@@ -86,7 +86,6 @@ fn session_event(event: &AgentSessionLifecycleEvent) -> Option<SessionEvent> {
         | AgentSessionLifecycleEvent::TurnStarted(_)
         | AgentSessionLifecycleEvent::TurnEnded(_)
         | AgentSessionLifecycleEvent::InputReceived(_)
-        | AgentSessionLifecycleEvent::Mentioned(_)
         | AgentSessionLifecycleEvent::Renamed(_) => return None,
     };
     Some(SessionEvent {

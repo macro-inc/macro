@@ -59,6 +59,9 @@ pub enum ChannelEvent {
         channel_id: Uuid,
         /// Actor that deleted the channel.
         actor: ChannelSender<'static>,
+        /// Active participants just before the delete, whose access to the
+        /// channel ended with it.
+        participant_user_ids: Vec<MacroUserIdStr<'static>>,
     },
     /// A message was posted.
     MessagePosted {
@@ -116,7 +119,20 @@ pub enum ChannelEvent {
         /// Active participants after the join.
         active_participant_user_ids: Vec<MacroUserIdStr<'static>>,
     },
-    /// Channel metadata was updated (rename).
+    /// Team auto-join added members to a channel: someone joined a team with
+    /// auto-join channels, or a channel turned auto-join on. It only updates
+    /// contacts; nobody is notified and nothing reaches the event broker.
+    MembersAutoJoined {
+        /// Channel the members were added to.
+        channel_id: Uuid,
+        /// Members the auto-join added or reactivated.
+        added_user_ids: Vec<MacroUserIdStr<'static>>,
+        /// Active participants after the auto-join.
+        active_participant_user_ids: Vec<MacroUserIdStr<'static>>,
+    },
+    /// Channel settings were patched: a rename, a conversion to or from a team
+    /// channel, or an auto-join change. `channel_name` equals `previous_name`
+    /// when the name did not change.
     ChannelUpdated {
         /// Updated channel id.
         channel_id: Uuid,
@@ -124,7 +140,7 @@ pub enum ChannelEvent {
         actor: MacroUserIdStr<'static>,
         /// Stored channel name before the update.
         previous_name: Option<String>,
-        /// New channel name.
+        /// Stored channel name after the update.
         channel_name: Option<String>,
     },
     /// Participants were removed from a channel (admin removal or self-leave).

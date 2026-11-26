@@ -5,11 +5,13 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
+
 import type { ActionConfigurationUpdateDescription } from './actionConfigurationUpdateDescription';
 import type { ActionConfigurationUpdateEnabled } from './actionConfigurationUpdateEnabled';
 import type { ActionConfigurationUpdateRunVisibility } from './actionConfigurationUpdateRunVisibility';
 import type { ActionKind } from './actionKind';
 import type { ActionTrigger } from './actionTrigger';
+import type { EntityAppearance } from './entityAppearance';
 import type { RoutineTask } from './routineTask';
 
 /**
@@ -18,6 +20,9 @@ omitting `enabled` keeps the stored value; omitting `run_visibility` or
 `description` keeps them too, so clients that predate them do not reset them.
  */
 export interface ActionConfigurationUpdate {
+  /** An icon and colour an agent picked, as on create. Saved only when the
+update is made for the routine's owner; skipped for anyone else. */
+  appearance?: EntityAppearance;
   /** An empty string clears it. */
   description?: ActionConfigurationUpdateDescription;
   /**

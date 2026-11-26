@@ -3,7 +3,7 @@ import { useOpenAgentDm } from '@app/features/agent-dms/open-agent-dm';
 import { LoadingSpinner } from '@core/component/LoadingSpinner';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_AGENT_DMS } from '@core/constant/featureFlags';
-import { useChannelsContext } from '@core/context/channels';
+import { loadedChannel, useChannelDirectory } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
@@ -22,7 +22,6 @@ import {
 import { Button } from '@ui';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { useChatV3AgentsFlag } from '../use-chat-v3-agents-flag';
 import { BotAdvancedSection } from './BotAdvancedSection';
 import { BotAgentSection } from './BotAgentSection';
 import { BotAvatar } from './BotAvatar';
@@ -45,9 +44,8 @@ import { CreateBotTokenDialog } from './CreateBotTokenDialog';
 import { createBotAvatarUpload } from './createBotAvatarUpload';
 
 export function BotDetail(props: { botId: string; onBack: () => void }) {
-  const agentsEnabled = useChatV3AgentsFlag();
   const agentDm = ENABLE_AGENT_DMS ? useOpenAgentDm() : undefined;
-  const channelsContext = useChannelsContext();
+  const channelDirectory = useChannelDirectory();
   const currentUserId = useUserId();
   const currentTeamQuery = useCurrentTeamQuery();
   const isTeamOwner = useIsTeamOwner();
@@ -96,11 +94,12 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
   );
 
   const assignedChannels = createMemo(() => {
-    const channelsById = channelsContext.channelsById();
     return (botChannelsQuery.data ?? []).map((channel) => ({
       id: channel.channel_id,
       name:
-        channelsById[channel.channel_id]?.name?.trim() ||
+        loadedChannel(
+          channelDirectory.lookup(channel.channel_id)
+        )?.name?.trim() ||
         channel.name?.trim() ||
         'Unnamed channel',
     }));
@@ -330,15 +329,13 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
                   onNewToken={() => setTokenOpen(true)}
                 />
 
-                <Show when={agentsEnabled()}>
-                  <BotAdvancedSection>
-                    <BotAgentSection
-                      checked={form.hasAgent}
-                      disabled={saving()}
-                      onChange={(checked) => setForm('hasAgent', checked)}
-                    />
-                  </BotAdvancedSection>
-                </Show>
+                <BotAdvancedSection>
+                  <BotAgentSection
+                    checked={form.hasAgent}
+                    disabled={saving()}
+                    onChange={(checked) => setForm('hasAgent', checked)}
+                  />
+                </BotAdvancedSection>
 
                 <BotDetailActions
                   canDelete={canDelete()}

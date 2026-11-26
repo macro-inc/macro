@@ -16,10 +16,27 @@
 
       # ── cloud-storage (Rust backend) ──────────────────────────────
 
-      rustToolchain = fenix.packages.${system}.fromToolchainFile {
+      rustToolchainManifestSha256 = "sha256-qqF33vNuAdU5vua96VKVIwuc43j4EFeEXbjQ6+l4mO4=";
+      rustToolchainFromFile = fenix.packages.${system}.fromToolchainFile {
         file = ../rust-toolchain.toml;
-        sha256 = "sha256-qqF33vNuAdU5vua96VKVIwuc43j4EFeEXbjQ6+l4mO4=";
+        sha256 = rustToolchainManifestSha256;
       };
+      # On macOS, add llvm-tools: Xcode 27's SwiftPM builds the Tauri plugins'
+      # @_cdecl exports as local symbols, and swift-rs promotes them back with
+      # the llvm-objcopy in rustc's sysroot. Without it the iOS app library
+      # fails to link. macOS only, so Linux toolchains and their caches stay
+      # as they are.
+      rustToolchain =
+        if isDarwin then
+          fenix.packages.${system}.combine [
+            rustToolchainFromFile
+            (fenix.packages.${system}.toolchainOf {
+              channel = (builtins.fromTOML (builtins.readFile ../rust-toolchain.toml)).toolchain.channel;
+              sha256 = rustToolchainManifestSha256;
+            }).llvm-tools
+          ]
+        else
+          rustToolchainFromFile;
 
       craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
 
@@ -56,14 +73,15 @@
       # `crates/agent_harness/container/ensure_ready.sh` survives the prune;
       # `.ttf` and `.xml` for the fonts and preset shape definitions that
       # `crates/pptx_engine` embeds with `include_bytes!`; `.graphql` for the
-      # `static_assets/schema.graphql` that `cache-core`'s build script reads;
+      # `static_assets/schema.graphql` that `cache-schema`'s build script reads;
       # `.jsonl` for the recorded sessions `agent_fold` tests embed; `.mjs`
-      # for the Deno bootstrap and timer shims;
+      # for the Deno bootstrap and timer shims; `.lua` for the Redis scripts
+      # `crates/rate_limit` embeds;
       # `.proto` for the protobuf files the `whatsmeow_proto` and
       # `whatsmeow_signal` build scripts compile.
       assetFilter =
         path: _type:
-        builtins.match ".*\\.(md|html|txt|json|jsonl|canvas|sql|sh|ttf|xml|graphql|mjs|proto)$" path != null;
+        builtins.match ".*\\.(md|html|txt|json|jsonl|canvas|sql|sh|ttf|xml|graphql|mjs|proto|lua)$" path != null;
       # `crates/routine_program` embeds its catalog programs with `include_str!`.
       # Only these `.ts` files: matching every `.ts` would pull the web app into
       # the Rust source hash.
@@ -132,6 +150,34 @@
       # pruned sources; only changes when a manifest or the lock changes.
       deployDummySrc = craneLib.mkDummySrc { inherit src; };
 
+      # The [patch.crates-io] crates kept under vendor/, read from the root
+      # manifest so a new one is covered without touching this file.
+      vendoredPatchDirs = builtins.filter (dir: pkgs.lib.hasPrefix "vendor/" dir) (
+        map (patch: patch.path or "") (
+          builtins.attrValues ((builtins.fromTOML (builtins.readFile ../Cargo.toml)).patch.crates-io or { })
+        )
+      );
+      isVendoredPatch =
+        rel:
+        rel == "vendor"
+        || builtins.any (dir: rel == dir || pkgs.lib.hasPrefix (dir + "/") rel) vendoredPatchDirs;
+      vendoredPatchesSrc = pkgs.lib.cleanSourceWith {
+        src = ../.;
+        name = "cloud-storage-vendored-patches";
+        filter = path: _type: isVendoredPatch (pkgs.lib.removePrefix ((toString ../.) + "/") (toString path));
+      };
+
+      # What every buildDepsOnly compiles: mkDummySrc stubs every path crate,
+      # the patched ones under vendor/ too, and crates.io crates compile
+      # against those (sqlx-macros-core uses sqlx-postgres's items), so they
+      # keep their real sources. Only the vendored crates, not rootDepsSrc,
+      # so a .sqlx or asset change leaves the deps artifacts cached.
+      depsDummySrc = pkgs.runCommand "cloud-storage-deps-dummy-src" { } ''
+        cp -rT ${deployDummySrc} $out
+        chmod -R +w $out
+        cp -rfT ${vendoredPatchesSrc} $out
+      '';
+
       # Real sources of one workspace crate dir, same filter as the full tree
       # (keeps per-crate assets: pdfium blobs, .sql migrations, templates).
       crateDirSrc =
@@ -165,11 +211,7 @@
           || (pkgs.lib.hasPrefix ".sqlx/" rel)
           || (rel == "static_assets")
           || (pkgs.lib.hasPrefix "static_assets/" rel)
-          || (rel == "vendor")
-          || (rel == "vendor/utoipa-swagger-ui")
-          || (pkgs.lib.hasPrefix "vendor/utoipa-swagger-ui/" rel)
-          || (rel == "vendor/chrono-tz")
-          || (pkgs.lib.hasPrefix "vendor/chrono-tz/" rel)
+          || (isVendoredPatch rel)
           || (
             type == "regular"
             && !(pkgs.lib.hasInfix "/" rel)
@@ -312,6 +354,7 @@
       cargoArtifacts = craneLib.buildDepsOnly (
         commonArgs
         // {
+          dummySrc = depsDummySrc;
           cargoExtraArgs = "--locked --all-features";
         }
       );
@@ -524,6 +567,11 @@
           binaries = [ "notification_service" ];
         }
         {
+          serviceName = "search-freshness-probe";
+          packageName = "search_freshness_probe";
+          binaries = [ "search_freshness_probe" ];
+        }
+        {
           serviceName = "search-processing-service";
           packageName = "search_processing_service";
           binaries = [ "search_processing_service" ];
@@ -586,6 +634,7 @@
       deployCargoArtifacts = craneLib.buildDepsOnly (
         commonArgs
         // {
+          dummySrc = depsDummySrc;
           pname = "cloud-storage-deploy-deps";
           doCheck = false;
           # buildDepsOnly runs a cargo check in buildPhase by default; keep this
@@ -631,6 +680,62 @@
             '';
           }
         );
+
+      # The daemons baked into the Macro computer image (nix/macro-box), built
+      # like the deploy leaves: a pruned source, so only a change in their own
+      # crate closure rebuilds them, over third-party deps compiled once per
+      # Cargo.lock. A local stack with `--computers docker` builds these on
+      # every `run_local`.
+      guestBinaryDefinitions = [
+        {
+          pname = "macrod";
+          packageName = "coding_agent_worker";
+        }
+        {
+          pname = "harnessd";
+          packageName = "harnessd";
+        }
+      ];
+
+      guestCargoArtifacts = craneLib.buildDepsOnly (
+        commonArgs
+        // {
+          dummySrc = depsDummySrc;
+          pname = "macro-box-guest-deps";
+          doCheck = false;
+          cargoCheckCommand = "true";
+          cargoExtraArgs =
+            "--locked "
+            + pkgs.lib.concatMapStringsSep " " (
+              def: "--package ${def.packageName} --bin ${def.pname}"
+            ) guestBinaryDefinitions;
+          CARGO_PROFILE = "release";
+        }
+      );
+
+      guestBinaryPackage =
+        { pname, packageName }:
+        craneLib.buildPackage (
+          commonArgs
+          // {
+            src = prunedDeploySrc "guest-${pname}" packageName;
+            cargoArtifacts = guestCargoArtifacts;
+            pname = "macro-box-${pname}";
+            doCheck = false;
+            cargoExtraArgs = "--locked --package ${packageName} --bin ${pname}";
+            CARGO_PROFILE = "release";
+            installPhaseCommand = ''
+              install -Dm0755 target/release/${pname} "$out/bin/${pname}"
+            '';
+          }
+        );
+
+      guestBinaryPackages = pkgs.lib.listToAttrs (
+        map (def: {
+          name = "macro-box-${def.pname}";
+          value = guestBinaryPackage def;
+        }) guestBinaryDefinitions
+      );
 
       deployServiceBinaryPackages = pkgs.lib.listToAttrs (
         map (def: {
@@ -875,6 +980,7 @@
       lambdaDeployCargoArtifacts = craneLib.buildDepsOnly (
         lambdaCommonArgs
         // {
+          dummySrc = depsDummySrc;
           pname = "cloud-storage-lambda-deps";
           doCheck = false;
           # buildDepsOnly runs a cargo check in buildPhase by default; keep this
@@ -1153,7 +1259,6 @@
           rustToolchain
           python3
         ]
-        ++ [ (pkgs.callPackage ./_swagger2openapi.nix { }) ]
         ++ pkgs.lib.optionals isLinux [
           mold
           docker
@@ -1165,14 +1270,36 @@
       checks = {
         code-mode-assets = codeModeAssets;
         # Deploy builds compile [patch.crates-io] crates from the pruned
-        # source, so their real code (not mkDummySrc's stubs) must be there.
-        pruned-deploy-src-vendored-patches = pkgs.runCommand "cloud-storage-pruned-vendored-patches" { } ''
-          grep -q "fn write_embed_code" \
-            ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/utoipa-swagger-ui/build.rs
-          grep -q "IANA_TZDB_VERSION" \
-            ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/chrono-tz/src/prebuilt/directory.rs
-          touch $out
-        '';
+        # source, and deps-only builds from their dummy source, so their real
+        # code (not mkDummySrc's stubs) must be in both. Each vendored crate
+        # is compared whole, in every deps-only source, so a new one or a new
+        # buildDepsOnly without depsDummySrc fails here, not in a deploy.
+        pruned-deploy-src-vendored-patches =
+          pkgs.runCommand "cloud-storage-pruned-vendored-patches"
+            { nativeBuildInputs = [ pkgs.diffutils ]; }
+            ''
+              grep -q "fn write_embed_code" \
+                ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/utoipa-swagger-ui/build.rs
+              grep -q "IANA_TZDB_VERSION" \
+                ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/chrono-tz/src/prebuilt/directory.rs
+              grep -q "Claim the depth before the round trip" \
+                ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/sqlx-postgres/src/transaction.rs
+              ${pkgs.lib.concatMapStrings
+                (
+                  built:
+                  pkgs.lib.concatMapStrings (dir: ''
+                    diff -r ${vendoredPatchesSrc}/${dir} ${built.src}/${dir}
+                  '') vendoredPatchDirs
+                )
+                [
+                  cargoArtifacts
+                  deployCargoArtifacts
+                  lambdaDeployCargoArtifacts
+                  guestCargoArtifacts
+                ]
+              }
+              touch $out
+            '';
         pruned-deploy-src-starter-agent =
           pkgs.runCommand "cloud-storage-pruned-starter-agent"
             { nativeBuildInputs = [ pkgs.diffutils ]; }
@@ -1265,6 +1392,7 @@
       }
       // dopplerConfigBinPackages
       // deployServiceBinaryPackages
+      // guestBinaryPackages
       // {
         deploy-service-binaries-document-storage-service = documentStorageDeployBinaries;
         deploy-service-binaries-email-service = emailServiceDeployBinaries;

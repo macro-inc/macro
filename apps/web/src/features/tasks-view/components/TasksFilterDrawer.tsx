@@ -1,9 +1,11 @@
 import type { ListControlOption } from '@app/components/view-shell/ListDropdowns';
 import { MobileFilterDrawer } from '@app/components/view-shell/MobileFilterDrawer';
+import { shownPage } from '@components/app/mobile/close-on-navigation';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useSelectedFirst } from '@core/util/useSelectedFirst';
 import { Accordion } from '@kobalte/core/accordion';
+import { useStartDateEnabled } from '@property/hooks/useStartDateEnabled';
 import { Key } from '@solid-primitives/keyed';
 import { type DialogHandle, Input } from '@ui';
 import {
@@ -15,7 +17,7 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
-import { TASK_GROUP_OPTIONS, TASK_SORT_OPTIONS } from '../constants';
+import { taskGroupOptions, taskSortOptions } from '../constants';
 import { useTaskFilters } from '../filters/use-task-filters';
 import { useTasksView } from '../tasks-view-context';
 import {
@@ -33,7 +35,8 @@ type PendingSavedViewAction = {
   scope: SavedViewScope;
 };
 
-export function TasksFilterDrawer() {
+export function TasksFilterDrawer(props: { inline?: boolean }) {
+  const startDates = useStartDateEnabled();
   const { state, setPrimarySort, setState, savedViews, savedViewScope } =
     useTasksView();
   const filters = useTaskFilters();
@@ -64,8 +67,11 @@ export function TasksFilterDrawer() {
     setOpen(false);
   };
   const reopen = async (dialog: DialogHandle, scope: SavedViewScope) => {
+    // A navigation that closed the dialog took the user elsewhere.
+    const page = shownPage();
     await dialog.closed;
-    if (!disposed && scope === savedViewScope()) setOpen(true);
+    if (disposed || scope !== savedViewScope() || page !== shownPage()) return;
+    setOpen(true);
   };
   const afterClose = (present: boolean) => {
     if (present || open()) return;
@@ -94,6 +100,7 @@ export function TasksFilterDrawer() {
         onOpenChange={setOpen}
         onContentPresentChange={afterClose}
         triggerLabel="Open task filters"
+        inline={props.inline}
         label="Task list controls"
         activeCount={filters.activeCount()}
         onClear={filters.clear}
@@ -114,7 +121,7 @@ export function TasksFilterDrawer() {
             role="radiogroup"
             aria-labelledby="task-sort-label"
           >
-            <For each={TASK_SORT_OPTIONS}>
+            <For each={taskSortOptions(startDates())}>
               {(option) => {
                 const selected = () => primarySort() === option.id;
 
@@ -139,7 +146,7 @@ export function TasksFilterDrawer() {
           role="radiogroup"
           aria-labelledby="task-group-label"
         >
-          <For each={TASK_GROUP_OPTIONS}>
+          <For each={taskGroupOptions(startDates())}>
             {(option) => {
               const selected = () => state.groupBy === option.id;
 

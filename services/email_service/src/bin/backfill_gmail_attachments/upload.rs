@@ -4,6 +4,7 @@ use email_api_client::GmailApiClientRepository;
 use email_api_client::domain::ports::AlwaysAllowRateLimiter;
 use email_api_client::domain::service::EmailApiClientServiceImpl;
 use email_service::outbound::email_api::StaticTokenSource;
+use email_service::util::upload_attachment::{determine_file_metadata, s3_error_code};
 use model::document::response::CreateDocumentRequest;
 use models_email::email::service::link::Link;
 use models_email::service::attachment::AttachmentUploadMetadata;
@@ -43,7 +44,7 @@ impl AttachmentProcessor {
     }
 
     /// Orchestrates the full upload process for a single attachment.
-    #[instrument(skip(self), fields(file_name = ?attachment.filename, mime_type = %attachment.mime_type))]
+    #[instrument(skip(self, attachment), fields(attachment_id = %attachment.attachment_db_id, mime_type = %attachment.mime_type))]
     pub async fn upload(
         &self,
         link: &Link,
@@ -116,19 +117,9 @@ impl AttachmentProcessor {
         attachment: &AttachmentUploadMetadata,
         sha256_hex: &str,
     ) -> anyhow::Result<Option<(String, String)>> {
-        // we filter out null filenames in the db query, but set to default just in case
-        let file_name = attachment
-            .filename
-            .clone()
-            .unwrap_or_default()
-            .split('.')
-            .next()
-            .unwrap_or(&attachment.filename.clone().unwrap_or_default())
-            .to_string();
-
-        let file_type = mime_guess::get_mime_extensions_str(&attachment.mime_type)
-            .and_then(|exts| exts.first().map(|s| s.to_string()))
-            .context("Could not determine file extension from MIME type")?;
+        // we filter out null filenames in the db query
+        let (file_name, file_type) = determine_file_metadata(attachment)
+            .context("Could not determine the document name and file type")?;
 
         let dss_response = self
             .dss_client
@@ -177,15 +168,16 @@ impl AttachmentProcessor {
             .body(data)
             .send()
             .await
+            .map_err(reqwest::Error::without_url)
             .context("HTTP request to presigned URL failed")?;
 
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
             bail!(
-                "Upload to storage failed with status {}. Body: {}",
+                "Upload to storage failed with status {}, code {}",
                 status,
-                body
+                s3_error_code(&body).as_deref().unwrap_or("none")
             );
         }
 

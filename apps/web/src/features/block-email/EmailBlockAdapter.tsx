@@ -1,16 +1,22 @@
+import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
+import { isListViewID } from '@app/constants/list-views';
 import type {
   EmailThreadHost,
   EmailThreadSource,
 } from '@app/features/email-thread/context/email-thread-context';
 import { URL_PARAMS } from '@app/features/email-thread/core/location';
 import { emailDetailSearch } from '@app/features/email-view/email-route';
+import { listNavigationSourceId } from '@app/features/soup/collection/list-navigation-source';
 import { createSearchParams } from '@app/lib/split-router';
+import { SplitLayoutContext } from '@components/app/split-layout/context';
+import type { SplitId } from '@components/app/split-layout/layoutManager';
 import {
   useCanAutofocusSplitContent,
   useSplitPanel,
 } from '@components/app/split-layout/layoutUtils';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createMethodRegistration } from '@core/orchestrator';
 import {
@@ -26,6 +32,7 @@ import {
   on,
   onCleanup,
   Show,
+  useContext,
 } from 'solid-js';
 import { useEmailListNavigation } from './use-email-list-navigation';
 import { registerEmailHotkeys } from './util/emailHotkeys';
@@ -53,6 +60,8 @@ export function EmailBlockAdapter(props: {
     routeOwnsTarget ? routeSearch.seek : undefined
   );
   const split = useSplitPanel();
+  const splitManager = useContext(SplitLayoutContext)?.manager;
+  const inlinePreviewLayout = useInlinePreviewLayout();
   const listNavigation = useEmailListNavigation(props.threadId);
   const canAutofocus = useCanAutofocusSplitContent();
   const blockElement = blockElementSignal.get;
@@ -122,6 +131,33 @@ export function EmailBlockAdapter(props: {
     },
   };
 
+  const mobileList = () => {
+    const handle = split?.handle;
+    if (!handle?.canGoBack() || inlinePreviewLayout()) return;
+
+    // A direct URL open has no list source on its entry. Supplying an empty
+    // fallback keeps it from inheriting the pane's identity.
+    const originId = listNavigationSourceId({
+      id: '' as SplitId,
+      content: handle.content,
+    });
+    if (!originId) return;
+
+    // Native Back closes the front pane. Mobile web Back uses pane history.
+    const native = isNativeMobilePlatform();
+    const behind = native ? splitManager?.splits().at(-2) : undefined;
+    const previous = native ? behind?.content : handle.previousContent();
+    if (previous?.type !== 'component' || !isListViewID(previous.id)) return;
+
+    const backId = listNavigationSourceId({
+      id: behind?.id ?? handle.id,
+      content: () => previous,
+    });
+    if (backId === originId) {
+      return { onDeleted: handle.goBack };
+    }
+  };
+
   return (
     <Show
       when={isTouchDevice()}
@@ -139,6 +175,7 @@ export function EmailBlockAdapter(props: {
         threadId={props.threadId}
         source={props.source}
         host={host}
+        list={mobileList()}
       />
     </Show>
   );

@@ -4,9 +4,19 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { AttachmentKind } from './attachmentKind';
 import type { EmailFiltersCalendarOnly } from './emailFiltersCalendarOnly';
+import type { EmailFiltersDone } from './emailFiltersDone';
+import type { EmailFiltersFavorite } from './emailFiltersFavorite';
+import type { EmailFiltersHasAttachment } from './emailFiltersHasAttachment';
 import type { EmailFiltersImportance } from './emailFiltersImportance';
 import type { EmailFiltersIsRead } from './emailFiltersIsRead';
+import type { EmailFiltersSentAfter } from './emailFiltersSentAfter';
+import type { EmailFiltersSentBefore } from './emailFiltersSentBefore';
+import type { EmailFiltersView } from './emailFiltersView';
+import type { EmailLabelMatch } from './emailLabelMatch';
+import type { EmailSearchView } from './emailSearchView';
+import type { EmailTextMatch } from './emailTextMatch';
 import type { NotificationFilters } from './notificationFilters';
 import type { SharedEmailFilter } from './sharedEmailFilter';
 
@@ -14,6 +24,9 @@ import type { SharedEmailFilter } from './sharedEmailFilter';
  * The email filters used to filter down what emails you search over.
  */
 export interface EmailFilters {
+  /** Only threads with at least one attachment of one of these kinds, by
+MIME type, on any of their messages. Empty applies no constraint. */
+  attachments?: AttachmentKind[];
   /** Email BCC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by BCC. */
   bcc?: string[];
   /** When `Some(true)`, only include threads that have at least one message
@@ -27,20 +40,34 @@ teammate's mailbox and restricts to threads involving any of these
 fully-qualified addresses. Each address is authorized against
 `crm_contacts` + `crm_companies` (contact must not be hidden, company
 must not be hidden, `email_sync` must be true).
-Mutually exclusive with `crm_domains`. */
+Mutually exclusive with `crm_domains`. Listing email only: search
+rejects a request that sets it with a 400. */
   crm_addresses?: string[];
   /** CRM-scoped domain filter. When non-empty, expands visibility to every
 teammate's mailbox and restricts to threads involving any of these
 domains (in any of sender/cc/bcc/recipient). Each domain is authorized
 against `crm_domains` + `crm_companies` (must exist for the caller's
 team, company must not be hidden, `email_sync` must be true).
-Mutually exclusive with `crm_addresses`. */
+Mutually exclusive with `crm_addresses`. Listing email only: search
+rejects a request that sets it with a 400. */
   crm_domains?: string[];
+  /** Filter by whether the thread is done: true for threads out of the
+inbox (archived), false for threads still in it. This is the mailbox
+state the Email view's Done filter uses, independent of notifications. */
+  done?: EmailFiltersDone;
   /** Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads. */
   email_thread_ids?: string[];
   /** Exclude emails that have any of these labels. Supports both Gmail system labels (e.g. "CATEGORY_PROMOTIONS") and user-created labels. Empty to not exclude any labels.
 Note: SPAM and TRASH emails are not indexed in OpenSearch, so they are already excluded by default. */
   exclude_labels?: string[];
+  /** Leave out the threads in these mailbox views. Search only. */
+  exclude_views?: EmailSearchView[];
+  /** True for the caller's favorite threads only, false to leave them out.
+Search only. */
+  favorite?: EmailFiltersFavorite;
+  /** True for threads with an attachment on any message, false for threads
+with none. Search only. */
+  has_attachment?: EmailFiltersHasAttachment;
   /** Filter by email importance. None to not filter. True to show only important emails
 (drafts, personal, sent, or uncategorized). False to show only unimportant emails
 (those categorized as promotions, social, updates, or forums). */
@@ -50,18 +77,42 @@ Note: SPAM and TRASH emails are not indexed in OpenSearch, so they will never ap
   include_labels?: string[];
   /** Filter by the email thread's read flag, independently of notification state. */
   is_read?: EmailFiltersIsRead;
+  /** Tags or labels each thread must carry, or must not, by name, as typing
+`label:` or `in:<name>` into the search does. A name matches the
+caller's tags with that label and the labels with that name in the
+caller's inboxes, ignoring case; a name that is neither matches
+nothing. Search only. */
+  label_names?: EmailLabelMatch[];
   /** Restrict to specific inboxes by email_links.id. Empty means "any inbox the
 caller can access" (soup expands to the full set at the router edge). */
   link_ids?: string[];
   /** Filter by email notification state. */
   notification_filters?: NotificationFilters;
-  /** A list of project ids to search within. Empty to ignore project filtering. */
+  /** Drive folder (project) ids to search within: threads filed in any of
+these folders. Besides the caller's own threads, it reaches every
+thread in a folder shared with the caller, whoever's inbox holds it,
+as the folder's list does. Search takes at most 50 folders and
+rejects more with a 400, and matches the query against at most 10,000
+of their threads in all; threads past that are not searched, unless
+`email_thread_ids` names them, and at most 10,000 named threads are
+searched in all. Empty to ignore project filtering. */
   project_ids?: string[];
   /** Email Recipient addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by Recipient. */
   recipients?: string[];
   /** Email sender addresses to filter by. Examples: ['user@example.com']. Empty to search all senders. */
   senders?: string[];
+  /** Only messages sent at or after this instant. Mail with no sent time
+never matches. Search only. */
+  sent_after?: EmailFiltersSentAfter;
+  /** Only messages sent before this instant. Mail with no sent time never
+matches. Search only. */
+  sent_before?: EmailFiltersSentBefore;
   /** Controls whether shared email threads are included in results.
 Defaults to "exclude" (only the user's own threads). */
   shared?: SharedEmailFilter;
+  /** Words or phrases each message must contain, or must not, in one part
+of it, as typing `subject:`, `from:`, `to:`, `cc:`, `bcc:` or a minus
+into the search does. Search only. */
+  text_matches?: EmailTextMatch[];
+  view?: EmailFiltersView;
 }

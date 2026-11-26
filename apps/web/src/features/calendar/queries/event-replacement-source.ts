@@ -11,6 +11,7 @@ import type { Accessor } from 'solid-js';
 import type { EventReplacementSource } from '../context/event-replacement-source';
 import type {
   EventReplacementPreview,
+  EventReplacementRequest,
   EventReplacementTarget,
 } from '../core/event-replacement';
 
@@ -29,19 +30,23 @@ export function decodeReplacement(
 }
 
 export function useEventReplacementSource(
-  eventId: Accessor<string>
+  eventId: Accessor<string | undefined>
 ): EventReplacementSource {
+  const invalidateEvent = () => {
+    const id = eventId();
+    if (id) invalidateCalendarEventPreviews(id);
+  };
+  // Only Teams removal opens a replacement, so the replacement never has an
+  // online meeting.
   const prepare = useMutation(() => ({
-    mutationFn: async (args: {
-      target: EventReplacementTarget;
-      removeConference: boolean;
-    }) =>
+    mutationFn: async (request: EventReplacementRequest) =>
       decodeReplacement(
         await throwOnErr(() =>
-          emailClient.prepareCalendarReplacement(args.target.eventId, {
-            calendarId: args.target.calendarId,
-            recurrenceId: args.target.recurrenceId,
-            removeConference: args.removeConference,
+          emailClient.prepareCalendarReplacement(request.target.eventId, {
+            calendarId: request.target.calendarId,
+            recurrenceId: request.target.recurrenceId,
+            removeConference: true,
+            changes: request.changes,
           })
         )
       ),
@@ -52,7 +57,7 @@ export function useEventReplacementSource(
         await throwOnErr(() => emailClient.confirmCalendarReplacement(id))
       ),
     onSettled: () => {
-      invalidateCalendarEventPreviews(eventId());
+      invalidateEvent();
       fireAndForget(invalidateCalendarInvitations(), 'calendar-replacement');
       fireAndForget(invalidateCalendarOccurrences(), 'calendar-replacement');
     },
@@ -69,15 +74,14 @@ export function useEventReplacementSource(
       ),
     onSuccess: (view) => {
       if (view.status === 'complete') {
-        invalidateCalendarEventPreviews(eventId());
+        invalidateEvent();
         fireAndForget(invalidateCalendarInvitations(), 'calendar-replacement');
         fireAndForget(invalidateCalendarOccurrences(), 'calendar-replacement');
       }
     },
   }));
   return {
-    prepare: (target, removeConference) =>
-      prepare.mutateAsync({ target, removeConference }),
+    prepare: (request) => prepare.mutateAsync(request),
     confirm: (id) => confirm.mutateAsync(id),
     status: (id) => status.mutateAsync(id),
     discard: (id) => discard.mutateAsync(id),

@@ -1,0 +1,91 @@
+# zizmor findings kept on purpose (`check generated workflows` / lint-workflows).
+# One rule and workflow file per entry, each with its reason. Fixing one means
+# changing what a job runs, so it lands as its own reviewed change. Entries cover
+# whole files because generated line numbers move with every generator change.
+# Step-level findings in generated YAML are kept inline instead, with
+# `Step::zizmor_ignore`, so they cover one step. Checkouts that keep their token
+# (artipacked) are kept that way: later steps may use the persisted token, and
+# dropping it needs each job audited.
+rules:
+  cache-poisoning:
+    ignore:
+      # Runs only for `sdk-v*` tags; setup-bun/setup-node caches are keyed by
+      # the lockfile, and turning them off changes the publish job's installs.
+      - publish-sdk.yml
+  adhoc-packages:
+    ignore:
+      # npm trusted publishing (OIDC) needs npm >= 11.5.1, newer than Node 24 ships.
+      - publish-sdk.yml
+      - release-sdk.yml
+  dangerous-triggers:
+    ignore:
+      # workflow_run after Build Desktop on Tag: reads the run's conclusion and
+      # alerts; checks out nothing.
+      - alert-native-build-failures.yml
+      # workflow_run after Android Play Release: runs main's workflow and code,
+      # never the triggering branch's.
+      - android-play-publish.yml
+      # pull_request_target/workflow_run: posts the CI gate status for fork PRs
+      # from main's workflow (a fork's token can't); checks out nothing.
+      - ci-gate-fork.yml
+      # pull_request_target: reacts to the run-ci label with a write token;
+      # checks out nothing.
+      - ci-gate-label.yml
+      # pull_request_target: the CLA check must run on fork PRs; checks out nothing.
+      - cla.yml
+      # workflow_run: exports finished runs' timings; reads the API only.
+      - export-ci-telemetry.yml
+      # pull_request_target on `labeled`: announces the release a label starts,
+      # with a pull-requests: write token; checks out nothing.
+      - release-label-check.yml
+  excessive-permissions:
+    ignore:
+      # No `permissions:` block, so jobs get the repository's default token.
+      # Scoping it changes what each job's token can do, so it needs every job
+      # reviewed, workflow by workflow.
+      - build-rust-ci-image.yml # snapshots a runner image
+      - build_agent_daemon_on_tag.yml # builds and uploads release assets
+      - build_desktop_on_tag.yml # builds and uploads release assets
+      - deploy-pulumi-stack.yml # deploys a Pulumi stack
+      - deploy-service-generic.yml # calls the deploy workflow
+      - deploy_ai_editing_worker.yml # deploys a worker
+      - deploy_all_services.yml # deploys every service
+      - deploy_fusionauth_instance.yml # deploys FusionAuth
+      - deploy_mcp_chatgpt_worker.yml # deploys a worker
+      - deploy_on_push.yml # calls the deploy workflows
+      - deploy_sync_service.yml # deploys a worker
+      - deploy_web_app.yml # deploys the web app
+      - email_e2e.yml # builds and runs the email end-to-end suite
+      - email_e2e_browser.yml # builds and runs the email browser suite
+      - email_e2e_full_stack.yml # runs the email suite against the local stack
+      - deploy_website.yml # deploys the website
+      - migrate-macro-db.yml # runs migrations
+      - pr-ci.yml # calls every check workflow; callees inherit its token
+      - release-production.yml # cuts the release and calls deploy workflows
+      - sdk-check.yml # builds and tests the SDK
+      # Workflow-level grants shared by several jobs; moving them onto jobs
+      # changes which jobs hold them.
+      - ensure_daytona_snapshot.yml # packages: write for the snapshot image
+      - pulumi_preview_pr.yml # id-token and pull-requests: write for previews
+  secrets-inherit:
+    ignore:
+      # `secrets: inherit` into reusable workflows in this repository; explicit
+      # secret maps arrive with typed reusable workflows.
+      - deploy-service-generic.yml
+      - deploy_fusionauth_instance.yml
+      - pr-ci.yml
+      - pulumi_preview_pr.yml
+      - release-production.yml
+  superfluous-actions:
+    ignore:
+      # softprops/action-gh-release uploads the release assets; replacing it
+      # with `gh release` changes the release step.
+      - build_agent_daemon_on_tag.yml
+      - build_desktop_on_tag.yml
+      - release-production.yml
+  use-trusted-publishing:
+    ignore:
+      # Publishes an AMI to AWS, which has no trusted publishing.
+      - deploy-observability.yml
+      # Publishes to App Store Connect, which has no trusted publishing.
+      - ios-app-store-publish.yml

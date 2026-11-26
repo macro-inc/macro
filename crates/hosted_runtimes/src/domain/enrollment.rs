@@ -1,8 +1,8 @@
 //! What a computer reads at first boot to join Macro.
 //!
-//! The control plane writes one [`Enrollment`] as JSON into the instance
-//! config key [`INCUS_ENROLLMENT_KEY`] (read in the guest from `/dev/incus`),
-//! or into a file for Docker computers, and deletes it once macrod connects.
+//! The control plane hands one [`Enrollment`] as JSON to the Firecracker host,
+//! which serves it to the guest through MMDS, or writes it into a file for
+//! Docker computers, and deletes it once macrod connects.
 //! These types are the contract between the control plane and
 //! `macrod enroll`; macrod depends on this crate with default features off.
 
@@ -10,9 +10,6 @@ use crate::domain::ids::{ComputerId, PairingId};
 
 use crate::domain::models::ComputerName;
 use serde::{Deserialize, Serialize};
-
-/// Instance config key carrying the JSON [`Enrollment`].
-pub const INCUS_ENROLLMENT_KEY: &str = "user.macro.enrollment";
 
 /// One-time join material. The device secret claims a pre-approved harness
 /// pairing exactly once; a copy read after that claim is useless.
@@ -36,10 +33,10 @@ pub struct Enrollment {
     /// reports join it. Opaque ids only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub traceparent: Option<String>,
-    /// The agent teammate this computer runs, if it was bought for one.
-    /// Older macrod builds ignore it.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub agent: Option<crate::domain::agent::AgentEnrollment>,
+    /// Whom the computer is for. Decides the guest image and what the guest
+    /// grants its user; never changes for a computer. Carries no credential:
+    /// an agent's environment arrives later over macrod's socket.
+    pub role: ComputerRole,
 }
 
 /// The service addresses of the deployment a computer joins, as the guest
@@ -54,6 +51,10 @@ pub struct Deployment {
     pub app_url: url::Url,
     /// Session egress: first-party MCP and the Anthropic gateway.
     pub egress_url: url::Url,
+    /// OTLP/HTTP intake for the computer's own spans (macrod, the agent).
+    /// Absent when the deployment has none the computer can reach.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub telemetry_url: Option<url::Url>,
 }
 
 /// The deployment could not be resolved; never carries a URL.
@@ -67,27 +68,7 @@ pub trait DeploymentSource: Send + Sync + 'static {
     fn deployment(&self) -> Result<Deployment, DeploymentUnavailable>;
 }
 
-/// Identifies one creation of a computer's guest, including retries of that creation.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct EnrollmentGeneration(u32);
-
-impl EnrollmentGeneration {
-    /// Construct a persisted generation; zero means no guest has been created.
-    pub const fn new(value: u32) -> Self {
-        Self(value)
-    }
-
-    /// The persisted counter value.
-    pub const fn get(self) -> u32 {
-        self.0
-    }
-
-    /// Reserve the next creation without wrapping the counter.
-    pub fn next(self) -> Option<Self> {
-        self.0.checked_add(1).map(Self)
-    }
-}
+pub use computer_types::{ComputerRole, EnrollmentGeneration};
 
 /// Issuing an enrollment failed; never carries the pairing secret.
 #[derive(Debug, thiserror::Error)]

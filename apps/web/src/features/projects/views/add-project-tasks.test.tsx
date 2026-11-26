@@ -1,22 +1,28 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import type { Accessor } from 'solid-js';
+import { type Accessor, createSignal, type ParentProps } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { AddProjectTasks } from '../add-project-tasks';
 import type { ProjectDetail } from '../core/project';
-import { AddProjectTasks } from './add-project-tasks';
 
-const mock = vi.hoisted(() => ({ assignTasks: vi.fn() }));
+const mock = vi.hoisted(() => ({ assignTasks: vi.fn(), touch: false }));
 vi.mock('@ui', async () => ({
   ...(await import('@app/components/ui/components/Button')),
   ...(await import('@app/components/ui/components/Dropdown')),
   ...(await import('@app/components/ui/components/Surface')),
+  ...(await import('@app/components/ui/components/PillButton')),
   ...(await import('@app/components/ui/utils/classname')),
   Hotkey: () => null,
 }));
 
+vi.mock('@components/app/mobile/float-regions/FloatRegion', () => ({
+  FloatRegion: (props: ParentProps) => props.children,
+}));
 vi.mock('@core/component/HoverCard', () => ({
   useIsInsideHoverCard: () => false,
 }));
-vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => mock.touch,
+}));
 vi.mock('../context/projects-context', () => ({
   useProjectsContext: () => ({
     createCommands: () => ({ assignTasks: mock.assignTasks }),
@@ -42,7 +48,18 @@ vi.mock('@property/editors/selectors/PropertyEntitySelector', () => ({
     </>
   ),
 }));
-beforeEach(() => vi.stubGlobal('scrollTo', vi.fn()));
+beforeEach(() => {
+  mock.touch = false;
+  vi.stubGlobal('scrollTo', vi.fn());
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+});
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -105,6 +122,32 @@ it('keeps only failed tasks selected for retry', async () => {
   expect(mock.assignTasks).toHaveBeenLastCalledWith('project', ['two']);
 });
 
+it('keeps a late answer for one project out of the next project', async () => {
+  const result = Promise.withResolvers<{ taskId: string; error?: string }[]>();
+  mock.assignTasks.mockReturnValue(result.promise);
+  const [current, setCurrent] = createSignal(project);
+  render(() => <AddProjectTasks project={current()} />);
+  fireEvent.keyDown(
+    screen.getByRole('button', { name: 'Add existing tasks' }),
+    { key: 'Enter' }
+  );
+  fireEvent.click(screen.getByText('Select tasks'));
+  fireEvent.click(screen.getByRole('button', { name: 'Add 2 tasks' }));
+  setCurrent({ ...project, id: 'next', name: 'Next', taskIds: [] });
+  result.resolve([
+    { taskId: 'one' },
+    { taskId: 'two', error: 'You need edit access to this task.' },
+  ]);
+  await result.promise;
+  await Promise.resolve();
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(screen.getByTestId('selection').textContent).toBe('');
+  expect(screen.getByRole('button', { name: 'Cancel' })).toHaveProperty(
+    'disabled',
+    false
+  );
+});
+
 it('preserves the selection after a request failure and allows canceling', async () => {
   mock.assignTasks.mockRejectedValue(new Error('Offline'));
   render(() => <AddProjectTasks project={project} />);
@@ -136,4 +179,29 @@ it('opens an anchored task dropdown and dismisses without assigning', () => {
   expect(mock.assignTasks).not.toHaveBeenCalled();
   fireEvent.keyDown(trigger, { key: 'Enter' });
   expect(screen.getByTestId('selection').textContent).toBe('');
+});
+
+it('keeps phone picker actions reachable and confirms the draft selection', async () => {
+  mock.touch = true;
+  mock.assignTasks.mockResolvedValue([{ taskId: 'one' }, { taskId: 'two' }]);
+  const style = document.createElement('style');
+  style.textContent =
+    '[data-corvu-drawer-content], .mobile-create-menu, .mobile-create-menu-overlay { transition-duration: 0s; animation-name: none !important; }';
+  document.head.append(style);
+  render(() => <AddProjectTasks project={project} inline />);
+  fireEvent.click(screen.getByRole('button', { name: 'Task' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Add existing tasks' }));
+  const sheet = await screen.findByRole('dialog', {
+    name: 'Add existing tasks',
+  });
+  fireEvent.transitionEnd(sheet);
+  sheet.scrollTo = vi.fn();
+  const add = screen.getByRole('button', { name: 'Add 0 tasks' });
+  expect(add).toHaveProperty('disabled', true);
+  expect(add.closest('[data-drawer-scroll-body]')).toBeNull();
+  fireEvent.click(screen.getByText('Select tasks'));
+  fireEvent.click(screen.getByRole('button', { name: 'Add 2 tasks' }));
+  expect(mock.assignTasks).toHaveBeenCalledWith('project', ['one', 'two']);
+  await vi.waitFor(() => expect(sheet.hasAttribute('data-open')).toBe(false));
+  style.remove();
 });

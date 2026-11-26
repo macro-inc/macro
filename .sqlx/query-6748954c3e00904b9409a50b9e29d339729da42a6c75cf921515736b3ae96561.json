@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO team_agents (user_id, team_id, created_by, persona_seed, purchase_key)\n            VALUES ($1, $2, $3, $4, $5)\n            ON CONFLICT (team_id, purchase_key) DO NOTHING\n            RETURNING user_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text",
+        "Jsonb",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6748954c3e00904b9409a50b9e29d339729da42a6c75cf921515736b3ae96561"
+}

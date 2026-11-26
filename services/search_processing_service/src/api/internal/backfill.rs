@@ -26,25 +26,31 @@ use serde::Serialize;
 
 use crate::BackfillServiceImpl;
 use crate::api::context::{ApiContext, AuthorizationService};
+use crate::domain::backfill_gate::BackfillGate;
 use crate::domain::jobs::{BackfillJobs, JobId};
 use crate::domain::models::{
     CalendarEventBackfillRequest, CallBackfillRequest, ChannelBackfillRequest, ChatBackfillRequest,
     DocumentBackfillRequest, EmailBackfillRequest, ProjectBackfillRequest,
     PropertiesBackfillRequest,
 };
+use crate::domain::ports::BackfillControl as _;
 use crate::domain::service::BackfillService;
+use crate::outbound::backfill_control::DynamoBackfillControl;
 
 pub fn router() -> Router<ApiContext> {
     Router::new()
         .route("/agent-sessions", post(agent_sessions))
         .route("/calls", post(calls))
         .route("/chats", post(chats))
+        .route("/deleted-chat-messages", post(deleted_chat_messages))
         .route("/channels", post(channels))
         .route("/documents", post(documents))
+        .route("/email-attachment-status", post(email_attachment_status))
         .route("/emails", post(emails))
         .route("/properties", post(properties))
         .route("/projects", post(projects))
         .route("/calendar-events", post(calendar_events))
+        .route("/pause", get(pause_state).put(set_pause))
         .route("/{job_id}", get(status))
 }
 
@@ -53,10 +59,11 @@ struct AcceptedReceipt {
     job_id: JobId,
 }
 
-#[tracing::instrument(skip(service, jobs, _internal_authorization, req))]
+#[tracing::instrument(skip(service, jobs, gate, _internal_authorization, req))]
 async fn agent_sessions(
     State(service): State<Arc<crate::AgentSessionIndexer>>,
     State(jobs): State<BackfillJobs>,
+    State(gate): State<BackfillGate>,
     _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     extract::Json(req): extract::Json<
         crate::domain::agent_session_index::AgentSessionBackfillRequest,
@@ -66,7 +73,7 @@ async fn agent_sessions(
         service,
         jobs,
         "agent-sessions",
-        move |svc, progress, cancel| async move { svc.backfill(req, progress, cancel).await },
+        move |svc, progress, cancel| async move { svc.backfill(req, &gate, progress, cancel).await },
     )
     .await
 }
@@ -135,6 +142,49 @@ async fn documents(
         move |svc, progress, cancel| async move {
             svc.backfill_documents(req, progress, cancel).await
         },
+    )
+    .await
+}
+
+#[tracing::instrument(skip(service, jobs, _internal_authorization, req))]
+async fn email_attachment_status(
+    State(service): State<Arc<crate::EmailAttachmentStatusBackfill>>,
+    State(jobs): State<BackfillJobs>,
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
+    extract::Json(req): extract::Json<
+        crate::domain::email_attachment_status::EmailAttachmentStatusBackfillRequest,
+    >,
+) -> Response {
+    spawn_backfill(
+        service,
+        jobs,
+        "email-attachment-status",
+        move |svc, progress, cancel| async move { svc.backfill(req, progress, cancel).await },
+    )
+    .await
+}
+
+#[tracing::instrument(skip(service, jobs, _internal_authorization, req))]
+async fn deleted_chat_messages(
+    State(service): State<Arc<crate::DeletedChatMessageRepair>>,
+    State(jobs): State<BackfillJobs>,
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
+    extract::Json(req): extract::Json<
+        crate::domain::chat_message_repair::DeletedChatMessageRepairRequest,
+    >,
+) -> Response {
+    // The job record names the mode, since a dry run and a run report the
+    // same counters.
+    let entity = if req.dry_run {
+        "deleted-chat-messages-dry-run"
+    } else {
+        "deleted-chat-messages"
+    };
+    spawn_backfill(
+        service,
+        jobs,
+        entity,
+        move |svc, progress, cancel| async move { svc.repair(req, progress, cancel).await },
     )
     .await
 }
@@ -211,12 +261,68 @@ async fn calendar_events(
     .await
 }
 
+#[derive(Debug, serde::Deserialize, Serialize)]
+struct PauseState {
+    paused: bool,
+}
+
+/// Whether backfills are paused. Every task rereads the switch every
+/// [`crate::domain::backfill_gate::PAUSE_POLL_INTERVAL`], so a change takes up to that long to stop or
+/// start them.
+#[tracing::instrument(skip(control, _internal_authorization))]
+async fn pause_state(
+    State(control): State<DynamoBackfillControl>,
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
+) -> Response {
+    match control.paused().await {
+        Ok(paused) => axum::Json(PauseState { paused }).into_response(),
+        Err(error) => {
+            tracing::error!(error = ?error, "failed to read the backfill pause switch");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "pause switch unavailable",
+            )
+                .into_response()
+        }
+    }
+}
+
+/// Pause or resume every backfill in every task: SQS backfill workers stop
+/// taking messages, which wait on the queue, and direct backfills wait before
+/// their next write. Work already admitted finishes.
+#[tracing::instrument(skip(control, _internal_authorization))]
+async fn set_pause(
+    State(control): State<DynamoBackfillControl>,
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
+    extract::Json(req): extract::Json<PauseState>,
+) -> Response {
+    match control.set_paused(req.paused).await {
+        Ok(()) => {
+            tracing::info!(paused = req.paused, "backfill pause switch set");
+            axum::Json(req).into_response()
+        }
+        Err(error) => {
+            tracing::error!(error = ?error, "failed to set the backfill pause switch");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "pause switch unavailable",
+            )
+                .into_response()
+        }
+    }
+}
+
 #[tracing::instrument(skip(jobs, _internal_authorization))]
 async fn status(
     State(jobs): State<BackfillJobs>,
     _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     Path(job_id): Path<String>,
 ) -> Response {
+    // Job ids are UUIDs; the table's other items, such as the pause switch,
+    // are not jobs.
+    if uuid::Uuid::parse_str(&job_id).is_err() {
+        return (StatusCode::NOT_FOUND, "unknown job id").into_response();
+    }
     match jobs.snapshot(&JobId::from(job_id)).await {
         Ok(Some(snap)) => axum::Json(snap).into_response(),
         Ok(None) => (StatusCode::NOT_FOUND, "unknown job id").into_response(),
@@ -268,10 +374,22 @@ where
 
     tokio::spawn(async move {
         let result = run(service, handle.progress, handle.cancel).await;
-        if let Err(e) = &result {
-            tracing::error!(job_id = %id_for_task, entity, error = ?e, "backfill failed");
-        } else {
-            tracing::info!(job_id = %id_for_task, entity, "backfill completed");
+        match &result {
+            Err(e) => {
+                tracing::error!(job_id = %id_for_task, entity, error = ?e, "backfill failed");
+            }
+            Ok(receipt) if receipt.not_queued > 0 => {
+                tracing::error!(
+                    job_id = %id_for_task,
+                    entity,
+                    enqueued = receipt.enqueued,
+                    not_queued = receipt.not_queued,
+                    "backfill left messages off the search event queue"
+                );
+            }
+            Ok(receipt) => {
+                tracing::info!(job_id = %id_for_task, entity, enqueued = receipt.enqueued, "backfill completed");
+            }
         }
         if let Err(e) = jobs_for_task.finish(&id_for_task, result).await {
             tracing::error!(job_id = %id_for_task, error=?e, "failed to record backfill terminal status in registry");

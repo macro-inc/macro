@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT r.user_id AS \"user_id!\", r.revision AS \"revision!\", c.consent_incarnation AS \"consent_incarnation!\", c.policy_version\n               FROM unnest($2::text[], $3::bigint[]) r(user_id, revision)\n               CROSS JOIN LATERAL (\n                   SELECT consent_incarnation, policy_version FROM crm_email_consent\n                   WHERE team_id = $1 AND user_id = r.user_id AND active_rule_revision = r.revision\n                     AND mode = 'selected' AND selected_enabled AND consent_incarnation IS NOT NULL\n                   OFFSET 0\n               ) c",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "revision!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "consent_incarnation!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "policy_version",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "Int8Array"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      true,
+      false
+    ]
+  },
+  "hash": "06c9940bb30645c0f992c3c6c9c283f09d99a98f64f0d7cfda8e137536bd7a08"
+}

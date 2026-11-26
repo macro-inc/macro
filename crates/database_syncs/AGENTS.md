@@ -4,7 +4,7 @@
 
 Synced tables for Databases: a table kept in sync with an outside source
 (the creator's imported Granola meetings, or a Notion data source read through
-their Pipedream Notion connection). Rows are upserted by the source's id for
+their Notion connection). Rows are upserted by the source's id for
 them, through the databases service, acting as the sync's creator.
 
 ## How it works

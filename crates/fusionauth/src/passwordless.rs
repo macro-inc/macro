@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use std::borrow::Cow;
 
 use crate::{AuthedClient, FusionAuthClient, Result, error::FusionAuthClientError};
@@ -13,6 +16,9 @@ struct PasswordlessLoginStateRequest<'a> {
     pub scope: Cow<'a, str>,
     /// The uri to redirect to after login
     pub redirect_uri: Cow<'a, str>,
+    /// The referral code the login request carried
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub referral_code: Option<Cow<'a, str>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
@@ -45,6 +51,9 @@ struct PasswordlessLoginCompleteRequest<'a> {
 pub struct PasswordlessLoginStateResponse {
     /// The redirect URI.
     pub redirect_uri: String,
+    /// The referral code the login request carried, if any.
+    #[serde(default)]
+    pub referral_code: Option<String>,
 }
 
 /// A user returned from the passwordless login response.
@@ -54,6 +63,9 @@ pub struct User {
     pub id: String,
     /// The user's email address.
     pub email: String,
+    /// The metadata stored on the user when it was created.
+    #[serde(default)]
+    pub data: Option<serde_json::Value>,
 }
 
 /// The complete response from a passwordless login.
@@ -173,12 +185,14 @@ async fn complete(
 }
 
 impl FusionAuthClient {
-    /// Starts a passwordless login flow for the given email.
-    #[tracing::instrument(skip(self), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
+    /// Starts a passwordless login flow for the given email. The referral code
+    /// comes back in the state of the completed login.
+    #[tracing::instrument(skip(self, email, referral_code), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn start_passwordless_login(
         &self,
         email: &str,
         redirect_uri: &str,
+        referral_code: Option<&str>,
     ) -> Result<String> {
         start(
             &self.auth_client,
@@ -191,6 +205,7 @@ impl FusionAuthClient {
                     response_type: Cow::Borrowed("code"),
                     scope: Cow::Borrowed("openid offline_access"),
                     redirect_uri: Cow::Borrowed(redirect_uri),
+                    referral_code: referral_code.map(Cow::Borrowed),
                 },
             },
         )

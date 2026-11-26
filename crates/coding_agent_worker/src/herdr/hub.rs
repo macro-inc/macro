@@ -358,14 +358,52 @@ impl HubState {
     }
 }
 
-/// The first line of a prompt, short enough for a tab label.
+/// The first line of a prompt, short enough for a tab label. Leading Macro
+/// elements (`<macrod-runtime>…</macrod-runtime>`, `<m-agent-context>`,
+/// `<m-user-mention>`) are hidden from the operator, so the title starts after them; a
+/// prompt that is nothing but such elements, or one left unclosed, has none.
 pub(crate) fn title_from(text: &str) -> Option<String> {
-    let line = text.lines().map(str::trim).find(|line| !line.is_empty())?;
+    let mut rest = text.trim_start();
+    while opening_tag(rest).is_ok() {
+        rest = hidden_element(rest).ok()?.0.trim_start();
+    }
+    let line = rest.lines().map(str::trim).find(|line| !line.is_empty())?;
     let mut title: String = line.chars().take(TITLE_LIMIT).collect();
     if line.chars().count() > TITLE_LIMIT {
         title.push('…');
     }
     Some(title)
+}
+
+/// `<macrod-runtime>` or `<m-…>`: the opening tags of Macro's prompt
+/// elements, which carry no attributes. Other markup is the operator's text.
+fn opening_tag(input: &str) -> nom::IResult<&str, &str> {
+    use nom::Parser as _;
+    let name = nom::branch::alt((
+        nom::bytes::complete::tag("macrod-runtime"),
+        nom::combinator::recognize((
+            nom::bytes::complete::tag("m-"),
+            nom::bytes::complete::take_while1(|character: char| {
+                character.is_ascii_lowercase() || character.is_ascii_digit() || character == '-'
+            }),
+        )),
+    ));
+    nom::sequence::delimited(
+        nom::character::complete::char('<'),
+        name,
+        nom::character::complete::char('>'),
+    )
+    .parse(input)
+}
+
+/// A whole `<name>…</name>` element.
+fn hidden_element(input: &str) -> nom::IResult<&str, &str> {
+    use nom::Parser as _;
+    let (rest, name) = opening_tag(input)?;
+    let close = format!("</{name}>");
+    let (rest, _) = nom::bytes::complete::take_until(close.as_str()).parse(rest)?;
+    let (rest, _) = nom::bytes::complete::tag(close.as_str()).parse(rest)?;
+    Ok((rest, name))
 }
 
 struct Launcher {

@@ -37,3 +37,20 @@ fn dialable_servers_keep_their_headers() {
     assert_eq!(headers, [("Authorization", "Bearer session-token")]);
     assert_eq!(dialable[0].url, "https://egress.test/mcp/linear");
 }
+
+#[test]
+fn a_name_is_dialed_once_as_its_first_entry() {
+    let internal = AcpMcpServer::Http(McpServerHttp::new(
+        "macro_internal",
+        "https://harness.test/mcp/internal",
+    ));
+    let dialable = dialable_servers(vec![http("macro"), internal, http("macro_internal")]);
+    let servers: Vec<(&str, &str)> = dialable
+        .iter()
+        .map(|server| (server.name.as_str(), server.url.as_str()))
+        .collect();
+    assert_eq!(
+        servers,
+        [("macro_internal", "https://harness.test/mcp/internal")]
+    );
+}

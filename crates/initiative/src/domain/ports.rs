@@ -30,7 +30,7 @@ pub trait InitiativeDescriptionSurfaces: Send + Sync + 'static {
         markdown: String,
     ) -> impl Future<Output = Result<(), InitiativeError>> + Send;
 
-    /// The description as GitHub-flavored markdown; empty while the surface was never ensured.
+    /// The description as lossless internal markdown; empty while the surface was never ensured.
     fn read(
         &self,
         initiative: InitiativeId,
@@ -191,7 +191,7 @@ pub trait InitiativeService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<(), InitiativeError>> + Send;
 
-    /// The description of an initiative the receipt authorized for view, as GitHub-flavored
+    /// The description of an initiative the receipt authorized for view, as lossless internal
     /// markdown; empty while no one has opened or written it.
     fn read_description(
         &self,
@@ -224,4 +224,13 @@ pub trait InitiativeService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> impl Future<Output = Result<(), InitiativeError>> + Send;
+}
+
+/// Physical identity facts for trusted backend integrations; grants no access.
+pub trait InitiativeLifecycleReads: Send + Sync + 'static {
+    /// Initiatives are permanently deleted; a persisted identity is live.
+    fn initiative_is_live(
+        &self,
+        id: InitiativeId,
+    ) -> impl Future<Output = Result<bool, InitiativeError>> + Send;
 }

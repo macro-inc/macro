@@ -26,7 +26,10 @@ Type design, idioms, errors and observability, performance, and tests.
 - **CS-19** Give third-party errors their own variant — don't collapse e.g. a
   `jsonwebtoken` failure into a generic internal error. A provider outage
   (5xx, 429, unreachable, undecodable) is an `upstream_error::UpstreamError`,
-  answered 502/503 — see `crates/upstream_error`.
+  answered 502/503 — see `crates/upstream_error`. Exception: a 429 the
+  caller must pace on (a connected app's MCP endpoint refusing a burst) stays
+  a typed rate limit, is retried after its `Retry-After`, and is answered 429
+  with `Retry-After` once retries run out.
 - **CS-20** Depending on a rate-limited external provider requires a fallback
   (fallback model, retry story, or documented degradation).
 - **CS-21** Wire usage metering on every invocation path — MCP-triggered tool
@@ -77,6 +80,13 @@ Type design, idioms, errors and observability, performance, and tests.
   and never record prompts, tool arguments or tool results as span fields or
   logs — they are content, recorded on the spans under the
   `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` policy and a size budget.
+  Read the policy with `ContentPolicy::current()` when you record, never
+  `from_env()` and never only once into a value built before the work runs, so
+  work run inside `genai_telemetry::withhold_content` records none; a task spawned
+  from it carries the scope with `withhold_content_if(content_withheld(), fut)`.
+  An error made inside the scope that is logged, recorded or returned to a
+  library that logs it says only its kind and what was wanted: a model or
+  serde error's text can quote the content.
 - **CS-73** A function that reaches a service's router or composition root is
   never a non-generic `pub async fn`, even in a private module: rustc compiles
   the body of every such function in every build, so the lib test compiles the

@@ -111,7 +111,9 @@ where
 {
     type Output = ListLabelsResponse;
 
-    #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
+    // An unknown inbox selector's error quotes the requested and connected
+    // addresses, so the span records no error text.
+    #[tracing::instrument(skip_all)]
     async fn call(
         &self,
         service_context: ServiceContext<EmailToolContext<T, G, E>>,

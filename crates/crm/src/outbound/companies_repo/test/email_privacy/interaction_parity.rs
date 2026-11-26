@@ -108,6 +108,36 @@ fn at(month: u32) -> DateTime<Utc> {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn mail_deleted_at_the_provider_is_no_interaction(pool: PgPool) -> anyhow::Result<()> {
+    let (_repo, team, link) = setup(&pool).await?;
+    consent_to_mailbox(&pool, team, link).await?;
+    insert_interaction(&pool, link, "kept@acme.example.com", at(1), true).await?;
+    let deleted = [
+        insert_interaction(&pool, link, "kept@acme.example.com", at(2), true).await?,
+        insert_interaction(&pool, link, "gone@acme.example.com", at(3), false).await?,
+    ];
+    // Outlook's sync keeps a message deleted at the provider as a tombstone.
+    sqlx::query!(
+        r#"UPDATE email_messages SET mailbox_state = '{"provider_missing":true}'::jsonb
+           WHERE thread_id = ANY($1)"#,
+        &deleted[..]
+    )
+    .execute(&pool)
+    .await?;
+
+    assert_eq!(
+        scan(&pool, team, link, "kept@acme.example.com").await?,
+        (Some(at(1)), Some(at(1)), Some(true)),
+        "the deleted later message no longer extends the range"
+    );
+    assert_eq!(
+        scan(&pool, team, link, "gone@acme.example.com").await?,
+        (None, None, None)
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn set_based_scan_applies_every_privacy_rule_like_thread_allowed(
     pool: PgPool,
 ) -> anyhow::Result<()> {

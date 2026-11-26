@@ -1,357 +1,323 @@
 import { t } from '@app/lib/i18n';
-import { fireAndForget } from '@core/util/fireAndForget';
-import RobotIcon from '@icon/system/regular/robot.svg';
+import { agentInitial } from '@core/user/agent-initial';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
-import UploadIcon from '@icon/system/regular/upload.svg';
 import type { ComputerSize, SizeOffer } from '@service-auth/computers';
-import type { CreateTeamAgent } from '@service-auth/team-agents';
+import type { CreateTeamAgent, TeamAgent } from '@service-auth/team-agents';
 import { Avatar, Button, Panel, TextField } from '@ui';
-import {
-  createEffect,
-  createSignal,
-  type JSX,
-  onCleanup,
-  Show,
-} from 'solid-js';
+import { createEffect, createSignal, Match, on, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
-import { ComputerSizePicker } from '../computers/components/computer-size-picker';
-import { formatQuote } from '../computers/core/computer-display';
-import { DisabledReason } from '../computers/views/computer-setup-dialog';
 import {
-  inviteBlocker,
+  ComputerSizePicker,
+  ComputerSizeSkeleton,
+} from '../computers/components/computer-size-picker';
+import { FailureNotice } from '../computers/components/failure-notice';
+import { formatQuote, sizeLabel } from '../computers/core/computer-display';
+import type { AddAgentState, AddRefusal } from '../core/team-agent-add';
+import {
+  addBlocker,
   MAX_AGENT_NAME_CHARS,
-  MAX_AGENT_PROFILE_CHARS,
-  teamAgentDraftProblems,
   teamAgentRequest,
 } from '../core/team-agent-draft';
-import { recommendedVoice, type VoicePickerSource } from '../core/voices';
-import { VoicePicker } from './voice-picker';
 
-/** Kobalte renders this only while its field is invalid. */
-function TooLong(props: { limit: number }) {
-  return (
-    <TextField.ErrorMessage>
-      {t('teamAgents.tooLong', { count: props.limit })}
-    </TextField.ErrorMessage>
-  );
+function refusalText(reason: AddRefusal): string {
+  return match(reason)
+    .with('invalid', () => t('teamAgents.invalid'))
+    .with('not_enabled', () => t('teamAgents.notEnabled'))
+    .with('on_trial', () => t('computers.trialBlocked'))
+    .with('unavailable', () => t('teamAgents.computerUnavailable'))
+    .with('in_progress', () => t('teamAgents.inviteInProgress'))
+    .with('repository', () => t('teamAgents.repositoryFailed'))
+    .with('unknown', () => t('teamAgents.failed'))
+    .exhaustive();
 }
 
 /**
- * Invite an agent teammate: who it is, what it does, and the computer it
- * runs on, priced the way Buy a computer prices it. Renders the body and
- * footer of the Invite to Team panel.
+ * Add an agent teammate: a name, shown as its initial, and the computer it
+ * runs on, priced the way Buy a computer prices it. The dialog stays open
+ * while the agent is added and started, and every failure is shown here, with
+ * the name and size kept. Add is always enabled: with no name it marks the
+ * field and moves the caret there. Renders the dialog's body and footer.
  */
 export function InviteAgentForm(props: {
-  /** Above the form, e.g. the People | Agent switch. */
-  header?: JSX.Element;
   /** Sizes with their price; `undefined` while loading. */
   offers: readonly SizeOffer[] | undefined;
   offersFailed: boolean;
   onRetryOffers: () => void;
-  /** The voice catalog; without it the agent gets its template's voice. */
-  voices?: VoicePickerSource;
-  /** Stores the picture and resolves to its URL. */
-  uploadPicture: (file: File) => Promise<string>;
-  pending: boolean;
-  error?: string;
+  state: AddAgentState;
+  purchaseKey: string;
   onCancel: () => void;
-  onSubmit: (request: CreateTeamAgent) => void;
+  onSubmit: (request: CreateTeamAgent, size: ComputerSize) => void;
+  /** Start a computer that didn't start again, with no new charge. */
+  onRetryStart: (agent: TeamAgent) => void;
+  /** The name or size changed after a refusal. */
+  onEdit: () => void;
+  /** Update card after a decline, with what was typed so it can come back. */
+  onBilling: (draft: { name: string; size: ComputerSize | undefined }) => void;
+  /** Where the form starts, e.g. the draft put aside to update the card. */
+  initialName?: string;
+  initialSize?: ComputerSize;
 }) {
-  let disposed = false;
-  onCleanup(() => {
-    disposed = true;
-  });
-  let pictureInput: HTMLInputElement | undefined;
-  // One purchase per dialog: a retry after a failure or timeout reuses it.
-  const purchaseKey = crypto.randomUUID();
+  // A new invite starts named Macronaught, which the admin keeps or changes;
+  // one put aside for Update card starts from what was typed.
+  const [name, setName] = createSignal(
+    props.initialName ?? t('teamAgents.defaultName')
+  );
+  const [chosenSize, setChosenSize] = createSignal<ComputerSize | undefined>(
+    props.initialSize
+  );
+  // Add was pressed with no name: the field says it needs one.
+  const [asked, setAsked] = createSignal(false);
+  // Add was pressed with every size sold out.
+  const [sizeAsked, setSizeAsked] = createSignal(false);
+  let nameInput: HTMLInputElement | undefined;
 
-  const [name, setName] = createSignal('');
-  const [jobDescription, setJobDescription] = createSignal('');
-  const [personality, setPersonality] = createSignal('');
-  const [chosenSize, setChosenSize] = createSignal<ComputerSize>();
-  const [avatarUrl, setAvatarUrl] = createSignal<string>();
-  const [uploading, setUploading] = createSignal(false);
-  const [pictureFailed, setPictureFailed] = createSignal(false);
-  // Until the admin picks one, the voice that suits the personality.
-  const [chosenVoice, setChosenVoice] = createSignal<string>();
-  const voice = () =>
-    chosenVoice() ??
-    recommendedVoice(props.voices?.choices() ?? [], personality())?.model;
-
-  // Until the admin picks one, the first size that is for sale.
-  const size = () =>
-    chosenSize() ?? props.offers?.find((offer) => !offer.soldOut)?.size;
+  const adding = () => props.state.kind === 'adding';
+  // A size with no room right now reads as sold out until the sizes reload.
+  const noRoomSize = () =>
+    props.state.kind === 'no_room' ? props.state.size : undefined;
+  const offers = () =>
+    props.offers?.map((offer) =>
+      offer.size === noRoomSize() ? { ...offer, soldOut: true } : offer
+    );
+  // The chosen size while it is on sale, else the first size that is.
+  const size = () => {
+    const chosen = chosenSize();
+    const list = offers();
+    if (chosen && list?.some((item) => item.size === chosen && !item.soldOut))
+      return chosen;
+    return list?.find((offer) => !offer.soldOut)?.size;
+  };
   const offer = () =>
-    props.offers?.find((item) => item.size === size() && !item.soldOut);
+    offers()?.find((item) => item.size === size() && !item.soldOut);
 
   const draft = () => ({
     name: name(),
-    jobDescription: jobDescription(),
-    personality: personality(),
     size: offer()?.size,
-    avatarUrl: avatarUrl(),
-    voice: voice(),
-    purchaseKey,
+    purchaseKey: props.purchaseKey,
   });
-  const problems = () => teamAgentDraftProblems(draft());
-  const busy = () => props.pending || uploading();
-  // Why Invite agent can't be pressed, beside it, as the computer flow does.
-  const disabledReason = () => {
-    if (props.pending) return undefined;
-    if (uploading()) return t('teamAgents.waitForPicture');
-    const blocker = inviteBlocker(problems());
-    if (!blocker) return undefined;
-    return match(blocker)
-      .with('fields', () => t('teamAgents.fillRequired'))
-      .with('too_long', () => t('teamAgents.shortenFields'))
-      .with('size', () =>
-        props.offers
-          ? t('teamAgents.noSizeForSale')
-          : t('teamAgents.loadingSizes')
-      )
-      .exhaustive();
+  const trimmedName = () => name().trim();
+  // The same letter the agent's avatar shows once it is added; while the
+  // field is cleared, the letter of the example name it shows.
+  const initial = () =>
+    agentInitial(trimmedName() || t('teamAgents.defaultName'));
+  const tooLong = () => addBlocker(draft()) === 'name_too_long';
+  const nameInvalid = () => tooLong() || (asked() && !trimmedName());
+
+  const edit =
+    <Value,>(set: (value: Value) => void) =>
+    (value: Value) => {
+      set(value);
+      props.onEdit();
+    };
+
+  const price = () => {
+    if (props.state.kind === 'not_started') return undefined;
+    const chosen = offer();
+    if (!chosen || chosen.quote.amount === 0) return undefined;
+    return formatQuote(chosen.quote);
   };
 
-  // The error sits at the end of a long form; bring it into view and
-  // announce it, so pressing Invite agent never looks like nothing happened.
-  let errorLine: HTMLParagraphElement | undefined;
-  createEffect(() => {
-    if (!props.error || !errorLine) return;
-    errorLine.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    errorLine.focus({ preventScroll: true });
-  });
-
-  const inviteLabel = () => {
-    const chosen = offer();
-    if (!chosen || chosen.quote.amount === 0) return t('teamAgents.invite');
-    return t('teamAgents.invitePriced', { price: formatQuote(chosen.quote) });
+  const submitLabel = () => {
+    const amount = price();
+    return amount
+      ? t('teamAgents.addPriced', { price: amount })
+      : t('teamAgents.add');
   };
 
   const submit = () => {
+    if (adding()) return;
+    const state = props.state;
+    if (state.kind === 'not_started') {
+      props.onRetryStart(state.agent);
+      return;
+    }
+    if (addBlocker(draft()) === 'name' || tooLong()) {
+      setAsked(true);
+      nameInput?.focus();
+      return;
+    }
+    if (addBlocker(draft()) === 'size') {
+      // Sizes still loading or failed to load say so already.
+      if (offers()) {
+        setSizeAsked(true);
+        notice?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+      return;
+    }
     const request = teamAgentRequest(draft());
-    if (busy() || !request) return;
-    // A retry after a failure sends the same voice, even if the suggestion moves.
-    if (request.voice) setChosenVoice(request.voice);
-    props.onSubmit(request);
+    const chosen = offer();
+    if (request && chosen) props.onSubmit(request, chosen.size);
   };
 
-  const upload = async (file: File) => {
-    setUploading(true);
-    setPictureFailed(false);
-    try {
-      const url = await props.uploadPicture(file);
-      if (!disposed) setAvatarUrl(url);
-    } catch {
-      if (!disposed) setPictureFailed(true);
-    } finally {
-      if (!disposed) setUploading(false);
-    }
-  };
+  // The notice sits below the sizes; bring it into view and announce it, so
+  // pressing Add never looks like nothing happened.
+  let notice: HTMLDivElement | undefined;
+  createEffect(
+    on(
+      () => props.state.kind,
+      (kind) => {
+        if (kind === 'editing' || kind === 'adding' || !notice) return;
+        notice.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    )
+  );
+
+  const nameField = (
+    <TextField
+      value={name()}
+      onChange={edit(setName)}
+      // Read-only, not disabled, so the name keeps its ink while adding.
+      readOnly={adding()}
+      validationState={nameInvalid() ? 'invalid' : 'valid'}
+    >
+      <div class="flex flex-col gap-1.5">
+        <TextField.Label>{t('teamAgents.nameIt')}</TextField.Label>
+        {/* The agent's picture is its name's first letter. */}
+        <div class="flex items-center gap-3">
+          <Avatar
+            size="lg"
+            class="shrink-0 bg-surface text-ink ring ring-edge-muted"
+          >
+            <Avatar.Fallback>{initial()}</Avatar.Fallback>
+          </Avatar>
+          <TextField.Input
+            ref={nameInput}
+            class="min-w-0 flex-1"
+            placeholder={t('teamAgents.defaultName')}
+            required
+          />
+        </div>
+        <Show when={tooLong()}>
+          <TextField.ErrorMessage>
+            {t('teamAgents.tooLong', { count: MAX_AGENT_NAME_CHARS })}
+          </TextField.ErrorMessage>
+        </Show>
+        <Show when={asked() && !trimmedName()}>
+          <TextField.ErrorMessage>
+            {t('teamAgents.nameRequired')}
+          </TextField.ErrorMessage>
+        </Show>
+      </div>
+    </TextField>
+  );
+
+  const computer = (
+    <div class="flex flex-col gap-2">
+      <div class="text-sm font-medium text-ink">
+        {t('teamAgents.giveItAComputer')}
+      </div>
+      <Show
+        when={offers()}
+        fallback={
+          <Show when={props.offersFailed} fallback={<ComputerSizeSkeleton />}>
+            <div
+              role="alert"
+              class="flex flex-wrap items-center gap-2 text-sm text-ink-muted"
+            >
+              <span>{t('teamAgents.sizesFailed')}</span>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => props.onRetryOffers()}
+              >
+                {t('teamAgents.tryAgain')}
+              </Button>
+            </div>
+          </Show>
+        }
+      >
+        {(available) => (
+          <ComputerSizePicker
+            offers={available()}
+            selected={size()}
+            onSelect={edit(setChosenSize)}
+          />
+        )}
+      </Show>
+      {/* What Add charges for, before anything is bought. */}
+      <Show when={offer()}>
+        {(chosen) => (
+          <p class="text-xs text-ink-muted">
+            {chosen().quote.amount === 0
+              ? t('teamAgents.chargeIncluded')
+              : t('teamAgents.chargeAdded', {
+                  price: formatQuote(chosen().quote),
+                })}
+          </p>
+        )}
+      </Show>
+    </div>
+  );
+
+  const noticeArea = (
+    <div
+      ref={notice}
+      data-add-agent-state={props.state.kind}
+      // With nothing to say it takes no room, not a gap under the sizes.
+      class="flex flex-col gap-3 empty:hidden"
+    >
+      <Switch>
+        <Match when={props.state.kind === 'declined'}>
+          <FailureNotice
+            actions={
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() =>
+                  props.onBilling({ name: name(), size: offer()?.size })
+                }
+              >
+                {t('teamAgents.updateCard')}
+              </Button>
+            }
+          >
+            {t('teamAgents.declined')}
+          </FailureNotice>
+        </Match>
+        <Match when={noRoomSize()}>
+          {(full) => (
+            <FailureNotice>
+              {t('teamAgents.noRoom', { size: sizeLabel(full()) })}
+            </FailureNotice>
+          )}
+        </Match>
+        <Match when={props.state.kind === 'not_started'}>
+          <FailureNotice>
+            {t('teamAgents.notStarted', { name: trimmedName() })}
+          </FailureNotice>
+        </Match>
+        <Match when={props.state.kind === 'refunded'}>
+          <FailureNotice>
+            {t('teamAgents.refunded', { name: trimmedName() })}
+          </FailureNotice>
+        </Match>
+        <Match when={sizeAsked() && offers() && !offer()}>
+          <FailureNotice>{t('teamAgents.noSizeForSale')}</FailureNotice>
+        </Match>
+        <Match when={props.state.kind === 'refused' && props.state.reason}>
+          {(reason) => <FailureNotice>{refusalText(reason())}</FailureNotice>}
+        </Match>
+      </Switch>
+    </div>
+  );
 
   return (
     <>
       <Panel.Body scroll>
         <div class="flex flex-col gap-5 px-5 py-5">
-          {props.header}
-          <p class="text-sm text-ink-muted">{t('teamAgents.intro')}</p>
-
-          <div class="flex items-center gap-3">
-            <Avatar
-              size="lg"
-              class="bg-surface text-accent ring ring-edge-muted"
-            >
-              <Show
-                when={avatarUrl()}
-                fallback={
-                  <Avatar.Fallback>
-                    <RobotIcon class="size-5" />
-                  </Avatar.Fallback>
-                }
-              >
-                {(url) => <Avatar.Image src={url()} alt="" />}
-              </Show>
-            </Avatar>
-            <div class="min-w-0 flex-1">
-              <div class="text-sm font-medium text-ink">
-                {t('teamAgents.picture')}
-              </div>
-              <div class="mt-0.5 text-xs text-ink-muted">
-                <Show
-                  when={pictureFailed()}
-                  fallback={t('teamAgents.pictureHint')}
-                >
-                  <span role="alert" class="text-failure">
-                    {t('teamAgents.pictureFailed')}
-                  </span>
-                </Show>
-              </div>
-            </div>
-            <input
-              ref={pictureInput}
-              type="file"
-              accept="image/*"
-              class="hidden"
-              aria-label={t('teamAgents.uploadPicture')}
-              disabled={busy()}
-              onChange={(event) => {
-                const file = event.currentTarget.files?.[0];
-                event.currentTarget.value = '';
-                if (file) fireAndForget(upload(file), 'team-agent.picture');
-              }}
-            />
-            <Show when={avatarUrl() && !uploading()}>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={busy()}
-                onClick={() => setAvatarUrl(undefined)}
-              >
-                {t('teamAgents.removePicture')}
-              </Button>
-            </Show>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              disabled={busy()}
-              onClick={() => pictureInput?.click()}
-            >
-              <UploadIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
-              {uploading() ? t('teamAgents.uploading') : t('teamAgents.upload')}
-            </Button>
-          </div>
-
-          <TextField
-            value={name()}
-            onChange={setName}
-            disabled={props.pending}
-            validationState={
-              problems().name === 'too_long' ? 'invalid' : 'valid'
-            }
-          >
-            <TextField.Label>{t('teamAgents.name')}</TextField.Label>
-            <TextField.Input
-              placeholder={t('teamAgents.namePlaceholder')}
-              required
-            />
-            <TooLong limit={MAX_AGENT_NAME_CHARS} />
-          </TextField>
-
-          <TextField
-            value={jobDescription()}
-            onChange={setJobDescription}
-            disabled={props.pending}
-            validationState={
-              problems().jobDescription === 'too_long' ? 'invalid' : 'valid'
-            }
-          >
-            <TextField.Label>{t('teamAgents.jobDescription')}</TextField.Label>
-            <TextField.TextArea
-              placeholder={t('teamAgents.jobDescriptionPlaceholder')}
-              required
-            />
-            <TooLong limit={MAX_AGENT_PROFILE_CHARS} />
-          </TextField>
-
-          <TextField
-            value={personality()}
-            onChange={setPersonality}
-            disabled={props.pending}
-            validationState={
-              problems().personality === 'too_long' ? 'invalid' : 'valid'
-            }
-          >
-            <TextField.Label>{t('teamAgents.personality')}</TextField.Label>
-            <TextField.TextArea
-              placeholder={t('teamAgents.personalityPlaceholder')}
-              required
-            />
-            <TooLong limit={MAX_AGENT_PROFILE_CHARS} />
-          </TextField>
-
-          <Show when={props.voices}>
-            {(source) => (
-              <div class="flex flex-col gap-1">
-                <VoicePicker
-                  source={source()}
-                  value={voice()}
-                  onChange={setChosenVoice}
-                  disabled={props.pending}
-                />
-                <p class="text-xs text-ink-muted">
-                  {t('teamAgents.voiceHint')}
-                </p>
-              </div>
-            )}
-          </Show>
-
-          <div class="flex flex-col gap-2">
-            <div class="text-sm font-medium text-ink">
-              {t('teamAgents.computer')}
-            </div>
-            <p class="text-xs text-ink-muted">{t('teamAgents.computerHint')}</p>
-            <Show
-              when={props.offers}
-              fallback={
-                <Show
-                  when={props.offersFailed}
-                  fallback={
-                    <p role="status" class="text-sm text-ink-muted">
-                      {t('teamAgents.loadingSizes')}
-                    </p>
-                  }
-                >
-                  <div
-                    role="alert"
-                    class="flex flex-wrap items-center gap-2 text-sm text-ink-muted"
-                  >
-                    <span>{t('teamAgents.sizesFailed')}</span>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => props.onRetryOffers()}
-                    >
-                      {t('teamAgents.tryAgain')}
-                    </Button>
-                  </div>
-                </Show>
-              }
-            >
-              {(offers) => (
-                <ComputerSizePicker
-                  offers={offers()}
-                  selected={size()}
-                  onSelect={setChosenSize}
-                />
-              )}
-            </Show>
-            <p class="text-xs text-ink-muted">
-              {t('settingsBilling.proration')}
-            </p>
-          </div>
-
-          <Show when={props.error}>
-            {(error) => (
-              <p
-                ref={errorLine}
-                role="alert"
-                tabIndex={-1}
-                data-invite-error
-                class="text-sm text-failure outline-none"
-              >
-                {error()}
-              </p>
-            )}
-          </Show>
+          {nameField}
+          {computer}
+          {noticeArea}
         </div>
       </Panel.Body>
-      <Panel.Footer class="flex-wrap justify-end gap-2 px-4 py-3">
+      <Panel.Footer class="justify-end gap-2 px-5 py-3">
         <Button
           type="button"
           variant="ghost"
-          disabled={props.pending}
+          class="shrink-0"
+          disabled={adding()}
           onClick={() => props.onCancel()}
         >
           {t('common.cancel')}
@@ -359,17 +325,28 @@ export function InviteAgentForm(props: {
         <Button
           type="button"
           variant="primary"
-          disabled={busy() || !teamAgentRequest(draft())}
+          class="min-w-0 max-w-full shrink"
+          // Always pressable: with no name it marks the field instead. While
+          // adding it keeps focus, so a phone sheet's focus trap doesn't move
+          // it to the name field when a refusal arrives; `submit` ignores
+          // presses meanwhile.
+          aria-disabled={adding() || undefined}
+          aria-busy={adding() || undefined}
+          data-disabled={adding() ? '' : undefined}
           onClick={submit}
         >
-          <Show when={props.pending} fallback={inviteLabel()}>
+          <Show
+            when={adding()}
+            fallback={
+              <span class="flex min-w-0 items-baseline">
+                <span class="shrink-0 whitespace-pre">{submitLabel()}</span>
+              </span>
+            }
+          >
             <SpinnerIcon class="size-4 animate-spin" />
-            <span class="sr-only">{t('teamAgents.inviting')}</span>
+            {t('teamAgents.add')}
           </Show>
         </Button>
-        <Show when={disabledReason()}>
-          {(reason) => <DisabledReason>{reason()}</DisabledReason>}
-        </Show>
       </Panel.Footer>
     </>
   );

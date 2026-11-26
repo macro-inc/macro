@@ -11,10 +11,10 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { cn } from '../utils/classname';
 import {
-  iconControlSizes,
   type LabeledControlSize,
-  labeledControlContents,
-  labeledControlFrames,
+  labeledControlContents as sharedControlContents,
+  labeledControlFrames as sharedControlFrames,
+  iconControlSizes as sharedIconControlSizes,
 } from '../utils/control-sizes';
 import { Layer } from './Layer';
 import { Tooltip } from './Tooltip';
@@ -37,7 +37,19 @@ export type TabOption<T extends string> = {
 };
 
 /** Button-sized pills; touch treatments keep their own minimum targets. */
-export type TabsSize = LabeledControlSize;
+export type TabsSize = LabeledControlSize | 'composer';
+
+// Match a composer repository pill: 36px control, 8px label inset, 14px text with inherited line height.
+const iconControlSizes = {
+  ...sharedIconControlSizes,
+  composer:
+    'h-9 w-9 min-h-9 shrink-0 aspect-square p-0 text-sm leading-[inherit]',
+};
+const labeledControlFrames = { ...sharedControlFrames, composer: 'min-h-9' };
+const labeledControlContents = {
+  ...sharedControlContents,
+  composer: 'px-2 py-0 text-sm leading-[inherit]',
+};
 
 const tabIconSizes: Record<TabsSize, { square: string; labeled: string }> = {
   xs: { square: 'size-3', labeled: 'size-3' },
@@ -45,6 +57,7 @@ const tabIconSizes: Record<TabsSize, { square: string; labeled: string }> = {
   md: { square: 'size-4', labeled: 'size-3.5' },
   lg: { square: 'size-5', labeled: 'size-4' },
   xl: { square: 'size-6', labeled: 'size-5' },
+  composer: { square: 'size-4', labeled: 'size-4' },
 };
 
 // The grouped frame adds 2px of border and 4px of padding around each tab.
@@ -56,6 +69,7 @@ const joinedIconSizes: Record<TabsSize, string> = {
   md: 'size-6.5',
   lg: 'size-8.5',
   xl: 'size-10.5',
+  composer: 'h-9 min-w-9',
 };
 
 function tabContentClasses(size: TabsSize) {
@@ -84,7 +98,7 @@ export type TabsProps<T extends string> = {
   ref?: (element: HTMLElement) => void;
 } & (
   | {
-      variant?: 'grouped' | 'pills';
+      variant?: 'grouped' | 'pills' | 'choices' | 'choices-filled';
       size?: TabsSize;
       /** Let many options flow onto more lines; renders pills on touch too. */
       wrap?: boolean;
@@ -92,8 +106,7 @@ export type TabsProps<T extends string> = {
     }
   | {
       /**
-       * One flat pill slides along a filled track, on every device. Only for
-       * the agent composer's mode switch, which sits in the composer's tray.
+       * Legacy track treatment, retained for Home; other value switches use grouped tabs.
        */
       variant: 'track';
       size?: never;
@@ -117,16 +130,20 @@ export type TabsProps<T extends string> = {
  * @dont Do not put Tabs inside a HeaderActionGroup or ButtonGroup.
  * @dont Do not use Tabs for tabs that own panels or a dynamic collection; use TabSelector.
  * @dont Do not branch on `isTouchDevice()` to pick a tab component; set `touch`.
- * @dont Do not use `variant="track"` outside the agent composer's tray.
+ * @dont Do not use the retained legacy `track` variant for new controls.
  */
 export function Tabs<T extends string>(props: TabsProps<T>) {
   const select = (value: string) => {
     const option = props.options.find((option) => option.value === value);
     if (option) props.onChange(option.value);
   };
+  const isChoice = () =>
+    props.variant === 'choices' || props.variant === 'choices-filled';
   // Wrapping presets retain separate pills; desktop view tabs share a frame.
   const touchStyle = (): TabsTouchStyle =>
-    isTouchDevice() && !props.wrap ? (props.touch ?? 'pill') : 'pills';
+    isTouchDevice() && !props.wrap && !isChoice()
+      ? (props.touch ?? 'pill')
+      : 'pills';
 
   return (
     <KSegmentedControl
@@ -147,7 +164,12 @@ export function Tabs<T extends string>(props: TabsProps<T>) {
             class={cn(
               'flex min-w-0 items-center',
               props.wrap && 'flex-wrap',
-              props.size === 'xs' || props.size === 'sm' ? 'gap-1' : 'gap-1.5',
+              isChoice() && 'gap-1 touch:gap-1.5',
+              !isChoice() &&
+                (props.size === 'xs' || props.size === 'sm'
+                  ? 'gap-1'
+                  : 'gap-1.5'),
+              props.variant === 'choices-filled' && 'gap-2',
               props.fullWidth && 'w-full'
             )}
           >
@@ -158,6 +180,8 @@ export function Tabs<T extends string>(props: TabsProps<T>) {
                   size={props.size ?? 'md'}
                   iconOnly={props.iconOnly ?? false}
                   fullWidth={props.fullWidth ?? false}
+                  choices={isChoice()}
+                  filledChoices={props.variant === 'choices-filled'}
                 />
               )}
             </For>
@@ -168,11 +192,18 @@ export function Tabs<T extends string>(props: TabsProps<T>) {
           <Track {...props} />
         </Match>
         <Match
-          when={!isTouchDevice() && !props.wrap && props.variant !== 'pills'}
+          when={
+            !isTouchDevice() &&
+            !props.wrap &&
+            (props.variant === undefined || props.variant === 'grouped')
+          }
         >
           <div
             class={cn(
-              'inline-flex min-w-0 items-stretch overflow-hidden rounded-full border border-edge-button bg-control gap-0.5 p-0.5',
+              'inline-flex min-w-0 items-stretch overflow-hidden rounded-full border border-edge-button bg-control gap-0.5',
+              props.size === 'composer'
+                ? 'px-1 py-0 text-sm leading-[inherit]'
+                : 'p-0.5',
               labeledControlFrames[props.size ?? 'md'],
               props.fullWidth && 'w-full'
             )}
@@ -209,19 +240,32 @@ function OptionContent<T extends string>(props: {
   iconOnly: boolean;
   iconClass: string;
 }) {
+  const iconOnly = () => props.iconOnly && props.option.icon !== undefined;
+  const dotColor = () =>
+    props.option.dot === 'violet' ? 'bg-violet' : 'bg-accent';
   return (
     <>
       <Show when={props.option.icon}>
         {(icon) => (
-          <Dynamic component={icon()} class={cn('shrink-0', props.iconClass)} />
+          <span class="relative inline-flex shrink-0">
+            <Dynamic
+              component={icon()}
+              class={cn('shrink-0', props.iconClass)}
+            />
+            {/* An icon-only option carries its dot on the glyph's corner. */}
+            <Show when={props.option.dot && iconOnly()}>
+              <span
+                aria-hidden="true"
+                class={cn(
+                  'absolute -top-0.5 -right-1 size-1.5 rounded-full',
+                  dotColor()
+                )}
+              />
+            </Show>
+          </span>
         )}
       </Show>
-      <span
-        class={cn(
-          'truncate',
-          props.iconOnly && props.option.icon !== undefined && 'sr-only'
-        )}
-      >
+      <span class={cn('truncate', iconOnly() && 'sr-only')}>
         {props.option.label}
       </span>
       <Show when={props.option.count !== undefined && !props.iconOnly}>
@@ -229,13 +273,10 @@ function OptionContent<T extends string>(props: {
           {props.option.count}
         </span>
       </Show>
-      <Show when={props.option.dot && !props.iconOnly}>
+      <Show when={props.option.dot && !iconOnly()}>
         <span
           aria-hidden="true"
-          class={cn(
-            'size-1.5 shrink-0 rounded-full',
-            props.option.dot === 'violet' ? 'bg-violet' : 'bg-accent'
-          )}
+          class={cn('size-1.5 shrink-0 rounded-full', dotColor())}
         />
       </Show>
     </>
@@ -248,30 +289,40 @@ function PillOption<T extends string>(props: {
   iconOnly: boolean;
   fullWidth: boolean;
   joined?: boolean;
+  choices?: boolean;
+  filledChoices?: boolean;
 }) {
   const [tooltipOpen, setTooltipOpen] = createSignal(false);
   const square = () => props.iconOnly && props.option.icon !== undefined;
+  // Full width shares the row equally, icon-only options too.
+  const fixedSquare = () => square() && !props.fullWidth;
   const item = () => (
     <KSegmentedControl.Item
       value={props.option.value}
       disabled={props.option.disabled}
       class={cn(
         'relative inline-flex min-w-0 shrink-0 rounded-full border text-ink-muted transition-colors duration-120 motion-reduce:transition-none',
-        props.joined
-          ? 'self-stretch border-transparent data-checked:border-edge-button'
-          : 'bg-control border-edge-button',
-        'shadow-none not-touch:not-data-checked:hover:overlay-hover not-touch:not-data-checked:hover:text-ink',
-        'data-checked:overlay-active data-checked:text-ink',
-        'has-focus-visible:ring-2 has-focus-visible:ring-inset has-focus-visible:ring-edge-focus',
+        props.choices
+          ? 'group/choice h-6 touch:h-11 border-transparent text-ink-muted'
+          : cn(
+              props.joined
+                ? 'self-stretch border-transparent data-checked:border-edge-button'
+                : 'bg-control border-edge-button',
+              'not-touch:not-data-checked:hover:overlay-hover not-touch:not-data-checked:hover:text-ink',
+              'data-checked:overlay-active data-checked:text-ink'
+            ),
+        props.filledChoices && 'h-7',
+        'shadow-none has-focus-visible:ring-2 has-focus-visible:ring-inset has-focus-visible:ring-edge-focus',
         'data-disabled:pointer-events-none data-disabled:opacity-50',
         !props.joined &&
-          (square()
+          !props.choices &&
+          (fixedSquare()
             ? iconControlSizes[props.size]
             : labeledControlFrames[props.size]),
-        props.joined && square() && joinedIconSizes[props.size],
-        'touch:min-h-8',
+        props.joined && fixedSquare() && joinedIconSizes[props.size],
+        !props.choices && 'touch:min-h-8',
         square() && 'touch:min-w-8',
-        props.fullWidth && !square() && 'flex-1'
+        props.fullWidth && 'flex-1'
       )}
     >
       <KSegmentedControl.ItemInput
@@ -280,8 +331,16 @@ function PillOption<T extends string>(props: {
       />
       <KSegmentedControl.ItemLabel
         class={cn(
-          'flex min-w-0 flex-1 self-stretch items-center justify-center gap-2 font-medium whitespace-nowrap select-none',
-          !square() && tabContentClasses(props.size),
+          'flex min-w-0 flex-1 items-center justify-center gap-2 font-medium whitespace-nowrap select-none',
+          props.choices
+            ? 'h-6 self-center rounded-full border border-edge-button bg-control px-2.5 text-xs leading-4 touch:h-7 touch:px-3 touch:text-xs group-data-checked/choice:bg-selected group-data-checked/choice:border-accent group-data-checked/choice:text-accent'
+            : cn(
+                'self-stretch',
+                (!square() || props.size === 'composer') &&
+                  tabContentClasses(props.size)
+              ),
+          props.filledChoices &&
+            'h-7 bg-button-secondary-bg border-transparent text-ink-muted group-data-checked/choice:bg-accent group-data-checked/choice:border-transparent group-data-checked/choice:text-button-accent-ink',
           props.joined && 'py-0'
         )}
       >
@@ -307,7 +366,7 @@ function PillOption<T extends string>(props: {
           onFocusOut={() => setTooltipOpen(false)}
           class={cn(
             'inline-flex min-w-0 shrink-0 self-stretch items-center',
-            props.fullWidth && !square() && 'flex-1'
+            props.fullWidth && 'flex-1'
           )}
         >
           {item()}
@@ -438,7 +497,10 @@ function TouchInset<T extends string>(props: TabsProps<T>) {
     <Layer depth={0}>
       <div
         class={cn(
-          'relative flex items-center rounded-full border border-edge-muted bg-surface p-0.5 has-focus-visible:ring-2 has-focus-visible:ring-accent/20',
+          'relative flex items-center rounded-full border border-edge-muted bg-surface has-focus-visible:ring-2 has-focus-visible:ring-accent/20',
+          size() === 'composer'
+            ? 'px-1 py-0 text-sm leading-[inherit]'
+            : 'p-0.5',
           props.fullWidth && 'w-full'
         )}
       >
@@ -449,7 +511,7 @@ function TouchInset<T extends string>(props: TabsProps<T>) {
                 value={option.value}
                 disabled={option.disabled}
                 class={cn(
-                  'inline-flex min-w-0 items-center rounded-full touch:min-h-8',
+                  'relative inline-flex min-w-0 items-center rounded-full touch:min-h-8',
                   props.iconOnly && option.icon !== undefined
                     ? iconControlSizes[size()]
                     : labeledControlFrames[size()],
@@ -468,7 +530,8 @@ function TouchInset<T extends string>(props: TabsProps<T>) {
                 <KSegmentedControl.ItemLabel
                   class={cn(
                     'flex min-w-0 flex-1 self-stretch items-center gap-1.5 rounded-full font-medium whitespace-nowrap text-ink-extra-muted ring-inset hover:text-ink data-checked:bg-surface data-checked:text-ink data-checked:ring data-checked:ring-edge-muted',
-                    !(props.iconOnly && option.icon !== undefined) &&
+                    (size() === 'composer' ||
+                      !(props.iconOnly && option.icon !== undefined)) &&
                       tabContentClasses(size()),
                     (props.fullWidth ||
                       (props.iconOnly && option.icon !== undefined)) &&

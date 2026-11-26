@@ -14,19 +14,12 @@ import {
   Suspense,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import {
-  createPriorityCollapseController,
-  PriorityCollapseOverflowSensor,
-} from '../priority-collapse/PriorityCollapseOverflowSensor';
-import { ViewShell } from '../view-shell/ViewShell';
 import type {
   PreviewBlockTarget,
   PreviewPanelSelection,
 } from './previewTarget';
-import {
-  SplitPanelContext,
-  type SplitPanelContextType,
-} from './split-layout/context';
+import { SplitHeaderScope } from './SplitHeaderScope';
+import type { SplitPanelContextType } from './split-layout/context';
 
 export const [PreviewPanelContext, useMaybePreviewPanel] =
   createContextProvider(
@@ -66,10 +59,6 @@ export type PreviewFrameProps = {
  * split-panel context scoped to the preview. Content mounts as children.
  */
 export function PreviewFrame(props: PreviewFrameProps) {
-  const scopedLayoutRefs: SplitPanelContextType['layoutRefs'] = {};
-  const mobileHeaderOwner = createSignal<symbol>();
-  const headerCollapseController = createPriorityCollapseController();
-  const toolbarCollapseController = createPriorityCollapseController();
   const [interactedWith, setInteractedWith] = createSignal(false);
   const [attachHotkeys, previewHotkeyScope] =
     useHotkeyDOMScope('preview-panel');
@@ -109,72 +98,19 @@ export function PreviewFrame(props: PreviewFrameProps) {
       onPointerDown={() => setInteractedWith(true)}
       tabIndex={-1}
     >
-      <Show when={!props.hideHeader}>
-        <ViewShell.TopBar
-          ref={headerCollapseController.setRow}
-          class="relative w-full py-0 touch:flex"
-        >
-          <Show when={props.headerLeading}>
-            <div class="flex shrink-0 items-center">{props.headerLeading}</div>
-          </Show>
-          <PriorityCollapseOverflowSensor
-            controller={headerCollapseController}
-            truncateAsLastResort
-            class="relative h-full min-w-0 shrink overflow-hidden"
-            contentClass={
-              props.headerLeading
-                ? 'flex h-full items-center gap-1 pl-0.5'
-                : 'flex h-full items-center gap-1'
-            }
-            contentRef={(element) => {
-              scopedLayoutRefs.headerLeft = element;
-            }}
-          />
-          <div
-            class="flex h-full grow shrink items-center justify-end gap-1"
-            ref={(ref) => {
-              scopedLayoutRefs.headerRight = ref;
-            }}
-          />
-        </ViewShell.TopBar>
-      </Show>
-      <div
-        ref={toolbarCollapseController.setRow}
-        class="relative flex min-h-0 w-full shrink-0 items-center justify-between px-2"
+      <SplitHeaderScope.Root
+        panel={props.splitPanelContext}
+        splitHotkeyScope={previewHotkeyScope}
+        isInlinePreview
       >
-        <PriorityCollapseOverflowSensor
-          controller={toolbarCollapseController}
-          class="min-w-0 flex-1 overflow-hidden"
-          contentClass="flex items-center gap-1"
-          contentRef={(element) => {
-            scopedLayoutRefs.toolbarLeft = element;
-          }}
-        />
-        <div
-          class="flex h-full items-center gap-1"
-          ref={(ref) => {
-            scopedLayoutRefs.toolbarRight = ref;
-          }}
-        />
-      </div>
-      <div class="min-h-0 flex-1">
-        <SplitPanelContext.Provider
-          value={{
-            ...props.splitPanelContext,
-            splitHotkeyScope: previewHotkeyScope,
-            isInlinePreview: true,
-            layoutRefs: scopedLayoutRefs,
-            mobileHeaderOwner,
-            // The preview has its own header; its content must not resize the
-            // hosting split's header controls.
-            headerMdControls: undefined,
-            headerCollapser: headerCollapseController.collapser,
-            toolbarCollapser: toolbarCollapseController.collapser,
-          }}
-        >
+        <Show when={!props.hideHeader}>
+          <SplitHeaderScope.TopBar leading={props.headerLeading} />
+        </Show>
+        <SplitHeaderScope.Toolbar />
+        <div class="min-h-0 flex-1">
           <Suspense>{props.children}</Suspense>
-        </SplitPanelContext.Provider>
-      </div>
+        </div>
+      </SplitHeaderScope.Root>
     </div>
   );
 }

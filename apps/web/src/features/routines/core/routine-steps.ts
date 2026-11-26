@@ -168,6 +168,13 @@ export function codeSteps(steps: StepDraft[]): CodeStepDraft[] {
   return steps.filter((step): step is CodeStepDraft => step.kind === 'code');
 }
 
+/** Whether a stored task's code steps name a picked item, which can be deleted later. */
+export function picksItems(task: RoutineTask): boolean {
+  return codeSteps(programSteps(task) ?? []).some((step) =>
+    step.knobs.some((knob) => knob.type === 'entity' && knob.value !== null)
+  );
+}
+
 /** Output ids: a lowercase letter, then up to 31 lowercase letters, digits or `_`. */
 const OUTPUT_ID = /^[a-z][a-z0-9_]{0,31}$/;
 

@@ -1,6 +1,6 @@
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { AgentsViewSkeleton } from '@app/features/agents-view/agents-view-skeleton';
-import { AgentSignup, MobileWebSignup } from '@app/features/auth/auth';
+import { AgentSignup } from '@app/features/auth/auth';
 import { CalendarViewSkeleton } from '@app/features/calendar-view/calendar-view-skeleton';
 import { ChannelInviteAcceptance } from '@app/features/channel-invitations/ChannelInviteAcceptance';
 import { ChannelsViewSkeleton } from '@app/features/channels-view/channels-view-skeleton';
@@ -30,19 +30,24 @@ import {
   splitContentFromLocation,
   upgradeLegacyPath,
 } from '@components/app/split-layout/split-router/legacy-route';
+import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { lazy } from '@core/util/lazy';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
-import { type JSX, lazy } from 'solid-js';
+import type { JSX } from 'solid-js';
 import { paneRoute } from './app-route';
 import { BasePathComponent } from './BasePath';
 import {
   ActivityRouteView,
+  AgentScreenRouteView,
   AgentsRouteView,
   BookingLinksRouteView,
   CalendarRouteView,
+  CalendarSearchRouteView,
+  CalendarSettingsRouteView,
   CallDetailRouteView,
   CallsCallDetail,
   CallsRouteView,
@@ -76,13 +81,16 @@ import {
   SettingsRouteView,
   TasksDetailRouteView,
   TasksRouteView,
+  TasksTimeTaskRouteView,
 } from './lazy-route-views';
 import {
   BookingReceiptRoutePage,
   EmailCallback,
   EmailLinkCallback,
+  GithubConnectRoutePage,
   LoginPage,
   LoginPopupSuccess,
+  MobileEmailSignupRedirect,
   OnboardingPage,
   PublicBookingRoutePage,
   SignupPage,
@@ -93,9 +101,11 @@ import {
   accountManagerRoute,
   activityRoute,
   agentChatsRoute,
+  agentScreenRoute,
   agentSetupDoneRoute,
   agentSetupRoute,
   agentSignupRoute,
+  agentsArchiveRoute,
   agentsRoute,
   agentsViewRoute,
   appRoute,
@@ -103,6 +113,8 @@ import {
   baseRoute,
   bookingLinksRoute,
   bookingReceiptRoute,
+  calendarSearchRoute,
+  calendarSettingsRoute,
   calendarSplitRoute,
   callDetailRoute,
   callsCallRoute,
@@ -142,6 +154,7 @@ import {
   foldersRoute,
   formRespondRoute,
   forYouRoute,
+  githubConnectRoute,
   homeCalendarRoute,
   homeChannelRoute,
   homeDocumentRoute,
@@ -179,6 +192,8 @@ import {
   taskSlugRoute,
   tasksProjectsRoute,
   tasksSplitRoute,
+  tasksTimeRoute,
+  tasksTimeTaskRoute,
   teamInviteRoute,
   welcomeRoute,
 } from './routes';
@@ -276,11 +291,15 @@ export function appRouteElements(): JSX.Element {
           definition={loginPopupSuccessRoute}
           component={LoginPopupSuccess}
         />
+        <Route
+          definition={githubConnectRoute}
+          component={GithubConnectRoutePage}
+        />
         <Route definition={loginRoute} component={LoginPage} />
         <Route definition={welcomeRoute} component={WelcomePage} />
         <Route
           definition={mobileEmailSignupRoute}
-          component={MobileWebSignup}
+          component={MobileEmailSignupRedirect}
         />
         <Route definition={onboardingRoute} component={OnboardingPage} />
         <Route definition={inviteRoute} component={InviteWelcome} />
@@ -336,6 +355,11 @@ export function appRouteElements(): JSX.Element {
         />
         <Route
           definition={routinesRoute}
+          component={AgentsRouteView}
+          loading={AgentsViewSkeleton}
+        />
+        <Route
+          definition={agentsArchiveRoute}
           component={AgentsRouteView}
           loading={AgentsViewSkeleton}
         />
@@ -420,6 +444,12 @@ export function appRouteElements(): JSX.Element {
             />
           </Route>
           <Route definition={tasksProjectsRoute} />
+          <Route definition={tasksTimeRoute}>
+            <Route
+              definition={tasksTimeTaskRoute}
+              component={TasksTimeTaskRouteView}
+            />
+          </Route>
           <Route
             definition={taskDetailRoute}
             component={TasksDetailRouteView}
@@ -450,6 +480,14 @@ export function appRouteElements(): JSX.Element {
           />
         </Route>
         <Route
+          definition={calendarSearchRoute}
+          component={CalendarSearchRouteView}
+        />
+        <Route
+          definition={calendarSettingsRoute}
+          component={CalendarSettingsRouteView}
+        />
+        <Route
           definition={calendarSplitRoute}
           component={CalendarRouteView}
           loading={CalendarViewSkeleton}
@@ -469,6 +507,7 @@ export function appRouteElements(): JSX.Element {
           <Route definition={callsCallRoute} component={CallsCallDetail} />
         </Route>
         <Route definition={callDetailRoute} component={CallDetailRouteView} />
+        <Route definition={agentScreenRoute} component={AgentScreenRouteView} />
         <Route definition={companiesRoute} component={CompaniesRouteView}>
           <Route definition={crmPipelineRoute}>
             <Route definition={crmPipelineItemRoute} />
@@ -517,7 +556,7 @@ export function AppRouterView() {
         }),
         stacked: isNativeMobilePlatform,
       })}
-      middleware={createAppSplitRouterMiddleware({ isTouchDevice })}
+      middleware={createAppSplitRouterMiddleware({ isTouchDevice, isMobile })}
       globalSearch={['referral_code']}
       defaultRoute={() => ({ matches: [{ id: baseRoute.id, params: {} }] })}
     >

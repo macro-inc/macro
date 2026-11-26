@@ -13,6 +13,7 @@ use import_notion::domain::model::{
     SearchHit, SearchObject,
 };
 use import_notion::domain::ports::{NotionApi, NotionConnections, NotionError};
+use import_notion::domain::views::{NotionView, ViewScope};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_databases::{
     CellValue, CellWrite, ColumnChange, DatabaseId, DatabaseOp, NewColumn, OpResult, RowChanges,
@@ -607,6 +608,18 @@ impl NotionApi for FakeNotion {
 
     async fn database_sources(&self, _database: &NotionId) -> Result<Vec<NotionId>, NotionError> {
         unimplemented!("syncs name data sources directly")
+    }
+
+    async fn list_views(
+        &self,
+        _scope: &ViewScope,
+        _cursor: Option<String>,
+    ) -> Result<Paged<NotionId>, NotionError> {
+        unimplemented!("syncs read no saved views")
+    }
+
+    async fn retrieve_view(&self, _id: &NotionId) -> Result<NotionView, NotionError> {
+        unimplemented!("syncs read no saved views")
     }
 
     async fn query_data_source(

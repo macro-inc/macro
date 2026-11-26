@@ -13,6 +13,7 @@ import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useUserId } from '@core/context/user';
 import { createLazyMemo } from '@solid-primitives/memo';
 import type { Accessor, Setter } from 'solid-js';
+import { leavesOutName } from '../core/search-operators';
 import { buildSoupSearchRequest } from '../queries/search-request';
 
 interface CreateSearchStateArgs {
@@ -29,6 +30,17 @@ interface CreateSearchStateArgs {
    */
   searchText: Accessor<string>;
   setSearchText: Setter<string>;
+  /** The text the search service is sent, when it differs from the field's. */
+  serviceText?: Accessor<string>;
+  /** The words names are matched with, when they differ from the field's. */
+  nameText?: Accessor<string>;
+  /** Words a minus leaves out: no name match may hold one. */
+  leftOutWords?: Accessor<readonly string[]>;
+  /**
+   * The types a query's operators leave to search, which name matches are
+   * narrowed to, or undefined for every type.
+   */
+  operatorIndexes?: Accessor<readonly string[] | undefined>;
 }
 
 const namesAny = (ids: readonly string[] | undefined) =>
@@ -62,6 +74,10 @@ export const createSearchState = ({
   searchPaused,
   searchText,
   setSearchText,
+  serviceText,
+  nameText,
+  leftOutWords,
+  operatorIndexes,
 }: CreateSearchStateArgs) => {
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
@@ -72,40 +88,53 @@ export const createSearchState = ({
     assignees: assignees(),
   });
 
-  const { entityPool, routinePool } = useSearchContext();
+  const hideLocalResults = () =>
+    hidesLocalSearchResults(filters().include, surface());
+  const searchContext = useSearchContext();
+  const namesText = nameText ?? searchText;
+  const entityPool = searchContext.entityPool(
+    () =>
+      !disableLocalSearch?.() &&
+      !hideLocalResults() &&
+      Boolean(namesText().trim())
+  );
   const localPool = createLazyMemo(() => {
-    const pool =
+    const searched =
       surface() === 'search'
-        ? [...entityPool(), ...routinePool()]
+        ? [...entityPool(), ...searchContext.routinePool()]
         : entityPool();
+    const leftOut = leftOutWords?.() ?? [];
+    const pool =
+      leftOut.length > 0
+        ? searched.filter((item) => !leavesOutName(item.data.name, leftOut))
+        : searched;
     const activeIds = soup.predicates
       .activeIds()
       .filter((id) => id !== 'explicit-noise');
-    if (activeIds.length === 0) return pool;
+    const indexes = operatorIndexes?.();
+    if (activeIds.length === 0 && !indexes) return pool;
 
     const context = getFilterContext();
     const entities = pool.map((item) => item.data);
-    const matches = intersectEntityPools(
-      activeIds.map((id) => {
-        const predicate = soup.predicates.available.find(
-          (candidate) => candidate.id === id
-        );
-        if (!predicate) return [];
-        return entities.filter((entity) =>
-          predicate.predicate(entity, context)
-        );
-      })
-    );
+    const matching = (id: string) => {
+      const predicate = soup.predicates.available.find(
+        (candidate) => candidate.id === id
+      );
+      if (!predicate) return [];
+      return entities.filter((entity) => predicate.predicate(entity, context));
+    };
+    const pools = activeIds.map(matching);
+    // The types `type:` names are alternatives: a match is any one of them.
+    if (indexes) pools.push(indexes.flatMap(matching));
+    const matches = intersectEntityPools(pools);
     const matchingIds = new Set(matches.map((entity) => entity.id));
     return pool.filter((item) => matchingIds.has(item.data.id));
   });
 
-  const hideLocalResults = () =>
-    hidesLocalSearchResults(filters().include, surface());
-
   const search = createSharedSearchState({
     surface,
-    text: searchText,
+    text: serviceText ?? searchText,
+    nameText: namesText,
     buildRequest: (search) => buildSoupSearchRequest(filters(), search),
     localPool,
     disableLocalSearch,
@@ -117,6 +146,7 @@ export const createSearchState = ({
     searchText,
     setSearchText,
     localFuzzyResults: search.localFuzzyResults,
+    localSearchText: search.localSearchText,
     refresh: search.refresh,
     isSearching: search.isSearching,
     serviceSearchResults: search.serviceSearchResults,

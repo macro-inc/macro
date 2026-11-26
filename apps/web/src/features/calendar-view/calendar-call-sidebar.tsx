@@ -3,22 +3,23 @@ import { openExternalUrl } from '@core/util/url';
 import { getWebOrigin } from '@core/util/webOrigin';
 import { useNavigate } from '@solidjs/router';
 import { isSameDay, isTomorrow } from 'date-fns';
-import { createDeferred } from 'solid-js';
-import { useCalendarView } from '../calendar/components/CalendarViewContext';
+import { createDeferred, createMemo } from 'solid-js';
+import {
+  selectionOnPage,
+  useCalendarView,
+} from '../calendar/components/CalendarViewContext';
 import { formatCompactCalendarTime } from '../calendar/utils/time-format';
 import { calendarCallNavigation } from '../meetings/core/calendar-calls';
 import type { UpcomingCalendarEvent } from '../meetings/core/upcoming-calendar-events';
 import { createCallSidebarClock } from '../meetings/primitives/call-sidebar';
 import { useActiveQuickCallsSource } from '../meetings/queries/active-quick-calls';
 import { useUpcomingCalendarEventsSource } from '../meetings/queries/upcoming-calendar-events';
-import { useQuickCallsFlag } from '../meetings/use-quick-calls-flag';
 import { CallSidebar } from '../meetings/views/call-sidebar';
 
 /** Production wiring, mounted within the section's Suspense boundary. */
 export function CalendarCallSidebar() {
   const calendar = useCalendarView();
   const userId = useUserId();
-  const quickCalls = useQuickCallsFlag();
   const now = createCallSidebarClock();
   const renderedHiddenSourceIds = createDeferred(calendar.hiddenSourceIds);
   const isRenderedSourceVisible = (sourceId: string) =>
@@ -30,10 +31,16 @@ export function CalendarCallSidebar() {
     isSourceVisible: isRenderedSourceVisible,
     now,
   });
-  const active = useActiveQuickCallsSource(() =>
-    quickCalls().enabled ? userId() : undefined
-  );
+  const active = useActiveQuickCallsSource(() => userId());
   const navigate = useNavigate();
+  // Details opened on a new event show the server's copy before this list
+  // redraws it, so its row stays the selected one until then.
+  const selectedRowId = createMemo(() => {
+    const selected = calendar.selectedEvent();
+    if (!selected) return undefined;
+    const rows = new Map(upcoming.events().map((row) => [row.id, row]));
+    return (selectionOnPage(selected, rows) ?? selected).id;
+  });
 
   function when(call: UpcomingCalendarEvent) {
     const start = new Date(
@@ -71,7 +78,7 @@ export function CalendarCallSidebar() {
       sources={{ upcoming, active }}
       now={now}
       when={when}
-      selectedEventId={calendar.selectedEvent()?.id}
+      selectedEventId={selectedRowId()}
       actions={{
         openEvent: (event, anchor) => {
           const calendarEvent = upcoming.findEvent(event.id);

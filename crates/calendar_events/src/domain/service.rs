@@ -516,6 +516,15 @@ where
             .reap_wedged_google_syncs(now - WEDGED_SYNC_STALL_THRESHOLD)
             .await
     }
+
+    /// Turn calendar off for Google accounts whose grant lacks the calendar
+    /// capability, so their stale copy stops reading as current.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn disable_without_capability_once(&self) -> Result<usize, Report> {
+        self.repository
+            .disable_google_accounts_without_calendar_capability()
+            .await
+    }
 }
 
 /// Applies terminal Google Calendar failures that happen before lease claim.
@@ -582,6 +591,29 @@ pub enum GoogleCalendarBackfillRunError {
     Retryable(String),
 }
 
+/// How far one delivery of a Google account round got.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GoogleBackfillOutcome {
+    /// Every calendar synced this round.
+    Complete,
+    /// Macro's per-inbox request limit stopped the round. The calendars it
+    /// synced keep their progress, and the next delivery, after
+    /// `retry_after`, resumes with the ones it did not reach.
+    Deferred {
+        /// When the inbox's request window admits calls again.
+        retry_after: std::time::Duration,
+    },
+}
+
+/// The wait before resuming a deferred round when the gate names none, as
+/// the Outlook sync waits.
+const DEFERRAL: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// The longest a deferred round waits. Its job waits pending behind a hidden
+/// delivery, so this stays well inside [`WEDGED_SYNC_STALL_THRESHOLD`], past
+/// which the reaper would republish it as dead-lettered.
+const MAX_DEFERRAL: std::time::Duration = std::time::Duration::from_secs(5 * 60);
+
 /// Application service that owns Google backfill claim, lease, and terminal policy.
 pub struct GoogleCalendarBackfillCoordinator<R, G, L, B> {
     repository: R,
@@ -620,7 +652,9 @@ where
     ///
     /// `report` accumulates durable progress and remains meaningful on
     /// failure: per-calendar commits that landed before the error survive
-    /// the retry, so callers should act on the report either way.
+    /// the retry, so callers should act on the report either way. A round
+    /// Macro's per-inbox request limit stopped releases its lease and
+    /// returns [`GoogleBackfillOutcome::Deferred`] for a later delivery.
     #[tracing::instrument(skip(self, owner_id, access_token, range, report), fields(job_id = %key.job_id), err)]
     pub async fn run(
         &self,
@@ -629,8 +663,8 @@ where
         access_token: &str,
         range: OccurrenceRange,
         report: &mut GoogleBackfillRunReport,
-    ) -> Result<(), GoogleCalendarBackfillRunError> {
-        let (lease_token, account_id) = match self
+    ) -> Result<GoogleBackfillOutcome, GoogleCalendarBackfillRunError> {
+        let (lease_token, account_id, round_started_at) = match self
             .lifecycle
             .claim_google_backfill(key)
             .await
@@ -639,8 +673,9 @@ where
             CalendarBackfillClaim::Claimed {
                 lease_token,
                 account_id,
-            } => (lease_token, account_id),
-            CalendarBackfillClaim::Complete => return Ok(()),
+                round_started_at,
+            } => (lease_token, account_id, round_started_at),
+            CalendarBackfillClaim::Complete => return Ok(GoogleBackfillOutcome::Complete),
             CalendarBackfillClaim::Busy => return Err(GoogleCalendarBackfillRunError::Busy),
             CalendarBackfillClaim::Failed => {
                 return Err(GoogleCalendarBackfillRunError::AlreadyFailed);
@@ -676,6 +711,7 @@ where
             key,
             lease_token,
             account_id,
+            round_started_at,
             owner_id,
             access_token,
             range,
@@ -694,12 +730,19 @@ where
         };
 
         match result {
-            Ok(()) => {
+            Ok(GoogleBackfillOutcome::Complete) => {
                 self.lifecycle
                     .complete_google_backfill(key, lease_token)
                     .await
                     .map_err(|_| GoogleCalendarBackfillRunError::LeaseLost)?;
-                Ok(())
+                Ok(GoogleBackfillOutcome::Complete)
+            }
+            Ok(deferred @ GoogleBackfillOutcome::Deferred { .. }) => {
+                self.lifecycle
+                    .defer_google_backfill(key, lease_token)
+                    .await
+                    .map_err(|_| GoogleCalendarBackfillRunError::LeaseLost)?;
+                Ok(deferred)
             }
             Err(error) => {
                 let provider_error = error
@@ -715,7 +758,8 @@ where
                     ) => CalendarBackfillFailureDisposition::Permanent,
                     Some(
                         CalendarProviderErrorKind::Transient
-                        | CalendarProviderErrorKind::SyncTokenExpired,
+                        | CalendarProviderErrorKind::SyncTokenExpired
+                        | CalendarProviderErrorKind::Deferred,
                     )
                     | None => CalendarBackfillFailureDisposition::Retry,
                 };
@@ -906,27 +950,56 @@ where
     /// caller observes durable partial progress even when a later calendar
     /// fails the run: those commits survive the retry, whose quiet re-run
     /// would never report them again.
+    ///
+    /// Macro's per-inbox request gate refuses every call once the inbox's
+    /// window is spent, so the first refusal ends the walk and defers the
+    /// round. A later delivery of the same round (`round_started_at`) skips
+    /// the calendars it already synced, so an inbox with more calendars than
+    /// one window admits still reaches all of them.
     #[allow(clippy::too_many_arguments)]
-    #[tracing::instrument(skip(self, owner_id, access_token, range, report), err)]
+    #[tracing::instrument(
+        skip(self, owner_id, access_token, range, report),
+        fields(
+            calendars = tracing::field::Empty,
+            calendars_reached = tracing::field::Empty,
+            resumed_from = tracing::field::Empty,
+            outcome = tracing::field::Empty,
+            retry_after_s = tracing::field::Empty,
+            deferred_until = tracing::field::Empty,
+        ),
+        err
+    )]
     pub async fn backfill(
         &self,
         key: CalendarBackfillJobKey,
         lease_token: Uuid,
         account_id: Uuid,
+        round_started_at: chrono::DateTime<Utc>,
         owner_id: &str,
         access_token: &str,
         range: OccurrenceRange,
         report: &mut GoogleBackfillRunReport,
-    ) -> Result<(), Report> {
+    ) -> Result<GoogleBackfillOutcome, Report> {
         if !range.is_valid_for_backfill() {
             return Err(rootcause::report!(CalendarValidationError::InvalidRange).into());
         }
-        let calendars = self
+        let calendars = match self
             .provider
             .list_calendars(access_token, key.email_link_id)
             .await
-            .map_err(|error| -> Report { rootcause::report!(error).into() })?;
-        let mut calendar_ids = Vec::with_capacity(calendars.len());
+        {
+            Ok(calendars) => calendars,
+            Err(error) if error.kind() == CalendarProviderErrorKind::Deferred => {
+                return Ok(defer_round(&error, None));
+            }
+            Err(error) => return Err(rootcause::report!(error).into()),
+        };
+        let mut walk = Walk {
+            calendars: calendars.len(),
+            reached: 0,
+            resumed_from: 0,
+        };
+        let mut calendar_ids = Vec::with_capacity(walk.calendars);
         // One calendar's provider failure is recorded and skipped rather than
         // failing the account. The run fails only when no calendar is healthy,
         // so the coordinator can still classify a wholesale outage.
@@ -934,7 +1007,8 @@ where
         let mut isolated_failures: Vec<(Uuid, CalendarSyncFailure, String)> = Vec::new();
         let mut last_isolated_error: Option<CalendarProviderError> = None;
 
-        for provider_calendar in calendars {
+        for (reached, provider_calendar) in calendars.into_iter().enumerate() {
+            walk.reached = reached;
             let provider_calendar_id = provider_calendar.provider_calendar_id.clone();
             let watch_provider_calendar_id = provider_calendar.provider_calendar_id.clone();
             let observed_access_role = provider_calendar.access_role.clone();
@@ -949,11 +1023,17 @@ where
             let calendar_id = stored_calendar.id;
             report.team_ooo_changed |= stored_calendar.team_ooo_changed;
             calendar_ids.push(calendar_id);
-            if super::models::is_system_calendar(&provider_calendar_id)
+            let synced_this_round = stored_calendar
+                .synced_at
+                .is_some_and(|synced_at| synced_at >= round_started_at);
+            let system_calendar_current = super::models::is_system_calendar(&provider_calendar_id)
                 && stored_calendar.synced_at.is_some_and(|synced_at| {
                     synced_at > Utc::now() - super::models::SYSTEM_CALENDAR_SYNC_INTERVAL
-                })
-            {
+                });
+            if synced_this_round {
+                walk.resumed_from += 1;
+            }
+            if synced_this_round || system_calendar_current {
                 any_calendar_healthy = true;
                 continue;
             }
@@ -1009,6 +1089,27 @@ where
                     if error.kind() == CalendarProviderErrorKind::ReauthRequired {
                         return Err(rootcause::report!(error).into());
                     }
+                    // The gate refuses every call until the window frees, so
+                    // the calendars after this one would only meet it again.
+                    // They stay due, unfailed, and so does this one; the
+                    // calendar list is not reconciled from a partial walk.
+                    // Calendars that failed earlier in the walk did fail, so
+                    // they are recorded now rather than when the round ends.
+                    if error.kind() == CalendarProviderErrorKind::Deferred {
+                        for (calendar_id, kind, message) in isolated_failures {
+                            self.repository
+                                .record_google_calendar_sync_error(
+                                    key,
+                                    lease_token,
+                                    account_id,
+                                    calendar_id,
+                                    kind,
+                                    &message,
+                                )
+                                .await?;
+                        }
+                        return Ok(defer_round(&error, Some(&walk)));
+                    }
                     tracing::warn!(
                         error=?error,
                         calendar_id=%calendar_id,
@@ -1048,6 +1149,9 @@ where
                     .await?;
                 self.publish_write_outcome(&outcome);
                 report.team_ooo_changed |= outcome.team_ooo_changed;
+                if outcome.change != CalendarEventChange::Unchanged {
+                    report.events_changed += 1;
+                }
                 report.aligned_copies.extend(outcome.aligned_copies);
                 calendar_count += 1;
             }
@@ -1096,6 +1200,7 @@ where
                     .watch_calendar(
                         access_token,
                         key.email_link_id,
+                        calendar_id,
                         &watch_provider_calendar_id,
                         channel_id,
                         watch,
@@ -1198,8 +1303,61 @@ where
         report.team_ooo_changed |= retired.iter().any(|event| event.team_ooo_changed);
         self.publish_retirements(retired);
 
-        Ok(())
+        walk.reached = walk.calendars;
+        walk.record(&tracing::Span::current());
+        tracing::Span::current().record("outcome", "complete");
+        Ok(GoogleBackfillOutcome::Complete)
     }
+}
+
+/// How far one delivery's walk of the calendar list got.
+struct Walk {
+    /// Calendars the provider listed.
+    calendars: usize,
+    /// Calendars the walk got to before it ended, the one refused excluded.
+    reached: usize,
+    /// Calendars earlier deliveries of this round synced, which this one
+    /// skipped; zero on a round's first delivery.
+    resumed_from: usize,
+}
+
+impl Walk {
+    fn record(&self, span: &tracing::Span) {
+        span.record("calendars", self.calendars);
+        span.record("calendars_reached", self.reached);
+        span.record("resumed_from", self.resumed_from);
+    }
+}
+
+/// End a round at Macro's per-inbox request limit, recording how far its walk
+/// got (`None` when the calendar list itself was refused) and when the next
+/// delivery may resume it.
+fn defer_round(error: &CalendarProviderError, walk: Option<&Walk>) -> GoogleBackfillOutcome {
+    let retry_after = error
+        .retry_after()
+        .unwrap_or(DEFERRAL)
+        .clamp(std::time::Duration::from_secs(1), MAX_DEFERRAL);
+    let deferred_until = chrono::TimeDelta::from_std(retry_after)
+        .ok()
+        .map(|delay| (Utc::now() + delay).to_rfc3339());
+    let span = tracing::Span::current();
+    if let Some(walk) = walk {
+        walk.record(&span);
+    }
+    span.record("outcome", "deferred");
+    span.record("retry_after_s", retry_after.as_secs());
+    if let Some(deferred_until) = &deferred_until {
+        span.record("deferred_until", deferred_until.as_str());
+    }
+    tracing::info!(
+        calendars = walk.map(|walk| walk.calendars),
+        calendars_reached = walk.map(|walk| walk.reached),
+        resumed_from = walk.map(|walk| walk.resumed_from),
+        retry_after_s = retry_after.as_secs(),
+        deferred_until,
+        "deferring a Google Calendar account round at the inbox's request limit"
+    );
+    GoogleBackfillOutcome::Deferred { retry_after }
 }
 
 fn validate_upsert(upsert: &CalendarEventUpsert) -> Result<(), Report> {

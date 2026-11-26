@@ -2,10 +2,17 @@
 use anyhow::Context;
 use email::domain::message_labels::state as label_state;
 use email::domain::message_labels::{
-    MessageLabelDefinition, MessageLabelInbox, MessageLabelRepository, MessageLabelTarget,
-    StageFailure, StagedLabelWrite,
+    GainingThread, MessageLabelDefinition, MessageLabelInbox, MessageLabelRepository,
+    MessageLabelTarget, StageFailure, StagedLabelWrite, StagedMessageLabels,
 };
+use email::domain::models::UserProvider;
+use email::domain::models::mailbox_action::{
+    MailboxAction, MailboxActionMessage, MailboxActionTarget,
+};
+use email::domain::ports::EmailRepo;
 use email::outbound::label_state_pg::PgLabelState;
+use email_db_client::labels::thread_gain;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service;
 use uuid::Uuid;
 
@@ -14,16 +21,28 @@ pub mod gmail_ops;
 #[cfg(test)]
 mod test;
 
-pub struct PgMessageLabels(pub sqlx::PgPool);
+/// Message-label persistence on the pool, with the inbox's mailbox commands
+/// written through the email repository composed at startup.
+pub struct PgMessageLabels<M>(pub sqlx::PgPool, pub M);
 
 #[derive(Debug, thiserror::Error)]
 pub enum MessageLabelPersistenceError {
     #[error(transparent)]
     Database(#[from] anyhow::Error),
+    /// The inbox stayed locked past the lock timeout; the change can be retried.
+    #[error(transparent)]
+    Contended(email::domain::models::EmailErr),
 }
 
-impl MessageLabelRepository for PgMessageLabels {
+impl<M> MessageLabelRepository for PgMessageLabels<M>
+where
+    M: EmailRepo<Err = sqlx::Error>,
+{
     type Err = MessageLabelPersistenceError;
+
+    fn is_contended(&self, error: &Self::Err) -> bool {
+        matches!(error, MessageLabelPersistenceError::Contended(_))
+    }
 
     async fn inbox_for_message(
         &self,
@@ -42,6 +61,10 @@ impl MessageLabelRepository for PgMessageLabels {
         Ok(link.map(|link| MessageLabelInbox {
             id: link.id,
             macro_id: link.macro_id,
+            provider: match link.provider {
+                service::link::UserProvider::Gmail => UserProvider::Gmail,
+                service::link::UserProvider::Outlook => UserProvider::Outlook,
+            },
         }))
     }
 
@@ -87,7 +110,7 @@ impl MessageLabelRepository for PgMessageLabels {
             .collect())
     }
 
-    async fn stage(&self, write: StagedLabelWrite) -> Result<Vec<(Uuid, String)>, StageFailure> {
+    async fn stage(&self, write: StagedLabelWrite) -> Result<StagedMessageLabels, StageFailure> {
         let StagedLabelWrite {
             link_id,
             thread_ids,
@@ -103,9 +126,9 @@ impl MessageLabelRepository for PgMessageLabels {
         })?;
 
         // The changed messages Gmail knows about; drafts have no provider_id.
-        let transaction_result: anyhow::Result<Vec<(Uuid, String)>> = async {
+        let transaction_result: anyhow::Result<StagedMessageLabels> = async {
             if message_db_ids.is_empty() {
-                return Ok(Vec::new());
+                return Ok(StagedMessageLabels::default());
             }
             email_db_client::labels::pending_writes::lock_thread_label_writes(&mut tx, &thread_ids)
                 .await
@@ -142,7 +165,19 @@ impl MessageLabelRepository for PgMessageLabels {
             .await
             .context("Failed to mark pending label writes")?;
 
+            let mut absent = Vec::new();
             if is_adding {
+                for thread_id in &thread_ids {
+                    let missing = thread_gain::absent_from_thread(
+                        &mut tx,
+                        link_id,
+                        *thread_id,
+                        std::slice::from_ref(&provider_label_id),
+                    )
+                    .await
+                    .context("Failed to read the threads' labels")?;
+                    absent.extend(missing.into_iter().map(|label| (*thread_id, label)));
+                }
                 label_state::insert_message_labels_batch(
                     &mut PgLabelState(&mut tx),
                     &message_db_ids,
@@ -190,17 +225,34 @@ impl MessageLabelRepository for PgMessageLabels {
                 .context("Failed to update thread state")?;
             }
 
-            Ok(provider_messages)
+            let absent_labels: Vec<Uuid> = absent.iter().map(|(_, label)| *label).collect();
+            let gaining =
+                thread_gain::carried_by_messages(&mut tx, &message_db_ids, &absent_labels)
+                    .await
+                    .context("Failed to read which threads gained the label")?
+                    .into_iter()
+                    .filter(|label| absent.contains(&(label.thread_id, label.label_id)))
+                    .map(|label| GainingThread {
+                        thread_id: label.thread_id,
+                        message_id: label.message_id,
+                        label_id: label.label_id,
+                    })
+                    .collect();
+
+            Ok(StagedMessageLabels {
+                provider_messages,
+                gaining,
+            })
         }
         .await;
 
         match transaction_result {
-            Ok(provider_messages) => {
+            Ok(staged) => {
                 tx.commit().await.map_err(|e| {
                     tracing::error!(error=?e, "unable to commit transaction");
                     StageFailure::Commit
                 })?;
-                Ok(provider_messages)
+                Ok(staged)
             }
             Err(e) => {
                 tracing::error!(error=?e, "Transaction failed, rolling back");
@@ -226,9 +278,38 @@ impl MessageLabelRepository for PgMessageLabels {
             })
             .map_err(Into::into)
     }
+
+    async fn mailbox_action_messages(
+        &self,
+        link_id: Uuid,
+        thread_id: Uuid,
+    ) -> Result<Vec<MailboxActionMessage>, Self::Err> {
+        self.1
+            .mailbox_action_messages(link_id, thread_id)
+            .await
+            .map_err(|e| anyhow::Error::from(e).into())
+    }
+
+    async fn enqueue_mailbox_action(
+        &self,
+        link_id: Uuid,
+        actor: MacroUserIdStr<'static>,
+        action: &MailboxAction,
+        targets: &[MailboxActionTarget],
+    ) -> Result<Uuid, Self::Err> {
+        self.1
+            .enqueue_mailbox_action(link_id, actor, action, targets)
+            .await
+            .map_err(|error| match error {
+                email::domain::models::EmailErr::Contended => {
+                    MessageLabelPersistenceError::Contended(error)
+                }
+                error => anyhow::Error::from(error).into(),
+            })
+    }
 }
 
-impl PgMessageLabels {
+impl<M> PgMessageLabels<M> {
     /// Restore an unqueued write while holding the same thread label-write locks.
     async fn revert_unsent_write(
         &self,

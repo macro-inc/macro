@@ -1,0 +1,76 @@
+{
+  "needs": [
+    {
+      "id": "r1",
+      "what": "Mail sorting: prospects, contracts and forecast mail mixed with CRM, signing and chat notifications, which Tessa already files under her own labels (Prospects, Contracts, Forecast).",
+      "evidence": ["labels Prospects, Contracts, Forecast on most messages"],
+      "catalog": ["inbox"],
+      "surfaces": ["email"]
+    },
+    {
+      "id": "r2",
+      "what": "An AE working 8 to 10 open deals with a weekly commit to her director; deals that go quiet are what she is judged on.",
+      "evidence": ["Weekly pipeline summary: $1.24M open across 11 deals", "Forecast: need your commit by Thursday noon", "Monday: commit call 8:30 — bring Harborline & Bluegate dates"],
+      "catalog": ["pipeline"],
+      "surfaces": ["crm"]
+    },
+    {
+      "id": "r3",
+      "what": "Days of demos, discovery calls and internal forecast reviews.",
+      "evidence": ["Invitation: Q4 forecast review — Tessa", "Invitation: Meridian Parcel <> Corvana discovery", "Invitation: Corvana demo for Pinecrest ops team"],
+      "catalog": ["brief", "meeting_brief"],
+      "surfaces": ["calendar", "tasks"]
+    },
+    {
+      "id": "r4",
+      "what": "Convoq emails a recap after each prospect call (demo, discovery, pricing, negotiation), with the next steps she promised.",
+      "evidence": ["Call recap: Corvana <> Harborline Freight — negotiation call", "Call recap: Corvana <> Valewood Fulfillment — demo", "Call recap: Corvana <> Meridian Parcel — discovery", "Call recap: Corvana <> Northstar Drayage — pricing walkthrough"],
+      "catalog": ["promises"],
+      "drafted": "When a call recap email arrives, make a task for each next step Tessa agreed to, with the account and any date.",
+      "surfaces": ["email", "tasks"]
+    },
+    {
+      "id": "r5",
+      "what": "Contracts move through e-signature (sent, viewed, completed) and legal redlines; a signed order form needs a handoff and a viewed one a nudge.",
+      "evidence": ["Completed: Corvana Order Form — Coastal Crossdock Co", "Rachel Ostrowski viewed: Corvana MSA + Order Form — Harborline Freight", "Envelope sent: Corvana MSA + Order Form — Harborline Freight", "Signed order form attached"],
+      "catalog": [],
+      "drafted": "When an e-signature email says an order form was completed (or a prospect sends a signed one), make a task to start the customer handoff, naming the account.",
+      "surfaces": ["email", "tasks"]
+    },
+    {
+      "id": "r6",
+      "what": "Her director asks for a forecast commit every week (Thursday noon, then a Monday commit call) with dates for her late-stage deals.",
+      "evidence": ["Forecast: need your commit by Thursday noon", "Re: Q4 forecast review — what I need by Monday", "Forecast call prep: Harborline, Bluegate, Pinecrest"],
+      "catalog": [],
+      "drafted": "Every Thursday morning, draft her forecast commit for her own review: each late-stage deal with its stage, amount, close date and last contact, from her mail and CRM.",
+      "surfaces": ["crm", "tasks"]
+    }
+  ],
+  "decoys": [
+    {
+      "id": "x1",
+      "what": "Summing up pull requests",
+      "why": "She sells software; nothing in her mail is code review.",
+      "catalog": ["pull_requests"]
+    },
+    {
+      "id": "x2",
+      "what": "Tasks to pay invoices",
+      "why": "She sells; the invoices in her mail are quotes and commission statements, not bills she pays.",
+      "catalog": ["invoices"]
+    },
+    {
+      "id": "x3",
+      "what": "A digest of LinkedIn notices, #deals chat digests or industry newsletters",
+      "why": "Automated notices she skims; a recap of them is noise.",
+      "catalog": ["newsletters"]
+    },
+    {
+      "id": "x4",
+      "what": "Anything that emails prospects, sends follow-ups or updates the CRM for others on her behalf",
+      "why": "Routines may not send or act as her."
+    }
+  ],
+  "fine": ["approvals", "archive_noise", "blockers", "call_followups", "call_recap", "call_tasks", "channel_answers", "channel_digest", "cold_outreach", "customer_followups", "date_changes", "decision_log", "delegated", "document_tags", "email_tags", "email_tasks", "end_of_day", "focus_time", "meeting_agenda", "mentions", "needs_reply", "one_on_one_prep", "project_hygiene", "project_update", "questionnaire", "reconnect", "recurring_task", "reply_drafts", "stuck", "task_routing", "triage", "updates", "week_ahead", "weekly_wrap"],
+  "misfit": ["agent_digest", "team_progress", "prd_tasks"]
+}

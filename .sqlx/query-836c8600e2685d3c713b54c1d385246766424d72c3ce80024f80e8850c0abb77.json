@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM crm_email_backfill_outbox WHERE team_id = $1 AND user_id = $2\n               AND work_id IS NOT DISTINCT FROM $3 AND consent_incarnation IS NOT DISTINCT FROM $4\n               AND policy_version IS NOT DISTINCT FROM $5",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "836c8600e2685d3c713b54c1d385246766424d72c3ce80024f80e8850c0abb77"
+}

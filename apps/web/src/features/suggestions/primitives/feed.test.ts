@@ -4,10 +4,12 @@ import type {
   SuggestionActions,
   SuggestionsSource,
 } from '../context/suggestions-source';
+import type { ForYouList } from '../core/lists';
 import type {
   FeedCounts,
   Suggestion,
   SuggestionFeed,
+  Topic,
 } from '../core/suggestion';
 import {
   backgroundSuggestion,
@@ -17,6 +19,7 @@ import {
   failedSuggestion,
   quietBackgroundSuggestion as quietSuggestion,
   replySuggestion,
+  reviewSuggestion,
   routineSuggestion,
   runningSuggestion,
 } from '../tests/fixtures';
@@ -38,16 +41,35 @@ function countsOf(suggestions: Suggestion[]): FeedCounts {
   return counts;
 }
 
+/** The topics a server would send for `suggestions`: those of the open ones. */
+function topicsOf(suggestions: Suggestion[]): Topic[] {
+  return suggestions.flatMap(({ status, topic }) =>
+    topic && status !== 'done' ? [{ ...topic, reason: `${topic.key} now` }] : []
+  );
+}
+
 function host(suggestions: Suggestion[]) {
   const [feed, setFeed] = createSignal<SuggestionFeed | undefined>({
     suggestions,
     counts: countsOf(suggestions),
+    topics: topicsOf(suggestions),
   });
+  /** The server's next answer lists `list`. */
+  const serve = (list: Suggestion[]) =>
+    setFeed({
+      suggestions: list,
+      counts: countsOf(list),
+      topics: topicsOf(list),
+    });
   /** The server stops listing a suggestion, as after a dismissal. */
   const drop = (id: string) =>
     setFeed((held) => {
       const left = held?.suggestions.filter((other) => other.id !== id) ?? [];
-      return { suggestions: left, counts: countsOf(left) };
+      return {
+        suggestions: left,
+        counts: countsOf(left),
+        topics: topicsOf(left),
+      };
     });
   const source = {
     feed,
@@ -58,7 +80,8 @@ function host(suggestions: Suggestion[]) {
     dismiss: vi.fn(async (id: string) => {
       drop(id);
     }),
-    restore: vi.fn(async (_id: string) => {}),
+    stop: vi.fn(async (_id: string) => {}),
+    restore: vi.fn(async (_suggestion: Suggestion) => {}),
     viewed: vi.fn(),
   } satisfies SuggestionsSource;
   const actions = {
@@ -69,7 +92,7 @@ function host(suggestions: Suggestion[]) {
     turnOnRoutine: vi.fn(async () => {}),
   } satisfies SuggestionActions;
 
-  return { source, actions };
+  return { source, actions, serve };
 }
 
 function withFeed(
@@ -86,16 +109,27 @@ function withFeed(
   });
 }
 
-function shownIds(feed: SuggestionsFeed) {
-  const view = feed.view();
+function entriesOf(feed: SuggestionsFeed, list: ForYouList = 'today') {
+  const view = feed.view(list);
 
-  return view.kind === 'suggestions'
-    ? view.entries.map((entry) => entry.suggestion.id)
-    : [];
+  return view.kind === 'rows' ? view.entries : [];
+}
+
+function shownIds(feed: SuggestionsFeed, list: ForYouList = 'today') {
+  return entriesOf(feed, list).map((entry) => entry.suggestion.id);
+}
+
+/** Today's rows, each as its id and how it reads. */
+function rowsOf(feed: SuggestionsFeed) {
+  return entriesOf(feed).map((entry) => [entry.suggestion.id, entry.state]);
+}
+
+function entryOf(feed: SuggestionsFeed, id: string) {
+  return entriesOf(feed).find((entry) => entry.suggestion.id === id);
 }
 
 describe('suggestions feed', () => {
-  it('shows the server’s order and counts as they are, with a failed run counted under Running', async () => {
+  it('lists what waits or runs in the server’s order, and Done apart', async () => {
     await withFeed(
       [
         composerSuggestion,
@@ -110,17 +144,129 @@ describe('suggestions feed', () => {
           'suggestion-reply',
           'suggestion-failed',
           'suggestion-running',
-          'suggestion-done',
         ]);
-        expect(feed.counts()).toEqual({ all: 5, running: 2, open: 2, done: 1 });
-
-        feed.setFilter('running');
-        expect(shownIds(feed)).toEqual([
+        expect(shownIds(feed, 'toDo')).toEqual(['suggestion-reply']);
+        expect(shownIds(feed, 'suggestions')).toEqual([
+          'suggestion-composer',
           'suggestion-failed',
           'suggestion-running',
         ]);
+        expect(shownIds(feed, 'done')).toEqual(['suggestion-done']);
+        expect(feed.counts()).toEqual({
+          today: 4,
+          toDo: 1,
+          suggestions: 3,
+          done: 1,
+        });
       }
     );
+  });
+
+  it('keeps a row marked done in place, struck, with Undo that opens it again', async () => {
+    await withFeed(
+      [composerSuggestion, reviewSuggestion, replySuggestion],
+      async (feed, { source, serve }) => {
+        source.accept.mockImplementationOnce(async () => {
+          serve([
+            composerSuggestion,
+            replySuggestion,
+            { ...reviewSuggestion, status: 'done' },
+          ]);
+          return 'accepted';
+        });
+        expect(await feed.markDone(reviewSuggestion)).toBe(true);
+
+        expect(rowsOf(feed)).toEqual([
+          ['suggestion-composer', 'open'],
+          ['suggestion-review', 'markedDone'],
+          ['suggestion-reply', 'open'],
+        ]);
+        expect(entryOf(feed, 'suggestion-review')?.canUndo).toBe(true);
+        // Only waiting rows count; Done has it already.
+        expect(feed.counts()).toMatchObject({ today: 2, done: 1 });
+
+        source.restore.mockImplementationOnce(async () => {
+          serve([composerSuggestion, reviewSuggestion, replySuggestion]);
+        });
+        await feed.undoDone(reviewSuggestion);
+        expect(source.restore).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'suggestion-review' })
+        );
+        expect(rowsOf(feed)[1]).toEqual(['suggestion-review', 'open']);
+      }
+    );
+  });
+
+  it('keeps a run that finished during the visit in place, and lists one done before it only in Done', async () => {
+    await withFeed(
+      [runningSuggestion, composerSuggestion, doneSuggestion],
+      async (feed, { serve }) => {
+        serve([
+          composerSuggestion,
+          { ...runningSuggestion, status: 'done' },
+          doneSuggestion,
+        ]);
+
+        expect(rowsOf(feed)).toEqual([
+          ['suggestion-running', 'finished'],
+          ['suggestion-composer', 'open'],
+        ]);
+        expect(entryOf(feed, 'suggestion-running')?.canUndo).toBe(false);
+        expect(shownIds(feed, 'done')).toEqual([
+          'suggestion-running',
+          'suggestion-done',
+        ]);
+      }
+    );
+  });
+
+  it('shows a routine suggestion whose routine was saved as on, where it was', async () => {
+    await withFeed(
+      [routineSuggestion, composerSuggestion],
+      async (feed, { source, serve }) => {
+        source.refresh.mockImplementationOnce(async () => {
+          serve([
+            composerSuggestion,
+            {
+              ...routineSuggestion,
+              status: 'done',
+              result: { entityType: 'scheduled_action', entityId: 'routine-1' },
+            },
+          ]);
+        });
+        expect(await feed.accept(routineSuggestion)).toBe(true);
+
+        expect(rowsOf(feed)).toEqual([
+          ['suggestion-routine', 'routineOn'],
+          ['suggestion-composer', 'open'],
+        ]);
+      }
+    );
+  });
+
+  it('stops a run and keeps the suggestion, which the server opens again', async () => {
+    await withFeed([runningSuggestion], async (feed, { source, serve }) => {
+      source.stop.mockImplementationOnce(async () => {
+        serve([{ ...runningSuggestion, status: 'open' }]);
+      });
+      await feed.stop(runningSuggestion);
+
+      expect(source.stop).toHaveBeenCalledWith('suggestion-running');
+      expect(source.dismiss).not.toHaveBeenCalled();
+      expect(rowsOf(feed)).toEqual([['suggestion-running', 'open']]);
+    });
+  });
+
+  it('marks the row failed when the server refuses to stop its run', async () => {
+    await withFeed([runningSuggestion], async (feed, { source }) => {
+      source.stop.mockRejectedValueOnce(new Error('refused'));
+      await feed.stop(runningSuggestion);
+
+      expect(entryOf(feed, 'suggestion-running')).toMatchObject({
+        state: 'running',
+        failed: true,
+      });
+    });
   });
 
   it('opens the composer with a composer suggestion’s prompt and accepts it', async () => {
@@ -176,9 +322,8 @@ describe('suggestions feed', () => {
     await createRoot(async (dispose) => {
       const feed = createSuggestionsFeed(deps.source, deps.actions);
       const entry = () => {
-        const view = feed.view();
-        if (view.kind !== 'suggestions')
-          throw new Error('expected suggestions');
+        const view = feed.view('today');
+        if (view.kind !== 'rows') throw new Error('expected rows');
 
         return view.entries[0];
       };
@@ -218,9 +363,8 @@ describe('suggestions feed', () => {
     await createRoot(async (dispose) => {
       const feed = createSuggestionsFeed(deps.source, deps.actions);
       const entry = () => {
-        const view = feed.view();
-        if (view.kind !== 'suggestions')
-          throw new Error('expected suggestions');
+        const view = feed.view('today');
+        if (view.kind !== 'rows') throw new Error('expected rows');
 
         return view.entries[0];
       };
@@ -250,19 +394,15 @@ describe('suggestions feed', () => {
     );
   });
 
-  it('lists an opened suggestion as done once the server says so, and opens it again without accepting', async () => {
-    const opened = { ...draftedReplySuggestion, status: 'done' as const };
-    await withFeed(
-      [replySuggestion, opened],
-      async (feed, { source, actions }) => {
-        expect(shownIds(feed)).toEqual(['suggestion-reply', opened.id]);
-        expect(feed.counts()).toEqual({ all: 2, running: 0, open: 1, done: 1 });
+  it('keeps an opened reply suggestion open while the server does, and accepts it again on the next open', async () => {
+    await withFeed([replySuggestion], async (feed, { source, actions }) => {
+      await feed.accept(replySuggestion);
+      await feed.accept(replySuggestion);
 
-        feed.open(opened);
-        expect(actions.openDraft).toHaveBeenCalledWith(DRAFT);
-        expect(source.accept).not.toHaveBeenCalled();
-      }
-    );
+      expect(source.accept).toHaveBeenCalledTimes(2);
+      expect(actions.openItem).toHaveBeenCalledTimes(2);
+      expect(shownIds(feed)).toEqual(['suggestion-reply']);
+    });
   });
 
   it('opens nothing when the account changed while the accept was out', async () => {
@@ -290,10 +430,10 @@ describe('suggestions feed', () => {
 
     await createRoot(async (dispose) => {
       const feed = createSuggestionsFeed(deps.source, deps.actions);
-      await feed.reviewRoutine(routineSuggestion);
+      await feed.look(routineSuggestion);
 
-      const view = feed.view();
-      if (view.kind !== 'suggestions') throw new Error('expected a feed');
+      const view = feed.view('today');
+      if (view.kind !== 'rows') throw new Error('expected a feed');
       expect(view.entries[0]?.failed).toBe(true);
       dispose();
     });
@@ -309,53 +449,93 @@ describe('suggestions feed', () => {
     });
   });
 
-  it('opens what the server says a finished run left, and a running one’s session', async () => {
+  it('looks at a running suggestion’s session, and at a waiting one’s prompt without taking it up', async () => {
     await withFeed(
-      [runningSuggestion, doneSuggestion],
-      async (feed, { actions }) => {
-        feed.open(doneSuggestion);
+      [runningSuggestion, backgroundSuggestion],
+      async (feed, { source, actions }) => {
+        await feed.look(runningSuggestion);
+        expect(actions.openItem).toHaveBeenLastCalledWith({
+          entityType: 'agent_session',
+          entityId: 'session-1',
+        });
+
+        await feed.look(backgroundSuggestion);
+        expect(actions.openComposer).toHaveBeenCalledWith(
+          'Summarize this week and post it.'
+        );
+        expect(source.accept).not.toHaveBeenCalled();
+      }
+    );
+  });
+
+  it('opens what a finished run left, and a finished reply’s draft, without accepting', async () => {
+    const opened = { ...draftedReplySuggestion, status: 'done' as const };
+    await withFeed(
+      [doneSuggestion, opened],
+      async (feed, { source, actions }) => {
+        await feed.open(doneSuggestion);
         expect(actions.openItem).toHaveBeenLastCalledWith({
           entityType: 'document',
           entityId: 'document-1',
         });
 
-        feed.open(runningSuggestion);
-        expect(actions.openItem).toHaveBeenLastCalledWith({
-          entityType: 'agent_session',
-          entityId: 'session-1',
-        });
+        await feed.open(opened);
+        expect(actions.openDraft).toHaveBeenCalledWith(DRAFT);
+        expect(source.accept).not.toHaveBeenCalled();
       }
     );
   });
 
-  it('opens nothing for a finished suggestion that left nothing', async () => {
-    const unsettled: Suggestion = {
-      ...quietSuggestion,
-      status: 'done',
-    };
+  it('opens nothing for a finished run that left nothing', async () => {
+    const unsettled: Suggestion = { ...quietSuggestion, status: 'done' };
     await withFeed([unsettled], async (feed, { actions }) => {
-      feed.open(unsettled);
+      await feed.open(unsettled);
 
+      expect(actions.openItem).not.toHaveBeenCalled();
+      expect(actions.openComposer).not.toHaveBeenCalled();
+    });
+  });
+
+  it('marks a review done by taking it up, without opening anything', async () => {
+    await withFeed([reviewSuggestion], async (feed, { source, actions }) => {
+      await feed.markDone(reviewSuggestion);
+
+      expect(source.accept).toHaveBeenCalledWith(reviewSuggestion);
       expect(actions.openItem).not.toHaveBeenCalled();
     });
   });
 
-  it('sends a dismissal at once and keeps the suggestion as a row to undo', async () => {
+  it('never marks a reply done, since only the person’s reply finishes it', async () => {
+    await withFeed([replySuggestion], async (feed, { source }) => {
+      await feed.markDone(replySuggestion);
+
+      expect(source.accept).not.toHaveBeenCalled();
+    });
+  });
+
+  it('never marks a background prompt done, since taking it up starts its run', async () => {
+    await withFeed([backgroundSuggestion], async (feed, { source }) => {
+      await feed.markDone(backgroundSuggestion);
+
+      expect(source.accept).not.toHaveBeenCalled();
+    });
+  });
+
+  it('sends a dismissal at once and keeps the suggestion where it was, to undo', async () => {
     await withFeed(
       [composerSuggestion, replySuggestion],
       async (feed, { source }) => {
         await feed.dismiss(composerSuggestion);
 
         expect(source.dismiss).toHaveBeenCalledWith('suggestion-composer');
-        const view = feed.view();
-        if (view.kind !== 'suggestions') throw new Error('expected a feed');
+        const view = feed.view('today');
+        if (view.kind !== 'rows') throw new Error('expected a feed');
         expect(
-          view.entries.map((entry) => [entry.suggestion.id, entry.dismissed])
+          view.entries.map((entry) => [entry.suggestion.id, entry.state])
         ).toEqual([
-          ['suggestion-reply', false],
-          ['suggestion-composer', true],
+          ['suggestion-composer', 'dismissed'],
+          ['suggestion-reply', 'open'],
         ]);
-        expect(feed.counts().all).toBe(1);
       }
     );
   });
@@ -365,7 +545,9 @@ describe('suggestions feed', () => {
       await feed.dismiss(composerSuggestion);
       await feed.undoDismiss(composerSuggestion);
 
-      expect(source.restore).toHaveBeenCalledWith('suggestion-composer');
+      expect(source.restore).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'suggestion-composer' })
+      );
       // The row is gone; the restored card comes back with the next read.
       expect(shownIds(feed)).toEqual([]);
     });
@@ -380,10 +562,129 @@ describe('suggestions feed', () => {
       await feed.dismiss(composerSuggestion);
       await feed.undoDismiss(composerSuggestion);
 
-      const view = feed.view();
-      if (view.kind !== 'suggestions') throw new Error('expected a feed');
-      expect(view.entries[0]).toMatchObject({ dismissed: true, failed: true });
+      const view = feed.view('today');
+      if (view.kind !== 'rows') throw new Error('expected a feed');
+      expect(view.entries[0]).toMatchObject({
+        state: 'dismissed',
+        failed: true,
+      });
       dispose();
+    });
+  });
+
+  it('shows a row dismissed from the press, while the feed drops it before the server answers', async () => {
+    await withFeed([composerSuggestion], async (feed, { source, serve }) => {
+      let answer: () => void = () => {};
+      source.dismiss.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            answer = resolve;
+          })
+      );
+      const sent = feed.dismiss(composerSuggestion);
+      // The feed no longer lists it while the dismissal is still answering.
+      serve([]);
+      await source.refresh();
+
+      expect(rowsOf(feed)).toEqual([['suggestion-composer', 'dismissed']]);
+      answer();
+      await sent;
+      expect(rowsOf(feed)).toEqual([['suggestion-composer', 'dismissed']]);
+    });
+  });
+
+  it('groups Today by topic, keeps a group whose rows settle, and leaves the other lists flat', async () => {
+    const acme = { key: 'customer:acme', name: 'Acme renewal' };
+    const first = { ...replySuggestion, topic: acme };
+    const second = { ...backgroundSuggestion, topic: acme };
+    const lone = {
+      ...reviewSuggestion,
+      topic: { key: 'event:offsite', name: 'Spring offsite' },
+    };
+    await withFeed([lone, first, second], async (feed) => {
+      const grouped = () =>
+        feed
+          .groups('today')
+          .map(({ topic, entries }) => [
+            topic?.name,
+            topic?.reason,
+            entries.map((entry) => entry.suggestion.id),
+          ]);
+      const inAcme = [
+        'Acme renewal',
+        'customer:acme now',
+        [first.id, second.id],
+      ];
+      expect(grouped()).toEqual([inAcme, [undefined, undefined, [lone.id]]]);
+      expect(feed.groups('toDo')).toHaveLength(1);
+      expect(feed.topics().map((topic) => topic.waiting)).toEqual([2]);
+
+      // Its topic now has one open row, and stays together.
+      await feed.dismiss(first);
+      expect(grouped()).toEqual([inAcme, [undefined, undefined, [lone.id]]]);
+      expect(feed.topics().map((topic) => topic.waiting)).toEqual([1]);
+
+      const [topic] = feed.topics();
+      expect(
+        feed
+          .groups('today', topic)
+          .map(({ entries }) => entries.map((entry) => entry.suggestion.id))
+      ).toEqual([[first.id, second.id]]);
+    });
+  });
+
+  it('keeps a row dismissed, with Undo, when the feed dropped it before its dismissal failed', async () => {
+    await withFeed([composerSuggestion], async (feed, { source, serve }) => {
+      let fail: (error: Error) => void = () => {};
+      source.dismiss.mockImplementationOnce(
+        () =>
+          new Promise<void>((_resolve, reject) => {
+            fail = reject;
+          })
+      );
+      const sent = feed.dismiss(composerSuggestion);
+      // The server took the dismissal (a poll no longer lists it), and only
+      // its answer was lost.
+      serve([]);
+      fail(new Error('connection lost'));
+      await sent;
+
+      expect(entryOf(feed, 'suggestion-composer')).toMatchObject({
+        state: 'dismissed',
+        failed: false,
+      });
+    });
+  });
+
+  it('keeps a row dismissed when its dismissal failed but the feed read after it no longer lists it', async () => {
+    await withFeed([composerSuggestion], async (feed, { source, serve }) => {
+      source.dismiss.mockRejectedValueOnce(new Error('connection lost'));
+      source.refresh.mockImplementationOnce(async () => {
+        serve([]);
+      });
+
+      await feed.dismiss(composerSuggestion);
+
+      expect(entryOf(feed, 'suggestion-composer')).toMatchObject({
+        state: 'dismissed',
+        failed: false,
+      });
+    });
+  });
+
+  it('shows what a run left when it finished before its dismissal reached the server', async () => {
+    await withFeed([runningSuggestion], async (feed, { source, serve }) => {
+      source.dismiss.mockRejectedValueOnce(new Error('not found'));
+      source.refresh.mockImplementationOnce(async () => {
+        serve([{ ...runningSuggestion, status: 'done' }]);
+      });
+
+      await feed.dismiss(runningSuggestion);
+
+      expect(entryOf(feed, 'suggestion-running')).toMatchObject({
+        state: 'finished',
+        failed: false,
+      });
     });
   });
 
@@ -395,9 +696,9 @@ describe('suggestions feed', () => {
       const feed = createSuggestionsFeed(deps.source, deps.actions);
       await feed.dismiss(composerSuggestion);
 
-      const view = feed.view();
-      if (view.kind !== 'suggestions') throw new Error('expected a feed');
-      expect(view.entries[0]).toMatchObject({ dismissed: false, failed: true });
+      const view = feed.view('today');
+      if (view.kind !== 'rows') throw new Error('expected a feed');
+      expect(view.entries[0]).toMatchObject({ state: 'open', failed: true });
       dispose();
     });
   });

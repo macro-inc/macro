@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id AS \"id!\" FROM unnest($2::uuid[]) d(id)\n                   WHERE EXISTS(SELECT 1 FROM crm_email_rule_companies r\n                       WHERE r.company_id=d.id AND r.team_id=$1 OFFSET 0)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "5ae892423bb3ae6dcc5a0e27458c69fd198a59211e7075b5501bf2ee0cadb90f"
+}

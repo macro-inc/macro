@@ -1,7 +1,8 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { SoupViewContextProvider } from './soup-view-context';
+import { NO_SEARCH_OPERATOR_NAMES } from '../core/search-operator-filters';
+import { SoupViewContextProvider, useSoupView } from './soup-view-context';
 
 // The provider builds its query options during setup. solid-query evaluates an
 // options accessor synchronously inside the hook call (createMemo), so anything
@@ -22,6 +23,7 @@ const mocks = vi.hoisted(() => {
     itemsOptionsEvaluated: vi.fn(),
     groupedOptionsEvaluated: vi.fn(),
     searchOptionsEvaluated: vi.fn(),
+    view: 'home',
   };
 });
 
@@ -86,9 +88,12 @@ vi.mock('@queries/soup/search', () => ({
 }));
 vi.mock('@app/features/soup/search', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  useSearchContext: () => ({ entityPool: () => [], routinePool: () => [] }),
+  useSearchContext: () => ({
+    entityPool: () => () => [],
+    routinePool: () => [],
+  }),
   useOptionalSearchContext: () => ({
-    entityPool: () => [],
+    entityPool: () => () => [],
     routinePool: () => [],
   }),
 }));
@@ -107,7 +112,7 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
     handle: {
       id: 'panel-1',
       isActive: () => true,
-      content: () => ({ type: 'component', id: 'home' }),
+      content: () => ({ type: 'component', id: mocks.view }),
       currentEntryState: () => undefined,
       registerEntryStateCaptor: () => () => {},
     },
@@ -159,5 +164,109 @@ describe('SoupViewContextProvider setup', () => {
     };
     expect(typeof meta.itemFilter).toBe('function');
     expect(typeof meta.insertFilter).toBe('function');
+  });
+
+  it('awaits input in Search while only an operator still being typed is there', () => {
+    mocks.view = 'search';
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    let view: ReturnType<typeof useSoupView> | undefined;
+    const Probe = () => {
+      view = useSoupView();
+      return null;
+    };
+    render(() => (
+      <QueryClientProvider client={client}>
+        <SoupViewContextProvider>
+          <Probe />
+        </SoupViewContextProvider>
+      </QueryClientProvider>
+    ));
+
+    try {
+      view?.initialize();
+      view?.setSearchText('');
+      expect(view?.searchAwaitingInput()).toBe(true);
+      view?.setSearchText('type:');
+      expect(view?.searchAwaitingInput()).toBe(true);
+      view?.setSearchText('launch');
+      expect(view?.searchAwaitingInput()).toBe(false);
+    } finally {
+      mocks.view = 'home';
+    }
+  });
+
+  it('waits for a word in Search when a sender is all the operators set', () => {
+    mocks.view = 'search';
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    let view: ReturnType<typeof useSoupView> | undefined;
+    const Probe = () => {
+      view = useSoupView();
+      return null;
+    };
+    render(() => (
+      <QueryClientProvider client={client}>
+        <SoupViewContextProvider>
+          <Probe />
+        </SoupViewContextProvider>
+      </QueryClientProvider>
+    ));
+
+    try {
+      view?.initialize();
+      view?.provideOperatorLookup(() => ({
+        ...NO_SEARCH_OPERATOR_NAMES,
+        userId: 'macro|viewer@example.com',
+      }));
+      view?.setSearchText('type:channel');
+      expect(view?.searchAwaitingInput()).toBe(false);
+      // The feed can't check who sent a channel's messages.
+      view?.setSearchText('type:channel from:me');
+      expect(view?.searchAwaitingInput()).toBe(true);
+      view?.setSearchText('type:channel from:me launch');
+      expect(view?.searchAwaitingInput()).toBe(false);
+    } finally {
+      mocks.view = 'home';
+    }
+  });
+
+  it('waits for a word in Search when every word is one a minus leaves out', () => {
+    mocks.view = 'search';
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    let view: ReturnType<typeof useSoupView> | undefined;
+    const Probe = () => {
+      view = useSoupView();
+      return null;
+    };
+    render(() => (
+      <QueryClientProvider client={client}>
+        <SoupViewContextProvider>
+          <Probe />
+        </SoupViewContextProvider>
+      </QueryClientProvider>
+    ));
+
+    try {
+      view?.initialize();
+      view?.provideOperatorLookup(() => NO_SEARCH_OPERATOR_NAMES);
+      // The service refuses minus words alone, and the feed can't leave
+      // anything out by a word.
+      view?.setSearchText('-draft');
+      expect(view?.searchAwaitingInput()).toBe(true);
+      view?.setSearchText('type:doc -draft');
+      expect(view?.searchAwaitingInput()).toBe(true);
+      view?.setSearchText('budget -draft');
+      expect(view?.searchAwaitingInput()).toBe(false);
+      // Mail's search runs on them alone.
+      view?.setSearchText('type:email -draft');
+      expect(view?.searchAwaitingInput()).toBe(false);
+    } finally {
+      mocks.view = 'home';
+    }
   });
 });

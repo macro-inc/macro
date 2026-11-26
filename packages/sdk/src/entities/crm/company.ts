@@ -136,7 +136,7 @@ export class Company extends PropertiedEntity<CompanyDetail> {
     return records.map((r) => Contact.from(this.client, r));
   }
 
-  /** Search CRM companies by name/domain, most relevant first, auto-paginated. */
+  /** Search CRM companies by name/domain, most relevant first, auto-paginated; `maxItems` caps the total. */
   static search = entitySearch({
     filters: { crm_company_filters: {} },
     type: 'company',
@@ -201,6 +201,44 @@ export class Company extends PropertiedEntity<CompanyDetail> {
       c.storage.setCrmCompanyName({
         path: { company_id: this.id },
         body: { name },
+      }),
+    );
+  }
+
+  /**
+   * Add another domain the organization uses. Mail and new contacts from it
+   * are then filed under this company instead of a separate one (a school's
+   * `.edu` and `.com`, say). The company keeps its name and primary domain;
+   * contacts already filed elsewhere stay where they are. Rejects a personal
+   * email provider (400) and a domain another company of the team tracks
+   * (409, naming that company when the caller can see it).
+   *
+   * @write
+   * @idempotent
+   */
+  async addDomain(domain: string): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.addCrmCompanyDomain({
+        path: { company_id: this.id },
+        body: { domain },
+      }),
+    );
+  }
+
+  /**
+   * Remove one of the company's domains. Contacts and mail stay; later mail
+   * from the domain is filed as it was before it was added. The domain
+   * the company is named after stays until the company is {@link rename}d,
+   * and only a team admin can remove a domain while email sync is off.
+   *
+   * @destructive
+   * @idempotent
+   */
+  async removeDomain(domain: string): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.removeCrmCompanyDomain({
+        path: { company_id: this.id },
+        body: { domain },
       }),
     );
   }

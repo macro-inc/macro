@@ -1,6 +1,7 @@
 import { DraftTransferAborted } from '@app/features/email-compose/context/compose-capabilities';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { throwOnErr } from '@core/util/result';
+import { ThrownResultError, throwOnErr } from '@core/util/result';
+import { sleep } from '@core/util/sleep';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import { invalidateAllSoup, refetchSoupEntity } from '@queries/soup/cache';
 import { emailClient } from '@service-email/client';
@@ -14,7 +15,6 @@ import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { refreshEmailThreadCache } from './cache-cleanup';
-import { markThreadDraftSaved } from './draft-cache';
 import { emailKeys } from './keys';
 
 type CreateDraftParams = {
@@ -52,7 +52,6 @@ export function useSaveDraftMutation(
               .catch(Telemetry.error);
             const threadId = data.draft.thread_db_id;
             if (!threadId) return;
-            markThreadDraftSaved(threadId);
             if (!vars.skipSoupRefetch) {
               void refetchSoupEntity(threadId, 'emailThread').catch(
                 Telemetry.error
@@ -134,28 +133,26 @@ export function useDeleteDraftMutation(
   }));
 }
 
-/** Moving creates a new server identity; old queued mutations retain their old target. */
-export function transferEmailDraft(input: {
+type TransferEmailDraftInput = {
   operationId: string;
   draftId: string;
   draftGeneration?: number;
   sourceInboxId: string;
   destinationInboxId: string;
-}) {
+};
+
+/** How long a refused move waits for the draft's last save to reach its provider. */
+const TRANSFER_SYNC_WAIT_MS = 30_000;
+/** Requests one move makes when the draft keeps syncing between them. */
+const TRANSFER_ATTEMPTS = 3;
+const SYNC_POLL_DELAYS_MS = [250, 500, 1000];
+
+/** Moving creates a new server identity; old queued mutations retain their old target. */
+export function transferEmailDraft(input: TransferEmailDraftInput) {
   return Telemetry.span('email.draft_transfer.request', async (span) => {
     let result: TransferDraftResponse;
     try {
-      result = await throwOnErr(() =>
-        emailClient.transferDraft(
-          input.draftId,
-          {
-            operation_id: input.operationId,
-            draft_generation: input.draftGeneration ?? 0,
-            destination_link_id: input.destinationInboxId,
-          },
-          input.sourceInboxId
-        )
-      );
+      result = await requestDraftTransfer(input, span);
       span.setAttr('email.draft_transfer.committed_by', 'response');
     } catch (originalError) {
       const recovery = await span.span(
@@ -200,6 +197,93 @@ export function transferEmailDraft(input: {
   });
 }
 
+/**
+ * The service refuses to move a draft while its last save is still being
+ * written to the provider. An Outlook draft is written after the save
+ * returns, and the composer saves just before it asks for the move, so the
+ * move often arrives during that write. A refusal then waits for the write
+ * and asks again with the same operation ID: a refused move is not
+ * committed, and the service treats a repeated ID as the same move. Each
+ * request runs in the move's span: after an await the browser has no
+ * active trace context to carry.
+ */
+async function requestDraftTransfer(
+  input: TransferEmailDraftInput,
+  span: Span
+): Promise<TransferDraftResponse> {
+  const deadline = Date.now() + TRANSFER_SYNC_WAIT_MS;
+  for (let attempt = 1; ; attempt += 1) {
+    span.setAttr('email.draft_transfer.attempts', attempt);
+    const result = await span.run(() =>
+      emailClient.transferDraft(
+        input.draftId,
+        {
+          operation_id: input.operationId,
+          draft_generation: input.draftGeneration ?? 0,
+          destination_link_id: input.destinationInboxId,
+        },
+        input.sourceInboxId
+      )
+    );
+    if (result.isOk()) return result.value;
+    const refused = result.error.some((error) => error.code === 'CONFLICT');
+    const retry =
+      refused &&
+      attempt < TRANSFER_ATTEMPTS &&
+      (await span.span('email.draft_transfer.await_sync', (wait) =>
+        awaitProviderWrite(input.draftId, deadline, attempt, wait)
+      ));
+    if (!retry) throw new ThrownResultError(result.error);
+  }
+}
+
+/**
+ * True when the refusal can be put down to the draft's provider write and
+ * that write has ended: the draft's operation left PENDING while this waited
+ * (for SYNCHRONIZED, or for none once an earlier move's cleanup ends). A
+ * first refusal that finds the write already done asks once more, since the
+ * write may have ended just after the refusal. False for a draft with no
+ * write in flight (a Gmail draft), a write that ended in another state, a
+ * failed read, or a write still running at `deadline`.
+ */
+async function awaitProviderWrite(
+  draftId: string,
+  deadline: number,
+  attempt: number,
+  span: Span
+): Promise<boolean> {
+  let polls = 0;
+  let outcome: string;
+  while (true) {
+    polls += 1;
+    const read = await span.run(() => emailClient.messageOperation(draftId));
+    if (read.isErr()) {
+      outcome = 'read_failed';
+      break;
+    }
+    const state = read.value.operation?.state;
+    if (state !== 'PENDING') {
+      outcome = state ?? 'none';
+      break;
+    }
+    const delay =
+      SYNC_POLL_DELAYS_MS[Math.min(polls, SYNC_POLL_DELAYS_MS.length) - 1];
+    if (Date.now() + delay > deadline) {
+      outcome = 'timed_out';
+      break;
+    }
+    await sleep(delay);
+  }
+  const waited = polls > 1;
+  const retry = waited
+    ? outcome === 'SYNCHRONIZED' || outcome === 'none'
+    : outcome === 'SYNCHRONIZED' && attempt === 1;
+  span.setAttr('email.draft_transfer.sync_polls', polls);
+  span.setAttr('email.draft_transfer.sync_outcome', outcome);
+  span.setAttr('email.draft_transfer.retry', retry);
+  return retry;
+}
+
 async function refreshTransferredThreads(
   result: TransferDraftResponse,
   parent: Span
@@ -211,12 +295,5 @@ async function refreshTransferredThreads(
     parent.run(() => refreshEmailThreadCache(result.source_thread_id)),
     parent.run(() => refreshEmailThreadCache(result.thread_id)),
   ]);
-  for (const threadId of [result.source_thread_id, result.thread_id]) {
-    await parent.run(() =>
-      queryClient.invalidateQueries({
-        queryKey: emailKeys.threadMessages(threadId).queryKey,
-      })
-    );
-  }
   invalidateAllSoup();
 }

@@ -93,17 +93,19 @@ export function createContactFilterOptions(
       }
     const matching = new Set(suggestions.map((user) => user.id));
     const query = source.suggestions.search().trim().toLowerCase();
+    // A further page extends the list on screen; only a new list reorders it.
     const window = JSON.stringify([
       viewer,
       query,
-      suggestions.map((user) => user.id),
+      source.suggestions.windowKey() ?? null,
     ]);
     if (window !== previousWindow) {
       previousWindow = window;
       order = ids;
     } else {
-      // Toggling a visible checkbox must not move it beneath the pointer.
-      // Retain only this window and explicit selections, never prior pages.
+      // Toggling a visible checkbox or listing a further page must not move
+      // rows beneath the pointer. Retain only this list and explicit
+      // selections, never an earlier search's rows.
       const next = new Set(ids);
       const previous = new Set(order);
       order = [

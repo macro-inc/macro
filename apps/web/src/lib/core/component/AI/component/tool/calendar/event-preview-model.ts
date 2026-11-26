@@ -4,7 +4,7 @@ import type {
 } from '@app/features/calendar/components/composer/event-form-model';
 import {
   type CalendarEvent,
-  type CalendarPeriodView,
+  type CalendarGridPeriodView,
   DEFAULT_CALENDAR_SOURCE,
   DEFAULT_GUEST_POLICY,
   NO_VIEWER_CAPABILITIES,
@@ -91,7 +91,7 @@ export function calendarToolPreviewDate(event: CalendarEvent) {
 
 /** Visible period selected for a calendar-tool preview. */
 export interface CalendarToolPreviewWindow {
-  view: CalendarPeriodView;
+  view: CalendarGridPeriodView;
   start: Date;
   end: Date;
   /** Consecutive days shown when previewing one non-recurring multi-day event. */
@@ -171,7 +171,7 @@ export function calendarToolPreviewWindow(
     (localDayNumber(occupiedEnd) - localDayNumber(start)) /
       (24 * 60 * 60 * 1000)
   );
-  const view: CalendarPeriodView = recurrenceFrequency
+  const view: CalendarGridPeriodView = recurrenceFrequency
     ? recurrenceFrequency === 'DAILY' || recurrenceFrequency === 'WEEKLY'
       ? 'timeGridWeek'
       : 'dayGridMonth'
@@ -473,4 +473,39 @@ export function expandCalendarToolPreviewEvents(
   }
 
   return occurrences.length > 0 ? occurrences : [event];
+}
+
+/** The chips a calendar-tool preview draws, and the ones it highlights. */
+export interface CalendarToolPreviewEvents {
+  events: CalendarEvent[];
+  emphasizedIds: ReadonlySet<string>;
+  /** Whether the created event's occurrences stand in for the draft. */
+  showsCreated: boolean;
+}
+
+/**
+ * The person's events with the draft over them. Once the drafted event is
+ * created and its occurrences have loaded, they take the draft's place and
+ * its highlight; until then the draft stays, so the preview is never empty.
+ */
+export function calendarToolPreviewEvents(input: {
+  existing: readonly CalendarEvent[];
+  draft: readonly CalendarEvent[];
+  createdEventId: string | undefined;
+  limit: number;
+}): CalendarToolPreviewEvents {
+  const createdId = input.createdEventId;
+  const created = createdId
+    ? input.existing.filter((event) => event.eventId === createdId)
+    : [];
+  const showsCreated = created.length > 0;
+  const others = showsCreated
+    ? input.existing.filter((event) => event.eventId !== createdId)
+    : input.existing;
+  const emphasized = showsCreated ? created : input.draft;
+  return {
+    events: [...others.slice(0, input.limit), ...emphasized],
+    emphasizedIds: new Set(emphasized.map((event) => event.id)),
+    showsCreated,
+  };
 }

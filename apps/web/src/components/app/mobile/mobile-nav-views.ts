@@ -14,6 +14,7 @@ export const MOBILE_NAV_VIEW_IDS = [
   'documents',
   'passwords',
   'tasks',
+  'projects',
   'reviews',
   'booking-links',
   'external',

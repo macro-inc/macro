@@ -61,6 +61,8 @@ without changing the severity or scope of the workspace's legacy rules.
 | [`email-worker-no-runtime-io`](../../rules/ast-grep/email-worker-no-runtime-io.yml) | Concrete I/O in worker/context files outside startup composition. |
 | [`email-worker-no-raw-state-access`](../../rules/ast-grep/email-worker-no-raw-state-access.yml) | Raw pool/client worker-context fields and raw client use outside `context()`. |
 | [`email-outbound-no-inbound-host`](../../rules/ast-grep/email-outbound-no-inbound-host.yml) | Outbound dependencies on API/pubsub implementations via `crate::` or `super::` paths. |
+| [`email-link-lock-transactions-time-out`](../../rules/ast-grep/email-link-lock-transactions-time-out.yml) | `email_pg_repo` transactions in the files whose user writes lock a link row, opened without `email_pg_repo::begin`'s lock timeout. |
+| [`email-mailbox-transactions-time-out-locks`](../../rules/ast-grep/email-mailbox-transactions-time-out-locks.yml) | `mailbox_pg` transactions or acquired connections opened without `PgMailboxSync::begin`'s lock timeout. |
 
 These are error-level rules. Their notes list the composition, transport,
 legacy type and helper exceptions. Keep exceptions narrow and cover both the

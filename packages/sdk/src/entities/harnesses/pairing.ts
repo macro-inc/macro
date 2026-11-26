@@ -28,7 +28,8 @@ export class HarnessPairing extends MacroEntity<PairingDetails> {
   readonly expiresAt = this.field('expires_at');
 
   /**
-   * Approve this pairing.
+   * Approve this pairing; refused to an agent's program (ExecuteCode, a
+   * routine), so there ask the user to approve it in Settings, Machines.
    *
    * @write
    */

@@ -1,6 +1,6 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
+import { lazy } from '@core/util/lazy';
 import { ok } from 'neverthrow';
-import { lazy } from 'solid-js';
 
 export const definition = defineBlock({
   name: 'contact',
@@ -10,6 +10,9 @@ export const definition = defineBlock({
       .ContactBlockAdapter,
   })),
   liveTrackingEnabled: false,
+  // The id a block opens with can name a contact merged into another, so the
+  // contact view records the open under the id its read answers with.
+  openHistoryFromView: true,
   async load(source, _intent) {
     if (source.type === 'dss') {
       return ok({ id: source.id });

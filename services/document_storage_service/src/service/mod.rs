@@ -10,3 +10,5 @@ pub mod s3;
 pub mod soup_favorites_reader;
 
 pub mod saved_views;
+
+pub mod task_templates;

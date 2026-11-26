@@ -135,6 +135,8 @@ pub enum ImportErrorCode {
     Busy,
     /// Required dependency unavailable; retry this item.
     VaultUnavailable,
+    /// The team's vault has not been set up; retrying cannot help.
+    VaultNotProvisioned,
 }
 impl From<Error> for ImportErrorCode {
     fn from(value: Error) -> Self {
@@ -146,6 +148,7 @@ impl From<Error> for ImportErrorCode {
             Error::FolderMissing => Self::FolderMissing,
             Error::Busy => Self::Busy,
             Error::Unavailable => Self::VaultUnavailable,
+            Error::NotProvisioned => Self::VaultNotProvisioned,
         }
     }
 }

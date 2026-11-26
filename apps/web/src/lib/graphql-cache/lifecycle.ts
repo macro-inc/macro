@@ -3,11 +3,21 @@ import type { CacheHost } from './host/types';
 import { rotateCacheScope } from './scope';
 import { beginCacheWriteSession, endCacheWriteSession } from './session-writes';
 
+/**
+ * How long a logout waits for a browser cache to be wiped. A native cache gets no
+ * limit: the app's running engine refuses the scope that would replace it.
+ */
+export const LOGOUT_CLEAR_TIMEOUT_MS = 10_000;
+
+/** How long a wipe its logout no longer waits for may go on. */
+const ABANDONED_WIPE_LIMIT_MS = 60_000;
+
 const hosts = new Set<CacheHost>();
 // Factories capture the original backend/scope and only accept typed safe-to-
 // reopen failures. A different current host is never a repair substitute.
 type RecoverCacheHost = (error: unknown) => CacheHost | undefined;
 const recoveryByHost = new WeakMap<CacheHost, RecoverCacheHost>();
+const clearTimeoutByHost = new WeakMap<CacheHost, number>();
 const sessionRecords = new Map<
   CacheHost,
   {
@@ -49,9 +59,12 @@ function clearExternalCacheState(): void {
 /** Registers a cache host for account-lifecycle clearing. */
 export function registerCacheHost(
   host: CacheHost,
-  recover?: RecoverCacheHost
+  recover?: RecoverCacheHost,
+  clearTimeoutMs?: number
 ): () => void {
   hosts.add(host);
+  if (clearTimeoutMs !== undefined)
+    clearTimeoutByHost.set(host, clearTimeoutMs);
   if (recover) recoveryByHost.set(host, recover);
   return () => hosts.delete(host);
 }
@@ -63,6 +76,102 @@ function forgetSessionRecords(owner: CacheHost) {
 
 function forgetAllSessionRecords() {
   for (const owner of sessionRecords.keys()) forgetSessionRecords(owner);
+}
+
+/**
+ * A wipe still running at the limit goes on, for storage nobody opens again.
+ * One that never ends is given up, which frees its hosts.
+ */
+async function wipeWithin(
+  storage: ClearedStorage,
+  timeoutMs: number | undefined
+): Promise<void> {
+  if (timeoutMs === undefined) return await wipe(storage);
+  const limit = new AbortController();
+  const giveUp = setTimeout(
+    () => limit.abort(new Error('cache clear given up')),
+    timeoutMs + ABANDONED_WIPE_LIMIT_MS
+  );
+  const ending = async () => {
+    try {
+      await wipe(storage, limit.signal);
+    } finally {
+      clearTimeout(giveUp);
+    }
+  };
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error('cache clear timeout')),
+      timeoutMs
+    );
+  });
+  try {
+    await Promise.race([ending(), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+type ClearedStorage = {
+  owner: CacheHost;
+  host: CacheHost;
+  recover: RecoverCacheHost | undefined;
+};
+
+/** Clears a host, until the signal gives it up. */
+async function clearUntil(host: CacheHost, limit?: AbortSignal): Promise<void> {
+  limit?.throwIfAborted();
+  let stop = () => {};
+  const givenUp = new Promise<never>((_, reject) => {
+    stop = () => reject(limit?.reason);
+    limit?.addEventListener('abort', stop, { once: true });
+  });
+  try {
+    await Promise.race([host.clear(), givenUp]);
+  } finally {
+    limit?.removeEventListener('abort', stop);
+  }
+}
+
+/**
+ * The host to repair `failed`'s storage with, if its failure permits one. A
+ * paused host reopens the same storage itself, and another would meet the
+ * same outage.
+ */
+const replacementFor = (
+  failed: CacheHost,
+  error: unknown,
+  recover: RecoverCacheHost | undefined
+): CacheHost | undefined => (failed.paused ? undefined : recover?.(error));
+
+async function wipe(
+  { owner, host, recover }: ClearedStorage,
+  limit?: AbortSignal
+): Promise<void> {
+  // A preceding login may have recovered storage while this logout was
+  // waiting. Pin that owner now; keep the original snapshot pinned too.
+  const current = retainCacheHost(
+    sessionRecords.get(owner)?.retained?.host ?? host
+  );
+  const target = current?.host ?? host;
+  try {
+    await clearUntil(target, limit);
+  } catch (error) {
+    if (limit?.aborted) throw error;
+    const replacement = replacementFor(target, error, recover);
+    if (!replacement) throw error;
+    const recovered = retainCacheHost(replacement);
+    replacement.dispose();
+    if (!recovered) throw error;
+    try {
+      await clearUntil(recovered.host, limit);
+    } finally {
+      recovered.release();
+    }
+  } finally {
+    current?.release();
+  }
 }
 
 // Snapshot before a drain: session teardown may unregister the old host.
@@ -91,31 +200,9 @@ function prepareCacheClear() {
         return;
       }
       const results = await Promise.allSettled(
-        storageHosts.map(async ({ owner, host, recover }) => {
-          // A preceding login may have recovered storage while this logout was
-          // waiting. Pin that owner now; keep the original snapshot pinned too.
-          const current = retainCacheHost(
-            sessionRecords.get(owner)?.retained?.host ?? host
-          );
-          try {
-            try {
-              await (current?.host ?? host).clear();
-            } catch (error) {
-              const replacement = recover?.(error);
-              if (!replacement) throw error;
-              const recovered = retainCacheHost(replacement);
-              replacement.dispose();
-              if (!recovered) throw error;
-              try {
-                await recovered.host.clear();
-              } finally {
-                recovered.release();
-              }
-            }
-            forgetSessionRecords(owner);
-          } finally {
-            current?.release();
-          }
+        storageHosts.map(async (storage) => {
+          await wipeWithin(storage, clearTimeoutByHost.get(storage.owner));
+          forgetSessionRecords(storage.owner);
         })
       );
       if (results.some((result) => result.status === 'rejected')) {
@@ -154,12 +241,12 @@ export function replaceCacheWriteSession() {
       let host = records.retained?.host;
       // Only the retained physical owner can prove cleanup. Never substitute
       // another scope or treat a retired wrapper's no-op as a successful delete.
-      if (!host || host.disabled)
+      if (!host || (host.disabled && !host.paused))
         throw new Error('Contact cache repair unavailable');
       try {
         await host.deleteRecords([...records.keys]);
       } catch (error) {
-        const replacement = records.recover?.(error);
+        const replacement = replacementFor(host, error, records.recover);
         if (!replacement) throw error;
         const retained = retainCacheHost(replacement);
         replacement.dispose();
@@ -171,7 +258,8 @@ export function replaceCacheWriteSession() {
         // and its new physical owner for a later explicit retry.
         await host.deleteRecords([...records.keys]);
       }
-      if (host.disabled) throw new Error('Contact cache repair unavailable');
+      if (host.disabled && !host.paused)
+        throw new Error('Contact cache repair unavailable');
       forgetSessionRecords(owner);
     }
   });

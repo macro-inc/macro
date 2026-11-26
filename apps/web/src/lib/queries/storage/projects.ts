@@ -1,38 +1,13 @@
 import { analytics } from '@app/lib/analytics';
 import { fireAndForget } from '@core/util/fireAndForget';
-import {
-  refetchHistory,
-  useUpsertToHistoryMutation,
-} from '@queries/history/history';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
+import { refetchHistory } from '@queries/history/history';
 import { setPreviewOnCreate } from '@queries/preview/preview';
 import { refetchSoupEntity } from '@queries/soup/cache';
-import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { storageServiceClient } from '@service-storage/client';
-import type { Project } from '@service-storage/generated/schemas/project';
-import { useMutation } from '@tanstack/solid-query';
-import { v4 as uuidv4 } from 'uuid';
-import { queryClient } from '../client';
 import { refreshActiveGraphqlFoldersQueries } from './graphql-folders';
-import { storageKeys } from './keys';
 
-type ProjectsQueryResponse = {
-  projects: Project[];
-  pending: Project[];
-};
-
-export function invalidateProjects() {
-  return Promise.all([
-    queryClient.invalidateQueries({
-      queryKey: storageKeys.projects.list.queryKey,
-    }),
-    refreshActiveGraphqlFoldersQueries(),
-  ]);
-}
-
-/**
- * Standalone function for creating projects that can be used outside of component context.
- * Prefer `useCreateProjectMutation` when inside a component.
- */
+/** Creates a project and refreshes the lists that show it. */
 export async function createProject(params: {
   name: string;
   parentId?: string;
@@ -40,6 +15,7 @@ export async function createProject(params: {
   /** UI surface the creation originated from, for analytics. */
   source?: string;
 }): Promise<string | undefined> {
+  const generation = cacheSessionGeneration.capture();
   const result = await storageServiceClient.projects.create({
     name: params.name,
     projectParentId: params.parentId,
@@ -48,6 +24,7 @@ export async function createProject(params: {
 
   if (result.isOk()) {
     const projectId = result.value.id;
+    if (!cacheSessionGeneration.isCurrent(generation)) return projectId;
     analytics.track('create_entity', {
       entityType: 'project',
       entityId: projectId,
@@ -55,6 +32,7 @@ export async function createProject(params: {
       source: params.source,
     });
     setPreviewOnCreate({
+      generation,
       itemId: projectId,
       itemType: 'project',
       name: params.name,
@@ -72,124 +50,9 @@ export async function createProject(params: {
       }),
       'project-creation'
     );
-    await Promise.all([invalidateProjects(), refetchHistory()]);
+    await Promise.all([refreshActiveGraphqlFoldersQueries(), refetchHistory()]);
     return projectId;
   }
 
   return undefined;
-}
-
-type CreateProjectParams = {
-  name: string;
-  parentId?: string;
-  sharePermission?: null;
-};
-
-type CreateProjectContext = {
-  previousData: ProjectsQueryResponse | undefined;
-  tempProjectId: string;
-};
-
-function _useCreateProjectMutation(
-  callbacks?: MutationCallbacks<
-    string | undefined,
-    Error,
-    CreateProjectParams,
-    CreateProjectContext
-  >
-) {
-  const upsertToHistoryMutation = useUpsertToHistoryMutation();
-
-  return useMutation(() => ({
-    mutationFn: async (
-      params: CreateProjectParams
-    ): Promise<string | undefined> => {
-      const result = await storageServiceClient.projects.create({
-        name: params.name,
-        projectParentId: params.parentId,
-        sharePermission: params.sharePermission,
-      });
-
-      if (result.isOk()) {
-        analytics.track('create_entity', {
-          entityType: 'project',
-          entityId: result.value.id,
-          parentId: params.parentId,
-        });
-        return result.value.id;
-      }
-      return undefined;
-    },
-    ...withCallbacks<
-      string | undefined,
-      Error,
-      CreateProjectParams,
-      CreateProjectContext
-    >(
-      {
-        onMutate: async (params) => {
-          await queryClient.cancelQueries({
-            queryKey: storageKeys.projects.list.queryKey,
-          });
-
-          const previousData = queryClient.getQueryData<ProjectsQueryResponse>(
-            storageKeys.projects.list.queryKey
-          );
-
-          const tempProjectId = uuidv4();
-          const tempProject: Project = {
-            createdAt: new Date().toISOString(),
-            id: tempProjectId,
-            name: params.name,
-            parentId: params.parentId,
-            type: 'project',
-            userId: '',
-            updatedAt: new Date().toISOString(),
-            deletedAt: null,
-          };
-
-          queryClient.setQueryData<ProjectsQueryResponse>(
-            storageKeys.projects.list.queryKey,
-            (old) => {
-              if (!old) return { projects: [tempProject], pending: [] };
-              return {
-                ...old,
-                projects: [tempProject, ...old.projects],
-              };
-            }
-          );
-
-          return { previousData, tempProjectId };
-        },
-        onSuccess: (projectId, params, _context) => {
-          if (projectId) {
-            setPreviewOnCreate({
-              itemId: projectId,
-              itemType: 'project',
-              name: params.name,
-            });
-            upsertToHistoryMutation.mutate({
-              itemId: projectId,
-              itemType: 'project',
-            });
-          }
-        },
-        onError: (_err, _params, context) => {
-          if (context?.previousData) {
-            queryClient.setQueryData(
-              storageKeys.projects.list.queryKey,
-              context.previousData
-            );
-          }
-        },
-        onSettled: () => {
-          queryClient.invalidateQueries({
-            queryKey: storageKeys.projects.list.queryKey,
-          });
-          fireAndForget(refetchHistory(), 'project-creation');
-        },
-      },
-      callbacks
-    ),
-  }));
 }

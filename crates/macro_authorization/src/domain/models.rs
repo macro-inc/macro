@@ -50,7 +50,8 @@ impl MacroUserAuthentication {
 
 /// Whose program, if any, a user credential was signed for. Routes where only
 /// a person may decide refuse every variant but `Person` (`is_program_run`);
-/// routes that ask a program to confirm refuse only `Agent` (`is_agent_run`).
+/// routes that ask a program to confirm refuse `Agent` (`is_agent_run`), never
+/// a signed `Routine`.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CredentialAttribution {
     /// No signed program attribution.

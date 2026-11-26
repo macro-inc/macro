@@ -14,10 +14,10 @@ import { ApiKeys } from './ApiKeys';
 import { Appearance } from './Appearance';
 import { Billing } from './Billing';
 import { Bots } from './Bots';
-import { DesktopApp } from './DesktopApp';
+import { Downloads } from './Downloads';
 import { EmailSettings } from './email-settings';
 import { IntegrationsPage } from './IntegrationsPage';
-import { MobileApp } from './MobileApp';
+import { NativeApp } from './NativeApp';
 import { Notifications } from './Notifications';
 import { Shortcuts } from './Shortcuts';
 import { Tags } from './Tags';
@@ -30,8 +30,14 @@ const RoutineSettings = lazyNamed(
   'RoutineSettings'
 );
 
-/** Shared forms for desktop panels and mobile sheet detail pages. */
-export function SettingsTabContent(props: { tab: SettingsTab }) {
+/**
+ * Shared forms for desktop panels and mobile sheet detail pages. `phone` is
+ * set by the phone settings sheet, for settings phones leave out.
+ */
+export function SettingsTabContent(props: {
+  tab: SettingsTab;
+  phone?: boolean;
+}) {
   const isAvailable = useSettingsTabAvailable();
   const isCurrentTab = (tab: SettingsTab) =>
     props.tab === tab && isAvailable(tab);
@@ -47,7 +53,7 @@ export function SettingsTabContent(props: { tab: SettingsTab }) {
         <Account />
       </Show>
       <Show when={isCurrentTab('Email')}>
-        <EmailSettings />
+        <EmailSettings displayOptions={!props.phone} />
       </Show>
       <Show when={isCurrentTab('Calendar')}>
         <CalendarSettings />
@@ -88,11 +94,11 @@ export function SettingsTabContent(props: { tab: SettingsTab }) {
       <Show when={isCurrentTab('Connected')}>
         <IntegrationsPage />
       </Show>
-      <Show when={isCurrentTab('Desktop App')}>
-        <DesktopApp />
+      <Show when={isCurrentTab('Downloads')}>
+        <Downloads />
       </Show>
-      <Show when={isCurrentTab('Mobile App')}>
-        <MobileApp />
+      <Show when={isCurrentTab('Native App')}>
+        <NativeApp />
       </Show>
       <Show when={isCurrentTab('Agent')}>
         <Agent />

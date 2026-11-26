@@ -5,7 +5,9 @@ use entity_registry::BotFacts;
 use crate::{
     domain::{
         error::Result,
-        search::{AgentSessionSearchMetadata, AgentSessionSearchMetadataRepo},
+        search::{
+            AgentSessionSearchMetadata, AgentSessionSearchMetadataRepo, indexing::GrantedLease,
+        },
     },
     outbound::postgres::PgAgentSessionRepo,
 };
@@ -38,15 +40,23 @@ impl crate::domain::search::indexing::SearchIndexingRepo for PgSearchIndexingRep
     async fn lock(
         &self,
         id: crate::domain::model::AgentSessionId,
-    ) -> Result<Self::Lease, rootcause::Report> {
+    ) -> Result<GrantedLease<Self::Lease>, rootcause::Report> {
         let mut transaction = self.lock_pool.begin().await?;
-        sqlx::query!(
-            "SELECT pg_advisory_xact_lock(hashtextextended('agent-session-search:' || $1::text, 0))",
+        // The function in FROM returns once the lock is granted, so the clock
+        // is read after the grant.
+        let granted_at = sqlx::query_scalar!(
+            r#"
+            SELECT clock_timestamp() AS "granted_at!"
+            FROM pg_advisory_xact_lock(hashtextextended('agent-session-search:' || $1::text, 0))
+            "#,
             id.to_string(),
         )
-        .execute(&mut *transaction)
+        .fetch_one(&mut *transaction)
         .await?;
-        Ok(transaction)
+        Ok(GrantedLease {
+            lease: transaction,
+            granted_at,
+        })
     }
 
     async fn page(&self, after: Option<uuid::Uuid>) -> Result<Vec<uuid::Uuid>, rootcause::Report> {

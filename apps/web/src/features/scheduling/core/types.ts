@@ -32,6 +32,11 @@ export type EventType = {
   /** Create a Macro call and attach its join link when someone books. */
   macroCall: boolean;
   googleMeet: boolean;
+  /**
+   * Connected inbox whose primary calendar takes this personal link's
+   * bookings and sends their invitations; null books on the primary inbox.
+   */
+  emailLinkId?: string | null;
   enabled: boolean;
   scheduleId: string;
   mode: SchedulingMode;
@@ -53,6 +58,7 @@ export type EventValidationIssue = {
     | 'durationMinutes'
     | 'hosts'
     | 'scheduleId'
+    | 'emailLinkId'
     | 'intervalMinutes'
     | 'horizonDays'
     | 'beforeMinutes'
@@ -133,6 +139,8 @@ export type Booking = {
   attendance: BookingAttendance;
   rescheduleCount: number;
   rescheduledAt: string | null;
+  /** Set when Macro stopped trying to update the host's calendar. */
+  abandonedAt?: string | null;
   location: string;
   answers: Record<string, string>;
   questionLabels?: Record<string, string>;
@@ -208,6 +216,7 @@ export function newEventType(
     location: '',
     macroCall: true,
     googleMeet: false,
+    emailLinkId: null,
     enabled: false,
     scheduleId,
     mode: team ? 'collective' : 'individual',
@@ -234,6 +243,7 @@ export function newDefaultBookingLink(
     location: '',
     macroCall: true,
     googleMeet: false,
+    emailLinkId: null,
     enabled: true,
     scheduleId,
     mode: 'individual',

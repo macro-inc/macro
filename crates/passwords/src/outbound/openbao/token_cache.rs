@@ -37,7 +37,8 @@ struct TeamSlot {
 #[derive(Default)]
 struct SlotState {
     cached: Option<Cached>,
-    last_login_failed: bool,
+    /// The last login's error, handed as-is to callers that waited on it.
+    last_login_error: Option<Error>,
 }
 
 struct Cached {
@@ -95,7 +96,7 @@ impl TokenCache {
 
     /// Returns the team's live token, or logs in once while concurrent callers
     /// for the same team wait for that login. Callers that waited on a failed
-    /// login share its failure instead of each retrying it in turn.
+    /// login share its error instead of each retrying it in turn.
     pub(super) async fn session<Login, Pending>(
         &self,
         team: TeamId,
@@ -146,14 +147,16 @@ impl TokenCache {
                 generation: entry.generation,
             });
         }
-        if state.last_login_failed && slot.attempts.load(Ordering::Acquire) != seen {
-            return Err(Error::Unavailable);
+        if let Some(error) = state.last_login_error
+            && slot.attempts.load(Ordering::Acquire) != seen
+        {
+            return Err(error);
         }
         state.cached = None;
         // The lease runs from the request, so a slow response cannot extend it.
         let requested = Instant::now();
         let outcome = login().await;
-        state.last_login_failed = outcome.is_err();
+        state.last_login_error = outcome.as_ref().err().copied();
         slot.attempts.fetch_add(1, Ordering::Release);
         let session = outcome?;
         let generation = self.generations.fetch_add(1, Ordering::Relaxed);

@@ -38,7 +38,7 @@ async fn existing_message_read_failure_is_terminal_and_provider_absence_has_no_e
     fake.0.lock().unwrap().failures.push(("message", 1));
     let (delete, error) = failure(svc.process(Ok(input(operation()))).await);
     assert!(delete);
-    assert!(error.source.to_string().contains("before provider upsert"));
+    assert!(format!("{:#}", error.source).contains("before provider upsert"));
     let (svc, fake) = make_service(false);
     assert!(matches!(
         svc.process(Ok(input(operation()))).await,
@@ -234,6 +234,135 @@ async fn immutable_redelivery_does_not_publish_or_notify_again() {
             .any(|c| matches!(c, Call::Event(_) | Call::Import("notify", _)))
     );
 }
+fn events(calls: &[Call]) -> Vec<&serde_json::Value> {
+    calls
+        .iter()
+        .filter_map(|call| match call {
+            Call::Event(event) => Some(event),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Gmail often reports a label added after a message arrived as another
+/// upsert of that message. Search finds the message by its new label only if
+/// the thread is reindexed.
+#[tokio::test]
+async fn a_resync_that_changes_labels_reindexes_the_thread() {
+    let labels = |ids: &[&str]| {
+        ids.iter()
+            .map(|id| super::fakes::label(id))
+            .collect::<Vec<_>>()
+    };
+    for (case, before, after) in [
+        ("added", vec!["INBOX"], vec!["INBOX", "Label_1"]),
+        ("removed", vec!["INBOX", "Label_1"], vec!["INBOX"]),
+        ("swapped", vec!["INBOX"], vec!["SENT"]),
+        ("cleared", vec!["INBOX"], vec![]),
+    ] {
+        let (svc, fake) = setup();
+        {
+            let mut s = fake.0.lock().unwrap();
+            s.labels = labels(&before);
+            s.import.labels_after_insert = Some(labels(&after));
+        }
+        assert!(matches!(
+            svc.process(Ok(input(operation()))).await,
+            InboxSyncDisposition::DoneDelete
+        ));
+        let calls = fake.calls();
+        let published = events(&calls);
+        assert_eq!(published.len(), 1, "{case}");
+        assert_eq!(
+            published[0]["event_type"], "email.threads_reindex_requested",
+            "{case}"
+        );
+        assert_eq!(
+            published[0]["metadata"],
+            serde_json::json!({
+                "link_id": LINK,
+                "owner": "macro|owner@example.com",
+                "thread_ids": [THREAD],
+                "reason": "provider_changed",
+            }),
+            "{case}"
+        );
+        let insert = calls
+            .iter()
+            .position(|c| matches!(c, Call::Import("insert_message", _)))
+            .unwrap();
+        let publish = calls
+            .iter()
+            .position(|c| matches!(c, Call::Event(_)))
+            .unwrap();
+        assert!(insert < publish, "{case}");
+    }
+}
+
+/// A re-sync of an unchanged message, or of one whose labels come back in
+/// another order, asks for nothing.
+#[tokio::test]
+async fn a_resync_that_leaves_the_labels_alone_publishes_nothing() {
+    let (svc, fake) = setup();
+    {
+        let mut s = fake.0.lock().unwrap();
+        s.labels = vec![super::fakes::label("INBOX"), super::fakes::label("Label_1")];
+        s.import.labels_after_insert = Some(vec![
+            super::fakes::label("Label_1"),
+            super::fakes::label("INBOX"),
+        ]);
+    }
+    assert!(matches!(
+        svc.process(Ok(input(operation()))).await,
+        InboxSyncDisposition::DoneDelete
+    ));
+    assert!(events(&fake.calls()).is_empty());
+}
+
+/// A retry would find the new labels already stored, so a failed read of them
+/// asks for the reindex rather than dropping it.
+#[tokio::test]
+async fn a_resync_whose_labels_cannot_be_read_back_reindexes_the_thread() {
+    let (svc, fake) = setup();
+    fake.0.lock().unwrap().failures.push(("labels", 2));
+    assert!(matches!(
+        svc.process(Ok(input(operation()))).await,
+        InboxSyncDisposition::DoneDelete
+    ));
+    let calls = fake.calls();
+    let published = events(&calls);
+    assert_eq!(published.len(), 1);
+    assert_eq!(
+        published[0]["event_type"],
+        "email.threads_reindex_requested"
+    );
+}
+
+/// A message's own event already indexes it with its current labels.
+#[tokio::test]
+async fn a_resync_with_its_own_event_publishes_only_that() {
+    let (svc, fake) = setup();
+    {
+        let mut s = fake.0.lock().unwrap();
+        s.message.as_mut().unwrap().is_draft = true;
+        let mut message = received_message(LINK, THREAD);
+        message.is_draft = true;
+        s.import.fetched = Ok(Some(MessageWithCalendarParts {
+            message,
+            calendar_parts: vec![],
+        }));
+        s.import.labels_after_insert = Some(vec![super::fakes::label("Label_1")]);
+    }
+    assert!(matches!(
+        svc.process(Ok(input(operation()))).await,
+        InboxSyncDisposition::DoneDelete
+    ));
+    let calls = fake.calls();
+    let published = events(&calls);
+    assert_eq!(published.len(), 1);
+    assert_eq!(published[0]["event_type"], "email.message_draft_synced");
+}
+
 #[tokio::test]
 async fn attachment_gates_skip_claims_and_query_failures_stop_publication() {
     let (mut svc, fake) = setup();
@@ -541,6 +670,7 @@ async fn crm_fanout_rejects_each_malformed_shape_and_preserves_valid_neighbours(
             BackfillOperation::PopulateCrmContact(LinkScopedPayload {
                 link_id: LINK,
                 payload: PopulateCrmContactPayload {
+                    live_mail: true,
                     contact_email: email.into(),
                     contact_name: Some(name.into()),
                     first_at: at,
@@ -602,12 +732,7 @@ async fn contact_connections_follow_direction_and_enqueue_failure_is_terminal() 
     let (delete, error) = failure(svc.process(Ok(input(operation()))).await);
     assert!(delete);
     assert_eq!(error.reason, FailureReason::SqsEnqueueFailed);
-    assert!(
-        error
-            .source
-            .to_string()
-            .contains("Failed to enqueue contacts message")
-    );
+    assert!(format!("{:#}", error.source).contains("Failed to enqueue contacts message"));
 }
 #[tokio::test]
 async fn notification_query_failures_retry_after_the_insert_and_publication_failure_is_best_effort()
@@ -757,4 +882,73 @@ async fn whole_thread_construction_keeps_message_order_flags_and_shared_thread_i
             assert_eq!(thread["messages"][1]["thread_db_id"], thread["db_id"]);
         }
     }
+}
+
+#[tokio::test]
+async fn an_arriving_message_reports_the_labels_it_brought_unless_spam_or_draft() {
+    use super::fakes::label;
+    let gained = Uuid::from_u128(0x99);
+    for (case, whole_thread, spam, reported) in [
+        ("into a stored thread", false, false, true),
+        ("into a new thread", true, false, true),
+        ("as spam", false, true, false),
+    ] {
+        let (svc, fake) = setup();
+        {
+            let mut s = fake.0.lock().unwrap();
+            let mut message = received_message(LINK, THREAD);
+            if spam {
+                message.labels = vec![label("SPAM").into()];
+            }
+            s.message = None;
+            s.gained_labels = vec![gained];
+            s.import.thread_exists = !whole_thread;
+            s.import.fetched = Ok(Some(MessageWithCalendarParts {
+                message: message.clone(),
+                calendar_parts: vec![],
+            }));
+            s.import.thread_messages = Ok(vec![MessageWithCalendarParts {
+                message,
+                calendar_parts: vec![],
+            }]);
+        }
+        svc.process(Ok(input(operation()))).await;
+        let calls = fake.calls();
+        let received: Vec<_> = events(&calls)
+            .into_iter()
+            .filter(|event| event["event_type"] == "email.message_received")
+            .collect();
+        assert_eq!(received.len(), 1, "{case}");
+        let labels = received[0]["metadata"].get("labels_gained").cloned();
+        if reported {
+            assert_eq!(labels, Some(serde_json::json!([gained])), "{case}");
+        } else {
+            assert_eq!(labels, None, "{case}");
+        }
+    }
+}
+
+#[tokio::test]
+async fn a_resync_that_gives_its_thread_a_label_reports_it_instead_of_a_reindex() {
+    let gained = Uuid::from_u128(0x99);
+    let (svc, fake) = setup();
+    {
+        let mut s = fake.0.lock().unwrap();
+        s.labels = vec![super::fakes::label("INBOX")];
+        s.import.labels_after_insert = Some(vec![
+            super::fakes::label("INBOX"),
+            super::fakes::label("Label_1"),
+        ]);
+        s.gained_labels = vec![gained];
+    }
+    svc.process(Ok(input(operation()))).await;
+    let calls = fake.calls();
+    let published = events(&calls);
+    assert_eq!(published.len(), 1);
+    assert_eq!(published[0]["event_type"], "email.thread_labels_updated");
+    assert_eq!(
+        published[0]["metadata"]["labels_gained"],
+        serde_json::json!([gained])
+    );
+    assert_eq!(published[0]["metadata"]["origin"], "provider_sync");
 }

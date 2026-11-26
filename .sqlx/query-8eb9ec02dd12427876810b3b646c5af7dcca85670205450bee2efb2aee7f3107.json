@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COALESCE(SUM(vcpus), 0)::BIGINT AS \"vcpus!\",\n                   COALESCE(SUM(memory_gib), 0)::BIGINT AS \"memory_gib!\"\n            FROM hosted_runtime\n            WHERE host_id = $1 AND awake AND hibernated_at IS NULL AND id <> $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "vcpus!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "memory_gib!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "8eb9ec02dd12427876810b3b646c5af7dcca85670205450bee2efb2aee7f3107"
+}

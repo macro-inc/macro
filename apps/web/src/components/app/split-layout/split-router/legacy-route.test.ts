@@ -13,16 +13,29 @@ import { createTestPolicy } from '@app/lib/split-router/tests/fixtures';
 import {
   appRoute,
   baseRoute,
+  calendarSearchRoute,
+  calendarSettingsRoute,
   calendarSplitRoute,
+  driveFolderDocumentRoute,
+  driveFolderRoute,
+  driveRootDocumentRoute,
+  driveSplitRoute,
+  driveTabDocumentRoute,
+  driveTabRoute,
   homeCalendarRoute,
   homeSplitRoute,
   legacyContentRoute,
   notFoundRoute,
+  notificationsRoute,
 } from '@app/routes/routes';
 import { createRoot } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createAppSplitRouterMiddleware } from './app-middleware';
-import { resolveContentLocation, upgradeLegacyPath } from './legacy-route';
+import {
+  resolveContentLocation,
+  splitContentFromLocation,
+  upgradeLegacyPath,
+} from './legacy-route';
 import { createMacroMentionLinkResolver } from './mention-links';
 
 vi.mock('@components/app/split-layout/componentRegistry', () => ({
@@ -47,7 +60,18 @@ const definitions = {
       children: [
         { ...homeSplitRoute, children: [homeCalendarRoute] },
         calendarSplitRoute,
+        calendarSearchRoute,
+        calendarSettingsRoute,
+        {
+          ...driveSplitRoute,
+          children: [
+            driveRootDocumentRoute,
+            { ...driveFolderRoute, children: [driveFolderDocumentRoute] },
+            { ...driveTabRoute, children: [driveTabDocumentRoute] },
+          ],
+        },
         legacyContentRoute,
+        notificationsRoute,
         notFoundRoute,
       ],
     },
@@ -58,7 +82,7 @@ const routes = createRoutesManifest(definitions);
 
 let cleanup: (() => void) | undefined;
 
-function openApp(url: string) {
+function openApp(url: string, touch = false) {
   const solid = createFakeSolidRouter(url);
   return createRoot((dispose) => {
     const router = createSplitRouter({
@@ -73,7 +97,7 @@ function openApp(url: string) {
       paneStore: createMemoryPaneStore(),
       policy: createTestPolicy().policy,
       middleware: createAppSplitRouterMiddleware({
-        isTouchDevice: () => false,
+        isTouchDevice: () => touch,
       }),
     });
     cleanup = () => {
@@ -94,6 +118,14 @@ afterEach(() => {
 describe('upgradeLegacyPath', () => {
   it('sends the retired Getting Started path to Home', () => {
     expect(upgradeLegacyPath(routes, '/getting-started')).toBe('/home');
+  });
+
+  it('sends the retired New Home path to Notifications', () => {
+    expect(upgradeLegacyPath(routes, '/new-home')).toBe('/notifications');
+  });
+
+  it('leaves a path named like an object property to Not Found', () => {
+    expect(upgradeLegacyPath(routes, '/constructor')).toBe('/constructor');
   });
 });
 
@@ -174,6 +206,87 @@ describe('legacy link mentions', () => {
 });
 
 describe('opening an app URL', () => {
+  it.each([calendarSettingsRoute, calendarSearchRoute])(
+    'keeps $id as a native view and returns to the calendar on Back',
+    async (destination) => {
+      vi.useFakeTimers();
+      const { solid, router } = openApp('/app/calendar/month', true);
+      await router.settled();
+      const pane = router.panes()[0]!;
+
+      await router.navigatePane(pane, { route: destination });
+      vi.runAllTimers();
+      const settings = router.entry(pane)!;
+      // The split panel resolves every committed route through this adapter.
+      // An unrecognized settings route throws and makes the panel restore Calendar.
+      expect(splitContentFromLocation(settings.location)).toEqual({
+        type: 'component',
+        id:
+          destination === calendarSearchRoute
+            ? 'calendar-search'
+            : 'calendar-settings',
+      });
+      expect(solid.landed()).toBe(`/app/${destination.path}`);
+      expect(
+        resolveContentLocation(
+          routes,
+          splitContentFromLocation(settings.location)
+        )
+      ).toEqual(settings.location);
+
+      await router.navigatePane(pane, -1);
+      vi.runAllTimers();
+      expect(solid.landed()).toBe('/app/calendar/month');
+      expect(router.entry(pane)?.location.route.matches.at(-1)?.id).toBe(
+        calendarSplitRoute.id
+      );
+    }
+  );
+
+  it.each([calendarSettingsRoute, calendarSearchRoute])(
+    'opens the $id deep link without treating it as a period',
+    async (destination) => {
+      const { solid, router } = openApp(`/app/${destination.path}`, true);
+      await router.settled();
+      const entry = router.entry(router.panes()[0]!)!;
+      expect(entry.location.route.matches.at(-1)?.id).toBe(destination.id);
+      expect(splitContentFromLocation(entry.location)).toEqual({
+        type: 'component',
+        id:
+          destination === calendarSearchRoute
+            ? 'calendar-search'
+            : 'calendar-settings',
+      });
+      expect(solid.landed()).toBe(`/app/${destination.path}`);
+    }
+  );
+  it.each([
+    '/drive/md/document',
+    '/drive/recent/pdf/document',
+    '/drive/folder/folder/md/document',
+  ])('keeps the touch Drive preview in its workspace: %s', async (path) => {
+    vi.useFakeTimers();
+    const { router, solid } = openApp('/app/drive', true);
+    await router.settled();
+    const pane = router.panes()[0]!;
+
+    await router.navigatePane(pane, path, {
+      state: [{ type: 'document', id: 'document' }],
+    });
+    vi.runAllTimers();
+
+    expect(solid.landed()).toBe(`/app${path}`);
+    expect(router.panes()).toEqual([pane]);
+    expect(router.entry(pane)?.state).toEqual([
+      { type: 'document', id: 'document' },
+    ]);
+    expect(
+      router
+        .entry(pane)
+        ?.location.route.matches.some((match) => match.id === 'drive')
+    ).toBe(true);
+  });
+
   it('opens a bare Calendar path at the preferred period with its event', async () => {
     vi.useFakeTimers();
     localStorage.setItem(

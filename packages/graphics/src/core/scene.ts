@@ -248,6 +248,26 @@ export function hitTest(
       return deep ? id : outermost(doc, id);
   }
 }
+/** How near its paint a cursor still picks an item, in screen pixels. */
+export const PICK_TOLERANCE = 3;
+
+/**
+ * `hitTest` with a wider `reach` that is searched only on a miss. Paint under
+ * the point (within `tolerance`) always wins, so a reach sized for a finger
+ * never picks a neighbour over the item actually pressed.
+ */
+export function hitTestWithin(
+  doc: GraphicsDocument,
+  point: Point,
+  deep: boolean,
+  tolerance: number,
+  reach: number
+): string | undefined {
+  return (
+    hitTest(doc, point, deep, tolerance) ??
+    (reach > tolerance ? hitTest(doc, point, deep, reach) : undefined)
+  );
+}
 export function boxHits(doc: GraphicsDocument, box: Bounds): readonly string[] {
   return [
     ...new Set(

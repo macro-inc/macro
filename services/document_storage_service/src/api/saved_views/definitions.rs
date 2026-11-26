@@ -42,6 +42,7 @@ where
     Router::new()
         .route("/", get(list_handler).post(create_handler))
         .route("/order", put(reorder_handler))
+        .route("/{saved_view_id}/appearance", put(appearance_handler))
         .route(
             "/{saved_view_id}",
             get(get_handler)
@@ -66,6 +67,8 @@ pub struct SavedViewDefinition {
     /// `kind` (such as `email` or `task`) and `version`.
     #[schema(value_type = Object)]
     config: serde_json::Value,
+    /// Icon and color metadata, separate from configuration.
+    appearance: Option<model_entity::EntityAppearance>,
     /// Team with access, or absent when the definition is private.
     shared_team_id: Option<Uuid>,
     /// Current revision, required by updates and deletion.
@@ -81,6 +84,7 @@ impl From<View> for SavedViewDefinition {
             owner_id: view.user_id,
             name: view.name,
             config: view.config,
+            appearance: view.appearance,
             shared_team_id: view.shared_team_id,
             revision: view.revision,
             created_at: view.created_at,
@@ -123,6 +127,8 @@ pub struct CreateSavedViewDefinitionRequest {
     config: serde_json::Value,
     /// Team to share with, which the creator must belong to.
     shared_team_id: Option<Uuid>,
+    /// Optional initial icon and color metadata; retries retain the original value.
+    appearance: Option<model_entity::EntityAppearance>,
 }
 
 /// An explicit sharing change: a team, or `null` to make the definition private.
@@ -320,6 +326,7 @@ pub async fn create_handler(
             request.name,
             request.config,
             request.shared_team_id,
+            request.appearance,
         )
         .await?;
     Ok((StatusCode::CREATED, Json(view.into())))
@@ -369,6 +376,38 @@ pub async fn update_handler(
                 config: request.config,
                 share,
             },
+        )
+        .await?;
+    Ok(Json(view.into()))
+}
+
+#[utoipa::path(
+    tag = "saved_views",
+    put,
+    path = "/saved_views/definitions/{saved_view_id}/appearance",
+    operation_id = "set_saved_view_appearance",
+    params(("saved_view_id" = Uuid, Path, description = "The saved view to edit")),
+    request_body = model_entity::EntityAppearance,
+    responses(
+        (status = 200, body = SavedViewDefinition),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(skip_all, fields(saved_view_id = %path.saved_view_id), err)]
+pub async fn appearance_handler(
+    State(SavedViewDefinitionsState(service)): State<SavedViewDefinitionsState>,
+    user: Viewer,
+    Path(path): Path<SavedViewDefinitionPath>,
+    Json(appearance): Json<model_entity::EntityAppearance>,
+) -> Result<Json<SavedViewDefinition>, SavedViewDefinitionErr> {
+    let view = service
+        .set_appearance(
+            user.authorization.user.macro_user_id.as_ref(),
+            path.saved_view_id,
+            appearance,
         )
         .await?;
     Ok(Json(view.into()))

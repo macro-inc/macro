@@ -125,6 +125,18 @@ pub enum ModelProbeResult {
     },
 }
 
+/// The dial header a runtime lists the optional messages it accepts in,
+/// comma-separated. The service sends an optional message only to a runtime
+/// that listed it, so older runtimes never receive one they cannot read.
+pub const RUNTIME_ACCEPTS_HEADER: &str = "x-macro-runtime-accepts";
+
+/// The [`RUNTIME_ACCEPTS_HEADER`] entry for [`ToRuntimeMessage::AgentsChanged`].
+pub const ACCEPTS_AGENTS_CHANGED: &str = "agents-changed";
+
+/// The [`RUNTIME_ACCEPTS_HEADER`] entry for [`ToRuntimeMessage::ApplyAgent`]:
+/// a runtime that doesn't list it can't run an agent teammate.
+pub const ACCEPTS_APPLY_AGENT: &str = "apply-agent";
+
 /// Agent Service to Agent Runtime traffic on the logical protocol stream.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -138,6 +150,51 @@ pub enum ToRuntimeMessage {
     /// configured harness what it advertises. Answers are therefore
     /// interchangeable, so nothing correlates a response to a request.
     ModelProbeRequest,
+    /// The agents bound to this runtime may have changed: re-read them.
+    ///
+    /// A hint with no payload, sent when the service may have just bound an
+    /// agent to the runtime, so it starts serving that agent's triggers at
+    /// once rather than at its next poll. Runtimes that do not serve
+    /// triggers ignore it.
+    AgentsChanged,
+    /// Run this agent teammate on the computer: write its environment where
+    /// the guest's agent service reads it, which (re)starts the agent. Sent
+    /// to a warm pool computer a purchase took for an agent; the agent's own
+    /// online report, not a reply, confirms it.
+    ApplyAgent {
+        /// The agent's environment.
+        environment: AgentEnvironment,
+        /// W3C context of the computer's setup, so the agent's start joins
+        /// its trace. Absent from older services.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        traceparent: Option<String>,
+    },
+}
+
+/// An agent teammate's environment: credentials and addresses, one variable
+/// each. Debug shows only the names.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(transparent)]
+pub struct AgentEnvironment(
+    #[specta(type = std::collections::HashMap<String, String>)]
+    pub  std::collections::BTreeMap<String, String>,
+);
+
+/// The values are credentials: wiped from memory when dropped.
+impl Drop for AgentEnvironment {
+    fn drop(&mut self) {
+        for value in self.0.values_mut() {
+            zeroize::Zeroize::zeroize(value);
+        }
+    }
+}
+
+impl std::fmt::Debug for AgentEnvironment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AgentEnvironment")
+            .field("names", &self.0.keys().collect::<Vec<_>>())
+            .finish()
+    }
 }
 
 /// Agent Runtime to Agent Service traffic on the logical protocol stream.

@@ -1,4 +1,7 @@
-import type { SavedViewDefinition } from '../../../generated/storage/types.gen';
+import type {
+  EntityAppearance,
+  SavedViewDefinition,
+} from '../../../generated/storage/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { MacroEntity } from '../entity';
@@ -19,7 +22,7 @@ export type SavedViewConfig = Record<string, unknown> & {
  * A saved view: a named, reusable filter definition (not a snapshot of what
  * it matches) shown in the app's sidebar for its kind, such as Email.
  *
- * Writes are guarded by the revision this handle last saw, so a stale handle
+ * Definition edits are guarded by the revision this handle last saw, so a stale handle
  * fails with a conflict ({@link MacroApiError} with status 409) instead of
  * overwriting an edit made elsewhere; reload it with {@link refresh} and retry.
  */
@@ -56,7 +59,12 @@ export class SavedView extends MacroEntity<SavedViewDefinition> {
   /** Create a saved view, private unless shared with a team the caller belongs to. */
   static async create(
     client: MacroClient,
-    opts: { name: string; config: SavedViewConfig; team?: Team },
+    opts: {
+      name: string;
+      config: SavedViewConfig;
+      team?: Team;
+      appearance?: EntityAppearance;
+    },
   ): Promise<SavedView> {
     const record = unwrap(
       await client.storage.createSavedViewDefinition({
@@ -64,6 +72,7 @@ export class SavedView extends MacroEntity<SavedViewDefinition> {
           name: opts.name,
           config: opts.config,
           sharedTeamId: opts.team?.id ?? null,
+          appearance: opts.appearance,
         },
       }),
     );
@@ -78,6 +87,25 @@ export class SavedView extends MacroEntity<SavedViewDefinition> {
     'config',
     (config) => config as SavedViewConfig,
   );
+
+  /** The shared icon and color overrides, or null when unchanged from defaults. */
+  readonly appearance = this.field('appearance');
+
+  /**
+   * Replace icon and color metadata without changing the filter revision. Pass {} to reset overrides.
+   *
+   * @write
+   * @idempotent
+   */
+  async setAppearance(appearance: EntityAppearance): Promise<EntityAppearance> {
+    const record = await this.mutate((client) =>
+      client.storage.setSavedViewAppearance({
+        path: { saved_view_id: this.id },
+        body: appearance,
+      }),
+    );
+    return record.appearance ?? {};
+  }
 
   /** The app surface that shows this view, such as `email` or `task`. */
   readonly kind = this.mappedField(
@@ -95,7 +123,7 @@ export class SavedView extends MacroEntity<SavedViewDefinition> {
     id === undefined ? undefined : Team.byId(this.client, id),
   );
 
-  /** The revision writes are checked against; each successful write advances it. */
+  /** The revision definition edits check and advance; appearance-only writes preserve it. */
   readonly revision = this.field('revision');
 
   /** When the view was created. */
@@ -128,8 +156,8 @@ export class SavedView extends MacroEntity<SavedViewDefinition> {
     team?: Team | null;
   }): Promise<void> {
     const { revision } = await this.detail.get();
-    const record = unwrap(
-      await this.client.storage.updateSavedViewDefinition({
+    await this.mutate((client) =>
+      client.storage.updateSavedViewDefinition({
         path: { saved_view_id: this.id },
         body: {
           expectedRevision: revision,
@@ -142,8 +170,7 @@ export class SavedView extends MacroEntity<SavedViewDefinition> {
         },
       }),
     );
-    // The response's revision guards this handle's next write.
-    this.detail.set(record);
+    // The next write reloads the current revision rather than trusting response order.
   }
 
   /**

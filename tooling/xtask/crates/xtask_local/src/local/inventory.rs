@@ -12,6 +12,7 @@ use super::Mode;
 use super::google_emulator;
 use super::instance::Port;
 use super::microsoft_emulator;
+use super::model_emulator;
 
 /// OpenBao release with namespaces, KV v2, JWT auth, and TOTP support.
 pub const OPENBAO_IMAGE: &str = "openbao/openbao:2.7.2";
@@ -201,6 +202,20 @@ pub const RUST_SERVICES: &[RustService] = &[
         compose_name: microsoft_emulator::SERVICE,
         cargo_bin: "outlook_emulator",
         package: "outlook_emulator",
+        host_port: None,
+        path_prefix: None,
+        is_websocket: false,
+        modes: &[],
+        opt_in: false,
+    },
+    RustService {
+        // Not a service of ours: the model emulator binary, shipped into
+        // /app/out for the model_emulator sidecar (a bespoke gen_compose
+        // block, hence no modes) that stands in for Gemini on a stack with
+        // no real Gemini key.
+        compose_name: model_emulator::SERVICE,
+        cargo_bin: "model_emulator",
+        package: "model_emulator",
         host_port: None,
         path_prefix: None,
         is_websocket: false,

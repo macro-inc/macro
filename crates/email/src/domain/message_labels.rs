@@ -1,6 +1,8 @@
 //! Message-label batch writes and compensation when a provider write cannot be queued.
 
 use super::events::{EmailEventOrigin, EmailMacroEvent, LabelRef};
+use super::models::UserProvider;
+use super::models::mailbox_action::{MailboxAction, MailboxActionMessage, MailboxActionTarget};
 use super::ports::EmailMessageEnqueuer;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -22,7 +24,7 @@ pub const MAX_MESSAGE_LABEL_BATCH: usize = 10;
 /// An authenticated caller's requested label change.
 pub struct MessageLabelChange {
     /// Caller whose own and delegated inboxes may resolve the first message.
-    pub caller_macro_id: String,
+    pub caller: MacroUserIdStr<'static>,
     /// Authentication identity used by the existing message lookup scope.
     pub caller_fusionauth_user_id: String,
     /// Message ids in request order, including any duplicates.
@@ -38,7 +40,8 @@ pub struct MessageLabelChange {
 pub struct MessageLabelOutcome {
     /// Messages whose requested state remains staged.
     pub successful_ids: Vec<Uuid>,
-    /// Messages restored because their provider write could not be queued.
+    /// Messages whose provider write was not queued: on Gmail those restored
+    /// after the queue refused it, on Outlook those the inbox no longer holds.
     pub failed_ids: Vec<Uuid>,
     /// Requested ids absent from the caller's message lookup.
     pub missing_ids: Vec<Uuid>,
@@ -71,6 +74,14 @@ pub enum MessageLabelError<E> {
     /// Neither queueing nor restoring the write succeeded.
     #[error("unable to queue the label change: {0}")]
     Unqueued(E),
+    /// The Outlook category command was refused or could not be written;
+    /// its transaction rolled back.
+    #[error("unable to queue the category change: {0}")]
+    Command(E),
+    /// The inbox stayed locked past the lock timeout; the category command
+    /// rolled back and the same change can be retried.
+    #[error("{}", super::models::EmailErr::Contended)]
+    Contended,
 }
 
 /// The transaction step that failed, after its original error has been logged.
@@ -94,6 +105,8 @@ pub struct MessageLabelInbox {
     pub id: Uuid,
     /// Inbox owner attributed in label-change events.
     pub macro_id: MacroUserIdStr<'static>,
+    /// Provider the label change is written to.
+    pub provider: UserProvider,
 }
 
 /// The label definition needed to stage a batch and publish its events.
@@ -135,10 +148,37 @@ pub struct StagedLabelWrite {
     pub write_id: Uuid,
 }
 
+/// What staging a label write changed.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct StagedMessageLabels {
+    /// Changed messages Gmail knows about, which the queued write sends.
+    pub provider_messages: Vec<(Uuid, String)>,
+    /// Threads that gained a label someone made: none of their messages,
+    /// drafts aside, carried it before.
+    pub gaining: Vec<GainingThread>,
+}
+
+/// A thread that gained a label, and the message it was put on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GainingThread {
+    /// Database identifier of the thread.
+    pub thread_id: Uuid,
+    /// Database identifier of the message.
+    pub message_id: Uuid,
+    /// Database identifier of the label.
+    pub label_id: Uuid,
+}
+
 /// Caller-scoped reads, atomic staging, and compensation for message labels.
 pub trait MessageLabelRepository: Send + Sync + 'static {
     /// Persistence failure, retaining its cause for callers.
     type Err: std::error::Error + Send + Sync + 'static;
+
+    /// Whether a failed `enqueue_mailbox_action` found the inbox locked past
+    /// the lock timeout, so the same change can be retried.
+    fn is_contended(&self, _error: &Self::Err) -> bool {
+        false
+    }
 
     /// Resolve the first message through the caller's own and delegated inboxes.
     fn inbox_for_message(
@@ -161,11 +201,11 @@ pub trait MessageLabelRepository: Send + Sync + 'static {
         caller_fusionauth_user_id: &str,
     ) -> impl Future<Output = Result<Vec<MessageLabelTarget>, Self::Err>> + Send;
 
-    /// Lock, mark, apply, and commit a label write, returning changed provider messages.
+    /// Lock, mark, apply, and commit a label write, returning what it changed.
     fn stage(
         &self,
         write: StagedLabelWrite,
-    ) -> impl Future<Output = Result<Vec<(Uuid, String)>, StageFailure>> + Send;
+    ) -> impl Future<Output = Result<StagedMessageLabels, StageFailure>> + Send;
 
     /// Restore an unqueued write under the threads' label-write locks.
     fn revert_unsent(
@@ -175,6 +215,23 @@ pub trait MessageLabelRepository: Send + Sync + 'static {
         provider_message_ids: &[Uuid],
         write_id: Uuid,
     ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
+
+    /// Read the organization facts of one thread's messages in the resolved inbox.
+    fn mailbox_action_messages(
+        &self,
+        link_id: Uuid,
+        thread_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<MailboxActionMessage>, Self::Err>> + Send;
+
+    /// Accept an Outlook mailbox command for exactly these targets, with their
+    /// pending state, in one transaction.
+    fn enqueue_mailbox_action(
+        &self,
+        link_id: Uuid,
+        actor: MacroUserIdStr<'static>,
+        action: &MailboxAction,
+        targets: &[MailboxActionTarget],
+    ) -> impl Future<Output = Result<Uuid, Self::Err>> + Send;
 }
 
 /// Orchestrates a message-label batch and its best-effort provider publication.
@@ -209,7 +266,7 @@ where
             .ok_or(MessageLabelError::BatchSize)?;
         let link = self
             .repository
-            .inbox_for_message(&request.caller_macro_id, first_id)
+            .inbox_for_message(request.caller.as_ref(), first_id)
             .await
             .map_err(MessageLabelError::InboxLookup)?
             .ok_or(MessageLabelError::MessageNotFound)?;
@@ -233,6 +290,15 @@ where
         if !missing_ids.is_empty() {
             tracing::warn!(message_ids=?missing_ids, "unable to find messages in db");
         }
+        if link.provider == UserProvider::Outlook {
+            let action = MailboxAction::Category {
+                name: label.provider_label_id,
+                present: request.add,
+            };
+            return self
+                .queue_outlook_category(link.id, request.caller, action, &db_messages, missing_ids)
+                .await;
+        }
         let message_db_ids: Vec<Uuid> = db_messages.iter().map(|m| m.db_id).collect();
         let mut thread_ids: Vec<Uuid> = db_messages.iter().map(|m| m.thread_db_id).collect();
         thread_ids.sort_unstable();
@@ -240,7 +306,10 @@ where
         let pending_write_id = macro_uuid::generate_uuid_v7();
         let provider_label_id = label.provider_label_id.clone();
         let is_adding = request.add;
-        let provider_messages = self
+        let StagedMessageLabels {
+            provider_messages,
+            gaining,
+        } = self
             .repository
             .stage(StagedLabelWrite {
                 link_id: link.id,
@@ -253,7 +322,9 @@ where
             .await?;
 
         let actor = Some(link.macro_id.clone());
+        let automated = agent_correlation::context::by_program();
         for thread_id in &thread_ids {
+            let gained = gaining.iter().find(|gained| gained.thread_id == *thread_id);
             let event = EmailMacroEvent::thread_label_change(
                 link.id,
                 link.macro_id.clone(),
@@ -266,12 +337,15 @@ where
                 },
                 is_adding,
                 EmailEventOrigin::UserAction,
+            )
+            .with_labels_gained(
+                gained.map(|gained| gained.message_id),
+                gained.map(|gained| gained.label_id).into_iter().collect(),
+                automated,
             );
-            if let Some(event) = event {
-                let _ = self.broker.send_event(&event).inspect_err(|e| {
-                    tracing::error!(error=?e, "failed to publish email macro event");
-                });
-            }
+            let _ = self.broker.send_event(&event).inspect_err(|e| {
+                tracing::error!(error=?e, "failed to publish email macro event");
+            });
         }
 
         let (labels_to_add, labels_to_remove) = if is_adding {
@@ -307,6 +381,19 @@ where
                 )
                 .await
                 .map_err(MessageLabelError::Unqueued)?;
+
+            // The change is published above, so a reader may have seen the
+            // labels this undid.
+            for thread_id in &thread_ids {
+                let event = EmailMacroEvent::thread_reindex_requested(
+                    link.id,
+                    link.macro_id.clone(),
+                    *thread_id,
+                );
+                let _ = self.broker.send_event(&event).inspect_err(|e| {
+                    tracing::error!(error=?e, "failed to publish email macro event");
+                });
+            }
         }
 
         Ok(MessageLabelOutcome {
@@ -314,6 +401,66 @@ where
                 .into_iter()
                 .filter(|id| !failed_ids.contains(id))
                 .collect(),
+            failed_ids,
+            missing_ids,
+        })
+    }
+
+    /// Outlook takes a category through a mailbox command, as a thread's
+    /// labels do, never through the Gmail label worker: one command for
+    /// exactly the requested messages the inbox still holds. The command's
+    /// projection publishes the threads' changes, so none are published here.
+    async fn queue_outlook_category(
+        &self,
+        link_id: Uuid,
+        actor: MacroUserIdStr<'static>,
+        action: MailboxAction,
+        messages: &[MessageLabelTarget],
+        missing_ids: Vec<Uuid>,
+    ) -> Result<MessageLabelOutcome, MessageLabelError<R::Err>> {
+        let mut thread_ids: Vec<Uuid> = messages.iter().map(|m| m.thread_db_id).collect();
+        thread_ids.sort_unstable();
+        thread_ids.dedup();
+        let mut requested = Vec::new();
+        for thread_id in thread_ids {
+            let facts = self
+                .repository
+                .mailbox_action_messages(link_id, thread_id)
+                .await
+                .map_err(MessageLabelError::MessagesLookup)?;
+            requested.extend(
+                facts
+                    .into_iter()
+                    .filter(|fact| messages.iter().any(|m| m.db_id == fact.id)),
+            );
+        }
+        let targets = action.targets(&requested);
+        if !targets.is_empty() {
+            self.repository
+                .enqueue_mailbox_action(link_id, actor, &action, &targets)
+                .await
+                .inspect_err(|e| {
+                    tracing::error!(
+                        error=?e,
+                        %link_id,
+                        targets = targets.len(),
+                        "Failed to queue the Outlook category change"
+                    );
+                })
+                .map_err(|error| {
+                    if self.repository.is_contended(&error) {
+                        MessageLabelError::Contended
+                    } else {
+                        MessageLabelError::Command(error)
+                    }
+                })?;
+        }
+        let (successful_ids, failed_ids) = messages
+            .iter()
+            .map(|m| m.db_id)
+            .partition(|id| targets.iter().any(|target| target.message_id == *id));
+        Ok(MessageLabelOutcome {
+            successful_ids,
             failed_ids,
             missing_ids,
         })

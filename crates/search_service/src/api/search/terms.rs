@@ -1,11 +1,13 @@
 //! Shared search-term parsing.
 //!
 //! [`split_search_terms`] tokenizes user input by whitespace while preserving
-//! double-quoted phrases so callers can build AND-of-terms queries where each
-//! quoted span counts as a single phrase term. Used by both the unified
-//! dispatch and the channel-only endpoint. [`drop_wordless_terms`] then removes
-//! the terms no indexed text can match, and [`resolve_document_term_matching`]
-//! decides how the remaining terms combine on document content.
+//! double-quoted phrases, in straight or curly quotes, so callers can build
+//! AND-of-terms queries where each quoted span counts as a single phrase term.
+//! Used by both the unified dispatch and the channel-only endpoint.
+//! [`drop_wordless_terms`] then removes the terms no indexed text can match,
+//! [`take_left_out_terms`] reads the words a minus leaves out, and
+//! [`resolve_document_term_matching`] decides how the remaining terms combine
+//! on document content.
 
 use macro_user_id::user_id::MacroUserIdStr;
 use models_search::{MatchType, TermMatching};
@@ -15,14 +17,25 @@ use opensearch_client::search::documents::{DocumentTermMatching, MIN_TERMS_FOR_D
 use crate::TermMatchingRollout;
 use crate::api::search::simple::SearchError;
 
+/// Whether `c` opens or closes a phrase: a straight double quote or a curly
+/// one, which phones and Macs type in its place (`“team lunch”`, `„team
+/// lunch“`).
+fn is_phrase_quote(c: char) -> bool {
+    matches!(c, '"' | '“' | '”' | '„')
+}
+
 /// Trims a query and rejects one that holds no search term: only whitespace
 /// and the double quotes [`split_search_terms`] strips. One character is
 /// enough: the query builders match a term under three characters as a whole
-/// word in document, chat, call and email content and cap every prefix
-/// expansion, so a short query costs no more than a common longer word.
+/// word in document, chat, call and email content, and expand any other
+/// prefix under three characters to a capped number of terms, so a short
+/// query costs no more than a common longer word.
 pub(in crate::api::search) fn trimmed_query(query: &str) -> Result<&str, SearchError> {
     let query = query.trim();
-    if query.chars().all(|c| c.is_whitespace() || c == '"') {
+    if query
+        .chars()
+        .all(|c| c.is_whitespace() || is_phrase_quote(c))
+    {
         return Err(SearchError::EmptyQuery);
     }
     Ok(query)
@@ -31,6 +44,7 @@ pub(in crate::api::search) fn trimmed_query(query: &str) -> Result<&str, SearchE
 /// Splits search terms by whitespace, preserving double-quoted phrases.
 /// e.g. `["hello world"]` → `["hello", "world"]`
 /// e.g. `[r#""hello world" test"#]` → `["hello world", "test"]`
+/// e.g. `["“hello world” test"]` → `["hello world", "test"]`
 pub(in crate::api::search) fn split_search_terms(terms: &[String]) -> Vec<String> {
     let joined = terms.join(" ");
     let mut result = Vec::new();
@@ -39,7 +53,7 @@ pub(in crate::api::search) fn split_search_terms(terms: &[String]) -> Vec<String
     let mut in_quotes = false;
     for c in joined.chars() {
         match c {
-            '"' => in_quotes = !in_quotes,
+            c if is_phrase_quote(c) => in_quotes = !in_quotes,
             c if c.is_whitespace() && !in_quotes => {
                 let trimmed = current.trim().to_string();
                 if !trimmed.is_empty() {
@@ -75,6 +89,38 @@ pub(in crate::api::search) fn drop_wordless_terms(
         return terms;
     }
     terms.into_iter().filter(has_word).collect()
+}
+
+/// The word or phrase `term` leaves out of a search when a minus starts it:
+/// `draft` for `-draft`, `team lunch` for `-"team lunch"`. A minus inside a
+/// word (`e-mail`), a term starting with two (`--force`) and a minus before
+/// no letter or digit leave nothing out; they stay words.
+pub(in crate::api::search) fn left_out(term: &str) -> Option<&str> {
+    let body = term.strip_prefix('-')?;
+    let names_a_word = !body.starts_with('-') && body.chars().any(char::is_alphanumeric);
+    names_a_word.then_some(body)
+}
+
+/// Takes the words and phrases a minus leaves out ([`left_out`]) out of
+/// `terms`, for a match type that reads plain words. Returns the terms left
+/// and the words left out; regexp and query-string input keep every term,
+/// since a minus is syntax there.
+pub(in crate::api::search) fn take_left_out_terms(
+    terms: Vec<String>,
+    match_type: MatchType,
+) -> (Vec<String>, Vec<String>) {
+    if !matches!(match_type, MatchType::Exact | MatchType::Partial) {
+        return (terms, Vec::new());
+    }
+    let mut kept: Vec<String> = Vec::with_capacity(terms.len());
+    let mut left_out_terms: Vec<String> = Vec::new();
+    for term in terms {
+        match left_out(&term) {
+            Some(word) => left_out_terms.push(word.to_string()),
+            None => kept.push(term),
+        }
+    }
+    (kept, left_out_terms)
 }
 
 /// Records on `span` how many terms a search kept and how many

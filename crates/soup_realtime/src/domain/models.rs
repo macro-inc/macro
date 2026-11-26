@@ -42,8 +42,19 @@ impl<T> Patch<T> {
 pub struct SoupRealtimePatch {
     /// Patch delivered to each recipient.
     pub patch: Patch<Entity<'static>>,
-    /// Entity whose current accessors should receive the patch.
-    pub access_source: Entity<'static>,
+    /// Entity whose current accessors should receive the patch; `None` when
+    /// only `named_recipients` should.
+    pub access_source: Option<Entity<'static>>,
+    /// Users who also receive the patch: those the source event names because
+    /// their access ended with the change, as when an entity is hard-deleted
+    /// before its event is consumed.
+    pub named_recipients: Vec<MacroUserIdStr<'static>>,
+    /// Channel whose active members are left out of `named_recipients`: the
+    /// event named them for a membership it ended, and they are members again
+    /// by the time it is consumed. Its roster is read when the patch is
+    /// delivered, past the audience cache, and also answers for the patches
+    /// whose access source is this channel.
+    pub named_unless_member_of: Option<Entity<'static>>,
 }
 
 impl SoupRealtimePatch {
@@ -51,7 +62,9 @@ impl SoupRealtimePatch {
     pub fn new(patch: Patch<Entity<'static>>, access_source: Entity<'static>) -> Self {
         Self {
             patch,
-            access_source,
+            access_source: Some(access_source),
+            named_recipients: Vec::new(),
+            named_unless_member_of: None,
         }
     }
 
@@ -59,6 +72,42 @@ impl SoupRealtimePatch {
     pub fn for_entity(patch: Patch<Entity<'static>>) -> Self {
         let access_source = patch.value().clone();
         Self::new(patch, access_source)
+    }
+
+    /// Creates a patch for `users` alone, whatever anyone's current access:
+    /// for people the source event names because the change ended theirs,
+    /// while everyone else who can see the entity hears something else.
+    pub fn only_for(patch: Patch<Entity<'static>>, users: Vec<MacroUserIdStr<'static>>) -> Self {
+        Self {
+            patch,
+            access_source: None,
+            named_recipients: users,
+            named_unless_member_of: None,
+        }
+    }
+
+    /// Creates a patch of a channel for `users` whose membership of it the
+    /// source event ended, leaving out those who are members again when the
+    /// patch is delivered: they were added back before the event was consumed,
+    /// so the patches for its members reach them instead.
+    pub fn only_for_former_members(
+        patch: Patch<Entity<'static>>,
+        users: Vec<MacroUserIdStr<'static>>,
+    ) -> Self {
+        let channel = patch.value().clone();
+        Self {
+            patch,
+            access_source: None,
+            named_recipients: users,
+            named_unless_member_of: Some(channel),
+        }
+    }
+
+    /// Also delivers the patch to `users`, whatever their current access.
+    #[must_use]
+    pub fn with_named_recipients(mut self, users: Vec<MacroUserIdStr<'static>>) -> Self {
+        self.named_recipients = users;
+        self
     }
 }
 

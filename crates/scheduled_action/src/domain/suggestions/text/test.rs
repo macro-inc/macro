@@ -18,6 +18,7 @@ fn routine(description: &str, steps: Value) -> ActionConfiguration {
         enabled: false,
         run_visibility: Default::default(),
         description: description.into(),
+        appearance: None,
     }
 }
 

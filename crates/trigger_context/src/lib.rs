@@ -401,6 +401,9 @@ pub struct TaskSnapshot {
     /// Priority option name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub priority: Option<String>,
+    /// Start date.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start: Option<DateTime<Utc>>,
     /// Due date.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub due: Option<DateTime<Utc>>,
@@ -604,6 +607,15 @@ pub enum RoutineEvent {
     EmailReceived {
         /// The email.
         email: EmailSnapshot,
+    },
+    /// A thread gained Gmail labels or Outlook categories, as an email
+    /// arrived with them or later.
+    EmailLabeled {
+        /// The email the labels were seen on: the thread's newest when a whole
+        /// thread was labeled.
+        email: EmailSnapshot,
+        /// The labels the thread gained, by name.
+        labels: Vec<String>,
     },
     /// A channel was created.
     ChannelCreated {

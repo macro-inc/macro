@@ -77,7 +77,7 @@ pub struct OpenInApp {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum UiDeclineReason {
-    /// Agent navigation is off for this person.
+    /// No longer sent; kept so existing clients still parse it.
     TurnedOff,
     /// The path is not a route agents may open.
     NotAllowedRoute,
@@ -184,13 +184,6 @@ pub trait UiTurns: Send + Sync + 'static {
     async fn turn(&self, session: AgentSessionId) -> Result<UiTurn, CodeModeError>;
 }
 
-/// Whether agent navigation is on for a person.
-#[async_trait]
-pub trait UiNavigationFlag: Send + Sync + 'static {
-    /// On for `user`. A flag that cannot be read counts as off.
-    async fn enabled(&self, user: &MacroUserIdStr<'static>) -> bool;
-}
-
 /// Shared command budgets, the same on every replica.
 #[async_trait]
 pub trait UiCommandBudgets: Send + Sync + 'static {
@@ -215,7 +208,6 @@ pub struct UiCommandService {
     store: Arc<dyn ExecutionStore>,
     active: Arc<dyn ExecutionTurns>,
     turns: Arc<dyn UiTurns>,
-    flag: Arc<dyn UiNavigationFlag>,
     budgets: Arc<dyn UiCommandBudgets>,
     delivery: Arc<dyn UiCommandDelivery>,
     routes: Arc<NavigableRoutes>,
@@ -229,8 +221,6 @@ pub struct UiCommandPorts {
     pub active: Arc<dyn ExecutionTurns>,
     /// The turn's owner and prompter.
     pub turns: Arc<dyn UiTurns>,
-    /// The rollout flag.
-    pub flag: Arc<dyn UiNavigationFlag>,
     /// Shared budgets.
     pub budgets: Arc<dyn UiCommandBudgets>,
     /// The connection gateway.
@@ -251,7 +241,6 @@ impl UiCommandService {
             store: ports.store,
             active: ports.active,
             turns: ports.turns,
-            flag: ports.flag,
             budgets: ports.budgets,
             delivery: ports.delivery,
             routes: Arc::new(routes),
@@ -342,10 +331,6 @@ impl UiCommandService {
             return Ok(UiCommandOutcome::NoClient);
         };
 
-        if !self.flag.enabled(user).await {
-            return Ok(declined(UiDeclineReason::TurnedOff));
-        }
-
         let Some(path) = self.routes.check(&input.path) else {
             return Ok(declined(UiDeclineReason::NotAllowedRoute));
         };
@@ -400,10 +385,11 @@ impl UiCommandService {
 }
 
 /// The person and tab a turn may show things to: a person's own turn, typed
-/// in a tab. A system turn never has one, whatever its row holds.
+/// in a tab. A system or program turn never has one, whatever its row holds:
+/// a program may have rewritten a prompt the person typed in that tab.
 fn prompting_tab(admitted: &Admitted) -> Option<(&MacroUserIdStr<'static>, UiClientId)> {
     let prompter = admitted.turn_facts.prompter.as_ref()?;
-    if prompter.action_id != admitted.turn {
+    if prompter.action_id != admitted.turn || !prompter.kind.is_user() {
         return None;
     }
 

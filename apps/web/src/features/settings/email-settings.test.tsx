@@ -63,7 +63,7 @@ describe('EmailSettings read receipts', () => {
       data: { links: [link] },
       refetch: vi.fn(),
     };
-    render(() => <EmailSettings />);
+    render(() => <EmailSettings displayOptions={false} />);
 
     expect(
       screen.getByRole('switch', {
@@ -81,7 +81,7 @@ describe('EmailSettings read receipts', () => {
       data: undefined,
       refetch: vi.fn(),
     };
-    render(() => <EmailSettings />);
+    render(() => <EmailSettings displayOptions={false} />);
 
     expect(screen.getByText("Couldn't load accounts")).toBeTruthy();
     expect(screen.queryByRole('switch')).toBeNull();
@@ -107,7 +107,7 @@ describe('EmailSignatures', () => {
       },
       refetch: vi.fn(),
     };
-    render(() => <EmailSettings />);
+    render(() => <EmailSettings displayOptions={false} />);
 
     expect(screen.getByText('Signature for owner@example.com')).toBeTruthy();
     expect(

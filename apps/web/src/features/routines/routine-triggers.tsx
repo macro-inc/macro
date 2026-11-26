@@ -1,7 +1,7 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
+  enableEmailLabeledTrigger,
   enableEventRoutines,
-  enableRoutineConditions,
 } from '@core/constant/featureFlags';
 import { Show, Suspense } from 'solid-js';
 import { RoutineEventCondition } from './components/routine-event-condition';
@@ -12,12 +12,21 @@ import { RoutineTriggers as TriggerList } from './components/routine-triggers';
 import {
   type EventTriggerDraft,
   eventScopeKind,
+  type RoutineEventName,
   type RoutineTriggerDraft,
   taskTriggerProperty,
   withPropertyValues,
 } from './core/routine-triggers';
 import { createGithubConnection } from './queries/github-link';
 import { createGithubRepositoryOptions } from './queries/github-repositories';
+import {
+  RoutineEmailLabels,
+  RoutineEmailLabelsLabel,
+} from './routine-email-labels';
+import {
+  RoutineInboxesLabel,
+  RoutineInboxPicker,
+} from './routine-event-inboxes';
 import {
   RoutineEventPropertyValues,
   RoutineEventValueLabel,
@@ -43,13 +52,16 @@ function RepositoryScopeLabel(props: { trigger: EventTriggerDraft }) {
   return <span title={label()}>{label()}</span>;
 }
 
+const NONE_HIDDEN: RoutineEventName[] = [];
+const EMAIL_LABELS_HIDDEN: RoutineEventName[] = ['email.labeled'];
+
 export function RoutineTriggers(props: {
   triggers: RoutineTriggerDraft[];
   onChange: (triggers: RoutineTriggerDraft[]) => void;
   layout?: 'rows' | 'add' | 'inline';
 }) {
-  const conditions = useFeatureFlag(enableRoutineConditions);
   const eventRoutines = useFeatureFlag(enableEventRoutines);
+  const emailLabels = useFeatureFlag(enableEmailLabeledTrigger);
   const github = createGithubConnection();
   const repositories = createGithubRepositoryOptions(
     () =>
@@ -85,6 +97,7 @@ export function RoutineTriggers(props: {
         onChange={props.onChange}
         layout={props.layout === 'add' ? 'add' : 'rows'}
         offerEvents={eventRoutines().enabled}
+        hiddenEvents={emailLabels().enabled ? NONE_HIDDEN : EMAIL_LABELS_HIDDEN}
         renderEventGroup={(group, options) => (
           <Show
             when={group !== 'GitHub' || github().linked !== false}
@@ -95,18 +108,25 @@ export function RoutineTriggers(props: {
             {options()}
           </Show>
         )}
-        renderEventCondition={
-          conditions().enabled
-            ? (trigger, onChange) => (
-                <RoutineEventCondition
-                  trigger={trigger()}
-                  onChange={onChange}
-                />
-              )
-            : undefined
-        }
+        renderEventCondition={(trigger, onChange) => (
+          <RoutineEventCondition trigger={trigger()} onChange={onChange} />
+        )}
+        renderInboxPicker={(inboxes, onChange) => (
+          <RoutineInboxPicker inboxes={inboxes} onChange={onChange} />
+        )}
+        renderInboxesLabel={(inboxes) => (
+          <RoutineInboxesLabel inboxes={inboxes} />
+        )}
         renderEventSettings={(trigger, onChange) => (
           <>
+            <Show when={trigger().events.includes('email.labeled')}>
+              <RoutineEmailLabels
+                labels={trigger().labels ?? []}
+                onChange={(labels) =>
+                  onChange({ labels: labels.length ? labels : undefined })
+                }
+              />
+            </Show>
             <Show when={taskTriggerProperty(trigger())}>
               {(property) => (
                 <RoutineEventPropertyValues
@@ -148,26 +168,33 @@ export function RoutineTriggers(props: {
         )}
         renderEventLabel={(trigger) => (
           <Show
-            when={entityKind(trigger())}
-            fallback={<RepositoryScopeLabel trigger={trigger()} />}
+            when={!trigger().events.includes('email.labeled')}
+            fallback={
+              <RoutineEmailLabelsLabel labels={trigger().labels ?? []} />
+            }
           >
-            {(kind) => (
-              <Suspense fallback={<span>Selected items</span>}>
-                <Show when={taskTriggerProperty(trigger())}>
-                  {(property) => (
-                    <RoutineEventValueLabel
-                      property={property()}
-                      values={trigger().property?.values ?? []}
-                    />
-                  )}
-                </Show>
-                <RoutineEventScopeLabel
-                  kind={kind()}
-                  ids={trigger().ids}
-                  events={trigger().events}
-                />
-              </Suspense>
-            )}
+            <Show
+              when={entityKind(trigger())}
+              fallback={<RepositoryScopeLabel trigger={trigger()} />}
+            >
+              {(kind) => (
+                <Suspense fallback={<span>Selected items</span>}>
+                  <Show when={taskTriggerProperty(trigger())}>
+                    {(property) => (
+                      <RoutineEventValueLabel
+                        property={property()}
+                        values={trigger().property?.values ?? []}
+                      />
+                    )}
+                  </Show>
+                  <RoutineEventScopeLabel
+                    kind={kind()}
+                    ids={trigger().ids}
+                    events={trigger().events}
+                  />
+                </Suspense>
+              )}
+            </Show>
           </Show>
         )}
         renderEventScope={(trigger, onChange) => (

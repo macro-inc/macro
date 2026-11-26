@@ -21,6 +21,7 @@ import { COMMENT_LINK_PARAM } from './comment-link';
 import {
   EntityConversation,
   EntityConversationComposer,
+  type EntityConversationProps,
 } from './EntityConversation';
 import {
   scrollToRenderedTarget,
@@ -67,12 +68,17 @@ export function EntityDiscussion(props: {
    */
   floatingComposerOnTouch?: boolean;
   editorHasFocus?: boolean;
+  children?: EntityConversationProps['children'];
 }) {
+  // This child is a render callback, not JSX to evaluate before its provider.
+  const renderDiscussion = createMemo(() => props.children);
   const params = useUrlParams({ commentId: COMMENT_LINK_PARAM });
   const commentId = () =>
     props.targetId === undefined ? params.commentId() : props.targetId;
   const floating = () =>
-    props.floatingComposerOnTouch === true && isTouchDevice();
+    props.floatingComposerOnTouch === true &&
+    isTouchDevice() &&
+    !renderDiscussion();
   let container: HTMLDivElement | undefined;
   // Scroll to the linked message once per navigation of `comment_id`, as the
   // margin does for anchored comments. A repeat navigation to the same message
@@ -104,6 +110,8 @@ export function EntityDiscussion(props: {
     on(
       [scrollRequest, () => props.scrollReady !== false],
       ([request, ready]) => {
+        // A composed sheet owns its own scroll root outside this inline container.
+        if (renderDiscussion()) return;
         if (!request || !container || request.key === scrolledKey) return;
         const onSettled = () => {
           scrolledKey = request.key;
@@ -142,9 +150,11 @@ export function EntityDiscussion(props: {
           canWrite={props.canWrite}
           canModerate={props.canModerate}
           targetId={commentId()}
+          targetRequestKey={scrollRequest()?.key}
           targetCleared={targetCleared()}
           onClearTarget={() => setClearedKey(scrollRequest()?.key)}
           label={props.label}
+          children={renderDiscussion()}
           buildLink={(message) =>
             buildSimpleEntityUrl(props.link, {
               [COMMENT_LINK_PARAM]: message.id,

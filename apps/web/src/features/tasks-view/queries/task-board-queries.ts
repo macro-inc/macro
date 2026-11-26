@@ -1,6 +1,9 @@
 import { createProjectIdentityQuery } from '@app/features/projects/queries/project-identity';
 import type { FacetSelection, SortSelection } from '@app/features/soup';
-import { soupPropertyToProperty } from '@entity/extractors-property/property-helpers';
+import {
+  buildStartDateDefaultProperty,
+  soupPropertyToProperty,
+} from '@entity/extractors-property/property-helpers';
 import type { TaskEntityWithProperties } from '@entity/types/entity';
 import { Telemetry } from '@macro-inc/observability';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
@@ -29,6 +32,7 @@ import {
   taskBoardColumns,
   taskBoardMoveValue,
   taskBoardPropertyId,
+  taskDeadlineMoveWrites,
   toBoardTask,
 } from './task-board';
 import type { TasksDataSourceItem } from './use-tasks-query';
@@ -39,7 +43,6 @@ export function createTaskBoardQueries(options: {
   grouping: Accessor<TaskBoardGrouping>;
   searching: Accessor<boolean>;
   userId: Accessor<string | undefined>;
-  projectsEnabled: Accessor<boolean>;
   facets?: Accessor<FacetSelection>;
   sort?: Accessor<SortSelection<TaskSortId>[]>;
   calendar?: Accessor<DateBucketBoundaries>;
@@ -114,7 +117,7 @@ export function createTaskBoardQueries(options: {
   );
 
   const projectIds = createMemo(() => {
-    if (options.grouping() !== 'project' || !options.projectsEnabled()) {
+    if (options.grouping() !== 'project') {
       return [];
     }
 
@@ -187,7 +190,7 @@ export function createTaskBoardQueries(options: {
       }
 
       if (grouping === 'due_date') return isTaskDueDateBucket(id);
-      return grouping !== 'project' || options.projectsEnabled();
+      return true;
     },
     async save(move, grouping) {
       const entity = entities().get(move.id);
@@ -203,7 +206,16 @@ export function createTaskBoardQueries(options: {
       if (!canMove) {
         throw new Error('Task or destination is no longer editable');
       }
-      if (grouping === 'due_date') {
+      const writes = () => {
+        if (grouping !== 'due_date')
+          return [
+            {
+              entityId: entity.id,
+              entityType: 'TASK' as const,
+              property,
+              apiValues: taskBoardMoveValue(entity, grouping, move),
+            },
+          ];
         const calendar = options.calendar?.();
         if (
           !calendar ||
@@ -211,22 +223,28 @@ export function createTaskBoardQueries(options: {
           taskDueDateBucket(move.dueDate ?? undefined, calendar) !== move.toLane
         )
           throw new Error('Date is outside the destination bucket');
-      }
+        return taskDeadlineMoveWrites(
+          entity,
+          move.dueDate,
+          calendar.timeZone
+        ).map(({ field, apiValues }) => ({
+          entityId: entity.id,
+          entityType: 'TASK' as const,
+          property:
+            field === 'due'
+              ? property
+              : (properties().get(SYSTEM_PROPERTY_IDS.START_DATE) ??
+                buildStartDateDefaultProperty()),
+          apiValues,
+        }));
+      };
+      const toSave = writes();
 
       await Telemetry.span('task.board.move', async (span) => {
         span.setAttr('task.id', entity.id);
         span.setAttr('task.grouping', grouping);
         span.setAttr('task.destination', move.toLane);
-        await save.mutateAsync({
-          properties: [
-            {
-              entityId: entity.id,
-              entityType: 'TASK',
-              property,
-              apiValues: taskBoardMoveValue(entity, grouping, move),
-            },
-          ],
-        });
+        await save.mutateAsync({ properties: toSave });
       });
     },
   };
@@ -286,7 +304,7 @@ export function createTaskBoardQueries(options: {
 
     try {
       if (definition.id === SYSTEM_PROPERTY_IDS.PROJECT) {
-        if (!options.projectsEnabled() || apiValues.valueType !== 'ENTITY') {
+        if (apiValues.valueType !== 'ENTITY') {
           throw new Error('Project editing is unavailable');
         }
       }

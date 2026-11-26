@@ -1,4 +1,5 @@
 use super::*;
+use email::outbound::EmailPgRepo;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 
@@ -6,7 +7,7 @@ use sqlx::PgPool;
 async fn a_write_that_can_be_neither_queued_nor_undone_fails_the_request(pool: PgPool) {
     pool.close().await;
 
-    let error = PgMessageLabels(pool)
+    let error = PgMessageLabels(pool.clone(), EmailPgRepo::new(pool))
         .revert_unsent(
             Uuid::now_v7(),
             &[Uuid::now_v7()],

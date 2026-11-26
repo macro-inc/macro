@@ -1,6 +1,7 @@
 import { ViewSidebar } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
 import { useUserId } from '@core/context/user';
+import RobotIcon from '@icon/system/regular/robot.svg';
 import UserPlusIcon from '@icon/system/regular/user-plus.svg';
 import UsersThreeIcon from '@icon/system/regular/users-three.svg';
 import { useTeamQuery, useUserTeamsQuery } from '@queries/team/teams';
@@ -13,7 +14,12 @@ import {
   type JSX,
   Show,
 } from 'solid-js';
-import { CreateTeamDialog, InviteToTeamDialog } from './Team';
+import {
+  CreateTeamDialog,
+  type InviteKind,
+  InviteToTeamDialog,
+  useCanInviteAgents,
+} from './Team';
 import { canInviteToTeam, isTeamAdminOrOwner } from './teamMemberPermissions';
 
 /**
@@ -56,7 +62,8 @@ function CreateTeamAction() {
 function InviteToTeamAction(props: { teamId: string }) {
   const userId = useUserId();
   const teamQuery = useTeamQuery(() => props.teamId);
-  const [open, setOpen] = createSignal(false);
+  // The flow the dialog opens, while it is open.
+  const [open, setOpen] = createSignal<InviteKind>();
   const role = () => {
     const team = teamQuery.isSuccess ? teamQuery.data : undefined;
     return team?.members.find((member) => member.user_id === userId())?.role;
@@ -66,6 +73,7 @@ function InviteToTeamAction(props: { teamId: string }) {
     if (!team) return false;
     return canInviteToTeam(role(), team.team.allow_non_admin_invites);
   };
+  const canInviteAgents = useCanInviteAgents(() => isTeamAdminOrOwner(role()));
 
   return (
     <Show when={canInvite()}>
@@ -73,13 +81,23 @@ function InviteToTeamAction(props: { teamId: string }) {
         icon={UserPlusIcon}
         label={t('settingsNav.inviteTeam')}
         gradient
-        onPress={() => setOpen(true)}
+        onPress={() => setOpen('people')}
       />
+      <Show when={canInviteAgents()}>
+        <ActionItem
+          icon={RobotIcon}
+          label={t('settingsNav.inviteAgents')}
+          gradient
+          onPress={() => setOpen('agent')}
+        />
+      </Show>
       <InviteToTeamDialog
         teamId={props.teamId}
         canManageLink={isTeamAdminOrOwner(role())}
-        open={open()}
-        onClose={() => setOpen(false)}
+        kind={open()}
+        canInviteAgents={canInviteAgents()}
+        open={!!open()}
+        onClose={() => setOpen(undefined)}
       />
     </Show>
   );

@@ -78,7 +78,6 @@ impl<
     PromptComposer,
     Egress,
     Lifecycle,
-    Mentions,
     Notifier,
 >
     AgentHarnessService<
@@ -90,7 +89,6 @@ impl<
         PromptComposer,
         Egress,
         Lifecycle,
-        Mentions,
         Notifier,
     >
 where
@@ -102,7 +100,6 @@ where
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
     Lifecycle: AgentSessionLifecyclePublisher,
-    Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
     pub(super) fn enqueue(
@@ -224,7 +221,6 @@ impl<
     PromptComposer,
     Egress,
     Lifecycle,
-    Mentions,
     Notifier,
 >
     AgentHarnessInner<
@@ -236,7 +232,6 @@ impl<
         PromptComposer,
         Egress,
         Lifecycle,
-        Mentions,
         Notifier,
     >
 where
@@ -248,7 +243,6 @@ where
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
     Lifecycle: AgentSessionLifecyclePublisher,
-    Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
     /// Execute where the session's live actor is: locally when nobody (or
@@ -440,6 +434,7 @@ where
                             announce: Some(origin),
                             context,
                             client: None,
+                            prompter: agent_session::domain::model::PrompterKind::User,
                         })
                     }
                     Err(AgentSessionError::NotFound(_)) => HarnessCommand::Open(open),
@@ -593,10 +588,11 @@ where
                 action_id,
                 prompt,
                 actor,
+                prompter,
             } => {
                 queue_result(
                     self.queues
-                        .edit_prompt(session_id, action_id, prompt, actor),
+                        .edit_prompt(session_id, action_id, prompt, actor, prompter),
                     session_id,
                 )?;
                 self.persist_or_rollback(session_id).await?;
@@ -1074,10 +1070,6 @@ where
             self.reject_waiting_on_denial(session_id, &error).await?;
             return Err(error);
         }
-        let prompt = match &command.action {
-            AgentAction::Prompt(prompt) => Some(prompt.prompt.clone()),
-            _ => None,
-        };
         let actor = command.actor.clone();
         let announce = command.announce.clone();
         let action = command.action.clone();
@@ -1099,6 +1091,7 @@ where
             announce: command.announce,
             context: command.context,
             client: command.client,
+            prompter: command.prompter,
             announced: None,
             created_at: dm_record
                 .as_ref()
@@ -1113,19 +1106,6 @@ where
         };
         queue_result(enqueued, session_id)?;
         self.persist_or_rollback(session_id).await?;
-        // Mentions are a fact about the prompt, not the turn: published as
-        // soon as the prompt is accepted, whether it dispatches now or waits.
-        if let Some(prompt) = prompt {
-            self.publish_mentions(
-                session_id,
-                action_id,
-                actor.clone(),
-                &prompt,
-                announce.as_ref().map(|origin| origin.message_id),
-            )
-            .await;
-        }
-
         if steers {
             self.steer_channel_follow_up(session_id, action_id, &action, actor.as_ref(), announce)
                 .await?;
@@ -1237,6 +1217,7 @@ where
                         announce: None,
                         context: None,
                         client: None,
+                        prompter: agent_session::domain::model::PrompterKind::User,
                     },
                 )
                 .await
@@ -1280,6 +1261,7 @@ where
                     announce: None,
                     context: None,
                     client: None,
+                    prompter: agent_session::domain::model::PrompterKind::User,
                 },
             )
             .await
@@ -1757,6 +1739,7 @@ where
                 // Already composed into the action above.
                 context: None,
                 client: None,
+                prompter: entry.prompter,
             };
             flight.announcement_message_id = entry.announced;
             if let Some(store) = conversation_store
@@ -1879,7 +1862,6 @@ pub(super) async fn run_session_worker<
     PromptComposer,
     Egress,
     Lifecycle,
-    Mentions,
     Notifier,
 >(
     session_id: AgentSessionId,
@@ -1892,7 +1874,6 @@ pub(super) async fn run_session_worker<
         PromptComposer,
         Egress,
         Lifecycle,
-        Mentions,
         Notifier,
     >,
     workers: Arc<SessionWorkers>,
@@ -1907,7 +1888,6 @@ pub(super) async fn run_session_worker<
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
     Lifecycle: AgentSessionLifecyclePublisher,
-    Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
     let mut deleted = false;

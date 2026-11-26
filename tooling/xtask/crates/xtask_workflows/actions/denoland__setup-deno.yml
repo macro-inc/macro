@@ -1,0 +1,23 @@
+name: Setup Deno
+description: Setup Deno by installing, downloading, and adding it to the path.
+inputs:
+  deno-version:
+    description: The Deno version to install. Can be a semver version of a stable release, "canary" for the latest canary, "lts" for the latest LTS, or the Git hash of a specific canary release.
+    default: 2.x
+  deno-version-file:
+    description: File containing the Deno version to install such as .dvmrc or .tool-versions.
+  deno-binary-name:
+    description: The name to use for the binary.
+    default: deno
+  cache:
+    description: Cache downloaded modules & packages automatically in GitHub Actions cache.
+    default: 'false'
+  cache-hash:
+    description: A hash used as part of the cache key, which defaults to a hash of the deno.lock files.
+outputs:
+  cache-hit:
+    description: A boolean indicating whether the cache was hit.
+  deno-version:
+    description: The Deno version that was installed.
+  release-channel:
+    description: The release channel of the installed version.

@@ -1,0 +1,201 @@
+# Gives a Firecracker computer its own identity and its /home, from the
+# `macro.identity` document the host puts in MMDS before it resumes a restore
+# (or starts a computer from its own disk). Without the document, as in the
+# golden boot the snapshot is taken from, it changes nothing. Safe to repeat.
+#
+# The host waits for this script, so it does only what macrod needs before it
+# can start, and leaves the rest to units it starts without waiting:
+# macro-home.target (macro-home-setup, then macrod-enroll, macrod, harnessd and
+# macro's session) and macro-restore-settle (networkd, journald, the random
+# seed and timesyncd catch up). Each step's time goes to the journal and to
+# /run/macro-restore/timings.json.
+set -euo pipefail
+trap 'echo "macro-restore: failed at line $LINENO: $BASH_COMMAND" >&2' ERR
+
+# Step times in microseconds from EPOCHREALTIME (a builtin, no fork), with the
+# clock step subtracted, so they stay monotonic.
+read -r uptime_at_start _ < /proc/uptime
+started=${EPOCHREALTIME/./}
+last=$started
+steps=
+step() {
+  local now=${EPOCHREALTIME/./}
+  echo "macro-restore: $1 $(((now - last) / 1000)) ms"
+  steps+="${steps:+,}{\"step\":\"$1\",\"ms\":$(((now - last) / 1000)),\"at_ms\":$(((now - started) / 1000))}"
+  last=$now
+}
+# Writes the timings for the host and the demo, then the final line.
+finish() {
+  local now=${EPOCHREALTIME/./}
+  mkdir -p /run/macro-restore
+  printf '{"kind":"%s","id":"%s","uptime_at_start_s":%s,"total_ms":%d,"steps":[%s]}\n' \
+    "$1" "$id" "$uptime_at_start" "$(((now - started) / 1000))" "$steps" > /run/macro-restore/timings.json.new
+  mv /run/macro-restore/timings.json.new /run/macro-restore/timings.json
+  echo "macro-restore: $2 as $id in $(((now - started) / 1000)) ms"
+}
+
+# MMDS address, token path and headers: the contract in
+# crates/firecracker_host_api/src/mmds.rs (mmds::ADDRESS, TOKEN_PATH,
+# TOKEN_TTL_HEADER, TOKEN_HEADER, IDENTITY_POINTER); keep them in step.
+mmds=http://169.254.169.254
+token=$(curl --silent --show-error --fail --max-time 2 --retry 20 --retry-delay 0 \
+  --retry-connrefused --retry-all-errors \
+  --request PUT --header 'X-metadata-token-ttl-seconds: 60' "$mmds/latest/api/token")
+status=$(curl --silent --show-error --max-time 2 --output /run/macro-identity.json \
+  --write-out '%{http_code}' --header "X-metadata-token: $token" \
+  --header 'Accept: application/json' "$mmds/macro/identity")
+if [ "$status" = 404 ]; then
+  echo "macro-restore: no identity in MMDS; leaving this boot as it is"
+  rm -f /run/macro-identity.json
+  exit 0
+fi
+if [ "$status" != 200 ]; then
+  echo "macro-restore: MMDS answered HTTP $status for /macro/identity" >&2
+  exit 1
+fi
+# One jq for the whole document; a missing field fails here, with its name.
+# eval is safe only because every value passes through @sh: never add an
+# unquoted field.
+eval "$(jq --raw-output '
+  @sh "id=\(.id) role=\(.role // error("no identity.role")) time_ms=\(.time_unix_ms) address=\(.network.address) gateway=\(.network.gateway)",
+  "dns=(\(.network.dns | if length > 0 then map(@sh) | join(" ") else error("no DNS servers") end))"
+' /run/macro-identity.json)"
+step mmds
+
+# A snapshot's wall clock can be the golden boot's (a restore without
+# clock_realtime). Step it forward to the host's time, which the host wrote
+# just before resuming; never back, since that time is already a little old.
+if [ "$((time_ms / 1000))" -gt "$((EPOCHSECONDS + 1))" ]; then
+  before=${EPOCHREALTIME/./}
+  date --utc --set="@$((time_ms / 1000)).$(printf %03d $((time_ms % 1000)))" > /dev/null
+  shift_us=$((${EPOCHREALTIME/./} - before))
+  started=$((started + shift_us))
+  last=$((last + shift_us))
+fi
+step clock
+
+# Every program a restored guest runs first faults its pages in from the
+# snapshot, which costs milliseconds each: this script uses shell builtins
+# where it can.
+applied=
+if [ -e /var/lib/macro-restore/identity ]; then
+  read -r applied < /var/lib/macro-restore/identity
+fi
+
+# A wake: this computer's own snapshot, already set up. Only the clock moved.
+if [ "$applied" = "$id" ] && mountpoint --quiet /home; then
+  systemctl --no-block start macro-restore-settle.service
+  step start-units
+  finish wake woke
+  exit 0
+fi
+
+# A new machine id once per identity: every clone of the snapshot starts with
+# the golden boot's. macro-restore-settle restarts journald (which files its
+# logs under it) and refreshes the saved random seed from the kernel's RNG,
+# which VMGenID reseeded at the restore. boot_id stays the golden's: the
+# kernel sets it once per boot, and nothing here keys on it.
+if [ "$applied" != "$id" ]; then
+  read -r old_machine_id < /etc/machine-id
+  read -r uuid < /proc/sys/kernel/random/uuid
+  printf '%s\n' "${uuid//-/}" > /etc/machine-id
+  mkdir -p /run/macro-restore /var/lib/macro-restore
+  # The old id, so macro-restore-settle can carry the journal over.
+  printf '%s\n' "$old_machine_id" > /run/macro-restore/new-identity
+  printf '%s\n' "$id" > /var/lib/macro-restore/identity
+fi
+step machine-id
+
+# The computer's address beside the image's link-local one that reaches MMDS,
+# set directly. The same settings go in a drop-in for the image's
+# 10-eth0.network (a /run file of the same name would lose to the one in
+# /etc), which networkd reads in macro-restore-settle, so a later reconfigure
+# keeps them.
+# The guest keeps the golden's MAC: each computer has its own tap in its own
+# network namespace, so the MAC the host sends doesn't matter, and changing
+# it means taking eth0 down, which makes networkd reconfigure the link while
+# the route below is being added.
+ip address replace "$address" dev eth0
+ip route replace default via "$gateway" dev eth0
+# resolved may still be starting (or restarting) right after a resume.
+tries=0
+until resolvectl dns eth0 "${dns[@]}" 2> /dev/null; do
+  tries=$((tries + 1))
+  if [ "$tries" -ge 20 ]; then
+    resolvectl dns eth0 "${dns[@]}"
+  fi
+  sleep 0.05
+done
+dropin=/run/systemd/network/10-eth0.network.d
+mkdir -p "$dropin"
+{
+  printf '[Network]\nAddress=%s\nGateway=%s\n' "$address" "$gateway"
+  printf 'DNS=%s\n' "${dns[@]}"
+} > "$dropin/identity.conf.new"
+mv "$dropin/identity.conf.new" "$dropin/identity.conf"
+step network
+
+# Who the computer is for decides, before anything of macro's runs, what
+# macro may do: a person's computer gives macro passwordless sudo and Docker;
+# an agent teammate's computer gives it neither and runs the agent's units.
+# Decided once per identity, here, never later (an agent can't be given a
+# computer whose macro had root).
+if [ "$applied" != "$id" ] || [ ! -e /run/macro/role ]; then
+  mkdir -p /run/macro /run/sudoers.d
+  case $role in
+    person)
+      printf 'macro ALL=(ALL:ALL) NOPASSWD: ALL\n' > /run/sudoers.d/macro.new
+      chmod 0440 /run/sudoers.d/macro.new
+      mv /run/sudoers.d/macro.new /run/sudoers.d/macro
+      setfacl --modify user:macro:rw /run/docker.sock
+      ;;
+    agent)
+      rm -f /run/sudoers.d/macro
+      install -d -m 0700 -o macro -g macro /run/macro-agent-inbox
+      ;;
+    *)
+      echo "macro-restore: identity.role is '$role', not person or agent" >&2
+      exit 1
+      ;;
+  esac
+  printf '%s\n' "$role" > /run/macro/role
+fi
+read -r role < /run/macro/role
+step role
+
+# /home: the host swapped the computer's volume, already an ext4 filesystem,
+# in for the snapshot's placeholder drive. Its new size reaches the guest as
+# a config interrupt just after resume; wait for it (5 s at most). Then drop
+# what the golden boot cached of the placeholder, so the probe reads the
+# volume.
+if ! mountpoint --quiet /home; then
+  waited=0
+  read -r sectors < "/sys/class/block/${MACRO_HOME_DEVICE##*/}/size"
+  while [ "$sectors" -lt $((64 * 2048)) ]; do
+    if [ "$waited" -ge 500 ]; then
+      echo "macro-restore: $MACRO_HOME_DEVICE is still the placeholder; attach the computer's volume before resuming" >&2
+      exit 1
+    fi
+    sleep 0.01
+    waited=$((waited + 1))
+    read -r sectors < "/sys/class/block/${MACRO_HOME_DEVICE##*/}/size"
+  done
+  step volume-size
+  blockdev --flushbufs "$MACRO_HOME_DEVICE"
+  if [ "$(blkid --probe --match-tag TYPE --output value "$MACRO_HOME_DEVICE" || true)" != ext4 ]; then
+    echo "macro-restore: $MACRO_HOME_DEVICE has no ext4 filesystem; the host attaches a formatted volume" >&2
+    exit 1
+  fi
+  mkdir -p "${MACRO_HOME_READY%/*}"
+  : > "$MACRO_HOME_READY"
+fi
+
+# macro-home.target requires home.mount, so systemd mounts /home on the way
+# to macrod; nothing here waits for it.
+units=(macro-home.target macro-restore-settle.service)
+if [ "$role" = agent ]; then
+  units+=(macro-agent.target)
+fi
+systemctl --no-block start "${units[@]}"
+step start-units
+finish restore restored

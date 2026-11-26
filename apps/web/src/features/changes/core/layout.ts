@@ -17,8 +17,21 @@ export const DEFAULT_CHANGES_SHARE = 58;
 export const MIN_CHANGES_SHARE = 22;
 export const MAX_CHANGES_SHARE = 74;
 
-/** Minimum room for the conversation and Changes pane side by side. */
+/** Narrowest a host (a session or a pull request) gets beside the pane. */
+export const DEFAULT_HOST_MIN_WIDTH = 320;
+/** Narrowest the Changes pane gets beside its host. */
+export const CHANGES_PANE_MIN_WIDTH = 400;
+
+/** A Changes pane this narrow or narrower opens its file tree as a drawer. */
 export const CHANGES_NARROW_WIDTH = 720;
+
+/**
+ * At this width or narrower, Changes opens over its host instead of beside it:
+ * the host and the pane would not both get their minimum width.
+ */
+export function changesTakeoverWidth(hostMinWidth: number): number {
+  return hostMinWidth + CHANGES_PANE_MIN_WIDTH;
+}
 
 export function isChangesVisible(layout: PaneLayout): boolean {
   return layout !== 'closed';

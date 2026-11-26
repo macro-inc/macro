@@ -12,6 +12,7 @@ us5.datadoghq.com.
 import datetime
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -28,6 +29,9 @@ PROMPT_SECTIONS = [
 # The Spans Search API allows a few hundred requests an hour; a batch export
 # waits out a 429 this many times per request before giving up.
 RATE_LIMIT_RETRIES = 5
+# The start of each definition in `gen_ai.tool.definitions`, a JSON array the
+# span cuts at about 25 KB, so it is read with a pattern instead of parsed.
+TOOL_DEFINITION = re.compile(r'\{"type":"function","name":"([^"\\]+)"')
 
 
 class MissingCredentials(Exception):
@@ -148,17 +152,83 @@ def model_call(span):
         "cache_read_tokens": number(dig(custom, "gen_ai.usage.cache_read.input_tokens")),
         "cache_write_tokens": number(dig(custom, "gen_ai.usage.cache_creation.input_tokens")),
         "finish_reasons": dig(custom, "gen_ai.response.finish_reasons"),
+        "eager_tools": number(dig(prompt, "tools.eager.count")),
+        "loaded_tools": number(dig(prompt, "tools.loaded.count")),
         "prompt_bytes": {
             section: number(dig(prompt, f"{section}.bytes"))
             for section in PROMPT_SECTIONS
             if number(dig(prompt, f"{section}.bytes")) is not None
         },
+        # The first 16 hex digits of each section's SHA-256, which a
+        # reconstructed section is checked against.
+        "prompt_hashes": {
+            section: dig(prompt, f"{section}.hash")
+            for section in PROMPT_SECTIONS
+            if isinstance(dig(prompt, f"{section}.hash"), str)
+        },
+        "task_definition": task_definition(span),
         "failed": failed(span),
     }
 
 
+def task_definition(span):
+    """The ECS task definition (`family:revision`) that served the span, from
+    its tags: the way back to the image, and so the commit, it ran. A family
+    alone would name its latest revision, not this one."""
+    tags = dict(tag.split(":", 1) for tag in span.get("tags") or [] if ":" in tag)
+    if "task_family" not in tags or "task_version" not in tags:
+        return None
+    return f"{tags['task_family']}:{tags['task_version']}"
+
+
+def documentation(span):
+    """A turn's SDK documentation selection (`select_documentation`): which
+    entity indexes Jev put in the prompt, and the `<macro_sdk>` bytes."""
+    custom = span.get("custom") or {}
+    entities = custom.get("selected_entities") or ""
+    return {
+        "trace_id": span.get("trace_id"),
+        "start_ms": epoch_ms(span["start_timestamp"]),
+        "status": custom.get("selection_status"),
+        "selected": number(custom.get("selected")),
+        "entities": [name for name in entities.split(",") if name],
+        "bytes": number(custom.get("bytes")),
+        "guidance": custom.get("guidance"),
+        "batches": number(custom.get("batches")),
+        "task_definition": task_definition(span),
+    }
+
+
+def cut_json(text):
+    """Whether `text` is JSON cut short. `macro.genai.content_truncated` says
+    nothing about the tool list alone, and Datadog cuts long strings itself."""
+    try:
+        json.loads(text or "[]")
+    except ValueError:
+        return True
+    return False
+
+
+def tool_offer(span):
+    """The names of the tools a turn's MCP servers offered, eager and
+    deferred alike, from its `invoke_agent` span. Only names are kept."""
+    custom = span.get("custom") or {}
+    definitions = dig(custom, "gen_ai.tool.definitions") or ""
+    return {
+        "start_ms": epoch_ms(span["start_timestamp"]),
+        "end_ms": epoch_ms(span["end_timestamp"]),
+        "names": list(dict.fromkeys(TOOL_DEFINITION.findall(definitions))),
+        "cut": cut_json(definitions),
+    }
+
+
 def fetch(session_id, since, until):
-    """{"tools": {tool call id: [timing, ...]}, "model_calls": [...]} for one session.
+    """The session's spans, by kind:
+
+    - "tools": {tool call id: [timing, ...]}
+    - "model_calls": one row per `chat_streaming` span
+    - "documentation": one row per `select_documentation` span
+    - "tool_offers": the tool names on each `invoke_agent` span
 
     A provider can reuse a tool call id within a session, so each id maps to
     every span carrying it, oldest first; the n-th call with that id takes
@@ -173,17 +243,25 @@ def fetch(session_id, since, until):
         since, until, keys,
     )
     tools = {}
+    offers = []
     for span in session_spans:
+        if span.get("resource_name") == "invoke_agent":
+            offers.append(tool_offer(span))
         call_id = dig(span.get("custom") or {}, "gen_ai.tool.call.id")
         if dig(span.get("custom") or {}, "gen_ai.operation.name") == "execute_tool" and call_id:
             tools.setdefault(call_id, []).append(tool(span))
     traces = sorted({span["trace_id"] for span in session_spans if span.get("trace_id")})
-    calls = []
+    # Neither span carries the session id; both are found through the
+    # traces of the session's own spans.
+    calls, selections = [], []
     for start in range(0, len(traces), TRACES_PER_QUERY):
         batch = " OR ".join(traces[start:start + TRACES_PER_QUERY])
-        calls += [
-            model_call(span)
-            for span in search(f"{SERVICE} resource_name:chat_streaming trace_id:({batch})", since, until, keys)
-        ]
-    calls.sort(key=lambda call: call["start_ms"])
-    return {"tools": tools, "model_calls": calls}
+        query = f"{SERVICE} resource_name:(chat_streaming OR select_documentation) trace_id:({batch})"
+        for span in search(query, since, until, keys):
+            if span.get("resource_name") == "select_documentation":
+                selections.append(documentation(span))
+            else:
+                calls.append(model_call(span))
+    for rows in (calls, selections, offers):
+        rows.sort(key=lambda row: row["start_ms"])
+    return {"tools": tools, "model_calls": calls, "documentation": selections, "tool_offers": offers}

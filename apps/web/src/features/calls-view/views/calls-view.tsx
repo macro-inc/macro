@@ -1,7 +1,14 @@
-import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
+import {
+  CollectionPanes,
+  ViewBreadcrumbs,
+  ViewShell,
+} from '@app/components/view-shell';
+import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
+import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { SoupRowMetadataProvider } from '@app/features/next-soup/soup-view/soup-row-metadata-provider';
 import { SoupView } from '@app/features/next-soup/soup-view/soup-view';
+import { MobileSoupViewTabs } from '@app/features/next-soup/soup-view/soup-view-tabs';
 import { callsTour } from '@app/features/next-soup/tour';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { TutorialRow } from '@app/features/video-tutorials';
@@ -11,11 +18,12 @@ import {
   usePaneHistory,
   useParams,
 } from '@app/lib/split-router';
-import { callsRoute } from '@app/routes/routes';
+import { callsCallRoute, callsRoute } from '@app/routes/routes';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { type JSX, Show, Suspense } from 'solid-js';
+import { onMount, Suspense } from 'solid-js';
 import { CallsHeader } from '../components/calls-header';
 import { CallsSidebar } from '../components/calls-sidebar';
 
@@ -25,6 +33,9 @@ import { CallsSidebar } from '../components/calls-sidebar';
  */
 export function CallsView() {
   const preset = getViewPreset('calls');
+  const panel = useSplitPanelOrThrow();
+  const inlinePreviewLayout = useInlinePreviewLayout();
+  onMount(() => panel.handle.updateMeta?.({ splitPanelLayout: 'composable' }));
   const params = useParams<{ callId?: string }>();
   const navigate = useNavigate();
   const history = usePaneHistory();
@@ -43,16 +54,52 @@ export function CallsView() {
     }
     fireAndForget(navigate({ route: callsRoute, params: {} }), 'calls-view');
   };
-  const list = (header?: JSX.Element) => (
+  const list = () => (
     <SoupView
       viewName="Calls"
       initialFilters={preset?.filters}
       initialClientFilters={preset?.clientFilters}
       initialGroupBy={preset?.groupBy}
       tour={<ViewTour tour={callsTour} />}
-      header={header}
+      header={
+        isTouchDevice() ? (
+          false
+        ) : (
+          <Suspense>
+            <CallsHeader />
+          </Suspense>
+        )
+      }
+      onOpenEntity={(entity, event) => {
+        if (
+          !isTouchDevice() ||
+          !inlinePreviewLayout() ||
+          entity.type !== 'call' ||
+          event?.shiftKey ||
+          event?.metaKey ||
+          event?.ctrlKey ||
+          event?.altKey
+        )
+          return false;
+        fireAndForget(
+          navigate({ route: callsCallRoute, params: { callId: entity.id } }),
+          'calls-view'
+        );
+        return true;
+      }}
       listStart={<TutorialRow tutorial="calls" />}
-      renderContent={(list) => <SplitRouter.Outlet fallback={list} />}
+      renderContent={(rows) => (
+        <CollectionPanes
+          hasDetail={!!params.callId}
+          list={
+            <MobileListLayout header={<MobileSoupViewTabs />}>
+              {rows()}
+            </MobileListLayout>
+          }
+        >
+          <SplitRouter.Outlet />
+        </CollectionPanes>
+      )}
     />
   );
 
@@ -81,28 +128,19 @@ export function CallsView() {
       <SplitPanel.Root>
         <SplitPanel.Body>
           <ViewShell.Root
+            contentLayout="collection"
             asidePreferenceKey="calls"
             resizable
             aside={{ preserveDuringResize: false }}
           >
-            <Show when={!isTouchDevice()}>
-              <ViewShell.Aside>
-                <Suspense>
-                  <SoupRowMetadataProvider>
-                    <CallsSidebar onNavigate={openList} />
-                  </SoupRowMetadataProvider>
-                </Suspense>
-              </ViewShell.Aside>
-            </Show>
-            <ViewShell.Main>
-              {list(
-                !isTouchDevice() ? (
-                  <Suspense>
-                    <CallsHeader />
-                  </Suspense>
-                ) : undefined
-              )}
-            </ViewShell.Main>
+            <ViewShell.Aside>
+              <Suspense>
+                <SoupRowMetadataProvider>
+                  <CallsSidebar onNavigate={openList} />
+                </SoupRowMetadataProvider>
+              </Suspense>
+            </ViewShell.Aside>
+            {list()}
           </ViewShell.Root>
         </SplitPanel.Body>
       </SplitPanel.Root>

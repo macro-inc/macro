@@ -1,14 +1,13 @@
-use super::delete_failed;
+use super::reports_error;
 use serde_json::json;
 
 #[test]
-fn partial_deletions_are_errors_even_with_http_success() {
-    assert!(!delete_failed(
-        &json!({"timed_out": false, "version_conflicts": 0, "failures": []})
-    ));
-    assert!(delete_failed(&json!({"timed_out": true})));
-    assert!(delete_failed(&json!({"version_conflicts": 1})));
-    assert!(delete_failed(
-        &json!({"failures": [{"reason": "shard unavailable"}]})
+fn only_a_missing_document_reads_as_missing() {
+    assert!(reports_error(&json!({
+        "error": { "type": "index_not_found_exception" },
+        "status": 404
+    })));
+    assert!(!reports_error(
+        &json!({ "_index": "agent_sessions", "found": false })
     ));
 }

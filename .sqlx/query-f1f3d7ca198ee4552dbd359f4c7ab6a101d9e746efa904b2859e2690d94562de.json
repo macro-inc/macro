@@ -1,0 +1,84 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- One page of legacy edges in id order with the evidence the audit reads from\n-- the database for each direction. Each probe is an index lookup on one user,\n-- team or inbox, so a page costs a few lookups per edge. The probes are scalar\n-- subqueries, not EXISTS: a generic plan may run an uncorrelated-looking\n-- EXISTS once as a hashed subplan over every user.\nWITH edges AS MATERIALIZED (\n    SELECT id, user1, user2\n    FROM contacts_connections\n    WHERE id > $1\n    ORDER BY id\n    LIMIT $2\n)\nSELECT\n    e.id,\n    e.user1,\n    e.user2,\n    COALESCE((\n        SELECT true\n        FROM team_user t1\n        JOIN team_user t2 ON t2.team_id = t1.team_id\n        WHERE t1.user_id = COALESCE(account1.id, e.user1)\n          AND t2.user_id = COALESCE(account2.id, e.user2)\n        LIMIT 1\n    ), false) AS \"teammates!\",\n    -- A referral invite already put the contact in the owner's invited\n    -- list, which keeps them whatever else explains the edge.\n    COALESCE((\n        SELECT true\n        FROM contact_list_members m\n        WHERE m.user_id = lower(e.user1) COLLATE \"C\"\n          AND m.contact_user_id = lower(e.user2) COLLATE \"C\"\n          AND m.list_key = $3\n        LIMIT 1\n    ), false) AS \"user1_invited_user2!\",\n    COALESCE((\n        SELECT true\n        FROM contact_list_members m\n        WHERE m.user_id = lower(e.user2) COLLATE \"C\"\n          AND m.contact_user_id = lower(e.user1) COLLATE \"C\"\n          AND m.list_key = $3\n        LIMIT 1\n    ), false) AS \"user2_invited_user1!\",\n    COALESCE((\n        SELECT true\n        FROM email_links l\n        JOIN email_contacts ec\n          ON ec.link_id = l.id\n         AND lower(ec.email_address::text) = lower(substr(e.user2, 7))\n        WHERE l.macro_id = e.user1\n          AND l.deleting_at IS NULL\n          AND l.disconnect_requested_at IS NULL\n          AND e.user2 COLLATE \"C\" LIKE 'macro|%'\n        LIMIT 1\n    ), false) AS \"user1_inbox_has_user2!\",\n    COALESCE((\n        SELECT true\n        FROM email_links l\n        JOIN email_contacts ec\n          ON ec.link_id = l.id\n         AND lower(ec.email_address::text) = lower(substr(e.user1, 7))\n        WHERE l.macro_id = e.user2\n          AND l.deleting_at IS NULL\n          AND l.disconnect_requested_at IS NULL\n          AND e.user1 COLLATE \"C\" LIKE 'macro|%'\n        LIMIT 1\n    ), false) AS \"user2_inbox_has_user1!\",\n    COALESCE((\n        SELECT true\n        FROM email_links_history h\n        WHERE h.fusionauth_user_id = account1.macro_user_id::text\n          AND h.deleted_at IS NOT NULL\n        LIMIT 1\n    ), false) AS \"user1_disconnected_inbox!\",\n    COALESCE((\n        SELECT true\n        FROM email_links_history h\n        WHERE h.fusionauth_user_id = account2.macro_user_id::text\n          AND h.deleted_at IS NOT NULL\n        LIMIT 1\n    ), false) AS \"user2_disconnected_inbox!\",\n    COALESCE((\n        SELECT true\n        FROM referral_tracking r\n        WHERE (r.referrer_id = account1.macro_user_id AND r.referred_id = account2.macro_user_id)\n           OR (r.referrer_id = account2.macro_user_id AND r.referred_id = account1.macro_user_id)\n        LIMIT 1\n    ), false) AS \"referral!\"\nFROM edges e\n-- Each end's account, by id or, for an id stored in another case, by\n-- address (User_id_key, User_lower_email_idx).\nLEFT JOIN LATERAL (\n    SELECT u.id, u.macro_user_id\n    FROM \"User\" u\n    WHERE u.id = e.user1 OR lower(u.email) = lower(substr(e.user1, 7))\n    ORDER BY u.id = e.user1 DESC\n    LIMIT 1\n) AS account1 ON true\nLEFT JOIN LATERAL (\n    SELECT u.id, u.macro_user_id\n    FROM \"User\" u\n    WHERE u.id = e.user2 OR lower(u.email) = lower(substr(e.user2, 7))\n    ORDER BY u.id = e.user2 DESC\n    LIMIT 1\n) AS account2 ON true\nORDER BY e.id\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "user1",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "user2",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "teammates!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "user1_invited_user2!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "user2_invited_user1!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "user1_inbox_has_user2!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "user2_inbox_has_user1!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "user1_disconnected_inbox!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 9,
+        "name": "user2_disconnected_inbox!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "referral!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "f1f3d7ca198ee4552dbd359f4c7ab6a101d9e746efa904b2859e2690d94562de"
+}

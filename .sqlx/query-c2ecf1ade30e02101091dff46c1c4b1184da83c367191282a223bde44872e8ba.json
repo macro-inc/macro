@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE hosted_runtime SET wake_requested_at = COALESCE(wake_requested_at, $2)\n            WHERE id = $1 AND hibernated_at IS NOT NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c2ecf1ade30e02101091dff46c1c4b1184da83c367191282a223bde44872e8ba"
+}

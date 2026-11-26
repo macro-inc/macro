@@ -211,3 +211,73 @@ async fn outcomes_persist_and_mixed_currency_totals_stay_separate(pool: PgPool) 
         entry.currencies
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn declined_deals_are_counted_apart_from_lost_ones(pool: PgPool) {
+    let Fixture {
+        workflows,
+        acme,
+        globex,
+        ..
+    } = fixture(&pool).await;
+    let owner = viewer(OWNER);
+    let sales = sales(&workflows, PipelineSharing::Team).await;
+    let id = sales.pipeline.pipeline.id;
+    let added = workflows
+        .add(
+            &owner,
+            id,
+            vec![
+                EntryAddition {
+                    record: Some(RecordTarget::Id(acme)),
+                    set: vec![set("Outcome", "Lost")],
+                },
+                EntryAddition {
+                    record: Some(RecordTarget::Id(globex)),
+                    set: vec![set("Outcome", "Declined")],
+                },
+            ],
+            false,
+        )
+        .await
+        .unwrap();
+    let all = workflows
+        .find(
+            &owner,
+            id,
+            EntryQuery {
+                limit: 50,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let outcomes = all
+        .counts
+        .iter()
+        .find(|counts| counts.field == "Outcome")
+        .unwrap();
+    assert_eq!(
+        outcomes.counts,
+        [
+            ("Open".into(), 0),
+            ("Won".into(), 0),
+            ("Lost".into(), 1),
+            ("Declined".into(), 1),
+        ]
+    );
+    let declined = workflows
+        .find(
+            &owner,
+            id,
+            EntryQuery {
+                filters: vec![set("Outcome", "Declined")],
+                limit: 50,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(declined.matched, 1);
+    assert_eq!(declined.entries[0].entry_id, added.added[1].entry_id);
+}

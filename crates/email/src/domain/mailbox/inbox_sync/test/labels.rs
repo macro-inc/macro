@@ -36,7 +36,7 @@ async fn a_missing_database_message_queues_the_exact_upsert_and_is_terminal() {
                 FailureReason::MessageNotFoundInDatabase
             }
         );
-        assert!(error.source.to_string().starts_with("remove_labels: "));
+        assert!(format!("{:#}", error.source).starts_with("remove_labels: "));
         assert_eq!(
             fake.calls(),
             vec![
@@ -181,7 +181,7 @@ async fn each_provider_error_preserves_primary_retry_routing_and_reason() {
             );
             assert_eq!(error.reason, *reason);
             assert_eq!(
-                error.source.to_string(),
+                format!("{:#}", error.source),
                 format!("remove_labels: {provider_error}")
             );
             let queued = fake
@@ -339,7 +339,7 @@ async fn additions_commit_before_removals_and_events_preserve_fixed_order_and_la
 }
 
 #[tokio::test]
-async fn removals_mark_read_and_provider_system_labels_only_refresh_without_user_events() {
+async fn removals_mark_read_and_labels_without_their_own_event_reindex_the_thread() {
     for read in [false, true] {
         let (service, fake) = make_service(false);
         {
@@ -359,7 +359,27 @@ async fn removals_mark_read_and_provider_system_labels_only_refresh_without_user
         ));
         let calls = fake.calls();
         assert_eq!(calls.contains(&Call::SetRead(true)), read);
-        assert_eq!(events(&calls).len(), usize::from(read));
+        let events = events(&calls);
+        assert_eq!(events.len(), 1);
+        assert_eq!(
+            events[0]["event_type"],
+            if read {
+                "email.thread_read"
+            } else {
+                "email.threads_reindex_requested"
+            }
+        );
+        if !read {
+            assert_eq!(
+                events[0]["metadata"],
+                serde_json::json!({
+                    "link_id": LINK,
+                    "owner": "macro|owner@example.com",
+                    "thread_ids": [THREAD],
+                    "reason": "provider_changed",
+                })
+            );
+        }
         assert_eq!(calls.last(), Some(&Call::Refresh(false)));
     }
 }
@@ -510,4 +530,64 @@ async fn reverse_provider_changes_publish_false_flags_and_the_removed_user_label
         "Label_old"
     );
     assert_eq!(events[5]["metadata"]["added"], serde_json::json!([]));
+}
+
+#[tokio::test]
+async fn labels_the_thread_gained_are_reported_on_the_label_event() {
+    let gained = Uuid::from_u128(0x99);
+    for (case, gained_labels) in [("gained", vec![gained]), ("already on the thread", vec![])] {
+        let (service, fake) = make_service(false);
+        {
+            let mut state = fake.0.lock().unwrap();
+            state.provider = Ok(Some(vec!["INBOX".into(), "Label_1".into()]));
+            state.gained_labels = gained_labels.clone();
+        }
+        service.process(Ok(input(operation()))).await;
+        let calls = fake.calls();
+        let updated: Vec<_> = events(&calls)
+            .into_iter()
+            .filter(|event| event["event_type"] == "email.thread_labels_updated")
+            .collect();
+        assert_eq!(updated.len(), 1, "{case}");
+        let metadata = &updated[0]["metadata"];
+        assert_eq!(metadata["origin"], "provider_sync", "{case}");
+        assert_eq!(
+            metadata.get("labels_gained").cloned().unwrap_or_default(),
+            if gained_labels.is_empty() {
+                serde_json::Value::Null
+            } else {
+                serde_json::json!(gained_labels)
+            },
+            "{case}"
+        );
+        assert_eq!(
+            metadata["message_id"],
+            serde_json::json!(super::fakes::MESSAGE),
+            "{case}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_gain_is_reported_when_the_removal_after_it_fails() {
+    let gained = Uuid::from_u128(0x99);
+    let (service, fake) = make_service(false);
+    {
+        let mut state = fake.0.lock().unwrap();
+        state.provider = Ok(Some(vec!["Label_1".into()]));
+        state.gained_labels = vec![gained];
+        state.failures.push(("remove", 1));
+    }
+    service.process(Ok(input(operation()))).await;
+    let calls = fake.calls();
+    let updated: Vec<_> = events(&calls)
+        .into_iter()
+        .filter(|event| event["event_type"] == "email.thread_labels_updated")
+        .collect();
+    assert_eq!(updated.len(), 1);
+    assert_eq!(
+        updated[0]["metadata"]["labels_gained"],
+        serde_json::json!([gained])
+    );
+    assert_eq!(updated[0]["metadata"]["removed"], serde_json::json!([]));
 }

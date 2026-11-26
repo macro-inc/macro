@@ -4,12 +4,26 @@
 
 Touch devices render the Inbox as **Notifications**: a floating Signal/Noise
 pill strip with a leading filter drawer (Status and Type), pull-to-refresh,
-and swipe-left to mark done. On touch, Signal is a pure notification feed — the viewer's own
+and swipe-left to mark done. A swiped row folds away, divider and all, before
+it leaves; a row the feed keeps (the viewer's own work) unfolds again once the
+done settles. The touch list shows no Undo for a done. On touch, Signal is a pure notification feed — the viewer's own
 touched-by-me recents are not merged in; that merge is desktop Home's Signal
 only, so sent mail and AI chats without notifications appear only on desktop.
 Access requests, grants and removals on a paired machine appear as rows about
 that machine; opening one goes to Settings → Machines with the machine pointed out.
 Signal, including its empty state, starts with the Home tutorial entry (from `features/video-tutorials`) once that video is in its catalog: a `TutorialSidebarItem` in the desktop rail; touch devices show none. It sits outside the virtualized rows, so list keyboard focus skips it.
+
+At 720px or narrower on touch, Notifications fills the pane with floating
+Signal/Noise pills and opens items as standalone pages. Above 720px, including
+unfolded Duo, the notification list docks on the left with the selected item's
+preview on the right, using Chat's width check. Collapse sits beside the
+Notifications title; the leading preview control restores the list. The Home
+composer remains desktop-only. Restored detail URLs stay inline when wide and
+redirect to standalone pages when folded.
+
+Drag existing email threads, documents, tasks, channels, Drive items or projects
+onto the Home composer to add mention context without moving the items. See
+[AI composer item drops](ai-chat.md#add-existing-items-by-dragging).
 
 Check live Home recency with two accounts: leave the recipient on Home without
 opening the conversation, then send a DM from the other account. The row should
@@ -178,13 +192,13 @@ composer uses the same topbar offset and 24/64 padding as the Agents
 new-conversation page so the two inputs share a baseline. With
 `enable-suggestions` on, today and the top priorities appear below the
 composer; otherwise the space below it is empty. Shift+Enter adds a line. Selecting a Home row replaces
-the composer with its preview. Home uses the shared 256px sidebar and collapses
+the composer with its preview. Desktop Home uses the shared 256px sidebar and collapses
 navigation below 720px. The hamburger or `Cmd+.` opens the full feed as a
 slide-over. Activating a row or **New chat** closes that overlay to show content;
 arrow-key browsing keeps it open. Preview headers start with **Home >**. Clicking
 **Home** clears the preview and returns to the starting pane without changing
-sidebar visibility. Use the hamburger to reopen the feed. Mobile continues to
-show the activity list alone.
+sidebar visibility. Use the hamburger to reopen the feed. Narrow touch shows
+the notification feed alone; wide touch keeps the feed beside its preview.
 
 Project rows, including unread discussion notifications, open the project Overview
 inside Home on desktop. The preview keeps the Home return breadcrumb, project
@@ -197,7 +211,7 @@ project row, switching tabs, returning Home, and reopening the same comment.
 Desktop previews use the same header controls as their standalone views, with
 the **Home >** return breadcrumb added. Calendar shares its date, search,
 navigation, view, and New controls; email shares its action, navigation, AI/task,
-and Share groups. Touch previews retain their existing compact headers.
+and Share groups. Touch previews and standalone pages retain their compact headers.
 
 Conversation breadcrumbs preserve identity: human DMs show the other participant's
 avatar, agent DMs show the persona avatar, and named channels show their picture
@@ -212,7 +226,20 @@ the details toggle, including tasks, snippets, skills, canvases, PDFs, images,
 code, and videos. Share uses the selected item's permissions and updates when
 switching items; copied links point to the entity rather than the Home feed.
 
+Markdown previews (documents, tasks, snippets, skills) register the same entity
+commands as their standalone pages, so Cmd+K lists **Copy link**, **Copy ID**
+and, for tasks, **Copy branch name** while the preview has focus. They live in
+the preview's own hotkey scope; with focus on the feed, the list's commands act
+on the focused row. Verify with the cursor in the preview's body.
+
 AI chat, agent, and channel message bodies use 15px text, including thread replies.
+Home uses the same unified agent/model selector as the Agents workspace. Switch
+from Auto to Chat or Code to show it. The menu includes custom agents, advertised
+models, Reasoning effort, and supported Speed choices; Auto hides those controls.
+Opening or dismissing the selector preserves Home's separate unsent draft and
+attachments. The saved model, per-model effort, and speed keep their existing
+preference ownership. Inline and standalone agent sessions use that selector too,
+with session-owned changes rather than new-chat preferences.
 Desktop AI chats, agents, and channel composers share Home's rounded composer
 surface: a muted dark fill or a white light-mode surface with a soft shadow,
 15px input text, and circular controls. Composer geometry is scaled to 15/16
@@ -302,16 +329,50 @@ With `enable-suggestions` on (desktop only), the idle pane shows, below the comp
   server ranks them. A row opens For you with that suggestion first; **All in
   For you** opens the page.
 
-On For you, each card has one main action for its kind: **Open in chat** opens
-the composer with the prompt, unsent; **Run in background** starts the run at
-once (the card says what it will post or send first), then shows Running and,
-when done, a row with **Open result**; **Open** or **Open draft** opens the
-item or the drafted reply; **Turn on** saves a routine suggestion and
-**Review** opens it in the routine editor. The `x` (shown on hover or focus)
-dismisses at once and leaves an Undo row for the visit; Undo restores the
-suggestion, which the server allows for a few minutes. Dismissing a running
+For you has a sidebar of lists, each with its count: **Today** (everything
+that waits or runs), **To do** (the person's own mail and documents),
+**Suggestions** (work Macro can do: runs, chats and routines) and **Done**
+(finished in the last day). Under them, **Routines** links **Ideas** (a dot
+when a routine was proposed since the last visit) and **Your routines**, both
+opening Agents → Routines. The page shows the chosen list under its name and
+the date as rows, each 56px: a tile tinted by kind, a title,
+and one line, cut where the row ends (hover shows the rest). Today groups the
+rows that share a topic (a customer, an event, a project) when two or more do:
+each group has the topic's name and, when there is one, a line saying why it
+matters now, and the rest come last under **Everything else**. The sidebar's
+**Topics** lists the same topics with how many of their rows wait; choosing one
+shows its rows alone (`sN.forYou.topic`; one that groups nothing shows Today), and
+tiles are tinted by topic instead of kind. With no such topic, Today is one flat list. The other lists are always
+flat. A row's age sits
+on the right; pointing at the row or focusing in it swaps the age for its
+buttons: ✓ (mark done, where taking it up finishes it), ✕ (dismiss) and the
+row's action. **Run** starts a background run at once (a run that posts or
+sends something says so at the start of its line); the row reads
+"Running…" with **Stop**, which stops the run and keeps the suggestion
+("Stopping…" until the server opens it again). A finished run stays in place
+for the visit with a green check, the one line its run reported, and
+**Open**, which opens its session; a failed run turns red with **Retry**.
+**Open chat** opens the composer with a prompt typed, unsent, and pressing a
+run's text puts its prompt there without starting it. **Turn on** saves a
+routine switched on in one click: the row reads "<name> is on" with a green
+dot and when it runs, **Edit** and its switch, and a toast offers **View
+routine**. Switched off there, it reads "<name> is off" with a grey dot. A To do row names the item it is about, who wrote, whether a
+reply is drafted, and how long it has waited; pressing its text, or **Open**
+/ **Open draft**, opens the item. A reply stays open until the person
+replies on its thread, however often it is opened, and has no ✓. **Open
+draft** opens the thread with the draft in its reply composer and a footer
+under it that reads **Drafted by Macro**, links what else the suggestion
+cites, and offers **Rewrite**, which opens the agent composer with the thread
+mentioned and the request typed, unsent. ✓ strikes the row through, "Done
+just now · Stays here until you leave this page" (the Done list already
+holds it), with **Undo** on the row and in a **Marked done** toast. With nothing waiting in Today, the page reads
+**You’re all caught up** (the date line adds "Nothing needs you right now")
+with **See what’s done** and **Browse routines**. ✕ dismisses at once and
+leaves the row in place with **Undo** for the visit (a routine idea has no
+Undo: the server can't bring it back); Undo restores the suggestion, which
+the server allows for a few minutes. Dismissing a running
 suggestion stops its run, and restoring it brings it back open, not running.
-**Refresh suggestions** in the header asks for a fresh run, at most once an
-hour; while one runs it reads "Looking for suggestions", and during the
-cooldown "Available at" a time.
+**Refresh** in the top bar asks for a fresh run, at most once an hour; while
+one runs it reads "Looking for suggestions", and during the cooldown
+"Available at" a time.
 

@@ -174,6 +174,11 @@ function MicrophoneControl() {
               </MobileDrawer.Section>
             </div>
           </Show>
+          <Show when={!('setSinkId' in HTMLMediaElement.prototype)}>
+            <p class="px-3 text-sm text-ink-muted">
+              {t('calls.systemAudioOutput')}
+            </p>
+          </Show>
           <MobileDrawer.Section>
             <ToggleSwitch
               size="md"

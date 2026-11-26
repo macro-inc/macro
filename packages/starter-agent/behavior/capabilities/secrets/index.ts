@@ -118,6 +118,8 @@ export const refusal = (
     version_conflict: `"${name}" changed since you last saw it: search for it again, and use the new hit`,
     vault_busy: 'the vault is busy: try again in a minute',
     vault_unavailable: 'the vault is unavailable right now: try again later',
+    vault_not_provisioned:
+      "your team's vault isn't set up yet: ask your owner to set it up, retrying won't help",
     unexpected: "the vault answered in a way this agent doesn't understand",
     unreachable: "the vault couldn't be reached",
   };

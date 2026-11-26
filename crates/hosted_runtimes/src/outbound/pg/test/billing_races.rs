@@ -122,6 +122,24 @@ impl crate::domain::ports::Billing for Arc<Stripe> {
         })
     }
 
+    async fn purchase_terms(
+        &self,
+        _team_id: Uuid,
+        _sizes: &[ComputerSize],
+        _billing: &crate::domain::models::PurchaseBilling,
+    ) -> Result<crate::domain::models::PurchaseTerms, BillingError> {
+        unimplemented!("no race test lists purchase offers")
+    }
+
+    async fn purchase_price(
+        &self,
+        team_id: Uuid,
+        size: ComputerSize,
+    ) -> Result<stripe::PriceId, BillingError> {
+        self.require_paid_plan(team_id).await?;
+        Ok(self.quote(team_id, size).await?.price_id)
+    }
+
     async fn add_computer(
         &self,
         _team_id: Uuid,
@@ -231,6 +249,16 @@ impl crate::domain::ports::Billing for Arc<Stripe> {
         computer_id: ComputerId,
     ) -> Result<Option<SubscriptionItemId>, BillingError> {
         Ok(self.items_for(computer_id).await.into_iter().next())
+    }
+
+    async fn refund_computer_purchase(
+        &self,
+        _team_id: Uuid,
+        _computer_id: ComputerId,
+        _idempotency_key: &str,
+    ) -> Result<Option<crate::domain::lifecycle::PurchaseRefund>, BillingError> {
+        // No race here refunds a purchase.
+        Ok(None)
     }
 
     async fn remove_computer(
@@ -422,9 +450,11 @@ async fn a_lost_restore_answer_is_retried_on_the_same_key(pool: PgPool) {
     );
 }
 
-/// Should-fix S7 and team deletion mid-purchase: the team is deleted while
-/// the purchase is charging. The deleted reservation never becomes a
-/// computer, and the purchase answers Confirming, never an error after a charge.
+/// The purchase converts before it charges: while its charge is still in
+/// flight the computer exists, charging, with its creation already leasable
+/// by the fleet. Deleting the team then releases it; the release's fence
+/// waits under the billing guard for the charge and takes back the item it
+/// landed, so the team is left with no computer and no billing.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn team_deletion_during_a_charge_leaves_no_computer(pool: PgPool) {
     let stripe = Arc::new(Stripe::default());
@@ -437,16 +467,117 @@ async fn team_deletion_during_a_charge_leaves_no_computer(pool: PgPool) {
     });
     stripe.entered.notified().await;
 
+    let [computer] = &repo.list_for_team(TEAM).await.unwrap()[..] else {
+        panic!("the computer exists while its charge runs");
+    };
+    let id = computer.id();
+    assert!(matches!(
+        billing_of(&repo, id).await,
+        Billing::Charging {
+            charger: crate::domain::lifecycle::Charger::Request,
+            ..
+        }
+    ));
+    let creating = repo
+        .lease_effects(
+            crate::domain::lifecycle::EffectWorker::Fleet,
+            crate::domain::ports::HostScope::Every,
+            8,
+            clock.now(),
+            clock.now() + Duration::minutes(1),
+        )
+        .await
+        .unwrap();
+    assert!(
+        creating.iter().any(|pending| pending.computer_id == id
+            && matches!(
+                pending.effect,
+                crate::domain::lifecycle::Effect::Create { .. }
+            )),
+        "{creating:?}"
+    );
+
     TeamComputerRelease::new(repo.clone(), clock.clone())
         .release_team(TEAM)
         .await
         .unwrap();
+    // The fence blocks on the guard the charging request holds.
+    let fence = tokio::spawn({
+        let service = service.clone();
+        async move { service.run_billing_effects().await }
+    });
     gate.add_permits(1);
     let outcome = purchase.await.unwrap().unwrap();
+    fence.await.unwrap().unwrap();
+    while service.run_billing_effects().await.unwrap() > 0 {}
 
-    assert!(matches!(outcome, Purchase::Confirming(_)), "{outcome:?}");
+    assert_eq!(outcome, Purchase::Ready(id));
     assert!(repo.list_for_team(TEAM).await.unwrap().is_empty());
     assert!(repo.team_reservations(TEAM).await.unwrap().is_empty());
+    assert!(stripe.items_for(id).await.is_empty());
+    assert_eq!(
+        stripe
+            .keys()
+            .iter()
+            .filter(|key| key.starts_with("computer-add:"))
+            .count(),
+        1,
+        "charged once"
+    );
+}
+
+/// A purchase request that dies after its charge landed leaves the computer
+/// charging; its takeover timer hands the charge to the billing worker,
+/// whose replay under the same key bills the item that landed, once.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_request_that_dies_mid_charge_is_settled_by_the_billing_worker(pool: PgPool) {
+    let stripe = Arc::new(Stripe::default());
+    stripe
+        .hang_after_add
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    let (service, repo, clock) = service(pool, stripe.clone()).await;
+    let service = Arc::new(service);
+    let purchase = tokio::spawn({
+        let service = service.clone();
+        async move { service.purchase(purchase_request("buy-1")).await }
+    });
+    stripe.entered.notified().await;
+    purchase.abort();
+    assert!(purchase.await.unwrap_err().is_cancelled());
+    let [computer] = &repo.list_for_team(TEAM).await.unwrap()[..] else {
+        panic!("the computer outlives its request");
+    };
+    let id = computer.id();
+
+    clock.advance(crate::domain::lifecycle::CHARGE_TAKEOVER);
+    let due = repo
+        .due_timers(crate::domain::ports::HostScope::Every, clock.now(), 8)
+        .await
+        .unwrap();
+    let takeover = due
+        .into_iter()
+        .find(|timer| {
+            timer.computer_id == id
+                && timer.kind == crate::domain::lifecycle::TimerKind::ChargeUnsettled
+        })
+        .expect("the takeover timer is due");
+    repo.fire_timer(takeover, None, clock.now()).await.unwrap();
+    service.run_billing_effects().await.unwrap();
+
+    let [item] = &stripe.items_for(id).await[..] else {
+        panic!("one item");
+    };
+    assert_eq!(
+        billing_of(&repo, id).await,
+        Billing::Active {
+            subscription_item: item.clone()
+        }
+    );
+    assert_eq!(
+        stripe.keys(),
+        vec![format!("computer-add:{id}"), format!("computer-add:{id}")],
+        "the replay reused the purchase's key"
+    );
 }
 
 /// Should-fix S1 and S2: an expired reservation keeps holding capacity

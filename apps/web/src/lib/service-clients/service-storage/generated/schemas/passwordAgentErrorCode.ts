@@ -27,4 +27,5 @@ export const PasswordAgentErrorCode = {
   vault_busy: 'vault_busy',
   rate_limited: 'rate_limited',
   vault_unavailable: 'vault_unavailable',
+  vault_not_provisioned: 'vault_not_provisioned',
 } as const;

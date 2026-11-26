@@ -104,6 +104,12 @@ pub struct EventType {
     pub macro_call: bool,
     /// Generate a Google Meet conference. Mutually exclusive with a Macro call.
     pub google_meet: bool,
+    /// Connected inbox whose primary calendar takes this link's bookings, so
+    /// the event lands there and its invitation comes from that address.
+    /// Absent books on the host's primary inbox. Personal links only: team
+    /// links book on each host's primary inbox.
+    #[serde(default)]
+    pub email_link_id: Option<Uuid>,
     /// Whether new bookings are accepted.
     pub enabled: bool,
     /// Referenced availability schedule.
@@ -218,7 +224,8 @@ pub struct Booking {
     #[cfg_attr(feature = "ai_tools", schemars(with = "String"))]
     #[cfg_attr(feature = "schema", schema(value_type = String))]
     pub time_zone: chrono_tz::Tz,
-    /// Assigned hosts.
+    /// Assigned hosts. Empty in responses to the booker, since a Macro user
+    /// identity carries the host's sign-in address.
     pub hosts: Vec<String>,
     /// Current lifecycle state.
     pub status: BookingStatus,
@@ -231,6 +238,11 @@ pub struct Booking {
     /// When the most recent successful reschedule completed.
     #[serde(default)]
     pub rescheduled_at: Option<DateTime<Utc>>,
+    /// When Macro stopped trying to update the host's calendar for the
+    /// booking's latest change. A failed booking with this set is not being
+    /// retried, and cancelling it is the way to release its time.
+    #[serde(default)]
+    pub abandoned_at: Option<DateTime<Utc>>,
     /// Final location or conference URL.
     pub location: String,
     /// Answers keyed by question identity.
@@ -338,6 +350,10 @@ pub enum Error {
     /// A host's calendar is not available for reliable conflict checking.
     #[error("A host's calendar is unavailable or still syncing. Please try again later.")]
     CalendarUnavailable,
+    /// A host's calendar refused the change for good, such as a host with no
+    /// writable calendar; retrying the same change cannot succeed.
+    #[error("A host's calendar cannot take this booking.")]
+    CalendarRejected,
     /// Public scheduling budget is exhausted for this profile.
     #[error("Too many scheduling requests. Please try again later.")]
     RateLimited,
@@ -399,6 +415,15 @@ pub struct CalendarOperation {
     pub retry_at: DateTime<Utc>,
     /// Intended provider change, retained through failures.
     pub kind: CalendarOperationKind,
+    /// When recovery stopped retrying: the calendar refused the change, or the
+    /// meeting started while it kept failing. The booking stays failed and is
+    /// never claimed again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub abandoned_at: Option<DateTime<Utc>>,
+    /// The calendar refused the first attempt, so nothing reached it: an
+    /// abandoned create left no event behind.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub unsent: bool,
 }
 /// Provider changes that can be retried without creating a second event.
 #[derive(Clone, Debug, Serialize, Deserialize)]

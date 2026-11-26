@@ -1,4 +1,6 @@
 use super::*;
+use crate::domain::mailbox::claim::StreamClaim;
+use crate::domain::mailbox::schedule::POLL_INTERVALS;
 use crate::domain::{models::mailbox_action::MailboxAction, ports::EmailRepo};
 use crate::outbound::mailbox_pg::test::{fixture, page, snapshot};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -14,11 +16,13 @@ async fn setup(
 ) {
     let (sync, link) = fixture(db).await;
     let stream = sync
-        .claim_stream(macro_uuid::generate_uuid_v7())
+        .claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .unwrap();
-    sync.commit_page(&stream, &page()).await.unwrap();
+    sync.commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
     let work = sync
         .claim_message(macro_uuid::generate_uuid_v7())
         .await
@@ -219,7 +223,10 @@ impl MailboxGateway for UncertainProvider {
     async fn folders(
         &self,
         _: MailboxKey,
-    ) -> Result<Vec<MailFolder>, email_api_client::domain::models::EmailApiError> {
+    ) -> Result<
+        email_api_client::domain::models::MailFolderCatalog,
+        email_api_client::domain::models::EmailApiError,
+    > {
         unreachable!()
     }
     async fn changes(
@@ -227,6 +234,7 @@ impl MailboxGateway for UncertainProvider {
         _: MailboxKey,
         _: &ProviderId,
         _: Option<&StreamToken>,
+        _: email_api_client::domain::models::RoundStart,
     ) -> Result<MailboxChangePage, email_api_client::domain::models::EmailApiError> {
         unreachable!()
     }
@@ -395,7 +403,9 @@ async fn category_projection_keeps_latest_intent_across_sync_failure_and_deletio
         .await
         .unwrap();
     assert!(
-        repo.labels_by_message_ids(&[message]).await.unwrap()[&message]
+        repo.labels_by_message_ids(&[message], Some(&owner()))
+            .await
+            .unwrap()[&message]
             .iter()
             .any(|label| label.provider_label_id == "Projects")
     );
@@ -407,7 +417,9 @@ async fn category_projection_keeps_latest_intent_across_sync_failure_and_deletio
     .await
     .unwrap();
     assert!(
-        repo.labels_by_message_ids(&[message]).await.unwrap()[&message]
+        repo.labels_by_message_ids(&[message], Some(&owner()))
+            .await
+            .unwrap()[&message]
             .iter()
             .any(|label| label.provider_label_id == "Projects")
     );
@@ -430,7 +442,7 @@ async fn category_projection_keeps_latest_intent_across_sync_failure_and_deletio
         .unwrap();
     assert!(
         !repo
-            .labels_by_message_ids(&[message])
+            .labels_by_message_ids(&[message], Some(&owner()))
             .await
             .unwrap()
             .get(&message)
@@ -458,7 +470,9 @@ async fn category_projection_keeps_latest_intent_across_sync_failure_and_deletio
             .is_empty()
     );
     assert!(
-        repo.labels_by_message_ids(&[message]).await.unwrap()[&message]
+        repo.labels_by_message_ids(&[message], Some(&owner()))
+            .await
+            .unwrap()[&message]
             .iter()
             .any(|label| label.provider_label_id == "Projects")
     );
@@ -469,7 +483,7 @@ async fn category_projection_keeps_latest_intent_across_sync_failure_and_deletio
     sync.delete_label(&owner(), link, label).await.unwrap();
     assert!(
         !repo
-            .labels_by_message_ids(&[message])
+            .labels_by_message_ids(&[message], Some(&owner()))
             .await
             .unwrap()
             .get(&message)
@@ -622,4 +636,88 @@ async fn unresumable_commands_are_not_reported_as_pending(db: PgPool) {
             .unwrap()
             .is_empty()
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_claim_behind_a_stuck_claim_lock_fails_fast(db: PgPool) {
+    let (sync, _) = fixture(&db).await;
+
+    let mut claim = db.begin().await.unwrap();
+    sqlx::query!("SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended('email.outlook.mutation-claims',0))")
+        .fetch_one(&mut *claim)
+        .await
+        .unwrap();
+
+    let blocked = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        sync.claim_command(macro_uuid::generate_uuid_v7()),
+    )
+    .await;
+    assert!(
+        matches!(
+            &blocked,
+            Ok(Err(MailboxError::Database(DatabaseFailure::Sqlstate(code)))) if code == "55P03"
+        ),
+        "{:?}",
+        blocked.as_ref().map(|result| result.as_ref().err())
+    );
+
+    claim.rollback().await.unwrap();
+    assert!(
+        sync.claim_command(macro_uuid::generate_uuid_v7())
+            .await
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_mailbox_action_gives_up_behind_a_population(db: PgPool) {
+    let (_, repo, work, thread) = setup(&db).await;
+    let messages = repo
+        .mailbox_action_messages(work.mailbox.link_id, thread)
+        .await
+        .unwrap();
+    let targets = MailboxAction::Flagged(true).targets(&messages);
+    let enqueue = || {
+        tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            repo.enqueue_mailbox_action(
+                work.mailbox.link_id,
+                owner(),
+                &MailboxAction::Flagged(true),
+                &targets,
+            ),
+        )
+    };
+    let commands = || async {
+        sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM email_mailbox_commands"#)
+            .fetch_one(&db)
+            .await
+            .unwrap()
+    };
+
+    // Commands take their acceptance order under the exclusive link lock, so
+    // a mailbox action still waits for a CRM population, then gives up.
+    let mut population = db.begin().await.unwrap();
+    sqlx::query!(
+        "SELECT id FROM email_links WHERE id = $1 FOR SHARE",
+        work.mailbox.link_id
+    )
+    .fetch_one(&mut *population)
+    .await
+    .unwrap();
+    let blocked = enqueue().await.expect("waited past its lock timeout");
+    assert!(matches!(
+        blocked,
+        Err(crate::domain::models::EmailErr::Contended)
+    ));
+    assert_eq!(commands().await, 0);
+    population.rollback().await.unwrap();
+
+    enqueue()
+        .await
+        .expect("waited past its lock timeout")
+        .unwrap();
+    assert_eq!(commands().await, 1);
 }

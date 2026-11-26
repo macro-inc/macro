@@ -22,8 +22,8 @@ Email: [frontend architecture](architecture/email.md) and
 
 Billing: the [Stripe event inbox](architecture/stripe-event-inbox.md).
 
-Macro computers: [architecture](architecture/macro-computers.md) and the
-[setup trace runbook](runbooks/computer-setup-traces.md).
+[Firecracker security model](architecture/firecracker-computers-security.md), the
+[Firecracker rollout](runbooks/firecracker-computers-rollout.md), and the
 
 Contacts: [disk-backed directory implementation plan](design/disk-backed-contacts.md),
 [approved name-focused search design](design/contact-name-search-proposal.md) (implementation in progress).
@@ -36,5 +36,9 @@ Bots: [building a bot](guides/bots.md) (set one up in the app, then search and
 post from the TypeScript SDK).
 
 Agent session activity: [correlation and visibility](architecture/agent-activity-correlation.md).
+
+Agent screens: [watch and take over an agent teammate's desktop](design/agent-screen.md).
+
+CAPTCHA vision lab: [Kimi vision smoke test on loopback challenge families](design/kimi-vision-captcha-lab.md) (lab only).
 
 CRM: [selective email contribution design](design/crm-selective-email-contribution.md).

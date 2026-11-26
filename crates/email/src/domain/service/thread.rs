@@ -10,20 +10,19 @@ use entity_access::domain::models::{
     AccessLevel, EntityAccessReceipt, EntityPermission, EntityType, ViewAccessLevel,
 };
 use frecency::domain::ports::FrecencyQueryService;
+use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::HashMap;
 use uuid::Uuid;
 
 use super::EmailServiceImpl;
 
-/// The shared ingredients fetched for any thread query: thread row, message rows,
-/// senders, recipients, labels, and whether the caller is the owner.
+/// The thread page and its sub-resources, scoped to the viewer.
 struct ThreadFetchResult {
     thread_row: ThreadRow,
     message_rows: Vec<MessageRow>,
     senders: HashMap<Uuid, ContactInfo>,
     recipients: RecipientsByMessageId,
     labels: HashMap<Uuid, Vec<MessageLabel>>,
-    is_owner: bool,
 }
 
 impl<T, U, E, CS, Eam, B> EmailServiceImpl<T, U, E, CS, Eam, B>
@@ -96,6 +95,9 @@ where
                     access_level: AccessLevel::Owner
                 }
             );
+        if !is_owner {
+            message_rows.retain(|row| !row.is_draft);
+        }
 
         let mut message_ids: Vec<Uuid> = message_rows.iter().map(|m| m.db_id).collect();
 
@@ -106,26 +108,29 @@ where
                 senders: HashMap::new(),
                 recipients: HashMap::new(),
                 labels: HashMap::new(),
-                is_owner,
             }));
         }
 
-        // Surface a reply draft the caller moved to another of their inboxes by
-        // switching the sender: it lives in a different thread, so pull it in here
-        // (matched by the message it replies to) and let the reply reopen with it.
-        if let Ok(macro_id) = receipt.get_authenticated_user() {
+        // A reply in another inbox can reopen here when the viewer can edit
+        // the conversation and the reply belongs to an inbox in their Drafts.
+        if (is_owner
+            || receipt
+                .entity_permission()
+                .allows_access_level(AccessLevel::Edit))
+            && let Ok(macro_id) = receipt.get_authenticated_user()
+        {
             let accessible = self
                 .email_repo
                 .inboxes_for_macro_id(macro_id.clone())
                 .await
                 .map_err(anyhow::Error::from)?;
             let link_ids: Vec<Uuid> = accessible.iter().map(|l| l.id).collect();
-            let moved_drafts = self
+            let reply_drafts = self
                 .email_repo
                 .cross_inbox_reply_drafts(&message_ids, &link_ids, thread_id)
                 .await
                 .map_err(anyhow::Error::from)?;
-            for draft in moved_drafts {
+            for draft in reply_drafts {
                 message_ids.push(draft.db_id);
                 message_rows.push(draft);
             }
@@ -146,7 +151,7 @@ where
             },
             async {
                 self.email_repo
-                    .labels_by_message_ids(&message_ids)
+                    .labels_by_message_ids(&message_ids, label_reader(receipt))
                     .await
                     .map_err(anyhow::Error::from)
             },
@@ -158,7 +163,6 @@ where
             senders,
             recipients,
             labels,
-            is_owner,
         }))
     }
 
@@ -168,11 +172,11 @@ where
         mut senders: HashMap<Uuid, ContactInfo>,
         mut recipients: RecipientsByMessageId,
         mut labels: HashMap<Uuid, Vec<MessageLabel>>,
-        is_owner: bool,
+        include_drafts: bool,
     ) -> Result<Vec<Message>, EmailErr> {
         let message_rows: Vec<MessageRow> = message_rows
             .into_iter()
-            .filter(|row| is_owner || !row.is_draft)
+            .filter(|row| include_drafts || !row.is_draft)
             .collect();
         let message_ids: Vec<Uuid> = message_rows.iter().map(|row| row.db_id).collect();
         let message_ids_with_attachments: Vec<Uuid> = message_rows
@@ -288,14 +292,14 @@ where
             senders,
             recipients,
             labels,
-            is_owner,
         }) = self.fetch_thread_core(&receipt, offset, limit).await?
         else {
             return Ok(None);
         };
 
+        // Draft visibility was decided before collecting the page's rows.
         let messages = self
-            .hydrate_full_messages(message_rows, senders, recipients, labels, is_owner)
+            .hydrate_full_messages(message_rows, senders, recipients, labels, true)
             .await?;
 
         Ok(Some(thread_from_row(thread_row, messages)))
@@ -314,7 +318,6 @@ where
             mut senders,
             mut recipients,
             mut labels,
-            is_owner,
         }) = self.fetch_thread_core(&receipt, offset, limit).await?
         else {
             return Ok(None);
@@ -322,7 +325,6 @@ where
 
         let messages: Vec<ParsedMessage> = message_rows
             .into_iter()
-            .filter(|row| is_owner || !row.is_draft)
             .map(|row| {
                 let message_id = row.db_id;
                 parsed_message_from_row(
@@ -338,11 +340,12 @@ where
         // independent of the fetched message page (unlike per-message labels).
         let labels = self
             .email_repo
-            .labels_by_thread_ids(&[thread_row.db_id])
+            .labels_by_thread_ids(&[thread_row.db_id], label_reader(&receipt))
             .await
             .map_err(anyhow::Error::from)?
             .into_iter()
             .map(|l| ParsedLabel {
+                id: Some(l.id),
                 provider_id: l.provider_label_id,
                 name: l.name,
             })
@@ -404,6 +407,7 @@ where
         &self,
         receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
     ) -> Result<HashMap<Uuid, ParsedMessage>, EmailErr> {
+        let reader = batch_label_reader(&receipts);
         let thread_ids = email_thread_ids_from_receipts(receipts)?;
 
         if thread_ids.is_empty() {
@@ -431,7 +435,7 @@ where
             },
             async {
                 self.email_repo
-                    .labels_by_message_ids(&message_ids)
+                    .labels_by_message_ids(&message_ids, reader.as_ref())
                     .await
                     .map_err(anyhow::Error::from)
             },
@@ -459,6 +463,7 @@ where
         &self,
         receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
     ) -> Result<HashMap<Uuid, Message>, EmailErr> {
+        let reader = batch_label_reader(&receipts);
         let thread_ids = email_thread_ids_from_receipts(receipts)?;
 
         if thread_ids.is_empty() {
@@ -486,7 +491,7 @@ where
             },
             async {
                 self.email_repo
-                    .labels_by_message_ids(&message_ids)
+                    .labels_by_message_ids(&message_ids, reader.as_ref())
                     .await
                     .map_err(anyhow::Error::from)
             },
@@ -499,6 +504,25 @@ where
             .map(|message| (message.thread_db_id, message))
             .collect())
     }
+}
+
+/// Who the labels of a receipt's thread are read for.
+fn label_reader(
+    receipt: &EntityAccessReceipt<ViewAccessLevel>,
+) -> Option<&MacroUserIdStr<'static>> {
+    receipt.get_authenticated_user().ok()
+}
+
+/// Who a batch's labels are read for: the one person who holds every receipt,
+/// or no one when the receipts are not all the same person's.
+fn batch_label_reader(
+    receipts: &[EntityAccessReceipt<ViewAccessLevel>],
+) -> Option<MacroUserIdStr<'static>> {
+    let reader = label_reader(receipts.first()?)?;
+    receipts
+        .iter()
+        .all(|receipt| label_reader(receipt) == Some(reader))
+        .then(|| reader.clone())
 }
 
 pub(super) fn email_thread_ids_from_receipts(
@@ -547,6 +571,7 @@ fn parsed_message_from_row(
         labels: labels
             .into_iter()
             .map(|label| ParsedLabel {
+                id: label.id,
                 provider_id: label.provider_label_id,
                 name: label.name.unwrap_or_default(),
             })

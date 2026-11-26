@@ -26,14 +26,18 @@ vi.mock('@service-storage/client', () => ({
 vi.mock('@channel/Media/media-items', () => ({
   partitionAttachments: (attachments: unknown[]) => ({
     mediaAttachments: [],
+    audioAttachments: [],
     documentAttachments: attachments,
   }),
   mapMediaItems: () => [],
 }));
+vi.mock('./DocumentImagePreview', () => ({ DocumentImagePreview: () => null }));
 vi.mock('./MediaPreview', () => ({ MediaPreview: () => null }));
 vi.mock('@ui', () => ({ cn: () => '' }));
 vi.mock('./context', () => ({
   useMessage: () => () => ({
+    sender_id: 'macro|person@example.com',
+    content: '',
     attachments: [
       { entity_type: 'initiative', entity_id: 'launch' },
       { entity_type: 'document', entity_id: 'note' },

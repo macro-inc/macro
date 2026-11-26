@@ -95,17 +95,32 @@ impl<ESvc: EntityAccessService> MessageToolContext<ESvc> {
         }
     }
 
+    /// The id of the entity a discussion belongs to now, which for a merged
+    /// company's or contact's old id is the record it was merged into. Grants
+    /// nothing.
+    async fn current_parent_id(
+        &self,
+        parent: &MessageParent,
+        action: &'static str,
+    ) -> Result<String, ToolCallError> {
+        self.entity_access_service
+            .current_entity_id(&parent.entity_id(), parent.access_entity_type())
+            .await
+            .map_err(access_error(parent, action))
+    }
+
     /// The requesting user's own view of a discussion.
     async fn discussion_view(
         &self,
         request_context: &RequestContext,
         parent: &MessageParent,
     ) -> Result<EntityAccessReceipt<MessageView>, ToolCallError> {
+        let parent_id = self.current_parent_id(parent, "view").await?;
         self.entity_access_service
             .generate_entity_access_receipt::<MessageView>(
                 &request_context.user_id,
                 None,
-                &parent.entity_id(),
+                &parent_id,
                 parent.access_entity_type(),
             )
             .await
@@ -119,11 +134,12 @@ impl<ESvc: EntityAccessService> MessageToolContext<ESvc> {
         request_context: &RequestContext,
         parent: &MessageParent,
     ) -> Result<EntityAccessReceipt<MessageWrite>, ToolCallError> {
+        let parent_id = self.current_parent_id(parent, "comment").await?;
         self.entity_access_service
             .generate_bot_entity_access_receipt::<MessageWrite>(
                 self.actor,
                 BotAccessScope::user(request_context.user_id.clone()),
-                &parent.entity_id(),
+                &parent_id,
                 parent.access_entity_type(),
             )
             .await
@@ -131,9 +147,10 @@ impl<ESvc: EntityAccessService> MessageToolContext<ESvc> {
     }
 
     /// The write capability for changing an existing comment as its author:
-    /// comments the tool actor bot posted are changed as the bot, and every
-    /// other comment as the user, so the message service applies the same
-    /// authorship and moderation rules as the web composer.
+    /// a comment the tool actor bot posted for the requesting user is changed
+    /// as the bot, and every other comment as the user, so the message
+    /// service applies the same authorship and moderation rules as the web
+    /// composer.
     async fn comment_author_write(
         &self,
         request_context: &RequestContext,
@@ -146,14 +163,15 @@ impl<ESvc: EntityAccessService> MessageToolContext<ESvc> {
             .get(view, comment_id)
             .await
             .map_err(comment_error("unable to read the comment"))?;
-        if comment.sender_id.as_ref() == self.actor.into_storage_id().as_ref() {
+        if comment.posted_by_bot_for(self.actor, request_context.user_id.as_ref()) {
             return self.discussion_write(request_context, parent).await;
         }
+        let parent_id = self.current_parent_id(parent, "comment").await?;
         self.entity_access_service
             .generate_entity_access_receipt::<MessageWrite>(
                 &request_context.user_id,
                 None,
-                &parent.entity_id(),
+                &parent_id,
                 parent.access_entity_type(),
             )
             .await

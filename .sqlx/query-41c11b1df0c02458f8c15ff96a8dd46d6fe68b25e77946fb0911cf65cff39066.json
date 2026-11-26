@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT channel.id AS channel_id,\n       grant_row.access_level AS \"access_level: AccessLevel\",\n       channel.name AS channel_name,\n       channel.channel_type AS \"channel_type: ChannelType\"\nFROM entity_access grant_row\nJOIN comms_channels channel ON channel.id = CASE\n    WHEN grant_row.source_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'\n    THEN grant_row.source_id::uuid\nEND\nJOIN comms_channel_participants member\n    ON member.channel_id = channel.id\n   AND member.user_id = $2\n   AND member.left_at IS NULL\nWHERE grant_row.entity_id = $1\n  AND grant_row.entity_type = 'email_thread'\n  AND grant_row.source_type = 'channel'\n  AND grant_row.granted_from_project_id IS NULL\nORDER BY channel.id\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "access_level: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "channel_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "channel_type: ChannelType",
+        "type_info": {
+          "Custom": {
+            "name": "comms_channel_type",
+            "kind": {
+              "Enum": [
+                "public",
+                "private",
+                "direct_message",
+                "team"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "41c11b1df0c02458f8c15ff96a8dd46d6fe68b25e77946fb0911cf65cff39066"
+}

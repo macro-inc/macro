@@ -206,6 +206,23 @@ async function open(
   return { posted, replies };
 }
 
+/**
+ * Below the docked width the panel would cover the stage, so a desktop call
+ * keeps its participants in view until the viewer opens the panel.
+ */
+async function openNarrowPanel(page: Page) {
+  if (process.env.CALL_FULL_HOST !== 'true') return;
+  const toggle = page.getByRole('button', {
+    name: 'Open chat and participants',
+  });
+  await expect(toggle).toBeVisible({ timeout: 30_000 });
+  await expect(
+    page.getByRole('complementary', { name: 'Call sidebar' })
+  ).toBeHidden();
+  await expect(page.locator('[data-call-participant-stage]')).toBeVisible();
+  await toggle.click();
+}
+
 const callRow = (page: Page) =>
   page.locator(`[data-message-id="${CALL_ID}"]`).first();
 
@@ -428,6 +445,11 @@ for (const shell of ['docked', 'overlay'] as const) {
           ? [reply('00000000-0000-7000-8000-000000000b01', 'A call message')]
           : [],
       });
+      if (
+        page.viewportSize()!.width < 800 &&
+        testInfo.project.name === 'desktop'
+      )
+        await openNarrowPanel(page);
       await expect(
         page.locator('[data-input-id^="thread-reply-input"]')
       ).toBeVisible({
@@ -741,6 +763,8 @@ test('rebuilt call panel keeps a long thread, bottom composer and draft across t
       )
     ),
   });
+  if (page.viewportSize()!.width < 800 && testInfo.project.name === 'desktop')
+    await openNarrowPanel(page);
   const latest = page.getByText('Call message 60', { exact: true });
   await expect(latest).toBeInViewport({ timeout: 30000 });
   const scroll = page.locator('[data-channel-scroll]');

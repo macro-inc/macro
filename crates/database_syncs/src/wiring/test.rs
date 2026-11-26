@@ -18,6 +18,7 @@ use import_notion::domain::model::{
     SearchObject,
 };
 use import_notion::domain::ports::{NotionApi, NotionError};
+use import_notion::domain::views::{NotionView, ViewScope};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_event_broker::domain::service::NoopMacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -98,14 +99,11 @@ struct Connected;
 
 #[async_trait]
 impl Accounts for Connected {
-    async fn account(
-        &self,
-        _: &MacroUserIdStr<'static>,
-    ) -> Result<Option<String>, rootcause::Report> {
-        Ok(Some("apn_1".to_string()))
+    async fn connected(&self, _: &MacroUserIdStr<'static>) -> Result<bool, rootcause::Report> {
+        Ok(true)
     }
 
-    async fn connected(&self) -> Result<Vec<(MacroUserIdStr<'static>, String)>, rootcause::Report> {
+    async fn holders(&self) -> Result<Vec<MacroUserIdStr<'static>>, rootcause::Report> {
         unimplemented!("syncs ask about one user")
     }
 }
@@ -135,6 +133,18 @@ impl NotionApi for NoNotion {
     }
 
     async fn database_sources(&self, _: &NotionId) -> Result<Vec<NotionId>, NotionError> {
+        unimplemented!("never connected")
+    }
+
+    async fn list_views(
+        &self,
+        _: &ViewScope,
+        _: Option<String>,
+    ) -> Result<Paged<NotionId>, NotionError> {
+        unimplemented!("never connected")
+    }
+
+    async fn retrieve_view(&self, _: &NotionId) -> Result<NotionView, NotionError> {
         unimplemented!("never connected")
     }
 

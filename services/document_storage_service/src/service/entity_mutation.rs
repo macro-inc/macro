@@ -26,7 +26,9 @@ use databases::domain::ports::DatabasesService;
 use documents_hex::domain::ports::DocumentService;
 use email::domain::ports::EmailService;
 use entity_access::domain::{
-    models::{AccessError, EditAccessLevel, EntityAccessReceipt, RequiredPermission},
+    models::{
+        AccessError, EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, RequiredPermission,
+    },
     ports::EntityAccessService,
 };
 use entity_mutation::{
@@ -38,8 +40,11 @@ use entity_mutation::{
 };
 use entity_registry::PurgeOwnedEntity;
 use futures::{StreamExt, stream};
+use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
-use models_permissions::share_permission::UpdateSharePermissionRequestV2;
+use models_permissions::share_permission::{
+    UpdateSharePermissionRequestV2, access_level::AccessLevel,
+};
 use projects_hex::domain::{duplicate::ProjectDuplicator, ports::ProjectService};
 use tracing::Instrument;
 
@@ -68,6 +73,19 @@ pub enum LifecycleError {
     Internal(rootcause::Report),
 }
 
+/// A channel grant the thread owner can see in the sharing roster.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct ThreadChannelShare {
+    /// The channel with access to the thread.
+    pub channel_id: uuid::Uuid,
+    /// The access level granted to the channel.
+    pub access_level: AccessLevel,
+    /// The channel's configured name, if it has one.
+    pub channel_name: Option<String>,
+    /// Whether the share is with a conversation or a group.
+    pub channel_type: channels::domain::models::ChannelType,
+}
+
 /// Document and email-thread mutations still orchestrated directly against
 /// persistence instead of a domain service.
 ///
@@ -75,6 +93,13 @@ pub enum LifecycleError {
 /// kind and become a capability-trait impl there (projects already
 /// graduated); delete this trait once it is empty.
 pub trait EntityLifecycleService: Send + Sync + 'static {
+    /// Read explicit thread grants to channels the user currently participates in.
+    fn thread_channel_shares(
+        &self,
+        thread_id: uuid::Uuid,
+        viewer: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<ThreadChannelShare>, LifecycleError>> + Send;
+
     /// Update an email thread's share policy.
     fn update_thread_share_policy(
         &self,
@@ -218,6 +243,24 @@ impl<D, H, C, K, E, P, Databases, Forms, A, L>
             access,
             lifecycle,
         }
+    }
+
+    /// Return the thread owner's active channel shares.
+    pub async fn thread_channel_shares(
+        &self,
+        owner: EntityAccessReceipt<OwnerAccessLevel>,
+    ) -> Result<Vec<ThreadChannelShare>, EntityMutationErrorCode>
+    where
+        L: EntityLifecycleService,
+    {
+        let viewer = owner.get_authenticated_user().map_err(access_failure)?;
+        let thread_id = uuid::Uuid::parse_str(&owner.entity().entity_id)
+            .map_err(|error| lifecycle_failure(LifecycleError::InvalidInput(error.to_string())))?;
+
+        self.lifecycle
+            .thread_channel_shares(thread_id, viewer)
+            .await
+            .map_err(lifecycle_failure)
     }
 }
 

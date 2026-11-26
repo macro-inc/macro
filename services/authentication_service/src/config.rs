@@ -74,10 +74,28 @@ maybe_env_vars! {
     pub struct GtmInvitePromoCode;
     /// Hours a GTM invite link stays openable after creation. Defaults to 48.
     pub struct GtmInviteLinkTtlHours;
-    /// Stripe price id for the Max plan seat. Optional so the service can
-    /// deploy before the price exists in Stripe; until it is set, Max checkout
-    /// and plan changes answer 400 and every subscription maps to Premium.
+    /// `true` where a Firecracker computer fleet runs: this service then takes
+    /// back the agent teammates of computers released after a failed first
+    /// start. Absent means off: no worker runs.
+    pub struct ComputersAgentEffects;
+    /// Stripe price id of the original $200/month Max seat. Optional so the
+    /// service can deploy before a Max price exists in Stripe; with no Max
+    /// price, Max checkout and plan changes answer 400. Once
+    /// `STRIPE_MAX_MONTHLY_PRICE_ID` is set it is no longer sold, and its
+    /// subscribers keep it as a legacy Max price.
     pub struct StripeMaxPriceId;
+    /// Stripe price id of the month-to-month Max seat ($220). Replaces
+    /// `STRIPE_MAX_PRICE_ID` for new monthly Max seats when set.
+    pub struct StripeMaxMonthlyPriceId;
+    /// Stripe price id of the annual Max seat ($200/month billed yearly).
+    /// Until it is set, annual Max checkout answers 400.
+    pub struct StripeMaxYearlyPriceId;
+    /// Stripe price id of the month-to-month Business seat ($90). Until it
+    /// is set, monthly Business checkout answers 400.
+    pub struct StripeBusinessMonthlyPriceId;
+    /// Stripe price id of the annual Business seat ($80/month billed
+    /// yearly). Until it is set, annual Business checkout answers 400.
+    pub struct StripeBusinessYearlyPriceId;
     /// Stripe price ids for Macro computers, one per size and billing
     /// interval. Absent as a group means computers are not sold here.
     pub struct StripeComputerStandardMonthlyPriceId;
@@ -116,6 +134,9 @@ pub struct Config {
     /// In-plan AI allowance per Premium seat per period, in cents at provider
     /// cost. Mandatory; set in Doppler.
     pub ai_usage_included_allowance_cents: ai_billing::IncludedAllowanceCents,
+    /// In-plan AI allowance per Business seat per period, in cents at provider
+    /// cost. Mandatory; set in Doppler.
+    pub ai_usage_business_included_allowance_cents: ai_billing::IncludedAllowanceCents,
     /// In-plan AI allowance per Max seat per period, in cents at provider
     /// cost. Mandatory; set in Doppler.
     pub ai_usage_max_included_allowance_cents: ai_billing::IncludedAllowanceCents,
@@ -166,6 +187,9 @@ pub struct Config {
     /// The environment we are in
     #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
+    /// Dev only: comma-separated Macro user ids that get computers without the
+    /// PostHog flag. Refused in production.
+    pub computers_rollout_allowlist: Option<String>,
     /// The internal auth key used by other services
     pub service_internal_auth_key: ServiceInternalAuthKey,
     /// The github client id
@@ -207,11 +231,23 @@ pub struct Config {
     pub gtm_invite_promo_code: GtmInvitePromoCode,
     /// Hours a GTM invite link can be opened and redeemed (optional, defaults to 48).
     pub gtm_invite_link_ttl_hours: GtmInviteLinkTtlHours,
+    /// Whether the computers agents worker runs (see [`ComputersAgentEffects`]).
+    pub computers_agent_effects: ComputersAgentEffects,
     /// The stripe price id for the Premium plan seat
     pub stripe_price_id: StripePriceId,
-    /// The stripe price id for the Max plan seat (optional, see
+    /// The stripe price id for the original Max plan seat (optional, see
     /// [`StripeMaxPriceId`])
     pub stripe_max_price_id: StripeMaxPriceId,
+    /// Month-to-month Max seat price (optional, see [`StripeMaxMonthlyPriceId`]).
+    pub stripe_max_monthly_price_id: StripeMaxMonthlyPriceId,
+    /// Annual Max seat price (optional, see [`StripeMaxYearlyPriceId`]).
+    pub stripe_max_yearly_price_id: StripeMaxYearlyPriceId,
+    /// Month-to-month Business seat price (optional, see
+    /// [`StripeBusinessMonthlyPriceId`]).
+    pub stripe_business_monthly_price_id: StripeBusinessMonthlyPriceId,
+    /// Annual Business seat price (optional, see
+    /// [`StripeBusinessYearlyPriceId`]).
+    pub stripe_business_yearly_price_id: StripeBusinessYearlyPriceId,
     /// Macro computer prices: all six or none, independent of fleet attachment.
     pub stripe_computer_standard_monthly_price_id: StripeComputerStandardMonthlyPriceId,
     pub stripe_computer_large_monthly_price_id: StripeComputerLargeMonthlyPriceId,
@@ -265,6 +301,7 @@ impl Config {
             ai_billing::PlanAllowances {
                 free: self.ai_usage_free_included_allowance_cents,
                 premium: self.ai_usage_included_allowance_cents,
+                business: self.ai_usage_business_included_allowance_cents,
                 max: self.ai_usage_max_included_allowance_cents,
             },
             self.ai_usage_overage_markup_percent,
@@ -310,6 +347,16 @@ impl Config {
         Ok(())
     }
 
+    /// The computers rollout allowlist; refused in production.
+    pub fn computer_rollout_allowlist(
+        &self,
+    ) -> anyhow::Result<hosted_runtimes::domain::rollout::RolloutAllowlist> {
+        Ok(hosted_runtimes::outbound::rollout_allowlist::configured(
+            self.computers_rollout_allowlist.as_deref(),
+            self.environment,
+        )?)
+    }
+
     /// Macro computers' retention and past-due grace.
     pub fn computer_billing_policy(
         &self,
@@ -320,6 +367,19 @@ impl Config {
                 self.computer_past_due_grace_days,
             )?,
         )
+    }
+
+    /// Whether this deployment runs the computers agents worker: off unless
+    /// `COMPUTERS_AGENT_EFFECTS` is `true`; any other value fails startup.
+    pub fn computer_agent_effects(&self) -> anyhow::Result<bool> {
+        match self.computers_agent_effects.value() {
+            None => Ok(false),
+            Some("true") => Ok(true),
+            Some("false") => Ok(false),
+            Some(other) => {
+                anyhow::bail!("COMPUTERS_AGENT_EFFECTS must be true or false, not {other:?}")
+            }
+        }
     }
 
     /// The Stripe price of each computer size per billing interval.

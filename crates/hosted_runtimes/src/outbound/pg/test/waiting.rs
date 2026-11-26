@@ -1,17 +1,11 @@
 use super::*;
+use crate::domain::ports::HostScope;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn releasing_awake_units_notifies_waiters_in_the_same_transaction(pool: PgPool) {
     insert_team(&pool).await;
     let repo = PgComputerRepo::new(pool, policy());
-    repo.register_host(HostRegistration {
-        name: "capacity-test".to_owned(),
-        memory_gb: 8,
-        reserve_gb: 0,
-        oversell_factor: 9,
-    })
-    .await
-    .unwrap();
+    host(&repo, "capacity-test", 8, 0, 9).await;
     for (first, waiting, prepare, release) in [
         (1, 2, Event::PowerOff, Event::InstanceStopped),
         (5, 6, Event::MacrodConnected, Event::ReleaseNow),
@@ -40,7 +34,7 @@ async fn releasing_awake_units_notifies_waiters_in_the_same_transaction(pool: Pg
             .await
             .unwrap();
         let timers = repo
-            .due_timers(now() + Duration::seconds(21), 100)
+            .due_timers(HostScope::Every, now() + Duration::seconds(21), 100)
             .await
             .unwrap();
         let timer = timers

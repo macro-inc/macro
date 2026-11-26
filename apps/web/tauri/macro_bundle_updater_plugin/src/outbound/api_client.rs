@@ -62,6 +62,10 @@ impl BundleClient {
             )
             .append_pair("native_build", &request.native_build.to_string())
             .append_pair("manifest_schema", &SUPPORTED_MANIFEST_SCHEMA.to_string());
+        if let Some(git_sha) = &request.current_git_sha {
+            url.query_pairs_mut()
+                .append_pair("current_git_sha", git_sha);
+        }
         Ok(url)
     }
 

@@ -8,7 +8,7 @@ version = "0.1.0"
 client = ["dep:macro_authorization", "dep:macro_tower_layers", "dep:reqwest", "dep:tracing", "dep:urlencoding"]
 default = ["client", "inbound", "outbound"]
 inbound = ["dep:axum", "dep:axum-extra", "dep:macro_authorization", "dep:tracing", "dep:urlencoding"]
-outbound = ["dep:httparse", "dep:sqlx", "dep:teams", "dep:tokio-util", "dep:tracing"]
+outbound = ["dep:httparse", "dep:rustix", "dep:sqlx", "dep:teams", "dep:tokio-util", "dep:tracing"]
 
 [dependencies]
 agent_credentials = { path = "../agent_credentials" }
@@ -27,6 +27,7 @@ macro_tower_layers = { path = "../macro_tower_layers", optional = true }
 macro_user_id = { path = "../macro_user_id" }
 reqwest = { workspace = true, optional = true }
 rootcause = { workspace = true }
+rustix = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }
@@ -42,6 +43,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 rand = { workspace = true }
+rustix = { workspace = true, features = ["event", "process"] }
 flate2 = { workspace = true }
 macro_authorization = { path = "../macro_authorization", features = ["postgres"] }
 macro_db_migrator = { path = "../macro_db_migrator" }

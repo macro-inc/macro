@@ -41,18 +41,15 @@ model.
 
 ## Artifacts
 
-An `artifact` node holds a self-contained HTML document, running behind
-`enable-canvas-artifacts`. Graphics stores it as opaque content; the Canvas host
+An `artifact` node holds a self-contained HTML document. Graphics stores it as opaque content; the Canvas host
 runs it in an opaque-origin sandboxed iframe, without a separate domain. See the
 [Canvas Next README](../../apps/web/src/features/block-canvas/README.md#artifacts)
 for the security model and its limits.
 
 AI edits artifacts through the same CanvasEditor SDK, QuickJS validation and guarded
 commit as other items: `createArtifact`, `artifactSource`, `artifactEdit`,
-`defineStyle`, `defineComponent` and `presentOrder`. The agent harness reads the same
-`enable-canvas-artifacts` flag per user and tells the worker through the optional
-`artifacts` field on `POST /canvas`. It sends the field only when on, so a worker
-that predates it keeps working for everyone else. Without it, the worker rejects
+`defineStyle`, `defineComponent` and `presentOrder`. Macro's backend always sets the
+optional `artifacts` field on `POST /canvas`. Without it, the worker rejects
 those operations before committing, ReadCanvas omits source and guide, and renders
 show titles only. Generic operations such as move still work on existing artifacts.
 Tool schemas cannot vary per user, so their descriptions stay neutral and the SDK is

@@ -15,8 +15,10 @@ serde_json = { workspace = true }
 serde = { workspace = true }
 soup-filter-projection = { path = "../soup_filter_projection", default-features = false }
 thiserror = { workspace = true }
+tracing = { workspace = true }
 uuid = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 cache-turso = { path = "../client/cache-turso" }
 pollster = { workspace = true }
+tempfile = { workspace = true }

@@ -1,10 +1,10 @@
 //! `macrod enroll`: join a Macro computer (hosted VM) to Macro at first boot.
 //!
 //! The control plane hands the computer one
-//! [`Enrollment`](hosted_runtimes::domain::enrollment::Enrollment): through the
-//! Incus guest API on VMs, or a file in Docker. Enrolling writes `macrod.toml`
-//! for the deployment it names and claims the pre-approved harness pairing.
-//! Every step is safe to re-run until the enrolled marker exists.
+//! [`Enrollment`](hosted_runtimes::domain::enrollment::Enrollment) in a file.
+//! Enrolling writes `macrod.toml` for the deployment it names and claims the
+//! pre-approved harness pairing. Every step is safe to re-run until the
+//! enrolled marker exists.
 //!
 //! The marker records the computer and its enrollment generation, and lives
 //! on the data disk. A guest recreated on that disk is handed a newer
@@ -13,56 +13,63 @@
 //! disk alone. A marker at least as new as the enrollment, or no enrollment
 //! (the control plane removes it once macrod connects), means enrolled.
 
-use std::os::unix::fs::{MetadataExt as _, OpenOptionsExt as _, PermissionsExt as _};
+use std::os::unix::fs::MetadataExt as _;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
-use hosted_runtimes::domain::enrollment::{Enrollment, EnrollmentGeneration, INCUS_ENROLLMENT_KEY};
+use hosted_runtimes::domain::enrollment::{Enrollment, EnrollmentGeneration};
 use rootcause::prelude::ResultExt as _;
 
 use crate::computer::ENROLLED_MARKER;
 use crate::config::{Config, HarnessCredentials};
 use crate::outbound::pairing::{ClaimStatus, PairingClient};
+use crate::retry_delay::RetryDelays;
 use crate::service::ServiceOptions;
 use crate::tui::config_form::ConfigForm;
 
 #[cfg(test)]
 mod test;
 
-/// The Incus guest API socket inside a VM.
-const INCUS_SOCKET: &str = "/dev/incus/sock";
 /// How long the claim keeps retrying a network that is not up yet.
 const CLAIM_DEADLINE: Duration = Duration::from_secs(300);
 /// The pairing is pre-approved, so a claim only waits for the network or
 /// service to come up: retry quickly.
 const CLAIM_RETRY: Duration = Duration::from_millis(250);
-const INCUS_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Where the enrollment JSON comes from.
+/// The claim's retry delays: every [`CLAIM_RETRY`], jittered.
+fn claim_retry_delays() -> RetryDelays {
+    RetryDelays::every(CLAIM_RETRY)
+}
+/// MMDS answers from the VMM itself; anything slower is not coming.
+const MMDS_TIMEOUT: Duration = Duration::from_secs(2);
+/// How long the MMDS session token lives; one enrollment read needs seconds.
+const MMDS_TOKEN_TTL_SECONDS: &str = "60";
+
+/// Where the enrollment JSON comes from. Firecracker computers add their
+/// metadata service as a second source.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EnrollmentSource {
-    /// The `user.macro.enrollment` instance config key, via `/dev/incus/sock`.
-    Incus,
     /// A file holding the JSON, for Docker computers.
     File(PathBuf),
+    /// The `macro.enrollment` object of a Firecracker microVM's MMDS
+    /// document, through MMDS v2 (session token).
+    Mmds,
 }
 
 /// An `--from` value that names no enrollment source.
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
-#[error("expected `incus` or `file:<path>`, not `{0}`")]
+#[error("expected `mmds` or `file:<path>`, not `{0}`")]
 pub struct UnknownEnrollmentSource(String);
 
 impl FromStr for EnrollmentSource {
     type Err = UnknownEnrollmentSource;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value {
-            "incus" => Ok(Self::Incus),
-            other => match other.strip_prefix("file:") {
-                Some(path) if !path.is_empty() => Ok(Self::File(PathBuf::from(path))),
-                _ => Err(UnknownEnrollmentSource(other.to_owned())),
-            },
+        match value.strip_prefix("file:") {
+            Some(path) if !path.is_empty() => Ok(Self::File(PathBuf::from(path))),
+            None if value == "mmds" => Ok(Self::Mmds),
+            _ => Err(UnknownEnrollmentSource(value.to_owned())),
         }
     }
 }
@@ -77,13 +84,15 @@ pub struct EnrollOptions {
     pub workspace: PathBuf,
     /// Agent preset id for a newly created config.
     pub agent: String,
-    /// Prefix for every system path (`/dev/incus`, `/etc`, `/var/lib`).
+    /// Prefix for every system path (`/etc`, `/var/lib`).
     pub root: PathBuf,
 }
 
-/// System paths, under a root prefix so tests can redirect them.
+/// System paths, under a root prefix, and the MMDS address, so tests can
+/// redirect them.
 struct SystemPaths {
     root: PathBuf,
+    mmds: String,
 }
 
 impl SystemPaths {
@@ -119,17 +128,28 @@ impl Host for SystemHost {
 /// Enroll this computer, or enroll it again for a newer enrollment
 /// generation; an enrolled one is left as it is.
 pub async fn run_enroll(options: EnrollOptions) -> rootcause::Result<()> {
-    run_enroll_with_host(options, &SystemHost).await
+    run_enroll_with_host(options, &SystemHost, crate::telemetry::install).await
 }
 
-async fn run_enroll_with_host(options: EnrollOptions, host: &impl Host) -> rootcause::Result<()> {
+/// Enroll on `host`, starting telemetry with `start_telemetry` once the
+/// enrollment is read, since it names where spans go.
+async fn run_enroll_with_host<Guard>(
+    options: EnrollOptions,
+    host: &impl Host,
+    start_telemetry: impl FnOnce(Option<crate::telemetry::Exporter>) -> Guard,
+) -> rootcause::Result<()> {
     use tracing::Instrument as _;
     let paths = SystemPaths {
         root: options.root.clone(),
+        mmds: firecracker_host_api::mmds::ADDRESS.to_owned(),
     };
     let marker = paths.at(ENROLLED_MARKER);
+    let telemetry_env = paths.at(crate::telemetry::TELEMETRY_ENV);
     let enrolled = read_marker(&marker)?;
-    let enrollment = match (read_enrollment(&options.from, &paths).await?, enrolled) {
+    let read = read_enrollment(&options.from, &paths).await?;
+    let exporter = read.as_ref().and_then(telemetry_exporter);
+    let _telemetry = start_telemetry(exporter.clone());
+    let enrollment = match (read, enrolled) {
         (None, Some(_)) => {
             tracing::info!(marker = %marker.display(), "already enrolled");
             return Ok(());
@@ -142,10 +162,12 @@ async fn run_enroll_with_host(options: EnrollOptions, host: &impl Host) -> rootc
         (None, None) => rootcause::bail!(
             "missing enrollment: {}",
             match &options.from {
-                EnrollmentSource::Incus =>
-                    format!("set the {INCUS_ENROLLMENT_KEY} Incus instance config key"),
                 EnrollmentSource::File(path) =>
                     format!("write the Enrollment JSON to {}", path.display()),
+                EnrollmentSource::Mmds => format!(
+                    "put the Enrollment JSON at {} in MMDS",
+                    firecracker_host_api::mmds::ENROLLMENT_POINTER
+                ),
             }
         ),
     };
@@ -157,18 +179,22 @@ async fn run_enroll_with_host(options: EnrollOptions, host: &impl Host) -> rootc
         otel.status_code = tracing::field::Empty
     );
     hosted_runtimes::domain::telemetry::attach(&span, enrollment.traceparent.as_deref());
-    enroll(&options, host, &paths, &marker, &enrollment)
-        .instrument(span.clone())
-        .await
-        .inspect_err(|_| {
-            span.record("otel.status_code", "ERROR");
-        })
+    async {
+        // Before the marker: once it is written a retry stops at "already
+        // enrolled", so failed settings would never be written.
+        write_telemetry_env(&telemetry_env, exporter.as_ref())?;
+        enroll(&options, host, &marker, &enrollment).await
+    }
+    .instrument(span.clone())
+    .await
+    .inspect_err(|_| {
+        span.record("otel.status_code", "ERROR");
+    })
 }
 
 async fn enroll(
     options: &EnrollOptions,
     host: &impl Host,
-    paths: &SystemPaths,
     marker: &Path,
     enrollment: &Enrollment,
 ) -> rootcause::Result<()> {
@@ -183,12 +209,6 @@ async fn enroll(
     write_config(options, agent, &urls)?;
     ensure_credentials(&options.config, enrollment).await?;
     own_like_parent(&options.config, host)?;
-    write_agent_env(
-        &paths.at(AGENT_ENV_PATH),
-        enrollment.agent.as_ref(),
-        &options.config,
-        host,
-    )?;
 
     if let Some(parent) = marker.parent() {
         std::fs::create_dir_all(parent)
@@ -204,6 +224,47 @@ async fn enroll(
     )
     .context(format!("could not write {}", marker.display()))?;
     tracing::info!("enrolled");
+    Ok(())
+}
+
+/// The enrollment's telemetry intake, which takes OTLP/HTTP, named this
+/// computer.
+fn telemetry_exporter(enrollment: &Enrollment) -> Option<crate::telemetry::Exporter> {
+    enrollment
+        .deployment
+        .telemetry_url
+        .as_ref()
+        .map(|url| crate::telemetry::Exporter::Http {
+            endpoint: url.as_str().trim_end_matches('/').to_owned(),
+            computer: Some(enrollment.computer_id),
+        })
+}
+
+/// Record the enrollment's telemetry settings for `macrod.service`, or
+/// remove them when this enrollment names no intake. Not a secret.
+fn write_telemetry_env(
+    path: &Path,
+    exporter: Option<&crate::telemetry::Exporter>,
+) -> rootcause::Result<()> {
+    match exporter {
+        Some(exporter) => {
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)
+                    .context(format!("could not create {}", parent.display()))?;
+            }
+            std::fs::write(path, exporter.environment_file())
+                .context(format!("could not write {}", path.display()))?;
+        }
+        None => match std::fs::remove_file(path) {
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
+                return Err(rootcause::report!(
+                    "could not remove {}: {error}",
+                    path.display()
+                ));
+            }
+            _ => {}
+        },
+    }
     Ok(())
 }
 
@@ -238,7 +299,7 @@ async fn read_enrollment(
                 path.display()
             ))?),
         },
-        EnrollmentSource::Incus => match read_incus_enrollment(&paths.at(INCUS_SOCKET)).await? {
+        EnrollmentSource::Mmds => match read_mmds_enrollment(&paths.mmds).await? {
             Some(raw) => raw,
             None => return Ok(None),
         },
@@ -248,39 +309,57 @@ async fn read_enrollment(
     ))
 }
 
-/// `GET /1.0/config/<key>` on the guest API answers the raw value, or 404
-/// once the control plane has removed it.
-async fn read_incus_enrollment(
-    socket: &Path,
+/// MMDS v2: a session token, then the object at the enrollment pointer as
+/// JSON (MMDS answers IMDS text without `Accept`), or `None` for a 404 (the
+/// control plane removed it once macrod connected). Never through a proxy:
+/// MMDS is only reachable from the microVM itself. The body is the
+/// enrollment, so it is never recorded.
+#[tracing::instrument(name = "macrod.enroll.read_mmds", skip_all, fields(found = tracing::field::Empty), err)]
+async fn read_mmds_enrollment(
+    address: &str,
 ) -> rootcause::Result<Option<zeroize::Zeroizing<String>>> {
+    use firecracker_host_api::mmds;
+
     let http = reqwest::Client::builder()
-        .unix_socket(socket)
-        .timeout(INCUS_TIMEOUT)
+        .no_proxy()
+        .timeout(MMDS_TIMEOUT)
         .build()
-        .context("could not build the Incus guest API client")?;
-    let response = http
-        .get(format!(
-            "http://custom.socket/1.0/config/{INCUS_ENROLLMENT_KEY}"
-        ))
+        .context("could not build the MMDS client")?;
+    let token = http
+        .put(format!("{address}{}", mmds::TOKEN_PATH))
+        .header(mmds::TOKEN_TTL_HEADER, MMDS_TOKEN_TTL_SECONDS)
         .send()
         .await
-        .context(format!(
-            "could not reach the Incus guest API at {}",
-            socket.display()
-        ))?;
+        .context(format!("could not reach MMDS at {address}"))?
+        .error_for_status()
+        .context("MMDS refused a session token")?
+        .text()
+        .await
+        .context("could not read the MMDS session token")?;
+    let token = zeroize::Zeroizing::new(token);
+
+    let response = http
+        .get(format!("{address}{}", mmds::ENROLLMENT_POINTER))
+        .header(mmds::TOKEN_HEADER, token.as_str())
+        .header(reqwest::header::ACCEPT, "application/json")
+        .send()
+        .await
+        .context(format!("could not reach MMDS at {address}"))?;
     let status = response.status();
     if status == reqwest::StatusCode::NOT_FOUND {
+        tracing::Span::current().record("found", false);
         return Ok(None);
     }
     let body = zeroize::Zeroizing::new(
         response
             .text()
             .await
-            .context("could not read the Incus guest API answer")?,
+            .context("could not read the MMDS answer")?,
     );
     if !status.is_success() {
-        rootcause::bail!("the Incus guest API answered {status} for {INCUS_ENROLLMENT_KEY}");
+        rootcause::bail!("MMDS answered {status} for {}", mmds::ENROLLMENT_POINTER);
     }
+    tracing::Span::current().record("found", true);
     Ok(Some(body))
 }
 
@@ -344,6 +423,7 @@ async fn ensure_credentials(path: &Path, enrollment: &Enrollment) -> rootcause::
     }
     let client = PairingClient::new(&config).with_trace_parent(enrollment.traceparent.clone());
     let started = Instant::now();
+    let mut delays = claim_retry_delays();
     let mut attempts: i64 = 0;
     loop {
         attempts += 1;
@@ -375,59 +455,8 @@ async fn ensure_credentials(path: &Path, enrollment: &Enrollment) -> rootcause::
         if started.elapsed() >= CLAIM_DEADLINE {
             rootcause::bail!("the enrollment's pairing was not claimable in time");
         }
-        tokio::time::sleep(CLAIM_RETRY).await;
+        tokio::time::sleep(delays.next_delay()).await;
     }
-}
-
-/// The agent teammate a computer was bought for: its brain's environment,
-/// read by the guest's `macro-agent.service`. Absent on other computers.
-pub const AGENT_ENV_PATH: &str = "/var/lib/macrod/agent.env";
-
-/// Write the agent's environment as a systemd environment file (mode 0600,
-/// owned like macrod's config, since the brain runs as that user), or remove
-/// a stale one when this enrollment carries no agent.
-fn write_agent_env(
-    path: &Path,
-    agent: Option<&hosted_runtimes::domain::agent::AgentEnrollment>,
-    config: &Path,
-    host: &impl Host,
-) -> rootcause::Result<()> {
-    let Some(agent) = agent else {
-        return match std::fs::remove_file(path) {
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            result => {
-                result.context(format!("could not remove {}", path.display()))?;
-                Ok(())
-            }
-        };
-    };
-    let contents = agent_env_file(agent);
-    write_file(path, &contents, 0o600)?;
-    let parent = config
-        .parent()
-        .ok_or_else(|| rootcause::report!("{} has no directory", config.display()))?;
-    let metadata =
-        std::fs::metadata(parent).context(format!("could not stat {}", parent.display()))?;
-    host.chown(
-        path,
-        Ownership {
-            uid: metadata.uid(),
-            gid: metadata.gid(),
-        },
-    )
-}
-
-/// `KEY="value"` lines, with `\` and `"` escaped as systemd expects. Names
-/// and single-line values are validated by [`AgentEnv`].
-///
-/// [`AgentEnv`]: hosted_runtimes::domain::agent::AgentEnv
-fn agent_env_file(agent: &hosted_runtimes::domain::agent::AgentEnrollment) -> String {
-    let mut contents = String::new();
-    for (key, value) in agent.env.expose() {
-        let escaped = value.replace('\\', "\\\\").replace('"', "\\\"");
-        contents.push_str(&format!("{}=\"{escaped}\"\n", key.as_str()));
-    }
-    contents
 }
 
 /// Give a file its directory's owner: enrollment runs as root, macrod as the
@@ -445,26 +474,4 @@ fn own_like_parent(path: &Path, host: &impl Host) -> rootcause::Result<()> {
             gid: metadata.gid(),
         },
     )
-}
-
-fn write_file(path: &Path, contents: &str, mode: u32) -> rootcause::Result<()> {
-    use std::io::Write as _;
-
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .context(format!("could not create {}", parent.display()))?;
-    }
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(mode)
-        .open(path)
-        .context(format!("could not open {}", path.display()))?;
-    // `mode` applies only to new files; a retry tightens an existing one.
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))
-        .context(format!("could not set the mode of {}", path.display()))?;
-    file.write_all(contents.as_bytes())
-        .context(format!("could not write {}", path.display()))?;
-    Ok(())
 }

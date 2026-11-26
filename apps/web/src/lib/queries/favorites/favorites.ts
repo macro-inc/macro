@@ -75,10 +75,12 @@ export function useFavoritesQuery(filter?: FavoritesFilter) {
  * background network request fails.
  */
 export function useFavoritesData(
-  filter?: FavoritesFilter
+  filter?: FavoritesFilter,
+  /** Read only while this holds, so a gated surface makes no request. */
+  wanted: Accessor<boolean> = () => true
 ): Accessor<FavoritesList | undefined> {
   const authenticated = useIsAuthenticated();
-  const enabled = () => authenticated() === true;
+  const enabled = () => authenticated() === true && wanted();
   const query = createGraphqlFavoritesQuery(filter, enabled);
   return () => (enabled() ? query.data : undefined);
 }

@@ -31,6 +31,15 @@ pub struct SessionLayout {
 /// Most routines sessions one generation runs at once.
 pub const MAX_ROUTINE_SESSIONS: usize = 3;
 
+/// Most sessions that draft from the work found in a person's mail at
+/// onboarding, each from its share of the streams: one session drafting
+/// for every stream outlasts the onboarding timeout.
+pub const MAX_DRAFT_SESSIONS: usize = 3;
+
+/// Most streams of the work found that are drafted for, the first listed
+/// first.
+pub const MAX_DRAFTED_STREAMS: usize = 12;
+
 /// Every surface routine suggestions show on.
 pub const ALL_SURFACES: [Surface; 9] = [
     Surface::Email,
@@ -86,17 +95,12 @@ impl SessionLayout {
 }
 
 impl Default for SessionLayout {
-    /// Three sessions by surface group, the layout the suggestion benchmark
-    /// chose: each hands back its catalog picks in about 20 to 35 seconds,
-    /// then drafts.
+    /// One session for every surface, the layout the suggestion benchmark
+    /// chose: a session that sees all of them picks the few routines the
+    /// person's mail calls for, where split sessions each fill their own
+    /// surfaces, and it reads the mail once instead of once per group.
     fn default() -> Self {
-        Self {
-            sessions: vec![
-                vec![Surface::Email, Surface::Calendar, Surface::Tasks],
-                vec![Surface::Crm, Surface::Calls, Surface::Chat],
-                vec![Surface::Files, Surface::Reviews, Surface::Agents],
-            ],
-        }
+        Self::single()
     }
 }
 

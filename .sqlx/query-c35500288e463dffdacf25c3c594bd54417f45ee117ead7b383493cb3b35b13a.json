@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_captcha_runs SET model_calls_in_flight = model_calls_in_flight - 1\n               WHERE id = $1 AND model_calls_in_flight > 0",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c35500288e463dffdacf25c3c594bd54417f45ee117ead7b383493cb3b35b13a"
+}

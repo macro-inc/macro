@@ -5,14 +5,7 @@ use crate::domain::enrollment::EnrollmentGeneration;
 async fn generations_and_create_outbox_never_persist_issuance_material(pool: PgPool) {
     insert_team(&pool).await;
     let repo = PgComputerRepo::new(pool.clone(), policy());
-    repo.register_host(HostRegistration {
-        name: "fixture-host".to_owned(),
-        memory_gb: 31,
-        reserve_gb: 7,
-        oversell_factor: 3,
-    })
-    .await
-    .unwrap();
+    host(&repo, "fixture-host", 31, 7, 3).await;
     let computer = bought(&repo, 1).await;
     assert_eq!(computer.enrollment_generation, EnrollmentGeneration::new(1));
     let outbox = sqlx::query_scalar!("SELECT effect FROM hosted_runtime_effect WHERE computer_id = $1 AND effect->>'effect' = 'create'", computer.id.as_uuid())

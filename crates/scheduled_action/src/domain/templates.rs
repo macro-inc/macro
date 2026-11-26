@@ -20,7 +20,7 @@ use serde_json::Value;
 use utoipa::ToSchema;
 
 use super::event_trigger::ActionTrigger;
-use super::models::{ActionConfiguration, ActionPolicyError, ScheduledAction};
+use super::models::{ActionConfiguration, ActionPolicyError, Requester, ScheduledAction};
 use super::ports::{RoutineTemplateRepo, RoutineTemplateService, ScheduledActionService};
 
 #[cfg(test)]
@@ -141,7 +141,10 @@ impl ShareRoutineTemplate {
             action_id,
             name: action.name.clone(),
             description: self.description.trim().to_owned(),
-            trigger: action.trigger.clone(),
+            // The owner's inboxes and email labels are theirs alone: whoever
+            // activates the template watches every inbox and any label of
+            // their own, and can narrow them.
+            trigger: action.trigger.without_owners_mail(),
             task,
             variables: self.variables,
             appearance: action.appearance.clone(),
@@ -245,6 +248,7 @@ where
         principal: &CreationPrincipal,
         template_id: Uuid,
         input: ActionConfiguration,
+        requester: Requester,
     ) -> Result<ScheduledAction> {
         self.require_sharing(principal.user()).await?;
         let template = self
@@ -253,7 +257,13 @@ where
             .await?
             .ok_or(ActionPolicyError::NotFound)?;
         self.actions
-            .create_action_from_template(principal, input, template_id, template.appearance)
+            .create_action_from_template(
+                principal,
+                input,
+                template_id,
+                template.appearance,
+                requester,
+            )
             .await
     }
 }

@@ -23,6 +23,10 @@ export const scheduledActionKeys = createQueryKeys('scheduledAction', {
   codeUpgrades: (params: { scheduleId: string }) => ({
     queryKey: [params.scheduleId, 'code-upgrades'],
   }),
+  /** Its knobs whose picked item its owner can't use now. */
+  unusableItems: (params: { scheduleId: string }) => ({
+    queryKey: [params.scheduleId, 'unusable-items'],
+  }),
   template: (params: { scheduleId: string }) => ({
     queryKey: [params.scheduleId, 'template'],
   }),

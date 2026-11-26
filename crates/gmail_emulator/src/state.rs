@@ -103,6 +103,19 @@ pub(crate) struct State {
     pub(crate) channel_notifications: Vec<ChannelNotification>,
     pub(crate) channel_deliveries: Vec<ChannelDelivery>,
     calendars_added: u64,
+    /// Whether changes to a meeting wait before reaching its other copies.
+    pub(crate) copies_held: bool,
+    /// The changes waiting: the copy that changed and who it uninvited.
+    pub(crate) held_copies: Vec<HeldCopy>,
+}
+
+/// A change to one copy of a meeting that has not reached the others yet.
+#[derive(Debug)]
+pub(crate) struct HeldCopy {
+    pub(crate) email: String,
+    pub(crate) calendar_id: String,
+    pub(crate) event_id: String,
+    pub(crate) uninvited: Vec<String>,
 }
 
 impl State {
@@ -399,7 +412,7 @@ impl State {
             Some(labels) => labels.clone(),
             None => {
                 let mut labels = BTreeSet::from([INBOX.to_string(), UNREAD.to_string()]);
-                mailbox.filtered_labels(&raw, &mut labels);
+                mailbox.filtered_labels(&raw, now_ms, &mut labels);
                 labels.into_iter().collect()
             }
         };
@@ -456,7 +469,7 @@ impl State {
                 continue;
             };
             let mut labels = BTreeSet::from([INBOX.to_string(), UNREAD.to_string()]);
-            mailbox.filtered_labels(&delivered_raw, &mut labels);
+            mailbox.filtered_labels(&delivered_raw, now_ms, &mut labels);
             let labels: Vec<String> = labels.into_iter().collect();
             mailbox.insert(
                 &mut self.ids,

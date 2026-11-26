@@ -94,6 +94,35 @@ describe('createCalendarEventToEditorInitialValues', () => {
 });
 
 describe('editorSubmitValuesToCreateCalendarEvent', () => {
+  it('honors an explicit time-zone change without changing untouched tool zones', () => {
+    const original = event({
+      time: {
+        kind: 'timed',
+        startsAt: '2026-08-20T17:00:00Z',
+        endsAt: '2026-08-20T18:00:00Z',
+        timeZone: 'America/Los_Angeles',
+      },
+    });
+    const values = submitValues({
+      time: {
+        kind: 'timed',
+        startsAt: '2026-08-20T14:00:00Z',
+        endsAt: '2026-08-20T15:00:00Z',
+        timeZone: 'America/New_York',
+      },
+    });
+    expect(
+      editorSubmitValuesToCreateCalendarEvent(values, original, true).time
+    ).toMatchObject({ timeZone: 'America/Los_Angeles' });
+    expect(
+      editorSubmitValuesToCreateCalendarEvent(values, original, true, {
+        timeZoneChanged: true,
+      }).time
+    ).toMatchObject({
+      timeZone: 'America/New_York',
+      startsAt: '2026-08-20T14:00:00Z',
+    });
+  });
   it('marks the tool args out of office and converts the decline mode back', () => {
     const merged = editorSubmitValuesToCreateCalendarEvent(
       submitValues({

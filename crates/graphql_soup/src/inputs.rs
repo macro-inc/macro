@@ -42,6 +42,8 @@ pub struct SoupInitialInput {
     filters: Option<GraphqlEntityFilterAst>,
     /// Direction to order the page in. Defaults to DESC.
     sort_direction: Option<GraphqlSortDirection>,
+    /// Where the page reads its channels. Defaults to REPLICA.
+    channel_reads: Option<SoupChannelReads>,
 }
 
 /// Input for continuing a Soup query.
@@ -58,6 +60,33 @@ pub struct SoupContinuationInput {
     /// The cursor does not carry it, so re-send whatever the initial query
     /// used or the continuation flips order mid-list.
     sort_direction: Option<GraphqlSortDirection>,
+    /// Where the page reads its channels. Defaults to REPLICA. The cursor
+    /// does not carry it, so re-send whatever the initial query used.
+    channel_reads: Option<SoupChannelReads>,
+}
+
+/// Where a Soup page reads its channels.
+#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq, Default, Debug)]
+pub enum SoupChannelReads {
+    /// The default: the channel query reads the read replica, as ordinary
+    /// Soup lists do.
+    #[default]
+    Replica,
+    /// The channel query reads the primary, where the REST channel list reads
+    /// it, so the page's channels, with their members and activity, reflect
+    /// every membership change committed before it ran. Nothing else moves:
+    /// other entity types and per-item lookups keep the database they read.
+    /// Served only for channel directory pages: a timestamp sort (not NAME,
+    /// PROPERTY or NOTIFIED_AT), newest first, at most 100 items, channel
+    /// threads excluded by a nil-id filter, no `favoritesOnly: true`, no CRM
+    /// association of any kind (company, contact or activity), neither as
+    /// `crmAssociation` nor as a `crmAssociated` literal anywhere in the
+    /// document filter (a CRM email scope is allowed), and either no
+    /// channel filter or one that admits only
+    /// channels it names by id: at most 100 id literals, with nothing beside
+    /// them but at most two isParticipant literals in the whole tree. Any
+    /// other page is refused.
+    Primary,
 }
 
 /// Direction a Soup page is ordered in.
@@ -262,6 +291,15 @@ enum GraphqlGroupByField {
 }
 
 impl SoupInput {
+    /// Where this page reads its channels.
+    pub(crate) fn channel_reads(&self) -> SoupChannelReads {
+        match self {
+            Self::Initial(input) => input.channel_reads,
+            Self::Continuation(input) => input.channel_reads,
+        }
+        .unwrap_or_default()
+    }
+
     /// Convert this value into the request representation.
     pub(crate) fn into_request(
         self,

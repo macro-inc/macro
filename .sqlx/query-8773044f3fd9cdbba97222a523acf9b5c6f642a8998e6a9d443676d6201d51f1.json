@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT el.id,\n                   (el.deleting_at IS NULL AND COALESCE(\n                       consent.enabled OR consent.selected_enabled, FALSE\n                   )) AS \"contributing!\",\n                   COALESCE(consent.selected_enabled, FALSE) AS \"selected!\"\n            FROM email_links el\n            JOIN team_user tu ON tu.user_id = el.macro_id\n            LEFT JOIN crm_email_consent consent\n              ON consent.team_id = $1 AND consent.user_id = el.macro_id\n             AND consent.link_id = el.id\n            WHERE tu.team_id = $1 AND el.is_primary\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "contributing!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "selected!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "8773044f3fd9cdbba97222a523acf9b5c6f642a8998e6a9d443676d6201d51f1"
+}

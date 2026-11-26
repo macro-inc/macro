@@ -1,12 +1,6 @@
+import { lazy } from '@core/util/lazy';
 import { lazyNamed } from '@core/util/lazyNamed';
-import {
-  type Accessor,
-  type JSX,
-  lazy,
-  Match,
-  Suspense,
-  Switch,
-} from 'solid-js';
+import { type Accessor, type JSX, Match, Suspense, Switch } from 'solid-js';
 import type { CallDiscussion } from './call-discussion';
 
 const CallChat = lazy(() => import('../chat/CallChat'));

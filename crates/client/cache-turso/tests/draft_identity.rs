@@ -6,7 +6,7 @@ use cache_core::link_patch::QueryRevalidation;
 use cache_core::queue::{MutationClaimRequest, MutationClaimToken, MutationId};
 use cache_core::record_selection::RecordSelection;
 use cache_core::value::EntityKey;
-use cache_turso::{TursoFileDatabase, TursoStorage, TursoStorageCloseOutcome};
+use cache_turso::{SalvageFile, TursoFileDatabase, TursoStorage, TursoStorageCloseOutcome};
 use pollster::block_on;
 use serde_json::{Map, Value, json};
 
@@ -156,6 +156,74 @@ fn reopen(engine: Engine<TursoStorage>, database: &TursoFileDatabase) -> Engine<
         TursoStorageCloseOutcome::Healthy
     );
     Engine::new(database.open("draft-lifecycle").unwrap())
+}
+
+/// What a recovery wipe leaves: a new database, and the queue the side file held.
+fn wiped(engine: Engine<TursoStorage>, database: &TursoFileDatabase) -> Engine<TursoStorage> {
+    let read = engine
+        .into_storage()
+        .salvage_queue("draft-lifecycle", None, 0);
+    assert!(read.complete);
+    let side_file = read.queue.unwrap().to_frame();
+    let mut storage = database.open("draft-lifecycle").unwrap();
+    let queue = SalvageFile::decode(&side_file).into_queue().unwrap();
+    assert!(storage.import_queue(&queue, 0).unwrap().complete);
+    Engine::new(storage)
+}
+
+#[test]
+fn a_recovery_wipe_keeps_the_server_identity_of_an_entity_still_being_edited() {
+    block_on(async {
+        let directory = tempfile::tempdir().unwrap();
+        let database = TursoFileDatabase::new(directory.path().join("draft.db")).unwrap();
+        let next = TursoFileDatabase::new(directory.path().join("next.db")).unwrap();
+        let mut engine = Engine::new(database.open("draft-lifecycle").unwrap());
+        let first = enqueue(&mut engine, false, "first", 0).await;
+        let token = claim(&mut engine, first, 1).await;
+        let newer = enqueue(&mut engine, false, "latest", 2).await;
+        engine
+            .commit_optimistic_write(
+                first,
+                token,
+                SAVE,
+                Some("SaveEmailDraft"),
+                &Map::new(),
+                &response("server-draft", "server-thread", "first"),
+            )
+            .await
+            .unwrap();
+
+        engine = wiped(engine, &next);
+        for id in ["local-draft", "server-draft"] {
+            let draft = read(&mut engine, id).await;
+            assert_eq!(draft.len(), 1);
+            assert_eq!(draft[0].record["id"], "server-draft");
+            assert_eq!(draft[0].record["threadId"], "server-thread");
+            assert_eq!(draft[0].record["bodyHtmlSanitized"], "latest");
+            assert!(draft[0].identity.pending);
+            assert_eq!(draft[0].identity.mutation_uuid.as_deref(), Some(UUID));
+        }
+        let token = claim(&mut engine, newer, 11).await;
+        let committed = engine
+            .commit_optimistic_write(
+                newer,
+                token,
+                SAVE,
+                Some("SaveEmailDraft"),
+                &Map::new(),
+                &response("server-draft", "server-thread", "latest"),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            serde_json::from_str::<Value>(&committed.revalidations[0].variables_json).unwrap()["threadId"],
+            "server-thread"
+        );
+        // The page still holds the local IDs, and so do the edits after this.
+        let delete = enqueue(&mut engine, true, "", 12).await;
+        assert!(read(&mut engine, "server-draft").await.is_empty());
+        claim(&mut engine, delete, 13).await;
+    });
 }
 
 #[test]

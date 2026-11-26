@@ -28,7 +28,7 @@ machine name, and writes the forwarder's token file; `xtask_local`'s
 - Not here: which events a run emits and their fields →
   `xtask_local/src/local/telemetry.rs`; the forwarder and lgtm containers →
   `xtask_local/src/local/grafana_forwarder.rs`, `docker/grafana-forwarder/`.
-  Panels → `infra/stacks/observability/nixos/local-report.json` and
+  Panels → `infra/stacks/observability/nixos/grafana-provisioning/local-report.json` and
   `local-dashboard.nix`.
 
 ## Checks

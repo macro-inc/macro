@@ -53,6 +53,7 @@ export default {
   unlinkValue: 'Unlink',
   unlinking: 'Unlinking…',
   unpinProperty: 'Unpin property',
+  removeLink: 'Remove link',
   moveToFolder: 'Move to folder',
   removeFromFolder: 'Remove from folder',
   duplicate: 'Duplicate',
@@ -89,6 +90,9 @@ export default {
   setOwner: 'Set owner',
   setRevenue: 'Set revenue',
   openPropertyEditor: 'Open property editor',
+  propertyValuesLoading: 'Loading {{values}}…',
+  propertyValuesUnavailable: "Couldn't load this item's {{values}}",
+  propertyLinks: 'links',
 
   // Command menu wording that differs from the menu labels.
   markAsNotDone: 'Mark as not done',
@@ -107,7 +111,9 @@ export default {
   projectActions: 'Project actions',
   propertyOption: '{{property}}: {{option}}',
   actions: 'Actions',
+  view: 'View',
   clear: 'Clear',
+  clearSelection: 'Clear selection',
   selectedCount: { other: '{{count}} selected' },
   undo: 'Undo',
 
@@ -149,6 +155,10 @@ export default {
     other: '{{count}} drafts discarded',
   },
   toastDiscardDraftFailed: 'Failed to discard draft',
+  toastPropertySet: {
+    one: '{{property}} set',
+    other: '{{property}} set on {{count}} items',
+  },
   toastAddedToFavorites: 'Added to favorites',
   toastAddedCountToFavorites: {
     one: 'Added {{count}} item to favorites',
@@ -190,6 +200,9 @@ export default {
     other: 'Unmuted {{succeeded}} of {{count}} items; {{failed}} failed',
   },
   toastUnmuteFailed: 'Failed to unmute notifications',
+  toastMentionsOnly: 'Notifying you for @mentions only',
+  toastAllMessages: 'Notifying you for all messages',
+  toastNotificationLevelFailed: 'Failed to update notifications',
   toastMarkedDone: 'Marked as done',
   toastMarkedDoneCount: {
     one: 'Marked {{count}} item as done',
@@ -292,8 +305,14 @@ export default {
   download: 'Download',
   print: 'Print',
   downloadAsDocx: 'Download DOCX',
+  betaBadge: 'Beta',
+  folderActions: 'Folder actions',
+  downloadAsXlsx: 'Download as Excel (.xlsx)',
+  downloadAsCsv: 'Download as CSV',
+  chatAboutProject: 'Chat',
   presentationActions: 'Presentation actions',
   documentActions: 'Document actions',
+  agentActions: 'Agent actions',
   copyGithubLink: 'Copy GitHub Link',
   prMerge: 'Merge',
   prMerging: 'Merging…',

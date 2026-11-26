@@ -43,7 +43,7 @@ export class ReferralNamespace {
    *
    * @param email - The address to invite.
    *
-   * @destructive
+   * @send
    * @openworld
    */
   async invite(email: string): Promise<void> {

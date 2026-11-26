@@ -122,3 +122,106 @@ it('shows a canvas radius drag in the inspector before committing and restores i
     }
   });
 });
+
+it('hands a drawing tool back to Select once it has drawn, unless the tool is locked', () => {
+  createRoot((dispose) => {
+    const editor = createGraphicsEditor([
+      {
+        id: 'first',
+        type: 'rectangle',
+        placement: { parentId: 'scene-root', sortKey: 'a0' },
+        transform: [1, 0, 0, 1, 0, 0],
+        geometry: { width: 40, height: 40 },
+        appearance: initialAppearance,
+      },
+    ]);
+    try {
+      const state = createCanvasState(editor, (geometry) => ({
+        width: geometry.width,
+        height: 20,
+      }));
+
+      state.chooseTool('rectangle');
+      state.shapeCreated('first');
+      expect(state.tool()).toBe('select');
+      expect(editor.getSession().selectedIds).toEqual(['first']);
+
+      // Locked, the tool stays for the next shape and nothing is selected,
+      // not even what was selected before.
+      state.setToolLocked(true);
+      state.chooseTool('rectangle');
+      state.shapeCreated('first');
+      expect(state.tool()).toBe('rectangle');
+      expect(editor.getSession().selectedIds).toEqual([]);
+
+      // The same goes for tools that report they are done, lines and text,
+      // which select what they commit.
+      state.chooseTool('arrow');
+      editor.select('first');
+      state.toolDone();
+      expect(state.tool()).toBe('arrow');
+      expect(editor.getSession().selectedIds).toEqual([]);
+      state.setToolLocked(false);
+      state.toolDone();
+      expect(state.tool()).toBe('select');
+
+      // The lock keeps a drawing tool. Under Select there is none to keep, so
+      // what finishes there (a connector's end dragged, a text edited) stays
+      // selected.
+      state.setToolLocked(true);
+      editor.select('first');
+      expect(state.keepsTool()).toBe(false);
+      state.toolDone();
+      expect(state.tool()).toBe('select');
+      expect(editor.getSession().selectedIds).toEqual(['first']);
+    } finally {
+      dispose();
+      editor.dispose();
+    }
+  });
+});
+
+it('gives drawing to the pen at its first press, and leaves the choice alone after', () => {
+  createRoot((dispose) => {
+    const editor = createGraphicsEditor([]);
+    try {
+      const state = createCanvasState(editor, (geometry) => ({
+        width: geometry.width,
+        height: 20,
+      }));
+
+      // No pen yet: fingers draw, and there is nothing to choose.
+      state.chooseTool('pencil');
+      expect(state.penSeen()).toBe(false);
+      expect(state.fingersPan()).toBe(false);
+
+      state.penPressed();
+      expect(state.penSeen()).toBe(true);
+      expect(state.fingersPan()).toBe(true);
+      // Fingers keep the tools that do not draw.
+      for (const tool of ['select', 'pan', 'text'] as const) {
+        state.chooseTool(tool);
+        expect(state.fingersPan()).toBe(false);
+      }
+      for (const tool of [
+        'rectangle',
+        'arrow',
+        'connector',
+        'eraser',
+      ] as const) {
+        state.chooseTool(tool);
+        expect(state.fingersPan()).toBe(true);
+      }
+
+      // Switched off, it stays off through the pen's later presses.
+      state.setPenOnly(false);
+      state.penPressed();
+      expect(state.penOnly()).toBe(false);
+      expect(state.fingersPan()).toBe(false);
+      expect(state.penSeen()).toBe(true);
+    } finally {
+      dispose();
+      editor.dispose();
+    }
+  });
+});

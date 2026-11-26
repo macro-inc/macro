@@ -19,12 +19,8 @@ import {
 } from './core/snooze';
 import { createSnoozeController } from './primitives/create-snooze-controller';
 
-function SnoozeNotificationsDialog(
-  props: ManagedDialogProps & { items: UserUnsubscribe[] }
-) {
-  const userId = useUserId();
-  const actorId = userId();
-  const mutation = useBulkNotificationPreferencesMutation();
+/** Presets matching the typed text, then the times it reads as. */
+function createSnoozeOptions() {
   const [query, setQuery] = createSignal('');
   const dates = useDateSearch({ query, defaultTime: { hours: 9, minutes: 0 } });
   const options = (): SnoozeOption[] => {
@@ -51,6 +47,16 @@ function SnoozeNotificationsDialog(
       return true;
     });
   };
+  return { query, setQuery, options };
+}
+
+function SnoozeNotificationsDialog(
+  props: ManagedDialogProps & { items: UserUnsubscribe[] }
+) {
+  const userId = useUserId();
+  const actorId = userId();
+  const mutation = useBulkNotificationPreferencesMutation();
+  const { query, setQuery, options } = createSnoozeOptions();
   const controller = createSnoozeController({
     items: props.items,
     saveItems: async (items, until) => {
@@ -121,4 +127,41 @@ export function openSnoozeNotifications(
   // their owner so mobile drawers inherit the parent's dismissal layer.
   if (unique.length)
     openDialog(SnoozeNotificationsDialog, { items: unique }, options);
+}
+
+function SnoozeSectionDialog(
+  props: ManagedDialogProps & {
+    save: (until: string) => Promise<boolean>;
+  }
+) {
+  const { query, setQuery, options } = createSnoozeOptions();
+  const controller = createSnoozeController({
+    items: [props.save],
+    saveItems: async (items, until) =>
+      (await props.save(until)) ? [] : [...items],
+    onSaved: () => props.onOpenChange(false),
+  });
+
+  return (
+    <SnoozePicker
+      {...props}
+      count={controller.remainingCount()}
+      query={query()}
+      onQueryChange={setQuery}
+      options={options()}
+      pending={controller.pending()}
+      error={controller.error()}
+      onSelect={(until) =>
+        fireAndForget(controller.submit(until), 'notifications')
+      }
+    />
+  );
+}
+
+/** The same picker for a Chat section's stored snooze. */
+export function openSectionSnooze(
+  save: (until: string) => Promise<boolean>,
+  options?: OpenDialogOptions
+) {
+  openDialog(SnoozeSectionDialog, { save }, options);
 }

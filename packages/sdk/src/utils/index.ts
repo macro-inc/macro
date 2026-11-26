@@ -1,7 +1,12 @@
 export { MacroClient } from './client';
 export { mapConcurrently } from './concurrency';
 export { Lazy } from './lazy';
-export { type Page, paginate } from './pagination';
+export {
+  type IterationOptions,
+  iterate,
+  type Page,
+  paginate,
+} from './pagination';
 export {
   MacroApiError,
   MacroError,

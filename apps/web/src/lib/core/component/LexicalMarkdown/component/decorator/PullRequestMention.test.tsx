@@ -40,6 +40,7 @@ vi.mock('../../context/LexicalWrapperContext', async () => {
 import { KEY_ENTER_COMMAND } from 'lexical';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import {
+  PullRequestEntityLink,
   PullRequestMention,
   PullRequestPreviewCard,
 } from './PullRequestMention';
@@ -284,6 +285,54 @@ describe('pull request mention face', () => {
 
     expect(enterHandler).toBeDefined();
     expect(enterHandler?.(null)).toBe(true);
+    expect(mocks.openExternalUrl).toHaveBeenCalledWith(url);
+    expect(mocks.openWithSplit).not.toHaveBeenCalled();
+  });
+});
+
+describe('opening a pull request', () => {
+  it('opens a mention on GitHub instead of in a split', () => {
+    setResolved(pullRequest);
+    render(() => (
+      <PullRequestMention id={pullRequest.id} url={url} key="node" theme={{}} />
+    ));
+
+    fireEvent.click(screen.getByText(title));
+
+    expect(mocks.openExternalUrl).toHaveBeenCalledWith(url);
+    expect(mocks.openWithSplit).not.toHaveBeenCalled();
+  });
+
+  it('opens an id-only mention at its synced GitHub URL', () => {
+    setResolved(pullRequest);
+    render(() => (
+      <PullRequestMention id={pullRequest.id} key="node" theme={{}} />
+    ));
+
+    fireEvent.click(screen.getByText(title));
+
+    expect(mocks.openExternalUrl).toHaveBeenCalledWith(url);
+    expect(mocks.openWithSplit).not.toHaveBeenCalled();
+  });
+
+  it('opens a PR entity link on GitHub, from its key when the URL is missing', () => {
+    render(() => (
+      <PullRequestEntityLink
+        entity={{
+          ...pullRequest,
+          metadata: {
+            name: title,
+            owner: 'macro-inc',
+            repo: 'macro',
+            number: 7956,
+            status: 'merged',
+          },
+        }}
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button'));
+
     expect(mocks.openExternalUrl).toHaveBeenCalledWith(url);
     expect(mocks.openWithSplit).not.toHaveBeenCalled();
   });

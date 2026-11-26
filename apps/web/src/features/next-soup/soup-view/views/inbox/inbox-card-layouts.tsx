@@ -48,7 +48,18 @@ import SmileyIcon from '@icon/system/regular/smiley.svg?component-solid';
 import AgentIcon from '@icon/system/regular/sparkle.svg?component-solid';
 import UserPlusIcon from '@icon/system/regular/user-plus.svg?component-solid';
 import { formatCalendarReminderTime } from '@notifications';
-import { getNotificationSenderFallbackName } from '@notifications/notification-sender';
+import { channelPlace } from '@notifications/channel-place';
+import {
+  pingedBy,
+  pingPlace,
+  reactionText,
+} from '@notifications/notification-metadata';
+import {
+  getNotificationAgentSender,
+  getNotificationSenderFallbackName,
+  getNotificationUserSenderId,
+  UNKNOWN_SENDER_NAME,
+} from '@notifications/notification-sender';
 import {
   PropertiesProvider,
   type PropertySaveHandler,
@@ -95,7 +106,7 @@ export interface InboxCardLayoutProps {
 
 /** Glyph size inside the card's avatar bubble — grows with the circle on
  * mobile, matching the narrow rows' icon factor (see InboxCard.Icon). */
-const AVATAR_GLYPH_CLASS = 'size-4 mobile:size-6';
+const AVATAR_GLYPH_CLASS = 'size-4 touch:size-6';
 
 type NotificationTag = ReturnType<typeof getNotificationTag>;
 
@@ -572,7 +583,7 @@ function BaseCard(props: {
       <InboxCard.Body class="contents">
         <InboxCard.Header class="col-start-2 row-start-1 self-center">
           <Show when={props.showUnreadIndicator && props.item.unread}>
-            <UnreadIndicator active class="mobile:hidden" />
+            <UnreadIndicator active class="touch:hidden" />
           </Show>
           <InboxCard.Title class="flex items-center gap-1">
             {props.titleLeading}
@@ -610,7 +621,8 @@ function BaseCard(props: {
 
 /**
  * A single truncating body line of markdown, rendered only when the text has
- * content — the standard middle/bottom line of a BaseCard.
+ * content — the standard middle/bottom line of a BaseCard. It is a preview:
+ * the card opens it, its links and mentions are inert.
  */
 function CardMarkdownLine(props: { text?: string; class?: string }) {
   return (
@@ -621,6 +633,7 @@ function CardMarkdownLine(props: { text?: string; class?: string }) {
             markdown={value()}
             singleLine
             theme={unifiedListMarkdownTheme}
+            inert
           />
         </InboxCard.Content>
       )}
@@ -630,11 +643,11 @@ function CardMarkdownLine(props: { text?: string; class?: string }) {
 
 /**
  * The two-line clamped markdown body (the channel-style message preview),
- * reserving its height so short previews keep the row rhythm.
+ * reserving its height so short previews keep the row rhythm. Its links and
+ * mentions are inert, like every card preview's.
  */
 function CardClampedMarkdown(props: {
   text?: string;
-  inert?: boolean;
   /** Inline run rendered ahead of the text (e.g. a sender label or
    * attachment paperclip); wraps and clamps as part of the same lines. */
   prefix?: JSX.Element;
@@ -648,7 +661,7 @@ function CardClampedMarkdown(props: {
             markdown={value()}
             singleLine
             theme={inlineWrappingMarkdownTheme}
-            inert={props.inert}
+            inert
           />
         )}
       </Show>
@@ -767,7 +780,6 @@ export function ChannelCardLayout(
         when={props.preview}
         fallback={
           <CardClampedMarkdown
-            inert
             text={text().content}
             prefix={
               <>
@@ -817,7 +829,7 @@ export function ChannelMessageCardLayout(props: InboxCardLayoutProps) {
       icon={<ActionBubble tag={getNotificationTag(props.item.notification)} />}
       title={text().title}
     >
-      <CardClampedMarkdown inert text={text().content} />
+      <CardClampedMarkdown text={text().content} />
     </BaseCard>
   );
 }
@@ -949,7 +961,7 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
         <div class={cn('col-start-2 row-start-2')}>
           <InboxCard.Header class="self-center">
             <Show when={props.showUnreadIndicator && props.item.unread}>
-              <UnreadIndicator active class="mobile:hidden" />
+              <UnreadIndicator active class="touch:hidden" />
             </Show>
             <InboxCard.Title class="flex items-center gap-1">
               <span class="truncate">{text().title}</span>
@@ -1268,6 +1280,7 @@ export function AgentSessionCardLayout(props: InboxCardLayoutProps) {
         <Show when={content()?.trim()}>
           {(text) => (
             <StaticMarkdown
+              inert
               markdown={text()}
               singleLine
               theme={unifiedListMarkdownTheme}
@@ -1613,6 +1626,99 @@ export function CalendarEventCardLayout(props: InboxCardLayoutProps) {
   );
 }
 
+/**
+ * A ping, whatever it is about: who pinged, then what about, then what they
+ * wrote, under the icon of what it is about.
+ */
+/**
+ * A reaction reads like Slack's: who reacted, then "Reacted 👍 to: …", then
+ * where (nothing for a DM).
+ */
+export function ReactionCardLayout(props: InboxCardLayoutProps) {
+  const reaction = () => {
+    const metadata = props.item.notification?.notification_metadata;
+    return metadata?.tag === 'channel_message_reaction'
+      ? metadata.content
+      : undefined;
+  };
+  const senderId = () =>
+    props.item.notification
+      ? getNotificationUserSenderId(props.item.notification)
+      : undefined;
+  const senderName = createSenderDisplayName(senderId, () =>
+    props.item.notification
+      ? getNotificationSenderFallbackName(props.item.notification)
+      : undefined
+  );
+
+  return (
+    <BaseCard
+      {...props}
+      icon={<InboxAvatar senderId={senderId()} />}
+      // A name still loading is blank; only a reaction with no sender is
+      // from someone unnamed.
+      title={senderName() ?? (senderId() ? '' : UNKNOWN_SENDER_NAME)}
+    >
+      <Show when={reaction()}>
+        {(content) => (
+          <>
+            <CardMarkdownLine
+              text={reactionText({
+                emoji: content().emoji,
+                messageContent: content().messageContent,
+              })}
+            />
+            <Show when={channelPlace(content())}>
+              {(place) => (
+                <InboxCard.Content class="truncate">
+                  {place()}
+                </InboxCard.Content>
+              )}
+            </Show>
+          </>
+        )}
+      </Show>
+    </BaseCard>
+  );
+}
+
+export function PingCardLayout(props: InboxCardLayoutProps) {
+  const userName = createSenderDisplayName(() =>
+    props.item.notification
+      ? getNotificationUserSenderId(props.item.notification)
+      : undefined
+  );
+  const sender = () => {
+    const notification = props.item.notification;
+    if (!notification) return undefined;
+    return getNotificationAgentSender(notification)?.name ?? userName();
+  };
+
+  return (
+    <BaseCard
+      {...props}
+      icon={
+        <EntityIcon
+          class={AVATAR_GLYPH_CLASS}
+          targetType={getEntityIconType(props.item.entity)}
+          appearance={props.item.entity.appearance}
+          size="fill"
+        />
+      }
+      title={pingedBy(sender())}
+    >
+      <Show when={props.item.entity.name && pingPlace(props.item.entity)}>
+        {(place) => (
+          <InboxCard.Content class="truncate">{place()}</InboxCard.Content>
+        )}
+      </Show>
+      <CardMarkdownLine
+        text={itemContent(props.item.entity, props.item.notification)}
+      />
+    </BaseCard>
+  );
+}
+
 export function GenericCardLayout(props: InboxCardLayoutProps) {
   const text = createMemo(() => ({
     title: props.item.entity.name
@@ -1664,6 +1770,12 @@ export function InboxCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <Switch>
+      <Match when={notificationTag() === 'ping'}>
+        <PingCardLayout {...props} />
+      </Match>
+      <Match when={notificationTag() === 'channel_message_reaction'}>
+        <ReactionCardLayout {...props} />
+      </Match>
       <Match when={props.item.entity.type === 'email'}>
         <EmailCardLayout {...props} />
       </Match>

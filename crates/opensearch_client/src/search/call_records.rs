@@ -8,25 +8,20 @@ use crate::{
             Highlight, SearchGotoCallRecord, SearchGotoContent, SearchHit, parse_highlight_hit,
         },
         properties::build_tag_filter,
-        query::Keys,
+        query::{Keys, child_content_query},
         utils::{millis_to_datetime, split_inner_hits_budget},
     },
 };
 
 use models_opensearch::{OpenSearchEntityType, SearchEntityType};
 use opensearch_query_builder::{
-    BoolQueryBuilder, HasChildQuery, InnerHits, MatchPhrasePrefixQuery, MatchPhraseQuery,
-    QueryType, ToOpenSearchJson,
+    BoolQueryBuilder, HasChildQuery, InnerHits, QueryType, ToOpenSearchJson,
 };
 
 /// Relation names for the join field. Kept in sync with the upsert path
 /// in `upsert::call_record`.
 const PARENT_RELATION: &str = "call";
 const CHILD_RELATION: &str = "segment";
-
-/// Minimum prefix length before we emit a `match_phrase_prefix`. Mirrors
-/// the documents/chats threshold.
-const MIN_PREFIX_LEN: usize = 3;
 
 /// The segment `_source` fields a `SearchHit` carries. Inner hits do not
 /// inherit the request-level `_source` filter, so without this every segment
@@ -38,8 +33,6 @@ const SEGMENT_SOURCE_FIELDS: [&str; 5] = [
     "started_at_millis",
     "ended_at_millis",
 ];
-
-const MATCH_PHRASE_PREFIX_MAX_EXPANSIONS: u32 = 256;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct CallRecordIndex {
@@ -82,8 +75,7 @@ pub(crate) struct CallRecordQueryBuilder {
     inner: SearchQueryBuilder<CallRecordSearchConfig>,
     channel_ids: Vec<String>,
     speaker_ids: Vec<String>,
-    tag_option_ids: Vec<String>,
-    match_all_tags: bool,
+    tag_groups: Vec<Vec<String>>,
     mode: CallRecordSearchMode,
 }
 
@@ -93,8 +85,7 @@ impl CallRecordQueryBuilder {
             inner: SearchQueryBuilder::new(terms),
             channel_ids: Vec::new(),
             speaker_ids: Vec::new(),
-            tag_option_ids: Vec::new(),
-            match_all_tags: false,
+            tag_groups: Vec::new(),
             mode: CallRecordSearchMode::default(),
         }
     }
@@ -107,6 +98,7 @@ impl CallRecordQueryBuilder {
         fn collapse(collapse: bool) -> Self;
         fn ids(ids: Vec<String>) -> Self;
         fn ids_only(ids_only: bool) -> Self;
+        fn excluded_terms(excluded_terms: Vec<String>) -> Self;
     }
 
     pub fn channel_ids(mut self, channel_ids: Vec<String>) -> Self {
@@ -119,13 +111,9 @@ impl CallRecordQueryBuilder {
         self
     }
 
-    pub fn tag_option_ids(mut self, tag_option_ids: Vec<String>) -> Self {
-        self.tag_option_ids = tag_option_ids;
-        self
-    }
-
-    pub fn match_all_tags(mut self, match_all_tags: bool) -> Self {
-        self.match_all_tags = match_all_tags;
+    /// Tag groups every hit must meet, each by any one of its option ids.
+    pub fn tag_groups(mut self, tag_groups: Vec<Vec<String>>) -> Self {
+        self.tag_groups = tag_groups;
         self
     }
 
@@ -178,7 +166,7 @@ impl CallRecordQueryBuilder {
 
         // Tag filter: a single nested clause matching any of the option ids in
         // the parent's `properties.values`, with no definition_id constraint.
-        if let Some(nested) = build_tag_filter(&self.tag_option_ids, self.match_all_tags) {
+        if let Some(nested) = build_tag_filter(&self.tag_groups) {
             bool_query.filter(nested);
         }
 
@@ -212,7 +200,37 @@ impl CallRecordQueryBuilder {
             }
         }
 
+        // A term a minus left out drops every call it would match: by its
+        // name, a segment, or either, as the mode reads.
+        if include_name {
+            for query in self
+                .inner
+                .excluded_field_queries(CallRecordSearchConfig::TITLE_KEY)?
+            {
+                bool_query.must_not(query);
+            }
+        }
+        if include_content {
+            for term in &self.inner.excluded_terms {
+                let has_child = HasChildQuery::new(CHILD_RELATION, self.segment_query(term));
+                bool_query.must_not(has_child.into());
+            }
+        }
+
         Ok(bool_query)
+    }
+
+    /// A segment matching `term`, spoken by one of the requested speakers
+    /// when any are.
+    fn segment_query<'a>(&'a self, term: &str) -> QueryType<'a> {
+        let term_query = child_content_query(term, &self.inner.match_type);
+        if self.speaker_ids.is_empty() {
+            return term_query;
+        }
+        let mut combined = BoolQueryBuilder::new();
+        combined.must(term_query);
+        combined.must(QueryType::terms("speaker_id", self.speaker_ids.clone()));
+        combined.build().into()
     }
 
     /// One `has_child` clause per term. The clauses split
@@ -237,16 +255,7 @@ impl CallRecordQueryBuilder {
             .iter()
             .enumerate()
             .map(|(idx, term)| {
-                let term_query = build_child_content_query(term, &self.inner.match_type);
-                let inner_query = if self.speaker_ids.is_empty() {
-                    term_query
-                } else {
-                    let mut combined = BoolQueryBuilder::new();
-                    combined.must(term_query);
-                    combined.must(QueryType::terms("speaker_id", self.speaker_ids.clone()));
-                    combined.build().into()
-                };
-                let has_child = HasChildQuery::new(CHILD_RELATION, inner_query);
+                let has_child = HasChildQuery::new(CHILD_RELATION, self.segment_query(term));
                 let Some(size) = budget.size_for_clause(idx) else {
                     return has_child.into();
                 };
@@ -283,7 +292,7 @@ fn inner_hits_content_highlight(highlight_query: &serde_json::Value) -> serde_js
 fn build_all_terms_highlight_query(terms: &[String], match_type: &str) -> serde_json::Value {
     let term_queries: Vec<serde_json::Value> = terms
         .iter()
-        .map(|t| build_child_content_query(t, match_type).to_json())
+        .map(|t| child_content_query(t, match_type).to_json())
         .collect();
     if term_queries.len() == 1 {
         return term_queries.into_iter().next().unwrap();
@@ -294,23 +303,6 @@ fn build_all_terms_highlight_query(terms: &[String], match_type: &str) -> serde_
             "minimum_should_match": 1,
         }
     })
-}
-
-fn build_child_content_query<'a>(term: &str, match_type: &str) -> QueryType<'a> {
-    let exact = match_type == "exact"
-        || term.chars().any(|c| c.is_whitespace())
-        || term.chars().count() < MIN_PREFIX_LEN;
-    if exact {
-        QueryType::MatchPhrase(MatchPhraseQuery::new(
-            "content".to_string(),
-            term.to_string(),
-        ))
-    } else {
-        QueryType::MatchPhrasePrefix(
-            MatchPhrasePrefixQuery::new("content".to_string(), term.to_string())
-                .max_expansions(MATCH_PHRASE_PREFIX_MAX_EXPANSIONS),
-        )
-    }
 }
 
 #[derive(Debug, Default)]
@@ -325,8 +317,7 @@ pub struct CallRecordSearchArgs {
     pub match_type: String,
     pub collapse: bool,
     pub ids_only: bool,
-    pub tag_option_ids: Vec<String>,
-    pub match_all_tags: bool,
+    pub tag_groups: Vec<Vec<String>>,
     pub mode: CallRecordSearchMode,
 }
 
@@ -342,8 +333,7 @@ impl From<CallRecordSearchArgs> for CallRecordQueryBuilder {
             .speaker_ids(args.speaker_ids)
             .collapse(args.collapse)
             .ids_only(args.ids_only)
-            .tag_option_ids(args.tag_option_ids)
-            .match_all_tags(args.match_all_tags)
+            .tag_groups(args.tag_groups)
             .mode(args.mode)
     }
 }

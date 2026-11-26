@@ -34,6 +34,17 @@ export default {
   // Picker sheet
   done: 'Done',
 
+  // Adding existing tasks to a project
+  addExistingTasks: 'Add existing tasks',
+  addTasks: 'Add tasks',
+  searchTasks: 'Search tasks…',
+  loadingTasks: 'Loading tasks…',
+  addTasksPartialFailure: {
+    one: '{{count}} task could not be added. {{reason}}',
+    other: '{{count}} tasks could not be added. {{reason}}',
+  },
+  addTasksFailed: 'Could not add tasks. Try again.',
+
   // App update waiting for Wi-Fi
   updateOffWifiTitle: 'Update available',
   updateOffWifiDescription:

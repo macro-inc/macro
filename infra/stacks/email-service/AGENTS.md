@@ -23,6 +23,25 @@ attachment storage, and Redis. Runtime code lives in `services/email_service`.
 - These tasks also consume inbox sync and Gmail operation queues. Changing task
   count scales their consumers and database connection pools as well.
 
+## Queues
+
+- `email-service-crm-population` is a high-throughput FIFO queue whose
+  message group is the mailbox, so SQS hands out one CRM population per
+  mailbox at a time. Workers back off by hiding a message, and each back-off
+  costs a receive on the next delivery: its redrive limit of 100 only catches
+  a message that never settles. Its 10 s delivery delay is a margin for a
+  backfilled thread to commit before its contacts are read. A message held in
+  back-off stays at the head of its mailbox's group, so the oldest-message
+  alarm (6 h) can fire for one mailbox stuck that long, not only for a
+  backlog nobody receives. Deploy the queue before any `pubsub_workers`
+  release that sends to it.
+- `email-service-refresh` is the link manager's interactive queue and
+  `email-service-link-maintenance` its maintenance queue, both 300 s visibility
+  and one consumer per task. The refresh handler sends only to the maintenance
+  queue but keeps send rights on both, so a handler released before the split
+  still works mid-rollout. Both are created in the same stack update that
+  ships their consumers, so neither waits on a separate deploy.
+
 ## Checks
 
 - `bun run --cwd infra check` from the repository root.

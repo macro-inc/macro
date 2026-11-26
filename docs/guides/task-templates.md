@@ -1,0 +1,63 @@
+# Task templates
+
+Task templates store a name and typed task configuration. Personal templates are private to the authenticated account. Team templates are visible to current team members, including after the creator leaves. Team admins and the creator, while still a member, can manage team templates. Ownership cannot change after creation.
+
+## Rollout
+
+The web composer uses the PostHog flag `enable-task-templates`, enabled by default
+in development. `VITE_ENABLE_TASK_TEMPLATES=true` or `false` overrides it locally;
+other builds defer to PostHog. Until the flag resolves, template controls and
+recovery stay inactive while ordinary task creation remains available. Turning
+the flag off hides desktop and touch template controls, stops template actions,
+and pauses template editing without discarding the task draft or template buffer.
+Re-enabling resumes the buffer after the description editor and definitions are
+ready. Create More does not reapply saved templates while disabled. Property
+pinning remains available. REST and SDK authorization are unchanged; the flag
+controls the web experience, not API access.
+
+## Composer
+
+The secondary template selector opens a searchable desktop dropdown or the existing touch picker sheet. No template is the default. Search is followed by No template, saved templates grouped under Personal and the team name, and New template at the bottom. The trigger shows the selected template's name, or No template with the menu's blank-page icon when none is applied; a trailing check marks its row. Managers get a row edit action on hover or keyboard focus, always available on touch.
+
+Selecting a saved template replaces untouched template fields, default task title, and description. Switching away from edited fields or prefilled task text requires confirmation. Launch-context property presets remain intact. A changed-field accent dot appears on the trigger and selected row, without modifying the shared property pills. Managers get Reset and Update template at the bottom of the picker. Task sharing counts as a field: changing the footer switch sets the dot, Reset restores its applied value, and Update template saves it. These actions leave the task title and description intact; Update template retains their saved defaults.
+
+New template and Edit open template mode over a preserved task draft without a replacement confirmation. The header has one New template or Edit template back action. An unframed row above the task title contains the template icon, a borderless shared name input, and template visibility. New templates start with an empty, focused Template name input and a Share with team switch when a team is available; editing keeps team ownership fixed, showing the team avatar and name, with no ownership label for personal templates. Name changes persist while typing, and blank names keep Save disabled. On phones visibility stacks below the unframed name row. The ordinary task title remains below the row without a leading icon. New template captures the draft's task title, fields, and description, but not attachments.
+
+Edit starts from saved defaults and keeps ownership fixed. Attachments and Create More are hidden. The footer switch edits the template's task-sharing default, independently of template visibility in the name strip. New template captures the draft's current switch. Applying a stored value sets the task switch; omitted or null values leave it alone. Without a team the switch stays hidden and the stored value is ignored. Back and Cancel restore the task draft and task sharing unchanged, without changing the global default. Save template saves no task, then returns with the saved fields applied. Existing task title, prose, and attachments remain intact; blank title or description takes the corresponding saved default. Source values remain contextual and are not captured as reusable defaults. Delete template is a small secondary header action, icon-only on touch, that opens the existing confirmation dialog; deletion detaches the selection without resetting the task draft.
+
+Create More retains the selection and starts each fresh task's fields and text from the saved template, not edits specific to the submitted task. A task-specific sharing override applies only to the submitted task; Create another restores the saved template's sharing default. If the template has no sharing default, the current switch remains unchanged. Task and template-editor sharing values also survive draft recovery. Launch-context property presets, including grouped-view values and explicit assignees, remain authoritative. Its task action reads Create another. Desktop places expansion immediately left of Close. Touch keeps the existing tall composer with Save in its reachable header and Cancel in the footer.
+
+Durable task submissions are not recovery candidates while their mutation is idle or pending. This prevents the unconfirmed-draft warning from appearing below the header during Create More. Unconfirmed settled attempts remain recoverable, including after restarting the app.
+
+Template saves retain their immutable creation request inside the separate editor
+buffer. Task submissions have no template-save checkpoint; saving a template and
+creating a task are independent operations.
+
+## Markdown initialization
+
+Task creation passes optional pinned property definition IDs through the owned
+`MarkdownInitializationOptions` domain argument. Omitted pins keep implicit editor
+defaults and let an empty document use the golden snapshot. An explicit empty
+list is distinct: it initializes through Lexical and writes an empty pin list.
+The outbound adapter maps domain options into the lexical client's options;
+the HTTP request uses lexical-service's `initialPins` field and omits it when absent.
+Authorization and task property policy remain in the documents domain service.
+
+## REST contract
+
+Creation accepts an optional client-generated `id`. Retrying the same creation ID and normalized input returns the existing template without another write. Changed content, ownership, or creator conflicts; team retries still require current membership. Persist the creation ID before sending template saves.
+
+All routes require account authentication. JSON field names use camelCase. `GET /task_templates?teamId=<uuid>` returns a JSON array of the caller's personal templates and templates from the requested team. Without `teamId`, it returns only personal templates. A nonmember requesting a team gets 403. `GET /task_templates/{id}` reads one currently accessible template and returns 404 for inaccessible records.
+
+`POST /task_templates` accepts `CreateTaskTemplateRequest`: `{ "teamId": uuid | null, "name": string, "configuration": TaskTemplateConfiguration }`. Omit `teamId` for a personal template. It returns a `TaskTemplate` with HTTP 201. `PUT /task_templates/{id}` accepts `UpdateTaskTemplateRequest`: `{ "revision": integer, "name": string, "configuration": TaskTemplateConfiguration }`. It replaces content without changing ownership and returns the updated `TaskTemplate`. `DELETE /task_templates/{id}?revision=<integer>` returns 204. A stale revision returns 409; missing or inaccessible templates return 404. Invalid content returns 400.
+
+`TaskTemplateConfiguration` is `{ "title"?: string | null, "shareWithTeam"?: boolean | null, "propertyIds": uuid[], "defaults": PropertyDefault[], "descriptionMarkdown": string }`. `shareWithTeam` controls whether created tasks are shared with the current team; it is independent of template ownership, so personal templates can create shared tasks and team templates can create private tasks. `title` is an optional default task title, separate from the template name; omitted, null, or empty titles leave a fresh task untitled. Existing stored configurations need no migration. `defaults` is optional and defaults to an empty array. Each `PropertyDefault` is `{ "propertyId": uuid, "value": SetPropertyValue }`, using the existing tagged property-value union. A default must refer to a listed property. Repeated `propertyIds` are deduplicated. Repeated defaults, more than 64 properties or defaults, empty names, names over 120 characters, descriptions over 16 KiB, and configurations over 32 KiB are rejected.
+
+PostgreSQL stores this atomic configuration as JSONB. The API and domain use
+`TaskTemplateConfiguration` and the tagged `SetPropertyValue` enum; the SQLx
+adapter decodes JSONB into that concrete type. JSONB does not enforce property
+foreign keys or value compatibility with a property's current definition.
+
+`TaskTemplate` returns `id`, `userId` (null for team), `teamId` (null for personal), `creatorId`, `name`, `configuration`, `revision`, `createdAt`, `updatedAt`, and `canManage`. `canManage` is computed from current primary-backed membership and role facts. Content never appears in tracing fields. A template's revision starts at 1 and increments on each update. Deletes do not retain tombstones; server-generated IDs do not support replaying a deleted create.
+
+The database cascades personal templates on account deletion and team templates on team deletion. Creator attribution becomes null on account deletion, so shared content remains without retaining the deleted account's identifier.

@@ -131,6 +131,69 @@ async fn a_computer_price_copies_the_catalog_price_with_the_computer_id(pool: sq
     );
 }
 
+/// Catalog prices never change, so the second computer's price is copied
+/// from the one read for the first, without reading it again.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_catalog_price_is_read_once_per_process(pool: sqlx::PgPool) {
+    let server = MockServer::start().await;
+    let base = stripe::Price {
+        id: "price_standard".parse().unwrap(),
+        currency: Some(stripe::Currency::USD),
+        product: Some(stripe::Expandable::Id("prod_computer".parse().unwrap())),
+        unit_amount: Some(4900),
+        recurring: Some(stripe::Recurring {
+            interval: stripe::RecurringInterval::Month,
+            interval_count: 1,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    mount(&server, "GET", "/v1/prices/price_standard", &base, 1).await;
+    mount(
+        &server,
+        "POST",
+        "/v1/prices",
+        &stripe::Price {
+            id: "price_c1".parse().unwrap(),
+            ..base.clone()
+        },
+        1,
+    )
+    .await;
+    let repo = repo(&server, pool);
+
+    for computer in ["computer-1", "computer-2"] {
+        repo.create_computer_price(
+            &stripe::PriceId::from_str("price_standard").unwrap(),
+            computer,
+            &format!("computer-price:{computer}"),
+        )
+        .await
+        .unwrap();
+    }
+    let info = crate::domain::customer_repo::CustomerRepository::price(
+        &repo,
+        &stripe::PriceId::from_str("price_standard").unwrap(),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(info.amount, 4900);
+    let requests = server.received_requests().await.unwrap();
+    let reads = requests
+        .iter()
+        .filter(|request| request.url.path() == "/v1/prices/price_standard")
+        .count();
+    assert_eq!(reads, 1);
+    assert_eq!(
+        requests
+            .iter()
+            .filter(|request| request.method.as_str() == "POST")
+            .count(),
+        2
+    );
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn removing_a_computer_item_deletes_it_without_proration(pool: sqlx::PgPool) {
     let server = MockServer::start().await;

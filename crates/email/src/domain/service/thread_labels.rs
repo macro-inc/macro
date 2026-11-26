@@ -24,6 +24,8 @@ struct StagedThreadLabels {
     all_ids: Vec<Uuid>,
     /// Messages that gain or lose the label; only these go to Gmail or revert.
     changed_ids: Vec<Uuid>,
+    /// Whether the thread gained a label someone made.
+    gained: bool,
 }
 
 impl StagedThreadLabels {
@@ -148,13 +150,72 @@ where
         let (provider_id, value) = match &action {
             MailboxAction::Flagged(value) => (system_labels::STARRED, *value),
             MailboxAction::Trashed(value) => (system_labels::TRASH, *value),
-            MailboxAction::Junk(value) => (system_labels::SPAM, *value),
+            MailboxAction::Junk(value) => {
+                return self
+                    .set_gmail_thread_junk(&link, thread_id, actor, *value)
+                    .await;
+            }
             MailboxAction::Category { name, present } => (name.as_str(), *present),
             _ => unreachable!("read and archive handled above"),
         };
         let label = self.link_label_by_provider_id(link.id, provider_id).await?;
         Ok(self
             .update_thread_labels_with_actor(&link, thread_id, label.id, value, Some(actor))
+            .await?
+            .successful_ids
+            .len())
+    }
+
+    /// Report spam and Not spam for a Gmail thread. Gmail's own buttons move
+    /// the conversation between the inbox and Spam, as the Outlook path moves
+    /// it to and from the Junk Email folder; the SPAM label alone would leave
+    /// reported mail in the inbox and bring rescued mail back archived. Each
+    /// label is its own write, and the one that keeps the thread where the
+    /// user can try again goes last: Report spam files the thread under Spam
+    /// before it leaves the inbox, Not spam puts it in the inbox before it
+    /// leaves Spam. The number of messages the SPAM write covers.
+    #[tracing::instrument(err, skip_all, fields(link_id = %link.id, %thread_id, junk = junk))]
+    async fn set_gmail_thread_junk(
+        &self,
+        link: &Link,
+        thread_id: Uuid,
+        actor: macro_user_id::user_id::MacroUserIdStr<'static>,
+        junk: bool,
+    ) -> Result<usize, EmailErr> {
+        let spam = self
+            .link_label_by_provider_id(link.id, system_labels::SPAM)
+            .await?;
+        let messages = self
+            .email_repo
+            .mailbox_action_messages(link.id, thread_id)
+            .await
+            .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?;
+        let present = || messages.iter().filter(|message| message.is_present);
+        if junk {
+            let filed = self
+                .update_thread_labels_with_actor(
+                    link,
+                    thread_id,
+                    spam.id,
+                    true,
+                    Some(actor.clone()),
+                )
+                .await?;
+            if present().any(|message| message.in_inbox) {
+                self.set_thread_inbox(link, thread_id, actor, false).await?;
+            }
+            return Ok(filed.successful_ids.len());
+        }
+        // Only received mail that was in Spam goes back to the inbox: Not spam
+        // on a thread that is not spam leaves an archived thread archived, and
+        // the user's own sent mail in Spam, even addressed to themselves,
+        // only leaves Spam. (Move to inbox also takes a note to self.)
+        if present().any(|message| message.in_junk && !message.is_draft && !message.is_sent) {
+            self.set_thread_inbox(link, thread_id, actor.clone(), true)
+                .await?;
+        }
+        Ok(self
+            .update_thread_labels_with_actor(link, thread_id, spam.id, false, Some(actor))
             .await?
             .successful_ids
             .len())
@@ -181,15 +242,14 @@ where
         if !targets.is_empty() {
             self.email_repo
                 .enqueue_mailbox_action(link.id, actor, &action, &targets)
-                .await
-                .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?;
+                .await?;
         }
         Ok(UpdateThreadLabelsResult {
             successful_ids: targets.iter().map(|t| t.message_id).collect(),
             failed_ids: vec![],
         })
     }
-    #[tracing::instrument(err, skip(self), fields(user_id = %macro_id, %thread_id))]
+    #[tracing::instrument(err, skip(self, macro_id), fields(%thread_id))]
     pub(crate) async fn mark_thread_seen_impl(
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
@@ -227,7 +287,7 @@ where
         let message_ids: Vec<Uuid> = messages.iter().map(|message| message.db_id).collect();
         let labels_by_message = self
             .email_repo
-            .labels_by_message_ids(&message_ids)
+            .labels_by_message_ids(&message_ids, Some(&macro_id))
             .await
             .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?;
         let unread_label_id = labels_by_message
@@ -253,7 +313,7 @@ where
             .len())
     }
 
-    #[tracing::instrument(err, skip(self), fields(user_id = %macro_id, %thread_id))]
+    #[tracing::instrument(err, skip(self, macro_id), fields(%thread_id))]
     pub(crate) async fn mark_thread_unread_impl(
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
@@ -287,7 +347,7 @@ where
     }
 
     /// Resolve the owning inbox server-side, including delegated inboxes.
-    #[tracing::instrument(err, skip(self), fields(user_id = %macro_id, %thread_id, archived))]
+    #[tracing::instrument(err, skip(self, macro_id), fields(%thread_id, archived))]
     pub(crate) async fn set_thread_archived_impl(
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
@@ -405,7 +465,7 @@ where
         Err(EmailErr::ThreadHasNoInboundMessages)
     }
 
-    #[tracing::instrument(err, skip(self), fields(user_id = %macro_id, %thread_id, %label_id, add))]
+    #[tracing::instrument(err, skip(self, macro_id), fields(%thread_id, %label_id, add))]
     pub(crate) async fn update_thread_labels_for_user_impl(
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
@@ -436,7 +496,7 @@ where
             .await
     }
 
-    #[tracing::instrument(err, skip(self, link))]
+    #[tracing::instrument(err, skip(self, link, actor))]
     pub(super) async fn update_thread_labels_with_actor(
         &self,
         link: &Link,
@@ -495,8 +555,8 @@ where
     /// without failing the others.
     #[tracing::instrument(
         err,
-        skip(self, thread_ids),
-        fields(user_id = %macro_id, thread_count = thread_ids.len(), archived)
+        skip(self, macro_id, thread_ids),
+        fields(thread_count = thread_ids.len(), archived)
     )]
     pub(crate) async fn set_threads_archived_impl(
         &self,
@@ -635,6 +695,7 @@ where
             all_ids: staged.messages.iter().map(|m| m.db_id).collect(),
             messages: staged.messages,
             changed_ids: staged.changed_ids,
+            gained: staged.thread_gained,
         })
     }
 
@@ -736,6 +797,7 @@ where
                 thread.thread_id,
                 &label,
                 add,
+                thread.gained,
                 &cancelled_send_ids,
                 actor.clone(),
             );
@@ -784,13 +846,19 @@ where
     /// macro.email event for that label (see
     /// [`EmailMacroEvent::thread_label_change`]). Scheduled sends cancelled
     /// by trashing publish `message_send_cancelled`. Actor is not tracked on
-    /// this path — the inbox owner is on `link`.
+    /// this path — the inbox owner is on `link`. `gained` says the thread
+    /// didn't have the label before.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the parts of one published change"
+    )]
     fn publish_thread_label_events(
         &self,
         link: &Link,
         thread_id: Uuid,
         label: &LinkLabel,
         add: bool,
+        gained: bool,
         cancelled_send_ids: &[Uuid],
         actor: Option<macro_user_id::user_id::MacroUserIdStr<'static>>,
     ) {
@@ -807,10 +875,11 @@ where
             add,
             EmailEventOrigin::UserAction,
         );
+        let gained_ids = if gained { vec![label.id] } else { Vec::new() };
+        let event =
+            event.with_labels_gained(None, gained_ids, agent_correlation::context::by_program());
 
-        if let Some(event) = event {
-            self.publish_email_event(&event);
-        }
+        self.publish_email_event(&event);
 
         for message_id in cancelled_send_ids {
             self.publish_email_event(&EmailMacroEvent::message_send_cancelled(

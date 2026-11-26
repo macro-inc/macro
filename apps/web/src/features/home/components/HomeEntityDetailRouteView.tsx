@@ -3,12 +3,14 @@ import {
   type EntityDetailContext,
   entityDetailBlockType,
 } from '@app/components/entity-detail/EntityDetail';
+import { EntityDetailFrame } from '@app/components/entity-detail/EntityDetailFrame';
 import type { EntityDetailTarget } from '@app/components/entity-detail/entity-detail-target';
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { channelsSearch } from '@app/features/channels-view/channels-route';
 import type { EntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { EntityAppearanceTrigger } from '@app/features/entity-appearance/entity-appearance';
 import { useDocumentAppearance } from '@app/features/entity-appearance/queries/document-appearance';
+import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { createSearchParams, useParams } from '@app/lib/split-router';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import { useMarkdownName } from '@block-md/component/MarkdownNameProvider';
@@ -35,6 +37,7 @@ import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useDocumentShareModal } from '@core/component/TopBar/shareModal';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { useUserId } from '@core/context/user';
+import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { buildEntityData, type EntityData } from '@entity';
 import {
   type Accessor,
@@ -126,6 +129,7 @@ function HomeEntityBreadcrumb(props: {
 function HomeMarkdownBreadcrumb(props: {
   target: EntityDetailTarget;
   value: Accessor<string>;
+  hotkeyScope: string;
   appearance?: EntityAppearance | null;
   ownerId: string;
   projectId?: string;
@@ -163,6 +167,21 @@ function HomeMarkdownBreadcrumb(props: {
     if (permissions.canComment()) return Permissions.CAN_COMMENT;
     return Permissions.CAN_VIEW;
   };
+
+  const { closePreview } = useHomeView();
+  useBlockEntityCommands({
+    id: documentId(),
+    scopeId: props.hotkeyScope,
+    onDeleted: closePreview,
+    resolveEntity: () =>
+      buildEntityData({
+        id: documentId(),
+        name: name(),
+        blockName: blockType(),
+        ownerId: props.ownerId,
+        projectId: props.projectId,
+      }),
+  });
 
   return (
     <HomeEntityBreadcrumb
@@ -303,29 +322,38 @@ function HomeEntityDetailBody(props: {
       : undefined;
   };
   const openShare = useDocumentShareModal(documentShareTarget);
-
+  // The list beside the detail registers the same entity keys on the split's
+  // scope, so the detail keeps its own in a child scope, as Mail's reading
+  // pane does; one registration would otherwise replace the other.
+  const [attachHotkeys, detailHotkeyScope] = useHotkeyDOMScope('home-detail');
   return (
-    <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-      <Show when={props.target.type !== 'channel'}>
-        <ViewShell.TopBar class="touch:flex">
-          <ViewBreadcrumbs.Outlet aria-label="Home location" />
-          <div class="ml-auto flex items-center gap-1">
-            <SidePanel.HeaderActionsOutlet />
-            <Show when={documentShareTarget()}>
-              {(target) => (
-                <ShareTrigger
-                  onClick={openShare}
-                  id={target().documentId}
-                  blockType={target().blockAlias}
-                  hotkeyScope={panel.splitHotkeyScope}
-                />
-              )}
-            </Show>
-            <SidePanel.Toggle />
-          </div>
-        </ViewShell.TopBar>
-      </Show>
-      <div class="relative min-h-0 min-w-0 flex-1">
+    <div ref={attachHotkeys} class="size-full min-h-0 min-w-0">
+      <EntityDetailFrame
+        target={props.target}
+        topBar={
+          <Show when={props.target.type !== 'channel'}>
+            <ViewShell.TopBar class="touch:flex">
+              <ViewShell.TopBarTitle>
+                <ViewBreadcrumbs.Outlet aria-label="Home location" />
+              </ViewShell.TopBarTitle>
+              <ViewShell.TopBarActions>
+                <SidePanel.HeaderActionsOutlet />
+                <Show when={documentShareTarget()}>
+                  {(target) => (
+                    <ShareTrigger
+                      onClick={openShare}
+                      id={target().documentId}
+                      blockType={target().blockAlias}
+                      hotkeyScope={panel.splitHotkeyScope}
+                    />
+                  )}
+                </Show>
+                <SidePanel.Toggle />
+              </ViewShell.TopBarActions>
+            </ViewShell.TopBar>
+          </Show>
+        }
+      >
         <EntityDetail
           target={props.target}
           navigationRequest={props.navigationRequest}
@@ -388,6 +416,7 @@ function HomeEntityDetailBody(props: {
                   <HomeMarkdownBreadcrumb
                     target={props.target}
                     value={props.value}
+                    hotkeyScope={detailHotkeyScope}
                     appearance={document()?.documentMetadata.appearance}
                     ownerId={document()?.documentMetadata.owner ?? ''}
                     projectId={
@@ -409,7 +438,7 @@ function HomeEntityDetailBody(props: {
             );
           }}
         </EntityDetail>
-      </div>
+      </EntityDetailFrame>
     </div>
   );
 }

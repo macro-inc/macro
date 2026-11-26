@@ -1,0 +1,659 @@
+{
+  "scenario": "ideas-plumber",
+  "description": "Ridgeway Plumbing & Drain (4 techs). Owner Dan Ridgeway with Luis (lead tech), Kevin, Tyrell and Amy (apprentice). Workspace matches the plumber benchmark inbox and plants cross-source suggestion opportunities plus stale decoys.",
+  "users": {
+    "owner": {
+      "email": "dan@ridgewayplumbing.example",
+      "first_name": "Dan",
+      "last_name": "Ridgeway",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    },
+    "luis": {
+      "email": "luis@ridgewayplumbing.example",
+      "first_name": "Luis",
+      "last_name": "Marin",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    },
+    "kevin": {
+      "email": "kevin@ridgewayplumbing.example",
+      "first_name": "Kevin",
+      "last_name": "O'Shea",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    },
+    "tyrell": {
+      "email": "tyrell@ridgewayplumbing.example",
+      "first_name": "Tyrell",
+      "last_name": "Boone",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    },
+    "amy": {
+      "email": "amy@ridgewayplumbing.example",
+      "first_name": "Amy",
+      "last_name": "Faulk",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    }
+  },
+  "teams": {
+    "ridgeway": {
+      "name": "Ridgeway Plumbing & Drain",
+      "owner": "owner",
+      "members": {
+        "luis": "admin",
+        "kevin": "member",
+        "tyrell": "member",
+        "amy": "member"
+      }
+    }
+  },
+  "channels": {
+    "crew": {
+      "type": "team",
+      "name": "crew",
+      "team": "ridgeway"
+    },
+    "jobs": {
+      "type": "public",
+      "name": "jobs",
+      "owner": "owner",
+      "members": [
+        "luis",
+        "kevin",
+        "tyrell",
+        "amy"
+      ]
+    },
+    "parts-and-vans": {
+      "type": "private",
+      "name": "parts-and-vans",
+      "owner": "owner",
+      "members": [
+        "luis",
+        "kevin",
+        "tyrell",
+        "amy"
+      ]
+    },
+    "dm-dan-luis": {
+      "type": "direct_message",
+      "members": [
+        "owner",
+        "luis"
+      ]
+    }
+  },
+  "projects": {
+    "lakeshore": {
+      "owner": "owner",
+      "name": "Lakeshore Residential",
+      "share": [
+        {
+          "with": "team:ridgeway",
+          "level": "view"
+        }
+      ]
+    },
+    "greer-repipe": {
+      "owner": "owner",
+      "name": "Greer repipe (PB-26-03544)",
+      "share": [
+        {
+          "with": "team:ridgeway",
+          "level": "view"
+        }
+      ]
+    },
+    "office": {
+      "owner": "owner",
+      "name": "Office & admin",
+      "share": [
+        {
+          "with": "team:ridgeway",
+          "level": "view"
+        }
+      ]
+    }
+  },
+  "documents": {
+    "q4-goals": {
+      "owner": "owner",
+      "name": "Shop goals - Q4 2026",
+      "project": "office",
+      "share": [
+        {
+          "with": "team:ridgeway",
+          "level": "edit"
+        }
+      ],
+      "content": "# Shop goals, Q4 2026\n\nWritten by Dan, Oct 1. Looked at in the Monday crew meeting.\n\nWe had our best September ever ($41k collected) but we are turning down work and the office is me at 9pm. Q4 is about getting the second journeyman, getting paid faster, and turning one-off customers into repeat customers.\n\n## Goals\n\n| # | Goal | Target | Owner | How we track it |\n|---|------|--------|-------|-----------------|\n| 1 | Hire a second journeyman | Start date by Dec 15 | Dan | TradeHire listing, interviews |\n| 2 | Launch the yearly drain maintenance plan | 25 signups by Dec 31 | | Dispatchly recurring jobs |\n| 3 | No invoice over 30 days | $0 over 30 days by Nov 30 | Dan + Joan | LedgerNest overdue report |\n| 4 | Amy backflow certified | Pass the December exam | Amy (shop pays the $185) | Exam registration |\n| 5 | Keep Google rating at 4.6 or better | Reply to every review within 24 hours | Dan | Google Business Profile |\n| 6 | Win the Lakeshore Building C toilet job | Signed by Dec 15, about $11k | Kevin quotes, Dan sends | Lakeshore project |\n\n## Goal 2: drain maintenance plan\n\nWhat it is: $149 a year. Includes one kitchen or main-line drain cleaning, one water heater flush, a visual check of shutoffs and supply lines, and 10% off any repair for the year. We price it so the drain cleaning alone ($219 normally) is cheaper than paying for it once.\n\nWhy: we have about 140 customers who have called us twice or more since 2024. If 25 sign up that's $3,725 up front and two booked visits each in our slow months (January, February, July).\n\nWhat has to happen before we can sell it (nobody has started this):\n\n- Set it up as a recurring job type in Dispatchly with a reminder 2 weeks before the visit.\n- One-page flyer techs leave behind, and a line on every invoice.\n- Decide who gets asked first: Sandra Whitlock asked about it last spring and again in October.\n- Card on file through Tillpoint for the annual charge.\n\n## Goal 3 notes\n\nJoan sends the LedgerNest overdue list on the 1st and 15th. Automatic reminders are off because I didn't like the default wording.\n\n## Parking lot\n\n- Van wraps (WrapKing quote): not this year.\n- Second truck for drain work: revisit when the journeyman starts.\n"
+    },
+    "price-book": {
+      "owner": "owner",
+      "name": "Price book 2026",
+      "project": "office",
+      "share": [
+        {
+          "with": "team:ridgeway",
+          "level": "edit"
+        }
+      ],
+      "content": "# Price book 2026\n\nUse these numbers on the phone and on site. If a job isn't here, call Dan before you quote. Updated Sep 15, 2026.\n\n## Service calls\n\n- Trip charge: $89. **Tell the customer on the phone, every time.** Waived if the job is over $300. If they cancel at the door, the trip charge still applies.\n- Hourly labor: $135 per hour after the first hour, billed in half hours.\n- After-hours and weekend call-out: $225 (includes the first hour), then $165 per hour.\n- Arrival windows: 2 hours. Text the customer when you leave the previous job.\n\n## Drains\n\n- Kitchen or bathroom drain cleaning (cable): $219\n- Main line cleaning from a cleanout: $349. No cleanout: add $150.\n- Sewer camera inspection: $295, or $150 when done with a cleaning\n- Hydro-jetting (commercial): $650 for the first 2 hours\n- Cleanout cap replacement: $165\n\n## Water heaters\n\n- Flush and anode check: $175; anode replacement adds $70 (parts included)\n- 40 gal gas, installed with permit and haul-away: $2,180\n- 50 gal gas, installed with permit and haul-away: $2,450\n- Tankless gas: $4,800 to $6,900 depending on gas line and venting. Always site visit first.\n- Recirculation pump, added at install: $650\n\n## Fixtures\n\n- Toilet install, customer-supplied: $245\n- Toilet install, we supply a 1.28 gpf Coldwater toilet: $475 each (10 or more units on one property: talk to Dan)\n- Kitchen faucet replacement (customer-supplied): $225; pull-down faucet we supply: $395\n- Garbage disposal replacement (1/2 hp, we supply): $385\n- Shower valve cartridge: $210\n\n## Testing and inspections\n\n- Backflow test: $95 per device, report sent to the city included\n- Turnover plumbing inspection (vacant unit, checklist and photos): $125 per unit\n\n## Maintenance plan (not launched yet)\n\n- $149 per year. See Shop goals, goal 2.\n"
+    },
+    "crew-handbook": {
+      "owner": "owner",
+      "name": "Crew handbook (draft)",
+      "project": "office",
+      "share": [
+        {
+          "with": "team:ridgeway",
+          "level": "edit"
+        }
+      ],
+      "content": "# Crew handbook (DRAFT)\n\nStarted by Dan, Sep 28. I need this done before the new journeyman starts so I'm not explaining it differently to everybody.\n\n## 1. Hours and pay\n\n- Normal day 7:30 to 4:00, first job at 8:00. Shop days are 8 to 4:30.\n- Pay is weekly, Friday. Timesheets due Friday 5pm for the week (Monday to Friday) plus any on-call hours.\n- Overtime is time and a half over 40 hours in the week. Tell Dan before a job is going to run past 6pm.\n- Mileage is logged per van in the van log, not on your timesheet.\n\n## 2. Pay rates and ranges (posted on TradeHire)\n\n- Journeyman plumber: $32 to $38 per hour depending on experience and license.\n- Apprentice: $19 to $22 per hour. Raises at each completed year of the apprenticeship.\n- On-call stipend: TODO\n\n## 3. On-call rotation\n\nTODO: how many weekends a month, who is in the rotation (Luis, Kevin, Tyrell, new hire?), what counts as an emergency, call-back time, how on-call hours get paid, what happens on holidays (Thanksgiving, Christmas).\n\n## 4. Vans\n\nTODO: who takes a van home, personal use (no), fuel card rules, what has to be in every van (see the van stock list Luis keeps), weekly inventory on Monday mornings, what to do with a check engine light.\n\n## 5. Tools\n\nTODO: what the shop provides vs what you bring. Right now: shop provides the jetter, camera, press tool, PEX expansion tool and crimp heads. You bring hand tools.\n\n## 6. Safety\n\n- Report broken equipment the same day. Tag it and don't use it.\n- Confined space and trenching: Dan or Luis must be on site.\n\n## 7. Customers\n\n- Shoe covers inside every home.\n- Photos before and after on every job (property managers need them on the invoice).\n- Never quote a price that isn't in the price book without calling Dan.\n"
+    },
+    "estimates-tracker": {
+      "owner": "owner",
+      "name": "Open estimates & follow-ups",
+      "project": "office",
+      "share": [
+        {
+          "with": "team:ridgeway",
+          "level": "edit"
+        }
+      ],
+      "content": "# Open estimates and follow-ups\n\nDan's list of quotes out and people to call back. If it's on this list, someone owes the customer an answer. Last updated: Oct 17.\n\n| Customer | What | Estimate | Sent | Next step | Status |\n|----------|------|----------|------|-----------|--------|\n| Gloria Pham (Birchwood Ct) | Replace all supply lines | not done | - | Luis to look at it | Waiting |\n| Neha Kapoor | Tankless descale | $175 | Oct 12 by text | Book it | Waiting |\n| Sandra Whitlock (Fenton Ave) | Kitchen drain | $219 | booked | Done Oct 22? | Booked |\n| Harmon | Kitchen faucet | $225 | Oct 14 | Booked Oct 19 | Booked |\n| Lakeshore Building C | Replace 24 toilets with low-flow | not done | - | Kevin to count units | Not started |\n| Mark Feeney (Orchard Ln) | Water heater, sediment | repair vs replace | - | Dan to visit | Not started |\n| Dorset Rd | Sewer camera | $295 | Oct 15 | Customer to confirm | Waiting |\n\n## Rules\n\n1. Every estimate gets a follow-up call 3 days after it's sent.\n2. If a customer doesn't answer after two follow-ups, mark it lost.\n3. Update this list when the job is booked or lost.\n"
+    },
+    "software-spend": {
+      "owner": "owner",
+      "name": "Subscriptions & software",
+      "project": "office",
+      "share": [
+        {
+          "with": "user:luis",
+          "level": "view"
+        }
+      ],
+      "content": "# Subscriptions and software\n\nWhat the shop pays for every month. Card: business Visa unless noted. Updated by Dan, Aug 30. Joan asked me to keep this current for the books.\n\n| Tool | What we use it for | Cost per month | Notes |\n|------|--------------------|----------------|-------|\n| Dispatchly Pro | Scheduling, booking requests, customer texts, tech mobile app | $199 | Pro plan also includes a time clock, online payments and automatic review requests. We only use scheduling and texts. |\n| Tillpoint | Card reader on Luis's phone + online invoices | 2.6% + 15c card present, 2.9% online | About $250 a month in fees. |\n| LedgerNest | Books (Joan), invoices, overdue reminders | $65 | Joan does the books here. Invoices also go out from here, so some customers get invoices from both Tillpoint and LedgerNest. |\n| JobTimer | Tech timesheets on the phone | $9 per user x 5 = $45 | Bought in March. Kevin gets logged out constantly. Since September everyone emails timesheets instead. |\n| AnswerDesk | Answering service | $149 | After-hours only. Daytime overflow turned off in August to save $60. |\n| Fleetwise GPS | Van tracking, 4 vans | $35 per van = $140 | Used for dispatch. |\n| TrakVan | Old GPS units still in vans 2 and 4 | $25 per van = $50 | Should have cancelled when we went to Fleetwise in May. |\n| Google Workspace | Email, 6 accounts | $14 x 6 = $84 | |\n| Yelp Ads | Ads on Yelp search | $300 | Leads tracked in Dispatchly from Yelp since July: 3 (Alyssa R. message, Greer came from a neighbor, not Yelp). |\n| Permit portal | City of Brennerton | free | |\n\n## Total\n\nAbout $1,032 per month plus card fees.\n\n## To look at\n\n- JobTimer vs the Dispatchly time clock?\n- TrakVan: call and cancel.\n- Is Yelp Ads worth $3,600 a year?\n"
+    },
+    "lakeshore-notes": {
+      "owner": "owner",
+      "name": "Lakeshore Residential - account notes",
+      "project": "lakeshore",
+      "share": [
+        {
+          "with": "team:ridgeway",
+          "level": "edit"
+        }
+      ],
+      "content": "# Lakeshore Residential Management: account notes\n\nContact: Brian Osei, Maintenance Coordinator. AP: ap@lakeshoreres.example. Biggest commercial customer by number of jobs (37 work orders in 2026 so far).\n\n## Property: Elm Street complex\n\n| Building | Units | Built | Toilets | Water heaters | Notes |\n|----------|-------|-------|---------|---------------|-------|\n| A | 18 | 1979 | Mostly original 3.5 gpf (Kevin replaced 2 in 2025) | 2 commercial 100 gal, 2019 | Shower valve calls every few months. |\n| B | 20 | 1979 | Mostly original 3.5 gpf | 2 commercial 100 gal, 2016 | Main shutoff and angle stops replaced Sep 2026 (invoice #1842). |\n| C | 24 | 1981 | Original 3.5 gpf except 3 swapped | 2 commercial 100 gal, 2021 | Main service line broke Oct 30; repaired same day. Sample low-flow toilets installed in 2 units Nov 2. |\n\n## How they want to be billed (their new AP system, since October)\n\n- One invoice per work order (WO number on the invoice). Combined invoices get rejected.\n- Equipment rentals as a separate line with the rental receipt attached.\n- Before and after photos attached to every invoice.\n- Net 30. They pay by ACH, usually on day 20 to 25.\n\n## Budget season\n\nBrian's budget for next year gets locked in December. Anything we want them to approve for 2027 has to be quoted in November. In October he said the regional manager wants to \"do all three buildings eventually\" on the toilet program if C goes well, because the city water rebate is $75 per low-flow toilet through June 2027.\n\n## Open work\n\n- Building C: 24-toilet replacement quote (in progress).\n- Invoice for the Oct 30 emergency: needs to be split (WO-5551 + excavation rental).\n- Unit 12 toilet: second trip not billed (Kevin's call).\n"
+    },
+    "building-c-proposal": {
+      "owner": "owner",
+      "name": "Building C toilet proposal (draft)",
+      "project": "lakeshore",
+      "share": [
+        {
+          "with": "team:ridgeway",
+          "level": "edit"
+        }
+      ],
+      "content": "# Proposal: Building C low-flow toilet replacement (DRAFT)\n\nFor: Brian Osei, Lakeshore Residential Management. Drafted by Dan, Nov 1.\n\n## Scope\n\nReplace 21 original 3.5 gpf toilets in Building C (Elm Street) with Coldwater 1.28 gpf round-bowl toilets, plus the 3 already-swapped units for consistency, 24 total. Each install includes:\n\n- Removal and haul-away of the old toilet\n- New wax-free seal, stainless supply line and closet bolts\n- Check and replace the angle stop if it doesn't shut off fully (included up to 6 stops; extra stops $45 each)\n- Flush test and leak check, photo of each finished install\n\n## Price\n\n| Item | Qty | Unit | Total |\n|------|-----|------|-------|\n| Supplied and installed 1.28 gpf toilet | 24 | $489 | $11,736 |\n| Angle stop replacement (up to 6) | included | - | - |\n| Permit | not required for like-for-like | - | - |\n| **Total** | | | **$11,736** |\n\nThe city water rebate is $75 per toilet ($1,800 for the building) and goes to the owner. We can fill out the rebate paperwork.\n\n## Schedule\n\nFour units a day with two techs, six working days. Tenants notified by Lakeshore 48 hours ahead. We'd like to start the week of Nov 30.\n\n## Notes to self\n\n- Coldwater invoice CF-21177 has the sample pricing; check the per-unit cost.\n- Kevin did the count and the sample swaps; ask him to look this over.\n- TODO: send to Brian.\n"
+    },
+    "greer-repipe-plan": {
+      "owner": "tyrell",
+      "name": "Greer repipe - job plan",
+      "project": "greer-repipe",
+      "share": [
+        {
+          "with": "team:ridgeway",
+          "level": "edit"
+        }
+      ],
+      "content": "# Greer repipe: job plan\n\nCustomer: Paul Greer, 1952 two-story, original galvanized supply. Permit PB-26-03544 (plumbing repipe, residential, 2-story), issued Nov 6. Lead: Tyrell. With: Amy.\n\n## Scope\n\n- New 3/4\" PEX-A trunk from the meter to a 10-port manifold in the basement\n- 1/2\" PEX-A home runs to: 2 bathrooms, kitchen, laundry, 2 hose bibs, water heater\n- New 3/4\" main shutoff and PRV\n- Cap and abandon the galvanized in place where it's inside walls\n\n## Materials\n\nFerro order FS-449377 ($2,960.15): 2 x 300 ft 3/4\" (one roll short on Nov 5, second roll Monday Nov 9), 6 x 100 ft 1/2\", manifold, fittings, hangers.\n\n## Schedule\n\n| Day | Work | Who |\n|-----|------|-----|\n| Thu Nov 5 | Trunk line with the one roll | Tyrell, Amy |\n| Fri Nov 6 | Manifold, start branch runs | Tyrell, Amy |\n| Mon Nov 9 | Branch runs (second roll arrives) | Tyrell, Amy |\n| Tue Nov 10 | Finish branch runs, fixtures roughed in | Tyrell, Amy |\n| Wed Nov 11 | Pressure test, 100 psi for 2 hours | Tyrell |\n| Wed Nov 11 | **Rough-in inspection (city)** | ? |\n| Thu Nov 12, 8am | Paul's drywall contractor starts closing walls | (customer) |\n| Week of Nov 16 | Fixture connections, final inspection | Tyrell |\n\n## Inspections (from the permit)\n\n- Rough-in (pressure test) **before walls are closed**.\n- Final.\n- Request in the city permit portal at least 24 hours ahead. Dan has the portal login.\n\nStatus of rough-in request: not requested yet.\n\n## Customer notes\n\n- Paul and his wife stay in the house; water off 9 to 3 on branch-run days only.\n- Permit card is posted in the front window.\n"
+    },
+    "crew-meeting-oct26": {
+      "owner": "owner",
+      "name": "Crew meeting - Oct 26",
+      "project": "office",
+      "share": [
+        {
+          "with": "team:ridgeway",
+          "level": "edit"
+        }
+      ],
+      "content": "# Crew meeting, Monday Oct 26 (7:00am at the shop)\n\nPresent: Dan, Luis, Kevin, Tyrell. Amy off (approved).\n\n## Lakeshore\n\n- Their new AP system rejects combined invoices. One invoice per work order from now on. Photos on every invoice.\n- Unit 12: Kevin's second trip is not billed. Note it on the invoice so Brian's regional manager stops asking.\n- Brian wants a quote for all 24 toilets in Building C. Kevin to count units and swap two samples.\n\n## Reviews\n\n- Corey Bellamy left 1 star on Google and 2 on Yelp about the trip charge. We didn't tell him on the phone. From today: say the trip charge on every call. It's in the price book.\n- Harold Jennings and Mark Feeney left 5 stars. Thanks Luis and Tyrell.\n\n## Equipment and vans\n\n- Van 2: check engine light, P0300. In the shop, probably plugs and coil.\n- Van 3 sliding door latch: zip-tied. Needs the shop.\n- Jetter foot pedal sticks sometimes. Watch it.\n\n## People\n\n- Interviewing Dwayne Carter (journeyman) Thursday at 3.\n- Amy finished module 2 of the backflow course. Exam is in December.\n- On-call for November: Dan to post the schedule.\n\n## Pricing questions that came up\n\n- Gas line check: hourly, $135, minimum one hour plus trip charge.\n- Weekend water heater flush: $225 call-out plus the flush price minus the first hour. (Dan to put this in the price book.)\n\n## Action items\n\n- Kevin: Building C count and samples.\n- Dan: on-call schedule for November; weekend flush pricing into the price book.\n- Tyrell: Greer permit resubmittal with Amy's riser diagram.\n"
+    },
+    "permit-process": {
+      "owner": "owner",
+      "name": "How we handle permits & inspections",
+      "project": "office",
+      "share": [
+        {
+          "with": "team:ridgeway",
+          "level": "edit"
+        }
+      ],
+      "content": "# How we handle permits and inspections (City of Brennerton)\n\nContractor license P-11842. Portal login: Dan (shared login is in the office binder, not here).\n\n## When we need a permit\n\n- Water heater replacement (gas or electric): yes, over-the-counter, usually 1 to 2 business days.\n- Repipe, new fixtures in new locations, gas line work, sewer line replacement: yes.\n- Like-for-like toilet, faucet or disposal swaps: no.\n- Backflow tests: no permit, but the report goes to the city's cross-connection program.\n\n## Steps\n\n1. **Apply.** Dan applies in the portal. For repipes, attach a riser or isometric diagram, the fixture count per floor and the signed owner authorization. Missing items mean resubmittal (that cost us a week on PB-26-03544).\n2. **Post the permit card** at the site before any work starts.\n3. **Rough-in inspection.** For anything going inside walls, the rough-in (with pressure test) has to pass before walls are closed. Request it in the portal at least 24 hours ahead. The lead tech on the job tells Dan the date the day the job starts; Dan requests it.\n4. **Final inspection.** Request when fixtures are connected. Someone has to be there to give access (the customer doesn't need to be home if we are).\n5. **Close out.** Passed final = permit closed. Save the inspection record PDF to the customer's folder and note it on the invoice.\n\n## If the walls get closed before rough-in\n\nThe inspector can make the owner open the walls. That's on us, not the customer. It happened once in 2024 (Delmar job): $1,400 of drywall we paid for.\n\n## Timelines\n\n- Permit expires 180 days after it's issued if work hasn't started.\n- Applications incomplete after 30 days are withdrawn.\n- Inspection windows are 8 to 12 or 12 to 4. The inspector usually calls 30 minutes ahead.\n"
+    },
+    "retro-building-c": {
+      "owner": "luis",
+      "name": "Retro: Building C emergency (Oct 30)",
+      "project": "lakeshore",
+      "share": [
+        {
+          "with": "team:ridgeway",
+          "level": "edit"
+        }
+      ],
+      "content": "# Retro: Building C main service line break, Oct 30\n\nWritten by Luis, Nov 1.\n\n## What happened\n\nBrian called at 6:45am: no water to Building C (24 units), water bubbling up in the parking strip by the meter. The utility had shut it off at the street. Kevin and I were on site by 8:00 with Amy following. We rented an excavator ($640, half day), found the break right at the curb stop on the customer side, replaced 12 ft of 1\" type K copper with two compression couplings, and had water back on at 4:40pm. The curb stop itself is the utility's side and wasn't replaced. Brian authorized up to $8,000; the final came in at $4,870.\n\n## What went well\n\n- Two techs on site within 75 minutes of the call.\n- Amy ran the locator and did the compression fittings with me. She's ready for more of this.\n- Tenants back on water by dinner, nobody put in a hotel. Brian brought pizza.\n- Photos taken at every step and put in the shared folder.\n\n## What didn't go well\n\n- The invoice went out as one line. Lakeshore's AP needs it split: the emergency repair under WO-5551, the excavator rental as its own line with the receipt.\n- The rental receipt was in my truck for three days.\n- The photos were in the shared folder but not attached to the invoice.\n- Tyrell and Amy's morning jobs got bumped and two customers weren't called until noon.\n\n## What we'll do next time\n\n| Action | Owner | Status |\n|--------|-------|--------|\n| Invoice template with one line per work order and a rental line | Dan | Not started |\n| Rental receipts photographed and texted to Dan same day | Whoever rents | Agreed |\n| When an emergency bumps jobs, office calls bumped customers within 1 hour | Dan | Agreed |\n| Keep a half-day excavator rental contact in the van binder | Luis | Done |\n"
+    }
+  },
+  "tasks": {
+    "okoro-return": {
+      "owner": "kevin",
+      "name": "Okoro return visit - kitchen sink leak (no charge)",
+      "status": "completed",
+      "assignees": [
+        "kevin"
+      ],
+      "share_with_team": true,
+      "content": "# Okoro return visit\n\nRachel Okoro: leak came back under the kitchen sink 3 days after the first visit ($260).\n\n- [x] Return visit Thu Nov 5, 8:00\n- [x] Found the slip nut cross-threaded on the trap, replaced trap and slip nuts\n- [x] Dry after 30 min with the disposal running\n- [x] No charge per Dan; Dan called Rachel the same day\n"
+    },
+    "oakmont-backflow": {
+      "owner": "luis",
+      "name": "Oakmont annual backflow tests (4 buildings) + certificates",
+      "status": "completed",
+      "assignees": [
+        "luis",
+        "amy"
+      ],
+      "share_with_team": true,
+      "content": "# Oakmont backflow tests\n\nDue Nov 30. Calder St #220, Linden Ave #15, Harbor Rd #900, Westgate office building.\n\n- [x] 220 Calder + 15 Linden (Nov 3)\n- [x] Harbor Rd #900 + Westgate (Nov 4), Westgate retest Nov 6 passed\n- [x] Reports sent to Renee and the city cross-connection program (Nov 6)\n"
+    },
+    "jetter-pedal": {
+      "owner": "kevin",
+      "name": "Jetter foot pedal sticking - get it repaired before bakery job (Nov 12)",
+      "status": "completed",
+      "assignees": [
+        "kevin"
+      ],
+      "share_with_team": true,
+      "content": "# Jetter foot pedal\n\nPedal sticks on. Safety issue.\n\n- [x] Took it to the repair shop Fri Nov 6, 2:00\n- [x] Pedal switch replaced, $86\n- [x] Back in van 3, tested\n"
+    },
+    "greer-repipe": {
+      "owner": "tyrell",
+      "name": "Greer repipe (PB-26-03544)",
+      "project": "greer-repipe",
+      "status": "in_progress",
+      "assignees": [
+        "tyrell",
+        "amy"
+      ],
+      "share_with_team": true,
+      "content": "# Greer repipe\n\nSee the job plan.\n\n- [x] Permit issued (Nov 6)\n- [x] Trunk line\n- [x] Manifold\n- [ ] Branch runs (Mon-Tue Nov 9-10)\n- [ ] Pressure test Wed Nov 11\n- [ ] Rough-in inspection requested in portal\n- [ ] Rough-in passed\n- [ ] Drywall (customer's contractor, Thu Nov 12 8am)\n- [ ] Fixture connections + final\n"
+    },
+    "building-c-quote": {
+      "owner": "kevin",
+      "name": "Building C - quote 24 low-flow toilets",
+      "project": "lakeshore",
+      "status": "in_progress",
+      "assignees": [
+        "kevin"
+      ],
+      "share_with_team": true,
+      "content": "# Building C toilet quote\n\nStarted Nov 3 after the sample swaps.\n\n- [x] Unit count: 24 (3 already swapped, will redo for consistency)\n- [x] Samples in 2 units, Brian liked them\n- [x] Price from the Coldwater sample invoice: $475 installed x 24 = $11,400\n- [ ] Write it up and send to Dan\n"
+    },
+    "lakeshore-invoice-split": {
+      "owner": "owner",
+      "name": "Re-issue Lakeshore Oct 30 emergency invoice split (WO-5551 + rental)",
+      "project": "lakeshore",
+      "status": "not_started",
+      "assignees": [
+        "owner"
+      ],
+      "share_with_team": true,
+      "content": "# Split the $4,870 invoice\n\nBrian's AP needs: emergency repair under WO-5551, excavation rental ($640) as a separate line with the rental receipt, and photos.\n"
+    },
+    "insurance-renewal": {
+      "owner": "owner",
+      "name": "Insurance renewal info: payroll by class, vehicles, subs",
+      "project": "office",
+      "status": "not_started",
+      "assignees": [
+        "owner"
+      ],
+      "share_with_team": true,
+      "content": "# GL renewal + workers comp audit\n\nPat Duggan needs payroll by classification (plumber, apprentice, office), 1099 subs with COIs, and quarterly payroll tax reports by Nov 13 so he can shop the GL renewal. Granite Shield needs payroll estimate, number of vehicles (4) and subcontractor costs by Nov 15. Ask Joan for the payroll reports.\n"
+    },
+    "oakmont-turnovers": {
+      "owner": "luis",
+      "name": "Oakmont turnover inspections (3 units, end of month)",
+      "status": "not_started",
+      "assignees": [
+        "luis"
+      ],
+      "share_with_team": true,
+      "content": "# Oakmont turnovers\n\n220 Calder St 3C, Linden Ave #15 2B, Harbor Rd #900 11. Checklist: fixtures, shutoffs, water heater age, drains, leaks. Report with photos per unit + quote for anything needing work. $125 per unit.\n"
+    },
+    "amy-backflow-exam": {
+      "owner": "owner",
+      "name": "Register Amy for the backflow tester exam ($185)",
+      "project": "office",
+      "status": "not_started",
+      "assignees": [
+        "owner"
+      ],
+      "share_with_team": true,
+      "content": "# Amy's backflow exam\n\nRegistration closes Nov 13. Shop pays the $185.\n"
+    },
+    "hire-journeyman": {
+      "owner": "owner",
+      "name": "Hire second journeyman",
+      "project": "office",
+      "status": "in_progress",
+      "assignees": [
+        "owner"
+      ],
+      "share_with_team": true,
+      "content": "# Hire a journeyman\n\nTradeHire listing ($32-38/hr) expires in about a week.\n\n- [x] Dwayne Carter interview Oct 29 (8 yrs, own tools, open to on-call, wants tankless work)\n- [ ] Second interview / ride-along with Luis\n- [ ] Ray Whitcomb: phone screen (prefers no on-call, no service tools)\n- [ ] Offer\n"
+    },
+    "van-wrap": {
+      "owner": "owner",
+      "name": "Van wrap quote (WrapKing)",
+      "project": "office",
+      "status": "canceled",
+      "assignees": [
+        "owner"
+      ],
+      "share_with_team": true,
+      "content": "# Van wraps\n\nCanceled: not this year.\n"
+    }
+  },
+  "calls": {
+    "crew-meeting": {
+      "channel": "crew",
+      "created_by": "owner",
+      "participants": [
+        "owner",
+        "luis",
+        "kevin",
+        "tyrell",
+        "amy"
+      ],
+      "duration_minutes": 20,
+      "ended_minutes_ago": 10500,
+      "name": "Monday crew meeting - Nov 2",
+      "transcript": [
+        {
+          "speaker": "owner",
+          "text": "Quick one before trucks roll. The warranty tank for claim WC-77812 is coming to Ferro branch 4 this week, Thermacrest says Friday but the counter thinks Thursday."
+        },
+        {
+          "speaker": "luis",
+          "text": "I'll swap it the afternoon it lands. Who's registering the new serial? Thermacrest only pays the hundred fifty labor if the replacement is registered within thirty days of install, and they want the old rating plate sent back with the pickup receipt."
+        },
+        {
+          "speaker": "owner",
+          "text": "That's me. Put the plate and the receipt on my desk and I'll do the portal and mail it."
+        },
+        {
+          "speaker": "kevin",
+          "text": "Jetter pedal is sticking again. The bakery jetting is on the twelfth."
+        },
+        {
+          "speaker": "owner",
+          "text": "Take it to the repair shop Friday after Building C. Don't use it until it's fixed."
+        },
+        {
+          "speaker": "tyrell",
+          "text": "Greer: once the permit's issued I'll have the trunk in by Friday, branches Monday and Tuesday. Paul's drywall guy wants to start Thursday the twelfth at eight."
+        },
+        {
+          "speaker": "owner",
+          "text": "Then rough-in has to be Wednesday the eleventh. You or me on the portal?"
+        },
+        {
+          "speaker": "tyrell",
+          "text": "You've got the login."
+        },
+        {
+          "speaker": "owner",
+          "text": "Right. I'll book it as soon as the permit's issued."
+        },
+        {
+          "speaker": "amy",
+          "text": "Can we go over on-call for November? I still don't know if I'm on, and the guy you're interviewing asked how it works."
+        },
+        {
+          "speaker": "owner",
+          "text": "I'll write it up in the handbook this week, with the van rules, and post it."
+        },
+        {
+          "speaker": "kevin",
+          "text": "Building C quote, I'll price it off the Coldwater sample invoice and send it to you."
+        },
+        {
+          "speaker": "luis",
+          "text": "Also, Brian's maintenance guy says A and B have the same old toilets as C. If C goes in, that's another forty or so."
+        }
+      ]
+    },
+    "dan-luis-huddle": {
+      "channel": "dm-dan-luis",
+      "created_by": "luis",
+      "participants": [
+        "luis",
+        "owner"
+      ],
+      "duration_minutes": 8,
+      "ended_minutes_ago": 7300,
+      "name": "Dan / Luis - week catch-up",
+      "transcript": [
+        {
+          "speaker": "luis",
+          "text": "Sandra Whitlock asked about the yearly drain plan again when I did her drain. That's the third time someone asked me this fall."
+        },
+        {
+          "speaker": "owner",
+          "text": "I know. It's on the goals list. We never set it up in Dispatchly."
+        },
+        {
+          "speaker": "luis",
+          "text": "If you get me a flyer I'll leave one at every house. Lindholm, the Kapoors and the Jennings would all take it."
+        },
+        {
+          "speaker": "owner",
+          "text": "I'll get the flyer done and set up the recurring job in Dispatchly by the fifteenth."
+        },
+        {
+          "speaker": "luis",
+          "text": "Also Lindholm wants a price on a 50 gallon replacement for spring. Tank's got two, three years left."
+        },
+        {
+          "speaker": "owner",
+          "text": "Put it on the estimates list."
+        }
+      ]
+    }
+  },
+  "messages": [
+    {
+      "channel": "crew",
+      "from": "owner",
+      "text": "Timesheets by Friday 5pm. Email is fine, I know JobTimer keeps logging people out."
+    },
+    {
+      "channel": "crew",
+      "from": "amy",
+      "text": "Who's on call this weekend? Nobody told me if I'm on."
+    },
+    {
+      "channel": "crew",
+      "from": "luis",
+      "text": "I took last weekend. Somebody else this one? Kevin?"
+    },
+    {
+      "channel": "crew",
+      "from": "kevin",
+      "text": "I can, but I did two in October. We need a real schedule."
+    },
+    {
+      "channel": "crew",
+      "from": "amy",
+      "text": "Riser diagram got PB-26-03544 approved on the first resubmit!"
+    },
+    {
+      "channel": "crew",
+      "from": "owner",
+      "text": "Nice work Amy. That saved us a week."
+    },
+    {
+      "channel": "jobs",
+      "from": "tyrell",
+      "text": "Customer on Pine St asking what we charge for a gas leak check. Set price or hourly?"
+    },
+    {
+      "channel": "jobs",
+      "from": "kevin",
+      "text": "What's the trip charge if they cancel at the door? Lady on Dorset just did."
+    },
+    {
+      "channel": "jobs",
+      "from": "amy",
+      "text": "Someone wants a water heater flush Saturday. Is that the $225 weekend call-out plus the flush, or just $225?"
+    },
+    {
+      "channel": "jobs",
+      "from": "owner",
+      "text": "All of this is in the price book. Please check it before you call me.",
+      "mentions": [
+        "document:price-book"
+      ]
+    },
+    {
+      "channel": "jobs",
+      "from": "tyrell",
+      "text": "Feld wants a ballpark for tankless, 4 bed 3 bath, gas to the garage. What range do I give him?"
+    },
+    {
+      "channel": "jobs",
+      "from": "luis",
+      "text": "Are supplied toilets $475 or $489 now? I've heard both this week."
+    },
+    {
+      "channel": "jobs",
+      "from": "kevin",
+      "text": "Customer asked how much the yearly drain plan is. I said I'd find out."
+    },
+    {
+      "channel": "jobs",
+      "from": "owner",
+      "text": "$149 a year. We haven't launched it yet, so don't sell it."
+    },
+    {
+      "channel": "jobs",
+      "from": "kevin",
+      "text": "Okoro return visit done. Slip nut on the trap was cross-threaded, replaced it, dry after 30 minutes. No charge like Dan said."
+    },
+    {
+      "channel": "jobs",
+      "from": "luis",
+      "text": "All four Oakmont backflow tests passed (Westgate retest Friday). Reports went to Renee and the city cross-connection program Friday afternoon."
+    },
+    {
+      "channel": "jobs",
+      "from": "luis",
+      "text": "Warranty swap for WC-77812 done Thursday. Old rating plate and the Ferro pickup receipt are on Dan's desk in an envelope."
+    },
+    {
+      "channel": "jobs",
+      "from": "tyrell",
+      "text": "Greer: trunk and manifold are in. Branch runs today and tomorrow with the second roll. Paul's drywall guy confirmed Thursday 8am.",
+      "mentions": [
+        "project:greer-repipe"
+      ]
+    },
+    {
+      "channel": "jobs",
+      "from": "tyrell",
+      "text": "Pressure test Wednesday morning, 100 psi for 2 hours, then it's ready for the inspector."
+    },
+    {
+      "channel": "jobs",
+      "from": "kevin",
+      "text": "Building C quote: $475 x 24 = $11,400 using Coldwater pricing. Writing it up tonight for Dan.",
+      "mentions": [
+        "project:lakeshore"
+      ]
+    },
+    {
+      "channel": "jobs",
+      "from": "kevin",
+      "text": "Brian's maintenance guy says A and B are 1979 originals too, about 38 toilets between them. He asked if we'd do the same price."
+    },
+    {
+      "channel": "jobs",
+      "from": "luis",
+      "text": "Monday van inventory done. Parts list texted to Dan."
+    },
+    {
+      "channel": "parts-and-vans",
+      "from": "kevin",
+      "text": "Jetter's back from the repair shop. New pedal switch, $86. Good for the bakery on Thursday."
+    },
+    {
+      "channel": "parts-and-vans",
+      "from": "tyrell",
+      "text": "Van 2 is back, $612 for plugs and coil. Check engine light's off."
+    },
+    {
+      "channel": "parts-and-vans",
+      "from": "kevin",
+      "text": "Van 3 latch is still zip-tied. Can it go in with the next oil change?"
+    },
+    {
+      "channel": "parts-and-vans",
+      "from": "amy",
+      "text": "JobTimer logged me out again. I'm just emailing my hours."
+    },
+    {
+      "channel": "parts-and-vans",
+      "from": "kevin",
+      "text": "Same. I haven't opened JobTimer since September."
+    },
+    {
+      "channel": "parts-and-vans",
+      "from": "luis",
+      "text": "Need a 1/2\" PEX crimp head (Kevin's is cracked), 12 wax rings and six 3/4\" ball valves on the next Ferro order."
+    },
+    {
+      "channel": "parts-and-vans",
+      "from": "tyrell",
+      "text": "Do we still have the old TrakVan box in van 4? It's beeping when I start it."
+    },
+    {
+      "channel": "dm-dan-luis",
+      "from": "luis",
+      "text": "Lindholm wants a 50 gal replacement price for spring. Put him on the list?"
+    },
+    {
+      "channel": "dm-dan-luis",
+      "from": "owner",
+      "text": "Yes. And thanks for covering last weekend."
+    }
+  ]
+}

@@ -16,7 +16,6 @@ vi.mock('@app/lib/analytics/posthog', () => ({
   ),
 }));
 vi.mock('@core/constant/featureFlags', () => ({
-  enableProjects: { key: 'enable-projects', override: undefined },
   isFeatureEnabled: () => mocks.enabled(),
 }));
 vi.mock('@components/app/split-layout/layout', () => ({
@@ -86,23 +85,4 @@ it('does not read pending query data', () => {
   };
   render(() => <ProjectAttachment id="initiative-1" />);
   expect(screen.getByText('Loading project…')).toBeTruthy();
-});
-
-it('does not mount project queries while off and removes links when the flag turns off', () => {
-  const [enabled, setEnabled] = createSignal(false);
-  mocks.enabled = enabled;
-  mocks.query = {
-    isPending: false,
-    isError: false,
-    isSuccess: true,
-    data: { id: 'initiative-1', name: 'Launch' },
-  };
-  render(() => <ProjectAttachment id="initiative-1" />);
-  expect(mocks.mountQuery).not.toHaveBeenCalled();
-  expect(screen.queryByRole('button')).toBeNull();
-  setEnabled(true);
-  expect(mocks.mountQuery).toHaveBeenCalledOnce();
-  expect(screen.getByRole('button', { name: 'Launch' })).toBeTruthy();
-  setEnabled(false);
-  expect(screen.queryByRole('button')).toBeNull();
 });

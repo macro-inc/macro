@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use super::run::{RunState, RunStateName};
+use super::topic::{Topic, TopicChange, TopicName};
 
 #[cfg(test)]
 mod test;
@@ -34,6 +35,8 @@ pub struct Suggestion {
     pub state: SuggestionState,
     /// Why it was resolved; only on resolved suggestions.
     pub state_reason: Option<String>,
+    /// The topic it belongs to, if any; never on a routine suggestion.
+    pub topic: Option<TopicName>,
     /// The items it is about.
     pub about: Vec<Target>,
     /// What acting on it produced.
@@ -165,6 +168,9 @@ pub struct SuggestionRun {
     pub state: RunStateName,
     /// When it entered `state`.
     pub state_changed_at: DateTime<Utc>,
+    /// The one line the run wrote for the person before it ended, saying
+    /// what it did and what it sent; none until it writes one.
+    pub report: Option<String>,
 }
 
 /// Where a run's session is, as the scheduler reads it.
@@ -527,6 +533,10 @@ pub struct SuggestionFeed {
     /// out when the feed was read with a `limit`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub done: Option<Vec<Suggestion>>,
+    /// The topics the open suggestions belong to, in the order they first
+    /// appear among them; left out when the feed was read with a `limit`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub topics: Option<Vec<Topic>>,
     /// How many suggestions the whole feed holds of each status, whatever the
     /// `limit`.
     pub counts: FeedCounts,
@@ -572,6 +582,11 @@ pub struct SuggestionsReview {
     /// Open suggestions first, best first, then closed ones newest first. A
     /// dismissed suggestion's `stateChangedAt` is when the person dismissed it.
     pub suggestions: Vec<Suggestion>,
+    /// The topics those suggestions belong to, in the order they first
+    /// appear, each with how many of its suggestions are open. Absent from a
+    /// server that has none.
+    #[schema(required = false)]
+    pub topics: Vec<Topic>,
     /// Open suggestions the person has, and the most they may have.
     pub open: u32,
     /// The most open suggestions a person may have.
@@ -598,6 +613,12 @@ pub struct NewSuggestion {
     /// The feed's filters it shows under.
     #[serde(default)]
     pub categories: Vec<Category>,
+    /// The key of the topic it belongs to, named with
+    /// `macro.suggestions.nameTopic` first, or null for none; left out, a
+    /// suggestion that exists keeps the one it has.
+    #[serde(default)]
+    #[schema(value_type = Option<String>)]
+    pub topic: TopicChange,
     /// The items it is about.
     #[serde(default)]
     pub about: Vec<Target>,
@@ -635,6 +656,10 @@ pub struct RewriteSuggestion {
     /// New categories.
     #[serde(default)]
     pub categories: Option<Vec<Category>>,
+    /// The key of the topic it now belongs to, or null for none.
+    #[serde(default)]
+    #[schema(value_type = Option<String>)]
+    pub topic: TopicChange,
     /// New items it is about.
     #[serde(default)]
     pub about: Option<Vec<Target>>,
@@ -655,6 +680,17 @@ pub struct RewriteSuggestion {
 pub struct RetireSuggestionRequest {
     /// Why, for the change log.
     pub reason: String,
+}
+
+/// What a background run did, in one line for the person, written by the
+/// run before its last message.
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RunReport {
+    /// What it did and what it sent, as the card shows it, such as "12 seats
+    /// added · Nothing was sent". One plain line; it names no email address,
+    /// phone number or street address.
+    pub report: String,
 }
 
 /// A reply draft a session wrote for an open reply suggestion, as the user,
@@ -717,6 +753,8 @@ pub struct SuggestionContent {
     pub importance: u8,
     /// See [`Suggestion::categories`].
     pub categories: Vec<Category>,
+    /// The key of its [`Suggestion::topic`].
+    pub topic: Option<String>,
     /// See [`Suggestion::about`].
     pub about: Vec<Target>,
     /// A prompt suggestion's prompt.
@@ -738,6 +776,7 @@ impl SuggestionContent {
             summary: suggestion.summary.clone(),
             importance: suggestion.importance,
             categories: suggestion.categories.clone(),
+            topic: suggestion.topic.as_ref().map(|topic| topic.key.clone()),
             about: suggestion.about.clone(),
             prompt: match &suggestion.kind {
                 SuggestionKind::Prompt { prompt, .. } => Some(prompt.clone()),
@@ -895,12 +934,12 @@ pub struct Change {
     pub at: DateTime<Utc>,
 }
 
-/// Why code resolved a suggestion, as stored in `state_reason`.
+/// Why code resolved a suggestion, as stored in `state_reason`. The person
+/// answering a reply suggestion doesn't resolve it but makes it done; rows
+/// resolved before that keep `replied`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum ResolveReason {
-    /// The person answered what the suggestion asked them to answer.
-    Replied,
     /// An item it is about was deleted.
     Deleted,
     /// The person can no longer open an item it is about.
@@ -944,10 +983,16 @@ pub enum SuggestionError {
     /// produced.
     #[error("a routine suggestion is not accepted; the user saves its routine in the app")]
     RoutineNotAccepted,
-    /// Only a suggestion the person dismissed in the last few minutes comes
-    /// back, and not a routine suggestion.
-    #[error("only a suggestion dismissed in the last five minutes can be restored")]
+    /// Only a suggestion the person dismissed, or completed themself, in the
+    /// last few minutes comes back, and not a routine suggestion.
+    #[error(
+        "only a suggestion dismissed, or completed by opening it, in the last five minutes can be restored"
+    )]
     NotRestorable,
+    /// Only a background run of the person's, still under way, writes its
+    /// report, from its own session.
+    #[error("only a background run of a suggestion, still under way, may report what it did")]
+    NotARun,
     /// Anything else.
     #[error("internal suggestions error: {0:?}")]
     Internal(rootcause::Report),

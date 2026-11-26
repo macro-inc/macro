@@ -1,5 +1,4 @@
 import { compareSoupNames } from '@app/features/soup/collection/transforms';
-import { enableSnippets, isFeatureEnabled } from '@core/constant/featureFlags';
 import { compareDateDesc } from '@core/util/date';
 import type { DocumentEntity, EntityData } from '@entity';
 import type { DriveSelection } from '../context/drive-source';
@@ -12,8 +11,6 @@ function documentMatchesTab(
   userId: string | undefined
 ): boolean {
   if (entity.subType?.type === 'task') return false;
-  if (entity.subType?.type === 'snippet' && !isFeatureEnabled(enableSnippets))
-    return false;
   if (tab === 'shared') return Boolean(userId) && entity.ownerId !== userId;
   if (tab === 'owned' && scope === 'default') return entity.ownerId === userId;
 

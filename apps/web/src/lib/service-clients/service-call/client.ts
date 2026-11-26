@@ -333,15 +333,6 @@ export const callServiceClient = {
     ).map((result) => result);
   },
 
-  async deleteCallRecord(callId: string) {
-    return (
-      await fetchWithToken<Record<string, never>>(
-        `${host}/call/record/${callId}`,
-        { method: 'DELETE' }
-      )
-    ).map(() => undefined);
-  },
-
   /**
    * `POST /call/record/{id}/share-with-team/toggle`: flips the live call's
    * share-with-team toggle and returns the new value. The toggle becomes

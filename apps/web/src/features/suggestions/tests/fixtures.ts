@@ -47,14 +47,22 @@ export const runningSuggestion: Suggestion = {
   ...backgroundSuggestion,
   id: 'suggestion-running',
   status: 'running',
-  run: { sessionId: 'session-1', startedAt: '2026-11-09T08:00:00Z' },
+  run: {
+    sessionId: 'session-1',
+    startedAt: '2026-11-09T08:00:00Z',
+    stopping: false,
+  },
 };
 
 export const failedSuggestion: Suggestion = {
   ...backgroundSuggestion,
   id: 'suggestion-failed',
   status: 'failed',
-  run: { sessionId: 'session-2', startedAt: '2026-11-09T08:00:00Z' },
+  run: {
+    sessionId: 'session-2',
+    startedAt: '2026-11-09T08:00:00Z',
+    stopping: false,
+  },
 };
 
 export const doneSuggestion: Suggestion = {
@@ -62,7 +70,11 @@ export const doneSuggestion: Suggestion = {
   id: 'suggestion-done',
   status: 'done',
   stateChangedAt: '2026-11-09T08:05:00Z',
-  run: { sessionId: 'session-3', startedAt: '2026-11-09T08:00:00Z' },
+  run: {
+    sessionId: 'session-3',
+    startedAt: '2026-11-09T08:00:00Z',
+    stopping: false,
+  },
   result: { entityType: 'document', entityId: 'document-1' },
 };
 
@@ -89,6 +101,16 @@ export const draftedReplySuggestion: Suggestion = {
     partId: 'draft-1',
     preview: 'The terms are unchanged; only the price moved.',
   },
+};
+
+export const reviewSuggestion: Suggestion = {
+  ...BASE,
+  id: 'suggestion-review',
+  kind: 'entity',
+  action: 'review',
+  title: 'Review the vendor contract',
+  summary: 'The redlined contract came back and needs a read before signing.',
+  about: [{ entityType: 'document', entityId: 'document-2' }],
 };
 
 export const routineSuggestion: Suggestion = {

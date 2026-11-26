@@ -2,11 +2,10 @@ import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { createAiDocument } from '@app/features/block-ai/queries/create-ai';
 import { createFigDocument } from '@app/features/block-fig/queries/create-fig';
 import { createPsdDocument } from '@app/features/block-psd/queries/create-psd';
-import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import { createSpreadsheetDocument } from '@app/features/block-spreadsheet/queries/create-spreadsheet';
 import { openChatWithAgent } from '@app/features/chat/ChatWithAgentButton';
 import { t } from '@app/lib/i18n';
-import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
+import type { BlockTool } from '@components/app/block-tool';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
@@ -340,9 +339,7 @@ function ProjectCreateDialog(props: {
 }) {
   const { replaceSplit, insertSplit } = useSplitLayout();
   const createBlock = makeCreateBlock({ replaceSplit, insertSplit });
-  const spreadsheetAccess = useSpreadsheetAccess();
   const offered = (spec: CreateSpec) => {
-    if (spec.blockName === 'spreadsheet') return spreadsheetAccess();
     if (spec.blockName === 'psd') return isFeatureEnabled(enablePsdEditor);
     if (spec.blockName === 'fig') return isFeatureEnabled(enableFigViewer);
     if (spec.blockName === 'ai') return isFeatureEnabled(enableAiEditor);
@@ -398,9 +395,7 @@ function MenuItem(props: MenuItemProps) {
 function MenuContent(props: { projectId: string; name: string }) {
   const { replaceSplit, insertSplit } = useSplitLayout();
   const createBlock = makeCreateBlock({ replaceSplit, insertSplit });
-  const spreadsheetAccess = useSpreadsheetAccess();
   const offered = (spec: CreateSpec) => {
-    if (spec.blockName === 'spreadsheet') return spreadsheetAccess();
     if (spec.blockName === 'psd') return isFeatureEnabled(enablePsdEditor);
     if (spec.blockName === 'fig') return isFeatureEnabled(enableFigViewer);
     if (spec.blockName === 'ai') return isFeatureEnabled(enableAiEditor);

@@ -2,55 +2,30 @@ use models_opensearch::SearchIndex;
 
 use crate::{
     Result,
-    error::{OpensearchClientError, OpensearchOperation},
+    error::OpensearchOperation,
+    upsert::chat_message::{CHILD_RELATION, PARENT_RELATION},
 };
 
-/// Deletes all chat messages with the specified chat_id
+/// Deletes the chat with the specified chat_id and every message under it.
+/// Messages carry their own id in `entity_id`, so they are matched by their
+/// parent; `parent_id` still finds them if a retry runs after the chat itself
+/// is gone.
 #[tracing::instrument(skip(client))]
 pub async fn delete_chat_by_id(
     client: &opensearch::OpenSearch,
     chat_id: &str,
     index_override: Option<&str>,
 ) -> Result<()> {
-    let query = serde_json::json!({
-        "query": {
-            "term": {
-                "entity_id": chat_id
-            }
-        },
-    });
-
-    let index = index_override.unwrap_or(SearchIndex::Chats.as_ref());
-    let response = client
-        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[index]))
-        .body(query)
-        .refresh(true) // Ensure the index reflects changes immediately
-        .send()
-        .await
-        .map_err(|err| {
-            OpensearchClientError::request_failed(OpensearchOperation::DeleteChatById, &err)
-        })?;
-
-    let status_code = response.status_code();
-
-    if !status_code.is_success() {
-        let body = response.text().await.map_err(|err| {
-            OpensearchClientError::deserialization_failed(OpensearchOperation::DeleteChatById, &err)
-        })?;
-
-        tracing::error!(
-            status_code = ?status_code,
-            body = ?body,
-            "error deleting chats by id"
-        );
-
-        return Err(OpensearchClientError::Unknown {
-            details: body,
-            operation: OpensearchOperation::DeleteChatById,
-        });
-    }
-
-    Ok(())
+    super::by_query::delete_matching(
+        client,
+        index_override.unwrap_or(SearchIndex::Chats.as_ref()),
+        serde_json::json!({ "bool": { "should": [
+            { "term": { "entity_id": chat_id } },
+            { "parent_id": { "type": CHILD_RELATION, "id": chat_id } }
+        ] } }),
+        OpensearchOperation::DeleteChatById,
+    )
+    .await
 }
 
 /// Deletes a particular chat message with the specified chat_id and chat_message_id
@@ -61,105 +36,45 @@ pub async fn delete_chat_message_by_id(
     chat_message_id: &str,
     index_override: Option<&str>,
 ) -> Result<()> {
-    let query = serde_json::json!({
-        "query": {
-            "bool": {
-                "must": [
-                    {
-                        "term": {
-                            "entity_id": chat_id
-                        }
-                    },
-                    {
-                        "term": {
-                            "chat_message_id": chat_message_id
-                        }
-                    }
-                ]
-            }
-        }
-    });
-
-    let index = index_override.unwrap_or(SearchIndex::Chats.as_ref());
-    let response = client
-        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[index]))
-        .body(query)
-        .refresh(true) // Ensure the index reflects changes immediately
-        .send()
-        .await
-        .map_err(|err| {
-            OpensearchClientError::request_failed(OpensearchOperation::DeleteChatMessageById, &err)
-        })?;
-
-    let status_code = response.status_code();
-
-    if !status_code.is_success() {
-        let body = response.text().await.map_err(|err| {
-            OpensearchClientError::deserialization_failed(
-                OpensearchOperation::DeleteChatMessageById,
-                &err,
-            )
-        })?;
-
-        tracing::error!(
-            status_code = ?status_code,
-            body = ?body,
-            "error deleting chats by id"
-        );
-
-        return Err(OpensearchClientError::Unknown {
-            details: body,
-            operation: OpensearchOperation::DeleteChatMessageById,
-        });
-    }
-
-    Ok(())
+    super::by_query::delete_matching(
+        client,
+        index_override.unwrap_or(SearchIndex::Chats.as_ref()),
+        serde_json::json!({ "ids": { "values": [format!("{chat_id}:{chat_message_id}")] } }),
+        OpensearchOperation::DeleteChatMessageById,
+    )
+    .await
 }
 
-/// Deletes all chat messages with a specific user_id
+/// Deletes every chat of a specific user_id and the messages under them.
 #[tracing::instrument(skip(client))]
 pub async fn delete_chat_by_user_id(client: &opensearch::OpenSearch, user_id: &str) -> Result<()> {
-    let query = serde_json::json!({
-        "query": {
-            "term": {
-                "user_id": user_id
-            }
-        },
-    });
-
-    let response = client
-        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[
-            SearchIndex::Chats.as_ref()
-        ]))
-        .body(query)
-        .refresh(true) // Ensure the index reflects changes immediately
-        .send()
-        .await
-        .map_err(|err| {
-            OpensearchClientError::request_failed(OpensearchOperation::DeleteChatByUserId, &err)
-        })?;
-
-    let status_code = response.status_code();
-
-    if !status_code.is_success() {
-        let body = response.text().await.map_err(|err| {
-            OpensearchClientError::deserialization_failed(
-                OpensearchOperation::DeleteChatByUserId,
-                &err,
-            )
-        })?;
-
-        tracing::error!(
-            status_code = ?status_code,
-            body = ?body,
-            "error deleting chats by user id"
-        );
-
-        return Err(OpensearchClientError::Unknown {
-            details: body,
-            operation: OpensearchOperation::DeleteChatByUserId,
-        });
-    }
-
-    Ok(())
+    delete_user_chats(client, user_id, SearchIndex::Chats.as_ref()).await
 }
+
+/// Deletes a user's chats in `index` and the messages under them. Messages
+/// carry no `user_id`, so they are matched by their chat's, and go first:
+/// once a chat is gone nothing finds its messages.
+pub(crate) async fn delete_user_chats(
+    client: &opensearch::OpenSearch,
+    user_id: &str,
+    index: &str,
+) -> Result<()> {
+    let owned_by_user = serde_json::json!({ "term": { "user_id": user_id } });
+    super::by_query::delete_matching(
+        client,
+        index,
+        serde_json::json!({ "has_parent": { "parent_type": PARENT_RELATION, "query": owned_by_user } }),
+        OpensearchOperation::DeleteChatByUserId,
+    )
+    .await?;
+    super::by_query::delete_matching(
+        client,
+        index,
+        owned_by_user,
+        OpensearchOperation::DeleteChatByUserId,
+    )
+    .await
+}
+
+#[cfg(test)]
+mod test;

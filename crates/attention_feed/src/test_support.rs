@@ -18,8 +18,8 @@ use uuid::Uuid;
 
 use crate::domain::{
     models::{
-        Candidate, CandidatePage, CandidateRequest, EntityFacts, FeedNotification, FeedPosition,
-        FeedViewer, MailFacts,
+        Candidate, CandidatePage, CandidateRead, CandidateRequest, EntityFacts, FeedNotification,
+        FeedPosition, FeedViewer, MailFacts,
     },
     ports::{CandidateSource, FeedMail, FeedNotifications, FeedSignals, NotificationTransition},
 };
@@ -336,12 +336,20 @@ pub fn mail_candidate<E>(
 }
 
 /// Serves a fixed list of candidates in feed order, narrowed by each
-/// request's `only` keys, cursor and limit, and records every request.
+/// request's `only` keys, cursor and limit (and, for a replica read, its
+/// `unreplicated` candidates), and records every request.
 pub struct FakeSource<E> {
     /// The candidates, newest first.
     pub items: Arc<Mutex<Vec<Candidate<E>>>>,
     /// Every request received, in order.
     pub requests: Arc<Mutex<Vec<CandidateRequest>>>,
+    /// The keys `unread_keys` serves, before its limit per type.
+    pub unread: Arc<Mutex<Vec<Entity<'static>>>>,
+    /// How many times `unread_keys` was asked.
+    pub unread_reads: Arc<Mutex<usize>>,
+    /// Candidates only the primary holds yet: a replica read leaves them out,
+    /// as a replica that has not caught up with their writes would.
+    pub unreplicated: Arc<Mutex<Vec<Entity<'static>>>>,
 }
 
 impl<E> Clone for FakeSource<E> {
@@ -349,6 +357,9 @@ impl<E> Clone for FakeSource<E> {
         Self {
             items: Arc::clone(&self.items),
             requests: Arc::clone(&self.requests),
+            unread: Arc::clone(&self.unread),
+            unread_reads: Arc::clone(&self.unread_reads),
+            unreplicated: Arc::clone(&self.unreplicated),
         }
     }
 }
@@ -359,6 +370,9 @@ impl<E> FakeSource<E> {
         Self {
             items: Arc::new(Mutex::new(items)),
             requests: Arc::default(),
+            unread: Arc::default(),
+            unread_reads: Arc::default(),
+            unreplicated: Arc::default(),
         }
     }
 }
@@ -372,8 +386,12 @@ where
     async fn page(&self, request: CandidateRequest) -> Result<CandidatePage<E>, Report> {
         self.requests.lock().unwrap().push(request.clone());
         let items = self.items.lock().unwrap().clone();
+        let unreplicated = self.unreplicated.lock().unwrap().clone();
         let mut page: Vec<_> = items
             .into_iter()
+            .filter(|item| {
+                request.read == CandidateRead::Committed || !unreplicated.contains(&item.key)
+            })
             .filter(|item| {
                 request
                     .only
@@ -397,6 +415,29 @@ where
             }
         });
         Ok(CandidatePage { items: page, next })
+    }
+
+    async fn unread_keys(
+        &self,
+        _viewer: &FeedViewer,
+        types: Vec<EntityType>,
+        limit: u16,
+    ) -> Result<Vec<Entity<'static>>, Report> {
+        *self.unread_reads.lock().unwrap() += 1;
+        let mut served: HashMap<EntityType, usize> = HashMap::new();
+        Ok(self
+            .unread
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|key| types.contains(&key.entity_type))
+            .filter(|key| {
+                let count = served.entry(key.entity_type).or_default();
+                *count += 1;
+                *count <= usize::from(limit)
+            })
+            .cloned()
+            .collect())
     }
 }
 

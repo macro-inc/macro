@@ -42,6 +42,28 @@ impl InboxSyncCatalog for PgInboxSync {
             .await
             .map_err(Into::into)
     }
+    async fn labelled_messages(
+        &self,
+        link: Uuid,
+        label: &str,
+        after: Uuid,
+        limit: u16,
+    ) -> Result<Vec<LabelledMessage>, Self::Err> {
+        Ok(email_db_client::labels::get::fetch_labelled_messages_page(
+            &self.0,
+            link,
+            label,
+            after,
+            i64::from(limit),
+        )
+        .await?
+        .into_iter()
+        .map(|message| LabelledMessage {
+            message_id: message.message_id,
+            thread_id: message.thread_id,
+        })
+        .collect())
+    }
 }
 impl InboxSyncMessageStore for PgInboxSync {
     async fn thread_ids(
@@ -63,14 +85,14 @@ impl InboxSyncMessageStore for PgInboxSync {
         thread: Uuid,
         message: &mut service::message::Message,
         resync: Option<&InboxSyncResync>,
-    ) -> Result<(), Self::Err> {
+    ) -> Result<Vec<Uuid>, Self::Err> {
         let resync = resync.map(
             |snapshot| email_db_client::messages::insert::ResyncSnapshot {
                 stored_labels: snapshot.stored_labels.clone(),
                 pending_labels: snapshot.pending_labels.clone(),
             },
         );
-        email_db_client::messages::insert::insert_message(
+        email_db_client::messages::insert::insert_message_gaining_labels(
             &self.0,
             thread,
             message,
@@ -91,6 +113,12 @@ impl InboxSyncMessageStore for PgInboxSync {
             .map(|_| ())
             .map_err(Into::into)
     }
+    async fn labels_new_to_thread(&self, message: Uuid) -> Result<Vec<Uuid>, Self::Err> {
+        email_db_client::labels::thread_gain::new_to_thread(&self.0, message)
+            .await
+            .map_err(anyhow::Error::from)
+            .map_err(Into::into)
+    }
     async fn message_ids(&self, link: Uuid, provider: &str) -> Result<(Uuid, Uuid), Self::Err> {
         email_db_client::messages::get::get_message_and_thread_id_by_provider_id(
             &self.0, link, provider,
@@ -105,22 +133,28 @@ impl InboxSyncAttachmentStore for PgInboxSync {
         link: Uuid,
         provider: &str,
     ) -> Result<Vec<AttachmentUploadMetadata>, Self::Err> {
-        email_db_client::attachments::provider::upload::new_email_document_atts(
+        let claimed = email_db_client::attachments::provider::upload::new_email_document_atts(
             &self.0, link, provider,
         )
-        .await
-        .map_err(Into::into)
+        .await?;
+        Ok(claimed
+            .into_iter()
+            .map(|claimed| claimed.metadata)
+            .collect())
     }
     async fn media_attachments(
         &self,
         link: Uuid,
         provider: &str,
     ) -> Result<Vec<AttachmentUploadMetadata>, Self::Err> {
-        email_db_client::attachments::provider::upload::new_email_media_atts(
+        let claimed = email_db_client::attachments::provider::upload::new_email_media_atts(
             &self.0, link, provider,
         )
-        .await
-        .map_err(Into::into)
+        .await?;
+        Ok(claimed
+            .into_iter()
+            .map(|claimed| claimed.metadata)
+            .collect())
     }
     async fn attachment_recipients(
         &self,

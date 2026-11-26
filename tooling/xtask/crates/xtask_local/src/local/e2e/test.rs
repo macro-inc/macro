@@ -24,6 +24,10 @@ fn derives_host_endpoints_and_test_environment_from_the_instance() {
         env["LOCAL_E2E_CONNECTION_GATEWAY_WS_URL"],
         "wss://localhost:31009/connection-gateway"
     );
+    assert_eq!(
+        env["LOCAL_E2E_AUTHENTICATION_URL"],
+        "https://localhost:31009/auth"
+    );
     assert_eq!(env["DATABASE_URL"], endpoints.postgres_url);
     assert_eq!(
         env["LOCAL_E2E_ENV_FILE"],

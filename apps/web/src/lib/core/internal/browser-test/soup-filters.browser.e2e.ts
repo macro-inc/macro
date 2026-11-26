@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { scrollList } from './scroll-gesture';
 
 test('closed Soup filters never read the directory, including on Home', async ({
   page,
@@ -41,19 +42,18 @@ test('Soup assignees page lazily and retain unknown selections and Unassigned', 
   await expect(
     page.getByRole(role, { name: /Viewer \(me\)/ }).first()
   ).toBeVisible();
-  if (!phone)
-    await page.getByRole('listbox').evaluate((element) => {
-      element.scrollTop = element.scrollHeight;
-    });
-  await page
-    .getByRole(phone ? 'button' : 'option', {
-      name: 'Next options',
-      exact: true,
-    })
-    .click();
-  await expect(
-    page.getByRole(role, { name: /Person 50/ }).first()
-  ).toBeInViewport();
+  // Reaching the end of the list lists the next page below the first.
+  if (phone)
+    await page
+      .getByRole(role, { name: /Person 49/ })
+      .first()
+      .scrollIntoViewIfNeeded();
+  else await scrollList(page.getByRole('listbox'));
+  const nextPage = page.getByRole(role, { name: /Person 50/ }).first();
+  await expect(nextPage).toBeAttached();
+  if (phone) await nextPage.scrollIntoViewIfNeeded();
+  else await scrollList(page.getByRole('listbox'), 150);
+  await expect(nextPage).toBeInViewport();
   await input.fill('zxq');
   const match = page.getByRole(role, { name: 'Broader match', exact: true });
   await expect(match).toBeVisible();

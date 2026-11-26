@@ -99,7 +99,7 @@ const MAILBOX: MailboxAccess = MailboxAccess {
 };
 
 #[tokio::test]
-async fn graph_retry_after_and_request_ids_are_recorded_on_every_response() {
+async fn graph_retry_after_request_ids_and_error_codes_are_recorded_on_every_response() {
     let spans = Spans::default();
     let _subscriber =
         tracing::subscriber::set_default(tracing_subscriber::registry().with(spans.clone()));
@@ -113,7 +113,10 @@ async fn graph_retry_after_and_request_ids_are_recorded_on_every_response() {
         .respond_with(
             ResponseTemplate::new(429)
                 .insert_header("Retry-After", "7")
-                .insert_header("request-id", "graph-request-1"),
+                .insert_header("request-id", "graph-request-1")
+                .set_body_json(serde_json::json!({
+                    "error": {"code": "ApplicationThrottled", "message": "Application is over its MailboxConcurrency limit."}
+                })),
         )
         .mount(&server)
         .await;
@@ -166,11 +169,13 @@ async fn graph_retry_after_and_request_ids_are_recorded_on_every_response() {
     assert_eq!(throttled["outlook.throttle_origin"], "graph");
     assert_eq!(throttled["outlook.retry_after_seconds"], "7");
     assert_eq!(throttled["graph.request_id"], "graph-request-1");
+    assert_eq!(throttled["graph.error_code"], "ApplicationThrottled");
     assert!(throttled.contains_key("otel.status_description"));
 
     assert_eq!(succeeded["http.response.status_code"], "200");
     assert_eq!(succeeded["outlook.throttle_origin"], "none");
     assert_eq!(succeeded["graph.request_id"], "graph-request-2");
+    assert!(!succeeded.contains_key("graph.error_code"));
     assert!(!succeeded.contains_key("otel.status_description"));
 }
 

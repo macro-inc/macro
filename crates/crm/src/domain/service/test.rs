@@ -30,10 +30,19 @@ struct StubRepo {
 }
 
 impl EmailPrivacyRepository for StubRepo {
+    async fn email_consent(
+        &self,
+        _: uuid::Uuid,
+        _: &str,
+    ) -> Result<crate::domain::email_privacy::EmailContributionConsent, CrmError> {
+        panic!("unexpected email_consent call")
+    }
+
     async fn excluded_email_threads(
         &self,
         _: uuid::Uuid,
         _: &str,
+        _: Option<uuid::Uuid>,
         _: Option<uuid::Uuid>,
     ) -> Result<crate::domain::email_privacy::ExcludedEmailThreads, CrmError> {
         panic!("unexpected excluded_email_threads call")
@@ -67,6 +76,9 @@ impl EmailPrivacyRepository for StubRepo {
             mailbox_email: None,
             team_domains: vec![],
             personal_domains: vec![],
+            team_domain_warnings: Default::default(),
+            personal_domain_warnings: Default::default(),
+            archived_team_domains: [("archived.example.com".to_owned(), uuid::Uuid::nil())].into(),
             can_remove_team_domains: false,
         })
     }
@@ -233,6 +245,16 @@ impl CompaniesRepository for StubRepo {
         unimplemented!()
     }
 
+    async fn create_contact_for_email_domain(
+        &self,
+        _team_id: &uuid::Uuid,
+        _email: &str,
+        _name: &str,
+        _now: DateTime<Utc>,
+    ) -> Result<CrmContact, CrmError> {
+        unimplemented!()
+    }
+
     async fn list_blocked_domains(
         &self,
         _team_id: &uuid::Uuid,
@@ -362,6 +384,16 @@ impl CompaniesRepository for StubRepo {
         Err(CrmError::ContactNotFoundForTeam)
     }
 
+    async fn update_company_domains(
+        &self,
+        _team_id: &uuid::Uuid,
+        _company_id: &uuid::Uuid,
+        _update: &crate::domain::company_domains::CompanyDomainUpdate,
+        _editor: crate::domain::company_domains::CompanyDomainEditor,
+    ) -> Result<CrmCompanyWithContacts, CrmError> {
+        Err(CrmError::CompanyNotFoundForTeam)
+    }
+
     async fn set_contact_hidden(
         &self,
         _team_id: &uuid::Uuid,
@@ -451,6 +483,15 @@ impl CompaniesRepository for StubRepo {
         _email: &str,
         _include_hidden: bool,
     ) -> Result<Option<CrmContact>, CrmError> {
+        unimplemented!()
+    }
+
+    async fn get_company_by_domain_for_team(
+        &self,
+        _team_id: &uuid::Uuid,
+        _domain: &str,
+        _include_hidden: bool,
+    ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
         unimplemented!()
     }
 
@@ -546,6 +587,23 @@ async fn members_can_add_team_blocks_but_only_admins_can_remove_them() {
                 .await
                 .unwrap()
                 .can_remove_team_domains
+        );
+    }
+}
+
+#[tokio::test]
+async fn only_admins_see_which_team_domains_come_from_archived_companies() {
+    let svc = service();
+    let settings = svc
+        .email_privacy(&receipt_with_role(TeamRole::Member))
+        .await
+        .unwrap();
+    assert!(settings.archived_team_domains.is_empty());
+    for role in [TeamRole::Admin, TeamRole::Owner] {
+        let settings = svc.email_privacy(&receipt_with_role(role)).await.unwrap();
+        assert_eq!(
+            settings.archived_team_domains,
+            [("archived.example.com".to_owned(), uuid::Uuid::nil())].into()
         );
     }
 }

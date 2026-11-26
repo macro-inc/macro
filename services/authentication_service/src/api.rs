@@ -58,9 +58,13 @@ pub(crate) mod trace_capture;
 const GATEWAY_PATH_PREFIX: &str = "/auth";
 
 pub(crate) async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<()> {
-    let cors = macro_cors::cors_layer_with_headers(vec![HeaderName::from_static(
-        MACRO_REFRESH_TOKEN_HEADER,
-    )]);
+    let cors = macro_cors::cors_layer_with_headers(vec![
+        HeaderName::from_static(MACRO_REFRESH_TOKEN_HEADER),
+        // Click ids on the passwordless POST. A header that is not listed here
+        // fails the cross-origin preflight and the sign-in never starts.
+        HeaderName::from_static("x-macro-fbp"),
+        HeaderName::from_static("x-macro-fbc"),
+    ]);
 
     let env = state.environment;
     let correlation =
@@ -153,14 +157,16 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
         .nest("/oauth2", oauth2::router())
         .nest(
             "/user",
-            user::router().merge(user_language::inbound::axum_router::user_language_router(
-                user_language::inbound::axum_router::UserLanguageRouterState::new(
-                    state.user_language_service.clone(),
-                    state.authorization_state.clone(),
+            user::router(state.clone()).merge(
+                user_language::inbound::axum_router::user_language_router(
+                    user_language::inbound::axum_router::UserLanguageRouterState::new(
+                        state.user_language_service.clone(),
+                        state.authorization_state.clone(),
+                    ),
                 ),
-            )),
+            ),
         )
-        .nest("/link", link::router())
+        .nest("/link", link::router(state.clone()))
         .nest("/cursor-api-key", cursor_api_key::router())
         .nest("/agents", agent_api_keys::router())
         .nest("/codex", codex::router())

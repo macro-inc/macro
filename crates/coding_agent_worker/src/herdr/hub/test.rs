@@ -1,5 +1,31 @@
 use super::*;
 
+#[test]
+fn tab_names_skip_the_hidden_prompt_header() {
+    assert_eq!(
+        title_from(
+            "<macrod-runtime>\nYou are running through macrod.\n</macrod-runtime>\n\n<m-agent-context>{\"text\":\"private\"}</m-agent-context>\n<m-user-mention>{\"displayName\":\"Helper\"}</m-user-mention> Fix the login flow\nmore details"
+        ),
+        Some("Fix the login flow".to_owned())
+    );
+    assert_eq!(title_from("<m-user-mention>{}</m-user-mention>"), None);
+    // An unclosed header is still hidden, never shown as a name.
+    assert_eq!(title_from("<macrod-runtime>unfinished instructions"), None);
+    assert_eq!(
+        title_from("  Fix <T> parsing\ncontext"),
+        Some("Fix <T> parsing".to_owned())
+    );
+    // The operator's own markup is part of the title.
+    assert_eq!(
+        title_from("<div> breaks in Safari"),
+        Some("<div> breaks in Safari".to_owned())
+    );
+    assert_eq!(
+        title_from("<b>Fix</b> login"),
+        Some("<b>Fix</b> login".to_owned())
+    );
+}
+
 fn owner() -> Owner {
     MacroUserIdStr::try_from_email("owner@example.com").unwrap()
 }

@@ -1,10 +1,10 @@
 //! `Publish SDK` — validates and publishes `@macro-inc/sdk` when an `sdk-v*` tag
 //! is pushed. Generated into `publish-sdk.yml`.
 
-use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, Push, Run, Step, Use, Workflow,
-};
+use gh_workflow::expr::typed::github;
+use gh_workflow::{Concurrency, Event, Job, Level, Permissions, Push, Run, Step, Use, Workflow};
 
+use crate::workflows::actions::ActionsSetupNode;
 use crate::workflows::steps;
 
 #[cfg(test)]
@@ -17,7 +17,7 @@ pub fn publish_sdk() -> Workflow {
     Workflow::new("Publish SDK")
         .on(Event::default().push(Push::default().add_tag(SDK_TAG_PATTERN)))
         .concurrency(
-            Concurrency::new(Expression::new("${{ github.workflow }}-${{ github.ref }}"))
+            Concurrency::new(format!("{}-{}", github().workflow(), github().git_ref()))
                 .cancel_in_progress(false),
         )
         .add_job("publish", publish())
@@ -34,7 +34,7 @@ fn publish() -> Job {
                 .id_token(Level::Write),
         )
         .add_step(steps::checkout(true, false))
-        .add_step(steps::setup_bun().add_with(("bun-version", "1.3.5")))
+        .add_step(steps::setup_bun_action().bun_version(steps::SDK_BUN_VERSION))
         .add_step(setup_node())
         .add_step(setup_npm())
         .add_step(verify_release())
@@ -44,10 +44,10 @@ fn publish() -> Job {
 }
 
 fn setup_node() -> Step<Use> {
-    Step::new("Setup Node")
-        .uses("actions", "setup-node", "v4")
-        .add_with(("node-version", "24"))
-        .add_with(("registry-url", "https://registry.npmjs.org"))
+    ActionsSetupNode::new("Setup Node")
+        .node_version("24")
+        .registry_url("https://registry.npmjs.org")
+        .step()
 }
 
 fn setup_npm() -> Step<Run> {

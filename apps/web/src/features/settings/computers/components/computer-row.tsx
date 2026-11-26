@@ -1,6 +1,6 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { t } from '@app/lib/i18n';
-import type { ComputerStatus } from '@service-auth/computers';
+import type { ComputerStatus, ComputerUsage } from '@service-auth/computers';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { Button } from '@ui';
 import { type JSX, Show } from 'solid-js';
@@ -19,6 +19,7 @@ import {
   ComputerActionsMenu,
   type ComputerMenuItem,
 } from './computer-actions-menu';
+import { ComputerUsageLine } from './computer-usage';
 
 /** How Claude Code on the computer is paid for, as the row shows it. */
 export type ComputerClaudeState =
@@ -108,6 +109,8 @@ export function ComputerRow(props: {
   claude: ComputerClaudeState;
   primary?: ComputerPrimaryAction;
   menu: readonly ComputerMenuItem[];
+  /** Its CPU and memory over the last day, once it has run. */
+  usage?: ComputerUsage;
   /** Adds the runtime's Don't ask before acting to the menu. */
   harness?: RegisteredHarness;
 }): JSX.Element {
@@ -127,6 +130,13 @@ export function ComputerRow(props: {
       }
       meta={
         <ComputerSubtitle computer={props.computer} claude={props.claude} />
+      }
+      detail={
+        <Show when={props.usage}>
+          {(usage) => (
+            <ComputerUsageLine computer={props.computer} usage={usage()} />
+          )}
+        </Show>
       }
       inlineActions={!props.primary}
       actions={

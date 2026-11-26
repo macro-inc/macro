@@ -15,6 +15,22 @@ export type AiToolsInfra = {
 };
 
 /**
+ * The key native MCP servers' credentials are encrypted with. A host of the
+ * `connectors` crate reads it by name (`MCP_CREDENTIALS_KEY_SECRET_NAME`, see
+ * `crates/ai_tools/src/connectors_config.rs`) and needs read access to it.
+ */
+export function getMcpCredentialsKey(): {
+  secretName: string;
+  secretArn: pulumi.Output<string>;
+} {
+  const secretName = `mcp-credentials-key-${stack}`;
+  const secretArn: pulumi.Output<string> = aws.secretsmanager
+    .getSecretOutput({ name: secretName })
+    .apply((s) => s.arn);
+  return { secretName, secretArn };
+}
+
+/**
  * Returns the env vars, secret/queue/bucket ARNs needed by any service that
  * hosts `ai_tools::build_tool_service_context_from_env`. Stack references are
  * namespaced with `ai-tools-` so callers can keep their own references to the
@@ -101,10 +117,7 @@ export function getAiToolsInfra(): AiToolsInfra {
     .getSecretVersionOutput({ secretId: SYNC_SERVICE_AUTH_KEY_SECRET_NAME })
     .apply((s) => s.arn);
 
-  const MCP_CREDENTIALS_KEY_SECRET_NAME = `mcp-credentials-key-${stack}`;
-  const mcpCredentialsKeyArn: pulumi.Output<string> = aws.secretsmanager
-    .getSecretOutput({ name: MCP_CREDENTIALS_KEY_SECRET_NAME })
-    .apply((s) => s.arn);
+  const mcpCredentialsKeyArn = getMcpCredentialsKey().secretArn;
 
   return {
     secretArns: [

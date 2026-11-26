@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { BulkDeleteUserNotificationsV2Data, BulkDeleteUserNotificationsV2Errors, BulkDeleteUserNotificationsV2Responses, BulkGetTypedNotificationsByEventItemIdsData, BulkGetTypedNotificationsByEventItemIdsErrors, BulkGetTypedNotificationsByEventItemIdsResponses, BulkMarkNotificationsDoneData, BulkMarkNotificationsDoneErrors, BulkMarkNotificationsDoneResponses, BulkMarkNotificationsSeenData, BulkMarkNotificationsSeenErrors, BulkMarkNotificationsSeenResponses, BulkMarkNotificationsUndoneData, BulkMarkNotificationsUndoneErrors, BulkMarkNotificationsUndoneResponses, DeleteUserNotificationV2Data, DeleteUserNotificationV2Errors, DeleteUserNotificationV2Responses, DisableNotificationTypeData, DisableNotificationTypeErrors, DisableNotificationTypeResponses, EnableNotificationTypeData, EnableNotificationTypeErrors, EnableNotificationTypeResponses, GetNotificationTypePreferencesData, GetNotificationTypePreferencesErrors, GetNotificationTypePreferencesResponses, GetTypedNotificationByIdData, GetTypedNotificationByIdErrors, GetTypedNotificationByIdResponses, GetTypedNotificationsByEventItemIdData, GetTypedNotificationsByEventItemIdErrors, GetTypedNotificationsByEventItemIdResponses, GetUnsubscribesData, GetUnsubscribesErrors, GetUnsubscribesResponses, HealthHandlerData, HealthHandlerResponses, ListTypedNotificationsData, ListTypedNotificationsErrors, ListTypedNotificationsResponses, RemoveUnsubscribeAllData, RemoveUnsubscribeAllErrors, RemoveUnsubscribeAllResponses, RemoveUnsubscribeItemData, RemoveUnsubscribeItemErrors, RemoveUnsubscribeItemResponses, RemoveUnsubscribeItemsData, RemoveUnsubscribeItemsErrors, RemoveUnsubscribeItemsResponses, UnsubscribeAllData, UnsubscribeAllErrors, UnsubscribeAllResponses, UnsubscribeEmailData, UnsubscribeEmailErrors, UnsubscribeEmailResponses, UnsubscribeItemData, UnsubscribeItemErrors, UnsubscribeItemResponses, UnsubscribeItemsData, UnsubscribeItemsErrors, UnsubscribeItemsResponses } from './types.gen';
+import type { BulkDeleteUserNotificationsV2Data, BulkDeleteUserNotificationsV2Errors, BulkDeleteUserNotificationsV2Responses, BulkGetTypedNotificationsByEventItemIdsData, BulkGetTypedNotificationsByEventItemIdsErrors, BulkGetTypedNotificationsByEventItemIdsResponses, BulkMarkNotificationsDoneData, BulkMarkNotificationsDoneErrors, BulkMarkNotificationsDoneResponses, BulkMarkNotificationsSeenData, BulkMarkNotificationsSeenErrors, BulkMarkNotificationsSeenResponses, BulkMarkNotificationsUndoneData, BulkMarkNotificationsUndoneErrors, BulkMarkNotificationsUndoneResponses, DeleteUserNotificationV2Data, DeleteUserNotificationV2Errors, DeleteUserNotificationV2Responses, DisableNotificationTypeData, DisableNotificationTypeErrors, DisableNotificationTypeResponses, EnableNotificationTypeData, EnableNotificationTypeErrors, EnableNotificationTypeResponses, GetNotificationTypePreferencesData, GetNotificationTypePreferencesErrors, GetNotificationTypePreferencesResponses, GetTypedNotificationByIdData, GetTypedNotificationByIdErrors, GetTypedNotificationByIdResponses, GetTypedNotificationsByEventItemIdData, GetTypedNotificationsByEventItemIdErrors, GetTypedNotificationsByEventItemIdResponses, GetUnsubscribesData, GetUnsubscribesErrors, GetUnsubscribesResponses, HealthHandlerData, HealthHandlerResponses, ListChannelNotificationSettingsData, ListChannelNotificationSettingsErrors, ListChannelNotificationSettingsResponses, ListSectionNotificationSettingsData, ListSectionNotificationSettingsErrors, ListSectionNotificationSettingsResponses, ListTypedNotificationsData, ListTypedNotificationsErrors, ListTypedNotificationsResponses, RemoveUnsubscribeAllData, RemoveUnsubscribeAllErrors, RemoveUnsubscribeAllResponses, RemoveUnsubscribeItemData, RemoveUnsubscribeItemErrors, RemoveUnsubscribeItemResponses, RemoveUnsubscribeItemsData, RemoveUnsubscribeItemsErrors, RemoveUnsubscribeItemsResponses, ResetChannelNotificationSettingsData, ResetChannelNotificationSettingsErrors, ResetChannelNotificationSettingsResponses, SendPingData, SendPingErrors, SendPingResponses, UnsubscribeAllData, UnsubscribeAllErrors, UnsubscribeAllResponses, UnsubscribeEmailData, UnsubscribeEmailErrors, UnsubscribeEmailResponses, UnsubscribeItemData, UnsubscribeItemErrors, UnsubscribeItemResponses, UnsubscribeItemsData, UnsubscribeItemsErrors, UnsubscribeItemsResponses, UpdateChannelNotificationSettingsData, UpdateChannelNotificationSettingsErrors, UpdateChannelNotificationSettingsResponses, UpdateSectionNotificationSettingsData, UpdateSectionNotificationSettingsErrors, UpdateSectionNotificationSettingsResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -65,6 +65,56 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
+     * List the authenticated user's channels that have notification settings.
+     */
+    public listChannelNotificationSettings<ThrowOnError extends boolean = false>(options?: Options<ListChannelNotificationSettingsData, ThrowOnError>): RequestResult<ListChannelNotificationSettingsResponses, ListChannelNotificationSettingsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListChannelNotificationSettingsResponses, ListChannelNotificationSettingsErrors, ThrowOnError>({ url: '/notification_settings/channels', ...options });
+    }
+
+    /**
+     * Remove the authenticated user's settings for one channel, including a
+     * legacy mentions-only preference, so it follows its sections again.
+     */
+    public resetChannelNotificationSettings<ThrowOnError extends boolean = false>(options: Options<ResetChannelNotificationSettingsData, ThrowOnError>): RequestResult<ResetChannelNotificationSettingsResponses, ResetChannelNotificationSettingsErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<ResetChannelNotificationSettingsResponses, ResetChannelNotificationSettingsErrors, ThrowOnError>({ url: '/notification_settings/channels/{channel_id}', ...options });
+    }
+
+    /**
+     * Change the authenticated user's notification settings for one channel.
+     */
+    public updateChannelNotificationSettings<ThrowOnError extends boolean = false>(options: Options<UpdateChannelNotificationSettingsData, ThrowOnError>): RequestResult<UpdateChannelNotificationSettingsResponses, UpdateChannelNotificationSettingsErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<UpdateChannelNotificationSettingsResponses, UpdateChannelNotificationSettingsErrors, ThrowOnError>({
+            url: '/notification_settings/channels/{channel_id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * List the authenticated user's Chat sections that have notification settings.
+     */
+    public listSectionNotificationSettings<ThrowOnError extends boolean = false>(options?: Options<ListSectionNotificationSettingsData, ThrowOnError>): RequestResult<ListSectionNotificationSettingsResponses, ListSectionNotificationSettingsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListSectionNotificationSettingsResponses, ListSectionNotificationSettingsErrors, ThrowOnError>({ url: '/notification_settings/sections', ...options });
+    }
+
+    /**
+     * Change the authenticated user's notification settings for one Chat section.
+     */
+    public updateSectionNotificationSettings<ThrowOnError extends boolean = false>(options: Options<UpdateSectionNotificationSettingsData, ThrowOnError>): RequestResult<UpdateSectionNotificationSettingsResponses, UpdateSectionNotificationSettingsErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<UpdateSectionNotificationSettingsResponses, UpdateSectionNotificationSettingsErrors, ThrowOnError>({
+            url: '/notification_settings/sections',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
      * Gets the users unsubscribe items.
      */
     public getUnsubscribes<ThrowOnError extends boolean = false>(options?: Options<GetUnsubscribesData, ThrowOnError>): RequestResult<GetUnsubscribesResponses, GetUnsubscribesErrors, ThrowOnError> {
@@ -86,7 +136,8 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * Unsubscribes a user from a given item for notifications.
+     * Unsubscribes a user from a given item for notifications, or, with
+     * `mentions_only`, from everything on a channel but their direct mentions.
      */
     public unsubscribeItem<ThrowOnError extends boolean = false>(options: Options<UnsubscribeItemData, ThrowOnError>): RequestResult<UnsubscribeItemResponses, UnsubscribeItemErrors, ThrowOnError> {
         return (options.client ?? this.client).post<UnsubscribeItemResponses, UnsubscribeItemErrors, ThrowOnError>({ url: '/unsubscribe/item/{item_type}/{item_id}', ...options });
@@ -244,6 +295,28 @@ export class Sdk extends HeyApiClient {
      */
     public enableNotificationType<ThrowOnError extends boolean = false>(options: Options<EnableNotificationTypeData, ThrowOnError>): RequestResult<EnableNotificationTypeResponses, EnableNotificationTypeErrors, ThrowOnError> {
         return (options.client ?? this.client).put<EnableNotificationTypeResponses, EnableNotificationTypeErrors, ThrowOnError>({ url: '/v1/user_notifications/preferences/{notification_event_type}/enable', ...options });
+    }
+
+    /**
+     * Send a notification the caller wrote about an entity, to themselves or to
+     * people who can already see that entity. Recipients who cannot see it,
+     * whose inbox would not list it, or who have received 60 from others this
+     * hour are skipped and returned. Delivered like any other notification and
+     * subject to each recipient's notification preferences. The same notification
+     * sent again in the same ten-minute window of the clock is delivered once; a
+     * repeat that falls in the next window is delivered again. A sender can
+     * notify at most 1000 recipients an hour. Refused with 403 while the
+     * `enable-agent-notifications` flag is off for the caller.
+     */
+    public sendPing<ThrowOnError extends boolean = false>(options: Options<SendPingData, ThrowOnError>): RequestResult<SendPingResponses, SendPingErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<SendPingResponses, SendPingErrors, ThrowOnError>({
+            url: '/v1/user_notifications/send',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
 
     /**

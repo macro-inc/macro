@@ -33,7 +33,7 @@ async fn closed_pool() -> PgPool {
 struct ChannelPublisher(Arc<Mutex<Vec<(String, String)>>>);
 
 impl SearchEventPublisher for ChannelPublisher {
-    async fn publish(&self, messages: Vec<SearchQueueMessage>) -> Result<(), BackfillError> {
+    async fn publish(&self, messages: Vec<SearchQueueMessage>) -> Result<usize, BackfillError> {
         for message in messages {
             let SearchQueueMessage::ChannelMessageUpdate(update) = message else {
                 panic!("expected channel update");
@@ -44,7 +44,7 @@ impl SearchEventPublisher for ChannelPublisher {
                 .unwrap()
                 .push((update.channel_id, update.message_id));
         }
-        Ok(())
+        Ok(0)
     }
 }
 
@@ -70,7 +70,12 @@ async fn empty_channel_scope_never_reads_or_publishes() {
     assert!(cursor.is_none());
 
     let publisher = ChannelPublisher::default();
-    let service = BackfillOrchestrator::new(source, publisher.clone(), UnusedPropertyIndexer);
+    let service = BackfillOrchestrator::new(
+        source,
+        publisher.clone(),
+        UnusedPropertyIndexer,
+        crate::domain::backfill_gate::BackfillGate::open(20),
+    );
     let progress = Arc::new(JobProgress::detached());
     let receipt = service
         .backfill_channels(request, progress.clone(), CancellationToken::new())
@@ -112,8 +117,12 @@ async fn scoped_backfill_publishes_only_primary_channel_history_and_can_replay(p
     let replica = closed_pool().await;
     let backfill_source = source(replica.clone(), pool.clone());
     let publisher = ChannelPublisher::default();
-    let service =
-        BackfillOrchestrator::new(backfill_source, publisher.clone(), UnusedPropertyIndexer);
+    let service = BackfillOrchestrator::new(
+        backfill_source,
+        publisher.clone(),
+        UnusedPropertyIndexer,
+        crate::domain::backfill_gate::BackfillGate::open(20),
+    );
     let request = ChannelBackfillRequest {
         channel_ids: Some(vec![channel]),
         index_override: Some("channels_repair".into()),

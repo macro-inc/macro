@@ -1,41 +1,22 @@
-import { useViewTabHotkeys, ViewSidebar } from '@app/components/view-shell';
+import { ViewSidebar } from '@app/components/view-shell';
 import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
 import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import ArchiveIcon from '@icon/system/regular/archive.svg';
-import BellIcon from '@icon/system/regular/bell-simple.svg';
-import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
-import ClockIcon from '@icon/system/regular/clock.svg';
-import FocusIcon from '@icon/system/regular/crosshair.svg';
-import EnvelopeIcon from '@icon/system/regular/envelope.svg';
-import FileIcon from '@icon/system/regular/file.svg';
-import PaperPlaneTiltIcon from '@icon/system/regular/paper-plane-tilt.svg';
-import SpamIcon from '@icon/system/regular/prohibit.svg';
-import StarIcon from '@icon/system/regular/star.svg';
-import TrashIcon from '@icon/system/regular/trash.svg';
 import TrayIcon from '@icon/system/regular/tray.svg';
-import UsersThreeIcon from '@icon/system/regular/users-three.svg';
-import SignalIcon from '@icon/system/regular/wave-sine.svg';
-import NoiseIcon from '@icon/system/regular/waveform.svg';
 import { pressHandlers } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import { type Component, For, Show } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { composeEmail } from '../compose-email';
-import {
-  EMAIL_INBOX_TAB_IDS,
-  EMAIL_TAB_IDS,
-  EMAIL_TAB_LABELS,
-  EMAIL_TABS,
-  isEmailInboxTab,
-} from '../constants';
+import { EMAIL_TAB_LABELS, EMAIL_TABS, isEmailInboxTab } from '../constants';
 import { useEmailView } from '../email-view-context';
+import { EMAIL_TAB_ICONS } from '../tab-icons';
 import { EMAIL_TOUR } from '../tour';
 import type { EmailTab } from '../types';
 import { useVisibleEmailTab } from '../use-visible-email-tab';
+import { EmailLabelsSection } from '../views/email-labels-section';
 import { EmailSavedViewsSection } from '../views/email-saved-views';
 import { EmailInboxList } from './EmailInboxSelector';
 
@@ -53,42 +34,20 @@ const LIBRARY_TAB_IDS = [
   'spam',
   'trash',
 ] as const satisfies readonly EmailTab[];
-const DESKTOP_TAB_IDS = [
-  'important',
-  ...PRIMARY_TAB_IDS,
-  ...LIBRARY_TAB_IDS,
-] as const;
-
-const TAB_ICONS: Record<EmailTab, Component<{ class?: string }>> = {
-  important: SignalIcon,
-  noise: NoiseIcon,
-  favorites: StarIcon,
-  sent: PaperPlaneTiltIcon,
-  scheduled: ClockIcon,
-  reminders: BellIcon,
-  calendar: CalendarBlankIcon,
-  drafts: FileIcon,
-  shared: UsersThreeIcon,
-  archived: ArchiveIcon,
-  all: EnvelopeIcon,
-  focus: FocusIcon,
-  spam: SpamIcon,
-  trash: TrashIcon,
-};
 
 function Tab(props: { id: EmailTab; label?: string; onNavigate?: () => void }) {
-  const { state, setTab, savedViewActive } = useEmailView();
+  const { shownTab, setTab, savedViewActive } = useEmailView();
 
   return (
     <ViewSidebar.Item
-      active={!savedViewActive() && state.tab === props.id}
+      active={!savedViewActive() && shownTab() === props.id}
       {...pressHandlers(() => {
         setTab(props.id);
         props.onNavigate?.();
       })}
     >
       <ViewSidebar.Icon>
-        <Dynamic component={TAB_ICONS[props.id]} class="size-4" />
+        <Dynamic component={EMAIL_TAB_ICONS[props.id]} class="size-4" />
       </ViewSidebar.Icon>
       <span class="truncate">{props.label ?? EMAIL_TAB_LABELS[props.id]}</span>
     </ViewSidebar.Item>
@@ -96,61 +55,78 @@ function Tab(props: { id: EmailTab; label?: string; onNavigate?: () => void }) {
 }
 
 export function EmailNavigation(props: { onNavigate?: () => void }) {
-  const { state, setTab, savedViewActive } = useEmailView();
+  const { shownTab, selectInbox, savedViewActive } = useEmailView();
+  const inboxShown = () => {
+    const tab = shownTab();
+    return tab === 'inbox' || (tab !== 'search' && isEmailInboxTab(tab));
+  };
   const isVisible = useVisibleEmailTab();
   return (
     <Show
       when={!isTouchDevice()}
       fallback={
-        <ViewSidebar.Nav aria-label="Email tabs">
-          <Show when={isVisible('focus')}>
-            <Tab id="focus" onNavigate={props.onNavigate} />
-          </Show>
-          <div
-            ref={tourTarget(EMAIL_TOUR.signalNoise)}
-            class="flex flex-col gap-(--sidebar-row-gap)"
-          >
-            <For each={EMAIL_TABS.slice(0, 2)}>
+        <ViewSidebar.Section
+          id="mail-folders"
+          label={t('viewMenus.mailFolders')}
+          headerless
+        >
+          <ViewSidebar.Nav aria-label="Email tabs">
+            <Show when={isVisible('focus')}>
+              <Tab id="focus" onNavigate={props.onNavigate} />
+            </Show>
+            <div
+              ref={tourTarget(EMAIL_TOUR.signalNoise)}
+              class="flex flex-col gap-(--sidebar-row-gap)"
+            >
+              <For each={EMAIL_TABS.slice(0, 2)}>
+                {(item) => <Tab id={item.id} onNavigate={props.onNavigate} />}
+              </For>
+            </div>
+            <For
+              each={EMAIL_TABS.slice(2).filter(
+                (tab) => tab.id !== 'focus' && isVisible(tab.id)
+              )}
+            >
               {(item) => <Tab id={item.id} onNavigate={props.onNavigate} />}
             </For>
-          </div>
-          <For
-            each={EMAIL_TABS.slice(2).filter(
-              (tab) => tab.id !== 'focus' && isVisible(tab.id)
-            )}
-          >
-            {(item) => <Tab id={item.id} onNavigate={props.onNavigate} />}
-          </For>
-        </ViewSidebar.Nav>
+          </ViewSidebar.Nav>
+        </ViewSidebar.Section>
       }
     >
-      <ViewSidebar.Nav aria-label="Email tabs">
-        <ViewSidebar.Item
-          ref={tourTarget(EMAIL_TOUR.inbox)}
-          active={!savedViewActive() && isEmailInboxTab(state.tab)}
-          {...pressHandlers(() => {
-            // Reopen the Inbox view that was last open: Focus, Signal or Noise.
-            setTab(
-              !savedViewActive() && isEmailInboxTab(state.tab)
-                ? state.tab
-                : 'important'
-            );
-            props.onNavigate?.();
-          })}
-        >
-          <ViewSidebar.Icon>
-            <TrayIcon class="size-4" />
-          </ViewSidebar.Icon>
-          <span class="truncate">{t('viewMenus.inbox')}</span>
-        </ViewSidebar.Item>
-        <For each={PRIMARY_TAB_IDS.filter(isVisible)}>
-          {(id) => <Tab id={id} onNavigate={props.onNavigate} />}
-        </For>
-      </ViewSidebar.Nav>
-      <section aria-label={t('viewMenus.library')} class="shrink-0">
-        <h2 class="flex h-(--sidebar-row-height) items-center px-(--sidebar-item-inset) text-xs font-medium text-ink-muted">
-          {t('viewMenus.library')}
-        </h2>
+      <ViewSidebar.Section
+        id="mail-folders"
+        label={t('viewMenus.mailFolders')}
+        headerless
+      >
+        <ViewSidebar.Nav aria-label="Email tabs">
+          <ViewSidebar.Item
+            ref={tourTarget(EMAIL_TOUR.inbox)}
+            active={!savedViewActive() && inboxShown()}
+            {...pressHandlers(() => {
+              selectInbox();
+              props.onNavigate?.();
+            })}
+          >
+            <ViewSidebar.Icon>
+              <TrayIcon class="size-4" />
+            </ViewSidebar.Icon>
+            <span class="truncate">{t('viewMenus.inbox')}</span>
+          </ViewSidebar.Item>
+          <For each={PRIMARY_TAB_IDS.filter(isVisible)}>
+            {(id) => <Tab id={id} onNavigate={props.onNavigate} />}
+          </For>
+        </ViewSidebar.Nav>
+      </ViewSidebar.Section>
+      <ViewSidebar.Section
+        id="library"
+        label={t('viewMenus.library')}
+        aria-label={t('viewMenus.library')}
+      >
+        <ViewSidebar.SectionHeader>
+          <h2 class="flex h-(--sidebar-row-height) items-center px-(--sidebar-item-inset) text-xs font-medium text-ink-muted">
+            {t('viewMenus.library')}
+          </h2>
+        </ViewSidebar.SectionHeader>
         <ViewSidebar.Nav
           aria-label="Email library"
           class="pt-(--sidebar-section-content-gap)"
@@ -165,47 +141,23 @@ export function EmailNavigation(props: { onNavigate?: () => void }) {
             )}
           </For>
         </ViewSidebar.Nav>
-      </section>
+      </ViewSidebar.Section>
     </Show>
   );
 }
 
 export function EmailSidebar() {
-  const isVisible = useVisibleEmailTab();
-  const panel = useSplitPanelOrThrow();
   const { openWithSplit } = useSplitLayout();
-  const { state, setTab } = useEmailView();
-
-  const tabIds = () =>
-    (isTouchDevice() ? EMAIL_TAB_IDS : DESKTOP_TAB_IDS).filter(isVisible);
-
-  useViewTabHotkeys({
-    scopeId: panel.splitHotkeyScope,
-    enabled: panel.isPanelActive,
-    ids: tabIds,
-    // Desktop groups the Inbox views under Inbox, so Tab moves between its
-    // header tabs instead of walking the sidebar.
-    sequentialIds: () =>
-      isTouchDevice() ? tabIds() : EMAIL_INBOX_TAB_IDS.filter(isVisible),
-    activeId: () => state.tab,
-    setActiveId: setTab,
-    shouldHandleSequentialKeyEvent: (event) =>
-      !(
-        event?.target instanceof Element &&
-        event.target.closest('[role="grid"][aria-label="Email"]')
-      ),
-  });
+  const { state } = useEmailView();
 
   return (
-    <ViewSidebar.Root aria-label="Email navigation">
-      <Show when={!isTouchDevice()}>
-        <ViewSidebar.Header>
-          <div class="flex min-w-0 items-center gap-1">
-            <ViewSidebar.CloseButton class="shrink-0" />
-            <ViewSidebar.Title>Email</ViewSidebar.Title>
-          </div>
-        </ViewSidebar.Header>
-      </Show>
+    <ViewSidebar.Root reorderId="email" aria-label="Email navigation">
+      <ViewSidebar.Header>
+        <div class="flex min-w-0 items-center gap-1">
+          <ViewSidebar.CloseButton class="shrink-0" />
+          <ViewSidebar.Title>Email</ViewSidebar.Title>
+        </div>
+      </ViewSidebar.Header>
 
       <Show when={!isTouchDevice()}>
         <ViewSidebar.Primary>
@@ -229,7 +181,16 @@ export function EmailSidebar() {
 
         <EmailNavigation />
 
+        {/* Under Library on desktop; at the end of the phone's sheet. */}
+        <Show when={!isTouchDevice()}>
+          <EmailLabelsSection />
+        </Show>
+
         <EmailSavedViewsSection />
+
+        <Show when={isTouchDevice()}>
+          <EmailLabelsSection />
+        </Show>
       </ViewSidebar.Content>
     </ViewSidebar.Root>
   );

@@ -22,6 +22,7 @@ use super::*;
 
 mod channels;
 mod confinement;
+mod mail_sort;
 
 fn request() -> SoupFlatRequest {
     SoupFlatRequest {

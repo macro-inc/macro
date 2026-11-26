@@ -498,3 +498,109 @@ async fn transferred_upload_provider_echo_does_not_consume_quota_twice(db: PgPoo
     .await
     .unwrap();
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_attachment_change_runs_beside_a_population_and_gives_up_behind_a_worker(db: PgPool) {
+    let (repo, link, draft) = fixture(&db).await;
+    let file = upload(draft, 123);
+    let change = || {
+        tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            repo.commit_attachment_change(
+                ACTOR,
+                link,
+                draft,
+                AttachmentChange::Upload(file.clone()),
+                0,
+            ),
+        )
+    };
+    let revisions = || async {
+        sqlx::query_scalar!(
+            r#"SELECT count(*) AS "count!" FROM email_mailbox_drafts WHERE message_id = $1"#,
+            draft
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap()
+    };
+
+    // A mailbox worker or a disconnect holds the link exclusively.
+    let mut worker = db.begin().await.unwrap();
+    sqlx::query!("SELECT id FROM email_links WHERE id = $1 FOR UPDATE", link)
+        .fetch_one(&mut *worker)
+        .await
+        .unwrap();
+    let blocked = change().await.expect("waited past its lock timeout");
+    assert!(
+        matches!(blocked, Err(AttachmentError::Contended)),
+        "{blocked:?}"
+    );
+    assert_eq!(revisions().await, 0);
+    worker.rollback().await.unwrap();
+
+    // A CRM contact population holds it this way for its whole transaction.
+    let mut population = db.begin().await.unwrap();
+    sqlx::query!("SELECT id FROM email_links WHERE id = $1 FOR SHARE", link)
+        .fetch_one(&mut *population)
+        .await
+        .unwrap();
+    change()
+        .await
+        .expect("waited past its lock timeout")
+        .unwrap();
+    population.rollback().await.unwrap();
+    assert_eq!(revisions().await, 1);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_attachment_waiting_on_a_discard_sees_it_and_refuses(db: PgPool) {
+    let (repo, link, draft) = fixture(&db).await;
+    // A discard shares the link lock too, so the attachment change waits on
+    // the draft's row while the discard commits.
+    let mut discard = db.begin().await.unwrap();
+    sqlx::query!(
+        "SELECT id FROM email_messages WHERE id = $1 FOR UPDATE",
+        draft
+    )
+    .fetch_one(&mut *discard)
+    .await
+    .unwrap();
+    sqlx::query!("INSERT INTO email_mailbox_drafts (message_id,link_id,generation,actor_id,desired_content,delete_requested) VALUES ($1,$2,0,$3,'{}'::jsonb,true)",draft,link,ACTOR)
+        .execute(&mut *discard)
+        .await
+        .unwrap();
+    let file = upload(draft, 123);
+    let change = tokio::spawn({
+        let repo = repo.clone();
+        async move {
+            repo.commit_attachment_change(ACTOR, link, draft, AttachmentChange::Upload(file), 0)
+                .await
+        }
+    });
+    tokio::time::timeout(std::time::Duration::from_secs(4), async {
+        while sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'"#)
+            .fetch_one(&db)
+            .await
+            .unwrap()
+            == 0
+        {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("the attachment change never waited on the draft");
+    discard.commit().await.unwrap();
+
+    assert!(change.await.unwrap().is_err());
+    assert_eq!(
+        sqlx::query_scalar!(
+            r#"SELECT count(*) AS "count!" FROM email_attachments_drafts WHERE draft_id = $1"#,
+            draft
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap(),
+        0
+    );
+}

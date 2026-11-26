@@ -1,1 +1,4 @@
-export { tabIndentationPlugin } from './tabIndentationPlugin';
+export {
+  $canOutdentSelection,
+  tabIndentationPlugin,
+} from './tabIndentationPlugin';

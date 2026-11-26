@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE computer_move\n            SET stage = $2, rounds = $3, last_round_bytes = $4, was_running = $5, error = $6,\n                updated_at = $7,\n                ticket = CASE WHEN $8 THEN NULL ELSE ticket END,\n                finished_at = CASE WHEN $8 THEN $7 ELSE finished_at END\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "computer_move_stage",
+            "kind": {
+              "Enum": [
+                "seeding",
+                "cutting_over",
+                "verifying",
+                "rolling_back",
+                "committed",
+                "rolled_back",
+                "failed"
+              ]
+            }
+          }
+        },
+        "Int4",
+        "Int8",
+        "Bool",
+        "Text",
+        "Timestamptz",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5fb0af197f2ce1402d486a5802e9c334ed7f4223c756284c0825ae1fb59b2f3b"
+}

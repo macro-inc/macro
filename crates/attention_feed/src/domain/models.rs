@@ -201,6 +201,28 @@ pub struct CandidateRequest {
     pub after: Option<FeedPosition>,
     /// Restrict to these candidate keys, for recomputing known entries.
     pub only: Option<Vec<Entity<'static>>>,
+    /// Treat every `only` key as if a notification about it were pending
+    /// now, to ask whether a new notification would be listed. Requires
+    /// `only` and no own work.
+    pub assume_attention: bool,
+    /// Which store may answer the read.
+    pub read: CandidateRead,
+}
+
+/// Which store may answer a candidate read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CandidateRead {
+    /// A replica, which can lag the primary: pages, unread counts and bulk
+    /// clears.
+    Replica,
+    /// The primary: a recompute answering a change the viewer has just been
+    /// told about or a write the viewer just made, and the rows done and seen
+    /// act on. Recomputed entries reach clients that already hold the change
+    /// (Soup patches are hydrated from the primary), so entries read from a
+    /// lagging replica would write the state before the change back into
+    /// their caches; and a row a recompute showed may not be on the replica
+    /// yet, so done or seen read there would find nothing of it to mark.
+    Committed,
 }
 
 /// One hydrated, authorized candidate.
@@ -311,6 +333,20 @@ impl DoneReceipt {
         decode_token(token).ok_or(InvalidUndoToken)
     }
 
+    /// Decode a token produced by [`Self::encode`] for an operation that
+    /// touches at most `max_keys` keys. Undo recomputes every key a receipt
+    /// names, so a token naming more was not issued by that operation and is
+    /// refused before anything is written.
+    pub fn decode_at_most(token: &str, max_keys: usize) -> Result<Self, InvalidUndoToken> {
+        Self::decode(token).and_then(|receipt| {
+            if receipt.keys.len() > max_keys {
+                Err(InvalidUndoToken)
+            } else {
+                Ok(receipt)
+            }
+        })
+    }
+
     /// The keys this receipt touched.
     pub fn feed_keys(&self) -> Vec<FeedKey> {
         self.keys
@@ -356,7 +392,8 @@ impl From<rootcause::Report> for FeedError {
 }
 
 /// Whether a notification makes its entry unread. Channel events other than
-/// messages, mentions and reactions (invites, calls) never do.
+/// messages, mentions, reactions and pings (invites, calls)
+/// never do.
 pub fn counts_as_unseen(notification: &UserNotificationRow<NotifEvent>) -> bool {
     if notification.state != NotificationState::Unseen {
         return false;
@@ -371,6 +408,7 @@ pub fn counts_as_unseen(notification: &UserNotificationRow<NotifEvent>) -> bool 
             | NotifEvent::ChannelMessageReaction(_)
             | NotifEvent::ChannelMessageReply(_)
             | NotifEvent::DocumentMention(_)
+            | NotifEvent::Ping(_)
     )
 }
 

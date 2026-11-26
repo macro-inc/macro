@@ -1,7 +1,9 @@
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { AppProviders } from '@components/app/AppProviders';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { createBlockOrchestrator } from '@core/orchestrator';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import { render, screen } from '@solidjs/testing-library';
 import { ImperativeDialogHost } from '@ui';
 import { createSignal, Show } from 'solid-js';
@@ -66,9 +68,6 @@ vi.mock('@app/signal/splitLayout', () => ({
 }));
 vi.mock('@components/app/useReactiveFavicon', () => ({
   useReactiveFavicon: () => {},
-}));
-vi.mock('@core/component/AI/signal/globalAttachments', () => ({
-  useGlobalAttachableHistory: () => {},
 }));
 vi.mock('@core/context/team', () => ({
   TeamContextProvider: (props: { children: unknown }) => props.children,
@@ -225,11 +224,15 @@ describe('useShareModal', () => {
     const view = render(() => (
       <Show when={showApp()}>
         <PosthogProvider>
-          <AppProviders>
-            <Show when={showMenu()}>
-              <Menu />
-            </Show>
-          </AppProviders>
+          <ChannelDirectoryProvider
+            directory={staticChannelDirectory(() => [])}
+          >
+            <AppProviders>
+              <Show when={showMenu()}>
+                <Menu />
+              </Show>
+            </AppProviders>
+          </ChannelDirectoryProvider>
         </PosthogProvider>
       </Show>
     ));

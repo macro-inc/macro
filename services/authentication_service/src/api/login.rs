@@ -19,12 +19,17 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
     Router::new()
         .route(
             "/passwordless",
-            post(passwordless::handler).layer(ServiceBuilder::new().layer(
-                axum::middleware::from_fn_with_state(
-                    state.clone(),
-                    middleware::rate_limit::passwordless::handler,
-                ),
-            )),
+            post(passwordless::handler).layer(
+                ServiceBuilder::new()
+                    .layer(axum::middleware::from_fn_with_state(
+                        state.authorization_state.clone(),
+                        middleware::refuse_program_sign_in::handler,
+                    ))
+                    .layer(axum::middleware::from_fn_with_state(
+                        state.clone(),
+                        middleware::rate_limit::passwordless::handler,
+                    )),
+            ),
         )
         .route(
             "/password",

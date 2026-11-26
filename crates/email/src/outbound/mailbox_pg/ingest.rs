@@ -1,6 +1,8 @@
 use super::*;
 use crate::domain::mailbox::drafts::models::DraftCheckpoint;
+use crate::domain::models::label::LabelsGained;
 use email_api_client::domain::models::MailboxMessage;
+use email_db_client::labels::thread_gain;
 
 impl MailboxIngest for PgMailboxSync {
     async fn ingest(
@@ -15,6 +17,7 @@ impl MailboxIngest for PgMailboxSync {
             folder_id,
             tags,
             version,
+            draft_content,
             ..
         } = snapshot;
         let mut message = content.message;
@@ -36,7 +39,7 @@ impl MailboxIngest for PgMailboxSync {
             )
             .await
             .map_err(wrapped_db_error)?;
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         let active = sqlx::query!(r#"
             SELECT id FROM email_links WHERE id = $1 AND sync_generation = $2 AND grant_generation = $3
                 AND is_sync_active FOR UPDATE
@@ -110,7 +113,12 @@ impl MailboxIngest for PgMailboxSync {
         if let Some(existing) = &existing {
             sqlx::query!("DELETE FROM email_draft_organization_versions WHERE message_id=$1 AND ($2=versions[cardinality(versions)] OR NOT ($2=ANY(versions)))",existing.id,version)
                 .execute(&mut *tx).await.map_err(db_error)?;
-            let remote = serde_json::to_value(&message).map_err(|_| MailboxError::Persistence)?;
+            let mut remote =
+                serde_json::to_value(&message).map_err(|_| MailboxError::Persistence)?;
+            email_db_client::parse::nul_characters::remove_from_json(
+                &mut remote,
+                "email_mailbox_drafts.remote_snapshot",
+            );
             sqlx::query!(
                 "UPDATE email_mailbox_drafts SET remote_snapshot = $2 WHERE message_id = $1",
                 existing.id,
@@ -124,7 +132,12 @@ impl MailboxIngest for PgMailboxSync {
                     .as_ref()
                     .is_some_and(|s| !s.dirty && !s.delete_requested)
             {
-                sqlx::query!("UPDATE email_mailbox_drafts SET base_version = $2,error_code = NULL WHERE message_id = $1 AND state = 'synced'",existing.id,version).execute(&mut *tx).await.map_err(db_error)?;
+                let base_content = draft_content
+                    .map(serde_json::to_value)
+                    .transpose()
+                    .map_err(|_| MailboxError::Persistence)?;
+                // The content of the version adopted, edited or not.
+                sqlx::query!("UPDATE email_mailbox_drafts SET base_version = $2,base_content = $3,error_code = NULL WHERE message_id = $1 AND state = 'synced'",existing.id,version,base_content).execute(&mut *tx).await.map_err(db_error)?;
             }
         }
         // A sent snapshot is authoritative even after a timeout, cancellation or
@@ -175,6 +188,29 @@ impl MailboxIngest for PgMailboxSync {
             .fetch_one(&mut *tx)
             .await
             .map_err(db_error)?
+        };
+        let deleting = sqlx::query_scalar!("SELECT resource_key FROM email_mailbox_settings_work WHERE link_id=$1 AND kind='delete_label' AND completed_revision<revision",lease.mailbox.link_id)
+            .fetch_all(&mut *tx).await.map_err(db_error)?;
+        let tags: Vec<String> = tags
+            .into_iter()
+            .filter(|tag| !deleting.contains(tag))
+            .collect();
+        let mut label_ids = Vec::with_capacity(tags.len());
+        for tag in &tags {
+            let label_id = sqlx::query_scalar!(r#"
+                INSERT INTO email_labels (id,link_id,provider_label_id,name,type) VALUES ($1,$2,$3::text,$3::text,'User')
+                ON CONFLICT (link_id,provider_label_id) DO UPDATE SET name = EXCLUDED.name RETURNING id
+            "#,macro_uuid::generate_uuid_v7(),lease.mailbox.link_id,tag).fetch_one(&mut *tx).await.map_err(db_error)?;
+            label_ids.push(label_id);
+        }
+        // Before the message write below, which clears the message's own labels.
+        // The inbox row held above makes reads of one thread take turns.
+        let absent = if lease.is_import {
+            Vec::new()
+        } else {
+            thread_gain::absent_from_thread(&mut tx, lease.mailbox.link_id, thread_id, &tags)
+                .await
+                .map_err(db_error)?
         };
         if !message.is_draft
             || !shadow
@@ -229,16 +265,17 @@ impl MailboxIngest for PgMailboxSync {
         .execute(&mut *tx)
         .await
         .map_err(db_error)?;
-        let deleting = sqlx::query_scalar!("SELECT resource_key FROM email_mailbox_settings_work WHERE link_id=$1 AND kind='delete_label' AND completed_revision<revision",lease.mailbox.link_id)
-            .fetch_all(&mut *tx).await.map_err(db_error)?;
-        for tag in tags.into_iter().filter(|tag| !deleting.contains(tag)) {
-            let label_id = sqlx::query_scalar!(r#"
-                INSERT INTO email_labels (id,link_id,provider_label_id,name,type) VALUES ($1,$2,$3::text,$3::text,'User')
-                ON CONFLICT (link_id,provider_label_id) DO UPDATE SET name = EXCLUDED.name RETURNING id
-            "#,macro_uuid::generate_uuid_v7(),lease.mailbox.link_id,tag).fetch_one(&mut *tx).await.map_err(db_error)?;
+        for label_id in label_ids {
             sqlx::query!("INSERT INTO email_message_labels (message_id,label_id) VALUES ($1,$2) ON CONFLICT DO NOTHING",message_id,label_id)
                 .execute(&mut *tx).await.map_err(db_error)?;
         }
+        let gained = thread_gain::carried_by_messages(&mut tx, &[message_id], &absent)
+            .await
+            .map_err(db_error)?;
+        let labels_gained = LabelsGained::from_provider(
+            gained.into_iter().map(|label| label.label_id).collect(),
+            message_id,
+        );
         email_db_client::threads::update::recompute_thread_metadata(
             &mut tx,
             thread_id,
@@ -256,14 +293,20 @@ impl MailboxIngest for PgMailboxSync {
         )
         .await
         .map_err(wrapped_db_error)?;
-        let payload = serde_json::json!({
+        let mut payload = serde_json::json!({
             "kind":"message", "message_id":message_id,"thread_id":thread_id,
             "provider_id":lease.provider_id.as_str(),"is_import":lease.is_import,
             "is_new":existing.is_none(),"is_new_thread":thread_id == candidate_thread_id,"was_draft":confirmed_send.is_some() || (shadow.is_none() && existing.as_ref().is_some_and(|m|m.is_draft)),
             "is_draft":message.is_draft,"is_sent":message.is_sent,
             "version":version,"actor":sent_actor,
             "calendar_parts":content.calendar_parts,
+            "labels_gained":labels_gained,"traceparent":crate::trace_context::current(),
         });
+        // Calendar part file names come from the sender.
+        email_db_client::parse::nul_characters::remove_from_json(
+            &mut payload,
+            "email_projection_outbox.payload",
+        );
         let dedupe = if confirmed_send.is_some() {
             Some(format!("send/{}/{}", lease.mailbox.link_id, message_id))
         } else {
@@ -285,21 +328,61 @@ impl MailboxIngest for PgMailboxSync {
         tx.commit().await.map_err(db_error)
     }
 
+    async fn stored(&self, lease: &MessageLease) -> Result<bool, MailboxError> {
+        sqlx::query_scalar!(
+            r#"SELECT EXISTS(SELECT 1 FROM email_messages WHERE link_id = $1 AND provider_id = $2) AS "stored!""#,
+            lease.mailbox.link_id,
+            lease.provider_id.as_str()
+        )
+        .fetch_one(&self.db)
+        .await
+        .map_err(db_error)
+    }
+
     async fn absent(&self, lease: &MessageLease) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
-        let active = sqlx::query!("SELECT id FROM email_links WHERE id = $1 AND sync_generation = $2 AND grant_generation = $3 AND is_sync_active FOR UPDATE",lease.mailbox.link_id,lease.mailbox.sync_generation,lease.mailbox.grant_generation)
-            .fetch_optional(&mut *tx).await.map_err(db_error)?;
-        if active.is_none() {
+        let mut tx = self.begin().await.map_err(db_error)?;
+        let Some(mailbox_address) = sqlx::query_scalar!("SELECT email_address FROM email_links WHERE id = $1 AND sync_generation = $2 AND grant_generation = $3 AND is_sync_active FOR UPDATE",lease.mailbox.link_id,lease.mailbox.sync_generation,lease.mailbox.grant_generation)
+            .fetch_optional(&mut *tx).await.map_err(db_error)? else {
             return Err(MailboxError::Stale);
-        }
-        let work = sqlx::query!(r#"
+        };
+        let Some(work) = sqlx::query!(r#"
             SELECT revision FROM email_message_reconciliation
             WHERE link_id = $1 AND generation = $2 AND provider_id = $3 AND lease_id = $4 AND lease_until > now() FOR UPDATE
         "#,lease.mailbox.link_id,lease.mailbox.sync_generation,lease.provider_id.as_str(),lease.lease_id)
-            .fetch_optional(&mut *tx).await.map_err(db_error)?;
-        if work.is_none() {
+            .fetch_optional(&mut *tx).await.map_err(db_error)? else {
             return Err(MailboxError::Stale);
+        };
+        // A change queued during the lease outdates this read's 404: leave the
+        // message as it is, and `complete_message` keeps the newer revision due
+        // for a read of its own.
+        if work.revision != lease.revision {
+            return Ok(());
         }
+        // The correspondents of mail that leaves the mailbox now, read before the
+        // mark below: sent mail's recipients and received mail's sender, as a
+        // Gmail deletion records them. Drafts never reach the CRM, and mail
+        // already marked missing left earlier.
+        let correspondents = sqlx::query_scalar!(
+            r#"
+            SELECT c.email_address AS "email!"
+            FROM email_messages m
+            JOIN email_message_recipients r ON r.message_id = m.id
+            JOIN email_contacts c ON c.id = r.contact_id
+            WHERE m.link_id = $1 AND m.provider_id = $2 AND m.is_sent AND NOT m.is_draft
+                AND NOT COALESCE((m.mailbox_state->>'provider_missing')::boolean,false)
+            UNION ALL
+            SELECT c.email_address
+            FROM email_messages m
+            JOIN email_contacts c ON c.id = m.from_contact_id
+            WHERE m.link_id = $1 AND m.provider_id = $2 AND NOT m.is_sent AND NOT m.is_draft
+                AND NOT COALESCE((m.mailbox_state->>'provider_missing')::boolean,false)
+        "#,
+            lease.mailbox.link_id,
+            lease.provider_id.as_str()
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(db_error)?;
         let rows = sqlx::query!(r#"
             UPDATE email_messages SET mailbox_state = COALESCE(mailbox_state,'{}'::jsonb) || '{"provider_missing":true}'::jsonb
             WHERE link_id = $1 AND provider_id = $2 AND (NOT is_draft OR body_macro IS NULL) RETURNING id,thread_id
@@ -317,6 +400,18 @@ impl MailboxIngest for PgMailboxSync {
             sqlx::query!("INSERT INTO email_projection_outbox (id,link_id,generation,payload) VALUES ($1,$2,$3,$4)",macro_uuid::generate_uuid_v7(),lease.mailbox.link_id,lease.mailbox.sync_generation,payload)
                 .execute(&mut *tx).await.map_err(db_error)?;
         }
+        // Give the nightly CRM cleanup a candidate for each correspondent, as a
+        // Gmail deletion does; it removes a contact only once no mail with them
+        // is left. Written last: the candidate row lock lasts until commit, and
+        // every deletion of mail with the same contact waits on it.
+        let emails = crate::domain::crm_cleanup::candidate_emails(&mailbox_address, correspondents);
+        email_db_client::crm_cleanup::candidates::insert_candidates(
+            &mut *tx,
+            lease.mailbox.link_id,
+            &emails,
+        )
+        .await
+        .map_err(wrapped_db_error)?;
         // Keep bodies, local draft revisions and attachments for reconciliation;
         // absence in a folder or a single 404 is never a hard-delete instruction.
         tx.commit().await.map_err(db_error)

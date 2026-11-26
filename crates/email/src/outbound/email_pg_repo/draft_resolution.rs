@@ -14,11 +14,11 @@ pub(super) async fn commit(
     plan: MessageResolutionPlan,
 ) -> Result<Uuid, EmailErr> {
     let id = plan.message_id;
-    let mut tx = pool.begin().await.map_err(anyhow::Error::from)?;
+    let mut tx = super::begin(pool).await.map_err(anyhow::Error::from)?;
     let link=sqlx::query!(r#"
         SELECT l.id,l.sync_generation FROM email_links l JOIN email_messages m ON m.link_id = l.id
         WHERE m.id = $1 AND (l.macro_id = $2 OR EXISTS (SELECT 1 FROM macro_user_links u WHERE u.link_id = l.id AND u.primary_macro_id = $2))
-        FOR UPDATE OF l
+        FOR SHARE OF l
     "#,id,actor.as_ref()).fetch_optional(&mut *tx).await.map_err(anyhow::Error::from)?.ok_or(EmailErr::MessageNotFound(id))?;
     let message=sqlx::query!("SELECT thread_id,provider_id,provider_version,is_sent FROM email_messages WHERE id = $1 FOR UPDATE",id).fetch_one(&mut *tx).await.map_err(anyhow::Error::from)?;
     if message.is_sent {
@@ -73,7 +73,7 @@ pub(super) async fn commit(
             match plan.action {
                 MessageResolutionAction::KeepLocal => {
                     sqlx::query!(r#"
-                        UPDATE email_mailbox_drafts SET revision = revision + 1,base_version = $2,checkpoint = NULL,
+                        UPDATE email_mailbox_drafts SET revision = revision + 1,base_version = $2,base_content = NULL,checkpoint = NULL,
                             state = 'pending',error_code = NULL,delete_requested = false,actor_id = $3,available_at = now(),updated_at = now()
                         WHERE message_id = $1
                     "#,id,message.provider_version,actor.as_ref()).execute(&mut *tx).await.map_err(anyhow::Error::from)?;
@@ -84,7 +84,7 @@ pub(super) async fn commit(
                         .as_ref()
                         .ok_or(EmailErr::MessageDeliveryConflict(id))?;
                     sqlx::query!(r#"
-                        UPDATE email_mailbox_drafts SET synced_revision = revision,base_version = $2,checkpoint = NULL,
+                        UPDATE email_mailbox_drafts SET synced_revision = revision,base_version = $2,base_content = NULL,checkpoint = NULL,
                             state = 'synced',error_code = 'accepting_remote',delete_requested = false,actor_id = $3,updated_at = now()
                         WHERE message_id = $1
                     "#,id,message.provider_version,actor.as_ref()).execute(&mut *tx).await.map_err(anyhow::Error::from)?;
@@ -94,7 +94,7 @@ pub(super) async fn commit(
                     sqlx::query!(r#"
                         INSERT INTO email_message_reconciliation (link_id,generation,provider_id,revision,is_import)
                         VALUES ($1,$2,$3,1,false) ON CONFLICT (link_id,generation,provider_id) DO UPDATE SET
-                            revision = email_message_reconciliation.revision + 1,available_at = now()
+                            revision = email_message_reconciliation.revision + 1,available_at = now(),is_import = false
                     "#,link.id,link.sync_generation,provider_id).execute(&mut *tx).await.map_err(anyhow::Error::from)?;
                 }
                 _ => unreachable!("outer match limits content resolutions"),

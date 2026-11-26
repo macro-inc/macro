@@ -24,7 +24,7 @@ export function RoutineCreatorView(props: {
   templatesEnabled: boolean;
   /** The scheduler's catalog routines. */
   catalog: RoutineTemplate[];
-  /** Templates start with their code (`enable-routine-code-steps`). */
+  /** Templates start with their code. */
   codeSteps: boolean;
   /** Drafts the routine from a description; absent where that is unavailable. */
   renderComposer?: (

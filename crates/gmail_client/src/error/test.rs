@@ -101,3 +101,27 @@ fn sanitization_truncates_unicode_only_at_character_boundaries() {
     assert!(!sanitized.contains("user@example.com"));
     assert!(sanitized.is_char_boundary(sanitized.len()));
 }
+
+#[test]
+fn decode_errors_name_a_missing_field_and_its_path() {
+    #[derive(Debug, serde::Deserialize)]
+    struct Labels {
+        #[expect(dead_code, reason = "decoded only to check the failure")]
+        labels: Vec<Label>,
+    }
+
+    #[derive(Debug, serde::Deserialize)]
+    struct Label {
+        #[expect(dead_code, reason = "decoded only to check the failure")]
+        id: String,
+    }
+
+    let error =
+        decode_json::<Labels>(br#"{"labels": [{"id": "INBOX"}, {"name": "person@example.com"}]}"#)
+            .unwrap_err();
+
+    assert_eq!(
+        error.to_string(),
+        "Gmail API response decode error: missing field `id` at labels[1]"
+    );
+}

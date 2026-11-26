@@ -3,6 +3,8 @@
     reason = "Just to allow GetActivitiesResponse and UserActivitiesResponse"
 )]
 
+mod email_policy;
+
 use crate::api::saved_views::definitions::{
     CreateSavedViewDefinitionRequest, ReorderSavedViewDefinitionsRequest, SavedViewDefinition,
     SavedViewDefinitionPage, SavedViewSharingRequest, UpdateSavedViewDefinitionRequest,
@@ -26,7 +28,7 @@ use crate::{
             self,
             recently_deleted::{RecentlyDeletedResponse, RecentlyDeletedResponseData},
         },
-        saved_views, threads, user_document_view_location,
+        saved_views, task_templates, threads, user_document_view_location,
     },
     model::{
         request::{
@@ -219,16 +221,30 @@ use soup::inbound::axum_router::{
     PostGroupedSoupAstRequest, PostSoupAstRequest, PostSoupRequest, PropertyBucketing,
     PropertyDateRange, PropertyDateRanges, SoupApiItem, SoupApiSort, SoupPage,
 };
+use time_tracking::domain::models::{
+    LoggedTime, RunningTimer, StartedTimer, StoppedTimer, TaskTimeTotal, TimeEntry,
+    TimeEntryCursor, TimeEntryPage, TimeEntrySource, TimerState,
+};
+use time_tracking::domain::report::{
+    TimeExport, TimeGroup, TimeGroupKey, TimeGrouping, TimeSummary, TimeTotal,
+};
+use time_tracking::inbound::axum_router::{
+    DiscardTimerRequest, LogTimeRequest, StartTimerRequest, StopTimerRequest, TimeTrackingApiError,
+    TimeTrackingErrorCode, UpdateTimeEntryRequest,
+};
+use time_tracking::inbound::report_router::TimeScopeName;
 use user_api_key::domain::models::{CreatedUserApiKey, UserApiKeyInfo};
 use user_api_key::inbound::axum_router::{CreateUserApiKeyRequest, UserApiKeysList};
 use utoipa::OpenApi;
+
+use email_policy::EmailPolicySchemas;
 
 #[derive(OpenApi)]
 #[openapi(
     info(
         terms_of_service = "https://macro.com/terms",
     ),
-    modifiers(&FormsApiAddon),
+    modifiers(&FormsApiAddon, &EmailPolicySchemas),
     paths(
         passwords::inbound::router::teams,
         passwords::inbound::router::list,
@@ -236,6 +252,8 @@ use utoipa::OpenApi;
         passwords::inbound::import::import_batch,
         passwords::inbound::import::match_names,
         passwords::inbound::router::detail,
+        passwords::inbound::router::set_favorite,
+        passwords::inbound::router::remove_favorite,
         passwords::inbound::router::username,
         passwords::inbound::router::copy_username,
         passwords::inbound::router::update,
@@ -558,6 +576,18 @@ use utoipa::OpenApi;
         channel_labels::inbound::axum_router::delete_channel_section_handler,
         channel_labels::inbound::axum_router::set_channel_section_handler,
 
+        // time tracking
+        time_tracking::inbound::axum_router::list_time_entries_handler,
+        time_tracking::inbound::axum_router::log_time_handler,
+        time_tracking::inbound::axum_router::update_time_entry_handler,
+        time_tracking::inbound::axum_router::delete_time_entry_handler,
+        time_tracking::inbound::axum_router::get_timer_handler,
+        time_tracking::inbound::axum_router::start_timer_handler,
+        time_tracking::inbound::axum_router::stop_timer_handler,
+        time_tracking::inbound::axum_router::discard_timer_handler,
+        time_tracking::inbound::report_router::time_summary_handler,
+        time_tracking::inbound::report_router::export_time_handler,
+
         // user api keys
         account_manager::inbound::axum_router::request_account_manager_handler,
         account_manager::inbound::axum_router::list_account_managers_handler,
@@ -667,6 +697,7 @@ use utoipa::OpenApi;
 
         // threads
         threads::edit_thread::edit_thread_handler,
+        threads::get_thread_channel_shares::handler,
 
         // /recents
         recents::recently_deleted::handler,
@@ -679,8 +710,14 @@ use utoipa::OpenApi;
         saved_views::definitions::get_handler,
         saved_views::definitions::create_handler,
         saved_views::definitions::update_handler,
+        saved_views::definitions::appearance_handler,
         saved_views::definitions::delete_handler,
         saved_views::definitions::reorder_handler,
+        task_templates::list_task_templates,
+        task_templates::get_task_template,
+        task_templates::create_task_template,
+        task_templates::update_task_template,
+        task_templates::delete_task_template,
 
         // /github
         github::inbound::github_sync_router::install_sync_handler,
@@ -717,12 +754,24 @@ use utoipa::OpenApi;
         crm::inbound::pipeline_workflows::import_companies,
         crm::inbound::pipeline_workflows::pipeline_csv,
         crm::inbound::pipeline_workflows::export_pipeline,
+        crm::inbound::record_merge::preview,
+        crm::inbound::record_merge::commit,
         crm::inbound::axum_router::set_email_sync::handler,
+        crm::inbound::axum_router::email_policy::get_handler,
+        crm::inbound::axum_router::email_policy::update_handler,
+        crm::inbound::axum_router::email_policy::validate_handler,
+        crm::inbound::axum_router::email_policy::history_handler,
+        crm::inbound::axum_router::email_policy::revision_handler,
+        crm::inbound::axum_router::email_policy::start_preview_handler,
+        crm::inbound::axum_router::email_policy::preview_handler,
+        crm::inbound::axum_router::email_policy::cancel_preview_handler,
         crm::inbound::axum_router::email_privacy::get_handler,
         crm::inbound::axum_router::email_privacy::excluded_threads_handler,
         crm::inbound::axum_router::email_privacy::update_handler,
         crm::inbound::axum_router::set_company_hidden::handler,
         crm::inbound::axum_router::set_company_name::handler,
+        crm::inbound::axum_router::company_domains::add_handler,
+        crm::inbound::axum_router::company_domains::remove_handler,
         crm::inbound::axum_router::set_contact_hidden::handler,
         crm::inbound::axum_router::set_contact_name::handler,
         crm::inbound::axum_router::set_contact_email::handler,
@@ -734,6 +783,7 @@ use utoipa::OpenApi;
         crm::inbound::axum_router::list_company_contacts_page::handler,
         crm::inbound::axum_router::get_contact::handler,
         crm::inbound::axum_router::get_contact_by_email::handler,
+        crm::inbound::axum_router::get_company_by_domain::handler,
         crm::inbound::axum_router::search_contacts::handler,
         crm::inbound::axum_router::get_company::handler,
         crm::inbound::axum_router::previews::handler,
@@ -795,6 +845,11 @@ use utoipa::OpenApi;
             documents_hex::domain::models::SkillDescriptionBody,
             documents_hex::domain::models::PropertyInput,
             models_properties::api::requests::SetPropertyValue,
+            ::task_templates::domain::TaskTemplateConfiguration,
+            ::task_templates::domain::PropertyDefault,
+            ::task_templates::domain::TaskTemplate,
+            ::task_templates::domain::CreateTaskTemplateRequest,
+            ::task_templates::domain::UpdateTaskTemplateRequest,
             models_properties::shared::EntityReference,
             models_properties::shared::EntityType, // Quick create task
             CreateBulkDocumentResponseData,
@@ -913,6 +968,31 @@ use utoipa::OpenApi;
             CreateChannelLabelRequest,
             RenameChannelLabelRequest,
             SetChannelLabelRequest,
+            // time tracking
+            TimeEntry,
+            TimeEntrySource,
+            TimeEntryCursor,
+            TimeEntryPage,
+            LoggedTime,
+            TaskTimeTotal,
+            RunningTimer,
+            TimerState,
+            StartedTimer,
+            StoppedTimer,
+            LogTimeRequest,
+            UpdateTimeEntryRequest,
+            StartTimerRequest,
+            StopTimerRequest,
+            DiscardTimerRequest,
+            TimeTrackingApiError,
+            TimeTrackingErrorCode,
+            TimeScopeName,
+            TimeGrouping,
+            TimeGroupKey,
+            TimeTotal,
+            TimeGroup,
+            TimeSummary,
+            TimeExport,
             // databases
             Database,
             DatabaseTable,
@@ -1221,6 +1301,7 @@ use utoipa::OpenApi;
             models_permissions::share_permission::LinkShare,
             models_permissions::share_permission::access_level::AccessLevel,
             models_permissions::share_permission::SharePermissionV2,
+            crate::service::entity_mutation::ThreadChannelShare,
             models_permissions::share_permission::UpdateSharePermissionRequestV2, // Share permission
             models_permissions::share_permission::channel_share_permission::ChannelSharePermission,
             models_permissions::share_permission::channel_share_permission::UpdateChannelSharePermission, // Channel share permissions
@@ -1290,6 +1371,24 @@ use utoipa::OpenApi;
             crm::inbound::axum_router::set_email_sync::SetEmailSyncRequest,
             crm::inbound::axum_router::set_company_hidden::SetCompanyHiddenRequest,
             crm::inbound::axum_router::set_company_name::SetCompanyNameRequest,
+            crm::inbound::axum_router::company_domains::CompanyDomainRequest,
+            crm::inbound::axum_router::company_domains::CompanyDomainTakenResponse,
+            crm::inbound::record_merge::MergePreviewRequest,
+            crm::inbound::record_merge::MergeCommitRequest,
+            crm::inbound::record_merge::MergeErrorResponse,
+            crm::domain::record_merge::MergePreview,
+            crm::domain::record_merge::MergeOutcome,
+            crm::domain::record_merge::MergeRecordType,
+            crm::domain::record_merge::SharingRulesChoice,
+            crm::domain::record_merge::MergedRecord,
+            crm::domain::record_merge::MergeMoves,
+            crm::domain::record_merge::SharedPipeline,
+            crm::domain::record_merge::FieldConflict,
+            crm::domain::record_merge::DroppedValue,
+            crm::domain::record_merge::MergeEmailSync,
+            crm::domain::record_merge::SharingRulesPreview,
+            crm::domain::record_merge::MergeBlock,
+            crm::domain::record_merge::SameAddressPerson,
             crm::inbound::axum_router::set_contact_hidden::SetContactHiddenRequest,
             crm::inbound::axum_router::set_contact_name::SetContactNameRequest,
             crm::inbound::axum_router::set_contact_email::SetContactEmailRequest,

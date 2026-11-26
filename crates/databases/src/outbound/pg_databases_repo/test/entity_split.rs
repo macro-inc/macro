@@ -20,7 +20,7 @@ const FOLDERS_UP: &str = include_str!(concat!(
 ));
 const SYNCS_DOWN: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../macro_db_client/migrations/20261117003604_database_syncs.down.sql"
+    "/../macro_db_client/migrations/20261126020614_database_syncs.down.sql"
 ));
 const WEBHOOKS_DOWN: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -265,6 +265,7 @@ async fn schema_cutover_discards_database_content_and_allows_a_fresh_start(pool:
     // The owner remains and can immediately create and write a fresh app database.
     let database = repo
         .create_database(
+            models_databases::DatabaseId::new(),
             &CreateDatabase {
                 name: "Fresh start".into(),
                 owner_id: user(),
@@ -272,6 +273,7 @@ async fn schema_cutover_discards_database_content_and_allows_a_fresh_start(pool:
                 first_table: None,
             },
             FirstTable {
+                ids: None,
                 name: "Contacts".into(),
                 title_column: "Name",
             },
@@ -286,5 +288,56 @@ async fn schema_cutover_discards_database_content_and_allows_a_fresh_start(pool:
             .0
             .name,
         "Fresh start"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_storage_batch_in_the_callers_transaction_commits_or_rolls_back_with_it(pool: PgPool) {
+    use crate::domain::provisioning::DatabaseStorageProvisioner;
+
+    let properties = PropertiesPgRepo::new(pool.clone());
+    let store = PgCellStore::new(pool.clone(), properties.clone());
+    let repo = PgDatabasesRepo::new(pool.clone(), properties);
+    insert_user(&pool).await;
+    let database = store.create_storage().await.unwrap();
+    let table = TableId::new();
+    let writes = batch(
+        database,
+        vec![Write::CreateTable {
+            table_id: table,
+            name: "Contacts".into(),
+        }],
+    );
+
+    let mut transaction = pool.begin().await.unwrap();
+    assert!(matches!(
+        store
+            .apply_storage_writes_in(&mut transaction, &writes)
+            .await
+            .unwrap(),
+        WritesOutcome::Applied { .. }
+    ));
+    transaction.rollback().await.unwrap();
+    assert!(
+        repo.tables_for_databases(&[database])
+            .await
+            .unwrap()
+            .is_empty(),
+        "the caller's rollback discards the batch"
+    );
+
+    let mut transaction = pool.begin().await.unwrap();
+    let WritesOutcome::Applied { changes, .. } = store
+        .apply_storage_writes_in(&mut transaction, &writes)
+        .await
+        .unwrap()
+    else {
+        panic!("the batch applies in the caller's transaction");
+    };
+    assert_eq!(changes.len(), 1, "the batch is journaled like any other");
+    transaction.commit().await.unwrap();
+    assert_eq!(
+        repo.tables_for_databases(&[database]).await.unwrap().len(),
+        1
     );
 }

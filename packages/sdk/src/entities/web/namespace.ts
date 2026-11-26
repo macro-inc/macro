@@ -55,7 +55,7 @@ export class WebNamespace {
    * });
    * for (const result of results) console.log(result.title, result.url, result.snippet);
    *
-   * @write
+   * @readonly
    * @openworld
    */
   async search(
@@ -85,7 +85,7 @@ export class WebNamespace {
    * const page = await macro.web.fetch('https://tokio.rs/blog/2025-10-tokio-1-48');
    * console.log(page.content);
    *
-   * @write
+   * @readonly
    * @openworld
    */
   async fetch(

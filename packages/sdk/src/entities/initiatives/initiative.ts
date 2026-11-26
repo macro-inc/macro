@@ -5,7 +5,7 @@ import type {
   InitiativeDetail,
 } from '../../../generated/storage/types.gen';
 import type { RichMessage } from '../../mentions';
-import { paginate, unwrap } from '../../utils';
+import { iterate, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { MacroEntity } from '../entity';
 import {
@@ -26,6 +26,14 @@ import {
   sharePermissionBody,
 } from '../sharing/permissions';
 import { Task } from '../tasks/task';
+import {
+  readTimeExport,
+  readTimeSummary,
+  type TimeExport,
+  type TimePeriodOptions,
+  type TimeSummary,
+  type TimeSummaryOptions,
+} from '../time/report';
 import { User } from '../users/user';
 
 /** Initiative creation settings. */
@@ -144,8 +152,8 @@ export class Initiative extends MacroEntity<InitiativeDetail> {
   readonly sharePermissions = this.field('sharePermission');
 
   /**
-   * The description as GitHub-flavored Markdown; empty while no one has opened
-   * or written it.
+   * The description as Macro's lossless Markdown, with chips, tables and other
+   * rich content as `<m-*>` tags; empty while no one has opened or written it.
    *
    * @readonly
    */
@@ -246,7 +254,49 @@ export class Initiative extends MacroEntity<InitiativeDetail> {
   }
 
   /**
-   * This initiative's history, newest first, auto-paginated: creation, edits,
+   * Everyone's time on this project's tasks over a period of at most 366
+   * days, grouped by person, task or day, each group optionally split by
+   * `thenBy`; only tasks you can see count, people who left the team included.
+   *
+   * @example
+   * ```ts
+   * // November by person, each person's time split by task.
+   * const month = await initiative.timeSummary({
+   *   from: '2026-11-01',
+   *   to: '2026-11-30',
+   *   groupBy: 'person',
+   *   thenBy: 'task',
+   * });
+   * ```
+   *
+   * @readonly
+   */
+  timeSummary(opts: TimeSummaryOptions): Promise<TimeSummary> {
+    return readTimeSummary(
+      this.client,
+      'initiative.timeSummary',
+      { scope: 'project', initiative: this },
+      opts,
+    );
+  }
+
+  /**
+   * This project's time entries over a period of at most 366 days as CSV
+   * text for invoicing, at most 10,000 entries; only tasks you can see count.
+   *
+   * @readonly
+   */
+  exportTimeCsv(opts: TimePeriodOptions): Promise<TimeExport> {
+    return readTimeExport(
+      this.client,
+      'initiative.exportTimeCsv',
+      { scope: 'project', initiative: this },
+      opts,
+    );
+  }
+
+  /**
+   * This initiative's history, newest first, auto-paginated (`maxItems` caps the total): creation, edits,
    * property changes and tasks added or removed, optionally within
    * `[after, before)`.
    *
@@ -261,35 +311,45 @@ export class Initiative extends MacroEntity<InitiativeDetail> {
    * @readonly
    */
   activity(
-    window: { after?: Date | string; before?: Date | string } = {},
+    window: {
+      after?: Date | string;
+      before?: Date | string;
+      maxItems?: number;
+    } = {},
   ): AsyncGenerator<InitiativeActivityEntry> {
     const after = timestamp(window.after);
     const before = timestamp(window.before);
-    return paginate<InitiativeActivityEntry, InitiativeActivityCursor>(
-      async (cursor) => {
-        const page = unwrap(
-          await this.client.storage.getInitiativeActivity({
-            path: { initiative_id: this.id },
-            query: {
-              after,
-              before,
-              cursorOccurredAt: cursor?.occurredAt,
-              cursorId: cursor?.id,
-            },
-          }),
-        );
-        return {
-          items: page.records.map((record) => ({
-            id: record.id,
-            actor: User.byId(this.client, record.actorId),
-            subject: User.byId(this.client, record.subjectId),
-            action: record.action,
-            payload: record.actionPayload ?? undefined,
-            occurredAt: record.occurredAt,
-          })),
-          nextCursor: page.nextCursor,
-        };
-      },
+    return iterate(
+      'initiative.activity',
+      window,
+      { after: true, before: true },
+      () =>
+        paginate<InitiativeActivityEntry, InitiativeActivityCursor>(
+          async (cursor) => {
+            const page = unwrap(
+              await this.client.storage.getInitiativeActivity({
+                path: { initiative_id: this.id },
+                query: {
+                  after,
+                  before,
+                  cursorOccurredAt: cursor?.occurredAt,
+                  cursorId: cursor?.id,
+                },
+              }),
+            );
+            return {
+              items: page.records.map((record) => ({
+                id: record.id,
+                actor: User.byId(this.client, record.actorId),
+                subject: User.byId(this.client, record.subjectId),
+                action: record.action,
+                payload: record.actionPayload ?? undefined,
+                occurredAt: record.occurredAt,
+              })),
+              nextCursor: page.nextCursor,
+            };
+          },
+        ),
     );
   }
 

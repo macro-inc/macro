@@ -1,3 +1,4 @@
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 /**
  * Creating a new Illustrator document: one empty artboard.
  */
@@ -22,6 +23,7 @@ export async function createAiDocument(args: {
   /** UI surface the creation originated from, for analytics. */
   source?: string;
 }): Promise<string | undefined> {
+  const generation = cacheSessionGeneration.capture();
   const title = args.title ?? 'Untitled illustration';
   const bytes = await AiEngine.blank(NEW_ARTBOARD.width, NEW_ARTBOARD.height);
   const sha = await contentHash(bytes);
@@ -47,6 +49,7 @@ export async function createAiDocument(args: {
     'create-ai-document'
   );
   setPreviewOnCreate({
+    generation,
     itemId: documentId,
     itemType: 'document',
     name: title,

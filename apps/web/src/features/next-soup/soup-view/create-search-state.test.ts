@@ -5,7 +5,7 @@ const pool = vi.hoisted(() => vi.fn((): unknown[] => []));
 vi.mock('@app/lib/analytics', () => ({ analytics: { track: vi.fn() } }));
 vi.mock('@app/features/soup/search', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@app/features/soup/search')>()),
-  useSearchContext: () => ({ entityPool: pool, routinePool: () => [] }),
+  useSearchContext: () => ({ entityPool: () => pool, routinePool: () => [] }),
 }));
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({}),
@@ -27,6 +27,7 @@ vi.mock('@app/features/next-soup/soup-view/sort-options', () => ({
 vi.mock('@core/mobile/inputModality', () => ({ isModality: () => false }));
 vi.mock('@core/component/EntityIcon', () => ({ getIconConfig: vi.fn() }));
 
+import { searchQueryParts } from '../core/search-operators';
 import { createSoupState } from '../create-soup-state';
 import { NIL_UUID, type QueryState } from '../filters/filter-store';
 import {
@@ -116,4 +117,91 @@ it('keeps local results in views whose tab presets carry those filters', () => {
       'tasks'
     )
   ).toBe(false);
+});
+
+function featuredIdsForQuery(options: {
+  nameText: string;
+  operatorIndexes?: string[];
+}) {
+  vi.useFakeTimers();
+  pool.mockReturnValue([
+    {
+      data: {
+        id: 'task-1',
+        type: 'document',
+        name: 'budget review',
+        fileType: 'md',
+        subType: { type: 'task', is_completed: false },
+      },
+    },
+  ]);
+  const [text, setText] = createSignal('');
+  const { search, dispose } = createRoot((dispose) => ({
+    dispose,
+    search: createSearchState({
+      surface: () => 'search',
+      soup: createSoupState(),
+      filters: () => ({ include: {}, exclude: {} }),
+      assignees: () => [],
+      searchText: text,
+      setSearchText: setText,
+      nameText: () => options.nameText,
+      operatorIndexes: () => options.operatorIndexes,
+    }),
+  }));
+  setText(`type:task ${options.nameText}`);
+  vi.advanceTimersByTime(20);
+  const ids = search.featuredIds();
+  dispose();
+  return ids;
+}
+
+it('matches names with the words beside the operators', () => {
+  expect(featuredIdsForQuery({ nameText: 'budget' })).toEqual(['task-1']);
+  expect(featuredIdsForQuery({ nameText: '' })).toEqual([]);
+});
+
+it('narrows name matches to the types the operators leave', () => {
+  expect(
+    featuredIdsForQuery({ nameText: 'budget', operatorIndexes: ['email'] })
+  ).toEqual([]);
+});
+
+it('leaves out name matches that hold a word a minus leaves out', () => {
+  vi.useFakeTimers();
+  const task = (id: string, name: string) => ({
+    data: {
+      id,
+      type: 'document',
+      name,
+      fileType: 'md',
+      subType: { type: 'task', is_completed: false },
+    },
+  });
+  pool.mockReturnValue([
+    task('task-1', 'Budget Review'),
+    task('task-2', 'budget plan'),
+  ]);
+  const [text, setText] = createSignal('');
+  const parts = () => searchQueryParts(text());
+  const { search, dispose } = createRoot((dispose) => ({
+    dispose,
+    search: createSearchState({
+      surface: () => 'search',
+      soup: createSoupState(),
+      filters: () => ({ include: {}, exclude: {} }),
+      assignees: () => [],
+      searchText: text,
+      setSearchText: setText,
+      serviceText: () => parts().serviceText,
+      nameText: () => parts().nameText,
+      leftOutWords: () => parts().leftOutWords,
+    }),
+  }));
+
+  setText('budget -REVIEW');
+  vi.advanceTimersByTime(20);
+
+  expect(search.featuredIds()).toEqual(['task-2']);
+  dispose();
 });

@@ -20,6 +20,8 @@ export type NotificationInboxRow = InboxRow<InboxRowContent>;
 /** Which rows a feed shows; with no row types it shows and reads nothing. */
 export type InboxScope = {
   rowTypes: readonly InboxRowType[];
+  /** No category selection: include kinds this client does not yet know. */
+  allKinds?: boolean;
   /**
    * Only unread rows. The server filters, so pages and live changes cover
    * unread rows alone.
@@ -134,6 +136,11 @@ export type NotificationsInboxContext = {
   openUrl: (url: string) => void;
   /** Where the reader's filters are kept between visits. */
   filterStorage: {
+    read: () => string | null;
+    write: (value: string) => void;
+  };
+  /** Where the reader's display options (Condensed) are kept between visits. */
+  displayStorage: {
     read: () => string | null;
     write: (value: string) => void;
   };

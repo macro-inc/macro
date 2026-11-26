@@ -26,7 +26,7 @@ impl ImportedGranolaMeetings {
 
 impl GranolaMeetings for ImportedGranolaMeetings {
     async fn connected(&self, user: &MacroUserIdStr<'static>) -> Result<bool, rootcause::Report> {
-        Ok(self.accounts.account(user).await?.is_some())
+        self.accounts.connected(user).await
     }
 
     async fn meetings(

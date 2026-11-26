@@ -22,6 +22,14 @@ describe('compactAge', () => {
   it('falls back to a short date after a week', () => {
     expect(compactAge(ago(10 * DAY), NOW)).toBe('Sep 5');
   });
+  it('localizes recent ages and older dates without changing legacy defaults', () => {
+    expect(compactAge(ago(20_000), NOW, 'fr-FR')).toBe('maintenant');
+    expect(compactAge(ago(4 * MINUTE), NOW, 'fr-FR')).toBe('4min');
+    expect(compactAge(ago(3 * HOUR), NOW, 'fr-FR')).toBe('3h');
+    expect(compactAge(ago(2 * DAY), NOW, 'fr-FR')).toBe('2j');
+    expect(compactAge(ago(10 * DAY), NOW, 'fr-FR')).toBe('5 sept.');
+    expect(compactAge(ago(4 * MINUTE), NOW)).toBe('4m');
+  });
 });
 
 describe('relativeAge', () => {

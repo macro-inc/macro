@@ -1,0 +1,21 @@
+[package]
+edition = "2024"
+name = "connectors_e2e"
+publish = false
+version = "0.1.0"
+description = "Test support: drives Macro's connectors on dev through its public HTTP API and an agent session, as two test accounts, against real Pipedream, Macro Connect, a native MCP server and the GitHub link."
+
+[dependencies]
+lazy-regex = { workspace = true }
+macro_service_urls = { path = "../macro_service_urls" }
+reqwest = { workspace = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }

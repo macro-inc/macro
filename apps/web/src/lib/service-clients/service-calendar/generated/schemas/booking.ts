@@ -4,6 +4,7 @@
  * calendar_service
  * OpenAPI spec version: 0.1.0
  */
+import type { BookingAbandonedAt } from './bookingAbandonedAt';
 import type { BookingAnswers } from './bookingAnswers';
 import type { BookingAttendance } from './bookingAttendance';
 import type { BookingQuestionLabels } from './bookingQuestionLabels';
@@ -14,6 +15,10 @@ import type { BookingStatus } from './bookingStatus';
  * Public booking details, also visible to authorized profile members.
  */
 export interface Booking {
+  /** When Macro stopped trying to update the host's calendar for the
+booking's latest change. A failed booking with this set is not being
+retried, and cancelling it is the way to release its time. */
+  abandonedAt?: BookingAbandonedAt;
   /** Answers keyed by question identity. */
   answers: BookingAnswers;
   /** Explicit attendance outcome; existing booking records default to unknown. */
@@ -24,7 +29,8 @@ export interface Booking {
   endsAt: string;
   /** Booking link identity. */
   eventTypeId: string;
-  /** Assigned hosts. */
+  /** Assigned hosts. Empty in responses to the booker, since a Macro user
+identity carries the host's sign-in address. */
   hosts: string[];
   /** Booking identity. */
   id: string;

@@ -5,33 +5,24 @@ enrolled() {
   [ -s "$MACRO_ENROLLED_MARKER" ]
 }
 
-# incus-agent creates the socket a few seconds after it starts.
-wait_for_incus_socket() {
-  waited=0
-  while [ ! -S /dev/incus/sock ] && [ "$waited" -lt "${MACRO_INCUS_SOCKET_WAIT:-60}" ]; do
-    sleep 1
-    waited=$((waited + 1))
-  done
-}
-
 case "${MACRO_ENROLL_FROM:-}" in
-  incus)
-    wait_for_incus_socket
-    if [ ! -S /dev/incus/sock ]; then
+  mmds)
+    token=$(curl --silent --show-error --max-time 2 --request PUT \
+      --header 'X-metadata-token-ttl-seconds: 60' http://169.254.169.254/latest/api/token) || {
       if enrolled; then exit 0; fi
-      echo "macrod-enroll: /dev/incus/sock is missing after ${MACRO_INCUS_SOCKET_WAIT:-60} s; is incus-agent running and security.guestapi on?" >&2
+      echo "macrod-enroll: MMDS (169.254.169.254) is unreachable; does the microVM have MMDS v2 on its network interface?" >&2
       exit 1
-    fi
-    status=$(curl --silent --show-error --max-time 2 --unix-socket /dev/incus/sock \
-      --output /dev/null --write-out '%{http_code}' \
-      http://custom.socket/1.0/config/user.macro.enrollment)
+    }
+    status=$(curl --silent --show-error --max-time 2 --output /dev/null --write-out '%{http_code}' \
+      --header "X-metadata-token: $token" --header 'Accept: application/json' \
+      http://169.254.169.254/macro/enrollment)
     if [ "$status" = 404 ]; then
       if enrolled; then exit 0; fi
-      echo "macrod-enroll: missing enrollment; set the user.macro.enrollment Incus instance config key to the Enrollment JSON" >&2
+      echo "macrod-enroll: missing enrollment; put the Enrollment JSON at macro.enrollment in the microVM's MMDS" >&2
       exit 1
     fi
     if [ "$status" != 200 ]; then
-      echo "macrod-enroll: Incus enrollment source returned HTTP $status" >&2
+      echo "macrod-enroll: MMDS returned HTTP $status for /macro/enrollment" >&2
       exit 1
     fi
     ;;
@@ -44,7 +35,7 @@ case "${MACRO_ENROLL_FROM:-}" in
     fi
     ;;
   *)
-    echo "macrod-enroll: MACRO_ENROLL_FROM='${MACRO_ENROLL_FROM:-}' (macro.box.enrollFrom) is not 'incus' or 'file:<path>'" >&2
+    echo "macrod-enroll: MACRO_ENROLL_FROM='${MACRO_ENROLL_FROM:-}' (macro.box.enrollFrom) is not 'mmds' or 'file:<path>'" >&2
     exit 1
     ;;
 esac

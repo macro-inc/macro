@@ -11,9 +11,12 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@channel/Input', () => ({
-  ChannelInput: (props: { parent: MessageParent }) => (
+  ChannelInput: (props: {
+    parent: MessageParent;
+    input: { placeholder: string };
+  }) => (
     <textarea
-      aria-label="Leave a comment..."
+      aria-label={props.input.placeholder}
       data-parent-type={props.parent.type}
       data-parent-id={props.parent.id}
     />

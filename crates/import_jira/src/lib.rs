@@ -3,5 +3,5 @@
 
 /// Source models and read ports.
 pub use import_tracker::domain;
-/// Provider and Pipedream adapters.
+/// The provider client over the user's connected API.
 pub mod outbound;

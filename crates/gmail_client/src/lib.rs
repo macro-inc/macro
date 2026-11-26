@@ -49,7 +49,7 @@ pub(crate) fn sanitize_error_body(body: &str) -> String {
 
 use crate::auth::{fetch_google_public_keys, verify_google_jwt};
 use crate::contacts::get_self_connection;
-use crate::messages::{get_message, get_message_label_ids, list_messages};
+use crate::messages::{get_message, get_message_label_ids, list_messages, list_messages_since};
 use crate::threads::get_thread;
 pub use error::GmailApiHttpError;
 use macro_service_urls::{GmailApiUrl, GoogleOauthCertsUrl, GooglePeopleApiUrl};
@@ -60,7 +60,8 @@ use models_email::gmail::inbox_sync::{
 };
 use models_email::gmail::labels::GmailLabel;
 use models_email::gmail::{
-    GmailUserProfile, HistoryListResponse, ListThreadsResponse, MessageResource, ThreadResource,
+    GmailUserProfile, HistoryListResponse, ListMessagesResponse, ListThreadsResponse,
+    MessageResource, ThreadResource,
 };
 
 #[derive(Clone, Debug)]
@@ -163,6 +164,30 @@ impl GmailClient {
         label_ids: &[&str],
     ) -> Result<Vec<String>, GmailApiHttpError> {
         list_messages(self, access_token, num_messages, label_ids).await
+    }
+
+    /// Lists one page of up to `max_results` ids of the messages Gmail
+    /// received at or after `since_seconds` (Unix time), newest first,
+    /// carrying all of `label_ids`. Pass the previous page's
+    /// `next_page_token` to continue.
+    #[tracing::instrument(skip(self, access_token, page_token), err)]
+    pub async fn list_messages_since(
+        &self,
+        access_token: &str,
+        max_results: u32,
+        label_ids: &[&str],
+        since_seconds: i64,
+        page_token: Option<&str>,
+    ) -> Result<ListMessagesResponse, GmailApiHttpError> {
+        list_messages_since(
+            self,
+            access_token,
+            max_results,
+            label_ids,
+            since_seconds,
+            page_token,
+        )
+        .await
     }
 
     // Returns a list containing the message ids belonging to the thread.
@@ -418,7 +443,7 @@ impl GmailClient {
     }
 
     /// Creates a new Gmail filter.
-    #[tracing::instrument(skip(self, access_token), err)]
+    #[tracing::instrument(skip(self, access_token, filter), err)]
     pub async fn create_filter(
         &self,
         access_token: &str,

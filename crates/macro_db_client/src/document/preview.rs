@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use document_sub_type::DocumentSubType;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{
     DocumentPreviewData, DocumentPreviewDataSubType, DocumentPreviewV2, WithDocumentId,
 };
@@ -33,11 +34,17 @@ impl From<PreviewQueryResult> for DocumentPreviewData {
     }
 }
 
-#[tracing::instrument(skip(db))]
+/// Previews the given documents for `viewer_id`. Only its owner can still open
+/// a document in the trash, so for anyone else (or no viewer) it previews as
+/// not existing, and a reference to it reads as deleted instead of offering a
+/// document that then refuses to open.
+#[tracing::instrument(skip(db, viewer_id))]
 pub async fn batch_get_document_preview_v2(
     db: &sqlx::Pool<sqlx::Postgres>,
     document_ids: &[String],
+    viewer_id: Option<&MacroUserIdStr<'_>>,
 ) -> anyhow::Result<Vec<DocumentPreviewV2>> {
+    let viewer_id: Option<&str> = viewer_id.map(|id| id.as_ref());
     let status_property_id = SystemPropertyKey::STATUS_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
@@ -69,10 +76,12 @@ pub async fn batch_get_document_preview_v2(
                 AND ep_status.property_definition_id = $3
             WHERE
                 d."id" = ANY($1)
+                AND (d."deletedAt" IS NULL OR d.owner = $4)
         "#,
         document_ids,
         completed_option_id,
         status_property_id,
+        viewer_id,
     )
     .fetch_all(db)
     .await?;
@@ -107,47 +116,4 @@ pub async fn batch_get_document_preview_v2(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use sqlx::{Pool, Postgres};
-
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("document_preview")))]
-    async fn test_batch_get_document_preview_v2(pool: Pool<Postgres>) -> anyhow::Result<()> {
-        let document_ids = vec![
-            "document-one".to_string(),
-            "document-two".to_string(),
-            "non-existent-doc".to_string(),
-        ];
-
-        let results = batch_get_document_preview_v2(&pool, &document_ids).await?;
-
-        assert_eq!(results.len(), 3);
-
-        match &results[0] {
-            DocumentPreviewV2::Found(data) => {
-                assert_eq!(data.document_id, "document-one");
-                assert_eq!(data.document_name, "test_document_name");
-                assert_eq!(data.file_type, Some("pdf".to_string()));
-            }
-            _ => panic!("Expected Access variant for document-one"),
-        }
-
-        match &results[1] {
-            DocumentPreviewV2::Found(data) => {
-                assert_eq!(data.document_id, "document-two");
-                assert_eq!(data.document_name, "test_document_name");
-                assert_eq!(data.file_type, Some("pdf".to_string()));
-            }
-            _ => panic!("Expected Found variant for document-two"),
-        }
-
-        match &results[2] {
-            DocumentPreviewV2::DoesNotExist(data) => {
-                assert_eq!(data.document_id, "non-existent-doc");
-            }
-            _ => panic!("Expected DoesNotExist variant for non-existent-doc"),
-        }
-
-        Ok(())
-    }
-}
+mod test;

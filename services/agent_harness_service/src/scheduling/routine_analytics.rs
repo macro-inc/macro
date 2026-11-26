@@ -59,6 +59,7 @@ impl From<&FinishedRoutineRun> for RunProperties {
                 RunEnd::Failed => "failed",
                 RunEnd::Interrupted => "interrupted",
                 RunEnd::AiLimitReached => "ai_limit_reached",
+                RunEnd::Stopped => "stopped",
             },
             duration_ms: run.duration.num_milliseconds(),
         }

@@ -1,16 +1,17 @@
-//! `Build CEF with codecs` — builds the CEF minimal distribution pinned in
+//! `Build CEF with codecs` — builds the CEF minimal distributions pinned in
 //! `apps/web/tauri/desktop-cef/cef-codecs.json` with proprietary codecs
-//! (H.264, HEVC, AAC) and publishes it as a prerelease asset. The CEF CDN
-//! builds omit those codecs, so the macOS app could not play most videos; the
-//! DMG build fetches this asset instead. Generated into `build_cef_codecs.yml`.
+//! (H.264, HEVC, AAC) and publishes them as prerelease assets, one per Mac
+//! architecture. The CEF CDN builds omit those codecs, so the macOS app could
+//! not play most videos; the DMG builds fetch these assets instead. Generated
+//! into `build_cef_codecs.yml`.
 //!
 //! It runs when the manifest changes on a PR, so a CEF upgrade builds its
-//! distribution before the pin lands, and is skipped when the release asset
-//! already exists.
+//! distributions before the pin lands. Each architecture's job is skipped when
+//! the manifest lists no asset for it or its release asset already exists.
 
+use gh_workflow::expr::typed::{Str, github};
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, PullRequest, Step, Workflow,
-    WorkflowDispatch,
+    Concurrency, Event, Job, Level, Permissions, PullRequest, Step, Workflow, WorkflowDispatch,
 };
 
 use crate::workflows::{runners, steps};
@@ -21,10 +22,6 @@ mod test;
 /// Build the workflow.
 pub fn build_cef_codecs() -> Workflow {
     Workflow::new("Build CEF with codecs")
-        .permissions(Permissions {
-            contents: Some(Level::Write),
-            ..Default::default()
-        })
         .on(Event::default()
             .pull_request(
                 PullRequest::default()
@@ -40,30 +37,42 @@ pub fn build_cef_codecs() -> Workflow {
             .workflow_dispatch(WorkflowDispatch::default()))
         // One Chromium build per manifest at a time; never cancel a build hours in.
         .concurrency(
-            Concurrency::new(Expression::new("build-cef-codecs")).cancel_in_progress(false),
+            Concurrency::new("build-cef-codecs").cancel_in_progress(false),
         )
-        .add_job("build-cef", build_cef_job())
+        .add_job("build-cef", build_cef_job("aarch64", "arm64"))
+        .add_job("build-cef-x86_64", build_cef_job("x86_64", "x86_64"))
 }
 
-fn build_cef_job() -> Job {
+/// Build the distribution for `arch` (the manifest's key) on Apple silicon,
+/// which cross-compiles the Intel one.
+fn build_cef_job(arch: &str, label: &str) -> Job {
     Job::default()
-        .name("Build CEF with proprietary codecs (macOS arm64)")
+        .name(format!("Build CEF with proprietary codecs (macOS {label})"))
+        // Each job publishes its own asset to the release.
+        .permissions(Permissions {
+            contents: Some(Level::Write),
+            ..Default::default()
+        })
         .runs_on(runners::Runner::MacOsArmLarge.to_string())
         // A full Chromium checkout and official build takes several hours.
         .timeout_minutes(1440u32)
-        .cond(Expression::new(
-            "github.event_name != 'pull_request' || \
-             github.event.pull_request.head.repo.full_name == github.repository",
-        ))
+        .cond(
+            github().event_name().ne("pull_request").or(github()
+                .event::<Str>("pull_request.head.repo.full_name")
+                .eq(github().repository())),
+        )
         .add_step(steps::checkout(false, false))
         .add_step(
             Step::new("Build and publish CEF")
                 .run(include_str!("scripts/build_cef_codecs.sh"))
                 .shell("bash")
-                .add_env(("GH_TOKEN", "${{ github.token }}"))
+                .add_env(("GH_TOKEN", github().token()))
+                .add_env(("CEF_ARCH", arch))
                 .add_env((
                     "TARGET_SHA",
-                    "${{ github.event.pull_request.head.sha || github.sha }}",
+                    github()
+                        .event::<Str>("pull_request.head.sha")
+                        .or_else(github().sha()),
                 )),
         )
 }

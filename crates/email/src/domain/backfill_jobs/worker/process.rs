@@ -102,6 +102,9 @@ where
             };
             crm::depopulate_crm_contact(ctx, &link, &scope.payload).await
         }
+        BackfillOperation::PopulateCrmPolicy(payload) => {
+            crm_policy::populate_policy_page(ctx, payload).await
+        }
         BackfillOperation::PopulateCrmForUser(payload) => {
             crm::populate_crm_for_user(ctx, payload).await
         }

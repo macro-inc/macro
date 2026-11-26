@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT l.id FROM email_links l JOIN team_user member\n                   ON member.user_id=l.macro_id AND member.team_id=$1\n               WHERE l.id=$3 AND l.macro_id=$2 FOR SHARE OF l,member",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f81b2592670d604b526f3773d51c7530623ada447854eeb58f0adbf7ec05373d"
+}

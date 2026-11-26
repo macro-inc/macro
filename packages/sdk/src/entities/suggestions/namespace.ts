@@ -2,6 +2,7 @@ import type {
   Category,
   EntityAction,
   RunMode,
+  Target,
 } from '../../../generated/scheduled-action/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
@@ -11,6 +12,7 @@ import {
   Suggestion,
   type SuggestionItem,
   type SuggestionWriteOutcome,
+  target,
   targets,
 } from './suggestion';
 
@@ -18,11 +20,48 @@ import {
 export interface SuggestionsReview {
   /** Open suggestions first, best first, then closed ones newest first. */
   readonly suggestions: Suggestion[];
+  /** The topics those suggestions belong to, in the order they first appear. */
+  readonly topics: SuggestionTopic[];
   /** Open suggestions the user has, and the most they may have. */
   readonly open: number;
   readonly openLimit: number;
   /** Suggestions this session's generation may still add or bring back. */
   readonly newLeft: number;
+}
+
+/** One thing in the user's work that suggestions are grouped under, such as a customer or an event. */
+export interface SuggestionTopic {
+  /** Names the topic across nights. */
+  readonly key: string;
+  readonly name: string;
+  /** Why it matters now; undefined without a reason, once one of its suggestions was done since it was written, or while the user can't open its source. */
+  readonly reason: SuggestionTopicReason | undefined;
+  /** How many open suggestions belong to it. */
+  readonly open: number;
+}
+
+/** Why a topic matters now: one fact, and the item that states it. */
+export interface SuggestionTopicReason {
+  readonly text: string;
+  readonly source: Target;
+}
+
+/** A topic to name, or to name again: its key's name and reason are replaced. */
+export interface SuggestionTopicInput {
+  /** A short lowercase key, the same every night for the same topic, such as `customer:northwind`. */
+  key: string;
+  /** What it is, in one to four words. Names no one's email address, phone number or street address. */
+  name: string;
+  /** Why it matters now; left out when no item says. */
+  reason?: SuggestionTopicReasonInput;
+}
+
+/** Why a topic matters now, as `nameTopic` takes it. */
+export interface SuggestionTopicReasonInput {
+  /** One fact, in one line. Names no one's email address, phone number or street address. */
+  text: string;
+  /** The item that states it, with the message as its `part` in a channel or an email thread; the user sees the reason only while they can open it. */
+  source: SuggestionItem;
 }
 
 /** How much of the user's feed to read, and for which time zone. */
@@ -48,6 +87,8 @@ interface SuggestionBase {
   /** 0 to 100. */
   importance: number;
   categories?: Category[];
+  /** The key of the topic it belongs to, named with `nameTopic` first, or `null` for none; left out, a suggestion that exists keeps its own. */
+  topic?: string | null;
   /** The items it is about, as handles the SDK returned. */
   about?: SuggestionItem[];
   /** Why, for the change log; required to bring back a suggestion the user dismissed. */
@@ -83,17 +124,21 @@ export type SuggestionInput =
  *
  * ### For the user
  *
- * - Read their feed with `macro.suggestions.list()`: their open suggestions, best first, then those done in the last day. Each one's `status` says where it is: `open`, `running` (its background run is under way), `failed` (its last run failed; the user can run it again from the app) or `done`. When they just dismissed one by mistake, `suggestion.restore()` brings it back within five minutes.
- * - When they take one up, call `suggestion.accept()`. A background prompt suggestion is then only taken on: the user starts its run from the app, so tell them it is ready to run there; never try to run it another way. Any other suggestion becomes done, so do it yourself: run a composer prompt suggestion's `prompt`, or do an entity suggestion's `action` on the items in `about`, using its `draft` when it has one. A routine suggestion can't be accepted (400): the user saves its routine from the app.
+ * - Read their feed with `macro.suggestions.list()`: their open suggestions, best first, then those done in the last day. Each one's `status` says where it is: `open`, `running` (its background run is under way), `failed` (its last run failed; the user can run it again from the app) or `done`. When they just dismissed one, or marked one done by acting on it, by mistake, `suggestion.restore()` brings it back within five minutes. When they want a running one stopped but kept, call `suggestion.stopRun()`: it is open again once the run stops.
+ * - When they take one up, call `suggestion.accept()`. A background prompt suggestion is then only taken on: the user starts its run from the app, so tell them it is ready to run there; never try to run it another way. A reply suggestion is also only taken on: it stays open until the user replies on its item, which makes it done, so help them reply, using its `draft` when it has one. Any other suggestion becomes done, so do it yourself: run a composer prompt suggestion's `prompt`, or do an entity suggestion's `action` on the items in `about`. A routine suggestion can't be accepted (400): the user saves its routine from the app.
  * - When they don't want one, call `suggestion.dismiss()`.
  * - Never suggest, rewrite or retire suggestions for the user: only a suggestions generation session may, and any other session gets a 403.
  *
  * ### In a suggestions generation session
  *
- * - Read every suggestion first with `macro.suggestions.review()`. Then add with `suggest`, change with `suggestion.rewrite`, and retire with `suggestion.retire` what no longer matters. Never `list`, `accept` or `dismiss`: those are the user's, and a generation session gets a 403.
+ * - Read every suggestion first with `macro.suggestions.review()`. Then add with `suggest` (naming a topic several suggestions share with `nameTopic` first), change with `suggestion.rewrite`, and retire with `suggestion.retire` what no longer matters. Never `list`, `accept` or `dismiss`: those are the user's, and a generation session gets a 403.
  * - Each write answers `{ ok, problems }`: when `ok` is false, fix what `problems` says and try again.
  * - Name items in `about`, never in words: titles, summaries and prompts name no one's email address, phone number or street address.
  * - A reply suggestion may carry a reply draft: write it with `macro.email.createDraft({thread, replyingTo, ...}, await thread.link())`, never send it, and attach it with `suggestion.attachDraft(draft, reason)`. Write none in a thread that already holds a draft (`thread.drafts()`).
+ *
+ * ### In a suggestion's background run
+ *
+ * - Just before your last message, call `macro.suggestions.reportRun(line)` once: one plain line for the user's card saying what you did, then what you sent (`'12 seats added · Nothing was sent'`).
  *
  * @mcp-exclude Suggestions are written by hidden generation sessions and acted on in the app, not over MCP.
  */
@@ -135,6 +180,11 @@ export class SuggestionNamespace {
       suggestions: review.suggestions.map((suggestion) =>
         Suggestion.from(this.client, suggestion),
       ),
+      // A server from before topics sends none.
+      topics: (review.topics ?? []).map((topic) => ({
+        ...topic,
+        reason: topic.reason ?? undefined,
+      })),
       open: review.open,
       openLimit: review.openLimit,
       newLeft: review.newLeft,
@@ -166,6 +216,78 @@ export class SuggestionNamespace {
       unwrap(
         await this.client.scheduledAction.addSuggestion({
           body: { ...rest, about: targets(about ?? []) },
+        }),
+      ),
+    );
+  }
+
+  /**
+   * Name a topic suggestions may belong to, or replace the name and reason of
+   * the one with the same `key`. Then give suggestions its key as `topic`.
+   * Only a suggestions generation session may.
+   *
+   * @example
+   * const outcome = await macro.suggestions.nameTopic({
+   *   key: 'customer:northwind',
+   *   name: 'Northwind renewal',
+   *   reason: { text: 'Renewal is November 30', source: { entity: contract } },
+   * });
+   * if (!outcome.ok) return outcome.problems;
+   */
+  async nameTopic(
+    topic: SuggestionTopicInput,
+  ): Promise<SuggestionWriteOutcome> {
+    rejectUnknownOptions('suggestions.nameTopic', topic, {
+      key: true,
+      name: true,
+      reason: true,
+    });
+    if (topic.reason) {
+      rejectUnknownOptions('suggestions.nameTopic reason', topic.reason, {
+        text: true,
+        source: true,
+      });
+      rejectUnknownOptions(
+        'suggestions.nameTopic reason source',
+        topic.reason.source,
+        { entity: true, part: true },
+      );
+    }
+    return outcome(
+      this.client,
+      unwrap(
+        await this.client.scheduledAction.nameSuggestionTopic({
+          body: {
+            key: topic.key,
+            name: topic.name,
+            reason: topic.reason && {
+              text: topic.reason.text,
+              source: target(topic.reason.source),
+            },
+          },
+        }),
+      ),
+    );
+  }
+
+  /**
+   * In a suggestion's background run, call this once, just before your last
+   * message: one plain line for the user's card saying what you did, then what
+   * you sent, such as `'12 seats added · Nothing was sent'`. At most 120
+   * characters, naming no one's email address, phone number or street
+   * address. A later call replaces it. When `ok` is false, fix what `problems`
+   * says and call it again. Any other session gets a 403.
+   *
+   * @example
+   * const outcome = await macro.suggestions.reportRun('Compared 3 quotes · Nothing was sent');
+   * if (!outcome.ok) return outcome.problems;
+   */
+  async reportRun(report: string): Promise<SuggestionWriteOutcome> {
+    return outcome(
+      this.client,
+      unwrap(
+        await this.client.scheduledAction.reportSuggestionRun({
+          body: { report },
         }),
       ),
     );

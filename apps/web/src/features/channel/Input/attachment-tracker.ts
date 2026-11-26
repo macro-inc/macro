@@ -1,10 +1,13 @@
 import { makePersisted } from '@solid-primitives/storage';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
+import { createSharedDrafts } from './shared-draft';
 import type { InputAttachmentData } from './types';
 
 export type InputAttachmentTracker = {
   attachments: Accessor<InputAttachmentData[]>;
   hasPending: Accessor<boolean>;
+  /** No room for another attachment; adding one is a no-op. */
+  isFull: Accessor<boolean>;
   addAttachment: (attachment: InputAttachmentData) => void;
   removeAttachment: (attachmentId: string) => void;
   setAttachmentPending: (attachmentId: string, pending: boolean) => void;
@@ -18,8 +21,25 @@ type CreateInputAttachmentTrackerOptions = {
   maxAttachments?: number;
 };
 
+const holdStoredAttachments = createSharedDrafts<InputAttachmentTracker>();
+
+/**
+ * The files attached to a draft. With a `persistenceKey`, every input holding
+ * that key shares one tracker; call it inside the owner that uses it.
+ */
 export function createInputAttachmentTracker(
   options: CreateInputAttachmentTrackerOptions = {}
+): InputAttachmentTracker {
+  const { persistenceKey } = options;
+  if (!persistenceKey) return buildAttachmentTracker(options);
+
+  return holdStoredAttachments(persistenceKey, () =>
+    buildAttachmentTracker(options)
+  );
+}
+
+function buildAttachmentTracker(
+  options: CreateInputAttachmentTrackerOptions
 ): InputAttachmentTracker {
   const raw = createSignal<InputAttachmentData[]>(
     options.initialAttachments ?? []
@@ -40,6 +60,8 @@ export function createInputAttachmentTracker(
   const hasPending = createMemo(() =>
     attachments().some((attachment) => attachment.pending === true)
   );
+
+  const isFull = () => attachments().length >= maxAttachments;
 
   const addAttachment = (attachment: InputAttachmentData) => {
     setAttachments((current) => {
@@ -74,6 +96,7 @@ export function createInputAttachmentTracker(
   return {
     attachments,
     hasPending,
+    isFull,
     addAttachment,
     removeAttachment,
     setAttachmentPending,

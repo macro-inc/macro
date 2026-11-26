@@ -12,6 +12,7 @@ describe('preinstalled SDK', () => {
           (key) =>
             key !== 'observeRequests' &&
             key !== 'gateRequests' &&
+            key !== 'limitSearches' &&
             key !== 'sendVerbHeaders'
         )
         .sort()

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO released_email_attachment_documents (document_id)\n            SELECT orphan.id\n            FROM unnest($1::text[]) AS orphan(id)\n            ORDER BY orphan.id\n            ON CONFLICT (document_id) DO NOTHING\n            RETURNING document_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "document_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4ce1e3577b4bd29356874a7528a90eaf8e1eeccc5ecb4818f195e48654a58b4a"
+}

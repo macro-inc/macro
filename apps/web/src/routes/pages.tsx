@@ -9,11 +9,11 @@ import {
 } from '@app/features/scheduling/public-booking';
 import { useRouteParams } from '@app/lib/split-router';
 import { publishLoginSuccess } from '@core/auth/login-events';
-import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { getWebOrigin } from '@core/util/webOrigin';
+import { lazy } from '@core/util/lazy';
+import { useNavigate } from '@solidjs/router';
 import { Button } from '@ui';
-import { lazy, onCleanup, onMount } from 'solid-js';
+import { onCleanup, onMount } from 'solid-js';
 import {
   bookingReceiptRoute,
   EMAIL_SIGNUP_CALLBACK_PATH,
@@ -34,18 +34,17 @@ export function LoginPage() {
   return <Login />;
 }
 
-/**
- * Phone browsers (including Meta's in-app browser) leave their email on the
- * website's `/mobile-signup` and get a link to finish signing up on desktop.
- */
 export function SignupPage() {
-  if (isMobile() && !isNativeMobilePlatform()) {
-    window.location.replace(
-      `${getWebOrigin()}/mobile-signup${window.location.search}`
-    );
-    return null;
-  }
   return <Login signupMode />;
+}
+
+/** The retired phone email capture forwards to signup, keeping attribution. */
+export function MobileEmailSignupRedirect() {
+  const navigate = useNavigate();
+  onMount(() => {
+    navigate(`/signup${window.location.search}`, { replace: true });
+  });
+  return null;
 }
 
 export function WelcomePage() {
@@ -81,6 +80,17 @@ export function LoginPopupSuccess() {
       </div>
     </div>
   );
+}
+
+/** GitHub's connect step; its code loads only when someone connects GitHub. */
+const GithubConnectPage = lazy(async () => ({
+  default: (
+    await import('@app/features/settings/connections/github-connect-page')
+  ).GithubConnectPage,
+}));
+
+export function GithubConnectRoutePage() {
+  return <GithubConnectPage />;
 }
 
 export function TaskSlugPage() {

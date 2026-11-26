@@ -19,6 +19,8 @@ const ACCOUNT_ID: &str = "000000000000";
 /// The doc-storage bucket — referenced by the upload-finalizer wiring and the
 /// seed env, so it is named rather than inlined.
 pub const DOC_STORAGE_BUCKET: &str = "doc-storage";
+/// The bucket of email attachments: drafts' uploads and received files.
+pub const EMAIL_ATTACHMENTS_BUCKET: &str = "macro-email-attachments";
 
 /// The queue doc-storage ObjectCreated events publish to — referenced by the
 /// upload-finalizer wiring, so it is named.
@@ -119,6 +121,19 @@ impl Queue {
                 (14 * 24 * 60 * 60).to_string(),
             )]
             .into(),
+            // The deployed queue's visibility timeout and delivery delay. It
+            // also deduplicates per message group, which changes nothing here:
+            // every message carries a deduplication id of its own.
+            macro_queues::EmailCrmPopulationQueue::LOCAL => [
+                (QueueAttributeName::VisibilityTimeout, "60".to_string()),
+                (QueueAttributeName::DelaySeconds, "10".to_string()),
+            ]
+            .into(),
+            // The deployed link-manager queues' visibility timeout: a purge
+            // outlasts SQS's 30 s default before its first renewal at 60 s.
+            macro_queues::LinkManagerQueue::LOCAL | macro_queues::LinkMaintenanceQueue::LOCAL => {
+                [(QueueAttributeName::VisibilityTimeout, "300".to_string())].into()
+            }
             _ => Default::default(),
         }
     }
@@ -183,6 +198,14 @@ pub const QUEUES: &[Queue] = &[
         )],
     },
     Queue {
+        // Consumed by email_service's CRM population workers.
+        name: macro_queues::EmailCrmPopulationQueue::LOCAL,
+        bindings: &[(
+            macro_queues::EmailCrmPopulationQueue::OVERRIDE_ENV_VAR_NAME,
+            Url,
+        )],
+    },
+    Queue {
         name: macro_queues::ChatDeleteQueue::LOCAL,
         bindings: &[("CHAT_DELETE_QUEUE", Name)],
     },
@@ -229,6 +252,15 @@ pub const QUEUES: &[Queue] = &[
     Queue {
         name: macro_queues::LinkManagerQueue::LOCAL,
         bindings: &[("LINK_MANAGER_QUEUE", Name)],
+    },
+    Queue {
+        // Consumed by email_service's link-maintenance consumers; the refresh
+        // handler sends its periodic work here.
+        name: macro_queues::LinkMaintenanceQueue::LOCAL,
+        bindings: &[(
+            macro_queues::LinkMaintenanceQueue::OVERRIDE_ENV_VAR_NAME,
+            Url,
+        )],
     },
     Queue {
         name: macro_queues::SearchEventQueue::LOCAL,
@@ -286,7 +318,7 @@ pub const QUEUES: &[Queue] = &[
 /// Every local S3 bucket and the env var that references it.
 pub const BUCKETS: &[Bucket] = &[
     Bucket {
-        name: "macro-email-attachments",
+        name: EMAIL_ATTACHMENTS_BUCKET,
         env_key: "ATTACHMENT_BUCKET",
     },
     Bucket {

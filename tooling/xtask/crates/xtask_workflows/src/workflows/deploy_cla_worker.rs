@@ -7,11 +7,12 @@
 //! legal-record store, not something with meaningful dev/prod split. The
 //! `deploy` script applies pending D1 migrations before `wrangler deploy`.
 
+use gh_workflow::expr::typed::github;
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, Push, Run, Step, Use, Workflow,
-    WorkflowDispatch,
+    Concurrency, Event, Job, Level, Permissions, Push, Run, Step, Use, Workflow, WorkflowDispatch,
 };
 
+use crate::workflows::actions::ActionsSetupNode;
 use crate::workflows::{runners, steps, vars};
 
 /// Build the workflow.
@@ -27,9 +28,7 @@ pub fn deploy_cla_worker() -> Workflow {
                     .add_path(xtask_paths::repo_glob!("services/cla-worker/**")),
             )
             .workflow_dispatch(WorkflowDispatch::default()))
-        .concurrency(
-            Concurrency::new(Expression::new("${{ github.workflow }}")).cancel_in_progress(false),
-        )
+        .concurrency(Concurrency::new(github().workflow().to_string()).cancel_in_progress(false))
         .add_job("deploy", deploy())
 }
 
@@ -52,9 +51,9 @@ fn deploy() -> Job {
 }
 
 fn setup_node() -> Step<Use> {
-    Step::new("Setup Node")
-        .uses("actions", "setup-node", "v4")
-        .add_with(("node-version", "22"))
+    ActionsSetupNode::new("Setup Node")
+        .node_version("22")
+        .step()
 }
 
 fn install_deps() -> Step<Run> {

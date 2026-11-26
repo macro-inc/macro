@@ -16,6 +16,7 @@ vi.mock('@ui', async () => ({
   ButtonGroup: (await import('@app/components/ui/components/ButtonGroup'))
     .ButtonGroup,
   cn: (await import('@app/components/ui/utils/classname')).cn,
+  CountBadge: (await import('@app/components/ui/components/Badge')).CountBadge,
 }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
 vi.mock('@core/constant/featureFlags', () => ({ ENABLE_EMAIL_SHARING: true }));
@@ -81,6 +82,8 @@ vi.mock('../component/useEmailThreadTools', () => ({
     permissions: () => undefined,
     openShare: actions.share,
     controls: {
+      crmExclusion: <button>Exclude thread from CRM</button>,
+      reminder: <button>Remind me</button>,
       isOwnThread: true,
       isDone: false,
       isUnread: false,
@@ -105,6 +108,10 @@ it('keeps email actions, sharing, and details available in the desktop header', 
   render(() => <EmailThread {...props} />);
 
   expect(screen.getByRole('heading', { name: 'A shared email' })).toBeTruthy();
+  expect(
+    screen.getByRole('button', { name: 'Exclude thread from CRM' })
+      .nextElementSibling
+  ).toBe(screen.getByRole('button', { name: 'Remind me' }));
   fireEvent.click(screen.getByRole('button', { name: 'Mark as unread' }));
   fireEvent.click(screen.getByRole('button', { name: 'Mark done' }));
   fireEvent.click(screen.getByRole('button', { name: 'Share' }));

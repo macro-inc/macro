@@ -180,7 +180,10 @@ it('seeds the live detail and identity edges from an authoritative create withou
         data: {
           user: {
             id: 'viewer',
-            initiative: { __typename: 'GraphqlSoupInitiative', id: 'project' },
+            visibleInitiative: {
+              __typename: 'GraphqlSoupInitiative',
+              id: 'project',
+            },
           },
         },
       })
@@ -225,7 +228,7 @@ it('does not seed or refresh a create response after a storage reset', async () 
     properties: [],
   });
   await vi.waitFor(() => expect(create).toHaveBeenCalledOnce());
-  reset({ storage: 'reset' });
+  reset({ storage: 'reset', queue: 'reset' });
   finish();
   await pending;
   expect(write).not.toHaveBeenCalled();

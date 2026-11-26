@@ -1,3 +1,4 @@
+import { installedNativeBuild } from '@app/lib/tauri/native-build';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { getPlatform, isTauri } from '@core/util/platform';
 import {
@@ -6,7 +7,9 @@ import {
   type ResourceAttributes,
   Telemetry,
 } from '@macro-inc/observability';
+import { raceTimeout } from '@solid-primitives/promise';
 import { invoke } from '@tauri-apps/api/core';
+import { type Result, ResultAsync } from 'neverthrow';
 import type {
   BundleReloadDiagnostics,
   BundleStartup,
@@ -228,6 +231,32 @@ export function createMemoryRecording(
       clearTimeout(timer);
     },
   };
+}
+
+/**
+ * `macro.native.build` from what the binary reported: a positive integer, else
+ * absent. 0 is the binary saying it could not read its own build.
+ */
+export function nativeBuildAttribute(build: unknown): number | undefined {
+  return typeof build === 'number' && Number.isSafeInteger(build) && build > 0
+    ? build
+    : undefined;
+}
+
+/**
+ * The native build for the resource, shared with the mail cache's lookup so it
+ * costs no IPC of its own. Export waits for it, so it gives up after the same
+ * deadline as the diagnostics snapshot.
+ */
+export async function readNativeBuildAttribute(): Promise<number | undefined> {
+  // `raceTimeout` leaves a rejection of its input unhandled, so it races a
+  // lookup that cannot reject.
+  const build = await raceTimeout(lookupNativeBuild(), 3000);
+  return build?.isOk() ? nativeBuildAttribute(build.value) : undefined;
+}
+
+async function lookupNativeBuild(): Promise<Result<unknown, undefined>> {
+  return await ResultAsync.fromPromise(installedNativeBuild(), () => undefined);
 }
 
 export async function readDesktopDiagnostics(): Promise<

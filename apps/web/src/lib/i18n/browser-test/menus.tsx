@@ -109,12 +109,22 @@ const LABEL_NAMESPACES = [
 ] as const satisfies (keyof typeof en)[];
 const NOT_A_LABEL =
   /toast|description|tagline|placeholder|example|hint|tooltip|aria|error|failed/i;
+// These legacy keys lack a description/error suffix, but render as wrapping
+// paragraphs in project summaries, status banners, and empty states.
+const PARAGRAPH_MESSAGES = new Set([
+  'unsupportedCopy',
+  'unsupportedProjectView',
+  'emptyProjectTasks',
+]);
 const LABEL_MENUS: (typeof MENUS)[number][] = LABEL_NAMESPACES.map(
   (namespace) => ({
     title: `All ${namespace}`,
     contentClass: 'min-w-56 max-w-[22rem] text-xs text-ink-muted',
     keys: Object.keys(en[namespace])
-      .filter((message) => !NOT_A_LABEL.test(message))
+      .filter(
+        (message) =>
+          !NOT_A_LABEL.test(message) && !PARAGRAPH_MESSAGES.has(message)
+      )
       .map((message) => `${namespace}.${message}` as TranslationKey),
   })
 );
@@ -171,6 +181,7 @@ function Fixture() {
             <SettingsSidebar
               groups={groups}
               results={[]}
+              searchable
               searchQuery=""
               onSearchQueryChange={() => {}}
               isItemActive={(tab) => tab === 'Appearance'}

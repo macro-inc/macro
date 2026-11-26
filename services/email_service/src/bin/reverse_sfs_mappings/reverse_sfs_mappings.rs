@@ -256,7 +256,7 @@ async fn process_batch(
                             truncate_url(sfs_url, 80),
                             truncate_url(source_url, 80)
                         );
-                        new_html = new_html.replace(sfs_url, source_url);
+                        new_html = process::restore_source_url(&new_html, sfs_url, source_url);
                         urls_reversed += 1;
                     } else {
                         println!(

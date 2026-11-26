@@ -17,6 +17,9 @@ fn comped(phase: Phase) -> ComputerState {
         capacity_wait: None,
         retried_by_team: false,
         failure: None,
+        awaiting_agent: false,
+        first_start_failures: 0,
+        refund: None,
     }
 }
 

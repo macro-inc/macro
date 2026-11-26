@@ -11,6 +11,7 @@ pub use ports::*;
 
 use models_email::service::crm_cleanup::{CrmCleanupJobStatus, CrmCleanupOperation};
 use models_email::service::pubsub::ProcessingError;
+use std::collections::HashSet;
 
 /// The listener's final action after the domain has handled the operation.
 pub enum CrmCleanupDisposition {
@@ -98,4 +99,29 @@ where
             contact_email,
         } => process_candidate::process_candidate(ctx, *link_id, contact_email).await,
     }
+}
+
+/// The addresses to leave cleanup candidates for when mail leaves a mailbox:
+/// trimmed, lowercased, well formed, without the mailbox's own address, each
+/// once, in first-seen order.
+pub fn candidate_emails(
+    self_email: &str,
+    contact_emails: impl IntoIterator<Item = String>,
+) -> Vec<String> {
+    let self_email = self_email.trim().to_ascii_lowercase();
+    let mut seen: HashSet<String> = HashSet::new();
+    contact_emails
+        .into_iter()
+        .filter_map(|raw| {
+            let email = raw.trim().to_ascii_lowercase();
+            let (local, domain) = email.split_once('@')?;
+            if local.is_empty() || domain.is_empty() || domain.contains('@') {
+                return None;
+            }
+            if email == self_email || !seen.insert(email.clone()) {
+                return None;
+            }
+            Some(email)
+        })
+        .collect()
 }

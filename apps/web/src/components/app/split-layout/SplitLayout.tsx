@@ -111,9 +111,11 @@ export function SplitLayout() {
   // Drop refs for departed splits by reconciling against the live list:
   // batched mutations can remove several splits in one flush (e.g. closing
   // a Preview Pair), and the events signal only surfaces the last event.
-  // Parked splits stay mounted, so they keep their refs.
+  // Parked splits stay mounted, so they keep their refs until discarded.
   createEffect(() => {
     splits();
+    // Discarding a parked split changes only the retained panes.
+    router.retainedPanes();
     for (const id of panelRefs.keys()) {
       if (!splitManager.splitState(id)) panelRefs.delete(id);
     }

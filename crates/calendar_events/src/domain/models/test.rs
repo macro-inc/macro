@@ -199,6 +199,36 @@ fn maintenance_horizon_is_stable_within_a_month_and_covers_reads() {
 }
 
 #[test]
+fn near_window_is_this_month_and_next_padded_by_a_day_inside_the_horizon() {
+    for (now, starts_at, ends_at) in [
+        (
+            Utc.with_ymd_and_hms(2026, 11, 17, 11, 11, 0).unwrap(),
+            Utc.with_ymd_and_hms(2026, 10, 31, 0, 0, 0).unwrap(),
+            Utc.with_ymd_and_hms(2027, 1, 2, 0, 0, 0).unwrap(),
+        ),
+        (
+            Utc.with_ymd_and_hms(2026, 12, 31, 23, 59, 0).unwrap(),
+            Utc.with_ymd_and_hms(2026, 11, 30, 0, 0, 0).unwrap(),
+            Utc.with_ymd_and_hms(2027, 2, 2, 0, 0, 0).unwrap(),
+        ),
+        (
+            Utc.with_ymd_and_hms(2027, 1, 1, 0, 0, 0).unwrap(),
+            Utc.with_ymd_and_hms(2026, 12, 31, 0, 0, 0).unwrap(),
+            Utc.with_ymd_and_hms(2027, 3, 2, 0, 0, 0).unwrap(),
+        ),
+    ] {
+        let near = OccurrenceRange::near_window(now);
+        assert_eq!((near.starts_at, near.ends_at), (starts_at, ends_at));
+        assert_eq!(
+            (near.start_date, near.end_date),
+            (starts_at.date_naive(), ends_at.date_naive())
+        );
+        let horizon = OccurrenceRange::maintenance_horizon(now);
+        assert!(horizon.starts_at < near.starts_at && near.ends_at < horizon.ends_at);
+    }
+}
+
+#[test]
 fn event_time_serializes_nested_fields_as_camel_case() {
     let starts_at = Utc.with_ymd_and_hms(2026, 7, 24, 12, 0, 0).unwrap();
     let ends_at = Utc.with_ymd_and_hms(2026, 7, 24, 13, 0, 0).unwrap();
@@ -395,4 +425,26 @@ fn a_calendar_listing_without_the_availability_setting_counts_it() {
         .remove("contributesToAvailability");
     let read: VisibleCalendar = serde_json::from_value(listed).unwrap();
     assert!(read.contributes_to_availability);
+}
+
+/// The id suffix of a calendar a person creates in Google.
+const GOOGLE_CREATED_CALENDAR_SUFFIX: &str = "@group.calendar.google.com";
+
+#[test]
+fn google_lists_its_system_calendars_and_calendars_added_by_url_as_subscriptions() {
+    for subscription in [
+        format!("en.usa#holiday{GOOGLE_SYSTEM_CALENDAR_SUFFIX}"),
+        format!("addressbook#contacts{GOOGLE_SYSTEM_CALENDAR_SUFFIX}"),
+        format!("8c1f0e4ab52d4b0b9d6fd1e5c3a7b210{GOOGLE_CALENDAR_ADDED_BY_URL_SUFFIX}"),
+    ] {
+        assert!(is_google_subscription(&subscription), "{subscription}");
+    }
+    for maintained in [
+        "olivia@example.com".to_string(),
+        "ada@example.com".to_string(),
+        format!("c_1a2b3c4d5e6f{GOOGLE_CREATED_CALENDAR_SUFFIX}"),
+        "AAMkAGI2TG93AAA=".to_string(),
+    ] {
+        assert!(!is_google_subscription(&maintained), "{maintained}");
+    }
 }

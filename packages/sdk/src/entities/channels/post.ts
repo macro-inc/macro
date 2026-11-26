@@ -6,12 +6,17 @@ import type { StaticImage } from '../images/image';
 import type { Channel } from './channel';
 import type { Thread } from './thread';
 
-/** What a posted message carries below its text. */
-export type MessageAttachments = {
+/** What a posted message carries below its text, and who hears about it. */
+export type PostOptions = {
   /** Static images, shown inline. */
   images?: StaticImage[];
   /** Macro documents, shown as file chips. */
   documents?: Document[];
+  /**
+   * Post without notifying anyone, mentioned people included: no push, email
+   * or inbox entry. The message still appears in the channel for everyone.
+   */
+  silent?: boolean;
 };
 
 /**
@@ -22,10 +27,11 @@ export type MessageAttachments = {
  * through channel membership. The bot owner is read from `GET /bots/me` and
  * cached by the client.
  *
- * The webhook endpoint takes content only: the `mentions` list, threads and
- * attachments are dropped. `<m-*>` mention tags in the content still render and
- * notify, because the server extracts a bot's mentions from its content. A
- * user-owned bot gets the full API by acting as its owner with `requestedAs`.
+ * The webhook endpoint takes content and `silent` only: the `mentions` list,
+ * threads and attachments are dropped. `<m-*>` mention tags in the content
+ * still render and notify, because the server extracts a bot's mentions from
+ * its content. A user-owned bot gets the full API by acting as its owner with
+ * `requestedAs`.
  *
  * Posting to a `Thread` puts the message in that thread; to a `Channel`, at the
  * channel root. One target rather than a channel plus a thread id, so the two
@@ -35,9 +41,10 @@ export async function postToChannel(
   client: MacroClient,
   target: Channel | Thread,
   body: RichMessage,
-  { images = [], documents = [] }: MessageAttachments = {},
+  { images = [], documents = [], silent = false }: PostOptions = {},
 ): Promise<string> {
   const { channelId, thread } = resolve(target);
+  const notification_policy = silent ? 'Silent' : 'Default';
 
   if (await hasEntityAccess(client)) {
     const { id } = unwrap(
@@ -60,6 +67,7 @@ export async function postToChannel(
           ],
           thread_id: thread?.rootId ?? null,
           nonce: crypto.randomUUID(),
+          notification_policy,
         },
       }),
     );
@@ -85,7 +93,7 @@ export async function postToChannel(
   const { message_id } = unwrap(
     await client.storage.postChannelBotWebhook({
       path: { channel_id: channelId },
-      body: { content: body.content },
+      body: { content: body.content, notification_policy },
       // Not a claim to be acting as a user — no acting user is sent. The
       // header is required to parse but never read here (the route resolves
       // no access scope, only bot identity plus channel membership), and

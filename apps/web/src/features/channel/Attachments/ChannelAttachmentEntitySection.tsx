@@ -5,9 +5,7 @@ import {
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
 import { ProjectAttachment } from '@app/features/projects/project-attachment';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { enableProjects } from '@core/constant/featureFlags';
 import type { EntityData } from '@entity';
 import Spinner from '@icon/system/bold/spinner-gap-bold.svg?component-solid';
 import {
@@ -75,7 +73,6 @@ function attachmentSoupAst(attachments: ApiChannelAttachment[]) {
 }
 
 export function ChannelAttachmentEntitySection(props: { channelId: string }) {
-  const projectsFlag = useFeatureFlag(enableProjects);
   const attachmentsQuery = useChannelDocumentAttachmentsQuery(
     () => props.channelId
   );
@@ -95,17 +92,17 @@ export function ChannelAttachmentEntitySection(props: { channelId: string }) {
         .map((item) => item.entity_id)
     ),
   ]);
+  const hasSoupAttachments = () =>
+    documentAttachments().some((item) => item.entity_type !== 'initiative');
   const soupQuery = useSoupAstItemsQuery(
     () => ({
       params: { limit: 500 },
       body: attachmentSoupAst(documentAttachments()),
     }),
-    () => ({
-      enabled: documentAttachments().some(
-        (item) => item.entity_type !== 'initiative'
-      ),
-    })
+    () => ({ enabled: hasSoupAttachments() })
   );
+  // A disabled query also reads as pending, so only wait when Soup has work.
+  const soupPending = () => hasSoupAttachments() && soupQuery.isPending;
 
   const attachmentByEntityId = createMemo(() => {
     const map = new Map<string, ApiChannelAttachment>();
@@ -122,32 +119,47 @@ export function ChannelAttachmentEntitySection(props: { channelId: string }) {
       preferNewSplit: event.shiftKey,
     });
 
+  // Soup returns only live entities the viewer can list, of the types the AST
+  // names: a trashed or deleted document, one without access, or a pull request
+  // is missing from it although its message still shows it. Once Soup answers,
+  // such an attachment keeps its row and shows as the message shows it.
   const rows = createMemo<AttachmentEntityListRow[]>(() => {
-    const entities = soupQuery.isLoading
-      ? []
-      : (soupQuery.data?.entities ?? []);
-    const lookup = attachmentByEntityId();
+    const attachments = [...attachmentByEntityId().values()].filter(
+      (attachment) => attachment.entity_type !== 'initiative'
+    );
+    if (attachments.length === 0 || soupQuery.isPending) return [];
 
-    return [...entities]
-      .sort((a, b) => {
-        const aTime = lookup.get(a.id)?.created_at ?? '';
-        const bTime = lookup.get(b.id)?.created_at ?? '';
-        return bTime.localeCompare(aTime);
-      })
-      .map((entity) => {
-        const attachment = lookup.get(entity.id);
-        return {
-          entity,
-          timestamp: attachment?.created_at,
-          senderId: attachment?.sender_id,
-          onClick: (event) => handleEntityClick(entity, event),
-        };
+    const entityById = new Map(
+      (soupQuery.data?.entities ?? []).map((entity) => [entity.id, entity])
+    );
+    // Previous data kept while a new page of attachments loads has not
+    // answered for the new ones yet; they appear once Soup does.
+    const answered = !soupQuery.isPlaceholderData;
+
+    return attachments
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+      .flatMap((attachment): AttachmentEntityListRow[] => {
+        const entity = entityById.get(attachment.entity_id);
+        if (entity) {
+          return [
+            {
+              kind: 'entity',
+              entity,
+              timestamp: attachment.created_at,
+              senderId: attachment.sender_id,
+              onClick: (event) => handleEntityClick(entity, event),
+            },
+          ];
+        }
+
+        if (!answered) return [];
+        return [{ kind: 'attachment', attachment }];
       });
   });
 
   return (
     <>
-      <Show when={projectsFlag().enabled && projectAttachments().length > 0}>
+      <Show when={projectAttachments().length > 0}>
         <AttachmentSection label="Projects">
           <div class="flex flex-wrap gap-2 p-4">
             <For each={projectAttachments()}>
@@ -156,7 +168,7 @@ export function ChannelAttachmentEntitySection(props: { channelId: string }) {
           </div>
           <Show
             when={
-              !soupQuery.isLoading &&
+              !soupPending() &&
               rows().length === 0 &&
               attachmentsQuery.hasNextPage
             }
@@ -169,7 +181,7 @@ export function ChannelAttachmentEntitySection(props: { channelId: string }) {
         </AttachmentSection>
       </Show>
       <Show
-        when={!attachmentsQuery.isPending && !soupQuery.isLoading}
+        when={!attachmentsQuery.isPending && !soupPending()}
         fallback={
           <AttachmentSection label="Documents">
             <div class="grid place-items-center py-3 text-ink-muted">

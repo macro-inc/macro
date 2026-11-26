@@ -61,7 +61,7 @@ describe('sdk entry', () => {
       $convertToMarkdownString(ALL_TRANSFORMERS)
     );
     expect(markdown).toBe(
-      '# Plan\n\n- [x] draft\n- [x] ship\n\n<m-table><m-table-row><m-table-cell>a</m-table-cell><m-table-cell>b</m-table-cell></m-table-row><m-table-row><m-table-cell>1</m-table-cell><m-table-cell>2</m-table-cell></m-table-row></m-table>\n\nadded'
+      '# Plan\n\n- [x] draft\n- [x] ship\n\n<m-table><m-table-row><m-table-cell header="row">a</m-table-cell><m-table-cell header="row">b</m-table-cell></m-table-row><m-table-row><m-table-cell>1</m-table-cell><m-table-cell>2</m-table-cell></m-table-row></m-table>\n\nadded'
     );
     expect(
       reloaded.read(() =>

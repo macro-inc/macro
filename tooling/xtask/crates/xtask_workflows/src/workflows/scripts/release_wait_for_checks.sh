@@ -7,15 +7,14 @@
 # not workflow names, plus the contexts of commit statuses such as the
 # android-play/* ones. PR CI prefixes the jobs it calls with `Web App / `.
 #
-# - The native checks are red until the release is live. Web App Status Check
-#   and the CI gate aggregate them, so they are red with them. Web App Status
-#   Check's other inputs (Typecheck, Test, Build, ...) are separate checks and
-#   still count.
+# - The native checks are red until the release is live. The CI gate reads
+#   them, so it is red with them. The other web checks (Typecheck, Test,
+#   Build, ...) are separate checks and still count.
 # - Both platforms' release and drift checks. The other store's release is
 #   not this one's gate: an upload that failed there, or is still in flight,
 #   must not hold this release back. Whoever adds the label decides whether a
 #   failure there matters here.
-release_gate_checks='^((Web App / )?(Android Native Check|iOS Native Check|Web App Status Check)|Re-run the native check|Android Play Release|Android Release Drift|android-play/|iOS App Store Release|iOS Release Drift|CI gate$)'
+release_gate_checks='^((Web App / )?(Android Native Check|iOS Native Check)|Re-run the native check|Android Play Release|Android Release Drift|android-play/|iOS App Store Release|iOS Release Drift|CI gate$)'
 deadline=$(( $(date +%s) + WAIT_MINUTES * 60 ))
 while true; do
   all_checks=$(gh pr checks "$PR_NUMBER" --repo "$GH_REPO" --json name,bucket,description)

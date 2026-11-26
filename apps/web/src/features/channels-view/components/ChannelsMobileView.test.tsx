@@ -124,6 +124,8 @@ vi.mock('./rail/hooks/useChannelCalls', () => ({
 vi.mock('./rail/hooks/useChannelRailActivity', () => ({
   useChannelRailActivity: () => ({
     unreadChannelIds: () => mocks.unreadChannelIds,
+    unreadOrMentionedChannelIds: () =>
+      new Set([...mocks.unreadChannelIds, ...mocks.mentionCounts.keys()]),
     callStatuses: () => new Map(),
     incomingCallIds: () => mocks.incomingCallIds,
     mentionCount: (channelId: string) =>
@@ -199,6 +201,65 @@ describe('mobile channel activation', () => {
     );
   });
 
+  it('opens both recent rows and pins in an admitted inline preview without creating a split', () => {
+    const openPreview = vi.fn(() => true);
+    const pinned = { ...channel, id: 'pinned', name: 'Pinned' };
+    render(() => (
+      <ChannelsMobileView
+        source={source}
+        pinned={[pinned]}
+        searchQuery=""
+        onClearSearch={() => {}}
+        openPreview={openPreview}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'One' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Pinned' }));
+    expect(openPreview).toHaveBeenNthCalledWith(1, channel);
+    expect(openPreview).toHaveBeenNthCalledWith(2, pinned);
+    expect(mocks.openSplit).not.toHaveBeenCalled();
+    expect(mocks.hydrate).not.toHaveBeenCalled();
+  });
+
+  it('keeps explicit new-split activation available beside the inline preview', async () => {
+    const openPreview = vi.fn(() => true);
+    render(() => (
+      <ChannelsMobileView
+        source={source}
+        pinned={[]}
+        searchQuery=""
+        onClearSearch={() => {}}
+        openPreview={openPreview}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'One' }), {
+      shiftKey: true,
+    });
+    await waitFor(() =>
+      expect(mocks.openSplit).toHaveBeenCalledWith(
+        channel,
+        expect.objectContaining({ openInNewSplit: true })
+      )
+    );
+    expect(openPreview).not.toHaveBeenCalled();
+  });
+
+  it('falls back to standalone navigation when the host cannot admit the preview', async () => {
+    const openPreview = vi.fn(() => false);
+    render(() => (
+      <ChannelsMobileView
+        source={source}
+        pinned={[]}
+        searchQuery=""
+        onClearSearch={() => {}}
+        openPreview={openPreview}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'One' }));
+    await waitFor(() => expect(mocks.openSplit).toHaveBeenCalledOnce());
+    expect(openPreview).toHaveBeenCalledWith(channel);
+  });
+
   it('still reports a navigation failure while the list is mounted', async () => {
     const error = new Error('Navigation failed');
     mocks.openSplit.mockRejectedValueOnce(error);
@@ -256,33 +317,6 @@ describe('mobile section hydration', () => {
 });
 
 describe('mobile channel press feedback', () => {
-  it('highlights a held row and cancels when the finger scrolls or the touch is cancelled', () => {
-    vi.useFakeTimers();
-    render(() => (
-      <ChannelsMobileView
-        source={source}
-        pinned={[]}
-        searchQuery=""
-        onClearSearch={() => {}}
-      />
-    ));
-    const button = screen.getByRole('button', { name: 'One' });
-    const row = button.closest('[data-soup-entity]')!;
-    fireEvent.touchStart(button, { touches: [{ clientX: 20, clientY: 20 }] });
-    vi.advanceTimersByTime(20);
-    expect(row.classList.contains('touch-highlight')).toBe(true);
-    vi.advanceTimersByTime(500);
-    expect(row.classList.contains('touch-highlight')).toBe(true);
-    expect(mocks.openSplit).not.toHaveBeenCalled();
-    fireEvent.touchMove(button, { touches: [{ clientX: 20, clientY: 40 }] });
-    expect(row.classList.contains('touch-highlight')).toBe(false);
-    fireEvent.touchStart(button, { touches: [{ clientX: 20, clientY: 20 }] });
-    vi.advanceTimersByTime(20);
-    expect(row.classList.contains('touch-highlight')).toBe(true);
-    fireEvent.touchCancel(button);
-    expect(row.classList.contains('touch-highlight')).toBe(false);
-  });
-
   it('keeps the tapped row highlighted while navigation is pending and clears after it finishes', async () => {
     vi.useFakeTimers();
     const opened = Promise.withResolvers<void>();
@@ -411,6 +445,23 @@ describe('mobile channel pins', () => {
         expect.objectContaining({ referredFrom: 'channels' })
       )
     );
+  });
+
+  it('keeps a conversation whose only unread is a thread mention under Unread only', () => {
+    mocks.mentionCounts = new Map([['two', 1]]);
+    mocks.unreadChannelIds = new Set();
+    render(() => (
+      <ChannelsMobileView
+        source={both}
+        pinned={[]}
+        searchQuery=""
+        onClearSearch={() => {}}
+        preferences={{ unreadOnly: true }}
+      />
+    ));
+
+    expect(screen.queryByTestId('row-one')).toBeNull();
+    expect(screen.getByTestId('row-two')).toBeTruthy();
   });
 
   it('counts unread mentions on list rows and pins, capped at the edge limit', () => {

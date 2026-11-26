@@ -27,13 +27,16 @@ use std::num::NonZeroU32;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
-use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
+use agent_runtime_protocol::domain::schema::v0::{
+    ACCEPTS_AGENTS_CHANGED, ACCEPTS_APPLY_AGENT, RUNTIME_ACCEPTS_HEADER, ToRuntimeMessage,
+    ToServerMessage,
+};
 use agent_runtime_protocol::outbound::websocket::connect_socket;
 use axum::Router;
 use axum::extract::ws::WebSocketUpgrade;
 use axum::extract::{FromRef, State};
-use axum::http::StatusCode;
 use axum::http::header::RETRY_AFTER;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse as _, Response};
 use axum::routing::get;
 use harness_id::HarnessId;
@@ -43,6 +46,7 @@ use macro_authorization::{
 use tokio::time::Instant;
 use tracing::Instrument as _;
 
+use crate::domain::ports::RuntimeAccepts;
 use crate::outbound::runtime_registry::RuntimeRegistry;
 
 #[cfg(test)]
@@ -120,6 +124,7 @@ where
 async fn dial_handler<Auth>(
     State(state): State<RuntimeGatewayState<Auth>>,
     caller: MacroAuthorizationExtractor<Auth, HarnessOnly>,
+    headers: HeaderMap,
     ws: WebSocketUpgrade,
 ) -> Response
 where
@@ -152,17 +157,38 @@ where
     span.record("agent.runtime.dial_outcome", DialOutcome::Accepted.as_str());
 
     let runtimes = Arc::clone(&state.runtimes);
+    let accepts = runtime_accepts(&headers);
     ws.on_upgrade(move |socket| {
         async move {
             let transport = connect_socket::<ToRuntimeMessage, ToServerMessage>(socket);
             // Last dial wins. A runtime that redials has lost its old socket
             // whether or not this side has noticed, so displacing is the only
             // answer that lets it recover.
-            runtimes.attach(harness, transport);
+            runtimes.attach_accepting(harness, transport, accepts);
             tracing::info!(%harness, "a runtime dialed in");
         }
         .instrument(span)
     })
+}
+
+/// The optional messages the dialing runtime listed in
+/// [`RUNTIME_ACCEPTS_HEADER`]. Runtimes that predate the header list none.
+fn runtime_accepts(headers: &HeaderMap) -> RuntimeAccepts {
+    let listed = headers
+        .get_all(RUNTIME_ACCEPTS_HEADER)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .flat_map(|value| value.split(','))
+        .map(str::trim);
+    let mut accepts = RuntimeAccepts::default();
+    for message in listed {
+        match message {
+            ACCEPTS_AGENTS_CHANGED => accepts.agents_changed = true,
+            ACCEPTS_APPLY_AGENT => accepts.apply_agent = true,
+            _ => {}
+        }
+    }
+    accepts
 }
 
 /// What the gateway did with a dial, as recorded on its span.

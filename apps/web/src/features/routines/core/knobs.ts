@@ -1,4 +1,8 @@
-import type { RoutineKnob } from '@service-scheduled-action/generated/schemas';
+import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import {
+  type RoutineKnob,
+  RoutineKnobEntityType,
+} from '@service-scheduled-action/generated/schemas';
 import { match } from 'ts-pattern';
 import { z } from 'zod';
 
@@ -32,7 +36,137 @@ export type Knob =
       label: string;
       /** The question AI is asked. */
       value: string;
+    }
+  | {
+      type: 'entity';
+      name: string;
+      label: string;
+      /** The kinds of item the owner may pick. */
+      entity_types: KnobEntityType[];
+      /** The item picked; none yet in a starter. */
+      value: KnobEntity | null;
     };
+
+/** A kind of item an entity knob names. */
+export type KnobEntityType = RoutineKnobEntityType;
+
+/** The item an entity knob names. */
+export type KnobEntity = { type: KnobEntityType; id: string };
+
+/**
+ * A knob whose picked item its owner can't use now (deleted, or out of their
+ * reach), with why, as the scheduler checked the saved routine. The knob needs
+ * a new pick, and its step fails until it gets one.
+ */
+export type UnusableItem = {
+  /** The id of the knob's step in the saved routine. */
+  step: string;
+  /** The knob's name. */
+  knob: string;
+  item: KnobEntity;
+  /** Why, naming the knob by its label. */
+  reason: string;
+};
+
+/** The entries of `unusable` for the saved step `id`; none for a new step. */
+export function unusableInStep(
+  unusable: readonly UnusableItem[],
+  id: string | undefined
+): UnusableItem[] {
+  return id ? unusable.filter((entry) => entry.step === id) : [];
+}
+
+/**
+ * Why `knob` needs a new pick, from its own step's `unusable` entries. Each
+ * knob gets the reason naming it, even when another holds the same item; one
+ * picked again since holds another item and gets none.
+ */
+export function unusableReason(
+  knob: Knob,
+  unusable: readonly UnusableItem[]
+): string | undefined {
+  if (knob.type !== 'entity' || !knob.value) return undefined;
+  const { type, id } = knob.value;
+  return unusable.find(
+    (entry) =>
+      entry.knob === knob.name &&
+      entry.item.type === type &&
+      entry.item.id === id
+  )?.reason;
+}
+
+/** What each kind of item is called, for its owner. */
+export function entityNoun(type: KnobEntityType): string {
+  return (
+    match(type)
+      .with('channel', () => 'channel')
+      .with('document', () => 'document')
+      .with('project', () => 'folder')
+      .with('database', () => 'database')
+      .with('user', () => 'person')
+      .with('task', () => 'task')
+      .with('email_thread', () => 'email thread')
+      .with('chat', () => 'chat')
+      .with('crm_company', () => 'company')
+      .with('crm_contact', () => 'contact')
+      // The app calls an initiative a project; a Macro project is a folder.
+      .with('initiative', () => 'project')
+      .exhaustive()
+  );
+}
+
+/**
+ * The entity selector's kind for each kind a knob can name. A whole database
+ * has none: the selector can't pick one, so the knob lists databases itself.
+ */
+export function knobPickerType(type: KnobEntityType): EntityType | undefined {
+  return match(type)
+    .returnType<EntityType | undefined>()
+    .with('channel', () => 'CHANNEL')
+    .with('document', () => 'DOCUMENT')
+    .with('project', () => 'PROJECT')
+    .with('user', () => 'USER')
+    .with('task', () => 'TASK')
+    .with('email_thread', () => 'THREAD')
+    .with('chat', () => 'CHAT')
+    .with('crm_company', () => 'COMPANY')
+    .with('crm_contact', () => 'CONTACT')
+    .with('initiative', () => 'INITIATIVE')
+    .with('database', () => undefined)
+    .exhaustive();
+}
+
+/** The knob kind of an item the entity selector picked, if a knob can name it. */
+export function knobTypeOfPicked(type: EntityType): KnobEntityType | undefined {
+  return (
+    match(type)
+      .returnType<KnobEntityType | undefined>()
+      .with('CHANNEL', () => 'channel')
+      .with('DOCUMENT', () => 'document')
+      .with('PROJECT', () => 'project')
+      .with('USER', () => 'user')
+      .with('TASK', () => 'task')
+      .with('THREAD', () => 'email_thread')
+      .with('CHAT', () => 'chat')
+      .with('COMPANY', () => 'crm_company')
+      .with('CONTACT', () => 'crm_contact')
+      .with('INITIATIVE', () => 'initiative')
+      // The selector can't pick these, and a code step has no handle for a row.
+      .with('CALENDAR_EVENT', 'CALL_RECORD', 'DATABASE_ROW', () => undefined)
+      .exhaustive()
+  );
+}
+/** The noun for what an entity knob may hold: its one kind, or "item". */
+export function entityKnobNoun(knob: { entity_types: KnobEntityType[] }) {
+  const [only, ...rest] = knob.entity_types;
+  return only && !rest.length ? entityNoun(only) : 'item';
+}
+
+/** "a channel", or "an item" for a knob that allows several kinds. */
+export function aEntityKnob(knob: { entity_types: KnobEntityType[] }) {
+  const noun = entityKnobNoun(knob);
+  return `${/^[aeiou]/.test(noun) ? 'an' : 'a'} ${noun}`;
+}
 
 export const KNOB_LIMITS = {
   text: 500,
@@ -81,6 +215,16 @@ export const knobSchema = z.discriminatedUnion('type', [
     label: z.string(),
     value: z.string(),
   }),
+  z.object({
+    type: z.literal('entity'),
+    name: knobName,
+    label: z.string(),
+    entity_types: z.array(z.enum(RoutineKnobEntityType)),
+    value: z
+      .object({ type: z.enum(RoutineKnobEntityType), id: z.string() })
+      .nullish()
+      .transform((value) => value ?? null),
+  }),
 ]) satisfies z.ZodType<Knob>;
 
 /** A stored knob for the editor: `min` and `max` only when set. */
@@ -91,6 +235,10 @@ export function knobFromWire(knob: RoutineKnob): Knob {
       ...rest,
       ...(min == null ? {} : { min }),
       ...(max == null ? {} : { max }),
+    }))
+    .with({ type: 'entity' }, ({ value, ...rest }) => ({
+      ...rest,
+      value: value ?? null,
     }))
     .otherwise((knob) => knob);
 }
@@ -108,12 +256,27 @@ export function knobToWire(knob: Knob): Knob {
 
 /** How a knob's value reads in a sentence. */
 export function knobText(knob: Knob): string {
-  return match(knob)
-    .with({ type: 'boolean' }, (knob) => (knob.value ? 'yes' : 'no'))
-    .with({ type: 'number' }, (knob) => String(knob.value))
-    .with({ type: 'question' }, (knob) => knob.label)
-    .with({ type: 'text' }, { type: 'choice' }, (knob) => knob.value)
-    .exhaustive();
+  return (
+    match(knob)
+      .with({ type: 'boolean' }, (knob) => (knob.value ? 'yes' : 'no'))
+      .with({ type: 'number' }, (knob) => String(knob.value))
+      .with({ type: 'question' }, (knob) => knob.label)
+      .with({ type: 'text' }, { type: 'choice' }, (knob) => knob.value)
+      // Plain text has no name to show; the step's sentence shows the item.
+      .with({ type: 'entity' }, (knob) =>
+        knob.value ? `the chosen ${entityKnobNoun(knob)}` : aEntityKnob(knob)
+      )
+      .exhaustive()
+  );
+}
+
+/**
+ * Whether a knob has no value to show: blank text, or an item not picked
+ * yet (as in a starter). The scheduler requires every other kind's value.
+ */
+export function knobIsEmpty(knob: Knob): boolean {
+  if (knob.type === 'entity') return !knob.value;
+  return knob.type === 'text' && !knob.value.trim();
 }
 
 /** A run of a step's sentence: plain words, or where a knob shows. */
@@ -216,7 +379,22 @@ export function knobValueProblem(
     .with({ type: 'boolean' }, () =>
       typeof value === 'boolean' ? undefined : 'Turn it on or off.'
     )
+    .with({ type: 'entity' }, (knob) =>
+      isEntityOf(knob, value) ? undefined : `Pick ${aEntityKnob(knob)}.`
+    )
     .exhaustive();
+}
+
+/** Whether `value` is an item of a kind `knob` allows. */
+function isEntityOf(
+  knob: { entity_types: KnobEntityType[] },
+  value: Knob['value']
+): value is KnobEntity {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    knob.entity_types.includes(value.type)
+  );
 }
 
 /**
@@ -244,6 +422,9 @@ function withValue(knob: Knob, value: Knob['value']): Knob {
     )
     .with({ type: 'text' }, { type: 'choice' }, { type: 'question' }, (knob) =>
       typeof value === 'string' ? { ...knob, value } : knob
+    )
+    .with({ type: 'entity' }, (knob) =>
+      isEntityOf(knob, value) ? { ...knob, value } : knob
     )
     .exhaustive();
 }

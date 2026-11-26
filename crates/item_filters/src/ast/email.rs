@@ -58,8 +58,9 @@ impl From<SubjectQuery> for String {
 }
 
 /// A kind of attachment a thread's messages carry, by MIME type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 pub enum AttachmentKind {
     /// `application/pdf`.
     Pdf,
@@ -124,6 +125,11 @@ pub enum EmailLiteral {
     CalendarOnly(bool),
     /// Threads with at least one attachment of this kind on any message.
     Attachment(AttachmentKind),
+    /// Threads with at least one message carrying this label
+    /// (`email_labels.id`). Only labels of inboxes the reader owns or manages
+    /// match, so the label of an inbox a thread was shared from never does.
+    /// Several `Label` literals OR together.
+    Label(Uuid),
     /// Filter by thread created_at timestamp
     #[serde(rename = "ca")]
     CreatedAt(DateLiteral),
@@ -144,6 +150,9 @@ pub enum EmailLiteral {
 impl ExpandFrame<EmailLiteral> for EmailFilters {
     type Err = ExpandErr;
     fn expand_ast(input: Self) -> Result<Option<filter_ast::Expr<EmailLiteral>>, Self::Err> {
+        if let Some(filter) = input.search_only_filter() {
+            return Err(ExpandErr::SearchOnlyEmailFilter(filter));
+        }
         let EmailFilters {
             senders,
             cc,
@@ -155,12 +164,22 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             importance,
             is_read,
             notification_filters,
+            done,
             include_labels: _,
             exclude_labels: _,
             shared,
             crm_domains,
             crm_addresses,
             calendar_only,
+            attachments,
+            view: _,
+            exclude_views: _,
+            text_matches: _,
+            label_names: _,
+            favorite: _,
+            has_attachment: _,
+            sent_after: _,
+            sent_before: _,
         } = input;
 
         // Expand crm_domains / crm_addresses via the shared helper so the
@@ -222,6 +241,15 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
         let calendar_only_node = calendar_only
             .filter(|v| *v)
             .map(|v| Expr::Literal(EmailLiteral::CalendarOnly(v)));
+        let mut attachment_kinds: Vec<AttachmentKind> = Vec::new();
+        for kind in attachments {
+            if !attachment_kinds.contains(&kind) {
+                attachment_kinds.push(kind);
+            }
+        }
+        let attachment_node = attachment_kinds
+            .into_iter()
+            .expand(EmailLiteral::Attachment, Expr::or);
 
         Ok([
             sender_nodes,
@@ -234,9 +262,11 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             importance_node,
             is_read.map(|read| Expr::val(EmailLiteral::Read(read))),
             notification_state_node,
+            done.map(|done| Expr::val(EmailLiteral::InboxVisible(!done))),
             shared_node,
             crm_node,
             calendar_only_node,
+            attachment_node,
         ]
         .into_iter()
         .fold_with(Expr::and))

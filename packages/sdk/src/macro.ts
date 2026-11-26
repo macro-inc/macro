@@ -38,8 +38,10 @@ import { RoutineNamespace } from './entities/routines/namespace';
 import { SavedViewsNamespace } from './entities/saved-views/namespace';
 import { SearchNamespace } from './entities/search/namespace';
 import { SuggestionNamespace } from './entities/suggestions/namespace';
+import { TaskTemplateNamespace } from './entities/task-templates/namespace';
 import { TaskNamespace } from './entities/tasks/namespace';
 import { TeamNamespace } from './entities/teams/namespace';
+import { TimeNamespace } from './entities/time/namespace';
 import { UiNamespace } from './entities/ui/namespace';
 import { UnfurlNamespace } from './entities/unfurls/namespace';
 import { UserNamespace } from './entities/users/namespace';
@@ -85,6 +87,37 @@ export {
 } from './entities/connected-apps/connected-app';
 export { Connector } from './entities/connected-apps/connector';
 export { ConnectedAppNamespace } from './entities/connected-apps/namespace';
+export type {
+  CrmEmailPolicy,
+  CrmEmailPolicyHistoryEvent,
+  CrmEmailPolicyResult,
+  CrmEmailPolicyToken,
+  CrmEmailPolicyWriteOptions,
+  CrmEmailPrivacySettings,
+  CrmEmailRuleValidation,
+  CrmExcludedEmailThread,
+} from './entities/crm-email-privacy/email-privacy';
+export {
+  type CrmEmailPreviewState,
+  CrmEmailRulePreview,
+} from './entities/crm-email-privacy/email-rule-preview';
+export {
+  type CrmEmailRuleDefinition,
+  CrmEmailRuleRevision,
+} from './entities/crm-email-privacy/email-rule-revision';
+export type {
+  CrmEmailRule,
+  CrmEmailRuleSet,
+} from './entities/crm-email-privacy/email-rules';
+export {
+  type CrmCompanyMerge,
+  type CrmCompanyMergeCommit,
+  type CrmContactMerge,
+  type CrmContactMergeCommit,
+  CrmMergeNamespace,
+  type CrmMergeOutcome,
+  type CrmMergePreview,
+} from './entities/crm-merges/merges';
 export {
   type AddColumnOptions,
   type ApplyOpsOptions,
@@ -263,7 +296,13 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   /** Search every kind of item at once: documents, email, channels, calls, events, sessions and chats. */
   readonly search: SearchNamespace;
 
+  /** Reusable personal and team task fields, defaults, and description Markdown. */
+  readonly taskTemplates: TaskTemplateNamespace;
+
   readonly teams: TeamNamespace;
+
+  /** Your running timer and your own or your team's time; time is logged and read on the task. */
+  readonly time: TimeNamespace;
 
   readonly users: UserNamespace;
 
@@ -330,7 +369,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.search = new SearchNamespace(client);
     this.passwords = new PasswordNamespace(client);
     this.tasks = new TaskNamespace(client);
+    this.taskTemplates = new TaskTemplateNamespace(client);
     this.teams = new TeamNamespace(client);
+    this.time = new TimeNamespace(client);
     this.users = new UserNamespace(client);
     this.webhooks = new WebhooksNamespace(client);
     this.workspace = new WorkspaceNamespace(client);
@@ -572,9 +613,13 @@ export { AgentVault, PasswordNamespace } from './entities/passwords/namespace';
 export type { EntityReference } from './entities/reference';
 export type { ReferralLink } from './entities/referrals/namespace';
 export type {
+  RoutineApp,
   RoutineEventFilter,
+  RoutineEventFilterDetail,
+  RoutineTriggerDetail,
   RoutineTriggerOptions,
   SingleRoutineTrigger,
+  SingleRoutineTriggerDetail,
 } from './entities/routines/routine';
 export {
   Routine,
@@ -610,6 +655,10 @@ export {
 export type {
   SuggestionInput,
   SuggestionsReview,
+  SuggestionTopic,
+  SuggestionTopicInput,
+  SuggestionTopicReason,
+  SuggestionTopicReasonInput,
 } from './entities/suggestions/namespace';
 export {
   Suggestion,
@@ -617,8 +666,44 @@ export {
   type SuggestionItem,
   type SuggestionWriteOutcome,
 } from './entities/suggestions/suggestion';
+export {
+  type CreateTaskTemplateOptions,
+  TaskTemplate,
+  type TaskTemplateProperty,
+  type UpdateTaskTemplateOptions,
+} from './entities/task-templates/task-template';
 export type { TaskSummary } from './entities/tasks/task';
 export { TeamInvite } from './entities/teams/invite';
+export {
+  NotTimeEntryAuthorError,
+  TimerOverLimitError,
+} from './entities/time/errors';
+export type {
+  TimeExport,
+  TimeGroup,
+  TimeGrouping,
+  TimePeriodOptions,
+  TimeScopeOptions,
+  TimeSummary,
+  TimeSummaryOptions,
+  TimeTotal,
+  TimeTotalKey,
+} from './entities/time/report';
+export type {
+  LogTimeOptions,
+  StartTimerOptions,
+  TimeEntriesOptions,
+  TimerStart,
+} from './entities/time/task-time';
+export {
+  TimeEntry,
+  type TimeEntryChanges,
+} from './entities/time/time-entry';
+export { type StopTimerOptions, Timer } from './entities/time/timer';
+export type {
+  ContactListKey,
+  ListMembersOptions,
+} from './entities/users/namespace';
 export {
   ExternalProfilePicture,
   type ProfilePicture,

@@ -2,7 +2,7 @@ import { t } from '@app/lib/i18n';
 import { LoadingSpinner } from '@core/component/LoadingSpinner';
 import { toast } from '@core/component/Toast/Toast';
 import { useSettingsState } from '@core/constant/SettingsState';
-import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
+import { ConnectorIcon } from '@core/connectors/ConnectorIcon';
 import { fireAndForget } from '@core/util/fireAndForget';
 import NotionIcon from '@icon/mcp-notion.svg';
 import ArrowsClockwiseIcon from '@icon/system/regular/arrows-clockwise.svg';
@@ -284,7 +284,7 @@ function SyncRow(props: {
         <span class="flex size-5 shrink-0 items-center justify-center pt-0.5">
           {match(props.sync.source.kind)
             .with('granola_meetings', () => (
-              <PipedreamConnectorIcon
+              <ConnectorIcon
                 appSlug={GRANOLA_APP_SLUG}
                 iconUrl={GRANOLA_ICON_URL}
                 class="size-5"

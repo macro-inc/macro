@@ -1,6 +1,7 @@
 import { AssistantActivityGroup } from '@core/component/AI/component/message/AssistantActivityGroup';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 import { ThinkingBlock } from '@core/component/AI/component/message/ThinkingBlock';
+import { codeRunLabel } from '@core/component/AI/component/tool/CodeMode';
 import { RenderTool } from '@core/component/AI/component/tool/handler';
 import { McpToolCall } from '@core/component/AI/component/tool/McpToolCall';
 import { useChatContext } from '@core/component/AI/context';
@@ -423,7 +424,12 @@ export function AssistantMessageParts(props: {
       if (part.type === 'mcpToolCall') {
         return part.display_name ?? `${part.service} / ${part.name}`;
       }
-      if (part.name === 'ExecuteCode') return 'Working in your workspace';
+      if (part.name === 'ExecuteCode') {
+        // A call that completed with no receipt ended in an error.
+        const receipt = responseById().get(part.id)?.json;
+        const failed = receipt === undefined && isCompleteSelector(part.id);
+        return codeRunLabel(receipt, failed ? { kind: 'failed' } : undefined);
+      }
       return part.name;
     });
 

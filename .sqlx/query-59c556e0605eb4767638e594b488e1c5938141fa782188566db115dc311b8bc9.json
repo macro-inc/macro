@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE hosted_runtime_host\n            SET admitted_since_report = admitted_since_report + 1,\n                last_admitted_at = GREATEST(last_admitted_at, $2)\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "59c556e0605eb4767638e594b488e1c5938141fa782188566db115dc311b8bc9"
+}

@@ -30,6 +30,49 @@ async fn channel_owner_can_delete_every_channel_type() {
 }
 
 #[tokio::test]
+async fn deleting_a_channel_names_the_members_who_lose_it() {
+    let channel_id = Uuid::now_v7();
+    let repo = FakeMutationRepo::new(channel_id, "macro|owner@example.com");
+    let members = repo
+        .state
+        .lock()
+        .unwrap()
+        .participants
+        .iter()
+        .map(|participant| participant.user_id.clone())
+        .collect::<Vec<_>>();
+    assert_eq!(members.len(), 2, "the owner and one member");
+    let events = FakeEvents::default();
+    let svc = mutation_service(
+        repo.clone(),
+        events.clone(),
+        FakeReferenceSharing::default(),
+    );
+
+    svc.delete_channel(sender("macro|owner@example.com"), channel_id)
+        .await
+        .unwrap();
+
+    let events = events.events.lock().unwrap();
+    let [
+        ChannelEvent::ChannelDeleted {
+            participant_user_ids,
+            ..
+        },
+    ] = events.as_slice()
+    else {
+        panic!("expected one ChannelDeleted event, got {events:?}");
+    };
+    assert_eq!(
+        participant_user_ids
+            .iter()
+            .map(|user_id| user_id.as_ref().to_string())
+            .collect::<Vec<_>>(),
+        members
+    );
+}
+
+#[tokio::test]
 async fn only_admins_of_the_channels_own_team_can_delete_without_ownership() {
     let channel_team = Uuid::now_v7();
     let other_team = Uuid::now_v7();

@@ -76,7 +76,10 @@ export function ChannelFavoriteRow(props: { favorite: Favorite }) {
         </Show>
       </ViewSidebar.Icon>
       <span class="min-w-0 flex-1 truncate">{displayName()}</span>
-      <ChannelMutedIndicator muted={item().muted} />
+      <ChannelMutedIndicator
+        muted={item().muted}
+        mentionsOnly={item().mentionsOnly}
+      />
       <Switch>
         <Match when={item().mentions > 0}>
           <ChannelMentionCount count={item().mentions} />

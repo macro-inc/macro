@@ -35,6 +35,7 @@ import {
   CHANNEL_SECTION_ROW_HEIGHT,
 } from '../../../constants';
 import { canLabelChannel } from '../../../core/channel-label-eligibility';
+import { ChannelsLiveCallsSidebar } from '../../../live-calls-sidebar';
 import { CHANNELS_TOUR } from '../../../tour';
 import type { ChannelSectionKey, ChannelsGroup } from '../../../types';
 import { ConversationsCreateMenu } from '../../ConversationsCreateMenu';
@@ -137,9 +138,10 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
           />
         </div>
       </ViewSidebar.Primary>
+      {/* With the aside's gap-3: 1rem under New, 1.5rem above the list. */}
       <SidebarRoutineSuggestions
         surface="chat"
-        class="mx-(--sidebar-gutter) mt-(--sidebar-gutter)"
+        class="px-(--sidebar-gutter) pt-(--sidebar-content-inset) pb-3"
       />
       <Show when={rail.labelsFailed()}>
         <div
@@ -903,6 +905,7 @@ export function ExpandedChannelsRail(props: { search: ChannelRailSearch }) {
   return (
     <>
       <ExpandedHeader search={props.search} />
+      <ChannelsLiveCallsSidebar />
       <div
         ref={(element) => {
           rail.registerRootRef(element);

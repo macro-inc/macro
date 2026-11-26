@@ -28,6 +28,13 @@ export const calendarKeys = createQueryKeys('calendar', {
     queryKey: [userId],
     contextQueries: { graphql: null },
   }),
+  firstSync: (
+    userId: string | undefined,
+    session: number | undefined,
+    linkIds: readonly string[]
+  ) => ({
+    queryKey: [userId, session, linkIds],
+  }),
   invitations: (threadId: string) => ({
     queryKey: [threadId],
   }),
@@ -53,6 +60,14 @@ export const calendarKeys = createQueryKeys('calendar', {
   ) => ({ queryKey: [items] }),
   joinRequests: (eventId: string) => ({
     queryKey: [eventId],
+  }),
+  teamAvailability: (
+    userId: string,
+    start: string | undefined,
+    end: string | undefined,
+    members: readonly string[]
+  ) => ({
+    queryKey: [userId, start, end, members],
   }),
   availabilityCalendars: (userId: string) => ({
     queryKey: [userId],

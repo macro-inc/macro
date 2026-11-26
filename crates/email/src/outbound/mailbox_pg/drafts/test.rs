@@ -1,4 +1,6 @@
 use super::*;
+use crate::domain::mailbox::claim::StreamClaim;
+use crate::domain::mailbox::schedule::POLL_INTERVALS;
 use crate::{
     domain::{
         models::{ResolvedDraftInput, UpsertedContacts},
@@ -13,6 +15,8 @@ use email_api_client::domain::models::{MailboxState, SendRequest};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 mod delivery_status;
+mod lock_timeouts;
+mod outlook_changes;
 mod sent_view;
 
 const ACTOR: &str = "macro|outlook-test@example.com";
@@ -34,8 +38,14 @@ async fn sent_sync_settles_uncertainty_and_fences_a_late_coordinator(db: PgPool)
     sync.fail_draft(&lease, DraftFailure::SendUnknown)
         .await
         .unwrap();
-    let stream = sync.claim_stream(Uuid::now_v7()).await.unwrap().unwrap();
-    sync.commit_page(&stream, &page()).await.unwrap();
+    let stream = sync
+        .claim_stream(Uuid::now_v7(), StreamClaim::LongestDue)
+        .await
+        .unwrap()
+        .unwrap();
+    sync.commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
     let work = sync.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
     let mut remote = snapshot(link, "a", MailboxState::default(), "v3");
     remote.content.message.is_sent = true;
@@ -368,7 +378,7 @@ fn checkpoint(lease: &DraftLease, stage: DraftStage) -> DraftCheckpoint {
             message:serde_json::from_value(serde_json::json!({"db_id":lease.message_id,"link_id":lease.mailbox.link_id,"subject":"Local subject"})).unwrap(),
             from:models_email::service::address::ContactInfo {email:"outlook-test@example.com".into(),name:None,photo_url:None},parent_message_id:None,references:None,
         },files:Vec::new(),removals:Vec::new()},
-        draft:Some(ProviderDraft {id:ProviderId::new("a").unwrap(),conversation_id:ProviderId::new("conversation").unwrap(),version:Some("v2".into()),is_draft:true,content_fingerprint:Some("unchanged-body".into()),app_revision:Some(lease.revision as u64)}),
+        draft:Some(ProviderDraft {id:ProviderId::new("a").unwrap(),conversation_id:ProviderId::new("conversation").unwrap(),version:Some("v2".into()),is_draft:true,content_fingerprint:Some("unchanged-body".into()),field_digests:Default::default(),app_revision:Some(lease.revision as u64)}),
         submission_started:matches!(stage,DraftStage::Submitting | DraftStage::Confirming),
         completed_files:0,completed_removals:0,transfer:None,
     }
@@ -469,8 +479,14 @@ async fn saving_an_imported_draft_keeps_its_provider_identity_and_baseline(db: P
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn remote_ingestion_preserves_an_unsynced_local_edit_and_records_remote_content(db: PgPool) {
     let (sync, _, input, link) = setup(&db, true).await;
-    let stream = sync.claim_stream(Uuid::now_v7()).await.unwrap().unwrap();
-    sync.commit_page(&stream, &page()).await.unwrap();
+    let stream = sync
+        .claim_stream(Uuid::now_v7(), StreamClaim::LongestDue)
+        .await
+        .unwrap()
+        .unwrap();
+    sync.commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
     let work = sync.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
     assert_eq!(work.provider_id.as_str(), "a");
     let mut remote = snapshot(
@@ -702,8 +718,14 @@ async fn sync_before_creation_response_binds_the_existing_macro_message(db: PgPo
     let mut cp = checkpoint(&lease, DraftStage::Creating);
     cp.draft = None;
     sync.checkpoint_draft(&lease, &cp).await.unwrap();
-    let stream = sync.claim_stream(Uuid::now_v7()).await.unwrap().unwrap();
-    sync.commit_page(&stream, &page()).await.unwrap();
+    let stream = sync
+        .claim_stream(Uuid::now_v7(), StreamClaim::LongestDue)
+        .await
+        .unwrap()
+        .unwrap();
+    sync.commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
     let work = sync.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
     let mut remote = snapshot(
         link,
@@ -843,9 +865,11 @@ async fn draft_organization_waits_for_binding_and_rebases_queued_edits(db: PgPoo
     sync.record_write_version(&command, &target, "v2", "v3")
         .await
         .unwrap();
-    let retained=sqlx::query!("SELECT base_version,checkpoint->'draft'->>'version' AS checkpoint_version FROM email_mailbox_drafts WHERE message_id=$1",input.db_id).fetch_one(&db).await.unwrap();
+    let retained=sqlx::query!("SELECT base_version,checkpoint->'draft'->>'version' AS checkpoint_version,base_content->>'version' AS content_version FROM email_mailbox_drafts WHERE message_id=$1",input.db_id).fetch_one(&db).await.unwrap();
     assert_eq!(retained.base_version.as_deref(), Some("v3"));
     assert_eq!(retained.checkpoint_version.as_deref(), Some("v3"));
+    // Macro's own move keeps the content, so its baseline moves with it.
+    assert_eq!(retained.content_version.as_deref(), Some("v3"));
     // A local content edit accepted during organization keeps the verified
     // provider baseline, even before the ordinary mailbox read catches up.
     let mut edited = input.clone();
@@ -871,8 +895,9 @@ async fn draft_organization_waits_for_binding_and_rebases_queued_edits(db: PgPoo
             .unwrap()
             .is_none()
     );
-    let retained=sqlx::query!("SELECT base_version,desired_content->>'subject' AS subject FROM email_mailbox_drafts WHERE message_id=$1",input.db_id).fetch_one(&db).await.unwrap();
+    let retained=sqlx::query!("SELECT base_version,desired_content->>'subject' AS subject,base_content->>'version' AS content_version FROM email_mailbox_drafts WHERE message_id=$1",input.db_id).fetch_one(&db).await.unwrap();
     assert_eq!(retained.base_version.as_deref(), Some("v4"));
+    assert_eq!(retained.content_version.as_deref(), Some("v4"));
     assert_eq!(retained.subject.as_deref(), Some("Edited while starring"));
     let snapshot = email_api_client::domain::models::MailboxOrganization {
         is_sent: false,
@@ -1103,4 +1128,109 @@ async fn native_draft_first_edit_adopts_proven_organization_versions_before_proj
         .unwrap(),
         Some(0)
     );
+}
+
+/// A reply waiting on delivery is still a draft at Outlook: restoring its
+/// conversation to the inbox leaves it where it is, whether the send is queued
+/// or has lost its schedule but not its attempt, and moves it once it is sent.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn restoring_a_conversation_leaves_a_reply_waiting_to_send_in_drafts(db: PgPool) {
+    use crate::domain::models::mailbox_action::MailboxAction;
+    let (sync, repo, input, link) = setup(&db, false).await;
+    let received = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO email_messages (id,link_id,thread_id,provider_id,provider_thread_id,internal_date_ts,mailbox_state)
+        VALUES ($1,$2,$3,'received','conversation','2026-09-30T12:00:00Z','{"in_inbox":false}')"#,
+        received,
+        link,
+        input.thread_db_id
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sync_draft(&sync, link).await;
+    let restored = async || {
+        let messages = repo
+            .mailbox_action_messages(link, input.thread_db_id)
+            .await
+            .unwrap();
+        let mut ids: Vec<_> = MailboxAction::Archived(false)
+            .targets(&messages)
+            .into_iter()
+            .map(|target| target.message_id)
+            .collect();
+        ids.sort();
+        ids
+    };
+    assert_eq!(restored().await, vec![received]);
+
+    sqlx::query!(
+        "UPDATE email_messages SET is_draft=false WHERE id=$1",
+        input.db_id
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query!("INSERT INTO email_scheduled_messages (link_id,message_id,send_time,actor_id) VALUES ($1,$2,now(),$3)",link,input.db_id,ACTOR).execute(&db).await.unwrap();
+    assert_eq!(restored().await, vec![received], "a queued send");
+
+    sqlx::query!(
+        "DELETE FROM email_scheduled_messages WHERE message_id=$1",
+        input.db_id
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query!("INSERT INTO email_send_attempts (user_id,link_id,attempt_id,message_id,thread_id,send_time) VALUES ($1,$2,$3,$4,$5,now())",ACTOR,link,Uuid::now_v7(),input.db_id,input.thread_db_id).execute(&db).await.unwrap();
+    assert_eq!(
+        restored().await,
+        vec![received],
+        "a send attempt still open"
+    );
+
+    sqlx::query!(
+        "UPDATE email_send_attempts SET sent=true WHERE message_id=$1",
+        input.db_id
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE email_messages SET is_sent=true WHERE id=$1",
+        input.db_id
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let mut both = vec![received, input.db_id];
+    both.sort();
+    assert_eq!(restored().await, both, "sent correspondence is restored");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_link_graph_serves_no_mailbox_for_holds_its_drafts(db: PgPool) {
+    let (sync, _, input, link) = setup(&db, true).await;
+    sqlx::query!("INSERT INTO email_scheduled_messages (link_id,message_id,send_time,actor_id,processing) VALUES ($1,$2,now(),$3,true)",link,input.db_id,ACTOR).execute(&db).await.unwrap();
+    let claim = || {
+        sync.claim_draft(
+            Uuid::now_v7(),
+            crate::domain::mailbox::drafts::models::DraftClaimMode::All,
+        )
+    };
+    sqlx::query!(
+        "UPDATE email_links SET mailbox_unavailable_at = now() WHERE id = $1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    assert!(claim().await.unwrap().is_none());
+    sqlx::query!(
+        "UPDATE email_links SET mailbox_unavailable_at = NULL WHERE id = $1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    assert!(claim().await.unwrap().is_some());
 }

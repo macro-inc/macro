@@ -88,6 +88,33 @@ pub fn entity_filters_from_include(
 #[derive(Debug, Serialize, Deserialize, ToSchema, Clone, JsonSchema)]
 pub struct UnifiedSearchRequest {
     /// The search query string. Must not be empty; one character is enough.
+    /// It reads operators that choose what to search, each narrowing the
+    /// search to the kinds it applies to: `type:` `doc`, `task`, `email`,
+    /// `channel`, `call`, `folder`, `agent` or `calendar`; `status:` a task's
+    /// (`not_started`, `in_progress`, `in_review`, `completed`, `canceled`)
+    /// or a call's (`missed`, `attended`, `unattended`); `priority:` (`low`,
+    /// `medium`, `high`, `urgent`); `assignee:` and `author:` (who created a
+    /// task) `me` or an address; `tag:` a tag name; `inbox:` an inbox
+    /// address; `in:#` a channel name; and, beside `type:channel` or
+    /// `type:call`, `from:` a sender or speaker. `OR` between two of the
+    /// same operator joins them (`tag:a OR tag:b`); repeated without it,
+    /// each must hold (`tag:a OR tag:b tag:c` finds items tagged c and
+    /// either a or b), except that two `from:` on calls are refused with a
+    /// 400. A minus before a
+    /// word or quoted phrase (`-draft`, `-"team lunch"`) leaves out every
+    /// item that word would match as a search term, in each kind the search
+    /// reaches (mail holding it in any part); a minus inside a word
+    /// (`e-mail`) or doubled (`--force`) is part of the word. Only a search
+    /// of email alone runs on operators or minus words with no word beside
+    /// them; any other is refused with a 400.
+    /// When the search reaches email it also reads Gmail's operators:
+    /// `subject:`, `from:`, `to:`, `cc:`, `bcc:`, `in:` a Mail view (`inbox`,
+    /// `signal`, `noise`, `archived`, `sent`, `drafts`, `calendar`, `shared`,
+    /// `favorites`) or a tag or label name, `label:`, `is:unread`, `is:read`,
+    /// `is:starred`, `is:shared`, `has:attachment`, `after:`/`before:` a day
+    /// (`2017/06/01`), `newer_than:`/`older_than:` a span (`3d`, `2w`, `1m`,
+    /// `1y`), and a minus before an operator to leave matching mail out. A
+    /// query that types one of these Gmail operators searches email only.
     pub query: String,
 
     /// How to match the search terms. 'exact' for precise case-sensitive phrase matches, 'partial' for prefix/partial matches. REQUIRED field.
@@ -124,6 +151,13 @@ pub struct UnifiedSearchRequest {
 
     #[schemars(skip)]
     pub collapse: Option<bool>,
+
+    /// The IANA time zone (such as `America/New_York`) the query's typed
+    /// dates are read in: `after:2017/06/01` starts at that day's midnight
+    /// there, and `newer_than:1m` counts a month back on its calendar.
+    /// Defaults to UTC.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub time_zone: Option<String>,
 }
 
 /// Whether a [FileAssociation] is indexed by the search processing service.
@@ -229,7 +263,10 @@ impl From<EntityFilters> for SearchEntityFilters {
         let should_include_emails = !contains_nil_uuid(&email_filters.email_thread_ids);
         let should_include_channels = !contains_nil_uuid(&channel_filters.channel_ids);
         let should_include_projects = !contains_nil_uuid(&project_filters.project_ids);
-        let should_include_call_records = !contains_nil_uuid(&call_filters.channel_ids);
+        // Either id list holding the nil id excludes calls; the web app's shared
+        // filters mark calls with `call_ids`, older callers with `channel_ids`.
+        let should_include_call_records = !contains_nil_uuid(&call_filters.channel_ids)
+            && !contains_nil_uuid(&call_filters.call_ids);
         let should_include_calendar_events =
             !contains_nil_uuid(&calendar_event_filters.calendar_event_ids);
 
@@ -240,6 +277,7 @@ impl From<EntityFilters> for SearchEntityFilters {
         strip_nil_uuids(&mut channel_filters.channel_ids);
         strip_nil_uuids(&mut project_filters.project_ids);
         strip_nil_uuids(&mut call_filters.channel_ids);
+        strip_nil_uuids(&mut call_filters.call_ids);
         strip_nil_uuids(&mut calendar_event_filters.calendar_event_ids);
 
         document_filters.file_types = expand_file_types_for_search(document_filters.file_types);
@@ -318,6 +356,11 @@ pub struct UnifiedSearchResponse {
     pub results: Vec<UnifiedSearchResponseItem>,
     /// The next cursor to use for paginating results
     pub next_cursor: Option<String>,
+    /// The email filters the query's typed operators (`subject:`, `in:`,
+    /// `after:` and the rest) became, each date as the instant it bounds.
+    /// Absent when the query typed none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub query_filters: Option<item_filters::EmailFilters>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]

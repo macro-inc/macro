@@ -3,10 +3,10 @@ import { useUserContext } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createEffectOnEntityTypeNotification } from '@notifications';
-import { InlineFetchedEntityTagsPill } from '@property/tags';
-import { clearSavedDraftThreadCache } from '@queries/email/draft-cache';
+import { InlineFetchedEntityTagsPill, LabelsMenuPill } from '@property/tags';
 import { useInboxEmail } from '@queries/email/inbox-email';
-import { createEffect, onCleanup, Suspense } from 'solid-js';
+import { useShownThreadLabels } from '@queries/email/thread-labels';
+import { Suspense } from 'solid-js';
 import { useCalendarPreferences } from '../calendar/utils/preferences';
 import { createEmailComposeContext } from '../email-compose/compose-adapter';
 import { createEmailComposeHost } from '../email-compose/compose-host-adapter';
@@ -25,6 +25,7 @@ import { EmailMessageOperation } from '../email-message/email-message-operation'
 import { createEmailRenderingContext } from '../email-message/rendering-adapter';
 import { EmailSenderIcon } from '../email-message/sender-icon-adapter';
 import type { InvitationRenderOptions } from '../email-message/views/email-message';
+import { SuggestionDraftOrigin } from '../suggestions/draft-origin';
 import {
   type CalendarInvitationOpenTarget,
   EmailCalendarInvitation,
@@ -96,6 +97,12 @@ export function EmailThread(props: EmailThreadProps) {
         message.operation && !operationSettled(message.operation) ? (
           <EmailMessageOperation message={message} />
         ) : undefined,
+      renderDraftOrigin: (draftId: string) => (
+        <SuggestionDraftOrigin
+          draftId={draftId}
+          thread={{ id: props.threadId(), name: props.title }}
+        />
+      ),
       renderTags: () => (
         <Suspense
           fallback={
@@ -109,6 +116,7 @@ export function EmailThread(props: EmailThreadProps) {
           />
         </Suspense>
       ),
+      renderLabels: () => <EmailThreadLabels threadId={props.threadId()} />,
       renderInvitation: (
         message: EmailMessage,
         invitation: CalendarInvitation,
@@ -149,10 +157,6 @@ export function EmailThread(props: EmailThreadProps) {
         void source.refresh().catch(compose.notices.reportError);
     }
   );
-  createEffect(() => {
-    const id = props.threadId();
-    onCleanup(() => clearSavedDraftThreadCache(id));
-  });
   return (
     <EmailThreadSurface
       {...props}
@@ -160,4 +164,9 @@ export function EmailThread(props: EmailThreadProps) {
       emailRendering={rendering}
     />
   );
+}
+
+function EmailThreadLabels(props: { threadId: string }) {
+  const labels = useShownThreadLabels(() => props.threadId);
+  return <LabelsMenuPill labels={labels()} />;
 }

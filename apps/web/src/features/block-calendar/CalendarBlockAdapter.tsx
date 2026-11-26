@@ -1,35 +1,21 @@
 import { CalendarViewContextProvider } from '@app/features/calendar/components/CalendarViewContext';
-import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
 import { CalendarFocusContextProvider } from '@app/features/calendar-view/calendar-focus-target';
 import { createCalendarFocusTarget } from '@app/features/calendar-view/calendar-target';
 import { createCalendarTargetAim } from '@app/features/calendar-view/calendar-target-request';
 import { Workspace } from '@app/features/calendar-view/components/Workspace';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { usePosthog } from '@app/lib/analytics/posthog';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { LoadingBlock } from '@core/component/LoadingBlock';
 import { useUserId } from '@core/context/user';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import { useCalendarOccurrencesQuery } from '@queries/calendar/occurrences';
 import { useSearchParams } from '@solidjs/router';
-import { onMount, Show } from 'solid-js';
+import { onMount } from 'solid-js';
 import type { CalendarBlockProps } from './types';
-
-function CalendarBlockDisabledRedirect() {
-  const panel = useSplitPanelOrThrow();
-  onMount(() => {
-    panel.handle.replace({ next: { type: 'component', id: 'home' } });
-  });
-  return null;
-}
 
 /** Compatibility host for inline previews that still mount a Calendar block. */
 function CalendarBlockAdapter(props: CalendarBlockProps) {
-  const calendarUiEnabled = useCalendarUiFlag();
-  const posthog = usePosthog();
   const userId = useUserId();
   const analytics = useAnalytics();
   const blockHandle = blockHandleSignal.get;
@@ -89,20 +75,11 @@ function CalendarBlockAdapter(props: CalendarBlockProps) {
   });
 
   return (
-    <Show
-      when={calendarUiEnabled()}
-      fallback={
-        <Show when={posthog.flagsLoaded()} fallback={<LoadingBlock />}>
-          <CalendarBlockDisabledRedirect />
-        </Show>
-      }
-    >
-      <CalendarFocusContextProvider target={focusTarget}>
-        <CalendarViewContextProvider>
-          <Workspace />
-        </CalendarViewContextProvider>
-      </CalendarFocusContextProvider>
-    </Show>
+    <CalendarFocusContextProvider target={focusTarget}>
+      <CalendarViewContextProvider>
+        <Workspace />
+      </CalendarViewContextProvider>
+    </CalendarFocusContextProvider>
   );
 }
 

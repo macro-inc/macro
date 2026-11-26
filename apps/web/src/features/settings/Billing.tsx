@@ -1,14 +1,9 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { TraceFlow } from '@app/observability/flow';
 import { useHasPaidAccess } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  enableAiUsageBilling,
-  enableMacroComputers,
-  LOCAL_ONLY,
-} from '@core/constant/featureFlags';
+import { LOCAL_ONLY } from '@core/constant/featureFlags';
 import { PERMISSION_IDS } from '@core/constant/permissions';
 import {
   useLicenseStatus,
@@ -25,15 +20,18 @@ import {
   useSubscriptionStatusQuery,
   useTrialEligibilityQuery,
 } from '@queries/auth';
+import { useMacroComputersRollout } from '@queries/computers/computers';
 import { queryReadyGate } from '@queries/gate';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { PaidPlan } from '@service-auth/ai-billing-types';
+import type { BillingInterval } from '@service-auth/generated/schemas/billingInterval';
 import { createMemo, type JSX, Show, Suspense } from 'solid-js';
 import { BillingSettingsView } from './components/billing-settings-view';
 import { BillingComputers } from './computers/views/BillingComputers';
 import {
   getBillingState,
   getFreePlanCheckoutRequest,
+  planChangeMessage,
 } from './core/billing-state';
 
 const ConnectedTeamBillingBreakdown = lazyNamed(
@@ -67,8 +65,7 @@ function LiveBilling(props: { controls?: JSX.Element }) {
   const userId = useUserId();
   const team = useCurrentTeamQuery();
   const summary = useAiBillingSummaryQuery();
-  const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
-  const macroComputers = useFeatureFlag(enableMacroComputers);
+  const macroComputers = useMacroComputersRollout();
   const changePlan = useChangePlanMutation();
   const checkout = useCreateCheckoutSessionMutation();
   const portal = useCreateBillingPortalMutation();
@@ -115,10 +112,9 @@ function LiveBilling(props: { controls?: JSX.Element }) {
       teamReady: team.isSuccess,
       teamRole: teamRole(),
       teamPlans: team.isSuccess
-        ? team.data?.members.map((member) =>
-            (member as typeof member & { plan?: PaidPlan }).plan === 'max'
-              ? 'max'
-              : 'premium'
+        ? team.data?.members.map(
+            (member) =>
+              (member as typeof member & { plan?: PaidPlan }).plan ?? 'premium'
           )
         : undefined,
       summary: summary.isSuccess
@@ -127,7 +123,7 @@ function LiveBilling(props: { controls?: JSX.Element }) {
             canManageBilling: summary.data.can_manage_billing,
           }
         : undefined,
-      aiUsageEnabled: aiUsageBilling().enabled,
+      aiUsageEnabled: true,
       pending: checkout.isPending || changePlan.isPending,
       existingSubscription: queryReadyGate(trialEligibility)
         ? trialEligibility.data.existingSubscription
@@ -137,17 +133,26 @@ function LiveBilling(props: { controls?: JSX.Element }) {
           ? trialEligibility.data.eligible
           : undefined,
       trialing: licenseStatus() === 'trialing',
+      interval: queryReadyGate(subscriptionStatus)
+        ? (subscriptionStatus.data.interval ?? undefined)
+        : undefined,
     });
 
-  const handleCheckout = async (plan: PaidPlan) => {
+  const handleCheckout = async (plan: PaidPlan, interval: BillingInterval) => {
     if (state().existingSubscription) return;
     const eligible = state().trialEligible;
     if (plan === 'premium' && eligible === undefined) return;
     try {
-      const url = await checkout.mutateAsync(
-        getFreePlanCheckoutRequest(plan, eligible === true)
+      const request = getFreePlanCheckoutRequest(
+        plan,
+        eligible === true,
+        interval
       );
-      analytics.track('subscription_start', { type: plan });
+      const url = await checkout.mutateAsync(request);
+      analytics.track('subscription_start', {
+        type: plan,
+        interval: request.interval,
+      });
       window.location.href = url;
     } catch (error) {
       console.error(error);
@@ -163,16 +168,8 @@ function LiveBilling(props: { controls?: JSX.Element }) {
     try {
       const previousTier = state().tier;
       await changePlan.mutateAsync({ plan });
-      analytics.track('plan_changed', { plan });
-      toast.success(
-        plan === previousTier
-          ? `Keeping your ${plan === 'max' ? 'Max' : 'Pro'} plan. Your scheduled downgrade is canceled.`
-          : plan === 'max'
-            ? aiUsageBilling().enabled
-              ? 'Upgraded to Max. Your larger AI allowance applies right away.'
-              : 'Upgraded to Max.'
-            : 'Pro will start at your next renewal. You keep Max until then.'
-      );
+      analytics.track('plan_changed', { plan, from: previousTier });
+      toast.success(planChangeMessage(previousTier, plan));
     } catch (error) {
       console.error(error);
       toast.failure("Couldn't change your plan. Please try again.");
@@ -246,9 +243,11 @@ function LiveBilling(props: { controls?: JSX.Element }) {
         fireAndForget(handleChangePlan(plan), 'billing-settings')
       }
       onManage={() => fireAndForget(handleManage(), 'billing-settings')}
-      onSelectPlan={(plan) =>
+      onSelectPlan={(plan, interval) =>
         fireAndForget(
-          effectiveHasPaid() ? handleChangePlan(plan) : handleCheckout(plan),
+          effectiveHasPaid()
+            ? handleChangePlan(plan)
+            : handleCheckout(plan, interval),
           'billing-settings'
         )
       }

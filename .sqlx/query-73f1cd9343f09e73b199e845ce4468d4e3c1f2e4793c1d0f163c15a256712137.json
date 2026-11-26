@@ -1,0 +1,90 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT event_id, link_id, consent_incarnation, policy_version, action, actor_kind,\n                      agent_id, agent_session_id, previous_revision, next_revision, details, created_at\n               FROM crm_email_policy_audit WHERE team_id = $1 AND user_id = $2\n                 AND event_id < COALESCE($3, 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid)\n               ORDER BY event_id DESC LIMIT 50",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "event_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "consent_incarnation",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "policy_version",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "action",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "actor_kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "agent_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "agent_session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "previous_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "next_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "details",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "73f1cd9343f09e73b199e845ce4468d4e3c1f2e4793c1d0f163c15a256712137"
+}

@@ -6,7 +6,8 @@
 #[cfg(test)]
 mod test;
 
-const MANGLED_PREFIX: &str = "mcp__";
+/// Every mangled MCP tool name starts with this prefix.
+pub const MANGLED_PREFIX: &str = "mcp__";
 const MANGLED_SEPARATOR: &str = "__";
 /// Model providers reject tool names that do not match
 /// `^[a-zA-Z0-9_-]{1,128}$`, and they validate the whole tool array: a single

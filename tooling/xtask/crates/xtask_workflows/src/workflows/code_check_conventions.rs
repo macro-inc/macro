@@ -1,5 +1,7 @@
 //! `conventions code check` — repo convention lints, generated into
-//! `code_check_conventions.yml`.
+//! `code_check_conventions.yml`. `PR CI` calls it only when [`PATHS`] changed,
+//! and `CI gate` reads the call's result, so it has no path-check or roll-up
+//! job of its own.
 //!
 //! Runs `ast-grep scan` over the custom structural rules in `rules/ast-grep`
 //! (config: `sgconfig.yml` at the repo root). The scan fails only on
@@ -7,11 +9,23 @@
 //! CodeRabbit's ast-grep integration on changed code instead. The rules encode
 //! conventions from `docs/development/style-guide.md` at the repo root.
 
-use gh_workflow::{
-    Event, Expression, Job, Level, Permissions, Run, Step, Use, Workflow, WorkflowCall,
-};
+use gh_workflow::{Event, Job, Level, Permissions, Run, Step, Workflow, WorkflowCall};
+use xtask_paths::RepoGlob;
 
 use crate::workflows::{runners, steps, vars};
+
+/// Files whose change makes `PR CI` call this workflow.
+pub const PATHS: &[RepoGlob<'static>] = &[
+    xtask_paths::repo_glob!("crates/**"),
+    xtask_paths::repo_glob!("services/**"),
+    xtask_paths::repo_glob!("tooling/xtask/**"),
+    xtask_paths::repo_glob!("apps/web/**"),
+    xtask_paths::repo_glob!("packages/**"),
+    xtask_paths::repo_glob!("rules/**"),
+    xtask_paths::repo_glob!("sgconfig.yml"),
+    xtask_paths::repo_glob!(".github/actions/teardown-nix/**"),
+    xtask_paths::repo_glob!(".github/workflows/code_check_conventions.yml"),
+];
 
 /// ast-grep is fetched with bunx, so this shares the `web-ci` bun cache volume
 /// the way the infra checks do.
@@ -28,22 +42,11 @@ pub fn code_check_conventions() -> Workflow {
             ..Default::default()
         })
         .on(Event::default().workflow_call(WorkflowCall::default()))
-        .add_job("path-check", path_check())
         .add_job("ast-grep", ast_grep())
-        .add_job("status-check", status_check())
-}
-
-fn path_check() -> Job {
-    Job::default()
-        .timeout_minutes(10u32)
-        .runs_on(runners::Runner::Small.to_string())
-        .add_output("should_run", "${{ steps.filter.outputs.should_run }}")
-        .add_step(steps::checkout(false, false))
-        .add_step(paths_filter())
 }
 
 fn ast_grep() -> Job {
-    steps::gated_job()
+    Job::default()
         .timeout_minutes(15u32)
         .name("ast-grep Conventions")
         .runs_on(conventions_runner())
@@ -55,63 +58,6 @@ fn ast_grep() -> Job {
         .add_step(steps::teardown_nix())
 }
 
-/// Always-run collector used as the required status check. Its name must stay
-/// stable because branch protection references it.
-fn status_check() -> Job {
-    Job::default()
-        .timeout_minutes(5u32)
-        .name("Conventions Status Check")
-        .cond(Expression::new("always()"))
-        .needs(vec!["path-check".to_string(), "ast-grep".to_string()])
-        .runs_on(runners::Runner::Small.to_string())
-        .add_step(check_job_results())
-}
-
-fn paths_filter() -> Step<Use> {
-    Step::new("Filter changed paths")
-        .uses(
-            "dorny",
-            "paths-filter",
-            "d1c1ffe0248fe513906c8e24db8ea791d46f8590",
-        ) // v3.0.3
-        .id("filter")
-        .add_with((
-            "filters",
-            indoc::indoc! {r#"
-                should_run:
-                  - 'crates/**'
-                  - 'services/**'
-                  - 'tooling/xtask/**'
-                  - 'apps/web/**'
-                  - 'packages/**'
-                  - 'rules/**'
-                  - 'sgconfig.yml'
-                  - '.github/actions/teardown-nix/**'
-                  - '.github/workflows/code_check_conventions.yml'
-            "#},
-        ))
-}
-
 fn run_ast_grep() -> Step<Run> {
     Step::new("Run ast-grep").run("bunx --yes @ast-grep/cli@0.44.1 scan")
-}
-
-fn check_job_results() -> Step<Run> {
-    Step::new("Check job results").run(indoc::indoc! {r#"
-        echo "path-check: ${{ needs.path-check.result }}"
-        echo "ast-grep: ${{ needs.ast-grep.result }}"
-
-        # Only success and skipped are OK. A job that hits its timeout reports
-        # cancelled, and passing on that would merge code whose checks never ran.
-        for result in \
-          "${{ needs.path-check.result }}" \
-          "${{ needs.ast-grep.result }}"; do
-          if [[ "$result" != "success" && "$result" != "skipped" ]]; then
-            echo "❌ One or more jobs failed or were cancelled"
-            exit 1
-          fi
-        done
-
-        echo "✅ All jobs passed or were skipped"
-    "#})
 }

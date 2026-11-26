@@ -51,6 +51,9 @@ where
         BackfillOperation::SeedSentContact(_) => {}
         BackfillOperation::PopulateCrmContact(_) => {}
         BackfillOperation::DepopulateCrmContact(_) => {}
+        BackfillOperation::PopulateCrmPolicy(_) => {
+            // Durable work is not retired by a queue-level terminal error.
+        }
         BackfillOperation::PopulateCrmForUser(_) => {}
         BackfillOperation::DepopulateCrmForUser(_) => {}
     }
@@ -215,6 +218,9 @@ pub async fn handle_retryable_error(
                 link_id = %scope.link_id,
                 "Retryable error depopulating CRM contact"
             )
+        }
+        BackfillOperation::PopulateCrmPolicy(_) => {
+            // Durable work is not retired by a queue-level terminal error.
         }
         BackfillOperation::PopulateCrmForUser(_) => {
             tracing::warn!("Retryable error populating CRM for user")

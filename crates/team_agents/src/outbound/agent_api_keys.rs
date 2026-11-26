@@ -8,6 +8,9 @@ use user_api_key::domain::{models::UserApiKeyError, ports::UserApiKeyService};
 use crate::domain::models::{AgentApiKey, TeamAgentError};
 use crate::domain::ports::AgentApiKeys;
 
+#[cfg(test)]
+mod test;
+
 /// Name the key shows under in the agent's Settings → API Keys.
 const BRAIN_KEY_NAME: &str = "Brain";
 

@@ -13,23 +13,25 @@ import { applyTheme } from '@app/features/theme/utils/themeUtils';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
-import { ChannelsContextProvider } from '@core/context/channels';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessProvider } from '@core/context/quickAccess/QuickAccessProvider';
 import { UserContextProvider } from '@core/context/user';
 import { useHotKeyRoot } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { BlockOrchestrator } from '@core/orchestrator';
+import { lazy } from '@core/util/lazy';
 import { EntityProvider } from '@entity';
 import { Popover } from '@kobalte/core/popover';
 import type { NotificationSource } from '@notifications';
 import { authKeys, type UserInfoData } from '@queries/auth/user-info';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import { queryClient } from '@queries/client';
 import { MemoryRouter, Route } from '@solidjs/router';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { DragDropProvider } from '@thisbeyond/solid-dnd';
 import { ImperativeDialogHost } from '@ui';
-import { createSignal, lazy, Match, Show, Suspense, Switch } from 'solid-js';
+import { createSignal, Match, Show, Suspense, Switch } from 'solid-js';
 import { Dynamic, render } from 'solid-js/web';
 import { ChannelTabProvider } from '../../../Channel/ChannelTabContext';
 import type { ChannelTabId } from '../../../Channel/channel-tabs';
@@ -82,7 +84,9 @@ function Fixture() {
           <EntityProvider>
             <UserContextProvider>
               <EmailLinksContextProvider>
-                <ChannelsContextProvider>
+                <ChannelDirectoryProvider
+                  directory={staticChannelDirectory(() => [])}
+                >
                   <QuickAccessProvider>
                     <GlobalAppStateProvider
                       notificationSource={notifications}
@@ -209,7 +213,7 @@ function Fixture() {
                       </DragDropProvider>
                     </GlobalAppStateProvider>
                   </QuickAccessProvider>
-                </ChannelsContextProvider>
+                </ChannelDirectoryProvider>
               </EmailLinksContextProvider>
             </UserContextProvider>
           </EntityProvider>

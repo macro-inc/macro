@@ -90,6 +90,7 @@ async fn claimed_job(
     let CalendarBackfillClaim::Claimed {
         lease_token,
         account_id,
+        ..
     } = repo.claim_google_backfill(key).await.unwrap()
     else {
         panic!("Google job should be claimable");

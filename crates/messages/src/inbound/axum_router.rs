@@ -208,19 +208,19 @@ async fn receipt_with_sender<
     use entity_access::inbound::axum_extractors::{
         message_sender_entity_access_receipt, principal_entity_access_receipt,
     };
-    let receipt = if as_sender {
-        message_sender_entity_access_receipt::<P>(
-            access,
-            &user.authorization,
-            &path.parent_id,
-            kind,
-        )
-        .await
-    } else {
-        principal_entity_access_receipt::<P>(access, &user.authorization, &path.parent_id, kind)
-            .await
+    let receipt = async {
+        // A merged company's or contact's discussion moved with it, so its old
+        // id reads and writes the discussion of the record it was merged into.
+        let parent_id = access.current_entity_id(&path.parent_id, kind).await?;
+        if as_sender {
+            message_sender_entity_access_receipt::<P>(access, &user.authorization, &parent_id, kind)
+                .await
+        } else {
+            principal_entity_access_receipt::<P>(access, &user.authorization, &parent_id, kind)
+                .await
+        }
     };
-    receipt.map_err(|error| match error {
+    receipt.await.map_err(|error| match error {
         entity_access::domain::models::AccessError::Unavailable(error)
         | entity_access::domain::models::AccessError::Internal(error) => {
             MessageError::Repository(error).into()
@@ -246,6 +246,7 @@ where
     A: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
+    ensure_policy_fits_parent(&path, &input)?;
     input.attribution = sender_attribution(&user.authorization);
     Ok(Json(
         state
@@ -256,6 +257,23 @@ where
             )
             .await?,
     ))
+}
+
+/// A caller may quiet only a channel message. Discussion delivery on other
+/// parents also grants mentioned people access, which a quieter policy would
+/// skip, so they take only the default.
+fn ensure_policy_fits_parent(
+    path: &ParentPath,
+    input: &PostMessage,
+) -> Result<(), MessageHttpError> {
+    let is_channel = matches!(
+        MessageParent::parse(&path.parent_type, &path.parent_id),
+        Ok(MessageParent::Channel(_))
+    );
+    if is_channel || input.notification_policy == PostMessageNotificationPolicy::Default {
+        return Ok(());
+    }
+    Err(MessageError::Invalid("notification_policy applies only to channel messages").into())
 }
 
 /// How a new message's signed agent attribution labels it: with the client a
@@ -537,3 +555,6 @@ where
             .await?,
     ))
 }
+
+#[cfg(test)]
+mod test;

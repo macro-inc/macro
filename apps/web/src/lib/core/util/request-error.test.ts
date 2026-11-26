@@ -1,6 +1,8 @@
 import { CombinedError } from '@urql/core';
 import { describe, expect, it } from 'vitest';
 import {
+  isAccessRequestError,
+  isGraphqlServerFault,
   isResponseFreeNetworkError,
   isTransientRequestError,
 } from './request-error';
@@ -113,5 +115,137 @@ describe('isTransientRequestError', () => {
       response: new Response(null, { status: 503 }),
     });
     expect(isTransientRequestError(error)).toBe(false);
+  });
+});
+
+describe('isAccessRequestError', () => {
+  it.each([
+    {
+      error: new CombinedError({
+        networkError: new Error('Request failed'),
+        response: new Response(null, { status: 401 }),
+      }),
+      expected: true,
+    },
+    {
+      error: new CombinedError({
+        networkError: new Error('Request failed'),
+        response: new Response(null, { status: 403 }),
+      }),
+      expected: true,
+    },
+    {
+      error: new CombinedError({
+        graphQLErrors: [
+          { message: 'Forbidden', extensions: { code: 'FORBIDDEN' } },
+        ],
+      }),
+      expected: true,
+    },
+    {
+      error: new CombinedError({
+        graphQLErrors: [
+          { message: 'Missing', extensions: { code: 'NOT_FOUND' } },
+        ],
+      }),
+      expected: true,
+    },
+    {
+      error: new CombinedError({
+        graphQLErrors: [{ message: 'A comms error has occured' }],
+      }),
+      expected: false,
+    },
+    {
+      error: new CombinedError({
+        graphQLErrors: [
+          { message: 'Internal', extensions: { code: 'INTERNAL' } },
+        ],
+      }),
+      expected: false,
+    },
+    {
+      error: new CombinedError({
+        networkError: new Error('Request failed'),
+        response: new Response(null, { status: 503 }),
+      }),
+      expected: false,
+    },
+    {
+      error: new ThrownResultError([
+        { code: 'FORBIDDEN', message: 'Forbidden' },
+      ]),
+      expected: true,
+    },
+    {
+      error: new ThrownResultError([{ code: 'GONE', message: 'Deleted' }]),
+      expected: true,
+    },
+    {
+      error: new ThrownResultError([
+        { code: 'SERVER_ERROR', message: 'Server failed' },
+      ]),
+      expected: false,
+    },
+    { error: new Error('Failed to fetch'), expected: false },
+  ])('classifies $error.message', ({ error, expected }) => {
+    expect(isAccessRequestError(error)).toBe(expected);
+  });
+});
+
+describe('isGraphqlServerFault', () => {
+  it.each([
+    { errors: [{ message: 'A comms error has occured' }], expected: true },
+    {
+      errors: [{ message: 'Internal', extensions: { code: 'INTERNAL' } }],
+      expected: true,
+    },
+    {
+      errors: [
+        { message: 'Failed', extensions: { code: 'INTERNAL_SERVER_ERROR' } },
+      ],
+      expected: true,
+    },
+    {
+      errors: [
+        { message: 'Read failed' },
+        { message: 'Forbidden', extensions: { code: 'FORBIDDEN' } },
+      ],
+      expected: false,
+    },
+    {
+      errors: [
+        { message: 'Bad cursor', extensions: { code: 'INVALID_INPUT' } },
+      ],
+      expected: false,
+    },
+  ])('classifies GraphQL errors $errors', ({ errors, expected }) => {
+    expect(
+      isGraphqlServerFault(new CombinedError({ graphQLErrors: errors }))
+    ).toBe(expected);
+  });
+
+  it.each([
+    { status: 200, expected: true },
+    { status: 401, expected: false },
+    { status: 403, expected: false },
+    { status: 500, expected: true },
+  ])('classifies uncoded errors with HTTP $status', ({ status, expected }) => {
+    expect(
+      isGraphqlServerFault(
+        new CombinedError({
+          graphQLErrors: [{ message: 'Request failed' }],
+          response: new Response(null, { status }),
+        })
+      )
+    ).toBe(expected);
+  });
+
+  it('is false for transport failures', () => {
+    expect(
+      isGraphqlServerFault(
+        new CombinedError({ networkError: new Error('Offline') })
+      )
+    ).toBe(false);
   });
 });

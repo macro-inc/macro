@@ -25,7 +25,6 @@ impl<
     PromptComposer,
     Egress,
     Lifecycle,
-    Mentions,
     Notifier,
 >
     AgentHarnessService<
@@ -37,7 +36,6 @@ impl<
         PromptComposer,
         Egress,
         Lifecycle,
-        Mentions,
         Notifier,
     >
 where
@@ -49,7 +47,6 @@ where
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
     Lifecycle: AgentSessionLifecyclePublisher,
-    Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
     #[tracing::instrument(skip_all, err, fields(agent.session.id = tracing::field::Empty, agent.harness = tracing::field::Empty, agent.session.warm = warm, agent.session.warm_hit = tracing::field::Empty, agent.session.warm_id_sent = tracing::field::Empty, agent.session.warm_miss_reason = tracing::field::Empty, agent.session.model = tracing::field::Empty, agent.session.source = <&str>::from(request.source), agent.session.visibility = <&str>::from(request.visibility)))]
@@ -217,6 +214,7 @@ where
                 .await;
             if let Some(prompt) = request.prompt {
                 let client = prompt.client;
+                let prompter = prompt.prompter;
                 let (id, action) = prompt.into_action();
                 self.execute(
                     session_id,
@@ -227,6 +225,7 @@ where
                         announce: None,
                         context: None,
                         client,
+                        prompter,
                     }),
                 )
                 .await
@@ -396,6 +395,7 @@ where
         // prompt against any control prompt racing the session's birth.
         if let Some(prompt) = request.prompt {
             let client = prompt.client;
+            let prompter = prompt.prompter;
             let (id, action) = prompt.into_action();
             self.execute_here(
                 session.id,
@@ -406,6 +406,7 @@ where
                     announce: None,
                     context: None,
                     client,
+                    prompter,
                 }),
             )
             .await

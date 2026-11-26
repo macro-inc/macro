@@ -8,9 +8,12 @@ Normalized GraphQL cache with disk-backed persistence for urql. Design doc:
 | Crate | Purpose |
 |---|---|
 | `cache-core` | Pure engine: normalize/denormalize, LRU hot tier, dependency index, durable ordered optimistic-mutation queue, async `Storage` trait |
+| `cache-schema` | Schema metadata derived from the GraphQL SDL (`cache_core::meta`); kept apart so `cache-wasm`'s build script can build the tables without the engine |
 | `cache-turso` | `Storage` over Turso core — browser WASM and Tauri native hosts |
 | `turso-opfs` | Browser OPFS `IO`/`File` adapter for the dedicated Turso engine worker |
 | `cache-wasm` | wasm-bindgen shell combining the engine, Turso storage, and OPFS adapter for browser worker glue (`apps/web/src/lib/graphql-cache/`) |
+| `cache-bench` | Production-size datasets and the native and browser replays that measure the engine; see its `AGENTS.md` |
+| `cache-diff-fuzz` | Differential fuzzer: runs the same seeded operations on two builds of the native host engine and compares responses and durable state (see its `AGENTS.md`) |
 
 The Tauri host lives in the tauri workspace (it needs the patched tauri fork
 pinned there): `apps/web/tauri/graphql_cache_plugin`, path-depending on
@@ -22,11 +25,16 @@ Tauri's Linux desktop stack needs its WebKitGTK/DBus system libraries).
 
 Desktop and mobile keep the cache engine and Turso storage in the native binary.
 The frontend bundle supplies the original `static_assets/schema.graphql` SDL as
-text. Native startup and browser workers pass it to the same Rust
-`Schema::from_sdl` parser, which validates it with `apollo-compiler` and derives
-the cache's internal lookup tables. There is no TypeScript schema generator or
-intermediate JSON asset. Browser workers configure SDL through
-`configureCacheSchema` before opening storage.
+text, and native startup passes it to the Rust `Schema::from_sdl` parser, which
+validates it with `apollo-compiler` and derives the cache's internal lookup
+tables. There is no TypeScript schema generator or intermediate JSON asset.
+
+The browser engine is built together with the web bundle, so `cache-wasm`'s
+`build.rs` runs the same parser when the engine is compiled and embeds the
+resulting tables (postcard). A browser worker decodes them in under a
+millisecond instead of parsing about 270 KB of SDL each time it starts.
+`configureCacheSchema` still installs a different SDL before storage opens, but
+the app's worker does not call it.
 
 Native startup calls `graphql_cache_init_with_schema`. This requires one native
 release; set the OTA bundle's `MIN_NATIVE_BUILD` to the first build containing that
@@ -75,17 +83,50 @@ projections keep their unframed postcard encoding, so a format upgrade never
 re-encodes them.
 
 Only the immediately prior cache format version is migratable
-(`MIGRATABLE_CACHE_FORMAT_VERSIONS`), and only while the storage schema still
-matches. A storage-schema mismatch instead follows physical reset. Opening a
+(`MIGRATABLE_CACHE_FORMAT_VERSIONS`). A native file at an older storage schema
+version is first upgraded when a chain of steps from its version is registered
+([storage upgrades](#storage-upgrades)), and resets otherwise. Opening a
 migratable format drops records, search
 projections, index facts, and calendar ranges — all refetchable — and keeps
 queued mutations, optimistic layers, and their projections, then rewrites the
 namespace in the same transaction. An interrupted migration therefore retries on
-the next open. Native owners then `VACUUM INTO` a fresh file and swap it in, so an
-upgrade also releases the space the dropped records occupied instead of leaving
-free pages in the old file. The browser's physical database name embeds the format
-version, so a browser upgrade starts a new file instead of migrating; the previous
-file is left for any tab still running the older bundle.
+the next open. Native owners then try to `VACUUM INTO` a fresh file and swap it
+in, so an upgrade usually releases the space the dropped records occupied
+instead of leaving free pages in the old file. The browser's physical database
+name embeds the format version, so a browser upgrade starts a new file instead
+of migrating; the previous file is left for any tab still running the older
+bundle.
+
+## Storage upgrades
+
+A native database written at an older `STORAGE_SCHEMA_VERSION` is upgraded in
+place when `cache-turso/src/storage/migration.rs` registers a chain of steps
+from its version to the current one. Each step is frozen SQL that runs in one
+write transaction, which also advances `meta.storage_schema_version`, so a
+stopped upgrade resumes from the last committed step. The last step's
+transaction also runs the frozen-schema checks, so the current version is
+committed only for a file with exactly the tables and indexes a fresh file has;
+a chain that would produce anything else rolls back to the version before its
+last step and resets. Later opens find a fresh file's schema digest and skip
+those checks. The open then runs the queue checks as every reopen does.
+
+Records, queued mutations, optimistic layers and the storage generation stay,
+so an upgrade refetches nothing and loses no queued write; a format migration
+that runs after it (above) still drops the refetchable rows. A file whose
+`meta` names another scope, or a cache format this build cannot carry forward,
+is rejected before any step runs. A version with no chain, a newer version, or
+a failing step resets as before, and so does a file an older build opens after
+a newer one upgraded it. Bumping the version without registering a step fails
+to compile; clearing `STEPS` declares that every older file resets. The
+plugin's `graphql_cache.native.open` span records the version a file came from
+as `graphql_cache.storage.upgraded_from`, and logs an event with it and the
+open's duration inside the init command's `graphql_cache.ipc.receive` span,
+which carries the webview's trace id as `upstream.trace_id`.
+
+Browser database names embed the storage version, so a browser build with a new
+storage version still opens a new database and backfills, leaving the older one
+for any tab still running the older bundle. A browser open never runs a step:
+an older version found under the current name resets, as before steps existed.
 
 ## Network refreshes
 
@@ -248,11 +289,13 @@ entity-only optimism and retain that recovery query for eventual commit/replay.
 
 ## Streaming text search
 
-Text search binds normalized subsequence patterns to Turso queries scoped by
-`(profile, bucket)` through `search_documents_browse_idx`. Every query token must
-match: `abc` becomes `%a%b%c%`, with literal SQL wildcards and escapes quoted in
-the bound value. Rows containing NUL pass the SQL prefilter because SQLite LIKE
-stops at NUL; Rust verifies them without truncation. Searching documents does not
+Text search streams each `(profile, bucket)` through
+`search_documents_browse_idx`, and the adapter drops rows in which some query
+token is not an ordered byte subsequence of `search_text` before decoding the
+rest. A token whose characters occur in order also has its UTF-8 bytes in order,
+so this keeps every row the core accepts. It replaces a SQL `LIKE '%a%b%c%'`
+prefilter that Turso evaluated several times slower per token; contact search,
+which must avoid decoding records, keeps its bound LIKE. Searching documents does not
 read cached email buckets. Empty bucket selection still means every profile bucket.
 The index includes `search_text` and `source_hash` after its existing browse keys,
 so filtering and result reads use an index-only scan without table lookups.
@@ -267,23 +310,23 @@ including deleted and nonmatching replacements. Empty-query browsing retains its
 indexed recent path and cursors. Leading-wildcard matching still scans the selected
 buckets: this bounds application search memory, not search work or database page
 cache memory. The existing SQL telemetry includes streamed processing and cleanup.
-Storage schema 12 introduces this covering index through an intentionally
-incompatible cutover, not a migration. Native `open_or_reset` replaces a schema-11
-cache, including its records, queued mutations, and optimistic layers. Browsers
-open a fresh `s4.v4.t12` database; existing cleanup still keeps older files with
-pending mutations, but the new engine does not replay those queues. Backfill
-restarts against the new storage generation. That index cutover kept the GraphQL
-schema epoch and record format unchanged. Native binaries
-must be rebuilt to gain the new index; an OTA frontend update alone cannot add it.
+Storage schema 12 introduced this covering index. Browsers open a fresh
+`s4.v4.t12` database; existing cleanup still keeps older files with pending
+mutations, but the new engine does not replay those queues, and backfill
+restarts against the new storage generation. Natively, the registered 11 to 12
+step builds the index in place (see [storage upgrades](#storage-upgrades)), so a
+schema-11 cache keeps its records and queued writes. That version kept the
+GraphQL schema epoch and record format unchanged. Native binaries must be
+rebuilt to gain the new index; an OTA frontend update alone cannot add it.
 
-The same unpublished schema-12 cutover now includes `records_contacts_cover_idx`,
-a partial covering index on `records(__typename, id, value)` for `GraphqlContact`.
-Ranked reads explicitly seek this index after the text prefilter instead of also
-fetching the record table. They still decode one row at a time and apply membership,
-exclusions, ranking and DM dedup before limiting. Exact schema validation protects
-the predicate/collation; older local schema-12 shapes without it are incompatible,
-not silently upgraded. No additional format/version cutover or contacts store was
-introduced.
+Schema 12 also includes `records_contacts_cover_idx`, a partial covering index
+on `records(__typename, id, value)` for `GraphqlContact`, which the same step
+builds. Ranked reads explicitly seek this index after the text prefilter instead
+of also fetching the record table. They still decode one row at a time and apply
+membership, exclusions, ranking and DM dedup before limiting. Exact schema
+validation protects the predicate/collation; a pre-release local schema-12 shape
+without it is incompatible, since it already records version 12 and no step
+runs. No contacts store was introduced.
 
 `cargo test -p cache-turso --test search` checks matching/ranking parity, including
 Unicode, escapes, NUL, and late high-ranking matches. Run the ignored 100k-row
@@ -297,7 +340,7 @@ statement reuse, covering-index scans, and borrowed-row decoding against the sam
 fixture adds a legacy non-covering index for comparison with the production
 covering index. Statement reuse has not shown a material benefit and is not
 enabled in production. See [search performance](search-performance.md) for
-measured costs, memory boundaries, and the schema-12 reset behavior.
+measured costs and memory boundaries.
 
 ### Contact projection and page retention
 
@@ -320,7 +363,7 @@ old hydration cannot resurrect verified removals, and old absence evidence canno
 delete a newer positive observation. Unfenced network/optimistic contact writes reject.
 The same backfill then verifies existing membership in bounded raw-key windows using
 the existing exact lookup. Only successful requested-ID omissions permit deletion;
-scan omissions do not. Checkpoint v2 tracks hydration/verification and completes
+scan omissions do not. Checkpoint v2 (v3 while `enable-contact-lists` selects contact lists) tracks hydration/verification and completes
 only after an exhaustive, non-malformed verification pass. Context-only stubs,
 explicit selections and shared name labels do not establish membership. See the
 [contacts plan](../../docs/design/disk-backed-contacts.md) for remaining acceptance.
@@ -331,8 +374,8 @@ explicit selections and shared name labels do not establish membership. See the
 search policy. Begin compares the previous epoch, patches cap at 500 and never
 write public contact identity/name fields, and commit publishes readiness. Full
 snapshot epochs expire omitted old facts without deleting membership records.
-Search uses indexed exact-name/word-prefix/contains stages over the existing
-owned facts, with recent-first ordering and canonical identity ties. Core applies
+Search uses indexed exact-name (full or first name)/word-prefix/contains stages, with people the viewer has messaged first among word-start matches, over the existing
+owned facts and a last stage for address terms (domain or local part), with recent-first ordering and canonical identity ties. Core applies
 membership, secondary-inbox/explicit exclusions and DM deduplication before the
 bounded result window. Generic title search keeps its separate scoring path.
 This uses schema 12 without adding a database or physical table; native/browser
@@ -340,7 +383,8 @@ hosts now expose state/update/search through dedicated commands. Rust-derived
 transport schemas are checked in `src/people/schema.json` and regenerated from
 `apps/web` with `bun run gen-cache-people-schema --rust`. The frontend now publishes
 channel/inbox context under Soup's leader in bounded snapshot/delta batches;
-Quick Access and all migrated personal pickers now preserve policy-5 windows
+Quick Access and all migrated personal pickers now preserve policy-8 windows (policies 5 to 7
+from native desktop, iOS and Android binaries released before it)
 instead of applying the old fuzzy/brevity scores. Empty property browsing pins self;
 recipient mode excludes automated addresses unless explicitly addressed. Interactive
 reads stay local, including partial hydration; unsupported hosts remain unavailable.
@@ -510,6 +554,65 @@ Search Datadog logs for `service:web-app "graphql_cache.slow_query"`:
 Parameters, results, raw SQL, and user identity are not exported. Logging uses
 an anonymous span context. A throwing JS telemetry callback cannot change query
 results. Native hosts are unchanged unless they install their own telemetry sink.
+
+## WAL checkpoints
+
+Every checkpoint changes the WAL's state, and Turso then drops the
+connection's page cache at its next read, so the requests after a copy read
+their pages back from the file. Native hosts keep Turso's own checkpoint,
+which copies the WAL inside the COMMIT that takes it to 1,000 frames, and
+their idle call copies from 500. The browser's connection (turso-opfs) turns
+Turso's checkpoint off, and cache-turso copies the WAL itself, at fewer
+points:
+
+- After a request that can write, the browser engine worker calls
+  `checkpointIfDue` once nothing has run for 100 ms, and cache-turso copies
+  from 4,000 frames (16 MB). Each request that runs re-arms the wait, so the
+  reads a page sends after an open or a write run first. A request that
+  arrives during a copy waits for it, as it waited for the write that used to
+  carry it; a drain cancels a copy not yet started and waits for one under
+  way.
+- A COMMIT that takes the WAL to 10,000 frames (40 MB) copies it right after,
+  as part of that write, so a backfill that never goes quiet still bounds the
+  WAL and what an open after a crash reads back.
+- A healthy close copies the WAL and empties its file.
+
+Each of these is a passive checkpoint followed by a restart checkpoint with
+nothing left to copy. The restart starts the log over and keeps the
+connection's view of it current, so the page cache survives the copy.
+Turso's restart checkpoint alone would start the log over before it syncs the
+database file.
+
+An idle copy that ran is reported as `graphql_cache.wal_checkpoint` with
+`cache.duration_ms`, `cache.count` (frames copied) and `cache.wal_frames` (frames
+in the WAL when it ran; a count below it is a partial copy). A failed copy is
+reported with its error class and retried once the next request has run; it
+leaves the WAL whole and resets the cache only when the error means corruption.
+
+## Slow request telemetry
+
+The engine worker reports each request that answers **1 s or more** after it
+arrived as `graphql_cache.slow_request`, unsampled. A page gives up on a
+request after 10 s; these spans say what held the engine meanwhile. Search
+Datadog spans for `service:web-app resource_name:graphql_cache.slow_request`:
+
+- `cache.request_kind`: the protocol request kind (`read`, `hydrate`, `init`...).
+- `cache.queue_wait_ms`: time queued in the engine worker before it ran.
+- `cache.duration_ms`: time it ran, from start to its answer.
+- `cache.queue_depth`: requests still queued when it started.
+- `cache.outcome`, `cache.error_code`: `success`/`none`, or the error class.
+
+A stall shows as one request with a long `duration_ms` and the requests behind
+it with long `queue_wait_ms`.
+
+Only requests that reach the engine worker's queue are covered. Two waits are
+not in `queue_wait_ms`:
+
+- A message that arrives while the engine is inside a wasm call is stamped only
+  when that call returns; the wait shows in the running request's
+  `duration_ms`.
+- Time the coordinator holds a request before any engine has it (owner
+  handoff, a parked or draining engine) is not reported here.
 
 ## Key policy
 

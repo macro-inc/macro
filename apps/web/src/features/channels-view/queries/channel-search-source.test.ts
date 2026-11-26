@@ -1,6 +1,10 @@
 import type { ChannelEntity } from '@entity/types/entity';
+import type { DirectoryChannel } from '@queries/channel/directory-core';
+import {
+  directoryChannel,
+  directoryParticipant,
+} from '@queries/channel/tests/directory-channel';
 import type { useSearchSoupQuery } from '@queries/soup/search';
-import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import { type Accessor, createRoot, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -18,10 +22,11 @@ vi.mock('@queries/channel/by-ids', () => ({
   useCachedChannelsByIds: () => ({ channels: () => hydratedSearch.channels() }),
 }));
 const channelList = vi.hoisted(() => ({
-  channels: (): ApiChannelWithLatest[] => [],
+  channels: (): DirectoryChannel[] => [],
 }));
 vi.mock('@core/context/channels', () => ({
-  useChannelsContext: () => ({ channels: () => channelList.channels() }),
+  useChannelDirectory: () => ({ channels: () => channelList.channels() }),
+  useChannel: () => () => undefined,
 }));
 vi.mock('@queries/soup/search', () => ({
   useSearchSoupQuery: queryMock,
@@ -47,74 +52,35 @@ const channel = (id: string, name: string, direct = false): ChannelEntity => ({
 });
 const localChannel = channel('channel', 'Alpha channel');
 const localDm = channel('dm', 'Alpha person', true);
-const supportChannel: ApiChannelWithLatest = {
-  id: 'support-acme',
+const CREATED = '2026-01-01T00:00:00Z';
+const member = (userId: string, role: 'owner' | 'member') =>
+  directoryParticipant(userId, { role, joinedAt: CREATED });
+const supportChannel = directoryChannel('support-acme', {
   name: 'Macro Support x Acme',
-  channel_type: 'private',
-  owner_id: 'viewer',
-  created_at: '2026-01-01T00:00:00Z',
-  updated_at: '2026-01-01T00:00:00Z',
-  auto_join_team: false,
-  is_participant: true,
-  participants: [
-    {
-      channel_id: 'support-acme',
-      user_id: 'viewer',
-      role: 'owner',
-      joined_at: '2026-01-01T00:00:00Z',
-    },
-    {
-      channel_id: 'support-acme',
-      user_id: 'acme-admin',
-      role: 'member',
-      joined_at: '2026-01-01T00:00:00Z',
-    },
-  ],
-};
+  channelType: 'private',
+  ownerId: 'viewer',
+  createdAt: CREATED,
+  updatedAt: CREATED,
+  participants: [member('viewer', 'owner'), member('acme-admin', 'member')],
+});
 // The list names a DM after the other participant and an agent DM after its persona.
-const personDm: ApiChannelWithLatest = {
-  id: 'dm-ada',
+const personDm = directoryChannel('dm-ada', {
   name: 'Ada Acme',
-  channel_type: 'direct_message',
-  owner_id: 'viewer',
-  created_at: '2026-01-01T00:00:00Z',
-  updated_at: '2026-01-01T00:00:00Z',
-  auto_join_team: false,
-  is_participant: true,
-  participants: [
-    {
-      channel_id: 'dm-ada',
-      user_id: 'viewer',
-      role: 'owner',
-      joined_at: '2026-01-01T00:00:00Z',
-    },
-    {
-      channel_id: 'dm-ada',
-      user_id: 'ada',
-      role: 'member',
-      joined_at: '2026-01-01T00:00:00Z',
-    },
-  ],
-};
-const personaDm: ApiChannelWithLatest = {
-  id: 'agent-dm',
+  channelType: 'direct_message',
+  ownerId: 'viewer',
+  createdAt: CREATED,
+  updatedAt: CREATED,
+  participants: [member('viewer', 'owner'), member('ada', 'member')],
+});
+const personaDm = directoryChannel('agent-dm', {
   name: 'Archivist',
-  channel_type: 'direct_message',
-  owner_id: 'viewer',
-  created_at: '2026-01-01T00:00:00Z',
-  updated_at: '2026-01-01T00:00:00Z',
-  auto_join_team: false,
-  is_participant: true,
-  agent_dm: { bot_id: 'archivist', name: 'Archivist' },
-  participants: [
-    {
-      channel_id: 'agent-dm',
-      user_id: 'viewer',
-      role: 'owner',
-      joined_at: '2026-01-01T00:00:00Z',
-    },
-  ],
-};
+  channelType: 'direct_message',
+  ownerId: 'viewer',
+  createdAt: CREATED,
+  updatedAt: CREATED,
+  agentDm: { botId: 'archivist', name: 'Archivist', avatarUrl: null },
+  participants: [member('viewer', 'owner')],
+});
 let dispose: (() => void) | undefined;
 
 function setup(
@@ -247,7 +213,7 @@ describe('shared channel search source', () => {
   });
 
   it('finds conversations beyond the loaded page in the complete channel list as it loads', async () => {
-    const [list, setList] = createSignal<ApiChannelWithLatest[]>([]);
+    const [list, setList] = createSignal<DirectoryChannel[]>([]);
     channelList.channels = list;
     const s = setup('acme', 'search', useChannelListSearchPool);
     await vi.advanceTimersByTimeAsync(300);

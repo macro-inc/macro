@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { TEST_AUTHORITY_GENERATION, testAuthority } from '../authority-fixture';
 import {
   type CacheRequest,
   INITIAL_CACHE_REVISION,
@@ -9,7 +10,7 @@ import type {
   CacheCoordinatorPageAdapterOptions,
   PageAdapterDisposeOptions,
 } from '../worker/coordinator-page-adapter';
-import { CacheBootstrapExhaustedError } from '../worker/startup';
+import { CacheHostFailedError } from './errors';
 import { CacheNavigationError } from './navigation-error';
 
 const adapterFactory = vi.hoisted(() => vi.fn());
@@ -36,7 +37,13 @@ class RegistrationAdapter {
         data: {
           id: request.id,
           ok: true,
-          result: request.kind === 'init' ? null : INITIAL_CACHE_REVISION,
+          authorityGeneration: TEST_AUTHORITY_GENERATION,
+          result:
+            request.kind === 'current-authority'
+              ? testAuthority(request.identity)
+              : request.kind === 'init'
+                ? null
+                : INITIAL_CACHE_REVISION,
         },
       })
     );
@@ -121,6 +128,7 @@ describe('coordinator registration retry', () => {
     expect(adapters[0].requests).toEqual([]);
     expect(adapters[1].requests.map(({ kind }) => kind)).toEqual([
       'init',
+      'current-authority',
       'current-revision',
     ]);
     expect(adapters.every((adapter) => adapter.options.scope === scope)).toBe(
@@ -141,6 +149,7 @@ describe('coordinator registration retry', () => {
   it('spaces both retries and exhausts once without admitting or replaying a mutation', async () => {
     const mutation = host.enqueueOptimisticMutation(
       {
+        generation: TEST_AUTHORITY_GENERATION,
         uuid: '00000000-0000-4000-8000-000000000100',
         query: 'mutation Update { update }',
         data: { update: true },
@@ -161,13 +170,12 @@ describe('coordinator registration retry', () => {
     expect(adapters).toHaveLength(2);
     await vi.advanceTimersByTimeAsync(1);
     expect(adapters).toHaveLength(3);
-    await expect(outcomes).resolves.toEqual([loadFailure, loadFailure]);
-    expect(onInitializationError).toHaveBeenCalledExactlyOnceWith(loadFailure);
-    expect(onInitializationError.mock.calls[0][0]).not.toBeInstanceOf(
-      CacheBootstrapExhaustedError
-    );
+    // Typed, so that the page builds another host later.
+    const failure = new CacheHostFailedError(loadFailure);
+    await expect(outcomes).resolves.toEqual([failure, failure]);
+    expect(onInitializationError).toHaveBeenCalledExactlyOnceWith(failure);
     expect(adapters.flatMap((adapter) => adapter.requests)).toEqual([]);
-    await expect(host.currentRevision()).rejects.toBe(loadFailure);
+    await expect(host.currentRevision()).rejects.toEqual(failure);
     await vi.advanceTimersByTimeAsync(1_000);
     expect(adapters).toHaveLength(3);
     expect(localStorage.getItem('graphql-cache:scope')).toBe(scope);
@@ -192,7 +200,7 @@ describe('coordinator registration retry', () => {
       host.dispose();
       await expect(outcome).resolves.toEqual(
         expect.objectContaining({
-          message: 'cache worker host was disposed during startup',
+          errorCode: 'host-disposed',
         })
       );
       await vi.advanceTimersByTimeAsync(1_000);
@@ -239,7 +247,7 @@ describe('coordinator registration retry', () => {
     host.dispose();
     await expect(outcome).resolves.toEqual(
       expect.objectContaining({
-        message: 'cache worker host was disposed during startup',
+        errorCode: 'host-disposed',
       })
     );
     await vi.advanceTimersByTimeAsync(1_000);

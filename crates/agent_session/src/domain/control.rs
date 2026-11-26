@@ -21,6 +21,16 @@ pub enum ControlPrincipal {
 }
 
 impl ControlPrincipal {
+    /// Whose words a prompt from this principal are: a program's, or a
+    /// person's (a runtime forwards a person's).
+    #[must_use]
+    pub fn prompter(&self) -> super::model::PrompterKind {
+        match self {
+            Self::Program => super::model::PrompterKind::Program,
+            Self::User | Self::Runtime(_) => super::model::PrompterKind::User,
+        }
+    }
+
     /// The app tab a prompt from this principal is recorded against.
     ///
     /// Only the person typing in a tab may name it: a runtime forwarding a
@@ -56,8 +66,10 @@ impl ControlEvent {
         principal: ControlPrincipal,
         access: EntityAccessReceipt<EditAccessLevel>,
     ) -> Result<Self> {
-        // Notification metadata is authored inside the harness, never by API callers.
-        if matches!(&action, AgentAction::Prompt(prompt) if prompt.notifications.is_some()) {
+        // Notification metadata, and a prompt's withholding of its content from
+        // traces, are authored inside the harness, never by API callers.
+        if matches!(&action, AgentAction::Prompt(prompt) if prompt.notifications.is_some() || prompt.withhold_content)
+        {
             return Err(AgentSessionError::Forbidden);
         }
 
@@ -71,6 +83,7 @@ impl ControlEvent {
         }
 
         let client = principal.admit_client(client)?;
+        let prompter = principal.prompter();
         let actor = match principal {
             ControlPrincipal::User | ControlPrincipal::Program if context.is_some() => {
                 return Err(AgentSessionError::Forbidden);
@@ -89,6 +102,7 @@ impl ControlEvent {
             actor,
             context,
             client,
+            prompter,
         })
     }
 }

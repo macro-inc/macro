@@ -1,0 +1,119 @@
+{
+  "planted": [
+    {
+      "id": "p1",
+      "what": "Q4 goal G5 (start SOC 2 Type II, sign an auditor by Nov 30) has owner TBD and no task; the leadership sync deferred it; the data room's 07 Confirmatory item 'Evidence of SOC 2 Type II audit engagement' has no owner, and Northmoor wants it by Nov 13.",
+      "evidence": [
+        "document:q4-plan",
+        "document:data-room",
+        "call:leadership-sync",
+        "channel:customers",
+        "inbox subject: Confirmatory diligence — final list"
+      ],
+      "ideal_suggestion": "Make a task with an owner to pick between the Halden & Pryce ($41k) and Cobalt ($36.5k) SOC 2 Type II quotes and sign the engagement letter this week, so the evidence can go into the 07 Confirmatory folder by Nov 13."
+    },
+    {
+      "id": "p2",
+      "what": "The 2027 Operating Plan doc is half-finished (headcount by quarter, burn, next raise and Series A impact are all TODO). That blocks Raj's requested board slide, Theo's data-room request and Sofia's runway number. Priya told Sofia 'tonight' and never followed up.",
+      "evidence": [
+        "document:plan-2027",
+        "document:data-room",
+        "task:board-ceo-slides",
+        "channel:dm-priya-sofia",
+        "inbox subject: Re: Board meeting agenda draft"
+      ],
+      "ideal_suggestion": "Fill in the 2027 plan's headcount-by-quarter table (using the hiring plan doc) today, so Sofia can finish burn and runway before the deck goes to Ben and before the plan is uploaded to the data room."
+    },
+    {
+      "id": "p3",
+      "what": "People keep asking security and compliance questions in #customers and pinging engineering (NDA template, backup encryption, Type II status, pen test date, SAML attributes, SCIM, EU residency). Almost all of them are answered in the Security & compliance answers doc, and Marcus asks for this to stop going through engineering.",
+      "evidence": [
+        "channel:customers",
+        "channel:eng",
+        "document:security-faq",
+        "document:leadership-notes"
+      ],
+      "ideal_suggestion": "Set up a security-questions agent in #customers that answers from the Security & compliance answers doc, and flags questions the doc can't answer (SCIM date, new pen test) to Dmitri so the doc gets updated."
+    },
+    {
+      "id": "p4",
+      "what": "The Customer commitments tracker was last updated Oct 12 and is wrong: K&M SSO is now committed for Nov 20, not Q1; Ortega permissions moved to Nov 16; the Ortega weekly report, Brightwater alert routing and Tidepool BAA aren't listed. The process requires updates within 24h, and Hannah's promise to update it in the health review didn't happen.",
+      "evidence": [
+        "document:commitments-tracker",
+        "document:escalation-process",
+        "call:customer-health",
+        "task:kessler-sso",
+        "task:ortega-permissions",
+        "task:brightwater-alert-routing"
+      ],
+      "ideal_suggestion": "Replace the stale commitments doc with a maintained database of customer commitments (customer, promise, owner, due date, status) that is updated from call recaps and tasks, starting with the six open commitments."
+    },
+    {
+      "id": "p5",
+      "what": "The spend doc shows overlapping or unused tools: Huddle ($175/mo, 14 seats, only #eng still uses it, 2 seats belong to people who left) duplicates Macro channels; Minutely ($150/mo) duplicates Callwise and only Priya has used it since July; Figwork has 9 editor seats ($1,080/mo) with 4 active, and it renews Nov 21.",
+      "evidence": [
+        "document:saas-spend",
+        "channel:eng"
+      ],
+      "ideal_suggestion": "Before Nov 21, cut Figwork to 5 seats (4 active plus Maya), move #eng off Huddle and cancel it, and don't renew Minutely in January, which saves about $1,000/month."
+    },
+    {
+      "id": "p6",
+      "what": "Tidepool has used more than 90% of its contracted 40k lines for three months running (37.1k, 38.0k, 38.6k), and its January clinic rollout adds about 15k lines a month. The pricing policy says to move the account up a tier. Priya promised to call Samuel and Sofia to draft the amendment, and neither happened.",
+      "evidence": [
+        "document:pricing",
+        "call:customer-health",
+        "call:leadership-sync",
+        "channel:customers"
+      ],
+      "ideal_suggestion": "Call Samuel about moving Tidepool to about 60k contracted lines before the January clinic rollout (about +$31k ARR at $0.13/line), and have Sofia draft the amendment."
+    },
+    {
+      "id": "p7",
+      "what": "Duplicate effort: Hannah is building the Ortega weekly unmatched-lines-by-region report in Chartbay (in-progress task), and Dmitri is separately building a cron email that does the same thing from the recon DB. Neither knows about the other's work.",
+      "evidence": [
+        "task:ortega-weekly-report",
+        "channel:customers",
+        "channel:eng"
+      ],
+      "ideal_suggestion": "Tell Hannah and Dmitri they are both building the Ortega weekly unmatched report and have them agree on one owner (probably Dmitri's version, which uses the LUM-447 regions), or replace both with a scheduled routine."
+    },
+    {
+      "id": "p8",
+      "what": "On the Nov 2 leadership sync, Sofia committed to buying 1-year RDS reservations (about $1,400/mo saved) and setting a Pipewell credit quota by Friday. The spend doc still shows on-demand RDS and no quota, and no task exists.",
+      "evidence": [
+        "call:leadership-sync",
+        "document:saas-spend",
+        "document:leadership-notes"
+      ],
+      "ideal_suggestion": "Remind Sofia about the RDS reservation purchase and the Pipewell 2,000-credit quota she committed to on Nov 2, or make a task for it, since October AWS came in $1.5k over budget."
+    },
+    {
+      "id": "p9",
+      "what": "Hannah committed on the leadership sync to write the churned-logo reasons by Thursday, Nov 5, for the data room. The data room checklist still says 'Not started' and no doc or task exists. Theo will ask during confirmatory diligence.",
+      "evidence": [
+        "call:leadership-sync",
+        "document:data-room",
+        "document:leadership-notes"
+      ],
+      "ideal_suggestion": "Ask Hannah for the five churned-logo write-ups she promised for Nov 5 (or draft them from her notes) so Sofia can upload them to 03 Customers before definitive docs start."
+    }
+  ],
+  "decoys": [
+    {
+      "id": "d1",
+      "what": "Tidepool security questionnaire (Trackline says it's at risk and unassigned)",
+      "why_stale": "The task is completed. Dmitri sent 214/214 answers on Nov 5 (#eng)."
+    },
+    {
+      "id": "d2",
+      "what": "Make Maya Okonkwo an offer before her Nov 4 competing deadline",
+      "why_stale": "Maya accepted on Nov 3 and starts Nov 30 (maya-offer task completed, #general, hiring plan doc)."
+    },
+    {
+      "id": "d3",
+      "what": "Kessler & Moore's card payment failed; switch them to ACH and resend the invoice",
+      "why_stale": "Sofia moved K&M to ACH, re-sent the invoice Nov 3, and it was paid Nov 5 (#customers)."
+    }
+  ]
+}

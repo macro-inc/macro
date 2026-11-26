@@ -497,6 +497,7 @@ struct PostedRequest {
     attachments: Vec<messages::domain::models::NewAttachment>,
     nonce: Option<String>,
     triggered_by: Option<String>,
+    notification_policy: messages::domain::models::PostMessageNotificationPolicy,
 }
 
 #[derive(Debug, Clone)]
@@ -565,6 +566,7 @@ impl messages::domain::api::MessageCommands for TestChannelPoster {
                     attachments: input.attachments.clone(),
                     nonce: input.nonce.clone(),
                     triggered_by: triggered_by.clone(),
+                    notification_policy: input.notification_policy,
                 },
             });
         match self.mode {
@@ -932,6 +934,32 @@ async fn channel_webhook_router_admin_can_create_scoped_bot() {
 }
 
 #[tokio::test]
+async fn an_agents_program_cannot_create_a_scoped_bot_with_its_token() {
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let service = TestBotService::for_create(scoped_bot_response(bot_id));
+    let channel_id = Uuid::new_v4();
+    let request = Request::builder()
+        .method("POST")
+        .uri(format!("/channels/{channel_id}/bots/scoped"))
+        .header("content-type", "application/json")
+        .header(macro_authorization::CODE_EXECUTION_HEADER, "1")
+        .body(scoped_bot_request_body())
+        .unwrap();
+
+    let response = router(
+        service.clone(),
+        TestChannelPoster::new(),
+        EntityParticipantRole::Admin,
+    )
+    .oneshot(request)
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(service.create_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
 async fn channel_webhook_router_preferred_token_posts_as_bot() {
     let channel_id = Uuid::new_v4();
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());
@@ -972,6 +1000,105 @@ async fn channel_webhook_router_preferred_token_posts_as_bot() {
     assert_eq!(call.channel_id, channel_id);
     assert_eq!(call.req.content, "hello preferred");
     assert!(call.req.triggered_by.is_none());
+    assert_eq!(
+        call.req.notification_policy,
+        messages::domain::models::PostMessageNotificationPolicy::Default
+    );
+}
+
+#[tokio::test]
+async fn channel_webhook_router_posts_a_silent_message_silently() {
+    let channel_id = Uuid::new_v4();
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let token = "mbot_test_silent";
+    let service = TestBotService::for_preferred_webhook(channel_id, bot_id);
+    let poster = TestChannelPoster::new();
+    let authorizer = TestBotAuthorizer::authorized(token, None, bot_authentication(bot_id));
+    let request = webhook_request(channel_id)
+        .header(BOT_TOKEN_HEADER, token)
+        .header(BOT_SCOPE_HEADER, BotScope::User.as_str())
+        .body(Body::from(
+            serde_json::json!({ "content": "nightly sync done", "notification_policy": "Silent" })
+                .to_string(),
+        ))
+        .unwrap();
+
+    let response = webhook_router_with_authorizer(service, poster.clone(), authorizer)
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let calls = poster.calls.lock().expect("posted message mutex poisoned");
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].req.content, "nightly sync done");
+    assert_eq!(
+        calls[0].req.notification_policy,
+        messages::domain::models::PostMessageNotificationPolicy::Silent
+    );
+}
+
+#[tokio::test]
+async fn channel_webhook_router_refuses_an_unknown_notification_policy() {
+    let channel_id = Uuid::new_v4();
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let token = "mbot_test_bad_policy";
+    let service = TestBotService::for_preferred_webhook(channel_id, bot_id);
+    let poster = TestChannelPoster::new();
+    let authorizer = TestBotAuthorizer::authorized(token, None, bot_authentication(bot_id));
+    let request = webhook_request(channel_id)
+        .header(BOT_TOKEN_HEADER, token)
+        .header(BOT_SCOPE_HEADER, BotScope::User.as_str())
+        .body(Body::from(
+            serde_json::json!({ "content": "nightly sync done", "notification_policy": "silent" })
+                .to_string(),
+        ))
+        .unwrap();
+
+    let response = webhook_router_with_authorizer(service, poster.clone(), authorizer)
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert!(
+        poster
+            .calls
+            .lock()
+            .expect("posted message mutex poisoned")
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn channel_webhook_router_refuses_malformed_json_that_names_a_policy() {
+    let channel_id = Uuid::new_v4();
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let token = "mbot_test_malformed_policy";
+    let service = TestBotService::for_preferred_webhook(channel_id, bot_id);
+    let poster = TestChannelPoster::new();
+    let authorizer = TestBotAuthorizer::authorized(token, None, bot_authentication(bot_id));
+    let request = webhook_request(channel_id)
+        .header(BOT_TOKEN_HEADER, token)
+        .header(BOT_SCOPE_HEADER, BotScope::User.as_str())
+        .body(Body::from(
+            r#"{"content":"nightly sync done","notification_policy":"Silent",}"#,
+        ))
+        .unwrap();
+
+    let response = webhook_router_with_authorizer(service, poster.clone(), authorizer)
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert!(
+        poster
+            .calls
+            .lock()
+            .expect("posted message mutex poisoned")
+            .is_empty()
+    );
 }
 
 #[tokio::test]
@@ -1103,7 +1230,7 @@ async fn channel_webhook_router_bot_token_and_user_are_ambiguous_without_posting
         .await
         .unwrap();
     let error: ErrorResponse = serde_json::from_slice(&body).unwrap();
-    assert_eq!(error.message, "ambiguous credentials");
+    assert_eq!(error.message, "conflicting_credentials");
     assert_eq!(authorizer.call_count(), 0);
     assert_eq!(service.auth_calls.load(Ordering::SeqCst), 0);
     assert_eq!(service.membership_calls.load(Ordering::SeqCst), 0);

@@ -2,6 +2,7 @@ import type { ListController, ListScrollHandle } from '@app/components/list';
 import type { ChannelPreviewSelection } from '@app/features/next-soup/utils';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import type { ChannelEntity } from '@entity';
+import type { ChannelNotificationSettingsState } from '@notifications/primitives/create-channel-notification-settings';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import type { ChannelLabelRule } from '@service-storage/generated/schemas/channelLabelRule';
 import type { ChannelLabelScopeSelection } from '@service-storage/generated/schemas/channelLabelScopeSelection';
@@ -210,6 +211,8 @@ export type ChannelsRailContext = {
   muteSection: (section: ChannelSectionKey, muted: boolean) => Promise<void>;
   snoozeSection: (section: ChannelSectionKey, until?: Date) => Promise<void>;
   sectionNotificationsDisabled: (section: ChannelSectionKey) => boolean;
+  /** The viewer's channel and section notification settings, as ingress applies them. */
+  channelNotifications: ChannelNotificationSettingsState;
   sortBy: (group: ChannelsSortGroup) => ChannelListSort;
   setSortBy: (group: ChannelsSortGroup, sort: ChannelListSort) => void;
   sectionPreferences: (section: ChannelSectionKey) => ChannelSectionPreferences;

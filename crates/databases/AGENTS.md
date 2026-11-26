@@ -12,8 +12,21 @@ service with Axum, agent-tool and Postgres adapters.
   `databases`/`database_entities` storage-vs-app-entity split, and a review map
   of every module.
 - `src/domain/service.rs` + `src/domain/ports.rs`: orchestration and the ports
-  adapters implement.
+  adapters implement. `DatabaseLifecycleReads` exposes only existence/trash
+  facts to trusted backend hosts, independently of viewer permissions.
 - `src/domain/models.rs`: `Database`, `DatabaseStorage`, typed ops/results.
+- `src/domain/service/project_creation.rs`: `DatabasesProjectService::create_database_in_project`
+  takes a caller-reserved database id and creates atomically inside an owner-access project. Import sharing is reviewed
+  per database: this API deliberately grants only its owner and does not inherit
+  folder grants; apply the reviewed database sharing separately. Ordinary moves
+  retain their existing grant-inheritance behavior. `create_database_with_id`
+  supports the same resumable owner-only create at top level; replays require
+  the same owner and filing and never revive trash. Reserved creations also
+  derive starter table/title-column identities with `FirstTableIds::for_database`;
+  retries resolve those exact ids rather than selecting the first table. A folder's link-only default
+  grants neither an owner-only filed database nor an owner-only document access;
+  `project_team_link_access_to_filed_databases_and_documents` exercises this.
+
 - `set_appearance` updates `database_entities` presentation under Edit access, preserving content dates and committing history-only activity in the same transaction.
 
 ## Scope
@@ -56,6 +69,11 @@ service with Axum, agent-tool and Postgres adapters.
 
 ## Gotchas
 
+- `DatabaseStorageTransactions::apply_storage_ops_in` plans a storage batch
+  from committed state and writes it in a consumer's own transaction, with the
+  usual locks, versions and journal (the CRM merge moves pipeline cells this
+  way). Any error may leave part of the batch in that transaction, so the
+  caller rolls back; only a moved schema, checked before any write, replans.
 - `POST /databases` and `POST /databases/{id}/duplicate` attribute the
   creation to the SDK token's `agent_id` (code mode, `agent_attribution`), like
   the native tool, so channel delivery shares a database an agent makes; access
@@ -91,3 +109,5 @@ service with Axum, agent-tool and Postgres adapters.
 
 - Skill: `database-core` · Rules: `.agents/rules/rust/db.md`,
   `.agents/rules/rust/architecture.md`
+
+- Creating a database webhook (`POST /databases/{id}/webhooks`, `crates/database_webhooks`) refuses an agent's program or a bot (403): its URL is a lasting secret that writes rows as its creator.

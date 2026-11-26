@@ -24,8 +24,8 @@ for file in release-artifacts/*; do
   fi
 done
 
-# A dedicated prerelease hosts only the mutable pointer. It never becomes the
-# public download page's latest release, nor follows SDK/daemon release tags.
+# A dedicated prerelease hosts the mutable pointers: the update feed and, from the next step,
+# the fixed-name installers. It never becomes the latest release, nor follows SDK/daemon tags.
 if gh release view desktop-stable --repo "$RELEASE_REPOSITORY" --json assets > "$work_dir/channel.json"; then
   if jq -e '.assets | any(.name == "latest.json")' "$work_dir/channel.json" >/dev/null; then
     gh release download desktop-stable --repo "$RELEASE_REPOSITORY" --pattern latest.json --dir "$work_dir"
@@ -35,19 +35,30 @@ if gh release view desktop-stable --repo "$RELEASE_REPOSITORY" --json assets > "
     if [ "$result" -eq 2 ]; then
       candidate_version=$(jq -er '.version' release-artifacts/latest.json)
       current_version=$(jq -er '.version' "$work_dir/latest.json")
-      if [ "$candidate_version" = "$current_version" ]; then
-        if ! cmp -s release-artifacts/latest.json "$work_dir/latest.json"; then
-          echo "Desktop update feed already has version $candidate_version with different content" >&2
-          exit 1
-        fi
+      if [ "$candidate_version" != "$current_version" ]; then
+        echo "A newer desktop release is already promoted."
+        exit 0
+      fi
+      if cmp -s release-artifacts/latest.json "$work_dir/latest.json"; then
         # A previous attempt may have uploaded the feed but failed before
         # marking the versioned release as the latest download.
         gh release edit "$RELEASE_TAG" --repo "$RELEASE_REPOSITORY" --latest
         echo "Desktop release already promoted."
-      else
-        echo "A newer desktop release is already promoted."
+        exit 0
       fi
-      exit 0
+      # A rerun of an optional build that failed (the Intel Mac or Windows app) adds its
+      # platform to the feed this version already published. Allow only that:
+      # every platform already listed, and everything else, must be unchanged.
+      if ! jq -en --slurpfile new release-artifacts/latest.json --slurpfile old "$work_dir/latest.json" '
+          $new[0] as $n | $old[0] as $o
+          | ($n | del(.platforms)) == ($o | del(.platforms))
+            and ($o.platforms | to_entries | all(. as $e | $n.platforms[$e.key] == $e.value))
+            and ($n.platforms | length) > ($o.platforms | length)' >/dev/null; then
+        echo "Desktop update feed already has version $candidate_version with different content" >&2
+        exit 1
+      fi
+      echo "Adding platforms to the promoted feed of version $candidate_version."
+      result=0
     fi
     [ "$result" -eq 0 ] || exit "$result"
   fi
@@ -62,7 +73,7 @@ else
   release_commit=$(git rev-parse --verify 'HEAD^{commit}')
   gh release create desktop-stable --repo "$RELEASE_REPOSITORY" --target "$release_commit" \
     --prerelease --latest=false --title "Desktop stable update feed" \
-    --notes "Update metadata only. Download installers from a versioned desktop release."
+    --notes "Update feed and the current desktop installers. Download Macro at https://macro.com/download."
 fi
 gh release upload desktop-stable release-artifacts/latest.json --repo "$RELEASE_REPOSITORY" --clobber
 gh release edit "$RELEASE_TAG" --repo "$RELEASE_REPOSITORY" --latest

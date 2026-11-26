@@ -1,8 +1,9 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { ProgressChip } from '@core/component/LexicalMarkdown/component/status/Progress';
-import { enableProjects } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { buildTaskProjectDefaultProperty } from '@entity/extractors-property';
+import {
+  buildStartDateDefaultProperty,
+  buildTaskProjectDefaultProperty,
+} from '@entity/extractors-property';
 import { AddPropertyButton } from '@property/component/AddPropertyButton';
 import { Modals } from '@property/component/modal';
 import {
@@ -14,10 +15,24 @@ import {
   type PropertySaveHandler,
 } from '@property/context/PropertiesContext';
 import { resolvePinnedPropertyIds } from '@property/core/pinned-property-ids';
+import { startDueEditorFor } from '@property/editors/popover/start-due-editor-for';
 import { useEntityProperties } from '@property/hooks';
+import { useStartDateEnabled } from '@property/hooks/useStartDateEnabled';
 import { InlineFetchedEntityTagsPill } from '@property/tags';
-import type { Property, PropertyApiValues } from '@property/types';
+import type {
+  DateProperty,
+  Property,
+  PropertyApiValues,
+} from '@property/types';
+import { isDateProperty } from '@property/utils';
+import {
+  type DateField,
+  dateFieldOf,
+  formatStartDue,
+  startDueOf,
+} from '@property/utils/start-due';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
+import { isTemporaryGraphqlProperty } from '@queries/properties/graphql-optimistic';
 import { useTagsQuery } from '@queries/properties/tags';
 import { Key } from '@solid-primitives/keyed';
 import {
@@ -26,6 +41,7 @@ import {
   createSignal,
   Show,
   Suspense,
+  untrack,
 } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { createPinnedProperties } from '../primitives/create-pinned-properties';
@@ -45,13 +61,9 @@ export function InlineTaskProperties() {
 
   const { properties, refetch, addProperty, removeProperty } =
     useEntityProperties(blockId, entityType, false);
-  const projects = useFeatureFlag(enableProjects);
   const defaultDefinitionIds = () =>
     documentKind === 'task'
-      ? [
-          ...getDefaultPinnedProperties('task'),
-          ...(projects().enabled ? [SYSTEM_PROPERTY_IDS.PROJECT] : []),
-        ]
+      ? [...getDefaultPinnedProperties('task'), SYSTEM_PROPERTY_IDS.PROJECT]
       : [];
   const pins = createPinnedProperties(
     () => state.editor.md.editor,
@@ -60,7 +72,6 @@ export function InlineTaskProperties() {
   const titleProperties = () => {
     const fetched = properties();
     return documentKind === 'task' &&
-      projects().enabled &&
       !fetched.some(
         (property) =>
           property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT
@@ -99,6 +110,8 @@ export function InlineTaskProperties() {
     if (pendingPins().size === 0 || !state.editor.md.editor) return;
     for (const property of properties()) {
       if (!pendingPins().has(property.propertyDefinitionId)) continue;
+      // A value saved straight after the add shows with a temporary id first.
+      if (isTemporaryGraphqlProperty(property.propertyId)) continue;
       pins.pin(property.propertyId, titleProperties());
       clearPendingPin(property.propertyDefinitionId);
     }
@@ -110,12 +123,8 @@ export function InlineTaskProperties() {
       (property) =>
         selected.includes(property.propertyId) &&
         !property.isMetadata &&
-        !tagDefinitionIds().has(property.propertyDefinitionId) &&
-        !(
-          documentKind === 'task' &&
-          !projects().enabled &&
-          property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT
-        )
+        property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.TIME_LOGGED &&
+        !tagDefinitionIds().has(property.propertyDefinitionId)
     );
     if (documentKind !== 'task') return visible;
     const order: readonly string[] = [
@@ -154,6 +163,88 @@ export function InlineTaskProperties() {
       saveOne(property, { valueType: 'DATE', value: date }),
   };
 
+  // A task's start and due dates share one picker, and the due date's pill
+  // reads as their range once a start is set.
+  const startDateEnabled = useStartDateEnabled();
+  // While Unlink saves, both dates read as cleared, so the pill steps from the
+  // range straight to empty; a failed save drops this and the dates return.
+  const [unlinkingDates, setUnlinkingDates] = createSignal(false);
+  const shownDate = <T extends Property>(property: T): T =>
+    unlinkingDates() &&
+    isDateProperty(property) &&
+    dateFieldOf(property.propertyDefinitionId)
+      ? { ...property, value: null }
+      : property;
+  const dateEnd = (field: DateField): DateProperty | undefined => {
+    const definitionId =
+      field === 'start'
+        ? SYSTEM_PROPERTY_IDS.START_DATE
+        : SYSTEM_PROPERTY_IDS.DUE_DATE;
+    const property =
+      titleProperties().find(
+        (candidate) => candidate.propertyDefinitionId === definitionId
+      ) ?? (field === 'start' ? buildStartDateDefaultProperty() : undefined);
+    return property && isDateProperty(property)
+      ? shownDate(property)
+      : undefined;
+  };
+  const datesText = (property: Property) => {
+    if (
+      documentKind !== 'task' ||
+      !startDateEnabled() ||
+      property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.DUE_DATE
+    ) {
+      return undefined;
+    }
+    return formatStartDue(startDueOf(dateEnd('start'), property));
+  };
+  // Unlink on the dates pill clears what it shows: both ends, as Clear both.
+  const datesUnlink = (property: Property) => {
+    if (
+      documentKind !== 'task' ||
+      !startDateEnabled() ||
+      property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.DUE_DATE
+    ) {
+      return undefined;
+    }
+    const setEnds = () =>
+      (['start', 'due'] as const)
+        .map(dateEnd)
+        .filter(
+          (end): end is DateProperty =>
+            !!end && !end.propertyId.startsWith('pending:') && end.value != null
+        );
+    return {
+      available: () => setEnds().length > 0,
+      clear: async () => {
+        const ends = setEnds();
+        setUnlinkingDates(true);
+        try {
+          await saveMutation.mutateAsync({
+            properties: ends.map((end) => ({
+              entityId: blockId,
+              entityType,
+              property: end,
+              apiValues: { valueType: 'DATE' as const, value: null },
+            })),
+          });
+        } finally {
+          setUnlinkingDates(false);
+        }
+      },
+    };
+  };
+  const datesEditor = (definitionId: string) => {
+    const field = dateFieldOf(definitionId);
+    if (documentKind !== 'task' || !field) return undefined;
+    return startDueEditorFor({
+      field,
+      enabled: startDateEnabled,
+      other: () => dateEnd(field === 'due' ? 'start' : 'due'),
+      saveOther: (property, value) => saveOne(property, value),
+    });
+  };
+
   return (
     <Suspense>
       <Show when={shouldShowRow()}>
@@ -186,25 +277,34 @@ export function InlineTaskProperties() {
           />
           {/* A placeholder keeps its chip, and a pick in it, when saving assigns its ID. */}
           <Key each={inlineProperties()} by="propertyDefinitionId">
-            {(property) => (
-              <InlinePropertyValue
-                property={property()}
-                entityId={blockId}
-                showLabel={
-                  documentKind === 'task' &&
-                  property().propertyDefinitionId ===
-                    SYSTEM_PROPERTY_IDS.DUE_DATE
-                    ? false
-                    : undefined
-                }
-                canManage={
-                  !property().propertyId.startsWith('pending:') ||
-                  defaultDefinitionIds().includes(
-                    property().propertyDefinitionId
-                  )
-                }
-              />
-            )}
+            {(property) => {
+              // Keyed by definition, so one editor serves the pill throughout.
+              const editor = datesEditor(
+                untrack(() => property().propertyDefinitionId)
+              );
+              return (
+                <InlinePropertyValue
+                  property={shownDate(property())}
+                  entityId={blockId}
+                  showLabel={
+                    documentKind === 'task' &&
+                    property().propertyDefinitionId ===
+                      SYSTEM_PROPERTY_IDS.DUE_DATE
+                      ? false
+                      : undefined
+                  }
+                  canManage={
+                    !property().propertyId.startsWith('pending:') ||
+                    defaultDefinitionIds().includes(
+                      property().propertyDefinitionId
+                    )
+                  }
+                  valueText={datesText(shownDate(property()))}
+                  editor={editor}
+                  unlink={datesUnlink(property())}
+                />
+              );
+            }}
           </Key>
           <Show when={documentKind === 'document' && canEdit()}>
             <AddPropertyButton variant="secondary" size="xs" class="gap-1.5" />

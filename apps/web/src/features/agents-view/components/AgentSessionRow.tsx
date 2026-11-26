@@ -9,27 +9,35 @@ import {
 /** Shared row geometry; the host supplies the Home icon or Agents status. */
 export function AgentSessionRow(props: {
   id: string;
+  /** The row button's id, for a list that points at its focused row. */
+  domId?: string;
   title: string;
   kind: 'chat' | 'code';
   state: ConversationState;
   leading: JSX.Element;
   trailing?: JSX.Element;
+  /** Shown at the row's end on hover, above the row's own button. */
+  hoverAction?: JSX.Element;
   timestamp: string;
   unread?: boolean;
   failed?: boolean;
   active?: boolean;
+  /** The list's keyboard focus, which is not DOM focus. */
+  focused?: boolean;
   /** When true, hides the leading icon slot to save horizontal space. */
   hideLeading?: boolean;
   children?: JSX.Element;
   onOpen?: (event: MouseEvent) => void;
 }) {
   const metadata = children(() => props.children);
+  const hoverAction = children(() => props.hoverAction);
   return (
     <ViewSidebar.Item
       as="div"
       active={props.active}
       class={cn(
-        'relative text-ink',
+        'group/agent-session relative text-ink',
+        props.focused && !props.active && 'not-touch:bg-hover',
         metadata.toArray().length > 0 &&
           'h-auto min-h-12 items-start py-1.5 touch:h-auto',
         props.hideLeading && 'pl-3'
@@ -39,6 +47,7 @@ export function AgentSessionRow(props: {
       data-session-state={props.state}
     >
       <button
+        id={props.domId}
         type="button"
         class="absolute inset-0 rounded-lg outline-none focus-visible:outline-2 focus-visible:outline-accent"
         aria-label={props.title}
@@ -68,6 +77,11 @@ export function AgentSessionRow(props: {
         </span>
         {metadata()}
       </span>
+      <Show when={hoverAction()}>
+        <span class="relative hidden shrink-0 group-hover/agent-session:flex">
+          {hoverAction()}
+        </span>
+      </Show>
     </ViewSidebar.Item>
   );
 }

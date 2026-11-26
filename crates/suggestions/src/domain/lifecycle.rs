@@ -10,26 +10,29 @@
 //! | `take_on` | proposed | accepted |
 //! | `start_run` | proposed, accepted | accepted |
 //! | `complete` | proposed, accepted | done |
+//! | `answer` | proposed, accepted | done |
 //! | `run_finished` | accepted | done |
 //! | `dismiss` | proposed, accepted | dismissed |
 //! | `retire` | proposed, accepted | retired |
 //! | `resolve` | proposed, accepted | resolved |
 //! | `rewrite`, `attach_draft` | proposed, accepted | the same |
 //! | `restore` | done, dismissed, resolved, retired | proposed |
-//! | `undismiss` | dismissed | proposed |
+//! | `undo` | dismissed, done | proposed |
 //!
 //! Rules beyond the states sit with the service: a dismissed suggestion comes
-//! back only with a reason, or undismissed by the person within five minutes;
-//! a background prompt suggestion starts a run only while none is unsettled;
-//! and taking on an accepted suggestion or completing a done one changes
-//! nothing.
+//! back only with a reason, or undone by the person within five minutes; the
+//! person undoes being done only on a suggestion they completed themself (not
+//! a finished run or an answered reply), within five minutes too; a background prompt suggestion starts a run only while none is unsettled;
+//! opening a reply suggestion only takes it on, and the person's own reply on
+//! its item answers it (through resolution); and taking on an accepted
+//! suggestion or completing a done one changes nothing.
 //!
 //! A routine suggestion doesn't follow this table: it moves only with its
 //! routine suggestion, as `RoutineSuggestionState::card` in
 //! `crates/scheduled_action` says, through
 //! `suggestions_db_utils::move_routine_card`. That also moves a retired one
 //! to dismissed, and a dismissed or retired one to done when the person saves
-//! its routine. Here it is never accepted, restored or undismissed.
+//! its routine. Here it is never accepted, restored or undone.
 
 use strum::IntoEnumIterator;
 
@@ -42,13 +45,18 @@ mod test;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr, strum::EnumIter)]
 #[strum(serialize_all = "snake_case")]
 pub enum LifecycleEvent {
-    /// Someone acting for the person takes a background prompt suggestion on,
-    /// for the person to run.
+    /// It is taken on without being done yet: a background prompt suggestion
+    /// by someone acting for the person, for the person to run, or a reply
+    /// suggestion opened (its item or its draft) before it is answered.
     TakeOn,
     /// The person runs a background prompt suggestion.
     StartRun,
-    /// The person acts on a suggestion that doesn't run.
+    /// The person acts on a suggestion that opening does: one that doesn't
+    /// run and doesn't wait for a reply.
     Complete,
+    /// The person answered a reply suggestion's item themself: done, as it
+    /// asked.
+    Answer,
     /// Its background run finished.
     RunFinished,
     /// The person isn't interested.
@@ -63,8 +71,9 @@ pub enum LifecycleEvent {
     AttachDraft,
     /// A generation session suggests a closed suggestion again.
     Restore,
-    /// The person takes back their dismissal, within minutes of it.
-    Undismiss,
+    /// The person takes back their dismissal, or their marking it done,
+    /// within minutes of it.
+    Undo,
 }
 
 /// The state `event` moves a suggestion in state `from` to, or `None` when
@@ -75,18 +84,19 @@ pub fn transition(from: SuggestionState, event: LifecycleEvent) -> Option<Sugges
     match (event, from) {
         (E::TakeOn, S::Proposed) => Some(S::Accepted),
         (E::StartRun, S::Proposed | S::Accepted) => Some(S::Accepted),
-        (E::Complete, S::Proposed | S::Accepted) => Some(S::Done),
+        (E::Complete | E::Answer, S::Proposed | S::Accepted) => Some(S::Done),
         (E::RunFinished, S::Accepted) => Some(S::Done),
         (E::Dismiss, S::Proposed | S::Accepted) => Some(S::Dismissed),
         (E::Retire, S::Proposed | S::Accepted) => Some(S::Retired),
         (E::Resolve, S::Proposed | S::Accepted) => Some(S::Resolved),
         (E::Rewrite | E::AttachDraft, S::Proposed | S::Accepted) => Some(from),
         (E::Restore, S::Done | S::Dismissed | S::Resolved | S::Retired) => Some(S::Proposed),
-        (E::Undismiss, S::Dismissed) => Some(S::Proposed),
+        (E::Undo, S::Dismissed | S::Done) => Some(S::Proposed),
         (
             E::TakeOn
             | E::StartRun
             | E::Complete
+            | E::Answer
             | E::RunFinished
             | E::Dismiss
             | E::Retire
@@ -94,7 +104,7 @@ pub fn transition(from: SuggestionState, event: LifecycleEvent) -> Option<Sugges
             | E::Rewrite
             | E::AttachDraft
             | E::Restore
-            | E::Undismiss,
+            | E::Undo,
             _,
         ) => None,
     }

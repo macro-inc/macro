@@ -7,7 +7,7 @@ export const TASKS_TOUR = defineTourTargets('tasks', ['filter']);
 export const tasksTour = defineViewTour({
   id: 'tasks',
   title: 'Tasks',
-  connector: { kind: 'mcp', label: 'Linear', tools: ['Linear'] },
+  connector: { kind: 'mcp', label: 'Linear', apps: ['linear'] },
   video: { youtubeId: 'gxJquVXRX5A', title: 'Macro Tasks', duration: '1:35' },
   steps: [
     {

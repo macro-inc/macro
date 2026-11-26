@@ -2,6 +2,7 @@ import type { FetchError } from '@core/service';
 import { type ResultError, throwOnErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import type { GetDocumentResponseData } from '@service-storage/generated/schemas';
+import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { useQuery } from '@tanstack/solid-query';
 import { err, ok, type Result } from 'neverthrow';
 import type { Accessor } from 'solid-js';
@@ -52,6 +53,20 @@ export async function fetchBinaryDocumentData(
     ...documentData,
     blobUrl: location.presignedUrl,
   });
+}
+
+/**
+ * A document's bytes through a freshly signed URL, for copy and download of
+ * an image shown from a presigned URL that may have expired since it loaded.
+ */
+export async function fetchBinaryDocumentBlob(
+  documentId: string
+): Promise<Blob | undefined> {
+  const data = await fetchBinaryDocumentData(documentId);
+  if (data.isErr()) return undefined;
+
+  const blob = await fetchBinary(data.value.blobUrl, 'blob');
+  return blob.isOk() ? blob.value : undefined;
 }
 
 async function fetchBinaryDocument(documentId: string): Promise<string> {

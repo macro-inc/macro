@@ -34,6 +34,9 @@ impl ItemNotificationPreferenceRepository for RecordingRepository {
             .push((user.to_string(), entity.entity_id.to_string(), until));
         Ok(())
     }
+    async fn set_mentions_only(&self, _: MacroUserIdStr<'_>, _: Entity<'_>) -> Result<(), Report> {
+        unimplemented!()
+    }
     async fn remove(&self, user: MacroUserIdStr<'_>, entity: Entity<'_>) -> Result<(), Report> {
         self.removes
             .lock()

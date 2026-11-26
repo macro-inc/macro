@@ -10,10 +10,14 @@ import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { openDirectMessage } from '@core/util/open-direct-message';
-import { cachedUserId } from '@queries/auth/cached-user-id';
+import { openTeamAgentDirectMessage } from '@core/util/open-team-agent-direct-message';
+import {
+  currentQueryAccount,
+  type QueryAccount,
+} from '@queries/auth/account-scope';
 import { fetchHarnesses } from '@queries/harnesses/harnesses';
 import {
+  openBillingSettings,
   openRuntimesSettings,
   openTeamMembersSettings,
 } from './notification-navigation';
@@ -28,19 +32,32 @@ export function openComputerSetup(computerId: string) {
   if (layout) openRuntimesSettings(layout, {});
 }
 
-/** The DM with an agent teammate, from wherever the app is. */
-export function openAgentDirectMessage(agentUserId: string) {
+/**
+ * The DM with an agent teammate, from wherever the app is, for `account`:
+ * the one signed in when the action was offered.
+ */
+export async function openAgentDirectMessage(
+  agentUserId: string,
+  account: QueryAccount | undefined = currentQueryAccount()
+) {
   const layout = globalSplitManager();
   if (!layout) return;
-  fireAndForget(
-    openDirectMessage(cachedUserId(), agentUserId, (content) => {
+  await openTeamAgentDirectMessage(
+    agentUserId,
+    (content) => {
       layout.openWithSplit(content, { activate: true, referredFrom: null });
-    }),
-    'notifications'
+    },
+    account
   );
 }
 
-/** Bring your AI for an agent teammate, on its row in Settings → Members. */
+/** Settings → Billing, from wherever the app is: to update a declined card. */
+export function openBilling() {
+  const layout = globalSplitManager();
+  if (layout) openBillingSettings(layout, {});
+}
+
+/** Connect Claude plan for an agent teammate, on its row in Settings → Members. */
 export function openAgentClaude(agentUserId: string) {
   requestAgentClaude(agentUserId);
   const layout = globalSplitManager();
@@ -81,11 +98,19 @@ async function showAgentSetupToast(
   notice: ComputerSetupNotice,
   agent: SetupAgent
 ) {
-  const canBringAi =
+  const canConnectClaude =
     notice.outcome.kind === 'ready' && (await ownsHarness(notice.harnessId));
+  // The notice can outlive a switch to another account in this tab.
+  const shownTo = currentQueryAccount();
   showTeamAgentSetupNotice(notice, agent, {
-    message: () => openAgentDirectMessage(agent.userId),
-    bringAi: canBringAi ? () => openAgentClaude(agent.userId) : undefined,
+    message: () =>
+      fireAndForget(
+        openAgentDirectMessage(agent.userId, shownTo),
+        'notifications'
+      ),
+    connectClaude: canConnectClaude
+      ? () => openAgentClaude(agent.userId)
+      : undefined,
     retry: () =>
       fireAndForget(retryAgentSetup(notice.computerId, agent), 'notifications'),
   });
@@ -98,5 +123,8 @@ export function showComputerSetupToast(notice: ComputerSetupNotice) {
     fireAndForget(showAgentSetupToast(notice, agent), 'notifications');
     return;
   }
-  showComputerSetupNotice(notice, () => openComputerSetup(notice.computerId));
+  fireAndForget(
+    showComputerSetupNotice(notice, () => openComputerSetup(notice.computerId)),
+    'notifications'
+  );
 }

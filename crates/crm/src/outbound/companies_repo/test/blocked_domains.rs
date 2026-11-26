@@ -3,6 +3,7 @@
 
 use super::helpers::*;
 use crate::domain::companies_repo::CompaniesRepository;
+use crate::domain::email_privacy::EmailPrivacyRepository;
 use crate::domain::model::CrmTeamSettingsPatch;
 use crate::domain::service::{CrmService, CrmServiceImpl};
 use crate::outbound::companies_repo::CompaniesRepositoryImpl;
@@ -12,7 +13,7 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-const OWNER: &str = "macro|owner@example.com";
+const OWNER: &str = "macro|owner@example.net";
 
 /// A consumer provider, so email sync would admit it if it weren't
 /// blocked. No reserved example domain is one.
@@ -27,7 +28,7 @@ async fn blocking_preserves_records_and_stops_consented_sync(pool: PgPool) -> an
     let team_id = Uuid::now_v7();
     seed_team(&pool, team_id, OWNER).await?;
     enable_crm_for_team(&pool, team_id).await?;
-    let link_id = insert_email_link(&pool, OWNER, "owner@example.com").await?;
+    let link_id = insert_email_link(&pool, OWNER, "owner@example.net").await?;
     consent_to_mailbox(&pool, team_id, link_id).await?;
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let service = CrmServiceImpl::new(repo.clone(), NoOpCompanyMetadataResolver);
@@ -68,7 +69,7 @@ async fn blocking_preserves_records_and_stops_consented_sync(pool: PgPool) -> an
             .populate_contact(
                 &team_id,
                 &link_id,
-                "owner@example.com",
+                "owner@example.net",
                 &email,
                 None,
                 Utc::now(),
@@ -240,5 +241,45 @@ async fn unblocking_a_domain_that_was_never_blocked_keeps_hand_hidden_records(
     repo.unblock_domain(&team_id, "example.com").await?;
     assert!(fetch_company_hidden(&pool, acme).await? == Some(true));
     assert!(fetch_contact_hidden(&pool, jane).await? == Some(true));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn privacy_names_the_archived_company_behind_a_team_domain(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    seed_team(&pool, team_id, OWNER).await?;
+    enable_crm_for_team(&pool, team_id).await?;
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    let archived = insert_company(&pool, team_id, true, &["archived.example.com"]).await?;
+    insert_company(&pool, team_id, false, &["paused.example.com"]).await?;
+    repo.set_company_hidden(&team_id, &archived, true).await?;
+    repo.block_domain(&team_id, "blocked.example.com").await?;
+
+    let privacy = EmailPrivacyRepository::email_privacy(&repo, team_id, OWNER).await?;
+    assert_eq!(
+        privacy.team_domains,
+        [
+            "archived.example.com",
+            "blocked.example.com",
+            "paused.example.com"
+        ]
+    );
+    assert_eq!(
+        privacy.archived_team_domains,
+        std::collections::BTreeMap::from([("archived.example.com".to_owned(), archived)])
+    );
+
+    // Restoring leaves email sync off, so the domain stays listed but can now
+    // be removed like any other.
+    repo.set_company_hidden(&team_id, &archived, false).await?;
+    let privacy = EmailPrivacyRepository::email_privacy(&repo, team_id, OWNER).await?;
+    assert!(privacy.archived_team_domains.is_empty());
+    assert!(
+        privacy
+            .team_domains
+            .contains(&"archived.example.com".to_owned())
+    );
     Ok(())
 }

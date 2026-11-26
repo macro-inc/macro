@@ -1,11 +1,15 @@
-import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { UserIcon } from '@core/component/UserIcon';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
-import { useSoupItemsQuery } from '@queries/soup/items';
+import { queryReadyGate } from '@queries/gate';
+import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { HoverCard } from '@ui';
 import { type ParentProps, Show } from 'solid-js';
+import {
+  documentMetadataArgs,
+  documentMetadataOptions,
+} from './document-metadata-query';
 
 type DocumentTitleProps = {
   documentId: string;
@@ -21,19 +25,13 @@ function DocumentTitleDetails(props: DocumentTitleProps) {
     const item = quickAccess.getById(props.documentId);
     return item?.kind === 'entity' ? item : undefined;
   };
-  const metadata = useSoupItemsQuery(
-    () => ({
-      params: { limit: 1 },
-      body: {
-        ...QUERY_FILTERS_BASE,
-        document_filters: { document_ids: [props.documentId] },
-      },
-    }),
-    () => ({ staleTime: 60_000 })
+  const metadata = useSoupAstItemsQuery(
+    () => documentMetadataArgs(props.documentId),
+    () => documentMetadataOptions(props.documentId)
   );
   const resolved = () =>
-    metadata.isSuccess
-      ? metadata.data.find((item) => item.id === props.documentId)
+    queryReadyGate(metadata)
+      ? metadata.data.entities.find((item) => item.id === props.documentId)
       : undefined;
   const ownerId = () =>
     props.ownerId ?? cached()?.data.ownerId ?? resolved()?.ownerId;

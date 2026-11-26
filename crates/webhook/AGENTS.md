@@ -16,6 +16,13 @@ before changing ingestion or delivery behavior.
   consumers for `macro.documents`, `macro.channels`, `macro.messages`,
   `macro.webhooks`, `macro.agent_sessions`, `macro.agent_session_lifecycle`,
   `macro.users`, and `macro.call_notifications`.
+- `src/domain/stream.rs` / `src/inbound/stream_router.rs`: the live SSE
+  stream. `StreamFeed` keeps two minutes of events (shared `Arc`s) for
+  clients that ask `resume=true` with a `Last-Event-ID` (`StreamCursor`);
+  without `resume=true` the stream is live-only, as before. Heartbeats flow
+  while the stream's Kafka consumer progresses (`kafka_stream_consumer.rs`,
+  `kafka_util::progress`); a lagging resuming subscriber's stream ends. See README's
+  "Live event stream and resuming".
 - `src/inbound/worker.rs`: the SQS delivery worker.
 - `src/outbound/http_delivery.rs`: signed HTTPS POST to the webhook endpoint.
 - `src/domain/blocked_address.rs`: the one blocked-address classifier, used by
@@ -42,12 +49,14 @@ before changing ingestion or delivery behavior.
   (subscribe/decode) → README's event table. Private call notifications
   match only the named user's personal workspace and stream.
 - Stream audiences: `StreamAudience` in `src/domain/stream.rs`. `ContactsOf`
-  (the user plus their contacts) is decided per subscriber by one exact
-  `WebhookContactChecker::is_contact` lookup (adapter over the contacts
-  crate's `lookup_contact_ids` in `document_storage_service`); never page a
-  contact list in the stream. `user.picture_changed` uses `Any([ContactsOf,
-  Workspace per user team])`, with teams resolved once per event in
-  `kafka_stream_consumer.rs`.
+  (the user plus everyone who has the user in their directory) is decided per
+  subscriber by one exact `WebhookContactChecker::is_contact(subscriber, user)`
+  lookup (adapter over the contacts crate's `lookup_contact_ids` in
+  `document_storage_service`, which follows the subscriber's
+  `contacts-list-reads` flag); directories are directed, so keep the
+  subscriber first. Never page a contact list in the stream.
+  `user.picture_changed` uses `Any([ContactsOf, Workspace per user team])`,
+  with teams resolved once per event in `kafka_stream_consumer.rs`.
 - Change delivery retry behavior: `src/domain/delivery.rs` → README's retry
   schedule table (keep them in sync).
 

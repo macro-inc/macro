@@ -7,7 +7,6 @@ import type { LexicalEditor } from 'lexical';
 import type { JSX } from 'solid-js';
 import type { RosterAgent } from '../../agents-view/core/roster';
 import type { SearchTypeValue } from '../../next-soup/core/search-filters';
-
 import type {
   Draft,
   InputFields,
@@ -18,6 +17,7 @@ import type {
   Suggestions,
 } from '../core/input';
 import type { Recipient, RecipientLookup } from '../core/recipients';
+import type { SearchDraftText } from '../core/search';
 import type { InputObservation } from './telemetry';
 
 export type MessageRecipient = RecipientSelectorProps<
@@ -43,6 +43,11 @@ export interface InputDisplay {
   selectedCalendar(fields: InputFields): { id: string } | undefined;
   inboxes(): { id: string; email_address: string }[];
   selectedInbox(fields: InputFields): { id: string } | undefined;
+  /**
+   * The draft's whole search as Search for shows it: its extracted filters
+   * written as operators before its words, until the field is edited.
+   */
+  search(fields: InputFields): SearchDraftText;
   connectGoogle(): Promise<void>;
   connectingGoogle(): boolean;
   roster(): RosterAgent[];

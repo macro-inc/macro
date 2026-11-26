@@ -8,7 +8,11 @@ use macro_user_id::user_id::MacroUserIdStr;
 use routine_program::{ProgramError, RoutineProgram};
 use serde_json::Value;
 
-use super::{models::ResolvedTaskTarget, ports::TaskTargetValidator};
+use super::{
+    knob_entities::{UnusableKnob, unusable_items, unusable_knobs},
+    models::ResolvedTaskTarget,
+    ports::{KnobEntities, TaskTargetValidator},
+};
 
 /// Safe configuration failures, independent of transport status codes.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -27,6 +31,12 @@ pub enum TargetValidationError {
     ExplicitAppsRequired,
     #[error("this routine has steps; reload or upgrade your client before updating")]
     ExplicitStepsRequired,
+    /// Entity knobs naming items the owner can't use, one problem each.
+    #[error("{}", .0.join("; "))]
+    UnusableItems(Vec<String>),
+    /// The scheduler has no way to look up the items entity knobs name.
+    #[error("this scheduler cannot check the items routines use")]
+    ItemsUnavailable,
 }
 
 /// Default acceptance policy for composition roots without a session domain.
@@ -45,20 +55,58 @@ impl TaskTargetValidator for ModelOnlyTargets {
         if agent || !program.mcp_servers.is_empty() {
             return Err(TargetValidationError::SessionsUnavailable.into());
         }
+        let items = program
+            .code_steps()
+            .iter()
+            .any(|step| step.entities().next().is_some());
+        if items {
+            return Err(TargetValidationError::ItemsUnavailable.into());
+        }
         Ok(())
+    }
+
+    /// Routines with entity knobs can't be saved here, so none has any.
+    async fn unusable_knobs(
+        &self,
+        task: &Value,
+        _owner: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<UnusableKnob>> {
+        let Ok(program) = RoutineProgram::from_task(task) else {
+            return Ok(Vec::new());
+        };
+        if program
+            .code_steps()
+            .iter()
+            .any(|step| step.entities().next().is_some())
+        {
+            return Err(TargetValidationError::ItemsUnavailable.into());
+        }
+        Ok(Vec::new())
     }
 }
 
 /// Authorizes every agent step's selection without opening a session or
 /// checking runtime connectivity, so a self-hosted agent can be saved while
-/// its runtime is offline.
+/// its runtime is offline, and checks the owner can use every item the
+/// program's entity knobs name.
 pub struct TargetValidation<Sessions> {
     sessions: Arc<Sessions>,
+    entities: Option<Arc<dyn KnobEntities>>,
 }
 
 impl<Sessions> TargetValidation<Sessions> {
+    /// Entity knobs are refused until [`Self::with_knob_entities`] says how
+    /// to look their items up.
     pub fn new(sessions: Arc<Sessions>) -> Self {
-        Self { sessions }
+        Self {
+            sessions,
+            entities: None,
+        }
+    }
+
+    pub fn with_knob_entities(mut self, entities: Arc<dyn KnobEntities>) -> Self {
+        self.entities = Some(entities);
+        self
     }
 }
 
@@ -76,7 +124,47 @@ impl<Sessions: RoutineSessions> TaskTargetValidator for TargetValidation<Session
                 })
                 .await?;
         }
+        let steps = program.code_steps();
+        if !steps.iter().any(|step| step.entities().next().is_some()) {
+            return Ok(());
+        }
+        let Some(entities) = &self.entities else {
+            return Err(TargetValidationError::ItemsUnavailable.into());
+        };
+        let unusable = unusable_items(entities.as_ref(), owner, &steps)
+            .await
+            .map_err(|error| anyhow::anyhow!("could not check a routine's items: {error}"))?;
+        if !unusable.is_empty() {
+            return Err(TargetValidationError::UnusableItems(
+                unusable.iter().map(|item| item.save_problem()).collect(),
+            )
+            .into());
+        }
         Ok(())
+    }
+
+    async fn unusable_knobs(
+        &self,
+        task: &Value,
+        owner: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<UnusableKnob>> {
+        // A stored task that no longer parses has no knobs to show.
+        let Ok(program) = RoutineProgram::from_task(task) else {
+            return Ok(Vec::new());
+        };
+        if !program
+            .code_steps()
+            .iter()
+            .any(|step| step.entities().next().is_some())
+        {
+            return Ok(Vec::new());
+        }
+        let Some(entities) = &self.entities else {
+            return Err(TargetValidationError::ItemsUnavailable.into());
+        };
+        unusable_knobs(entities.as_ref(), owner, &program)
+            .await
+            .map_err(|error| anyhow::anyhow!("could not check a routine's items: {error}"))
     }
 }
 

@@ -1,7 +1,10 @@
 //! An All Mail page of the caller's own inboxes filtered to one OR-tree of
 //! addresses: the Sales Email view and a CRM record's emails under Me (a
 //! company's domains and its contacts' addresses), or a search on senders
-//! and recipients. Newest first.
+//! and recipients. Newest first. A page filtered to one OR-tree of labels is
+//! read the same way on All Mail and on the views sorted by a thread date
+//! (Inbox, Sent, Drafts, Starred, Important, Other), whose thread restriction
+//! joins every stream's terms; the label rows are its superset.
 //!
 //! The general builder lists every thread of the inboxes that has a message
 //! from or to the addresses, probing each such message's mailbox facts,
@@ -13,9 +16,11 @@
 //!   conditions an index serves: the inbox, the filter's thread-level terms
 //!   and the cursor. The *superset* stream sorts the threads the address
 //!   indexes list (`matching_threads`, without mailbox facts), which is cheap
-//!   when the addresses are rare in the mail. The *inbox* stream merges each
-//!   inbox's newest threads from `idx_email_threads_non_spam_link_ts_id`, up
-//!   to a window of threads, which is cheap when they are common.
+//!   when the addresses are rare in the mail. The initial sparse superset
+//!   fetches each distinct match by primary key, so its estimate cannot
+//!   turn those IDs into a filter over the whole mailbox. The *inbox* stream
+//!   merges each inbox's newest threads from `idx_email_threads_non_spam_link_ts_id`,
+//!   up to a window of threads, which is cheap when they are common.
 //! - Each streamed thread then gets the general builder's preview pick, its
 //!   latest message the view and the filter accept, in order, until the page
 //!   fills; a thread with none drops out. The pick is the general builder's
@@ -44,11 +49,11 @@
 //!
 //! A walked thread whose messages miss the addresses costs the pick a read of
 //! each of them, so on a cold cache a window of addresses gone quiet costs
-//! several times their superset. Every statement reads a bounded number of
-//! rows ([`MAX_ROUND_WINDOW`] threads, [`MAX_SUPERSET_CAP`] superset rows),
-//! and the walks and the probes grow geometrically, so a page costs a small
-//! multiple of the cheaper of walking to its last row and reading the
-//! superset. The request as a whole has no bound: a superset past
+//! several times their superset. The windows and emitted probe rows are
+//! capped ([`MAX_ROUND_WINDOW`] threads, [`MAX_SUPERSET_CAP`] superset rows),
+//! and their sizes grow geometrically. These caps do not bound recipients
+//! rejected by a role filter or messages inspected by a thread's preview
+//! pick. The request as a whole has no bound: a superset past
 //! [`MAX_SUPERSET_CAP`] rows leaves only the walk, which goes on to the
 //! page's last row or the end of the inboxes, about what reading that
 //! superset would cost. A page never comes up short to save rounds, so it
@@ -78,11 +83,15 @@ use sqlx::{PgConnection, Postgres, QueryBuilder};
 use tracing::field::Empty;
 use uuid::Uuid;
 
+#[cfg(test)]
+mod stream_plan;
+
 use super::super::SqlFragment;
 use super::super::filters::{
     AddressSuperset, ContactScope, build_address_superset, build_contact_scope,
-    build_thread_conjunct_filter, get_sort_timestamp_field, only_address_message_terms,
-    top_level_owners,
+    build_label_superset, build_label_tree_predicate, build_thread_conjunct_filter,
+    build_thread_conjunct_filter_without_labels, build_view_thread_filter,
+    get_sort_timestamp_field, only_address_message_terms, top_level_owners,
 };
 use super::{
     QueryParams, map_row, push_page_head, push_page_tail, push_preview_message_select_with,
@@ -109,6 +118,10 @@ pub(crate) struct OwnedReadTuning {
     pub(crate) max_round_window: i64,
     /// The most superset rows a round's probe counts: [`MAX_SUPERSET_CAP`].
     pub(crate) max_superset_cap: i64,
+    /// The most threads the inbox stream walks for one request before it
+    /// returns what it found and where to go on. `None` walks to the page's
+    /// last row or the end of the inboxes.
+    pub(crate) walk_budget: Option<i64>,
 }
 
 impl OwnedReadTuning {
@@ -128,7 +141,20 @@ impl OwnedReadTuning {
         superset_per_walked: 50,
         max_round_window: MAX_ROUND_WINDOW,
         max_superset_cap: MAX_SUPERSET_CAP,
+        walk_budget: None,
     };
+
+    /// A label read: a label's superset costs a message lookup per row, so it
+    /// is read only up to [`LABEL_MAX_SUPERSET_CAP`] rows, and past it a
+    /// request walks at most [`LABEL_WALK_BUDGET`] threads. A big label whose
+    /// mail is all old then fills its page over several requests.
+    fn for_labels(self) -> Self {
+        Self {
+            max_superset_cap: self.max_superset_cap.min(LABEL_MAX_SUPERSET_CAP),
+            walk_budget: Some(self.walk_budget.unwrap_or(LABEL_WALK_BUDGET)),
+            ..self
+        }
+    }
 
     /// The most superset rows a round reads the superset for, after the walk
     /// read `walked` threads, the last `last_window` of which held
@@ -180,6 +206,13 @@ const MAX_ROUND_WINDOW: i64 = 16_000;
 /// reads below the walk. Past it the rounds only walk.
 const MAX_SUPERSET_CAP: i64 = 800_000;
 
+/// The most label rows a label read's probes count, and so the most labeled
+/// messages it looks up for one request.
+const LABEL_MAX_SUPERSET_CAP: i64 = 20_000;
+
+/// The most threads a label read walks for one request.
+const LABEL_WALK_BUDGET: i64 = 10_000;
+
 /// How much each round's window grows over the last, and the least each
 /// probe's cap grows over the last cap the superset outgrew.
 const GROWTH: i64 = 4;
@@ -198,6 +231,8 @@ pub(crate) fn inbox_window(query_limit: i64, window_per_row: i64) -> i64 {
 enum Stream {
     /// The threads the address indexes list, sorted.
     Superset,
+    /// A superset the initial capped probe found small enough for indexed lookups.
+    SparseSuperset,
     /// Each inbox's newest threads, merged, up to `window` threads.
     Inboxes { window: i64 },
 }
@@ -229,6 +264,9 @@ pub(crate) enum OwnedStreams {
     /// The windows came up short, and the superset, within a round's cap,
     /// finished the page below them.
     InboxesThenSuperset,
+    /// The windows walked the request's budget without filling the page,
+    /// which goes on below the last walked thread.
+    WalkBudgetSpent,
 }
 
 /// How [`OwnedRead`] took a page.
@@ -244,6 +282,9 @@ pub(crate) struct OwnedReadStats {
     /// The threads the inbox stream's windows reached. The last window
     /// stops early when it fills the page.
     pub(crate) walked: i64,
+    /// Where a page cut short by the walk budget goes on: the last thread
+    /// the windows read, which may be below the page's last row.
+    pub(crate) continue_below: Option<(DateTime<Utc>, Uuid)>,
 }
 
 impl OwnedReadStats {
@@ -271,14 +312,37 @@ pub(super) struct OwnedRead<'a> {
     /// has domains or partial addresses.
     contact_scope: Option<ContactScope>,
     /// The filter's top-level thread-level terms on `t`, which the streams
-    /// apply as they read.
+    /// apply as they read. A label read leaves its label tree out of them, so
+    /// an inbox window walks the threads it counts.
     thread_terms: SqlFragment,
+    /// A label read's label tree, which each thread an inbox window walked
+    /// must match. The superset streams list only threads that do.
+    walked_match: Option<SqlFragment>,
+}
+
+/// Views other than All Mail a label read walks: each sorts by a thread
+/// column with an index in that order per inbox, and restricts threads only
+/// through [`build_view_thread_filter`] and the preview pick. Spam and Trash
+/// sort by their folder's own date, and a user-label view by its label.
+fn walks_threads(view: &PreviewView) -> bool {
+    matches!(
+        view,
+        PreviewView::StandardLabel(
+            PreviewViewStandardLabel::Inbox
+                | PreviewViewStandardLabel::Sent
+                | PreviewViewStandardLabel::Drafts
+                | PreviewViewStandardLabel::Starred
+                | PreviewViewStandardLabel::Important
+                | PreviewViewStandardLabel::Other
+        )
+    )
 }
 
 impl<'a> OwnedRead<'a> {
     /// A read for an owned All Mail request whose filter has one positive
-    /// OR-tree of addresses among its top-level terms; other requests get
-    /// their params back.
+    /// OR-tree of addresses among its top-level terms, or for an owned
+    /// request on a view sorted by a thread column whose filter has one
+    /// positive OR-tree of labels; other requests get their params back.
     pub(super) fn new(
         view: &'a PreviewView,
         email_filter: &'a Expr<EmailLiteral>,
@@ -290,15 +354,16 @@ impl<'a> OwnedRead<'a> {
         // drop most of the inbox window in the preview pick, which the probe
         // can't foresee: the read would walk the window and then read the
         // superset, slower than the general builder's one statement.
-        let covered = matches!(
+        let all = matches!(
             view,
             PreviewView::StandardLabel(PreviewViewStandardLabel::All)
-        ) && params.team_id.is_none()
+        );
+        let covered = (all || walks_threads(view))
+            && params.team_id.is_none()
             && !uses_view_history(email_filter, &params.sort_method_str)
             && matches!(params.shared, SharedEmailFilter::Exclude)
             && params.project_scope.is_none()
-            && !uses_subject_subscans(view, email_filter)
-            && only_address_message_terms(email_filter);
+            && !uses_subject_subscans(view, email_filter);
         if !covered {
             return Err(Box::new(params));
         }
@@ -309,19 +374,47 @@ impl<'a> OwnedRead<'a> {
             .copied()
             .filter(|inbox| owners.iter().all(|owner| owner == inbox))
             .collect();
-        let Some(superset) =
-            build_address_superset(email_filter, &params.resolved, &params.link_ids)
-        else {
-            return Err(Box::new(params));
+        let addresses = (all && only_address_message_terms(email_filter))
+            .then(|| {
+                build_address_superset(
+                    email_filter,
+                    &params.resolved,
+                    &params.link_ids,
+                    tuning.superset_limit,
+                )
+            })
+            .flatten();
+        let sort_ts_field = get_sort_timestamp_field(view);
+        let (superset, tuning, thread_terms, walked_match) = match addresses {
+            Some(superset) => (
+                superset,
+                tuning,
+                build_thread_conjunct_filter(email_filter, sort_ts_field),
+                None,
+            ),
+            None => match build_label_superset(email_filter, &params.link_ids) {
+                Some(superset) => (
+                    superset,
+                    tuning.for_labels(),
+                    {
+                        let mut terms = build_view_thread_filter(view);
+                        terms.extend(build_thread_conjunct_filter_without_labels(
+                            email_filter,
+                            sort_ts_field,
+                        ));
+                        terms
+                    },
+                    Some(build_label_tree_predicate(email_filter, sort_ts_field)),
+                ),
+                None => return Err(Box::new(params)),
+            },
         };
         let contact_scope = build_contact_scope(email_filter, &params.resolved, &params.link_ids);
         Ok(Self {
             view,
             email_filter,
-            thread_terms: build_thread_conjunct_filter(
-                email_filter,
-                get_sort_timestamp_field(view),
-            ),
+            thread_terms,
+            walked_match,
             params,
             tuning,
             inboxes,
@@ -335,6 +428,7 @@ impl<'a> OwnedRead<'a> {
         name = "email.owned_address_read",
         skip_all,
         fields(
+            view = %self.view,
             inboxes = self.inboxes.len(),
             superset_rows = Empty,
             streams = Empty,
@@ -355,11 +449,12 @@ impl<'a> OwnedRead<'a> {
                 probes: 0,
                 probe_cap: None,
                 walked: 0,
+                continue_below: None,
             };
             (stats, Vec::new())
         } else {
             let superset_rows = self
-                .superset_rows(connection, self.tuning.superset_limit)
+                .superset_rows(connection, self.tuning.superset_limit, true)
                 .await?;
             span.record("superset_rows", superset_rows);
             self.read(connection, superset_rows).await?
@@ -389,12 +484,16 @@ impl<'a> OwnedRead<'a> {
             probes: 1,
             probe_cap: Some(self.tuning.superset_limit),
             walked: 0,
+            continue_below: None,
         };
         if superset_rows <= self.tuning.superset_limit {
-            let rows = self.page(connection, Stream::Superset, None, limit).await?;
+            let rows = self
+                .page(connection, Stream::SparseSuperset, None, limit)
+                .await?;
             return Ok((stats, rows));
         }
-        let mut window = inbox_window(limit, self.tuning.window_per_row);
+        let mut window = inbox_window(limit, self.tuning.window_per_row)
+            .min(self.tuning.walk_budget.unwrap_or(i64::MAX));
         let mut rows = self
             .page(connection, Stream::Inboxes { window }, None, limit)
             .await?;
@@ -416,6 +515,10 @@ impl<'a> OwnedRead<'a> {
             window = window
                 .saturating_mul(GROWTH)
                 .min(self.tuning.max_round_window);
+            // A label read walks no more than its budget in a request.
+            if let Some(budget) = self.tuning.walk_budget {
+                window = window.min(budget.saturating_sub(stats.walked).max(1));
+            }
             let left = limit - rows.len() as i64;
             // At the last window's rate, the page needs `left × last_window
             // / last_found` more threads; a window that found none never
@@ -427,7 +530,7 @@ impl<'a> OwnedRead<'a> {
                 if self.tuning.probes_again(cap, over) {
                     stats.probes += 1;
                     stats.probe_cap = Some(cap);
-                    if self.superset_rows(connection, cap).await? <= cap {
+                    if self.superset_rows(connection, cap, false).await? <= cap {
                         rows.extend(
                             self.page(connection, Stream::Superset, Some(below), left)
                                 .await?,
@@ -450,6 +553,14 @@ impl<'a> OwnedRead<'a> {
                 return Ok((stats.with(OwnedStreams::InboxesThenInboxes), rows));
             };
             below = end;
+            if self
+                .tuning
+                .walk_budget
+                .is_some_and(|budget| stats.walked >= budget)
+            {
+                stats.continue_below = Some((below.effective_ts, below.id));
+                return Ok((stats.with(OwnedStreams::WalkBudgetSpent), rows));
+            }
         }
     }
 
@@ -512,19 +623,29 @@ impl<'a> OwnedRead<'a> {
         &self,
         connection: &mut PgConnection,
         cap: i64,
+        indexed: bool,
     ) -> Result<i64, sqlx::Error> {
-        let mut builder = QueryBuilder::new("");
-        self.push_contact_ctes(&mut builder, "WITH ");
-        builder.push("\n        SELECT count(*) FROM (SELECT 1 FROM (\n            ");
-        self.push_branches(&mut builder, "UNION ALL");
-        builder.push("\n        ) AS superset LIMIT ");
-        builder.push_bind(cap.saturating_add(1).max(0));
-        builder.push(") AS capped");
-        builder
+        self.probe(cap, indexed)
             .build_query_scalar()
             .persistent(false)
             .fetch_one(&mut *connection)
             .await
+    }
+
+    fn probe(&self, cap: i64, indexed: bool) -> QueryBuilder<'static, Postgres> {
+        let mut builder = QueryBuilder::new("");
+        self.push_contact_ctes(&mut builder, "WITH ");
+        builder.push("\n        SELECT count(*) FROM (SELECT 1 FROM (\n            ");
+        let branches = if indexed {
+            &self.superset.indexed_branches
+        } else {
+            &self.superset.branches
+        };
+        self.push_branches(&mut builder, branches, "UNION ALL");
+        builder.push("\n        ) AS superset LIMIT ");
+        builder.push_bind(cap.saturating_add(1).max(0));
+        builder.push(") AS capped");
+        builder
     }
 
     /// The hoisted contact CTEs the branches read, the first after `lead`.
@@ -538,8 +659,13 @@ impl<'a> OwnedRead<'a> {
         }
     }
 
-    fn push_branches(&self, builder: &mut QueryBuilder<'static, Postgres>, operator: &str) {
-        for (index, branch) in self.superset.branches.iter().cloned().enumerate() {
+    fn push_branches(
+        &self,
+        builder: &mut QueryBuilder<'static, Postgres>,
+        branches: &[SqlFragment],
+        operator: &str,
+    ) {
+        for (index, branch) in branches.iter().cloned().enumerate() {
             if index > 0 {
                 builder.push(format!("\n            {operator}\n            "));
             }
@@ -557,7 +683,7 @@ impl<'a> OwnedRead<'a> {
     ) -> QueryBuilder<'static, Postgres> {
         let sort_ts_field = get_sort_timestamp_field(self.view);
         let mut builder = QueryBuilder::new("");
-        if matches!(stream, Stream::Superset) {
+        if matches!(stream, Stream::Superset | Stream::SparseSuperset) {
             self.push_contact_ctes(&mut builder, "\n        WITH ");
             let separator = if self.superset.contact_ctes.is_empty() {
                 "\n        WITH "
@@ -567,7 +693,12 @@ impl<'a> OwnedRead<'a> {
             builder.push(format!(
                 "{separator}matching_threads AS MATERIALIZED (\n            "
             ));
-            self.push_branches(&mut builder, "UNION");
+            let branches = if matches!(stream, Stream::SparseSuperset) {
+                &self.superset.indexed_branches
+            } else {
+                &self.superset.branches
+            };
+            self.push_branches(&mut builder, branches, "UNION");
             builder.push("\n        )");
         }
         push_page_head(&mut builder, &self.params, true);
@@ -634,11 +765,29 @@ impl<'a> OwnedRead<'a> {
         sort_ts_field: &str,
     ) {
         match stream {
-            Stream::Superset => {
-                self.push_stream_select(builder, sort_ts_field);
+            Stream::Superset | Stream::SparseSuperset => {
+                if matches!(stream, Stream::SparseSuperset) {
+                    self.push_stream_columns(builder, sort_ts_field);
+                    // A recipient lookup can change the CTE's estimate enough
+                    // to scan the mailbox. Fetch the proven-small ID set first;
+                    // DISTINCT keeps one thread when several messages match.
+                    builder.push(
+                        r#"
+                    FROM (SELECT DISTINCT thread_id FROM matching_threads) matched
+                    CROSS JOIN LATERAL (
+                        SELECT * FROM email_threads WHERE id = matched.thread_id OFFSET 0
+                    ) AS t
+                    WHERE "#,
+                    );
+                } else {
+                    self.push_stream_select(builder, sort_ts_field);
+                }
                 builder.push("t.link_id = ANY(");
                 builder.push_bind(self.inboxes.clone());
-                builder.push(") AND t.id IN (SELECT thread_id FROM matching_threads)");
+                builder.push(")");
+                if matches!(stream, Stream::Superset) {
+                    builder.push(" AND t.id IN (SELECT thread_id FROM matching_threads)");
+                }
                 self.push_stream_filters(builder, sort_ts_field, below);
                 builder.push(
                     r#"
@@ -650,6 +799,9 @@ impl<'a> OwnedRead<'a> {
                 // One ordered, limited index walk per inbox: `link_id =
                 // ANY(…)` can't return index order, so it would read and sort
                 // every thread of every inbox.
+                if self.walked_match.is_some() {
+                    builder.push("\n                    SELECT * FROM (");
+                }
                 builder.push("\n                    SELECT * FROM (");
                 for (index, inbox) in self.inboxes.iter().enumerate() {
                     if index > 0 {
@@ -671,6 +823,21 @@ impl<'a> OwnedRead<'a> {
                     LIMIT "#,
                 );
                 builder.push_bind(window);
+                // A label read tests its labels on each walked thread here,
+                // before the preview pick, which then runs only on matches.
+                // The merged window comes first: filtered per inbox, an older
+                // inbox's labeled thread could fall below the window's last
+                // thread and be listed again by the next window.
+                if let Some(walked_match) = &self.walked_match {
+                    builder.push(
+                        r#"
+                    ) AS t WHERE "#,
+                    );
+                    walked_match
+                        .clone()
+                        .push_into(builder, &self.params.user_id);
+                    builder.push(" ORDER BY effective_ts DESC, id DESC");
+                }
             }
         }
     }
@@ -678,13 +845,21 @@ impl<'a> OwnedRead<'a> {
     /// A stream's columns, up to its `WHERE`. All Mail's `created_at` and
     /// `updated_at` are its sort date, as in the general builder.
     fn push_stream_select(&self, builder: &mut QueryBuilder<'static, Postgres>, ts: &str) {
+        self.push_stream_columns(builder, ts);
+        builder.push(
+            r#"
+                    FROM email_threads t
+                    WHERE "#,
+        );
+    }
+
+    /// Shared projection for mailbox walks and matched-thread fetches.
+    fn push_stream_columns(&self, builder: &mut QueryBuilder<'static, Postgres>, ts: &str) {
         builder.push(format!(
             r#"
                     SELECT t.id, t.provider_id, t.link_id, t.inbox_visible, t.is_read,
                            t.is_signal, t.project_id,
-                           {ts} AS created_at, {ts} AS updated_at, {ts} AS effective_ts
-                    FROM email_threads t
-                    WHERE "#
+                           {ts} AS created_at, {ts} AS updated_at, {ts} AS effective_ts"#
         ));
     }
 

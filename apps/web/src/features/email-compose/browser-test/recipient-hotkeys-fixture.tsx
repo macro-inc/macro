@@ -1,7 +1,7 @@
 import '@app/index.css';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
-import { ChannelsContextProvider } from '@core/context/channels';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessProvider } from '@core/context/quickAccess/QuickAccessProvider';
 import { UserContextProvider } from '@core/context/user';
@@ -11,6 +11,7 @@ import {
   useHotkeyDOMScope,
 } from '@core/hotkey/hotkeys';
 import { EntityProvider } from '@entity';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import type { readContactDirectory } from '@queries/contacts/directory';
 import { createContactRecipientSource } from '@queries/contacts/recipient-window';
 import {
@@ -51,6 +52,50 @@ const readDirectory: typeof readContactDirectory = async (
   request
 ) => {
   setDirectoryReads((count) => count + 1);
+  // Two contacts that both match a typed `ann@example.com`, the similar one
+  // ranked first: what Enter adds must be the address typed.
+  if (request.query.startsWith('ann')) {
+    setDirectoryRows(2);
+    return {
+      source: 'cache',
+      sync: 'partial',
+      offline: false,
+      query: request.query,
+      users: [
+        {
+          id: 'macro|ann+news@example.com',
+          email: 'ann+news@example.com',
+          name: 'ann',
+        },
+        {
+          id: 'macro|ann@example.com',
+          email: 'ann@example.com',
+          name: 'Ann Rivera',
+        },
+      ],
+      nextCursor: null,
+    };
+  }
+  // A contact that loads only after a reply's list has opened on its
+  // thread sender, already in To.
+  if (request.query.startsWith('thread')) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    setDirectoryRows(1);
+    return {
+      source: 'cache',
+      sync: 'partial',
+      offline: false,
+      query: request.query,
+      users: [
+        {
+          id: 'macro|thread.keeper@example.com',
+          email: 'thread.keeper@example.com',
+          name: 'Thread Keeper',
+        },
+      ],
+      nextCursor: null,
+    };
+  }
   const offset =
     request.cursor?.source === 'people' ? Number(request.cursor.after) : 0;
   const ids =
@@ -145,7 +190,7 @@ const context: EmailComposeContext = {
     feedback: {
       success: () => undefined,
       failure: () => undefined,
-      alert: () => {},
+      alert: () => undefined,
       dismiss: () => {},
     },
     blockingNotice: async () => {},
@@ -168,7 +213,6 @@ const context: EmailComposeContext = {
     isTouch: () => mobile,
     isMobile: () => mobile,
     scheduleEnabled: false,
-    signaturesEnabled: () => false,
   },
   editorFiles: {
     readDroppedFiles: () => {},
@@ -307,7 +351,9 @@ function Fixture() {
           <EntityProvider>
             <UserContextProvider>
               <EmailLinksContextProvider>
-                <ChannelsContextProvider>
+                <ChannelDirectoryProvider
+                  directory={staticChannelDirectory(() => [])}
+                >
                   <QuickAccessProvider>
                     <main class="min-h-screen bg-surface p-4 text-ink">
                       <output data-testid="directory-reads">
@@ -323,7 +369,7 @@ function Fixture() {
                       </ThreadScope>
                     </main>
                   </QuickAccessProvider>
-                </ChannelsContextProvider>
+                </ChannelDirectoryProvider>
               </EmailLinksContextProvider>
             </UserContextProvider>
           </EntityProvider>

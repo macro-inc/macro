@@ -410,6 +410,15 @@ const MAILPIT_ROUTE: &str = r#"    # Mailpit serves itself under /mailpit (MP_WE
 /// Local: /api and /internal go to the service, everything else to the S3 bucket
 /// via LocalStack (mirrors infra/local/nginx/static-file-cdn.conf).
 const STATIC_FILE_LOCAL: &str = r#"    handle_path /local-storage/* {
+        # A link signed for the CDN (received email attachments): there is no
+        # CDN here, and LocalStack reads its `Signature` and `Expires` as an
+        # S3 query signature it then refuses.
+        @cdn_signed query Key-Pair-Id=*
+        uri @cdn_signed query {
+            -Signature
+            -Expires
+            -Key-Pair-Id
+        }
         reverse_proxy localstack:4566
     }
     handle_path /static-file/* {

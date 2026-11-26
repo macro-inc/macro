@@ -102,7 +102,7 @@ async function archiveThreadsRequest(
       value,
       getUnmaintainedGraphqlSoupRevalidations()
     );
-    if (result.kind === 'queued')
+    if (result.kind === 'queued' || result.kind === 'committed-without-content')
       return ids.map(() => ({ status: 'fulfilled', value: 'queued' }));
     if (!graphqlCacheEnabled())
       await Promise.all(

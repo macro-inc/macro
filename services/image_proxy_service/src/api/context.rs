@@ -1,4 +1,5 @@
 use axum::extract::FromRef;
+use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     MacroAuthJwtValidator, MacroAuthorizationServiceImpl, MacroAuthorizationState,
 };
@@ -12,4 +13,6 @@ pub struct ApiContext {
     pub authorization_state: MacroAuthorizationState<AuthorizationService>,
     pub environment: Environment,
     pub http_client: reqwest::Client,
+    /// Verifies the signed scope of an agent run's credential.
+    pub jwt_validation_args: JwtValidationArgs,
 }

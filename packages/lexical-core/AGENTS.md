@@ -52,8 +52,37 @@ literal, because Lexical's export adds them to unlinked URL text (see
 `NodeReplacements` must copy `ListNode` start when wrapping as `TaskListNode`;
 dropping it resets every typed `6.` marker to `1.`
 
+A link's URL comes from saved content: check it with `isAllowedLinkUrl`
+(`utils/link-url.ts`) before it becomes a link node, an anchor, or a call to
+open it. Build transformer sets from `STANDARD_TRANSFORMERS`, never Lexical's
+`TRANSFORMERS` (its `LINK` keeps any URL; see `README.md`).
+
+Table cells import and export through their own transformer sets in
+`transformers/tables.ts`. Keep their chip entries matching the paragraph sets
+(`EXTERNAL_TRANSFORMERS` order for export), or a table drops chips a paragraph
+keeps.
+
 An image under a list item is a child of that `ListItemNode`. Lexical runs
 element transformers only on top-level nodes, so `listItemImage` exports it as
 an indented line, and the image importers attach an indented image line after a
 list to its last item. Add it to any new transformer set that has image
 transformers.
+
+Notion database blocks resolve through `NotionLinks.databases`, a page-local
+array keyed by dashless container ID from the URL path and zero-based ordinal
+per container. Each target selects a database/table/optional view for the
+existing `DocumentCardNode`; absent or failed targets remain named Notion links
+with a typed reason. Database mentions remain compact references. Keep the
+ordinal counter shared across recursive container imports and ignore code.
+Both parsers read `crates/import_notion/fixtures/database_occurrences.md`;
+split mid-line database tags into blocks, accept self-closing tags and either
+quote form, and exclude comments, code and escaped tags from the counter.
+
+Creation-time markdown snapshots write explicit root pins as `pending:<definitionId>`; omit initial pins to preserve the blank golden snapshot and implicit defaults.
+
+The Notion importer parses exact page and view references in `notion/links.ts`.
+Keep malformed and external URLs, code, and unmapped block anchors intact.
+Recognize an exact child-page block anchor only on a typed child-page placeholder.
+Use the child's Notion page URL when the placeholder has no mapped mention so
+the deferred workspace import pass can resolve it.
+Database cards remain a separate occurrence-based conversion.

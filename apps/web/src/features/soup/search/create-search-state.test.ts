@@ -4,7 +4,6 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 const track = vi.hoisted(() => vi.fn());
 vi.mock('@app/lib/analytics', () => ({ analytics: { track } }));
-vi.mock('./context', () => ({ useOptionalSearchContext: () => undefined }));
 
 const [query, setQuery] = createStore({
   isSuccess: false,
@@ -19,7 +18,7 @@ vi.mock('@queries/soup/search', () => ({
     text.replaceAll('"', '').trim().length > 0,
 }));
 
-import { createSearchState } from './create-search-state';
+import { createSearchState, soupSearchMatchType } from './create-search-state';
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -125,4 +124,43 @@ it('counts the same query again after the box is cleared', () => {
   dispose();
 
   expect(track).toHaveBeenCalledTimes(2);
+});
+
+it('searches for one quoted phrase exactly, in straight or curly quotes', () => {
+  for (const query of ['"team lunch"', '“team lunch”', '„team lunch“']) {
+    expect(soupSearchMatchType(query)).toBe('exact');
+  }
+  for (const query of ['team lunch', '“team lunch” menu', '“team” “lunch”']) {
+    expect(soupSearchMatchType(query)).toBe('partial');
+  }
+});
+
+it('settles once the name text does, when operators leave it empty', () => {
+  const [text, setText] = createSignal('');
+  const [nameText, setNameText] = createSignal('');
+  const { state, dispose } = createRoot((dispose) => ({
+    state: createSearchState({
+      surface: () => 'search',
+      text,
+      nameText,
+      disableLocalSearch: () => true,
+      buildRequest: ({ query, matchType }) => ({
+        params: {},
+        body: { query, match_type: matchType },
+      }),
+    }),
+    dispose,
+  }));
+
+  setText('budget');
+  setNameText('budget');
+  vi.advanceTimersByTime(300);
+  expect(state.isLocalSearchSettling()).toBe(false);
+
+  // `tag:work` narrows past name matches, so the name text empties.
+  setText('budget tag:work');
+  setNameText('');
+  vi.advanceTimersByTime(300);
+  expect(state.isLocalSearchSettling()).toBe(false);
+  dispose();
 });

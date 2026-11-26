@@ -1,5 +1,7 @@
 //! Workspace import tools for the two issue trackers.
-use super::{ImportToolContext, NotionImportAction, import_error, tool_error};
+use super::{
+    FAILED_NEXT, ImportToolContext, NotionImportAction, failure_reason, import_error, tool_error,
+};
 use crate::domain::{
     models::{ImportSource, NotionImportReport, NotionSharing, RunStatus},
     ports::ImportError,
@@ -120,6 +122,12 @@ async fn call<T: WorkspaceImporter>(
         other => import_error(&format!("{} import failed", source.label()), other),
     })?;
     let message = message(source, action, &report);
+    // The agent reads why from `error_kind` and the message; the run's
+    // report text is for the owner's card.
+    let report = NotionImportReport {
+        error: None,
+        ..report
+    };
     Ok(TrackerImportResponse { report, message })
 }
 
@@ -171,8 +179,8 @@ fn message(
                 .unwrap_or_default()
         ),
         (_, Some(RunStatus::Failed)) => format!(
-            "The {name} import failed: {}. Fix the cause and plan again.",
-            report.error.as_deref().unwrap_or("unknown error")
+            "The {name} import failed: {}. {FAILED_NEXT}",
+            failure_reason(source, report.error_kind)
         ),
         (_, Some(RunStatus::Dismissed)) => format!("The {name} import was cancelled."),
         (_, None) => format!("No {name} plan yet. Use action plan."),

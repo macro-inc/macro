@@ -13,9 +13,6 @@ import type { ChannelLabelScopeSelection } from '@service-storage/generated/sche
 import type { ChannelLabelsList } from '@service-storage/generated/schemas/channelLabelsList';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
-import type { QueryAccount } from '../auth/account-scope';
-import { useQueryAccount } from '../auth/use-query-account';
-import { listChannelsQueryOptions } from '../channel/channels';
 import { queryClient } from '../client';
 import { withCallbacks } from '../utils';
 import { channelLabelKeys, channelSectionKeys } from './keys';
@@ -158,27 +155,6 @@ export function useSmartTagPreviewQuery(
       sectionsFlag().enabled
     );
   });
-}
-
-function availableSectionChannelsQueryOptions(
-  account: QueryAccount | undefined,
-  enabled: boolean
-) {
-  return queryOptions({
-    ...listChannelsQueryOptions(account, enabled),
-    reconcile: 'id',
-    staleTime: 0,
-  });
-}
-
-/** Full authorized channel membership, scoped to the current account. */
-export function useAvailableSectionChannelsQuery(
-  enabled: Accessor<boolean> = () => true
-) {
-  const account = useQueryAccount();
-  return useQuery(() =>
-    availableSectionChannelsQueryOptions(account(), enabled())
-  );
 }
 
 export type CreateChannelLabelArgs = {

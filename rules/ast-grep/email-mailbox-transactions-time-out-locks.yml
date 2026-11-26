@@ -1,0 +1,31 @@
+id: email-mailbox-transactions-time-out-locks
+language: rust
+severity: error
+message: Open mailbox_pg transactions and pooled connections with PgMailboxSync::begin, which sets the lock timeout.
+note: |-
+  A mailbox transaction queued behind a long lock holder (a CRM population
+  share-locks its link for its whole transaction) would otherwise hold a pooled
+  connection for as long as it waits. `begin` sets a 5 s `lock_timeout`, so it
+  fails with SQLSTATE 55P03 into its caller's retry instead. A locking read on
+  an acquired connection waits the same way, so it runs in a transaction too.
+  The rule sees only `begin()` and `acquire()`: a `FOR UPDATE` or `FOR SHARE`
+  statement run on the pool itself still needs review. Tests are exempt.
+files:
+  - crates/email/src/outbound/mailbox_pg.rs
+  - crates/email/src/outbound/mailbox_pg/**
+ignores:
+  - '**/test.rs'
+  - '**/tests.rs'
+  - '**/test/**'
+  - '**/tests/**'
+rule:
+  any:
+    - pattern: $OWNER.db.begin()
+    - pattern: $OWNER.db.acquire()
+  not:
+    inside:
+      kind: function_item
+      has:
+        field: name
+        regex: ^begin$
+      stopBy: end

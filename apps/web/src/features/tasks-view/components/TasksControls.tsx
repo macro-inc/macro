@@ -10,10 +10,11 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import GanttIcon from '@icon/system/regular/chart-gantt.svg';
 import BoardIcon from '@icon/system/regular/kanban.svg';
 import ListIcon from '@icon/system/regular/list-bullets.svg';
-import { ButtonGroup } from '@ui';
+import { useStartDateEnabled } from '@property/hooks/useStartDateEnabled';
+import { ButtonGroup, cn } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createSignal, Show } from 'solid-js';
-import { TASK_GROUP_OPTIONS, TASK_SORT_OPTIONS } from '../constants';
+import { taskGroupOptions, taskSortOptions } from '../constants';
 import { TASK_BOARD_GROUP_OPTIONS } from '../core/task-board';
 import { useTaskFilters } from '../filters/use-task-filters';
 import { useTasksView } from '../tasks-view-context';
@@ -21,18 +22,35 @@ import { TASKS_TOUR } from '../tour';
 import { TasksFilterDrawer } from './TasksFilterDrawer';
 import { TaskDueDateRangeDialog } from './task-due-date-range-dialog';
 
-export function TasksControls() {
+export type TasksControlsProps = {
+  /** On touch, the filter trigger sits in an in-flow header row. */
+  inline?: boolean;
+  /** Hides the layout switch (List, Board, Gantt) when the header has no room. */
+  hideLayout?: boolean;
+  /** Hides the view options (sort, group) when the header has no room. */
+  hideViewOptions?: boolean;
+};
+
+export function TasksControls(props: TasksControlsProps) {
   return (
-    <Show when={!isTouchDevice()} fallback={<TasksFilterDrawer />}>
-      <DesktopTasksControls />
+    <Show
+      when={!isTouchDevice()}
+      fallback={<TasksFilterDrawer inline={props.inline} />}
+    >
+      <DesktopTasksControls
+        hideLayout={props.hideLayout}
+        hideViewOptions={props.hideViewOptions}
+      />
     </Show>
   );
 }
 
-function DesktopTasksControls() {
+function DesktopTasksControls(
+  props: Pick<TasksControlsProps, 'hideLayout' | 'hideViewOptions'>
+) {
+  const startDates = useStartDateEnabled();
   const panel = useSplitPanelOrThrow();
-  const { state, setPrimarySort, setState, projectsEnabled, ganttEnabled } =
-    useTasksView();
+  const { state, setPrimarySort, setState, ganttEnabled } = useTasksView();
   const filters = useTaskFilters();
   const [openMenu, setOpenMenu] = createSignal<'filters' | 'sort'>();
   let filterTrigger: HTMLButtonElement | undefined;
@@ -61,7 +79,8 @@ function DesktopTasksControls() {
     },
     sort: {
       description: 'Sort tasks',
-      condition: () => !isSearching(),
+      // A sort menu hidden with the header's view options has no trigger to open beside.
+      condition: () => !isSearching() && !props.hideViewOptions,
       run: () => {
         if (!sortTrigger) return false;
 
@@ -75,12 +94,10 @@ function DesktopTasksControls() {
 
   const groupOptions = () => {
     if (state.layout !== 'board') {
-      return TASK_GROUP_OPTIONS;
+      return taskGroupOptions(startDates());
     }
 
-    return TASK_BOARD_GROUP_OPTIONS.filter((option) => {
-      return option.id !== 'project' || projectsEnabled();
-    });
+    return TASK_BOARD_GROUP_OPTIONS;
   };
 
   return (
@@ -107,63 +124,68 @@ function DesktopTasksControls() {
           />
         </div>
       </HeaderActionGroup>
-      <HeaderActionGroup label="Task layout" size="md">
-        <ButtonGroup.Button
-          aria-label="List"
-          tooltip="List"
-          variant="ghost"
-          size="icon-md"
-          aria-pressed={state.layout === 'list'}
-          onClick={() => setState('layout', 'list')}
-        >
-          <ListIcon class="size-4" />
-        </ButtonGroup.Button>
-        <ButtonGroup.Button
-          aria-label="Board"
-          tooltip="Board"
-          variant="ghost"
-          size="icon-md"
-          aria-pressed={state.layout === 'board'}
-          onClick={() => setState('layout', 'board')}
-        >
-          <BoardIcon class="size-4" />
-        </ButtonGroup.Button>
-        <Show when={ganttEnabled()}>
+      {/* Wrappers the header's row keeps, so hiding a group never adds or removes a child. */}
+      <div class={cn('contents', props.hideLayout && 'hidden')}>
+        <HeaderActionGroup label="Task layout" size="md">
           <ButtonGroup.Button
-            aria-label="Gantt"
-            tooltip="Gantt"
+            aria-label="List"
+            tooltip="List"
             variant="ghost"
             size="icon-md"
-            aria-pressed={state.layout === 'gantt'}
-            onClick={() => setState('layout', 'gantt')}
+            aria-pressed={state.layout === 'list'}
+            onClick={() => setState('layout', 'list')}
           >
-            <GanttIcon class="size-4" />
+            <ListIcon class="size-4" />
           </ButtonGroup.Button>
-        </Show>
-      </HeaderActionGroup>
-      <HeaderActionGroup label="Task view options" size="md">
-        <Show when={!isSearching()}>
-          <ListSortDropdown
+          <ButtonGroup.Button
+            aria-label="Board"
+            tooltip="Board"
+            variant="ghost"
+            size="icon-md"
+            aria-pressed={state.layout === 'board'}
+            onClick={() => setState('layout', 'board')}
+          >
+            <BoardIcon class="size-4" />
+          </ButtonGroup.Button>
+          <Show when={ganttEnabled()}>
+            <ButtonGroup.Button
+              aria-label="Gantt"
+              tooltip="Gantt"
+              variant="ghost"
+              size="icon-md"
+              aria-pressed={state.layout === 'gantt'}
+              onClick={() => setState('layout', 'gantt')}
+            >
+              <GanttIcon class="size-4" />
+            </ButtonGroup.Button>
+          </Show>
+        </HeaderActionGroup>
+      </div>
+      <div class={cn('contents', props.hideViewOptions && 'hidden')}>
+        <HeaderActionGroup label="Task view options" size="md">
+          <Show when={!isSearching()}>
+            <ListSortDropdown
+              grouped
+              size="icon-md"
+              label="Sort tasks"
+              value={primarySort()}
+              options={taskSortOptions(startDates())}
+              open={openMenu() === 'sort'}
+              onChange={setPrimarySort}
+              onOpenChange={handleMenuOpenChange('sort')}
+              triggerRef={(element) => (sortTrigger = element)}
+            />
+          </Show>
+          <ListGroupDropdown
             grouped
             size="icon-md"
-            label="Sort tasks"
-            value={primarySort()}
-            options={TASK_SORT_OPTIONS}
-            open={openMenu() === 'sort'}
-            onChange={setPrimarySort}
-            onOpenChange={handleMenuOpenChange('sort')}
-            triggerRef={(element) => (sortTrigger = element)}
+            label="Group by"
+            value={state.groupBy}
+            options={groupOptions()}
+            onChange={(groupBy) => setState('groupBy', groupBy)}
           />
-        </Show>
-        <ListGroupDropdown
-          grouped
-          size="icon-md"
-          label="Group by"
-          value={state.groupBy}
-          options={groupOptions()}
-          onChange={(groupBy) => setState('groupBy', groupBy)}
-        />
-      </HeaderActionGroup>
+        </HeaderActionGroup>
+      </div>
       <TaskDueDateRangeDialog
         value={filters.customRange()}
         onChange={filters.setCustomRange}

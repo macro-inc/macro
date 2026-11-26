@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH moving AS MATERIALIZED (\n                   SELECT id, company_id, created_at,\n                          row_number() OVER (ORDER BY created_at, id) AS place\n                   FROM crm_domains WHERE company_id = ANY($2) AND team_id = $3\n               ), after AS (\n                   SELECT GREATEST(clock_timestamp(), MAX(created_at)) AS at\n                   FROM crm_domains WHERE company_id = $1\n               ), moved AS (\n                   UPDATE crm_domains d\n                   SET company_id = $1,\n                       created_at = (SELECT at FROM after) + moving.place * INTERVAL '1 microsecond'\n                   FROM moving WHERE d.id = moving.id\n                   RETURNING d.id\n               )\n               SELECT moving.id, moving.company_id, moving.created_at\n               FROM moving JOIN moved USING (id) ORDER BY moving.place",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "company_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "3cacdfd03a76760997f901cf6abe78916f5114707171c4ea4ec41c06288a18dd"
+}

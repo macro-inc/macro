@@ -4,6 +4,7 @@ export { ProjectBreadCrumb } from './components/ProjectBreadCrumb';
 export { UnreadIndicator } from './components/UnreadIndicator';
 export { InlineEntity } from './composed/InlineEntity';
 export {
+  type EmailRowStyle,
   ListEntity,
   ListLayoutProvider,
   MaybeEntityRow,
@@ -80,6 +81,7 @@ export {
   getTaskPriorityOptionId,
   getTaskReferencedEntityIds,
   getTaskStatusOptionId,
+  taskCustomPropertyReferences,
 } from './utils/task-properties';
 export {
   formatDateAndTime,

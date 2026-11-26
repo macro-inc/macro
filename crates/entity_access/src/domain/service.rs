@@ -817,6 +817,22 @@ where
         ))
     }
 
+    #[tracing::instrument(err(level = Level::DEBUG), skip_all)]
+    async fn merged_crm_company_ids(
+        &self,
+        company_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, Uuid>, AccessError> {
+        self.repo.get_merged_crm_company_ids(company_ids).await
+    }
+
+    #[tracing::instrument(err(level = Level::DEBUG), skip_all)]
+    async fn merged_crm_contact_ids(
+        &self,
+        contact_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, Uuid>, AccessError> {
+        self.repo.get_merged_crm_contact_ids(contact_ids).await
+    }
+
     #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
     async fn get_users_by_entity(
         &self,
@@ -1061,5 +1077,16 @@ impl<R: AccessRepository> EntityAudienceLookup for EntityAccessServiceImpl<R> {
                 users: audience.users,
             })
             .collect())
+    }
+
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
+    async fn get_current_channel_users(
+        &self,
+        channel_id: &str,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        let channel_id = Uuid::parse_str(channel_id).map_err(|_| {
+            AccessError::BadRequest("invalid channel_id for get_current_channel_users")
+        })?;
+        self.repo.get_current_channel_users(&channel_id).await
     }
 }

@@ -42,11 +42,7 @@ import {
   fileTypeToBlockName,
   resolveBlockAlias,
 } from '@core/constant/allBlocks';
-import {
-  enableCalendarUi,
-  isFeatureEnabled,
-  USE_MACRO_PR_SUMMARY_BLOCK,
-} from '@core/constant/featureFlags';
+import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import {
   ENTITY_ID_DATA_ATTRIBUTE,
   entityIdSelector,
@@ -92,7 +88,10 @@ import {
   type UnifiedNotification,
 } from '@notifications';
 import { openRuntimesSettings } from '@notifications/notification-navigation';
-import { isTopLevelChannelNotification } from '@notifications/top-level-channel-notification';
+import {
+  isTopLevelChannelNotification,
+  isUnseenChannelInvite,
+} from '@notifications/top-level-channel-notification';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import { queryClient } from '@queries/client';
 import { updateEmailThreadState } from '@queries/email/cache-cleanup';
@@ -679,7 +678,6 @@ const openEntity = async (
   if (entity.type === 'foreign') return;
 
   if (entity.type === 'calendar_event') {
-    if (!isFeatureEnabled(enableCalendarUi)) return;
     openCalendarView(calendarViewTargetForEntity(entity), {
       manager: splitManager,
       handle: splitHandle,
@@ -898,11 +896,12 @@ export function markChannelNotificationsSeenOnOpen(
 
   const notifications = getEntityNotifications(entity, notificationSource, {
     scopeChannelThreads: channelReadScope === 'inbox-row',
-  }).filter(
-    (notification) =>
-      !notificationIsRead(notification) &&
-      (channelReadScope === 'inbox-row' ||
-        isTopLevelChannelNotification(notification))
+  }).filter((notification) =>
+    channelReadScope === 'inbox-row'
+      ? !notificationIsRead(notification)
+      : isUnseenChannelInvite(notification) ||
+        (isTopLevelChannelNotification(notification) &&
+          !notificationIsRead(notification))
   );
   if (notifications.length === 0) return;
 

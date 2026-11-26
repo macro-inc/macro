@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT ct.id FROM (\n                   SELECT id,team_id,hidden FROM crm_contacts WHERE company_id=$2 OFFSET 0 FOR UPDATE\n               ) ct WHERE ct.team_id=$1 AND ($3 OR ct.hidden IS DISTINCT FROM $4)\n                 AND EXISTS (SELECT 1 FROM crm_email_rule_contacts r WHERE r.contact_id=ct.id AND r.team_id=$1 OFFSET 0)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "bee1e5eb63005d4e8405883e225f358e716503fead5d5817cc569c0479094cf7"
+}

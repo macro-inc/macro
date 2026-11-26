@@ -232,6 +232,22 @@ function Fixture() {
   const [readOnlyTeam, setReadOnlyTeam] = createSignal(false);
   const capabilities: SchedulingCapabilities = {
     userId: () => 'macro|alex@example.com',
+    bookingAccounts: () => [
+      {
+        emailLinkId: 'fixture-personal-inbox',
+        emailAddress: 'alex@example.com',
+        primary: true,
+        needsReconnect: false,
+        videoMeetings: true,
+      },
+      {
+        emailLinkId: 'fixture-work-inbox',
+        emailAddress: 'alex@work.example',
+        primary: false,
+        needsReconnect: false,
+        videoMeetings: true,
+      },
+    ],
     scopes: () => [
       { id: 'me', name: 'Personal', canEdit: true, canManageBookings: true },
       {
@@ -407,6 +423,7 @@ function Fixture() {
                   groups={settingsGroups}
                   results={settingsResults()}
                   selectedResultId={selectedResult()?.id}
+                  searchable
                   searchQuery={settingsSearch()}
                   onSearchQueryChange={setSettingsSearch}
                   isItemActive={(tab) => settingsTab() === tab}
@@ -499,7 +516,10 @@ function Fixture() {
             unavailable={false}
             cancel={async () => {
               const r = receipt();
-              if (r) updateReceipt({ ...r.booking, status: 'cancelled' });
+              if (!r) throw new Error('No booking to cancel');
+              const booking = { ...r.booking, status: 'cancelled' as const };
+              updateReceipt(booking);
+              return booking;
             }}
             loadSlots={async (date) => sampleSlots(date)}
             reschedule={async (start) => {

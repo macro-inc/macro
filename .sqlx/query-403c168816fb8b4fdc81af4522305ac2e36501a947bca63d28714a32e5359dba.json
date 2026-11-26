@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- People in the viewer's directory (their contact graph in both directions,\n-- self, and current team) whom the typed text names, as the local people\n-- ranking's two name stages decide it: the whole name, or for one word the\n-- first name, equals the text; or every typed word starts a word of the name.\n-- The name is the one the directory shows: the Macro profile name, else the\n-- viewer's own address-book label, else the address's local part.\n-- Teammates come first; within each group exact matches, then byte-ordered\n-- ids.\n-- $1 viewer id, $2 typed text, $3 result limit.\n-- Peers are read through contacts_connections_user1_user2_key and\n-- idx_contacts_connections_user2_user1; each then costs the \"User\" and\n-- macro_user_info probes the ranked search pays. The viewer's address book is\n-- read once and hash-joined to the people without a profile name.\nWITH typed AS MATERIALIZED (\n    -- Normalized by the same lower() and whitespace rules as the names below,\n    -- so the text and a name compare alike under any collation.\n    SELECT trim(regexp_replace(lower($2::text), '\\s+', ' ', 'g')) AS text\n),\npatterns AS MATERIALIZED (\n    -- The text's distinct words, split on anything but letters and digits\n    -- like the names' words, so they carry no LIKE wildcards. Text without a\n    -- word leaves both arrays null, which matches no name.\n    SELECT\n        array_agg('%' || word || '%') AS inside,\n        array_agg('% ' || word || '%') AS word_start\n    FROM (\n        SELECT DISTINCT word\n        FROM regexp_split_to_table((SELECT text FROM typed), '[^[:alnum:]]+') AS word\n        WHERE word <> ''\n    ) AS words\n),\nviewer_mailboxes AS MATERIALIZED (\n    SELECT COALESCE(array_agg(id ORDER BY id), '{}'::uuid[]) AS ids\n    FROM email_links\n    WHERE macro_id = $1\n),\ncandidates AS MATERIALIZED (\n    SELECT directory.id, bool_or(directory.is_teammate) AS is_teammate\n    FROM (\n        -- Fold case like the scoped peer indexes, then return to the default\n        -- collation so the joins below can use \"User\" and email_contacts keys.\n        SELECT lower(user2 COLLATE \"C\") COLLATE \"default\" AS id, FALSE AS is_teammate\n        FROM contacts_connections\n        WHERE user1 = $1\n          AND user2 COLLATE \"C\" LIKE 'macro|%'\n        UNION ALL\n        SELECT lower(user1 COLLATE \"C\") COLLATE \"default\", FALSE\n        FROM contacts_connections\n        WHERE user2 = $1\n          AND user1 COLLATE \"C\" LIKE 'macro|%'\n        UNION ALL\n        SELECT lower($1::text COLLATE \"C\") COLLATE \"default\", FALSE\n        UNION ALL\n        -- A user has at most one team; its members include the viewer.\n        SELECT lower(teammate.user_id COLLATE \"C\") COLLATE \"default\", TRUE\n        FROM team_user AS own\n        JOIN team_user AS teammate ON teammate.team_id = own.team_id\n        WHERE own.user_id IN (\n            -- team_user may hold a legacy mixed-case id for this user. Find\n            -- it through the lower(email) index and keep it only if it folds\n            -- to the canonical id.\n            SELECT $1::text\n            UNION\n            SELECT account.id\n            FROM \"User\" AS account\n            WHERE lower(account.email) = substr($1, length('macro|') + 1)\n              AND lower(account.id COLLATE \"C\") = $1\n        )\n    ) AS directory\n    GROUP BY directory.id\n),\nprofiles AS MATERIALIZED (\n    SELECT\n        c.id,\n        substr(c.id, length('macro|') + 1) AS email,\n        c.is_teammate,\n        COALESCE(u.\"isAgent\", FALSE) AS is_agent,\n        NULLIF(mui.first_name, 'N/A') AS first_name,\n        NULLIF(mui.last_name, 'N/A') AS last_name\n    FROM candidates AS c\n    LEFT JOIN \"User\" AS u ON u.id = c.id\n    LEFT JOIN macro_user_info AS mui ON mui.macro_user_id = u.macro_user_id\n),\n-- The viewer's address book, read through its mailboxes only: joined on the\n-- address instead, Postgres probes the address trigram index per person,\n-- which searches every mailbox and takes seconds.\nbook_rows AS MATERIALIZED (\n    SELECT\n        ec.email_address AS email,\n        ec.name,\n        array_position((SELECT ids FROM viewer_mailboxes), ec.link_id) AS mailbox\n    FROM email_contacts AS ec\n    WHERE ec.link_id = ANY((SELECT ids FROM viewer_mailboxes)::uuid[])\n      AND ec.name IS NOT NULL\n),\n-- Labels of the people without a profile name. Someone in several of the\n-- viewer's mailboxes takes the label of the first that has one, as the\n-- directory's names choose it.\nbook AS MATERIALIZED (\n    SELECT DISTINCT ON (r.email COLLATE \"C\") r.email, r.name\n    FROM book_rows AS r\n    JOIN profiles AS p USING (email)\n    WHERE p.first_name IS NULL AND p.last_name IS NULL\n    -- Byte order: a locale-aware sort costs more than the rest of the query.\n    ORDER BY r.email COLLATE \"C\", r.mailbox\n),\nnames AS MATERIALIZED (\n    SELECT\n        shown.*,\n        -- The name the directory shows (`ContactName::display_name`: its\n        -- parts without empty or N/A ones), else the address's local part,\n        -- normalized like the text.\n        trim(regexp_replace(lower(COALESCE(\n            NULLIF(concat_ws(' ',\n                NULLIF(NULLIF(shown.shown_first, 'N/A'), ''),\n                NULLIF(NULLIF(shown.shown_last, 'N/A'), '')), ''),\n            split_part(shown.email, '@', 1)\n        )), '\\s+', ' ', 'g')) AS name\n    FROM (\n        -- Same precedence as the directory's names: a Macro profile name\n        -- wins; otherwise the viewer's own label, split at its first space.\n        SELECT\n            p.*,\n            CASE\n                WHEN p.first_name IS NOT NULL OR p.last_name IS NOT NULL THEN p.first_name\n                ELSE split_part(book.name, ' ', 1)\n            END AS shown_first,\n            CASE\n                WHEN p.first_name IS NOT NULL OR p.last_name IS NOT NULL THEN p.last_name\n                WHEN position(' ' IN book.name) > 0\n                THEN NULLIF(trim(substring(book.name FROM position(' ' IN book.name) + 1)), '')\n            END AS shown_last\n        FROM profiles AS p\n        LEFT JOIN book USING (email)\n    ) AS shown\n),\nnamed AS (\n    SELECT\n        n.*,\n        (\n            n.name = (SELECT text FROM typed)\n            OR (\n                strpos((SELECT text FROM typed), ' ') = 0\n                AND strpos(n.name, ',') = 0\n                AND split_part(n.name, ' ', 1) = (SELECT text FROM typed)\n            )\n        ) AS is_exact\n    FROM names AS n\n    -- Every typed word occurs in the name: a cheap test before the word split.\n    WHERE n.name LIKE ALL ((SELECT inside FROM patterns)::text[])\n)\nSELECT\n    n.id AS \"user_id!\",\n    n.is_teammate AS \"is_teammate!\",\n    n.is_agent AS \"is_agent!\",\n    n.shown_first AS \"first_name?\",\n    n.shown_last AS \"last_name?\"\nFROM named AS n\n-- Words are split on anything but letters and digits.\nWHERE n.is_exact\n   OR ' ' || regexp_replace(n.name, '[^[:alnum:]]+', ' ', 'g')\n        LIKE ALL ((SELECT word_start FROM patterns)::text[])\n-- Byte order keeps ties stable whatever the database's locale.\nORDER BY n.is_teammate DESC, n.is_exact DESC, n.id COLLATE \"C\"\nLIMIT $3\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "is_teammate!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "is_agent!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "first_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "last_name?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "403c168816fb8b4fdc81af4522305ac2e36501a947bca63d28714a32e5359dba"
+}

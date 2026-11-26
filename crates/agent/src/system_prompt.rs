@@ -4,19 +4,18 @@
 use sha2::{Digest as _, Sha256};
 
 /// A session's system prompt, optionally split where the part every session
-/// of the agent repeats byte for byte ends, with an optional tail that
-/// changes every turn.
+/// of the agent repeats byte for byte ends.
 ///
 /// Anthropic caches the shared part apart from the per-session rest
 /// (instructions, memory), so a session reads the shared part back even when
-/// its rest is new. The turn's part comes last, after anything the loop adds
-/// (the model id, connected integrations), so a change to it costs only what
-/// follows it. Other providers receive the parts joined.
+/// its rest is new. Other providers receive the parts joined. Nothing that
+/// changes per turn belongs here: the prompt comes before the conversation,
+/// so changing it misses the cache for all of it. Text a turn sends
+/// elsewhere can still be measured with [`Self::record`].
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SystemPrompt {
     shared: Option<String>,
     rest: String,
-    turn: String,
     sections: Vec<MeasuredSection>,
 }
 
@@ -42,7 +41,8 @@ pub enum PromptSection {
     ModelId,
     /// The integrations reachable through tool search.
     ConnectedIntegrations,
-    /// SDK documentation selected for the turn (code mode).
+    /// SDK documentation selected for the turn (code mode), sent on the
+    /// turn's request rather than in the prompt.
     SdkDocs,
     /// A prompt not built from named sections.
     Unsectioned,
@@ -106,9 +106,9 @@ impl SystemPrompt {
         self.measure(section, text);
     }
 
-    /// Append `text` to the part only this turn sends, which goes last.
-    pub fn push_turn(&mut self, section: PromptSection, text: &str) {
-        self.turn.push_str(text);
+    /// Measure `text` the turn sends outside the prompt, on its request,
+    /// without adding it here.
+    pub fn record(&mut self, section: PromptSection, text: &str) {
         self.measure(section, text);
     }
 
@@ -117,9 +117,9 @@ impl SystemPrompt {
         self.shared.as_deref()
     }
 
-    /// Everything after the shared part: the session's own, then the turn's.
+    /// Everything after the shared part.
     pub fn rest(&self) -> String {
-        format!("{}{}", self.rest, self.turn)
+        self.rest.clone()
     }
 
     /// The whole prompt as one string.
@@ -154,10 +154,9 @@ impl std::fmt::Display for SystemPrompt {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             formatter,
-            "{}{}{}",
+            "{}{}",
             self.shared.as_deref().unwrap_or_default(),
-            self.rest,
-            self.turn
+            self.rest
         )
     }
 }

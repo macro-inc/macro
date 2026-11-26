@@ -33,7 +33,7 @@ pub enum EmailContributionMode {
 }
 
 /// One positive whole-thread selector; denials always take precedence.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, ToSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum EmailInclusionRule {
     /// A mailbox-local thread owned by the contributor.
@@ -143,4 +143,7 @@ pub enum EmailPolicyAuditAction {
     MailboxRevoked,
     /// A referenced contact/company changed the effective live selection.
     LiveTargetsChanged,
+    /// An admin merged records the rules named, so the rules were rewritten
+    /// to share the same mail (or, at the admin's choice, to stop sharing it).
+    RecordsMerged,
 }

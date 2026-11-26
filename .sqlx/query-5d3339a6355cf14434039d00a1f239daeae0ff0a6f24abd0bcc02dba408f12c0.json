@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id FROM crm_contacts WHERE id=ANY(ARRAY(\n                   SELECT ct.id FROM unnest($2::uuid[]) ids(id) CROSS JOIN LATERAL (\n                       SELECT id,team_id FROM crm_contacts WHERE id=ids.id OFFSET 0\n                   ) ct WHERE ct.team_id=$1\n               )) ORDER BY id FOR SHARE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5d3339a6355cf14434039d00a1f239daeae0ff0a6f24abd0bcc02dba408f12c0"
+}

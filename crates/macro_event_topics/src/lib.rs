@@ -104,4 +104,6 @@ topics! {
     MacroUsersTopic => "macro.users",
     /// Vault facts addressed to one account, such as a resolved agent access request.
     MacroPasswordsTopic => "macro.passwords",
+    /// Time logged on tasks: entries logged, edited and deleted, with the task's new total.
+    MacroTimeEntriesTopic => "macro.time_entries",
 }

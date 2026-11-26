@@ -1,4 +1,5 @@
 pub mod constant;
+pub mod credential;
 pub mod error;
 pub mod headers;
 mod internal_api_key;

@@ -1,8 +1,8 @@
 :root { --documentation-nav-width: 241px; }
-.site-documentation-header { --doc-nav-background: #000; }
+.site-documentation-header { --doc-nav-background: #000; --doc-nav-muted-mix: 60%; }
 .site-header.site-documentation-header { left: 20px; }
-html[data-palette='cream'] .site-documentation-header { --doc-nav-background: #f5f1e8; }
-.macro-homepage .site-documentation-header { --doc-nav-background: light-dark(#fff, #000); }
+/* Dark ink needs a larger share of the mix to keep 4.5:1 on the cream page. */
+html[data-palette='cream'] .site-documentation-header { --doc-nav-background: #f5f1e8; --doc-nav-muted-mix: 66%; }
 .site-header.site-documentation-header .site-menu-toggle { display: grid; position: relative; z-index: 2; width: 68px; height: 68px; margin-inline: -16px; border-radius: 50%; background: transparent; color: var(--nav-ink); cursor: default; }
 .site-header.site-documentation-header .site-menu-mark { width: 36px; height: 36px; }
 .site-header.site-documentation-header .site-menu-toggle:focus-visible { background: color-mix(in srgb, var(--nav-ink) 8%, transparent); }
@@ -12,7 +12,7 @@ html[data-palette='cream'] .site-documentation-header { --doc-nav-background: #f
 }
 .site-documentation-header .site-menu::after { display: none; }
 .documentation-navigation {
-  --nav-muted: color-mix(in srgb, var(--nav-ink) 60%, var(--doc-nav-background));
+  --nav-muted: color-mix(in srgb, var(--nav-ink) var(--doc-nav-muted-mix), var(--doc-nav-background));
   position: fixed; inset: 0 auto 0 0; width: var(--documentation-nav-width); z-index: 1;
   padding: 0; box-sizing: border-box;
   background: var(--doc-nav-background); border: 0; border-right: 1px solid color-mix(in srgb, var(--nav-ink) 7%, transparent);
@@ -26,8 +26,8 @@ html[data-palette='cream'] .site-documentation-header { --doc-nav-background: #f
 .documentation-navigation a { cursor: default; display: block; box-sizing: border-box; min-height: 32px; margin-bottom: 2px; padding: 6px 8px; border-radius: 0; color: var(--nav-muted); text-decoration: none; font: 370 14px/20px 'Inter Variable', Inter, sans-serif; overflow-wrap: anywhere; }
 .documentation-navigation a:hover, .documentation-navigation a[aria-current=page] { color: var(--nav-ink); background: transparent; }
 .documentation-navigation a:focus-visible { outline: 2px solid var(--nav-muted); outline-offset: -2px; }
-.doc-nav-top { position: sticky; top: -16px; z-index: 1; padding: 8px 0 16px; margin-top: -16px; background: var(--doc-nav-background); }
-.doc-nav-search { position: relative; display: block; }
+.doc-nav-top { position: sticky; top: -16px; z-index: 1; display: flex; align-items: center; gap: 8px; padding: 8px 0 16px; margin-top: -16px; background: var(--doc-nav-background); }
+.doc-nav-search { position: relative; display: block; flex: 1; min-width: 0; }
 .doc-nav-search-icon { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); color: var(--nav-muted); pointer-events: none; }
 .doc-nav-search input { width: 100%; box-sizing: border-box; height: 40px; padding: 0 12px 0 33px; font: 370 14px/20px 'Inter Variable', Inter, sans-serif; color: var(--nav-ink); background: color-mix(in srgb, var(--nav-ink) 5%, transparent); border: 1px solid color-mix(in srgb, var(--nav-ink) 1.5%, transparent); border-radius: 999px; }
 .doc-nav-group { margin: 0; }
@@ -94,4 +94,8 @@ html[data-palette='cream'] .site-documentation-header { --doc-nav-background: #f
 @media (min-width: 768px) and (max-width: 1439px) {
   :root { --documentation-nav-width: 200px; }
   .doc-nav-scroll { padding-inline: 16px 12px; }
+}
+
+@media (max-width: 767px) {
+  .doc-nav-group a.doc-nav-desktop-only { display: none; }
 }

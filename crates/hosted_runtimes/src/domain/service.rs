@@ -12,19 +12,23 @@ use uuid::Uuid;
 use crate::domain::ids::ComputerId;
 use crate::domain::lifecycle::{Event, Rejected};
 use crate::domain::models::{
-    Computer, ComputerName, ComputerRecord, ComputerStatus, FleetUnavailable, InvalidComputerName,
-    PurchaseBilling, Quote, Reservation, SizeOffer,
+    Computer, ComputerName, ComputerRecord, ComputerStatus, FleetUnavailable, HostAllocation,
+    InvalidComputerName, PurchaseBilling, PurchaseOffers, PurchaseQuote, PurchaseSizeOffer, Quote,
+    Reservation, SizeOffer,
 };
 use crate::domain::ports::{
     Applied, Billing, BillingError, CompPolicy, ComputerRepo, FleetAttachmentSource, NoComps,
 };
-use crate::domain::size::ComputerSize;
+use crate::domain::size::{CatalogEntry, ComputerSize};
 
+mod agent_invites;
+pub use agent_invites::MAX_AGENT_ATTEMPTS;
 mod billing;
 pub use billing::{ObservedItem, SubscriptionObserved, SubscriptionStatus};
 mod purchase;
 pub use purchase::{CONFIRM_DELAY, RESERVATION_TTL};
 mod team_release;
+mod usage;
 pub use team_release::TeamComputerRelease;
 
 #[cfg(test)]
@@ -102,6 +106,19 @@ impl ComputerError {
 impl From<rootcause::Report> for ComputerError {
     fn from(report: rootcause::Report) -> Self {
         Self::Internal(report)
+    }
+}
+
+/// A listed size with its price and whether any host can sell it now.
+fn size_offer(entry: &CatalogEntry, quote: Quote, hosts: &[HostAllocation]) -> SizeOffer {
+    let units = entry.resources.units();
+    SizeOffer {
+        size: entry.size,
+        vcpus: entry.resources.vcpus.get(),
+        memory_gb: entry.resources.memory_gib.get(),
+        disk_gb: entry.resources.disk_gib.get(),
+        quote,
+        sold_out: !hosts.iter().any(|host| host.sells(units)),
     }
 }
 
@@ -209,14 +226,21 @@ impl<
         &self,
         team_id: Uuid,
         computer_id: ComputerId,
-    ) -> Result<(ComputerStatus, crate::domain::models::FleetAttachment), ComputerError> {
-        let availability = self
+    ) -> Result<crate::domain::models::RosterStatus, ComputerError> {
+        let attachment = self
             .attachment
             .attachment(self.clock.now())
             .await
             .map_err(internal)?;
         let record = self.team_record(team_id, computer_id).await?;
-        Ok((self.status_of(&record).await?, availability))
+        let awaiting_agent = record
+            .healthy()
+            .is_some_and(|computer| computer.state.awaiting_agent);
+        Ok(crate::domain::models::RosterStatus {
+            status: self.status_of(&record).await?,
+            attachment,
+            awaiting_agent,
+        })
     }
 
     /// Release an agent teammate's computer when the agent is removed: the
@@ -237,7 +261,17 @@ impl<
         self
     }
 
-    async fn require_rollout(
+    /// Whether the caller sees and may buy computers: the check purchases
+    /// and offers make, so the web follows the same rollout (flag and dev
+    /// allowlist).
+    pub async fn rollout_enabled(&self, user_id: &MacroUserIdStr<'static>) -> bool {
+        self.rollout.enabled(user_id).await
+    }
+
+    /// Refuse a buyer the computers rollout doesn't include, before anything
+    /// is reserved: callers that create other things for a purchase (an agent
+    /// teammate's account) ask first, so a refusal leaves nothing to undo.
+    pub async fn require_rollout(
         &self,
         user_id: &MacroUserIdStr<'static>,
     ) -> Result<(), ComputerError> {
@@ -324,22 +358,88 @@ impl<
 
         let billing = self.purchase_billing(team_id).await?;
         let mut offers = Vec::new();
-        for entry in &self.catalog {
-            let size = entry.size;
-            let units = entry.resources.units();
-            if !hosts.iter().any(|host| host.runs(units)) {
-                continue;
-            }
-            offers.push(SizeOffer {
-                size,
-                vcpus: entry.resources.vcpus.get(),
-                memory_gb: entry.resources.memory_gib.get(),
-                disk_gb: entry.resources.disk_gib.get(),
-                quote: self.quote(team_id, size, &billing).await?,
-                sold_out: !hosts.iter().any(|host| host.sells(units)),
-            });
+        for entry in self.listed_sizes(&hosts) {
+            let quote = self.quote(team_id, entry.size, &billing).await?;
+            offers.push(size_offer(entry, quote, &hosts));
         }
         Ok(offers)
+    }
+
+    /// [`Self::offers`] for the buy dialog: each size also says what buying
+    /// it charges today, with the renewal date and the card charged, from
+    /// one read of the team's billing whatever the number of sizes.
+    #[tracing::instrument(
+        skip(self, user_id),
+        fields(sizes = tracing::field::Empty, card = tracing::field::Empty),
+        err
+    )]
+    pub async fn purchase_offers(
+        &self,
+        team_id: Uuid,
+        user_id: MacroUserIdStr<'static>,
+    ) -> Result<PurchaseOffers, ComputerError> {
+        self.require_rollout(&user_id).await?;
+        self.require_attached().await?;
+        let hosts = self.repo.allocation().await.map_err(internal)?;
+
+        let billing = self.purchase_billing(team_id).await?;
+        let listed = self.listed_sizes(&hosts);
+        let sizes: Vec<ComputerSize> = listed.iter().map(|entry| entry.size).collect();
+        let terms = self
+            .billing
+            .purchase_terms(team_id, &sizes, &billing)
+            .await?;
+        if terms.quotes.len() != listed.len() {
+            return Err(ComputerError::Internal(rootcause::report!(
+                "billing quoted {} sizes of {}",
+                terms.quotes.len(),
+                listed.len()
+            )));
+        }
+        // A comped team is charged nothing, so no card is named.
+        let card = match billing {
+            PurchaseBilling::Stripe => terms.card,
+            PurchaseBilling::Comped { .. } => None,
+        };
+        let span = tracing::Span::current();
+        span.record("sizes", listed.len());
+        span.record("card", card.is_some());
+        Ok(PurchaseOffers {
+            sizes: listed
+                .into_iter()
+                .zip(terms.quotes)
+                .map(
+                    |(
+                        entry,
+                        PurchaseQuote {
+                            mut quote,
+                            due_today,
+                        },
+                    )| {
+                        if let PurchaseBilling::Comped { .. } = billing {
+                            quote.amount = 0;
+                        }
+                        PurchaseSizeOffer {
+                            offer: size_offer(entry, quote, &hosts),
+                            due_today,
+                        }
+                    },
+                )
+                .collect(),
+            renews_at: terms.renews_at,
+            card,
+        })
+    }
+
+    /// The catalog sizes some host can run awake.
+    fn listed_sizes(&self, hosts: &[HostAllocation]) -> Vec<&CatalogEntry> {
+        self.catalog
+            .iter()
+            .filter(|entry| {
+                let units = entry.resources.units();
+                hosts.iter().any(|host| host.runs(units))
+            })
+            .collect()
     }
 
     /// One of the team's computers, or its purchase while it is being
@@ -403,6 +503,27 @@ impl<
         self.require_attached().await?;
         let event = if on { Event::PowerOn } else { Event::PowerOff };
         self.apply_for_team(team_id, computer_id, event).await
+    }
+
+    /// The agent teammate the computer runs reported itself online, which
+    /// ends its first start and its setup: the teammate flow set it up, so
+    /// it never offers the person's guided setup. Not gated on an attached
+    /// fleet: it changes only the computer's record. Telling it again
+    /// changes nothing.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn agent_online(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+    ) -> Result<(), ComputerError> {
+        self.team_computer(team_id, computer_id).await?;
+        self.apply(computer_id, Event::AgentOnline).await?;
+        self.repo
+            .complete_setup(computer_id, self.clock.now())
+            .await
+            .map_err(internal)?
+            .ok_or(ComputerError::NotFound)?;
+        Ok(())
     }
 
     /// Retry a computer that gave up restarting, without changing its billing.

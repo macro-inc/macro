@@ -16,6 +16,10 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             "/passwordless/{code}",
             get(passwordless_callback::handler).layer(
                 ServiceBuilder::new()
+                    .layer(axum::middleware::from_fn_with_state(
+                        state.authorization_state.clone(),
+                        middleware::refuse_program_sign_in::handler,
+                    ))
                     .layer(CookieManagerLayer::new())
                     .layer(axum::middleware::from_fn_with_state(
                         state.clone(),

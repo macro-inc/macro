@@ -4,6 +4,9 @@ pub mod call_link;
 /// Postgres implementation of the companies repository
 #[cfg(feature = "outbound")]
 pub mod companies_repo;
+/// Remote rollout gate for selective contribution authoring.
+#[cfg(feature = "outbound")]
+pub mod email_policy;
 /// Postgres implementation of the message store's CRM parent reader
 #[cfg(feature = "lookup")]
 pub mod lookup;
@@ -25,6 +28,14 @@ pub mod thread_exclusions;
 #[cfg(feature = "outbound")]
 pub mod unfurl_resolver;
 
+/// Merges across every owner of rows that name the merged records.
+#[cfg(feature = "merge")]
+pub mod record_merge;
+
 /// Atomic pipeline storage over the databases domain writer.
 #[cfg(feature = "outbound")]
 pub mod pipelines;
+
+/// Bounded live rule discovery for readers and owner authoring.
+#[cfg(any(feature = "outbound", feature = "email_discovery"))]
+pub mod email_rule_discovery;

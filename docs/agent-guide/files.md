@@ -3,7 +3,10 @@
 ## Files — `/app/component/documents`
 
 Tabs `Owned` / `Shared` / `Attachments` / `Folders` / `All`; `New` menu; rows show title,
-tags, updated time. Clicking a row opens the doc.
+tags, updated time. Clicking a row opens the doc. Above 720px on touch, the file
+list stays on the left and the document opens in the right preview; before
+selection that preview is empty. Show sidebar opens folders and sub-views in
+a sheet without replacing the list.
 
 Shared always excludes files owned by you. Selecting **Created by → Me** therefore
 returns no files; selecting Me together with another creator returns only that
@@ -15,7 +18,7 @@ viewer identity is available, document inserts into Shared are rejected.
 
 Files opens **Drive** using the same shell as Tasks, on desktop and touch
 devices alike.
-The top of Drive's My Files, Recent and Shared lists (not folders) holds the Drive `TutorialRow`, outside the virtualized rows, and the top of Drive's sidebar holds the Docs `TutorialSidebarItem`, followed by Spreadsheets' under `enable-spreadsheets` and Databases' under `enable-databases` (all from `features/video-tutorials`, each once its video is in the catalog). While Drive's sidebar lists more than Docs, each item is labelled with its Block (**Macro Docs**, **Macro Spreadsheets**, **Macro Databases**) instead of **Watch tutorial**.
+The top of Drive's My Files, Recent and Shared lists (not folders) holds the Drive `TutorialRow`, outside the virtualized rows, and the top of Drive's sidebar holds the Docs `TutorialSidebarItem`, followed by Spreadsheets' and Databases' (all from `features/video-tutorials`, each once its video is in the catalog). While Drive's sidebar lists more than Docs, each item is labelled with its Block (**Macro Docs**, **Macro Spreadsheets**, **Macro Databases**) instead of **Watch tutorial**.
 
 The document header's **Copy Share Link** and the Share dialog's **Copy Link**
 copy a standalone link to the selected file, not the current browser URL.
@@ -38,7 +41,7 @@ well as ID, so an unrelated conversation with the same ID remains visible.
 Deleting a non-owned item still only removes it from history. Forking a markdown
 history version still uses REST because GraphQL duplication copies current content.
 
-With `enable-databases` enabled, **My Files** includes owned databases and
+**My Files** includes owned databases and
 **Shared with me** includes databases shared by other owners. **All files**
 also includes accessible databases owned by others. **Search Drive** matches
 database names and **Filter → Type → Database** narrows the list. **New →
@@ -69,37 +72,48 @@ corresponding database timestamp.
 An email attachment's Drive copy goes to the Trash within about a minute once
 its email is gone (the message deleted at the provider, a draft sent or
 discarded, or the inbox disconnected or removed), unless its owner moved it
-into a folder, shared it, edited it or commented on it. It never shows up in
+into a folder, shared it, renamed it, edited it or commented on it. Opening it
+does not keep it. It never shows up in
 **My Files** on its own, and it expires from the Trash like any other file.
 The app has no Trash view, so the document simply leaves **Email
 attachments**. Verify by deleting a test message whose attachment was opened,
 then checking that the document is in neither **Email attachments** nor
 **My Files**, and that its `"deletedAt"` is set.
 
-On touch devices (phones and tablets), the Drive header is a scrollable pill
-strip — **Recent**, **My Files**, **Shared with me**, and **Folders** — with a
-leading filter-drawer button, like Tasks. Opening Files from the mobile dock
-starts on **Recent**; explicit tab and folder links keep their destination. The
-first pill is Recent. The drawer holds Sort (hidden on Recent, where the viewer's own
+Above 720px of pane width on touch, Drive keeps its list on the left and opens
+selected files in the right preview. Before selection, that preview is empty.
+Show sidebar opens sub-view navigation in a left sheet over the list. At every
+touch width, this sheet covers floating list controls and app navigation chrome.
+At narrow touch widths, selecting a file opens its standalone view. Router middleware
+preserves explicit Drive detail routes so folding an open preview can keep its
+editor mounted.
+
+On touch devices (phones and tablets), the Drive header holds only **Show
+sidebar** and the filter-drawer button, like Tasks; tabs and folders are picked
+from the sidebar sheet. Opening Files from the mobile dock starts on **Recent**;
+explicit tab and folder links keep their destination. The drawer holds Sort (hidden on Recent, where the viewer's own
 edit order applies, and hidden on the touch folder tree) and, on tab locations only, the same filter groups as the
 desktop **Filter** menu; active selections show a count badge on the trigger
 and a `Clear all` action in the drawer. The single-row desktop list header orders the title, Filter, Sort, New, and an
 expandable Search icon. `Cmd/Ctrl+F` opens the search field. These list-header
 controls are desktop-only — search on
 touch uses the global search overlay and creation uses the dock's New button.
-The **Folders** pill opens the folder overview and stays highlighted inside
-any folder; tapping it from inside a folder returns to the overview, and
-selecting another pill leaves the folder tree. On a touch device whose Drive
+On a touch device whose Drive
 sidebar is off screen, that overview is the nested folder tree — name order,
 with a folder search field — rather than a date-sorted list of every folder.
 Tap a folder name to open its contents; the expand control reveals child
-folders without leaving the overview. Inside a folder, a path under the pills
-lists Folders and each ancestor; choosing one opens it. A docked sidebar keeps
-the date-sorted folder list beside the tree. The sidebar contains `New file or folder`, `My Files`, `Recent`,
+folders without leaving the overview. Inside a folder, a path under the header
+controls lists Folders and each ancestor; choosing one opens it. A docked sidebar keeps
+the date-sorted folder list beside the tree. By default the sidebar contains `New file or folder`, `My Files`, `Recent`,
 `Shared with me`, collapsible Favorites, a collapsible Databases section
 listing every database the viewer owns or has been shared, by name (past ten,
 it scrolls within its own height; hidden when there are none or databases are
 disabled), and a searchable folder hierarchy.
+Drag the Favorites, Databases, or Folders heading before or after the unnamed
+My Files/Recent/Shared group to change their shared local order. The unnamed group
+has no grip or keyboard move control. Reload to verify persistence independently
+of other workspaces.
+New file/folder and import controls remain pinned.
 The Drive sidebar's import card (**Import files**, see
 [setup cards](setup-cards.md#import-from-connected-apps)) lists Notion; its
 **Import** (or a successful **Connect**) opens a new agent chat beside Drive
@@ -114,15 +128,81 @@ decided` as the decisions fill in, with **Import** disabled until the plan is
 ready. The card shows totals (Documents, Databases with rows, Task lists with
 tasks, Skipped, Already in Macro), a **Team** / **Only you** badge on every
 written row (the owner clicks it to flip it, and a folder flips what is below
-it; databases stay **Only you**, and the card says "Databases can't be shared
-with the team yet, so they stay with you."), a sharing summary line (without
+it; each database keeps its own reviewed sharing choice), a sharing summary line (without
 a team: `N only you — you're not on a team, so nothing is shared`), and a
 collapsed **Already in Macro** section linking to copies teammates already
 imported and shared, which are not imported again. A database or task-list
 row's caret (**Show rows of …**) shows its row count with a few sample row
 titles and, for a task list, which Notion columns become status, priority,
-due date and assignee. **Open full review** shows the whole plan in a dialog
-(a full-height sheet on phones). **Import …** approves straight from the
+due date and assignee. Linked sources outside the selected roots appear as
+**Linked from <page title>** dependencies when a selected standalone page refers
+to them. External dependencies start unticked with **Link**; tick one to copy
+it. An old or missing saved selection never implicitly imports a dependency.
+Sources already inside the selection show **Linked from <page title>** and
+default to a database copy; an approved task-list choice or exclusion
+keeps Notion links in its cards and reports why. Excluding one
+keeps a named Notion link in the page; unreadable dependencies show the reason
+and cannot be included. The same source is copied once across repeated inline
+and linked placements. Each placement becomes an editable database card at its
+original position, including in row bodies, with its translated saved view. The text
+title column stays first so related-record chips show row names; a row-body
+**Page** link appears immediately after it.
+Row bodies are checked while importing: a reference to a source absent from the
+review stays a named Notion link, with the reason and count in the report.
+A missing selected-tab hint uses the first Notion tab. The completed card shows
+this choice under **Tab choices**, with the containing page or row named,
+when Notion returned more than one tab.
+If a selected saved view is unavailable but its database is ready, the card stays
+editable on the default view and the report names that approximation. Saved view
+names are readable and unique, without source identifiers.
+Unsupported filter clauses broaden the view rather than hide source rows; its
+name ends in **≈** and the report explains every translation loss using view and property titles, without importer paths.
+While reviewing, row and task counts are estimates. The completed card shows
+confirmed writes and separates **Needs attention**, **Not imported**, and
+**View changes**. **Needs attention** opens with the run error, failed objects,
+and any rows written before a database stopped. Expand the other sections for
+reasons and affected databases and views. Large reports show totals and label
+the samples they display. Hidden Notion columns that stay visible are named in
+the view details.
+Formula and rollup columns are labelled snapshots. Database sharing is separate
+from page sharing; if a personal database's folder or an ancestor has explicit
+sharing grants, it uses the owner-only **Notion (personal)** folder and mirrored
+subfolder path, with a placement note in the report. Renamed properties and options
+warn on resume; values missing from the reserved option schema are omitted and
+counted, with the matching method. Structural property changes stop only that
+source and leave named Notion links in affected placements. An older interrupted
+database without planning facts asks for a re-import. A Personal source stops
+before writing rows if its reserved folder gains an explicit sharing grant, with
+a sharing-change warning. A resumed run reuses reserved
+databases and saved views. Invalid source schemas or missing or inaccessible
+destinations leave named links for that source. An incomplete saved-view listing
+is retried across attempts. After three consecutive source-specific failures,
+the report names the fallback; a successful reservation resets that budget.
+The link outcome persists across later plans of the same import generation.
+Unexpected errors name the database and follow the same bounded retry policy.
+Authentication, rate limits, storage and folder-access failures stop the attempt
+without permanently replacing cards with links. A repeatedly timing-out Notion
+source counts toward its budget only when another source answers a fresh read
+after the failure. Without a healthy peer, it stays retryable until at least
+three failed attempts on distinct reviews form a sustained chain spanning
+24 hours, with no gap over 12 hours and no successful reservation in between.
+A longer gap or a success restarts the chain; redelivering one review never
+counts twice. Then the report says the database was imported as a link.
+Rate limits never trigger this fallback. Unsupported properties, including buttons,
+are named as omitted in the review and report. People assignments that cannot
+be matched to Macro users are counted by database and property; matched people
+are kept and resume does not count an omission twice.
+Cancellation stays cancelled even if an in-flight reservation later returns an
+error. A teammate still
+creating a shared copy produces a named waiting error; a later import retry
+finishes it. Failed cards currently have no resume action, and degraded database
+links have no retry/reset action. Partial results point to the report rather
+than promising that another plan retries terminal links. **Open full review**
+shows the whole plan in a dialog
+(a full-height sheet on phones). On phones, plan titles wrap instead of clipping; counts and badges move below
+them, with per-row sharing controls still available. **Linked from** wraps below
+those controls; notices start collapsed behind their count before the tree. Tap
+the notice count to read every warning. Desktop starts the same notices disclosure expanded. **Import …** approves straight from the
 card, with no confirmation step. The agent ends that
 message with "Should I kick it off?"; when the owner answers yes in chat, it
 approves the review itself (a `DecideReview` submit, the card's own approve with the
@@ -185,7 +265,7 @@ combine to narrow the results. Created by is hidden while My Files
 is restricted to your own files. Recent offers only file-scope filtering.
 Created by uses a bounded searchable contact window on desktop and in the mobile
 drawer, with Me and persisted selections resolved independently of that window.
-Next options replaces the page; selected and unavailable IDs remain selected,
+Further pages load as the list scrolls; selected and unavailable IDs remain selected,
 and Only clears off-page selections in this group without changing other facets.
 Partial/offline cache data is labeled rather than treated as an empty directory.
 The source stays idle until the creator submenu/drawer section opens. Regression:
@@ -234,16 +314,22 @@ details include Print, and DOCX files include Download DOCX. Markdown details
 use the document menu, which already includes Download. Spreadsheets keep the
 editor's Import and export menu for Excel and CSV downloads. Choose the current location
 breadcrumb to return to the list; choosing an ancestor file drops newer detail
-entries. Opening a list row or sidebar favorite pushes a new one-item detail path;
-sidebar favorites start from My Files instead of inheriting a previously selected
-folder. Only navigation originating inside a detail appends to that path. Browser
+entries. Opening a list row or a sidebar shortcut (a favorite, or an item in the
+Databases section) pushes a new one-item detail path; sidebar shortcuts start
+from My Files instead of inheriting a previously selected folder, and a new item
+opens in the list that holds it (its folder, else My Files). Only navigation
+originating inside a detail appends to that path. Only a file opened from a Drive
+list names that list as its location (`My Files ›`, `Shared with me ›`, a folder
+path); a sidebar shortcut, a call, or a file opened from anywhere else (an email
+attachment, a channel, search, a link) shows no location breadcrumb, nor do the
+files opened from inside it. Browser
 Back and Forward restore the exact path saved with each entry, and renamed files
 update in mounted ancestor breadcrumbs without rewriting history. Cmd/Ctrl-clicking a
 row toggles selection; Shift-clicking a checkbox selects a range, and Shift+Enter
 opens the focused row in a new split. Cmd/Ctrl-clicking a row's folder link or
 search hit opens a new tab. Short filtered pages load more results automatically;
 a failed page shows a retry action instead of silently stopping. On touch, tabs
-switch via the header pills; on narrow desktop layouts the header keeps a plain
+switch from the sidebar sheet; on narrow desktop layouts the header keeps a plain
 title and navigation goes through the hamburger overlay. Location, search,
 filters, expanded folders, list focus, and scroll position are restored when
 returning from an opened file.

@@ -2,7 +2,7 @@ import '@app/index.css';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { DocumentMentionStatic } from '@core/component/LexicalMarkdown/component/decorator/DocumentMention';
-import { ChannelsContextProvider } from '@core/context/channels';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessContextProvider } from '@core/context/quickAccess/context';
 import { filterQuickAccessItems } from '@core/context/quickAccess/entity-search';
@@ -21,6 +21,7 @@ import { useHotKeyRoot } from '@core/hotkey/hotkeys';
 import { EntityProvider } from '@entity';
 import { DocumentMentionNode } from '@macro-inc/lexical-core';
 import { setDecorator } from '@macro-inc/lexical-core/decoratorRegistry';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import { createContactDirectoryWindow } from '@queries/contacts/directory-query';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { createSignal, onCleanup } from 'solid-js';
@@ -32,6 +33,7 @@ const CHANNEL_ID = 'mention-fixture-channel';
 // Render the stored chip without a backend preview or app navigation host.
 setDecorator(DocumentMentionNode, DocumentMentionStatic);
 const CRM_SCENARIO = new URLSearchParams(location.search).has('crm');
+const PEOPLE_SCENARIO = new URLSearchParams(location.search).has('people');
 const ITEMS: EntityItem[] = CRM_SCENARIO
   ? [
       {
@@ -207,7 +209,9 @@ function Fixture() {
           <EntityProvider>
             <UserContextProvider>
               <EmailLinksContextProvider>
-                <ChannelsContextProvider>
+                <ChannelDirectoryProvider
+                  directory={staticChannelDirectory(() => [])}
+                >
                   <QuickAccessContextProvider value={QUICK_ACCESS}>
                     <main class="min-h-screen bg-page p-4 text-ink space-y-4 flex flex-col justify-end">
                       <h1>
@@ -245,6 +249,26 @@ function Fixture() {
                           discussion && !scoped
                             ? undefined
                             : () => {
+                                if (PEOPLE_SCENARIO)
+                                  return [
+                                    {
+                                      id: 'macro|alina@example.com',
+                                      name: 'Alina Ellis',
+                                      email: 'alina@example.com',
+                                      lastInteraction: new Date(),
+                                    },
+                                    {
+                                      id: 'macro|caleb@example.com',
+                                      name: 'Caleb Knox',
+                                      email: 'caleb@example.com',
+                                      lastInteraction: new Date(),
+                                    },
+                                    {
+                                      id: 'macro|alex@example.com',
+                                      name: 'Alex Rowan',
+                                      email: 'alex@example.com',
+                                    },
+                                  ];
                                 if (CRM_SCENARIO)
                                   return [
                                     {
@@ -263,7 +287,7 @@ function Fixture() {
                       />
                     </main>
                   </QuickAccessContextProvider>
-                </ChannelsContextProvider>
+                </ChannelDirectoryProvider>
               </EmailLinksContextProvider>
             </UserContextProvider>
           </EntityProvider>

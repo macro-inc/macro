@@ -34,6 +34,7 @@ fn bare_row(row_type: InboxRowType, unseen: bool) -> InboxRow {
             slot: "top_level".to_string(),
         },
         row_type,
+        also_listed_as: Vec::new(),
         thread_id: None,
         actor: None,
         actions: Vec::new(),

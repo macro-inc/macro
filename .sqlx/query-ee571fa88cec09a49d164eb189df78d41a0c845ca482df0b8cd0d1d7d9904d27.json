@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE email_attachments a SET upload_claimed_at = NULL FROM email_messages m\n            WHERE a.message_id = m.id AND m.link_id = $1 AND m.id = $2\n                AND a.upload_claimed_at < now() - interval '3 minutes'\n                AND a.upload_abandoned_at IS NULL\n                AND NOT EXISTS(SELECT 1 FROM document_email d WHERE d.email_attachment_id = a.id)\n                AND NOT EXISTS(SELECT 1 FROM email_attachments_sfs s WHERE s.attachment_id = a.id)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ee571fa88cec09a49d164eb189df78d41a0c845ca482df0b8cd0d1d7d9904d27"
+}

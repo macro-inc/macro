@@ -277,14 +277,19 @@ async fn resuming_a_session_a_live_peer_manages_is_refused_without_rotating() {
     );
 }
 
-/// The in-process runtime skips Macro's own server by the name the harness
-/// gives it, and restates that name rather than importing it. This is the one
-/// crate that sees both, so it is where they are held equal.
+/// The in-process runtime skips Macro's own server, and tells the internal one
+/// from connected apps, by the names the harness gives them, and restates
+/// those names rather than importing them. This is the one crate that sees
+/// both, so it is where they are held equal.
 #[test]
-fn the_in_process_runtime_and_the_harness_agree_on_macros_server_name() {
+fn the_in_process_runtime_and_the_harness_agree_on_macros_server_names() {
     assert_eq!(
         agent_inmem::domain::mcp::MACRO_MCP_NAME,
         agent_harness::domain::model::MACRO_MCP_NAME
+    );
+    assert_eq!(
+        agent_inmem::domain::mcp::MACRO_INTERNAL_MCP_NAME,
+        agent_harness::domain::model::INTERNAL_MCP_NAME
     );
 }
 

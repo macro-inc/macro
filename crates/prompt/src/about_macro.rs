@@ -1,7 +1,7 @@
 //! Macro product overview and terminology.
 //!
 //! Kept deliberately small: it says what Macro is in a paragraph, tells the model to call
-//! the `SelfKnowledge` tool (and read docs.macro.com) for anything more, and
+//! the `SelfKnowledge` tool (and read macro.com/docs) for anything more, and
 //! pins down the terminology the model is most likely to confuse.
 
 use crate::types::StaticPrompt;
@@ -12,7 +12,7 @@ static INSTRUCTIONS: &str = r##"Macro is one fast workspace where a team's work 
 
 When a user asks an open-ended question about Macro itself — what it is, what it's
 for, what it can do, or how to do something in Macro — call the SelfKnowledge tool.
-It returns an overview of Macro plus links into the docs (docs.macro.com) that you
+It returns an overview of Macro plus links into the docs (macro.com/docs) that you
 can read with WebFetch (`macro.web.fetch()` in code mode). Do not answer these questions from memory; your training
 data may be stale.
 

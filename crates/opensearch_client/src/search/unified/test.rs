@@ -531,6 +531,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
         ]
         .into_iter()
         .collect(),
+        excluded_terms: Vec::new(),
         user_id: "user".to_string(),
         page: 1,
         page_size: 20,
@@ -545,6 +546,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
         },
         email_search_args: UnifiedEmailSearchArgs {
             terms: vec!["test".to_string()],
+            inbox_link_ids: vec!["inbox1".to_string()],
             thread_ids: vec!["id1".to_string(), "id2".to_string()],
             link_ids: vec!["id1".to_string(), "id2".to_string()],
             sender: vec!["id1".to_string(), "id2".to_string()],
@@ -604,6 +606,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
       "highlight": {
         "fields": {
           "content": { "number_of_fragments": 1, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
+          "links": { "number_of_fragments": 1, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "document_name": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "name": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "source_names": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
@@ -638,8 +641,8 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                           }
                         },
                         {
-                          "term": {
-                            "user_id": "user"
+                          "terms": {
+                            "link_id": ["inbox1"]
                           }
                         }
                       ]
@@ -757,8 +760,15 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                         {
                           "simple_query_string": {
                             "default_operator": "AND",
-                            "fields": ["sender", "reply_to", "recipients", "cc", "bcc", "sender.parts", "reply_to.parts", "recipients.parts", "cc.parts", "bcc.parts"],
+                            "fields": ["sender", "reply_to", "recipients", "cc", "bcc"],
                             "query": "(test | test@*)"
+                          }
+                        },
+                        {
+                          "simple_query_string": {
+                            "default_operator": "AND",
+                            "fields": ["sender.parts", "reply_to.parts", "recipients.parts", "cc.parts", "bcc.parts"],
+                            "query": "(test)"
                           }
                         },
                         {
@@ -812,7 +822,8 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                         {
                           "bool": {"minimum_should_match": 1, "should": [
                             {"match_phrase": {"content": "test"}},
-                            {"match_phrase": {"imported_author": "test"}}
+                            {"match_phrase": {"imported_author": "test"}},
+                            {"match_phrase": {"links": "test"}}
                           ]}
                         }
                       ]
@@ -841,6 +852,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
         ]
         .into_iter()
         .collect(),
+        excluded_terms: Vec::new(),
         user_id: "user".to_string(),
         page: 1,
         page_size: 20,
@@ -855,6 +867,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
         },
         email_search_args: UnifiedEmailSearchArgs {
             terms: vec!["test".to_string()],
+            inbox_link_ids: vec!["inbox1".to_string()],
             thread_ids: vec!["id1".to_string(), "id2".to_string()],
             link_ids: vec!["id1".to_string(), "id2".to_string()],
             sender: vec!["id1".to_string(), "id2".to_string()],
@@ -933,6 +946,7 @@ fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
       "highlight": {
         "fields": {
           "content": { "number_of_fragments": 1, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
+          "links": { "number_of_fragments": 1, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "document_name": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "name": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "source_names": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
@@ -1355,7 +1369,7 @@ fn every_searched_index_contributes_a_named_clause() -> anyhow::Result<()> {
 
     let args = UnifiedSearchArgs {
         search_indices: OpenSearchEntityType::iter().collect(),
-        agent_session_search_args: super::super::agent_sessions::AgentSessionSearchArgs {
+        agent_session_search_args: crate::search::agent_sessions::AgentSessionSearchArgs {
             terms: vec!["test".into()],
             session_ids: vec![uuid::Uuid::from_u128(1).to_string()],
             ..Default::default()
@@ -1523,5 +1537,120 @@ fn a_one_character_query_is_a_whole_word_in_content_and_a_capped_prefix_in_names
     ));
     assert!(request.contains(r#"{"query":"(a)","fields":["subject""#));
     assert!(!request.contains(r#""match_phrase_prefix":{"content""#));
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_unified_search_asks_for_its_phase_timings_and_tolerates_missing_indices() {
+    let (url, server) = crate::test_support::serve_once(
+        "200 OK",
+        r#"{"took":12,"timed_out":false,"_shards":{"total":6,"successful":6,"skipped":0,"failed":0},"hits":{"total":{"value":0,"relation":"eq"},"max_score":null,"hits":[]},"phase_took":{"dfs_pre_query":0,"query":9,"fetch":2,"dfs_query":0,"expand":0,"can_match":0}}"#,
+    );
+    let client = crate::OpensearchClient::new(url, String::new(), String::new()).unwrap();
+    let args = UnifiedSearchArgs {
+        search_indices: HashSet::from([OpenSearchEntityType::Projects]),
+        user_id: "macro|viewer@example.com".to_string(),
+        page_size: 10,
+        match_type: "partial".to_string(),
+        cursor: SearchCursorOption::NotDone(None),
+        project_search_args: UnifiedProjectSearchArgs {
+            terms: vec!["roadmap".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let (hits, cursor) = client.search_unified(args).await.unwrap();
+    let (request_line, _) = server.join().unwrap();
+
+    assert_eq!(
+        request_line.trim_end(),
+        "POST /projects/_search?ignore_unavailable=true&phase_took=true HTTP/1.1"
+    );
+    assert!(hits.is_empty());
+    assert!(matches!(cursor, SearchCursorOption::Done));
+}
+
+#[test]
+fn every_index_leaves_out_what_a_left_out_term_matches() -> anyhow::Result<()> {
+    let terms = vec!["budget".to_string()];
+    let args = UnifiedSearchArgs {
+        search_indices: [
+            OpenSearchEntityType::AgentSessions,
+            OpenSearchEntityType::Documents,
+            OpenSearchEntityType::Emails,
+            OpenSearchEntityType::Channels,
+            OpenSearchEntityType::Chats,
+            OpenSearchEntityType::CallRecords,
+            OpenSearchEntityType::Projects,
+            OpenSearchEntityType::CalendarEvents,
+        ]
+        .into_iter()
+        .collect(),
+        excluded_terms: vec!["draft".to_string()],
+        user_id: "macro|ana@example.com".to_string(),
+        page_size: 20,
+        match_type: "partial".to_string(),
+        agent_session_search_args: crate::search::agent_sessions::AgentSessionSearchArgs {
+            terms: terms.clone(),
+            session_ids: vec!["session-1".to_string()],
+            mode: crate::search::agent_sessions::AgentSessionSearchMode::NameContent,
+        },
+        document_search_args: UnifiedDocumentSearchArgs {
+            terms: terms.clone(),
+            mode: DocumentSearchMode::NameContent,
+            ..Default::default()
+        },
+        email_search_args: UnifiedEmailSearchArgs {
+            terms: terms.clone(),
+            inbox_link_ids: vec!["link-1".to_string()],
+            ..Default::default()
+        },
+        channel_message_search_args: UnifiedChannelMessageSearchArgs {
+            terms: terms.clone(),
+            channel_ids: vec!["channel-1".to_string()],
+            ..Default::default()
+        },
+        chat_search_args: UnifiedChatSearchArgs {
+            terms: terms.clone(),
+            ..Default::default()
+        },
+        call_record_search_args: UnifiedCallRecordSearchArgs {
+            terms: terms.clone(),
+            call_ids: vec!["call-1".to_string()],
+            ids_only: true,
+            mode: CallRecordSearchMode::NameContent,
+            ..Default::default()
+        },
+        project_search_args: UnifiedProjectSearchArgs {
+            terms: terms.clone(),
+            ..Default::default()
+        },
+        calendar_event_search_args: UnifiedCalendarEventSearchArgs {
+            terms,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let json = build_unified_search_request(&args)?.to_json();
+
+    let clauses = json["query"]["bool"]["should"]
+        .as_array()
+        .expect("one clause per index");
+    assert_eq!(clauses.len(), 8);
+    for clause in clauses {
+        let name = &clause["bool"]["_name"];
+        let left_out = clause["bool"]["must_not"].to_string();
+        assert!(
+            left_out.contains("draft"),
+            "{name} must leave out what `draft` matches: {left_out}"
+        );
+        let searched = clause["bool"]["must"].to_string() + &clause["bool"]["should"].to_string();
+        assert!(
+            !searched.contains("draft"),
+            "{name} must not search for `draft`: {searched}"
+        );
+    }
     Ok(())
 }

@@ -6,11 +6,11 @@ import {
 } from './recent-conversations';
 
 /** Select the current user's active coding sessions with open pull requests. */
-export function selectOpenPullRequests(
-  conversations: readonly AgentConversationEntity[],
+export function selectOpenPullRequests<Item extends AgentConversationEntity>(
+  conversations: readonly Item[],
   ownerId: string | undefined,
-  modeForConversation: (conversation: AgentConversationEntity) => AgentsMode
-): AgentConversationEntity[] {
+  modeForConversation: (conversation: Item) => AgentsMode
+): Item[] {
   if (!ownerId) return [];
 
   return conversations
@@ -27,4 +27,24 @@ export function selectOpenPullRequests(
       (left, right) =>
         conversationTimestamp(right) - conversationTimestamp(left)
     );
+}
+
+/** Partition filtered, non-waiting rows while preserving their selected sort order. */
+export function partitionOpenPullRequests<Item extends AgentConversationEntity>(
+  conversations: readonly Item[],
+  ownerId: string | undefined,
+  modeForConversation: (conversation: Item) => AgentsMode
+) {
+  const pinnedIds = new Set(
+    selectOpenPullRequests(conversations, ownerId, modeForConversation).map(
+      (row) => row.id
+    )
+  );
+  const openPullRequests: Item[] = [];
+  const remaining: Item[] = [];
+  for (const conversation of conversations) {
+    if (pinnedIds.has(conversation.id)) openPullRequests.push(conversation);
+    else remaining.push(conversation);
+  }
+  return { openPullRequests, conversations: remaining };
 }

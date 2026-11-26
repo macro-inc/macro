@@ -6,6 +6,21 @@ interface FuzzyNameMatchResultWithItem<T> {
   score: number;
 }
 
+/** uFuzzy's default options split query terms on everything but Latin
+ * letters, so a query in another script has no terms and matches nothing.
+ * These are its Unicode options, with combining marks counted as part of a
+ * word because Devanagari and Thai words are written with them. A
+ * contraction ("don't") must end its word; `\b` sees only ASCII letters, so
+ * it would also cut the start of an elided word ("d'équipe") off its term. */
+export const ANY_SCRIPT_FUZZY_OPTIONS: uFuzzy.Options = {
+  unicode: true,
+  interSplit: "[^\\p{L}\\p{M}\\d']+",
+  intraSplit: '\\p{Ll}\\p{Lu}',
+  intraBound: '\\p{L}\\d|\\d\\p{L}|\\p{Ll}\\p{Lu}',
+  intraChars: "[\\p{L}\\p{M}\\d']",
+  intraContr: "'\\p{L}{1,2}(?![\\p{L}\\p{M}\\d])",
+};
+
 const uf = new uFuzzy({});
 
 const mark = (part: string, matched: boolean) =>

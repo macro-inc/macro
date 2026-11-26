@@ -226,8 +226,13 @@ where
             )
             .await
             .map_err(|error| CalendarMutationError::PersistFailed(format!("{error:?}")))?;
-        self.announce_retirements(&target.owner_id, target.email_link_id, retired)
-            .await;
+        self.announce_retirements(
+            &target.owner_id,
+            target.email_link_id,
+            target.token_identity.provider,
+            retired,
+        )
+        .await;
         Ok(())
     }
 }

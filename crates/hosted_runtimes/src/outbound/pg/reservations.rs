@@ -19,7 +19,7 @@ impl PgComputerRepo {
             ComputerRow,
             r#"
             SELECT id, team_id, host_id, name, size AS "size: ComputerSize", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, state, harness_id, created_by,
-                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image
+                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image, hibernated_at
             FROM hosted_runtime
             WHERE purchase_key = $1
             "#,
@@ -92,11 +92,18 @@ impl PgComputerRepo {
                 UNION ALL
                 SELECT host_id, GREATEST((memory_gib::BIGINT + 7) / 8, (vcpus::BIGINT + 3) / 4)
                 FROM computer_reservation
+                UNION ALL
+                -- A moving computer also holds its units on the move's other host.
+                SELECT CASE WHEN computer.host_id = move.to_host THEN move.from_host ELSE move.to_host END,
+                       GREATEST((computer.memory_gib::BIGINT + 7) / 8, (computer.vcpus::BIGINT + 3) / 4)
+                FROM computer_move move JOIN hosted_runtime computer ON computer.id = move.computer_id
+                WHERE move.stage IN ('seeding', 'cutting_over', 'verifying', 'rolling_back')
             )
             SELECT host.id
             FROM hosted_runtime_host host
             LEFT JOIN held ON held.host_id = host.id
             WHERE host.awake_capacity_units >= $1::BIGINT
+              AND host.admitting
             GROUP BY host.id, host.sold_capacity_units
             HAVING host.sold_capacity_units - COALESCE(SUM(held.units), 0) >= $1::BIGINT
             ORDER BY host.sold_capacity_units - COALESCE(SUM(held.units), 0) DESC

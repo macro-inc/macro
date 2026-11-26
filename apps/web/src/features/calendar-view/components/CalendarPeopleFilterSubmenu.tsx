@@ -1,6 +1,8 @@
+import { useInfiniteScrollSentinel } from '@app/lib/primitives/infinite-scroll-sentinel';
 import { UserIcon } from '@core/component/UserIcon';
 import { emailToMacroId } from '@core/user/macroId';
 import type { IUser } from '@core/user/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
@@ -50,6 +52,18 @@ export function CalendarPeopleFilterSubmenu(props: {
   const contacts = () => source.suggestions.data()?.users ?? [];
   const loading = source.suggestions.loading;
   const error = source.suggestions.error;
+  const hasNext = () => !!source.suggestions.data()?.nextCursor;
+  // Further contacts load as the end of the list scrolls into view. With no
+  // rows listed, the sentinel sits below the empty list and keeps reading
+  // pages until one matches or the directory ends. The sentinel opts out of
+  // scroll anchoring, which would otherwise hold it in view as pages land.
+  const [sentinel, setSentinel] = createSignal<HTMLDivElement>();
+  useInfiniteScrollSentinel({
+    sentinel,
+    hasNextPage: () => hasNext() && !error(),
+    isFetchingNextPage: loading,
+    fetchNextPage: source.suggestions.next,
+  });
   const [inputRef, setInputRef] = createSignal<HTMLInputElement>();
   let listViewport: HTMLDivElement | undefined;
   const [contentRef, setContentRef] = createSignal<HTMLElement>();
@@ -239,8 +253,14 @@ export function CalendarPeopleFilterSubmenu(props: {
                     </Dropdown.CheckboxItem>
                   )}
                 </Virtualizer>
+                <Show when={hasNext()}>
+                  <div ref={setSentinel} class="h-px [overflow-anchor:none]" />
+                </Show>
               </div>
             </Show>
+          </Show>
+          <Show when={matches().length === 0 && hasNext()}>
+            <div ref={setSentinel} class="h-px [overflow-anchor:none]" />
           </Show>
           <Show
             when={
@@ -258,16 +278,15 @@ export function CalendarPeopleFilterSubmenu(props: {
               Selected emails are kept; some names are unavailable.
             </div>
           </Show>
-          <Show when={source.suggestions.data()?.nextCursor}>
+          <Show when={error()}>
             <Dropdown.Item
               closeOnSelect={false}
               disabled={loading()}
-              onSelect={() => {
-                source.suggestions.next();
-                scrollToTop();
-              }}
+              onSelect={() =>
+                fireAndForget(source.suggestions.retry(), 'calendar-filters')
+              }
             >
-              Next contacts
+              Retry contacts
             </Dropdown.Item>
           </Show>
           <Show when={canAddEmail()}>
@@ -288,11 +307,18 @@ export function CalendarPeopleFilterSubmenu(props: {
               </span>
             </Dropdown.Item>
           </Show>
-          <Show when={!loading() && matches().length === 0 && !canAddEmail()}>
+          <Show
+            when={
+              !loading() &&
+              matches().length === 0 &&
+              !canAddEmail() &&
+              (error() || !hasNext())
+            }
+          >
             <div class="px-2 py-3 text-center text-xs text-ink-muted">
               {error()
                 ? 'Contacts unavailable. Enter an email instead.'
-                : 'No matches on this page or cached snapshot. Enter an email or continue browsing.'}
+                : 'No matching contacts. Enter an email instead.'}
             </div>
           </Show>
         </Dropdown.Group>

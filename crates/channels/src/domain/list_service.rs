@@ -74,7 +74,7 @@ where
     Users: ChannelListUserRepo,
     Frec: AggregateFrecencyStorage,
 {
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip_all, fields(limit = ?req.limit, include_frecency = req.include_frecency))]
     async fn get_channels(
         &self,
         req: GetChannelsRequest,
@@ -120,19 +120,19 @@ where
             channel_entities.as_slice(),
         );
 
+        // Each listed channel's own activity: the page was sorted and filtered
+        // on it in SQL, and the cursor built from these rows must match.
         let (names, latest_messages, activities, frecency) = tokio::join!(
             self.users.get_names_for_ids(participant_ids),
             self.channels
                 .get_latest_channel_messages_batch(&channel_ids),
-            self.channels.get_channel_list_activities(user.clone()),
+            self.channels
+                .get_channel_activities(user.clone(), &channel_ids),
             frecency,
         );
 
-        let mut activity_lookup: HashMap<Uuid, Activity> = activities
-            .unwrap_or_default()
-            .into_iter()
-            .map(|a| (a.channel_id, a))
-            .collect();
+        let mut activity_lookup: HashMap<Uuid, Activity> =
+            activities?.into_iter().map(|a| (a.channel_id, a)).collect();
 
         let mut frecency_map: HashMap<Uuid, AggregateFrecency> = frecency
             .unwrap_or_default()

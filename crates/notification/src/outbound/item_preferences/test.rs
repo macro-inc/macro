@@ -53,7 +53,7 @@ async fn snooze_expiry_replacement_and_owner_isolation(pool: PgPool) {
     );
     let recipients = [user("alice"), user("bob"), user("carol")];
     let muted = pool
-        .get_unsubscribed_users("document-one", &recipients)
+        .get_unsubscribed_users("document-one", false, &recipients)
         .await
         .unwrap();
     assert_eq!(muted.len(), 2);
@@ -69,7 +69,7 @@ async fn snooze_expiry_replacement_and_owner_isolation(pool: PgPool) {
     .unwrap();
     assert!(repo.list(user("alice")).await.unwrap().is_empty());
     let muted = pool
-        .get_unsubscribed_users("document-one", &recipients)
+        .get_unsubscribed_users("document-one", false, &recipients)
         .await
         .unwrap();
     assert!(!muted.contains(&user("alice")));
@@ -149,4 +149,49 @@ async fn bulk_updates_and_removals_are_atomic_and_owner_scoped(pool: PgPool) {
         .unwrap();
     assert!(repo.list(user("alice")).await.unwrap().is_empty());
     assert_eq!(repo.list(user("bob")).await.unwrap().len(), 1);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn mentions_only_is_listed_and_replaced_by_a_mute(pool: PgPool) {
+    let repo = PgItemNotificationPreferenceRepository(pool.clone());
+    let channel = || EntityType::Channel.with_entity_str("channel-one");
+    let recipients = [user("alice")];
+
+    repo.set(
+        user("alice"),
+        channel(),
+        Some(Utc::now() + Duration::hours(1)),
+    )
+    .await
+    .unwrap();
+    repo.set_mentions_only(user("alice"), channel())
+        .await
+        .unwrap();
+    let listed = repo.list(user("alice")).await.unwrap();
+    assert_eq!(listed.len(), 1);
+    assert!(listed[0].mentions_only);
+    assert!(listed[0].snoozed_until.is_none());
+    assert!(
+        pool.get_unsubscribed_users("channel-one", false, &recipients)
+            .await
+            .unwrap()
+            .contains(&user("alice"))
+    );
+    assert!(
+        pool.get_unsubscribed_users("channel-one", true, &recipients)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+
+    repo.set_bulk(user("alice"), &[channel()], None)
+        .await
+        .unwrap();
+    assert!(!repo.list(user("alice")).await.unwrap()[0].mentions_only);
+    assert!(
+        pool.get_unsubscribed_users("channel-one", true, &recipients)
+            .await
+            .unwrap()
+            .contains(&user("alice"))
+    );
 }

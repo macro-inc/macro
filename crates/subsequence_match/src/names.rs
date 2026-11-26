@@ -13,7 +13,7 @@ pub enum NameMatch {
     Contains,
     /// Every query word prefixes a name word, independent of word order.
     WordPrefix,
-    /// The complete normalized label equals the query.
+    /// The complete normalized label, or its first name, equals the query.
     Exact,
 }
 
@@ -52,7 +52,7 @@ impl NameQuery {
         if self.normalized.is_empty() {
             return Some(NameMatch::Browse);
         }
-        if name == self.normalized {
+        if name == self.normalized || self.is_first_name(name) {
             return Some(NameMatch::Exact);
         }
         if !self.words.is_empty()
@@ -67,6 +67,14 @@ impl NameQuery {
             .split_whitespace()
             .all(|term| name.contains(term))
             .then_some(NameMatch::Contains)
+    }
+    /// A one-term query equal to the name's first space-separated term, as the
+    /// browser menus rank people. A comma lists several people, so its first
+    /// term is only one person's name and never counts.
+    fn is_first_name(&self, name: &str) -> bool {
+        !self.normalized.contains(' ')
+            && !name.contains(',')
+            && name.split(' ').next() == Some(self.normalized.as_str())
     }
 }
 

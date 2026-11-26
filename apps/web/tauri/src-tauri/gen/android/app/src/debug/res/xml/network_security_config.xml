@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Replaces the rustls-platform-verifier library's config in debug builds only.
+     Debug builds load the dev server and local services over plain HTTP, and once
+     a network security config is merged Android ignores usesCleartextTraffic.
+     Release builds keep the library's config: cleartext off except for the
+     certificate authorities' CRL hosts. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

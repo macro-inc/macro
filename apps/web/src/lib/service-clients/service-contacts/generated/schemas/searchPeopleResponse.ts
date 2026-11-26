@@ -10,6 +10,9 @@ import type { SearchedPerson } from './searchedPerson';
  * Response body for GET /contacts/search.
  */
 export interface SearchPeopleResponse {
-  /** Matches ranked teammates first, then prefix matches, then by name or email. */
+  /** Matches ranked by group, then prefix matches, then by name or email.
+Teammates come first. For a viewer on the list-aware directory,
+`interacted` and `invited` people come next, then `gmail` and
+`outlook` contacts. */
   people: SearchedPerson[];
 }

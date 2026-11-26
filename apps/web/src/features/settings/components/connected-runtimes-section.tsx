@@ -1,9 +1,10 @@
 import { useShareRequests } from '@app/features/access-requests/access-requests';
 import { shareEntity } from '@app/features/access-requests/core/types';
 import { t } from '@app/lib/i18n';
+import { lazy } from '@core/util/lazy';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { Button, cn } from '@ui';
-import { For, type JSX, lazy, Show, Suspense } from 'solid-js';
+import { For, type JSX, Show, Suspense } from 'solid-js';
 import { ConnectAction, StatusDot } from '../integration-ui';
 import { SettingsCard } from '../primitives';
 import { RuntimeOptions } from './runtime-options';
@@ -119,6 +120,8 @@ export function MachineRow(props: {
   dot?: JSX.Element;
   name: string;
   meta: JSX.Element;
+  /** More under the meta line, e.g. a computer's usage. */
+  detail?: JSX.Element;
   actions?: JSX.Element;
   /**
    * The actions are one icon button (a lone ⋯): keep it on the name's line
@@ -144,6 +147,7 @@ export function MachineRow(props: {
         >
           {props.meta}
         </p>
+        {props.detail}
       </div>
       <Show when={props.actions}>
         <div

@@ -1,0 +1,16 @@
+id: email-mailbox-transactions-time-out-locks
+valid:
+  - |
+    async fn commit(&self) { let mut tx = self.begin().await.map_err(db_error)?; }
+  - |
+    async fn begin(&self) -> Result<Transaction<'_, Postgres>, sqlx::Error> {
+        let mut tx = self.db.begin().await?;
+        Ok(tx)
+    }
+  - |
+    async fn read(&self) { sqlx::query!("SELECT 1").fetch_one(&self.db).await; }
+invalid:
+  - |
+    async fn commit(&self) { let mut tx = self.db.begin().await.map_err(db_error)?; }
+  - |
+    async fn accessible(&self) { authorized(&mut *self.db.acquire().await?, actor, link).await }

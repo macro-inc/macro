@@ -2,8 +2,9 @@
 //! price of its own, per computer.
 
 use crate::domain::model::{
-    CustomerError, ItemChangeSettlement, ItemChangeStatus, ItemProration, ItemQuantityChange,
-    ItemRemoval, PriceInfo, SubscriptionItemView, SubscriptionTerms, TeamError,
+    ComputerPurchaseCredit, CustomerError, ItemChangeSettlement, ItemChangeStatus, ItemProration,
+    ItemQuantityChange, ItemRemoval, PaymentTerms, PriceInfo, ProratedCharge, SubscriptionItemView,
+    SubscriptionTerms, TeamError,
 };
 
 /// Errors from changing or reading a team subscription's items.
@@ -71,6 +72,16 @@ pub trait TeamSubscriptionItems: Clone + Send + Sync + 'static {
         idempotency_key: &str,
     ) -> impl Future<Output = Result<ItemRemoval, TeamSubscriptionItemsError>> + Send;
 
+    /// Undo `computer_id`'s purchase with a credit note on the invoice it
+    /// paid, refunding the card part. Idempotent on `idempotency_key`.
+    /// `None` when no paid invoice carries the computer.
+    fn refund_computer_purchase(
+        &self,
+        team_id: &uuid::Uuid,
+        computer_id: computer_id::ComputerId,
+        idempotency_key: &str,
+    ) -> impl Future<Output = Result<Option<ComputerPurchaseCredit>, TeamSubscriptionItemsError>> + Send;
+
     /// Every item on the team subscription.
     fn team_subscription_items(
         &self,
@@ -96,6 +107,21 @@ pub trait TeamSubscriptionItems: Clone + Send + Sync + 'static {
         &self,
         team_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<SubscriptionTerms, TeamSubscriptionItemsError>> + Send;
+
+    /// The team subscription's terms and the card it charges, from one read.
+    fn team_payment_terms(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<PaymentTerms, TeamSubscriptionItemsError>> + Send;
+
+    /// What adding one item of each of `prices` to the team subscription
+    /// would invoice now, from one preview that changes nothing. One charge
+    /// per price, in order.
+    fn preview_item_prorations(
+        &self,
+        team_id: &uuid::Uuid,
+        prices: &[stripe::PriceId],
+    ) -> impl Future<Output = Result<Vec<ProratedCharge>, TeamSubscriptionItemsError>> + Send;
 
     /// What a price charges per unit.
     fn price(

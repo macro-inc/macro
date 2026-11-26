@@ -79,3 +79,38 @@ it('closes on Escape and returns focus to Watch demo', async () => {
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   await waitFor(() => expect(document.activeElement).toBe(trigger));
 });
+
+it('starts playback immediately and keeps focus on the video when autoPlay is enabled', async () => {
+  render(() => (
+    <TutorialVideoDialog
+      tutorial="mail"
+      triggerLabel="Watch"
+      triggerAriaLabel="Watch Email demo, 1:42"
+      autoPlay
+    />
+  ));
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Watch Email demo, 1:42' })
+  );
+  const dialog = await screen.findByRole('dialog', {
+    name: 'Learn how to use Macro Mail',
+  });
+  const video = dialog.querySelector('video');
+
+  await waitFor(() => expect(play).toHaveBeenCalledOnce());
+  // Wait past Kobalte's macrotask focus pass to ensure Close does not steal focus.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(document.activeElement).toBe(video);
+  expect(screen.queryByRole('button', { name: /^Play Learn how/ })).toBeNull();
+});
+
+it('restores and focuses the play pill when autoPlay is refused', async () => {
+  play.mockRejectedValueOnce(new Error('Autoplay blocked'));
+  render(() => <TutorialVideoDialog tutorial="mail" autoPlay />);
+  await openDialog();
+
+  const playPill = await screen.findByRole('button', {
+    name: 'Play Learn how to use Macro Mail, 1:42',
+  });
+  await waitFor(() => expect(document.activeElement).toBe(playPill));
+});

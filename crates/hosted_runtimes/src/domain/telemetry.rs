@@ -1,12 +1,36 @@
 //! Context carried by durable computer work, independent of its transport.
 use opentelemetry::trace::{Span as _, SpanKind, TraceContextExt, Tracer};
 use opentelemetry::{Context, KeyValue, global};
-use std::collections::HashMap;
+use std::{collections::HashMap, future::Future};
+use tracing::Instrument as _;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::domain::lifecycle::ComputerState;
 use crate::domain::models::HostAllocation;
 use crate::domain::setup::{PhaseTiming, SetupTimeline};
+
+/// Time a purchase phase for a teammate purchase. Record only its result class.
+pub(crate) async fn invite_purchase_phase<T, E>(
+    for_agent: bool,
+    phase: &'static str,
+    operation: impl Future<Output = Result<T, E>>,
+) -> Result<T, E> {
+    if !for_agent {
+        return operation.await;
+    }
+    let span = tracing::info_span!(
+        "computer.purchase.invite_phase",
+        phase = phase,
+        outcome = tracing::field::Empty,
+        otel.status_code = tracing::field::Empty,
+    );
+    let result = operation.instrument(span.clone()).await;
+    span.record("outcome", if result.is_ok() { "ok" } else { "error" });
+    if result.is_err() {
+        span.record("otel.status_code", "ERROR");
+    }
+    result
+}
 
 /// Current W3C context, absent when no tracing provider is enabled.
 pub fn traceparent() -> Option<String> {
@@ -266,7 +290,7 @@ fn capacity(meter: &opentelemetry::metrics::Meter, allocations: &[HostAllocation
             &[
                 KeyValue::new("scope", "host"),
                 KeyValue::new("host_id", allocation.host.id.to_string()),
-                KeyValue::new("host", allocation.host.name.clone()),
+                KeyValue::new("host", allocation.host.name.to_string()),
             ],
         );
     }
@@ -276,6 +300,53 @@ fn capacity(meter: &opentelemetry::metrics::Meter, allocations: &[HostAllocation
 /// [`capacity`] through the process-wide meter provider.
 pub fn record_capacity(allocations: &[HostAllocation]) {
     capacity(&global::meter("hosted_runtimes"), allocations);
+}
+
+/// An outbox effect's wait from being queued until a worker started it.
+pub struct EffectQueued<'a> {
+    /// Outbox id of the effect.
+    pub effect_id: i64,
+    /// Computer the effect addresses.
+    pub computer_id: String,
+    /// The effect's name, as on `computer.effect.failures`.
+    pub phase: &'a str,
+    /// When the transition queued it.
+    pub queued_at: chrono::DateTime<chrono::Utc>,
+    /// When a worker started carrying it out.
+    pub started_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Export `computer.effect.queued` with its recorded start and end, under the
+/// purchase trace when there is one and the current span otherwise, plus its
+/// duration by phase.
+pub fn effect_queued<T: Tracer>(tracer: &T, traceparent: Option<&str>, queued: &EffectQueued<'_>) {
+    let parent = traceparent
+        .and_then(remote_parent)
+        .unwrap_or_else(|| tracing::Span::current().context());
+    let mut span = tracer
+        .span_builder("computer.effect.queued")
+        .with_kind(SpanKind::Internal)
+        .with_start_time(std::time::SystemTime::from(queued.queued_at))
+        .with_attributes([
+            KeyValue::new("effect_id", queued.effect_id),
+            KeyValue::new("computer_id", queued.computer_id.clone()),
+            KeyValue::new("effect", queued.phase.to_owned()),
+        ])
+        .start_with_context(tracer, &parent);
+    span.end_with_timestamp(std::time::SystemTime::from(queued.started_at));
+    global::meter("hosted_runtimes")
+        .f64_histogram("computer.effect.queued.duration")
+        .with_unit("s")
+        .build()
+        .record(
+            seconds(queued.queued_at, queued.started_at),
+            &[KeyValue::new("phase", queued.phase.to_owned())],
+        );
+}
+
+/// [`effect_queued`] through the process-wide tracer provider.
+pub fn record_effect_queued(traceparent: Option<&str>, queued: &EffectQueued<'_>) {
+    effect_queued(&global::tracer("hosted_runtimes"), traceparent, queued);
 }
 
 /// Link an already-running callback to the durable provisioning trace.

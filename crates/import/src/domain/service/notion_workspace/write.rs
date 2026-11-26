@@ -11,9 +11,9 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
 use futures::{FutureExt, StreamExt, stream};
-use import_notion::domain::inventory::{all_rows, full_markdown};
+use import_notion::domain::inventory::all_rows;
 use import_notion::domain::macro_cells::{PeopleMap, capped_name, derived_id};
-use import_notion::domain::model::{NotionId, NotionPage};
+use import_notion::domain::model::NotionId;
 use import_notion::domain::ports::NotionApi;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
@@ -23,20 +23,26 @@ use crate::domain::models::{
     WrittenObject,
 };
 use crate::domain::ports::{
-    NotionLinks, NotionPageLink, NotionUserLink, SharedEntity, SourceDates, WorkspaceWriter,
+    ImportVisibility, NotionLinks, NotionUserLink, SharedEntity, SourceDates, WorkspaceWriter,
     WrittenObjects,
 };
 
 use super::values::{task_body, task_properties};
 
 mod database;
-pub(super) use database::{WrittenDatabase, link_relations, recorded_database, write_database};
+mod reservation;
+pub(super) use database::{
+    PreparedDatabase, WrittenDatabase, link_relations, prepare_database, recorded_database,
+    write_prepared_database,
+};
 
 #[cfg(test)]
 mod test;
 
 /// Objects written at once.
 pub(super) const WRITE_CONCURRENCY: usize = 4;
+/// Source-specific reservation failures tolerated within one ledger generation.
+pub(super) const RESERVATION_ATTEMPTS: usize = 3;
 /// Row bodies fetched at once within one database.
 const BODY_CONCURRENCY: usize = 3;
 /// Name of the folder every workspace import writes into.
@@ -46,6 +52,11 @@ pub(super) const ROOT_FOLDER: &str = "Notion";
 pub(super) const DOCUMENT_ENTITY: &str = "md";
 pub(super) const DATABASE_ENTITY: &str = "database";
 pub(super) const FOLDER_ENTITY: &str = "project";
+
+/// A cancellation checkpoint, kept distinct from provider and source errors.
+#[derive(Debug, thiserror::Error)]
+#[error("Cancelled")]
+pub(super) struct Cancelled;
 
 /// Set once the write must stop (the user cancelled, the process is shutting
 /// down, or another process took the run over); long writes check it between
@@ -66,7 +77,9 @@ impl Cancel {
 
     /// Fail with "Cancelled" once the import was cancelled.
     pub fn ensure_running(&self) -> anyhow::Result<()> {
-        anyhow::ensure!(!self.stopped(), "Cancelled");
+        if self.stopped() {
+            return Err(Cancelled.into());
+        }
         Ok(())
     }
 }
@@ -76,6 +89,8 @@ impl Cancel {
 pub(in crate::domain::service) struct WriteItem {
     /// The ledger row.
     pub import_id: Uuid,
+    /// Planned objects referencing an external source, for placement reporting.
+    pub dependency_of: Vec<String>,
     /// The ledger row it sits under, if any.
     pub parent: Option<Uuid>,
     /// The Notion object.
@@ -111,6 +126,7 @@ impl WriteItem {
         let plan = meta.plan?;
         Some(Self {
             import_id: entity.id,
+            dependency_of: plan.dependency_of,
             parent: entity.parent_id,
             notion_id: NotionId::parse(&entity.foreign_id)?,
             kind: entity.kind,
@@ -196,29 +212,8 @@ pub(super) fn folder_for(
     root
 }
 
-/// Where the plan's pages and people resolve in Macro: every page gets the
-/// id of the document it becomes (`imported` when it already exists,
-/// otherwise [`document_id`], known before anything is written), and every
-/// person matched to a teammate their account.
-pub(super) fn notion_links(
-    items: &[WriteItem],
-    imported: &HashMap<NotionId, Uuid>,
-    people: &PeopleMap,
-) -> NotionLinks {
-    let pages = items
-        .iter()
-        .filter(|item| item.kind != ImportKind::DataSource)
-        .map(|item| {
-            let link = NotionPageLink {
-                document_id: imported
-                    .get(&item.notion_id)
-                    .copied()
-                    .unwrap_or_else(|| document_id(item.import_id)),
-                name: item.title.clone(),
-            };
-            (item.notion_id.clone(), link)
-        })
-        .collect();
+/// The initial conversion keeps hyperlinks and resolves only known people.
+pub(super) fn notion_links(people: &PeopleMap) -> NotionLinks {
     let users = people
         .iter()
         .filter_map(|(id, person)| {
@@ -229,7 +224,10 @@ pub(super) fn notion_links(
             Some((id.clone(), link))
         })
         .collect();
-    NotionLinks { pages, users }
+    NotionLinks {
+        users,
+        ..Default::default()
+    }
 }
 
 /// The document plan row `import_id` becomes, the same on every attempt.
@@ -243,7 +241,10 @@ pub(super) struct Progress<'a, Store> {
     store: &'a Store,
     user: &'a MacroUserIdStr<'static>,
     import_id: Uuid,
+    review_id: Option<Uuid>,
     known: Mutex<HashMap<(WrittenKind, String), Uuid>>,
+    warnings: Mutex<Vec<crate::domain::models::FidelityWarning>>,
+    losses: Mutex<HashMap<NotionId, HashSet<crate::domain::models::SourceLossFact>>>,
 }
 
 impl<'a, Store: WrittenObjects> Progress<'a, Store> {
@@ -263,8 +264,20 @@ impl<'a, Store: WrittenObjects> Progress<'a, Store> {
             store,
             user,
             import_id,
+            review_id: None,
             known: Mutex::new(known),
+            warnings: Mutex::new(Vec::new()),
+            losses: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// Refuse unknown prerequisites before changing an interrupted source.
+    pub fn ensure_supported(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            self.all(WrittenKind::Unsupported).is_empty(),
+            crate::domain::models::SourceStopReason::UnsupportedMarker
+        );
+        Ok(())
     }
 
     /// The row's own object of `kind`, when an earlier attempt made it.
@@ -296,6 +309,176 @@ impl<'a, Store: WrittenObjects> Progress<'a, Store> {
             .unwrap_or_default()
     }
 
+    /// A successful reservation releases its bounded retry and outage state.
+    pub async fn clear_reservation_failures(&self) -> anyhow::Result<()> {
+        if self.all(WrittenKind::DatabaseReservationFailure).is_empty() {
+            return Ok(());
+        }
+        self.store
+            .clear_database_reservation_failures(self.user, self.import_id)
+            .await?;
+        self.known
+            .lock()
+            .map_err(|_| anyhow::anyhow!("written marker buffer unavailable"))?
+            .retain(|(kind, _), _| *kind != WrittenKind::DatabaseReservationFailure);
+        Ok(())
+    }
+
+    /// Spend one source-scoped attempt; run-wide failures never call this.
+    pub async fn reservation_failure(&self) -> anyhow::Result<usize> {
+        let count = self.reservation_failures()?;
+        if count >= RESERVATION_ATTEMPTS {
+            return Ok(RESERVATION_ATTEMPTS);
+        }
+        let attempt = Uuid::now_v7();
+        self.record_all(vec![WrittenObject {
+            import_id: self.import_id,
+            kind: WrittenKind::DatabaseReservationFailure,
+            object: attempt.to_string(),
+            macro_id: attempt,
+        }])
+        .await?;
+        Ok(count + 1)
+    }
+
+    /// Resolve this source's omitted assignees once, without revisiting user edits.
+    fn omitted_assignee_tasks(&self) -> anyhow::Result<HashSet<Uuid>> {
+        let mut tasks = HashSet::new();
+        for (payload, id) in self.all(WrittenKind::TaskNotice) {
+            let notice: crate::domain::models::TaskImportNotice = serde_json::from_str(&payload)?;
+            anyhow::ensure!(
+                notice.task_id == id,
+                "Task notice identity does not match its marker"
+            );
+            match notice.reason {
+                crate::domain::models::TaskImportNoticeReason::PersonalAssigneeOmitted => {
+                    tasks.insert(id);
+                }
+            }
+        }
+        Ok(tasks)
+    }
+
+    /// Record a typed task notice before its written marker makes retries skip it.
+    pub async fn record_task_notice(
+        &self,
+        task: Uuid,
+        reason: crate::domain::ports::TaskImportNoticeReason,
+    ) -> anyhow::Result<()> {
+        self.store
+            .record_task_notice(self.user, self.import_id, task, reason)
+            .await?;
+        Ok(())
+    }
+
+    /// Clear historical owner-only omission notices when the source is re-reviewed Shared.
+    pub async fn clear_task_notices(&self) -> anyhow::Result<()> {
+        self.store
+            .clear_task_notices(self.user, self.import_id)
+            .await?;
+        Ok(())
+    }
+
+    /// Record a semantic notice without pre-rendering its sentence.
+    pub async fn notice(
+        &self,
+        object: &NotionId,
+        source: &str,
+        kind: crate::domain::models::ImportNoticeKind,
+    ) -> anyhow::Result<()> {
+        self.warn_fidelity(&[crate::domain::models::FidelityWarning::Notice {
+            notice: crate::domain::models::ImportNotice::new(object, source, kind),
+        }])
+        .await
+    }
+
+    /// Forward another source's already counted warnings after its access check.
+    pub async fn warn_fidelity(
+        &self,
+        warnings: &[crate::domain::models::FidelityWarning],
+    ) -> anyhow::Result<()> {
+        self.warnings
+            .lock()
+            .map_err(|_| anyhow::anyhow!("warning buffer unavailable"))?
+            .extend_from_slice(warnings);
+        Ok(())
+    }
+
+    /// Report a typed source-only stop before recording its failure.
+    pub async fn source_stopped(
+        &self,
+        title: &str,
+        reason: crate::domain::models::SourceStopReason,
+    ) -> anyhow::Result<()> {
+        self.warn_fidelity(&[crate::domain::models::FidelityWarning::SourceStopped {
+            title: title.to_owned(),
+            reason,
+        }])
+        .await
+    }
+
+    /// Keep a typed loss until the same batch records its completed object.
+    pub fn loss(&self, mut fact: crate::domain::models::SourceLossFact) -> anyhow::Result<()> {
+        fact.bound_display_text();
+        self.losses
+            .lock()
+            .map_err(|_| anyhow::anyhow!("loss buffer unavailable"))?
+            .entry(fact.object.clone())
+            .or_default()
+            .insert(fact);
+        Ok(())
+    }
+
+    /// Persist one cumulative snapshot per phase, rebuilding facts after a restart.
+    pub async fn flush_warnings(&self) -> anyhow::Result<()> {
+        use crate::domain::models::{FidelityWarning, SourceLossFact};
+        let mut facts: Vec<SourceLossFact> = self
+            .all(WrittenKind::Loss)
+            .into_keys()
+            .map(|payload| serde_json::from_str(&payload))
+            .collect::<std::result::Result<_, _>>()?;
+        facts.extend(
+            self.losses
+                .lock()
+                .map_err(|_| anyhow::anyhow!("loss buffer unavailable"))?
+                .values()
+                .flatten()
+                .cloned(),
+        );
+        let mut warnings = self
+            .warnings
+            .lock()
+            .map_err(|_| anyhow::anyhow!("warning buffer unavailable"))?
+            .clone();
+        warnings.extend(SourceLossFact::warnings(facts));
+        let warnings = FidelityWarning::merge(warnings);
+        if !warnings.is_empty() {
+            self.store
+                .record_warnings(self.user, self.import_id, &warnings)
+                .await?;
+        }
+        Ok(())
+    }
+
+    /// Add small loss facts to an existing marker batch, never a per-row warning update.
+    pub fn loss_markers(&self, object: &NotionId) -> anyhow::Result<Vec<WrittenObject>> {
+        self.losses
+            .lock()
+            .map_err(|_| anyhow::anyhow!("loss buffer unavailable"))?
+            .get(object)
+            .into_iter()
+            .flatten()
+            .map(|fact| {
+                Ok(WrittenObject {
+                    import_id: self.import_id,
+                    kind: WrittenKind::Loss,
+                    object: serde_json::to_string(fact)?,
+                    macro_id: self.import_id,
+                })
+            })
+            .collect()
+    }
+
     /// Record the row's own object of `kind`.
     pub async fn record(&self, kind: WrittenKind, macro_id: Uuid) -> anyhow::Result<()> {
         self.record_all(vec![WrittenObject::own(self.import_id, kind, macro_id)])
@@ -309,13 +492,37 @@ impl<'a, Store: WrittenObjects> Progress<'a, Store> {
         row: &NotionId,
         macro_id: Uuid,
     ) -> anyhow::Result<()> {
-        self.record_all(vec![WrittenObject::for_row(
-            self.import_id,
-            kind,
-            row,
-            macro_id,
-        )])
-        .await
+        let mut objects = self.loss_markers(row)?;
+        objects.push(WrittenObject::for_row(self.import_id, kind, row, macro_id));
+        self.record_all(objects).await
+    }
+
+    /// Fence deferred document writes to the reviewed generation creating them.
+    pub fn in_review(mut self, review_id: Uuid) -> Self {
+        self.review_id = Some(review_id);
+        self
+    }
+
+    /// Store the body identity and initial revision in one ledger write.
+    pub async fn record_document(
+        &self,
+        kind: WrittenKind,
+        source: &NotionId,
+        document: &crate::domain::ports::CreatedImportDocument,
+    ) -> anyhow::Result<Uuid> {
+        let id: Uuid = document.id.parse()?;
+        let mut objects = self.loss_markers(source)?;
+        objects.push(WrittenObject::for_row(self.import_id, kind, source, id));
+        if let (Some(generation), Some(revision)) = (self.review_id, document.link_revision) {
+            objects.push(WrittenObject {
+                import_id: self.import_id,
+                kind: WrittenKind::LinkBodyRevision,
+                object: format!("{generation}/{id}"),
+                macro_id: revision,
+            });
+        }
+        self.record_all(objects).await?;
+        Ok(id)
     }
 
     /// Record `objects`, which must belong to this row.
@@ -340,32 +547,20 @@ pub(super) async fn folder_once<Writer: WorkspaceWriter, Store: WrittenObjects>(
     progress: &Progress<'_, Store>,
     kind: WrittenKind,
     name: &str,
-    parent: Uuid,
+    parent: Option<Uuid>,
+    visibility: crate::domain::ports::ImportVisibility,
 ) -> anyhow::Result<Uuid> {
     if let Some(folder) = progress.get(kind) {
         return Ok(folder);
     }
-    let folder = writer.create_folder(user, name, Some(parent)).await?;
+    let folder = writer.create_folder(user, name, parent, visibility).await?;
     progress.record(kind, folder).await?;
     Ok(folder)
 }
 
-/// Every row of a data source. Fails when Notion stops listing them at its
-/// result cap, so an import never records a partial list as imported.
-pub(super) async fn every_row<Api: NotionApi>(
-    api: &Api,
-    data_source: &NotionId,
-) -> anyhow::Result<Vec<NotionPage>> {
-    let drained = all_rows(api, data_source).await?;
-    if !drained.complete {
-        anyhow::bail!("Notion stopped listing this data source's rows at its result cap");
-    }
-    Ok(drained.rows)
-}
-
 /// Write a task list: a folder of Macro tasks, one per row, shared with the
 /// team with `share`. Returns the folder id. Rows an earlier attempt already
-/// wrote are skipped.
+/// wrote keep their contents; Shared retries reapply their assignees.
 #[expect(
     clippy::too_many_arguments,
     reason = "a task list needs its source, destination, people, links and progress"
@@ -378,20 +573,29 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
     folder: Uuid,
     share: bool,
     people: &PeopleMap,
-    links: &NotionLinks,
+    links: &tokio::sync::RwLock<NotionLinks>,
+    destinations: &super::databases::DatabaseDestinations,
     progress: &Progress<'_, Store>,
     cancel: &Cancel,
+    personal_folder: Option<Uuid>,
 ) -> anyhow::Result<Uuid> {
-    let rows = every_row(api, &item.notion_id).await?;
-    let tasks_folder = folder_once(
-        writer,
-        user,
-        progress,
-        WrittenKind::TasksFolder,
-        &capped_name(&item.title),
-        folder,
-    )
-    .await?;
+    let visibility = ImportVisibility::from_shared(item.shared);
+    let rows = all_rows(api, &item.notion_id).await?.rows;
+    let tasks_folder = match personal_folder {
+        Some(folder) => folder,
+        None => {
+            folder_once(
+                writer,
+                user,
+                progress,
+                WrittenKind::TasksFolder,
+                &capped_name(&item.title),
+                Some(folder),
+                visibility,
+            )
+            .await?
+        }
+    };
     // Shared before the tasks are made, so each is shared as it lands in
     // the folder; shared again on resume, which is harmless.
     if share {
@@ -399,20 +603,53 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
             .share_with_team(user, SharedEntity::Folder(tasks_folder))
             .await?;
     }
+    if share {
+        for task in progress.all(WrittenKind::Task).values() {
+            cancel.ensure_running()?;
+            writer
+                .share_with_team(user, SharedEntity::Document(*task))
+                .await?;
+        }
+    }
     let failures = Mutex::new(0usize);
+    let replay_failed = std::sync::atomic::AtomicBool::new(false);
+    let omitted_assignees = progress.omitted_assignee_tasks()?;
     stream::iter(rows.iter().cloned())
         .map(|row| {
             let failures = &failures;
+            let replay_failed = &replay_failed;
+            let omitted_assignees = &omitted_assignees;
             async move {
-                if cancel.stopped()
-                    || progress
-                        .get_for(WrittenKind::Task, row.id.as_str())
-                        .is_some()
-                {
+                if cancel.stopped() {
                     return;
                 }
                 let outcome: anyhow::Result<()> = async {
-                    let content = full_markdown(api, &row.id).await?;
+                    if let Some(task) = progress.get_for(WrittenKind::Task, row.id.as_str()) {
+                        if item.shared
+                            && omitted_assignees.contains(&task)
+                            && let Some(email) =
+                                task_properties(&row, &item.task_fields, people).assignee_email
+                        {
+                            let notice = writer
+                                .reapply_task_assignee(user, task, &email, visibility)
+                                .await
+                                .inspect_err(|_| {
+                                    replay_failed.store(true, std::sync::atomic::Ordering::Relaxed);
+                                })?;
+                            if let Some(notice) = notice {
+                                progress.record_task_notice(task, notice).await?;
+                            }
+                        }
+                        return Ok(());
+                    }
+                    let (content, database_links) = super::databases::body_links(
+                        api,
+                        &row.id,
+                        &row.title,
+                        destinations,
+                        progress,
+                    )
+                    .await?;
                     let body = task_body(&row, &content, &item.task_fields, people);
                     let properties = task_properties(&row, &item.task_fields, people);
                     let title = if row.title.trim().is_empty() {
@@ -421,18 +658,24 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
                         row.title.trim()
                     };
                     let id = derived_id(item.import_id, &format!("task/{}", row.id.as_str()));
-                    writer
+                    let mut row_links = links.read().await.clone();
+                    row_links.databases = database_links;
+                    let created = writer
                         .create_task(
                             user,
                             id,
                             title,
                             &body,
-                            links,
+                            &row_links,
                             &properties,
                             Some(tasks_folder),
                             Some(SourceDates::from(&row)),
+                            visibility,
                         )
                         .await?;
+                    if let Some(notice) = created.notice {
+                        progress.record_task_notice(id, notice).await?;
+                    }
                     progress.record_for(WrittenKind::Task, &row.id, id).await?;
                     Ok(())
                 }
@@ -450,6 +693,10 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
         .collect::<Vec<()>>()
         .await;
     cancel.ensure_running()?;
+    anyhow::ensure!(
+        !replay_failed.load(std::sync::atomic::Ordering::Relaxed),
+        "Some task assignees could not be reapplied. Retry the import."
+    );
     let failed = failures.into_inner().unwrap_or_default();
     anyhow::ensure!(
         failed < rows.len() || rows.is_empty(),

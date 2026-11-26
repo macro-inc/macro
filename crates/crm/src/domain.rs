@@ -9,6 +9,24 @@ pub mod email_privacy;
 #[cfg(feature = "ports")]
 pub mod email_rules;
 
+/// Bounded live-rule discovery shared by authoring and email reads.
+#[cfg(feature = "ports")]
+pub mod email_rule_discovery;
+
+/// Consent-generation storage for policy APIs and background work.
+#[cfg(feature = "ports")]
+pub mod email_policy;
+/// Own-member rule authoring, consent CAS and verified provenance.
+#[cfg(feature = "ports")]
+pub mod email_policy_api;
+/// Bounded asynchronous own-mailbox count previews.
+#[cfg(feature = "ports")]
+pub mod email_policy_preview;
+
+/// Generation-bound history and live-source reconciliation contracts.
+#[cfg(feature = "ports")]
+pub mod email_policy_work;
+
 /// Static list of generic/personal email-provider domains to exclude
 /// from CRM populate
 #[cfg(feature = "ports")]
@@ -26,6 +44,10 @@ pub mod service;
 /// Team deal stages: the role-gated write path over the team's stage definition
 #[cfg(feature = "ports")]
 pub mod stages;
+
+/// Operator-run filing of manual contacts under their email domain's company
+#[cfg(feature = "ports")]
+pub mod contact_filing;
 
 /// Capability-token receipt wrappers gating per-entity CRM service calls
 #[cfg(feature = "ports")]
@@ -63,6 +85,12 @@ pub mod pipelines;
 /// Company and contact chip titles, read many at a time.
 #[cfg(feature = "ports")]
 pub mod previews;
+/// Companies, contacts and deal pipelines another CRM's import writes.
+#[cfg(feature = "ports")]
+pub mod record_import;
+/// Merging duplicate companies or contacts into the one that stays.
+#[cfg(feature = "ports")]
+pub mod record_merge;
 
 /// Pipeline outcome and per-amount currency fields.
 #[cfg(feature = "ports")]
@@ -71,3 +99,7 @@ pub mod pipeline_commercial;
 /// Explicit contact field edits.
 #[cfg(feature = "ports")]
 pub mod contact_update;
+
+/// Adding and removing a company's domains.
+#[cfg(feature = "ports")]
+pub mod company_domains;

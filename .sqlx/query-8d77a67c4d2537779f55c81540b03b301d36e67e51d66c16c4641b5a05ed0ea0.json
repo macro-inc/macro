@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE hosted_runtime_host SET awake_capacity_units = $2, sold_capacity_units = $3 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8d77a67c4d2537779f55c81540b03b301d36e67e51d66c16c4641b5a05ed0ea0"
+}

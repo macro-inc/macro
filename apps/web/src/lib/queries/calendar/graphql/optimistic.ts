@@ -1,6 +1,7 @@
 import type { CalendarGuestInputBody } from '@service-calendar/generated/schemas/calendarGuestInputBody';
 import type { EventReminders } from '@service-storage/generated/schemas/eventReminders';
 import type { EventTime } from '@service-storage/generated/schemas/eventTime';
+import type { EventVisibility } from '@service-storage/generated/schemas/eventVisibility';
 import type { GuestPolicy } from '@service-storage/generated/schemas/guestPolicy';
 import type {
   CalendarAttendeeFieldsFragment,
@@ -40,6 +41,19 @@ export function graphqlTimeRecord(
         startDate: time.startDate,
         endDate: time.endDate,
       };
+}
+
+/**
+ * An occurrence's time as the server sends it: the server keeps an event's
+ * time zone on the event alone, so its details show no "Original time".
+ */
+export function graphqlOccurrenceTimeRecord(
+  time: EventTime
+): CalendarEventTimeFieldsFragment {
+  const record = graphqlTimeRecord(time);
+  return record.__typename === 'GraphqlTimedEventTime'
+    ? { ...record, timeZone: null }
+    : record;
 }
 
 export function graphqlTimeInput(time: EventTime): CalendarEventTimeInput {
@@ -135,11 +149,12 @@ export interface EventFieldPatch {
   reminders?: EventReminders | null;
   time?: EventTime | null;
   guestPolicy?: GuestPolicy | null;
+  visibility?: EventVisibility | null;
 }
 
 type CopyContent = Pick<
   SourceRecord,
-  'title' | 'description' | 'location' | 'reminders'
+  'title' | 'description' | 'location' | 'reminders' | 'visibility'
 >;
 
 /** The per-copy fields a patch rewrites on one copy of the event. */
@@ -150,6 +165,9 @@ function patchCopy<T extends CopyContent>(copy: T, patch: EventFieldPatch): T {
   }
   if (patch.description !== undefined) next.description = patch.description;
   if (patch.location !== undefined) next.location = patch.location;
+  if (patch.visibility !== undefined && patch.visibility !== null) {
+    next.visibility = graphqlEnum<SourceRecord['visibility']>(patch.visibility);
+  }
   if (patch.reminders !== undefined && patch.reminders !== null) {
     next.reminders = graphqlReminders(patch.reminders);
   }
@@ -206,7 +224,7 @@ export function patchedOccurrence(
     ...(patch.location !== undefined
       ? { overrideLocation: patch.location }
       : {}),
-    ...(patch.time ? { time: graphqlTimeRecord(patch.time) } : {}),
+    ...(patch.time ? { time: graphqlOccurrenceTimeRecord(patch.time) } : {}),
   };
 }
 

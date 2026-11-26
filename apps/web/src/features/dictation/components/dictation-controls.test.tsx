@@ -8,24 +8,16 @@ vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => device.touch,
 }));
 
-const flags = vi.hoisted(() => ({ dictation: true }));
-vi.mock('@core/constant/featureFlags', async (original) => {
-  const actual = await original<typeof import('@core/constant/featureFlags')>();
-  return {
-    ...actual,
-    isFeatureEnabled: (flag: Parameters<typeof actual.isFeatureEnabled>[0]) =>
-      flag === actual.enableDictation
-        ? flags.dictation
-        : actual.isFeatureEnabled(flag),
-  };
-});
-
 function controller(): DictationController {
   return {
     phase: () => 'idle',
     active: () => false,
     volumeHistory: () => [],
+    elapsedMs: () => 0,
+    limitReached: () => false,
     message: () => '',
+    messageTone: () => 'info',
+    clearMessage: () => {},
     label: () => 'Start dictation',
     disabled: () => false,
     start: async () => {},
@@ -36,7 +28,6 @@ function controller(): DictationController {
 
 beforeEach(() => {
   device.touch = false;
-  flags.dictation = true;
 });
 afterEach(cleanup);
 
@@ -48,14 +39,14 @@ describe('DictationButton', () => {
     ).toBeTruthy();
   });
 
-  it.each([
-    ['a touch device', () => (device.touch = true)],
-    ['an account outside the rollout', () => (flags.dictation = false)],
-  ])('renders nothing on %s', (_case, arrange) => {
-    arrange();
-    const { container } = render(() => (
-      <DictationButton dictation={controller()} />
-    ));
-    expect(container.querySelector('button')).toBeNull();
-  });
+  it.each([['a touch device', () => (device.touch = true)]])(
+    'renders nothing on %s',
+    (_case, arrange) => {
+      arrange();
+      const { container } = render(() => (
+        <DictationButton dictation={controller()} />
+      ));
+      expect(container.querySelector('button')).toBeNull();
+    }
+  );
 });

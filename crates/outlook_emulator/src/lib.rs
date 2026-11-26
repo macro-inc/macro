@@ -67,7 +67,7 @@ pub use control::{CalendarSummary, MessageChange, MessageSummary, SubscriptionSu
 pub use fault::{Fault, FaultError, Route};
 pub use seed::{
     NewAttachment, NewEvent, NewMessage, Seed, SeedCalendar, SeedContact, SeedError, SeedFolder,
-    SeedMailbox,
+    SeedMailbox, SeedPhoto,
 };
 
 use crate::signing_key::{SigningKey, SigningKeyError};
@@ -253,7 +253,16 @@ impl OutlookEmulator {
         seed: Seed,
         options: Options,
     ) -> Result<Self, StartError> {
-        let listener = TcpListener::bind(address).await?;
+        Self::start_with_listener(TcpListener::bind(address).await?, seed, options)
+    }
+
+    /// Starts an emulator on a listener the caller bound, for a caller that
+    /// picks its own port. Call it inside a Tokio runtime.
+    pub fn start_with_listener(
+        listener: TcpListener,
+        seed: Seed,
+        options: Options,
+    ) -> Result<Self, StartError> {
         let address = listener.local_addr()?;
         let mut state = State::new(options.allow_http_notification_urls);
         state.apply_seed(&seed)?;
@@ -461,7 +470,28 @@ impl OutlookEmulator {
     pub fn link_mailbox(&self, link_id: &str, email: &str) -> Result<(), EmulatorError> {
         self.with_state(|state| {
             let email = state.mailbox(email)?.email.clone();
-            state.links.insert(link_id.to_lowercase(), email);
+            state.bind_link(link_id.to_lowercase(), email);
+            Ok(())
+        })
+    }
+
+    /// Binds a Macro email link id to the mailbox of the OAuth attempt it
+    /// was made from, with the grants the stand-in described for that
+    /// attempt: once they are all released, the link gets no access token.
+    pub fn link_attempt(&self, link_id: &str, attempt_id: &str) -> Result<(), EmulatorError> {
+        self.with_state(|state| {
+            let attempt = attempt_id.to_lowercase();
+            let email = state
+                .links
+                .get(&attempt)
+                .cloned()
+                .ok_or_else(|| EmulatorError::UnknownMailbox(attempt.clone()))?;
+            let grants = state.link_grants.get(&attempt).cloned().unwrap_or_default();
+            let link = link_id.to_lowercase();
+            state.bind_link(link.clone(), email);
+            if !grants.is_empty() {
+                state.link_grants.entry(link).or_default().extend(grants);
+            }
             Ok(())
         })
     }
@@ -483,6 +513,13 @@ impl OutlookEmulator {
         })
     }
 
+    /// Deletes a folder for good, with its subfolders and their messages, as
+    /// if its owner had emptied it out of Deleted Items in Outlook. Its
+    /// messages are then read as Graph reads any message deleted for good.
+    pub fn delete_folder(&self, email: &str, folder: &str) -> Result<(), EmulatorError> {
+        self.with_state(|state| state.mailbox(email)?.remove_folder(folder))
+    }
+
     /// Drops a mailbox's sync state: its delta tokens answer 410, as after
     /// Graph expires them.
     pub fn expire_delta_tokens(&self, email: &str) -> Result<(), EmulatorError> {
@@ -493,7 +530,8 @@ impl OutlookEmulator {
     }
 
     /// Adds a contact to the default contacts folder, or changes the one
-    /// with this id. Answers its id.
+    /// with this id. The contact has the photo given here, or none.
+    /// Answers its id.
     pub fn upsert_contact(
         &self,
         email: &str,
@@ -501,8 +539,20 @@ impl OutlookEmulator {
         contact: &SeedContact,
     ) -> Result<String, EmulatorError> {
         self.with_state(|state| {
+            let photo = contact
+                .photo
+                .as_ref()
+                .map(crate::mailbox::Mailbox::seeded_photo)
+                .transpose()?;
             let mailbox = state.mailbox(email)?;
-            Ok(mailbox.upsert_contact(id, contact.name.clone(), vec![contact.email.clone()]))
+            Ok(
+                mailbox.upsert_contact(
+                    id,
+                    contact.name.clone(),
+                    vec![contact.email.clone()],
+                    photo,
+                ),
+            )
         })
     }
 

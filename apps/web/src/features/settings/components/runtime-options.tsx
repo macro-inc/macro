@@ -14,6 +14,11 @@ import {
 } from '@ui';
 import { createSignal, getOwner, Show } from 'solid-js';
 
+/** Only the owner may change a runtime's options. */
+export function canChangeRuntimeOptions(harness: RegisteredHarness) {
+  return harness.access === 'owner';
+}
+
 /**
  * Turns "Don't ask before acting" (the runtime's permission bypass) on or off.
  * Turning it on asks first; only the owner may change it.
@@ -23,7 +28,7 @@ export function createBypassControl(
   dialogOptions?: OpenDialogOptions
 ) {
   const patchHarness = usePatchHarnessMutation();
-  const canChange = () => harness().access === 'owner';
+  const canChange = () => canChangeRuntimeOptions(harness());
   const set = async (allowed: boolean) => {
     if (allowed) {
       const confirmed = await confirmDialog(

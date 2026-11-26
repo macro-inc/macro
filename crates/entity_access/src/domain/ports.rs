@@ -298,6 +298,20 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> impl Future<Output = Result<Option<CrmEntityAccess>, AccessError>> + Send;
 
+    /// The company each merged company's old id names now, for the ids a
+    /// merge retired. Grants nothing.
+    fn get_merged_crm_company_ids(
+        &self,
+        company_ids: &[Uuid],
+    ) -> impl Future<Output = Result<HashMap<Uuid, Uuid>, AccessError>> + Send;
+
+    /// The contact each merged contact's old id names now, for the ids a
+    /// merge retired. Grants nothing.
+    fn get_merged_crm_contact_ids(
+        &self,
+        contact_ids: &[Uuid],
+    ) -> impl Future<Output = Result<HashMap<Uuid, Uuid>, AccessError>> + Send;
+
     /// Get the access level a user has for a CRM contact, with the contact's
     /// owning `team_id` (its parent company's team).
     ///
@@ -389,8 +403,16 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         entity_type: EntityType,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
 
-    /// Get all active participant user IDs in a channel.
+    /// Get all active participant user IDs in a channel. Implementations may
+    /// answer from a cache a few seconds old.
     fn get_channel_users(
+        &self,
+        channel_id: &Uuid,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
+
+    /// Get all active participant user IDs in a channel, read now rather than
+    /// from any cache [`Self::get_channel_users`] keeps.
+    fn get_current_channel_users(
         &self,
         channel_id: &Uuid,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
@@ -710,6 +732,50 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
         entity_type: EntityType,
     ) -> impl Future<Output = Result<(EntityPermission, Uuid, TeamRole), AccessError>> + Send;
 
+    /// The company each merged company's old id names now, for the ids a
+    /// merge retired; see [`Self::current_entity_id`].
+    fn merged_crm_company_ids(
+        &self,
+        _company_ids: &[Uuid],
+    ) -> impl Future<Output = Result<HashMap<Uuid, Uuid>, AccessError>> + Send {
+        async { Ok(HashMap::new()) }
+    }
+
+    /// The contact each merged contact's old id names now, for the ids a
+    /// merge retired; see [`Self::current_entity_id`].
+    fn merged_crm_contact_ids(
+        &self,
+        _contact_ids: &[Uuid],
+    ) -> impl Future<Output = Result<HashMap<Uuid, Uuid>, AccessError>> + Send {
+        async { Ok(HashMap::new()) }
+    }
+
+    /// The id of the entity an id names now: for a company or contact merged
+    /// away, the record it was merged into; for anything else, the id itself.
+    ///
+    /// Grants nothing. Every access check here is for exactly the id it is
+    /// given, so a caller that accepts old ids resolves first, then
+    /// authorizes, reads and writes the returned id only.
+    fn current_entity_id(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<String, AccessError>> + Send {
+        async move {
+            let Ok(record_id) = entity_id.parse::<Uuid>() else {
+                return Ok(entity_id.to_owned());
+            };
+            let merged = match entity_type {
+                EntityType::CrmCompany => self.merged_crm_company_ids(&[record_id]).await?,
+                EntityType::CrmContact => self.merged_crm_contact_ids(&[record_id]).await?,
+                _ => return Ok(entity_id.to_owned()),
+            };
+            Ok(merged
+                .get(&record_id)
+                .map_or_else(|| entity_id.to_owned(), Uuid::to_string))
+        }
+    }
+
     /// Get all user IDs that have access to a given entity.
     ///
     /// For Document, Chat, Project, and EmailThread: returns user IDs with direct
@@ -933,4 +999,12 @@ pub trait EntityAudienceLookup: Clone + Send + Sync + 'static {
         entity_type: EntityType,
         entity_ids: &[&str],
     ) -> impl Future<Output = Result<Vec<EntityAudience>, AccessError>> + Send;
+
+    /// Returns the active members of the channel `channel_id`, read now: the
+    /// audiences above may come from a cache a few seconds old, which misses a
+    /// membership change the caller is reacting to.
+    fn get_current_channel_users(
+        &self,
+        channel_id: &str,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
 }

@@ -1,16 +1,22 @@
 import { behavior } from '@macro-inc/muppet/core/behavior';
 import { source } from '@macro-inc/muppet/core/event';
 import type { ChatContext } from '../../capabilities/chat/context.ts';
-import type { Conversation } from '../../capabilities/chat/entry.ts';
+import { type Conversation, Entry } from '../../capabilities/chat/entry.ts';
+import { maintenanceSource } from '../../context/runtime-maintenance.ts';
 
 /** One conversation at a time per channel; channels don't wait on each other. */
-async function* conversations({
+export async function* conversations({
   waiting,
   history,
 }: Pick<ChatContext, 'waiting' | 'history'>): AsyncIterable<Conversation> {
-  // Messages that were waiting when the last process ended.
-  for (const message of await history.waiting())
+  // Messages that were waiting when the last process ended. One queued just
+  // before a stop, and not recorded yet, is recorded now: otherwise its
+  // redelivery would be judged and queued again, and answered twice.
+  for (const message of await history.waiting()) {
+    if (!(await history.recorded(message.channel_id, message.id)))
+      await history.record(message.channel_id, Entry.parse(message));
     waiting.push(message.channel_id, message);
+  }
   for await (const { key, items } of waiting.stream) {
     const last = items.at(-1);
     if (last !== undefined)
@@ -29,7 +35,10 @@ export const chatSources = (
   context: Pick<ChatContext, 'chat' | 'waiting' | 'history' | 'unanswered'>
 ) =>
   behavior().source({
-    messages: source(context.chat.incoming),
-    conversations: source(conversations(context)),
-    unanswered: context.unanswered.source,
+    messages: maintenanceSource(source(context.chat.incoming), 'replayable'),
+    conversations: maintenanceSource(
+      source(conversations(context)),
+      'replayable'
+    ),
+    unanswered: maintenanceSource(context.unanswered.source, 'dependent'),
   });

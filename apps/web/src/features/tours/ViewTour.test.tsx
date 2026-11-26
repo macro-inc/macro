@@ -9,12 +9,7 @@ const wiring = vi.hoisted(() => ({
   userId: 'tour-user',
   settings: vi.fn(),
   links: [] as unknown[],
-  native: [] as {
-    server_name: string;
-    authenticated: boolean;
-    enabled: boolean;
-  }[],
-  pipedream: [] as { server_name: string; enabled: boolean }[],
+  connected: [] as string[],
   queries: vi.fn(),
 }));
 
@@ -34,16 +29,13 @@ vi.mock('@queries/email/link', () => ({
     return { isSuccess: true, data: { links: wiring.links } };
   },
 }));
-vi.mock('@queries/mcp-servers', () => ({
-  useMcpServersQuery: () => {
-    wiring.queries('native');
-    return { isSuccess: true, data: wiring.native };
-  },
-}));
-vi.mock('@queries/pipedream-connectors', () => ({
-  usePipedreamConnectionsQuery: () => {
-    wiring.queries('pipedream');
-    return { isSuccess: true, data: wiring.pipedream };
+vi.mock('@queries/connectors', () => ({
+  useConnectors: () => {
+    wiring.queries('connectors');
+    return {
+      ready: () => true,
+      connectedApps: () => new Set(wiring.connected),
+    };
   },
 }));
 
@@ -61,7 +53,7 @@ const withVideo = defineViewTour({
 const linear = defineViewTour({
   id: 'linear',
   title: 'Linear',
-  connector: { kind: 'mcp', label: 'Linear', tools: ['Linear'] },
+  connector: { kind: 'mcp', label: 'Linear', apps: ['linear'] },
   steps,
 });
 const key = (id: string) => `macro:tour:${id}:tour-user`;
@@ -75,8 +67,7 @@ beforeEach(() => {
   localStorage.clear();
   wiring.userId = 'tour-user';
   wiring.links = [];
-  wiring.native = [];
-  wiring.pipedream = [];
+  wiring.connected = [];
   vi.clearAllMocks();
 });
 afterEach(() => {
@@ -163,23 +154,14 @@ describe('ViewTour', () => {
     expect(wiring.queries).not.toHaveBeenCalled();
   });
 
-  it('offers the connector until it is linked, using the onboarding rule', () => {
+  it('offers the connector until the app is connected', () => {
+    wiring.connected = ['notion'];
     const view = render(() => <ViewTour tour={linear} />);
     fireEvent.click(screen.getByRole('button', { name: 'Connect Linear' }));
     expect(wiring.settings).toHaveBeenCalledWith('Connected');
     view.unmount();
 
-    // A native connection remains usable alongside unrelated Pipedream apps.
-    wiring.native = [
-      { server_name: 'Linear', authenticated: true, enabled: true },
-    ];
-    wiring.pipedream = [{ server_name: 'notion', enabled: true }];
-    const second = render(() => <ViewTour tour={linear} />);
-    expect(screen.queryByRole('button', { name: 'Connect Linear' })).toBeNull();
-    second.unmount();
-
-    wiring.native = [];
-    wiring.pipedream = [{ server_name: 'linear', enabled: true }];
+    wiring.connected = ['linear'];
     render(() => <ViewTour tour={linear} />);
     expect(screen.queryByRole('button', { name: 'Connect Linear' })).toBeNull();
   });

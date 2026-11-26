@@ -61,10 +61,6 @@ const operationMocks = vi.hoisted(() => {
     bulkMarkNotificationsAsDone: vi.fn(async () => {}),
     bulkMarkNotificationsAsUndone: vi.fn(async () => {}),
     cancelQueries: vi.fn(async () => {}),
-    flagArchived: vi.fn(async () => ({
-      isErr: () => false,
-      value: undefined,
-    })),
     invalidateQueries: vi.fn(
       async (_options: { queryKey?: readonly unknown[] }) => {}
     ),
@@ -132,19 +128,14 @@ vi.mock('@queries/soup/graphql/optimistic-done', () => ({
 vi.mock('@queries/soup/graphql/active-queries', () => ({
   refreshActiveGraphqlSoupQueries: operationMocks.refreshGraphqlSoup,
 }));
-vi.mock('@service-email/client', () => ({
-  emailClient: { flagArchived: operationMocks.flagArchived },
-}));
 vi.mock('@core/constant/featureFlags', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@core/constant/featureFlags')>();
   return {
     ...actual,
-    enableCalendarUi: { key: 'enable-calendar-ui' },
     enableReminders: { key: 'enable-reminders' },
     isFeatureEnabled: (flag: Parameters<typeof actual.isFeatureEnabled>[0]) =>
-      'key' in flag &&
-      (flag.key === 'enable-calendar-ui' || flag.key === 'enable-reminders')
+      'key' in flag && flag.key === 'enable-reminders'
         ? true
         : actual.isFeatureEnabled(flag),
   };
@@ -1656,6 +1647,28 @@ describe('getChannelEntityTarget', () => {
       expect(notificationsByEntity).not.toHaveBeenCalled();
     }
   );
+
+  it('marks an unseen invite seen when Chat opens the channel', () => {
+    const invite = {
+      ...sendNotification('invite', 'unused'),
+      notification_event_type: 'channel_invite',
+      notification_metadata: {
+        tag: 'channel_invite',
+        content: {
+          invitedBy: 'macro|inviter@example.com',
+          channelName: 'Team',
+        },
+      },
+    } as UnifiedNotification;
+    const seenInvite = asRead({ ...invite, id: 'seen-invite' });
+    const bulkMarkAsRead = vi.fn(async () => {});
+    markChannelNotificationsSeenOnOpen(
+      channelRow({ notifications: [invite, seenInvite] }),
+      notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
+      { channelReadScope: 'top-level' }
+    );
+    expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([invite]);
+  });
 
   it('marks top-level notifications on repeated Chat opens, skipping replies and local reads', () => {
     const send = sendNotification('send', 'top-level');

@@ -11,7 +11,8 @@ use models_email::gmail::MessagePart;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    AccessToken, CalendarPart, EmailApiError, MessageWithCalendarParts, ThreadListPage,
+    AccessToken, CalendarPart, EmailApiError, MessageIdPage, MessageWithCalendarParts,
+    ThreadListPage,
 };
 use crate::domain::ports::{MailboxCalendarClient, MailboxMessageClient, MailboxRawMessageClient};
 
@@ -132,6 +133,36 @@ impl MailboxMessageClient for GmailApiClientRepository {
             .list_messages(access_token.expose_secret(), limit, label_ids)
             .await
             .map_err(map_gmail_error)
+    }
+
+    async fn list_messages_since(
+        &self,
+        access_token: &AccessToken,
+        max_results: u32,
+        label_ids: &[&str],
+        since: chrono::DateTime<chrono::Utc>,
+        page_token: Option<&str>,
+    ) -> Result<MessageIdPage, EmailApiError> {
+        let page = self
+            .client
+            .list_messages_since(
+                access_token.expose_secret(),
+                max_results,
+                label_ids,
+                since.timestamp(),
+                page_token,
+            )
+            .await
+            .map_err(map_gmail_error)?;
+        Ok(MessageIdPage {
+            ids: page
+                .messages
+                .unwrap_or_default()
+                .into_iter()
+                .map(|message| message.id)
+                .collect(),
+            next_page_token: page.next_page_token.filter(|token| !token.is_empty()),
+        })
     }
 
     async fn get_message_ids_for_thread(

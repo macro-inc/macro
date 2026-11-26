@@ -18,6 +18,7 @@ name = "image_proxy_service_doppler_config"
 path = "src/doppler_config.rs"
 
 [dependencies]
+agent_correlation = { path = "../../crates/agent_correlation", features = ["http"] }
 anyhow = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 axum = { workspace = true, features = ["macros"] }
@@ -54,3 +55,4 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
+uuid = { workspace = true }

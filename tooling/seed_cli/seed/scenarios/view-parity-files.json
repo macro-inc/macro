@@ -72,5 +72,37 @@
       "owner": "pat",
       "name": "Parity chat"
     }
+  },
+  "channels": {
+    "parity-room": {
+      "type": "private",
+      "name": "Parity room",
+      "owner": "pat",
+      "members": []
+    }
+  },
+  "projects": {
+    "folder": {
+      "owner": "pat",
+      "name": "Parity folder"
+    }
+  },
+  "calls": {
+    "call": {
+      "channel": "parity-room",
+      "created_by": "pat",
+      "share_with_team": false,
+      "participants": [
+        "pat"
+      ],
+      "duration_minutes": 5,
+      "name": "Parity call",
+      "transcript": [
+        {
+          "speaker": "pat",
+          "text": "A short parity call."
+        }
+      ]
+    }
   }
 }

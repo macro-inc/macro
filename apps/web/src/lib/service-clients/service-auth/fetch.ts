@@ -81,7 +81,7 @@ export async function getMacroApiToken(): Promise<string> {
 }
 
 type TextContentType = `text/${string}`;
-type AcceptHeader<T extends ObjectLike | TextContentType> =
+type AcceptHeader<T extends ObjectLike | TextContentType | null> =
   | HeadersInit
   | (T extends TextContentType
       ? {
@@ -90,10 +90,10 @@ type AcceptHeader<T extends ObjectLike | TextContentType> =
       : {
           Accept: 'application/json';
         });
-type SafeFetchT<T extends ObjectLike | TextContentType> =
-  T extends TextContentType ? TextResponse : ObjectLike;
+type SafeFetchT<T extends ObjectLike | TextContentType | null> =
+  T extends TextContentType ? TextResponse : ObjectLike | null;
 type fetchWithAuthOptions<
-  T extends ObjectLike | TextContentType,
+  T extends ObjectLike | TextContentType | null,
   CustomErrorCode extends string,
 > = SafeFetchInit & {
   errorResponseHandler?: (
@@ -102,7 +102,7 @@ type fetchWithAuthOptions<
   headers?: AcceptHeader<T>;
 };
 export async function fetchWithAuth<
-  T extends ObjectLike | TextContentType = {},
+  T extends ObjectLike | TextContentType | null = {},
   CustomErrorCode extends string = never,
 >(
   input: RequestInfo,

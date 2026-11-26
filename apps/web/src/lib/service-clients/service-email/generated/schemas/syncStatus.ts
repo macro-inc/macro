@@ -8,7 +8,8 @@
 /**
  * Coarse sync state for an inbox, used to render a one-line hint in the
 multi-inbox settings list. Derived from the link's `is_sync_active` flag, its
-reauth health, and its most recent backfill job.
+reauth health, whether the provider serves its mailbox, and its most recent
+backfill job.
  */
 export type SyncStatus = (typeof SyncStatus)[keyof typeof SyncStatus];
 
@@ -18,5 +19,6 @@ export const SyncStatus = {
   UP_TO_DATE: 'UP_TO_DATE',
   ERROR: 'ERROR',
   NEEDS_REAUTH: 'NEEDS_REAUTH',
+  MAILBOX_UNAVAILABLE: 'MAILBOX_UNAVAILABLE',
   INACTIVE: 'INACTIVE',
 } as const;

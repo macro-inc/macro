@@ -48,7 +48,6 @@ function resolveTypes(
 
   return new Set(
     [...requested].filter((type) => {
-      if (type === 'calendar') return capabilities.calendar;
       if (type === 'github') return capabilities.foreignEntities;
       return true;
     })

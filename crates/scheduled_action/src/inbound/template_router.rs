@@ -17,7 +17,9 @@ use macro_uuid::Uuid;
 use crate::domain::models::ActionConfiguration;
 use crate::domain::ports::RoutineTemplateService;
 use crate::domain::templates::{RoutineTemplate, ShareRoutineTemplate};
-use crate::inbound::axum_router::{ScheduledActionApiError, ScheduledActionResponse};
+use crate::inbound::axum_router::{
+    RoutineLimitErrorBody, ScheduledActionApiError, ScheduledActionResponse,
+};
 
 pub struct RoutineTemplateRouterState<T, Svc, Auth> {
     pub service: Arc<T>,
@@ -189,6 +191,7 @@ where
         (status = 201, body = ScheduledActionResponse),
         (status = 400, body = String),
         (status = 401, body = String),
+        (status = 402, body = RoutineLimitErrorBody, description = "The owner's plan allows no more active routines"),
         (status = 403, body = String),
         (status = 404, body = String, description = "The routine is not shared"),
         (status = 500, body = String),
@@ -198,6 +201,11 @@ pub async fn activate_template<T, Svc, Auth>(
     State(state): State<RoutineTemplateRouterState<T, Svc, Auth>>,
     Path(id): Path<Uuid>,
     CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
+    user: Result<
+        macro_authorization::MacroAuthorizationExtractor<Auth, macro_authorization::UserOrInternal>,
+        macro_authorization::MacroAuthorizationRejection,
+    >,
+    headers: axum::http::HeaderMap,
     body: Result<Json<ActionConfiguration>, JsonRejection>,
 ) -> Result<impl IntoResponse, ScheduledActionApiError>
 where
@@ -206,7 +214,14 @@ where
     Auth: MacroAuthorizationService,
 {
     let Json(req) = body.map_err(ScheduledActionApiError::InvalidRequest)?;
-    let created = state.service.activate_template(&principal, id, req).await?;
+    let requester = crate::inbound::axum_router::requester(
+        user.as_ref().ok().map(|user| &user.authorization),
+        &headers,
+    );
+    let created = state
+        .service
+        .activate_template(&principal, id, req, requester)
+        .await?;
     Ok((
         StatusCode::CREATED,
         Json(ScheduledActionResponse::from(created)),

@@ -1,4 +1,5 @@
-//! Optional W3C context for email backfill jobs, including retries and fan-out.
+//! Optional W3C context for email backfill jobs, including retries and fan-out,
+//! and for Gmail inbox sync and operation notifications.
 
 use opentelemetry::trace::TraceContextExt as _;
 use std::collections::HashMap;
@@ -20,8 +21,9 @@ pub fn current() -> Option<String> {
     carrier.remove(ATTRIBUTE)
 }
 
-/// Adopt persisted context before polling a publisher or consumer span.
-/// Missing or malformed context leaves legacy jobs unaffected.
+/// Parents `span` on persisted context. Call it before `span` is first
+/// entered: an entered span keeps the parent it started with. Missing or
+/// malformed context leaves legacy jobs unaffected.
 pub fn adopt(span: &tracing::Span, traceparent: Option<&str>) {
     let Some(traceparent) = traceparent else {
         return;
@@ -35,7 +37,7 @@ pub fn adopt(span: &tracing::Span, traceparent: Option<&str>) {
     }
 }
 
-pub(super) fn attribute() -> Option<aws_sdk_sqs::types::MessageAttributeValue> {
+pub(crate) fn attribute() -> Option<aws_sdk_sqs::types::MessageAttributeValue> {
     current().and_then(|value| {
         aws_sdk_sqs::types::MessageAttributeValue::builder()
             .data_type("String")

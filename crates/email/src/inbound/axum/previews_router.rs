@@ -83,9 +83,9 @@ where
     )
 )]
 #[tracing::instrument(
-    skip(links, macro_user, service),
+    skip(links, macro_user, service, preview_view),
     fields(
-        actor = %macro_user.acting_entity(),
+        view = preview_view.span_value(),
         fusionauth_user_id = tracing::field::Empty,
     )
 )]

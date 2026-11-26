@@ -11,6 +11,8 @@ import { browserContext } from './capabilities/browser/context.ts';
 import { browserCapabilities } from './capabilities/browser/index.ts';
 import { callsContext } from './capabilities/calls/context.ts';
 import { callsCapabilities } from './capabilities/calls/index.ts';
+import { captchaContext } from './capabilities/captcha/context.ts';
+import { captchaCapabilities } from './capabilities/captcha/index.ts';
 import { chatContext } from './capabilities/chat/context.ts';
 import { chatCapabilities } from './capabilities/chat/index.ts';
 import { heartbeatContext } from './capabilities/heartbeat/context.ts';
@@ -49,7 +51,10 @@ export const assistant = (
   /** Restarts the agent onto code that landed; none outside a supervisor. */
   restart?: () => Promise<void>
 ) => {
-  const chat = chatContext(base);
+  // Outgoing chat checks the agent's own function names, known once the
+  // catalog below is built.
+  let functionNames: readonly string[] = [];
+  const chat = chatContext(base, () => functionNames);
   const chatEvents = chatSources(chat.decorations);
   const scheduled = scheduling({
     store: fileStore({
@@ -76,8 +81,9 @@ export const assistant = (
   const callsEvents = callsSources({ ...base, ...calls.decorations });
   const tools = toolsContext(base);
   const browser = browserContext(base);
+  const captcha = captchaContext(base, browser.decorations.browser);
   const secrets = secretsContext(base, scheduled.decorations.schedules);
-  return behavior()
+  const built = behavior()
     .decorate(base)
     .decorate({ agent })
     .use(failureHandlers())
@@ -105,9 +111,15 @@ export const assistant = (
     .use(callsHandlers(callsEvents))
     .use(browser)
     .use(browserCapabilities)
+    .use(captcha)
+    .use(captchaCapabilities)
     .use(secrets)
     .use(secretsCapabilities)
     .use(secretsHandlers(scheduled));
+  functionNames = Object.values(built.capabilities).flatMap((capability) =>
+    capability.kind === 'module' ? Object.keys(capability.functions) : []
+  );
+  return built;
 };
 
 export type Assistant = ReturnType<typeof assistant>;

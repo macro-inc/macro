@@ -33,6 +33,7 @@ fn config_values() -> serde_json::Value {
     }
     values["AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS"] = serde_json::json!(500);
     values["AI_USAGE_INCLUDED_ALLOWANCE_CENTS"] = serde_json::json!(2_000);
+    values["AI_USAGE_BUSINESS_INCLUDED_ALLOWANCE_CENTS"] = serde_json::json!(6_000);
     values["AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS"] = serde_json::json!(10_000);
     values["AI_USAGE_OVERAGE_MARKUP_PERCENT"] = serde_json::json!(5);
     values
@@ -85,6 +86,7 @@ fn ai_pricing_is_mandatory_and_validated() {
     for key in [
         "AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS",
         "AI_USAGE_INCLUDED_ALLOWANCE_CENTS",
+        "AI_USAGE_BUSINESS_INCLUDED_ALLOWANCE_CENTS",
         "AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS",
         "AI_USAGE_OVERAGE_MARKUP_PERCENT",
     ] {
@@ -106,6 +108,7 @@ fn ai_pricing_is_mandatory_and_validated() {
     for key in [
         "AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS",
         "AI_USAGE_INCLUDED_ALLOWANCE_CENTS",
+        "AI_USAGE_BUSINESS_INCLUDED_ALLOWANCE_CENTS",
         "AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS",
     ] {
         let mut values = config_values();
@@ -628,4 +631,24 @@ fn absent_fleet_keeps_optional_computer_prices_and_rejects_partial_prices() {
     values["STRIPE_COMPUTER_STANDARD_MONTHLY_PRICE_ID"] = serde_json::json!("price_test");
     let config: Config = serde_json::from_value(values).unwrap();
     assert!(config.validate_computer_config().is_err());
+}
+
+/// Without a fleet the agents worker never runs; only an explicit `true`
+/// turns it on, and a typo fails startup instead of silently disabling it.
+#[test]
+fn the_computers_agents_worker_is_off_unless_turned_on() {
+    let config: Config = serde_json::from_value(config_values()).unwrap();
+    assert!(!config.computer_agent_effects().unwrap());
+
+    for (value, enabled) in [("true", true), ("false", false)] {
+        let mut values = config_values();
+        values["COMPUTERS_AGENT_EFFECTS"] = serde_json::json!(value);
+        let config: Config = serde_json::from_value(values).unwrap();
+        assert_eq!(config.computer_agent_effects().unwrap(), enabled, "{value}");
+    }
+
+    let mut values = config_values();
+    values["COMPUTERS_AGENT_EFFECTS"] = serde_json::json!("yes");
+    let config: Config = serde_json::from_value(values).unwrap();
+    assert!(config.computer_agent_effects().is_err());
 }

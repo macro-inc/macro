@@ -28,6 +28,12 @@ whose hash lives in `account_manager_grants` rather than `"UserApiKey"`.
 - Used by: `services/document_storage_service`,
   `services/authentication_service` (agent setup).
 
+## Gotchas
+
+- `POST /user-api-keys` refuses an agent's program
+  (`macro_authorization::is_program_run`, 403): the key would reach the
+  model, and is a credential without the program's agent claims.
+
 ## Checks
 
 - `cargo test -p user_api_key` (`SQLX_OFFLINE` unset).

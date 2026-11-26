@@ -21,6 +21,7 @@ import {
   isGlobalEvent,
   newScheduleTrigger,
   type RoutineEventGroup,
+  type RoutineEventName,
   type RoutineTriggerDraft,
   routineEvents,
 } from '../core/routine-triggers';
@@ -31,6 +32,8 @@ import { TRIGGER_GROUP_ICONS } from './routine-trigger-icons';
 
 type TriggerChoice = {
   key: string;
+  /** The event it starts on; none for a schedule. */
+  event?: RoutineEventName;
   label: string;
   description: string;
   make: () => RoutineTriggerDraft;
@@ -48,6 +51,7 @@ function eventChoices(group: RoutineEventGroup): TriggerChoice[] {
     .map((event) => ({
       // GitHub's choices share one event and differ by their preset.
       key: `${event.value}:${event.label}`,
+      event: event.value,
       label: event.label,
       description: event.description,
       make: () => ({
@@ -169,6 +173,8 @@ export function TriggerMenu(props: {
   ) => JSX.Element;
   /** False offers only schedules; a saved event trigger still shows its own. */
   offerEvents?: boolean;
+  /** Events left out of the menu, such as one still rolling out. */
+  hiddenEvents?: readonly RoutineEventName[];
   /** For a saved trigger: offered at the bottom of the menu. */
   onRemove?: () => void;
   triggerLabel: string;
@@ -183,11 +189,22 @@ export function TriggerMenu(props: {
   let input: HTMLInputElement | undefined;
   let content: HTMLElement | undefined;
   const [search, setSearch] = createSignal('');
-  const [drilled, setDrilled] = createSignal<TriggerType>();
-  const types = () =>
-    props.offerEvents === false
-      ? TRIGGER_TYPES.filter((type) => type.label === 'Schedule')
-      : TRIGGER_TYPES;
+  const [drilledLabel, setDrilled] = createSignal<string>();
+  // One list per change of the props, so its rows keep their identity.
+  const types = createMemo(() => {
+    if (props.offerEvents === false)
+      return TRIGGER_TYPES.filter((type) => type.label === 'Schedule');
+    const hidden = props.hiddenEvents ?? [];
+    if (!hidden.length) return TRIGGER_TYPES;
+    return TRIGGER_TYPES.map((type) => ({
+      ...type,
+      choices: type.choices.filter(
+        (choice) => !choice.event || !hidden.includes(choice.event)
+      ),
+    }));
+  });
+  /** The type opened on a phone, as the menu offers it now. */
+  const drilled = () => types().find((type) => type.label === drilledLabel());
   /** On a phone: every type, or only the opened one above its events. */
   const shownTypes = () => {
     const type = drilled();
@@ -363,7 +380,7 @@ export function TriggerMenu(props: {
                         class="touch:min-h-11"
                         onTouchEnd={keepTapInMenu}
                         onSelect={() =>
-                          setDrilled(drilled() ? undefined : type)
+                          setDrilled(drilled() ? undefined : type.label)
                         }
                       >
                         {/* Taps land on the row, which outlives the drill. */}

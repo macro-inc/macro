@@ -20,6 +20,7 @@ import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { toast } from '@core/component/Toast/Toast';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { fileSelector } from '@core/directive/fileSelector';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
@@ -32,9 +33,10 @@ import { refetchSoupEntity } from '@queries/soup/cache';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { refetchResources } from '@service-storage/util/refetchResources';
 import { type Component, createSignal, Show } from 'solid-js';
+import { MobileProjectHeader } from '../views/mobile/project-header';
+import { ProjectHeader } from '../views/project-header';
 import { useProjectScopedPanel } from './project-scoped-panel';
 import { ProjectSidePanelSections } from './sidepanel/ProjectSidePanelSections';
-import { TopBar } from './TopBar';
 
 // HACK: prevent lint error on custom directive
 false && fileFolderDrop;
@@ -139,7 +141,9 @@ const Block: Component = () => {
               <ProjectSidePanelSections />
             </Show>
             <div class="flex size-full min-w-0 flex-col overflow-hidden">
-              <TopBar />
+              <Show when={isTouchDevice()} fallback={<ProjectHeader />}>
+                <MobileProjectHeader />
+              </Show>
               <ProjectEntityList
                 projectId={projectId}
                 soup={projectSoup}

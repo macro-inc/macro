@@ -86,7 +86,8 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                         "should": [
                             {"bool": {"minimum_should_match": 1, "should": [
                                 {"match_phrase": {"content": "test"}},
-                                {"match_phrase": {"imported_author": "test"}}
+                                {"match_phrase": {"imported_author": "test"}},
+                                {"match_phrase": {"links": "test"}}
                             ]}}
                         ]
                     }
@@ -139,11 +140,13 @@ fn test_build_bool_query_multi_term_ands_inside_opensearch() -> anyhow::Result<(
                                     "must": [
                                         {"bool": {"minimum_should_match": 1, "should": [
                                             {"match_phrase": {"content": "foo"}},
-                                            {"match_phrase": {"imported_author": "foo"}}
+                                            {"match_phrase": {"imported_author": "foo"}},
+                                            {"match_phrase": {"links": "foo"}}
                                         ]}},
                                         {"bool": {"minimum_should_match": 1, "should": [
                                             {"match_phrase": {"content": "bar baz"}},
-                                            {"match_phrase": {"imported_author": "bar baz"}}
+                                            {"match_phrase": {"imported_author": "bar baz"}},
+                                            {"match_phrase": {"links": "bar baz"}}
                                         ]}}
                                     ]
                                 }

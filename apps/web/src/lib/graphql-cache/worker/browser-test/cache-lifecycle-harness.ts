@@ -51,6 +51,8 @@ let watchingNavigation = false;
 let mutationRunner: Client | undefined;
 let mutationReplays = 0;
 const settledMutations: string[] = [];
+const acceptedWrites: string[] = [];
+let queueingStopped = false;
 addEventListener('pageshow', (event: PageTransitionEvent) => {
   if (event.persisted) pageRestores += 1;
 });
@@ -209,6 +211,7 @@ const api = {
     const owner = 'browser-test-seed';
     const queued = await host.enqueueOptimisticMutation(
       {
+        generation: (await host.authority!.current()).generation,
         uuid: crypto.randomUUID(),
         query: stringifyDocument(mutation),
         variables: {
@@ -234,6 +237,63 @@ const api = {
     );
     return queued.transactionId;
   },
+  /** Queues writes back to back until stopped, noting those accepted. */
+  async queueWrites(): Promise<string[]> {
+    const host = requireOwner();
+    const { generation } = await host.authority!.current();
+    const refusals: string[] = [];
+    while (!queueingStopped) {
+      const uuid = crypto.randomUUID();
+      const nowMs = Date.now();
+      try {
+        await host.enqueueOptimisticMutation(
+          {
+            generation,
+            uuid,
+            query: `mutation KeptWrite($input: SetEntityPropertyInput!) {
+              setEntityProperty(input: $input) { id displayName }
+            }`,
+            variables: {
+              input: {
+                entityType: 'DOCUMENT',
+                entityId: uuid,
+                propertyDefinitionId: 'definition',
+                value: { string: uuid },
+              },
+            },
+            data: { setEntityProperty: { id: uuid, displayName: uuid } },
+          },
+          {
+            owner: 'browser-test',
+            nowMs,
+            leaseExpiresAtMs: nowMs + 300_000,
+          }
+        );
+      } catch (error) {
+        refusals.push(
+          String((error as { errorCode?: unknown }).errorCode ?? error)
+        );
+        continue;
+      }
+      acceptedWrites.push(uuid);
+    }
+    return refusals;
+  },
+  stopQueueing(): void {
+    queueingStopped = true;
+  },
+  acceptedWriteCount(): number {
+    return acceptedWrites.length;
+  },
+  acceptedWrites(): string[] {
+    return acceptedWrites;
+  },
+  async queuedWrites(): Promise<string[]> {
+    return (await requireOwner().inspectMutations!()).map(({ uuid }) => uuid);
+  },
+  async storageGeneration(): Promise<string> {
+    return await requireOwner().currentStorageGeneration();
+  },
   async seedRetryBudget(): Promise<string[]> {
     const host = requireOwner();
     const nowMs = Date.now();
@@ -241,9 +301,10 @@ const api = {
     const mutation = `mutation RetryBudget($input: SetEntityPropertyInput!) {
       setEntityProperty(input: $input) { id displayName }
     }`;
-    const enqueue = (id: string) =>
+    const enqueue = async (id: string) =>
       host.enqueueOptimisticMutation(
         {
+          generation: (await host.authority!.current()).generation,
           uuid: crypto.randomUUID(),
           query: mutation,
           variables: {
@@ -357,7 +418,11 @@ const api = {
     limit = 1
   ): Promise<void> {
     const host = requireOwner();
+    // Asking a suspended host would wait for the page to come back.
+    const authority =
+      host.authority!.snapshot() ?? (await host.authority!.current());
     await host.writeQuery({
+      generation: authority.generation,
       query: query('CacheLifecycleQuery'),
       operationName: 'CacheLifecycleQuery',
       variables: variables(limit),
@@ -411,6 +476,7 @@ const api = {
   async identityReset(): Promise<{ old: unknown; current: unknown }> {
     const host = requireOwner();
     await host.writeQuery({
+      generation: (await host.authority!.current()).generation,
       query: query('CacheLifecycleQuery'),
       operationName: 'CacheLifecycleQuery',
       variables: variables(1),
@@ -418,6 +484,7 @@ const api = {
       identity: 'cache-lifecycle-user-a',
     });
     await host.writeQuery({
+      generation: (await host.authority!.current()).generation,
       query: query('CacheLifecycleQuery'),
       operationName: 'CacheLifecycleQuery',
       variables: variables(2),

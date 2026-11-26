@@ -2,6 +2,7 @@ import { syncLoginStorage } from '@core/util/cookies';
 import { createNoopCacheHost } from '@graphql-cache/host/noop-host';
 import { createRetirableCacheHost } from '@graphql-cache/host/retirable-host';
 import type { CacheHost } from '@graphql-cache/host/types';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import {
   beginCacheWriteSession,
   captureCacheWriteSession,
@@ -350,6 +351,7 @@ it('keeps replacement contact writes closed until every logout wipe and teardown
 it('starts local and server sign-out while a write is held, and waits for physical cleanup before reload', async () => {
   client.current = new QueryClient();
   await beginCacheWriteSession(async () => {}).ready;
+  const generation = cacheSessionGeneration.capture();
   isTauri.mockReturnValue(true);
   const held = Promise.withResolvers<void>();
   const writingStarted = Promise.withResolvers<void>();
@@ -365,7 +367,11 @@ it('starts local and server sign-out while a write is held, and waits for physic
       await held.promise;
       stored.add('GraphqlSoupCrmContact:old-contact');
       order.push('write');
-      return createNoopCacheHost().writeQuery({ query: '', data: {} });
+      return createNoopCacheHost().writeQuery({
+        generation,
+        query: '',
+        data: {},
+      });
     },
     clear: async () => {
       stored.clear();
@@ -380,7 +386,7 @@ it('starts local and server sign-out while a write is held, and waits for physic
   const unregister = registerCacheHost(host);
   const writing = captureCacheWriteSession().run(async () => {
     recordSessionCacheWrite(host, 'GraphqlSoupCrmContact:old-contact');
-    await host.writeQuery({ query: '', data: {} });
+    await host.writeQuery({ generation, query: '', data: {} });
   });
   await writingStarted.promise;
   vi.mocked(syncLoginStorage).mockImplementationOnce(() => {

@@ -39,3 +39,8 @@ VALUES ('share-permission-one', 'c1', 'view');
 
 INSERT INTO public."ChannelSharePermission" ("share_permission_id", "channel_id", "access_level")
 VALUES ('share-permission-one', 'c2', 'edit');
+
+-- A document its owner moved to the trash
+INSERT INTO public."Document" ("id","name","fileType", "owner", "createdAt", "updatedAt", "deletedAt")
+SELECT 'document-trashed', 'trashed_document_name', 'md', "id", '2019-10-16 00:00:00', '2019-10-16 00:00:00', '2019-10-17 00:00:00'
+FROM public."User" WHERE "macro_user_id" = 'a1111111-1111-1111-1111-111111111111';

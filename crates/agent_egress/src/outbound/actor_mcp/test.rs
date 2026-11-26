@@ -90,3 +90,82 @@ async fn state_is_preserved_within_one_actor_and_isolated_across_actors() {
     );
     server.abort();
 }
+
+/// An MCP endpoint that initializes normally and answers every `tools/call`
+/// with HTTP 429 and `Retry-After: 2`, as GitHub's MCP endpoint does under a
+/// burst.
+async fn rate_limited_tool_call(
+    axum::Json(message): axum::Json<Value>,
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    match message["method"].as_str() {
+        Some("initialize") => (
+            [("mcp-session-id", "rate-limited-session")],
+            axum::Json(json!({
+                "jsonrpc": "2.0",
+                "id": message["id"],
+                "result": {
+                    "protocolVersion": message["params"]["protocolVersion"],
+                    "capabilities": {"tools": {}},
+                    "serverInfo": {"name": "rate-limited", "version": "1"},
+                },
+            })),
+        )
+            .into_response(),
+        Some("tools/call") => (
+            http::StatusCode::TOO_MANY_REQUESTS,
+            [(http::header::RETRY_AFTER, "2")],
+            "slow down",
+        )
+            .into_response(),
+        _ => http::StatusCode::ACCEPTED.into_response(),
+    }
+}
+
+#[tokio::test]
+async fn an_upstream_429_is_a_typed_rate_limit_carrying_retry_after() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let app = axum::Router::new().route("/mcp", axum::routing::post(rate_limited_tool_call));
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let transport = HttpActorMcpTransport::new(AddressPolicy::AnyAddress).unwrap();
+
+    let result = transport
+        .exchange(
+            AgentSessionId::new(),
+            MacroUserIdStr::try_from_email("owner@example.com").unwrap(),
+            UpstreamCall::bearer_over_local_cleartext(
+                url::Url::parse(&format!("http://{address}/mcp")).unwrap(),
+                crate::domain::model::BearerToken::new("test-credential"),
+            ),
+            json!({"method":"tools/call","params":{"name":"pull_request_read","arguments":{}}}),
+        )
+        .await;
+
+    match result {
+        Err(EgressError::RateLimited { retry_after }) => {
+            assert_eq!(retry_after, Some(std::time::Duration::from_secs(2)));
+        }
+        other => panic!("expected a rate limit, got {other:?}"),
+    }
+    server.abort();
+}
+
+#[test]
+fn retry_after_reads_seconds_and_http_dates() {
+    assert_eq!(retry_after(" 2 "), Some(std::time::Duration::from_secs(2)));
+    let in_a_minute =
+        httpdate::fmt_http_date(std::time::SystemTime::now() + std::time::Duration::from_secs(60));
+    let wait = retry_after(&in_a_minute).unwrap();
+    assert!(
+        wait > std::time::Duration::from_secs(55) && wait <= std::time::Duration::from_secs(60),
+        "{wait:?}"
+    );
+    assert_eq!(
+        retry_after("Wed, 21 Oct 2015 07:28:00 GMT"),
+        Some(std::time::Duration::ZERO)
+    );
+    assert_eq!(retry_after("soon"), None);
+}

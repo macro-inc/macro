@@ -9,6 +9,10 @@ export type SuggestionTarget = {
 export type SuggestionRun = {
   sessionId: string;
   startedAt: string;
+  /** Asked to stop and not yet stopped: the row says it is stopping. */
+  stopping: boolean;
+  /** The one line the run wrote saying what it did and what it sent; absent until it writes one. */
+  report?: string;
 };
 
 export type SuggestionCategory =
@@ -66,6 +70,15 @@ export type SuggestionKind =
  */
 export type SuggestionStatus = 'open' | 'running' | 'failed' | 'done';
 
+/** Something the person has going on that several suggestions are part of. */
+export type Topic = {
+  /** The same from one generation to the next. */
+  key: string;
+  name: string;
+  /** Why it matters now; absent when nothing it said still holds. */
+  reason?: string;
+};
+
 /** One proactive suggestion for the person, as the feed shows it. */
 export type Suggestion = SuggestionKind & {
   id: string;
@@ -83,6 +96,8 @@ export type Suggestion = SuggestionKind & {
   /** When it was last written; accepting sends it back, so a card can't take up text it never showed. */
   updatedAt: string;
   about: SuggestionTarget[];
+  /** The topic it is part of; absent for one that stands alone. */
+  topic?: Pick<Topic, 'key' | 'name'>;
   /** What a finished suggestion left to open; absent until it settled. */
   result?: SuggestionTarget;
 };
@@ -97,25 +112,53 @@ export type FeedCounts = Record<SuggestionStatus, number>;
 export type SuggestionFeed = {
   suggestions: Suggestion[];
   counts: FeedCounts;
+  /** The topics of the suggestions that wait or run. */
+  topics: Topic[];
 };
 
-export type FeedFilter = 'all' | 'running' | 'open' | 'done';
+/**
+ * Whether taking a suggestion up is what finishes it. Not a background
+ * prompt, which starts its run, a routine, which is saved, or a reply, which
+ * the server keeps open until the person replies on its item.
+ */
+export function doneWhenTakenUp(suggestion: Suggestion): boolean {
+  if (suggestion.kind === 'entity') return suggestion.action !== 'reply';
 
-export function matchesFilter(status: SuggestionStatus, filter: FeedFilter) {
-  if (filter === 'all') return true;
-  if (filter === 'running') return status === 'running' || status === 'failed';
-
-  return status === filter;
+  return suggestion.kind === 'prompt' && suggestion.runMode === 'composer';
 }
 
-/** The tabs' counts: a failed run sits with the running ones. */
-export function tabCounts(counts: FeedCounts): Record<FeedFilter, number> {
-  return {
-    all: counts.open + counts.running + counts.failed + counts.done,
-    running: counts.running + counts.failed,
-    open: counts.open,
-    done: counts.done,
-  };
+/** Where a saved reply draft came from: its thread, and what else its suggestion cites. */
+export type DraftOrigin = {
+  thread: SuggestionTarget;
+  /** The suggestion's other items, without the draft's own thread. */
+  sources: SuggestionTarget[];
+};
+
+/**
+ * The origin of the draft `draftId` when a session wrote it for one of the
+ * feed's suggestions, open or done; undefined for any other draft.
+ */
+export function draftOrigin(
+  feed: SuggestionFeed,
+  draftId: string
+): DraftOrigin | undefined {
+  for (const suggestion of feed.suggestions) {
+    if (suggestion.kind !== 'entity') continue;
+
+    const draft = suggestion.draft;
+    if (draft?.partId !== draftId) continue;
+
+    return {
+      thread: { entityType: draft.entityType, entityId: draft.entityId },
+      sources: suggestion.about.filter(
+        (target) =>
+          target.entityType !== draft.entityType ||
+          target.entityId !== draft.entityId
+      ),
+    };
+  }
+
+  return undefined;
 }
 
 /** How long someone has waited, in whole hours or days; nothing under an hour. */

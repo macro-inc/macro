@@ -1,16 +1,32 @@
+import { isBotPrincipalId } from '@core/constant/macroAgent';
+import { firstOrAborted } from '@core/util/abort-signal';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { throwOnErr } from '@core/util/result';
+import { type ResultError, throwOnErr } from '@core/util/result';
 import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
-import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import {
   type GetOrCreateChannelResponse,
   storageServiceClient,
 } from '@service-storage/client';
-import { ChannelType } from '@service-storage/generated/schemas/channelType';
-import { useMutation } from '@tanstack/solid-query';
-import { ResultAsync } from 'neverthrow';
-import { invalidateListChannels, loadChannelList } from './channels';
+import { DirectMessageChannelIdDocument } from '@service-storage/graphql/generated/graphql';
+import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import {
+  type MutationFunctionContext,
+  useMutation,
+} from '@tanstack/solid-query';
+import { okAsync, ResultAsync } from 'neverthrow';
+import { filter, pipe } from 'wonka';
+import {
+  assertQueryAccount,
+  currentQueryAccount,
+  isCurrentQueryAccount,
+  mutationQueryAccount,
+  type QueryAccount,
+  QueryAccountChangedError,
+} from '../auth/account-scope';
+import { useQueryAccount } from '../auth/use-query-account';
+import { type ChannelDirectory, refreshChannelDirectory } from './directory';
+import { directMessageWithPerson } from './directory-core';
 
 type GetOrCreateDmResponse = GetOrCreateChannelResponse;
 
@@ -19,19 +35,47 @@ type GetOrCreateDirectMessageParams = {
   recipient_id: string;
 };
 
+type GetOrCreatePrivateChannelParams = {
+  parentSpan?: TraceContext;
+  recipients: string[];
+};
+
 /**
- * Create or resolve a 1:1 DM channel for a recipient. Invalidates the channel list on settle.
+ * Reads the conversation found or created into the channel directory, unless
+ * the sign-in that asked was replaced since: the directory it would refresh
+ * is gone, and a read now would run as the replacement.
  */
-export function useGetOrCreateDirectMessageMutation(
+function refreshAfterConversation(
+  account: QueryAccount | undefined,
+  channelId: string | undefined
+) {
+  if (!isCurrentQueryAccount(account)) return;
+  fireAndForget(
+    refreshChannelDirectory(channelId ? [channelId] : []),
+    'channel-list'
+  );
+}
+
+function refreshAfterSettled(
+  data: GetOrCreateChannelResponse | undefined,
+  context: MutationFunctionContext
+) {
+  refreshAfterConversation(mutationQueryAccount(context), data?.channel_id);
+}
+
+/** Creates or resolves a 1:1 DM with a recipient, as `account`. */
+function getOrCreateDirectMessageMutationOptions(
   callbacks?: MutationCallbacks<
     GetOrCreateDmResponse,
     Error,
     GetOrCreateDirectMessageParams,
     undefined
-  >
+  >,
+  account = currentQueryAccount()
 ) {
-  return useMutation(() => ({
+  return {
     gcTime: 0,
+    meta: { queryAccount: account },
     mutationFn: async (vars: GetOrCreateDirectMessageParams) => {
       return await throwOnErr(async () =>
         (vars.parentSpan ?? Telemetry.captureContext()).run(() =>
@@ -51,66 +95,151 @@ export function useGetOrCreateDirectMessageMutation(
         onError(error) {
           console.error('failed to get or create direct message', error);
         },
-        onSettled: () =>
-          fireAndForget(invalidateListChannels(), 'channel-list'),
+        onSettled: (data, _error, _vars, _result, context) =>
+          refreshAfterSettled(data, context),
       },
       callbacks,
       (variables) => variables.parentSpan
     ),
-  }));
+  };
 }
 
 /**
- * The 1:1 DM between `viewerId` and `recipientId` in a channel list, picked as
- * the server's get-or-create picks it: the oldest two-member DM with both.
+ * Create or resolve a 1:1 DM channel for a recipient. Refreshes the in-memory
+ * channel directory on settle, in the sign-in that started it.
  */
-function findDirectMessage(
-  channels: ApiChannelWithLatest[],
-  viewerId: string,
-  recipientId: string
-): string | undefined {
-  let found: ApiChannelWithLatest | undefined;
-  for (const channel of channels) {
-    if (channel.channel_type !== ChannelType.direct_message) continue;
-    if (channel.participants.length !== 2) continue;
-    const members = channel.participants.map(({ user_id }) => user_id);
-    if (!members.includes(viewerId) || !members.includes(recipientId)) continue;
-    if (!found || channel.created_at < found.created_at) found = channel;
-  }
-  return found?.id;
-}
-
-/**
- * The viewer's existing DM with a recipient, without creating one. Reads the
- * channel list the app already keeps, fetching it only when it isn't loaded.
- */
-export function existingDirectMessage(
-  viewerId: string,
-  recipientId: string
-): ResultAsync<string | undefined, unknown> {
-  return ResultAsync.fromPromise(loadChannelList(), (error) => error).map(
-    (channels) => findDirectMessage(channels, viewerId, recipientId)
+export function useGetOrCreateDirectMessageMutation(
+  callbacks?: MutationCallbacks<
+    GetOrCreateDmResponse,
+    Error,
+    GetOrCreateDirectMessageParams,
+    undefined
+  >
+) {
+  const account = useQueryAccount();
+  return useMutation(() =>
+    getOrCreateDirectMessageMutationOptions(callbacks, account())
   );
 }
 
-type GetOrCreatePrivateChannelParams = {
-  parentSpan?: TraceContext;
-  recipients: string[];
-};
+/**
+ * The DM with `recipientId`, created if there is none yet. For a recipient
+ * that writes first (an agent teammate's greeting), so the conversation shown
+ * is the real one its message lands in. Refreshes the channel directory after,
+ * in the sign-in that asked.
+ */
+export function getOrCreateDirectMessageChannel(
+  recipientId: string
+): ResultAsync<string, ResultError[]> {
+  const account = currentQueryAccount();
+  return new ResultAsync(
+    storageServiceClient.getOrCreateDirectMessage({ recipient_id: recipientId })
+  ).map(({ channel_id }) => {
+    refreshAfterConversation(account, channel_id);
+    return channel_id;
+  });
+}
+
+/** Where an existing DM was found: the viewer's complete channel directory,
+ * or the server. */
+export type DirectMessageSource = 'directory' | 'server';
 
 /**
- * Create or resolve a private group channel for a set of recipients. Invalidates the channel list on settle.
+ * The viewer's existing DM with a person, without creating one: among the
+ * DMs the viewer is still in, the one the server's get-or-create would reuse,
+ * as the joined channel list it replaces showed it. A DM the viewer left is
+ * not answered, though get-or-create may still reuse it. A `directory` that
+ * is complete and current (a pass of this page reread every cached record,
+ * so a DM deleted while no tab was open is gone from it) answers when one of
+ * its DMs has just the two of them in it, which the server would rank first
+ * (`directMessageWithPerson`); otherwise the server is asked, since the DM
+ * may be one the directory cannot rank (only the other person is left in it)
+ * or has not received yet. The server
+ * looks up people only; agents are opened through their own DM flow
+ * (`openTeamAgentDirectMessage`), so a bot answers none without asking.
+ * Fails with `DirectMessageLookupTimedOut` once the server has not answered
+ * within `DM_LOOKUP_DEADLINE_MS`.
  */
-export function useGetOrCreatePrivateChannelMutation(
+export function existingDirectMessage(
+  viewerId: string,
+  recipientId: string,
+  directory?: Pick<ChannelDirectory, 'channels' | 'complete' | 'viewsCurrent'>
+): ResultAsync<
+  { channelId: string | undefined; source: DirectMessageSource | undefined },
+  unknown
+> {
+  if (recipientId === viewerId || isBotPrincipalId(recipientId))
+    return okAsync({ channelId: undefined, source: undefined });
+  if (directory?.complete() && directory.viewsCurrent()) {
+    const channelId = directMessageWithPerson(
+      directory.channels(),
+      viewerId,
+      recipientId
+    );
+    if (channelId) return okAsync({ channelId, source: 'directory' });
+  }
+  return ResultAsync.fromPromise(
+    lookupDirectMessage(viewerId, recipientId),
+    (error) => error
+  ).map((channelId) => ({ channelId, source: 'server' as const }));
+}
+
+/** How long opening a person's DM waits for the server to say whether one
+ * exists. Past it the opener shows the DM as not yet made, whose first
+ * message still reaches an existing one. */
+export const DM_LOOKUP_DEADLINE_MS = 5_000;
+
+/** Why a DM lookup gave up: `DM_LOOKUP_DEADLINE_MS` passed. */
+export class DirectMessageLookupTimedOut extends Error {
+  constructor() {
+    super('direct message lookup timed out');
+  }
+}
+
+// Looked up as `viewerId` only: a lookup for a viewer who is no longer
+// signed in rejects with `QueryAccountChangedError`. Giving up at the
+// deadline leaves the query's result source, which ends urql's request.
+async function lookupDirectMessage(
+  viewerId: string,
+  recipientId: string
+): Promise<string | undefined> {
+  const account = currentQueryAccount();
+  assertQueryAccount(account);
+  if (account.userId !== viewerId) throw new QueryAccountChangedError();
+  const settled = await firstOrAborted(
+    pipe(
+      getGraphqlSoupClient().query(
+        DirectMessageChannelIdDocument,
+        { userId: recipientId },
+        { requestPolicy: 'network-only' }
+      ),
+      // The answer, as urql's own toPromise takes it.
+      filter((result) => !result.stale && !result.hasNext)
+    ),
+    AbortSignal.timeout(DM_LOOKUP_DEADLINE_MS)
+  );
+  assertQueryAccount(account);
+  if (settled.kind === 'aborted') throw new DirectMessageLookupTimedOut();
+  if (settled.kind === 'ended')
+    throw new Error('direct message lookup ended without an answer');
+  const result = settled.value;
+  if (result.error) throw result.error;
+  return result.data?.user.directMessageChannelId ?? undefined;
+}
+
+/** Creates or resolves a private group channel, as `account`. */
+function getOrCreatePrivateChannelMutationOptions(
   callbacks?: MutationCallbacks<
     GetOrCreateChannelResponse,
     Error,
     GetOrCreatePrivateChannelParams,
     undefined
-  >
+  >,
+  account = currentQueryAccount()
 ) {
-  return useMutation(() => ({
+  return {
     gcTime: 0,
+    meta: { queryAccount: account },
     mutationFn: async (vars: GetOrCreatePrivateChannelParams) => {
       return await throwOnErr(async () =>
         (vars.parentSpan ?? Telemetry.captureContext()).run(() =>
@@ -130,11 +259,30 @@ export function useGetOrCreatePrivateChannelMutation(
         onError(error) {
           console.error('failed to get or create private channel', error);
         },
-        onSettled: () =>
-          fireAndForget(invalidateListChannels(), 'channel-list'),
+        onSettled: (data, _error, _vars, _result, context) =>
+          refreshAfterSettled(data, context),
       },
       callbacks,
       (variables) => variables.parentSpan
     ),
-  }));
+  };
+}
+
+/**
+ * Create or resolve a private group channel for a set of recipients.
+ * Refreshes the in-memory channel directory on settle, in the sign-in that
+ * started it.
+ */
+export function useGetOrCreatePrivateChannelMutation(
+  callbacks?: MutationCallbacks<
+    GetOrCreateChannelResponse,
+    Error,
+    GetOrCreatePrivateChannelParams,
+    undefined
+  >
+) {
+  const account = useQueryAccount();
+  return useMutation(() =>
+    getOrCreatePrivateChannelMutationOptions(callbacks, account())
+  );
 }

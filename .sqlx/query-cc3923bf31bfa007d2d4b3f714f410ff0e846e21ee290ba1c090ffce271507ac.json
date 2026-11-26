@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE import_entity SET waiting_on = NULL WHERE waiting_on = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cc3923bf31bfa007d2d4b3f714f410ff0e846e21ee290ba1c090ffce271507ac"
+}

@@ -22,6 +22,31 @@ use super::{Mode, proxy, repo_root, stage::Stage};
 /// before it launches.
 pub const STARTUP_TIMEOUT: Duration = Duration::from_secs(180);
 
+/// How long bring-up waits for Vite's first `/app/` answer by default. A cold
+/// dev server optimizes its dependencies on that request, which can take
+/// minutes on a loaded machine.
+const FRONTEND_READY_TIMEOUT: Duration = Duration::from_secs(300);
+
+/// Overrides [`FRONTEND_READY_TIMEOUT`], in whole seconds.
+const FRONTEND_READY_TIMEOUT_ENV: &str = "MACRO_LOCAL_FRONTEND_READY_SECS";
+
+/// The first-page deadline: [`FRONTEND_READY_TIMEOUT_ENV`] when set, else the
+/// default. A value that is not a positive whole number is an error, not a
+/// silent default.
+fn frontend_ready_timeout(raw: Option<&str>) -> Result<Duration> {
+    let Some(raw) = raw else {
+        return Ok(FRONTEND_READY_TIMEOUT);
+    };
+    match raw.trim().parse::<u64>() {
+        Ok(secs) if secs > 0 => Ok(Duration::from_secs(secs)),
+        _ => {
+            anyhow::bail!(
+                "{FRONTEND_READY_TIMEOUT_ENV}={raw:?} must be a positive number of seconds"
+            )
+        }
+    }
+}
+
 /// Vite's output, kept across the whole dev server's life for `run_local logs`.
 pub fn log_path(instance: &Instance) -> PathBuf {
     instance.artifact_dir().join("run/frontend.log")
@@ -361,38 +386,74 @@ pub fn wait_backend_ready(stage: &Stage, instance: &Instance) -> Result<()> {
     stage.run("Waiting for backend (proxy /auth/health)", &mut cmd)
 }
 
-/// A listening Vite port does not prove the containerized proxy can reach it.
-/// Verify the browser's route before announcing that the stack is ready.
-fn wait_frontend_proxy_ready(stage: &Stage, instance: &Instance) -> Result<()> {
+/// How long the proxy check waits once Vite answers on the host. Only the
+/// Docker-to-host path is left to fail then, so this stays short.
+const PROXY_ROUTE_TIMEOUT: Duration = Duration::from_secs(45);
+
+/// A `curl` that fetches `url` until it succeeds or `deadline` passes, each
+/// attempt capped at `attempt`.
+fn curl_until_ok(url: &str, deadline: Duration, attempt: Duration) -> Command {
+    let deadline = deadline.as_secs().to_string();
     let mut cmd = Command::new("curl");
     cmd.args([
         "--fail",
         "--silent",
         "--show-error",
+        // --retry-max-time is the deadline; --retry only needs to be large
+        // enough not to stop first.
         "--retry",
-        "8",
+        &deadline,
         "--retry-connrefused",
         "--retry-delay",
-        "1",
+        "2",
         "--retry-max-time",
-        "45",
+        &deadline,
         "--max-time",
-        "5",
+        &attempt.as_secs().to_string(),
         "--output",
         "/dev/null",
-        "--cacert",
-    ])
-    .arg(proxy::ca_pem())
-    .arg(format!("{}/app/", proxy::url(instance)));
+        url,
+    ]);
+    cmd
+}
+
+/// A listening Vite port does not prove it serves pages, nor that the
+/// containerized proxy can reach it. Wait for Vite's first `/app/` on the host,
+/// which a cold dev server answers only after optimizing its dependencies, then
+/// verify the browser's route through the proxy before announcing the stack.
+fn wait_frontend_ready(stage: &Stage, instance: &Instance, timeout: Duration) -> Result<()> {
+    let mut direct = curl_until_ok(
+        &format!("{}/", url(instance)),
+        timeout,
+        Duration::from_secs(60),
+    );
     stage
-        .run("Checking frontend through HTTPS proxy", &mut cmd)
+        .run("Waiting for frontend to serve /app/", &mut direct)
         .with_context(|| {
             format!(
-                "HTTPS proxy could not serve the frontend. Check proxy logs and Docker-to-host \
-                 firewall access to host.docker.internal:{} (Vite's port). \
-                 Direct Vite URL: {}",
-                instance.port(Port::Frontend),
-                url(instance)
+                "Vite did not serve {}/ within {}s; see {}. A slow machine can wait longer \
+                 with {FRONTEND_READY_TIMEOUT_ENV}=<seconds>.",
+                url(instance),
+                timeout.as_secs(),
+                log_path(instance).display()
+            )
+        })?;
+
+    let mut proxied = curl_until_ok(
+        &format!("{}/app/", proxy::url(instance)),
+        PROXY_ROUTE_TIMEOUT,
+        Duration::from_secs(5),
+    );
+    proxied.arg("--cacert").arg(proxy::ca_pem());
+    stage
+        .run("Checking frontend through HTTPS proxy", &mut proxied)
+        .with_context(|| {
+            format!(
+                "HTTPS proxy could not serve the frontend, though Vite serves it directly at {}. \
+                 Check proxy logs and Docker-to-host firewall access to \
+                 host.docker.internal:{} (Vite's port).",
+                url(instance),
+                instance.port(Port::Frontend)
             )
         })
 }
@@ -491,6 +552,9 @@ pub fn start(
         ));
         return Ok(None);
     }
+    let ready_timeout = frontend_ready_timeout(
+        macro_env_var::maybe_read_env(FRONTEND_READY_TIMEOUT_ENV).as_deref(),
+    )?;
     let port = instance.port(Port::Frontend);
     // A successful connect means something is already listening — almost
     // certainly a stale dev server from a previous run. (A bind probe can miss
@@ -531,7 +595,7 @@ pub fn start(
     }
     let process = spawn(stage, &mut cmd, port, &log)?;
     record_pid(&pid_file, &process);
-    wait_frontend_proxy_ready(stage, instance)?;
+    wait_frontend_ready(stage, instance, ready_timeout)?;
     Ok(Some(Frontend {
         process,
         command: cmd,

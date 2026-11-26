@@ -21,7 +21,6 @@ impl<
     PromptComposer,
     Egress,
     Lifecycle,
-    Mentions,
     Notifier,
 > AgentSessionNotificationRecipient
     for AgentHarnessService<
@@ -33,7 +32,6 @@ impl<
         PromptComposer,
         Egress,
         Lifecycle,
-        Mentions,
         Notifier,
     >
 where
@@ -45,7 +43,6 @@ where
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
     Lifecycle: AgentSessionLifecyclePublisher,
-    Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
     async fn present_tool(
@@ -191,6 +188,7 @@ where
         action_id: AgentActionId,
         prompt: String,
         actor: Option<MacroUserIdStr<'static>>,
+        prompter: agent_session::domain::model::PrompterKind,
     ) -> agent_session::domain::error::Result<()> {
         self.execute(
             id,
@@ -198,6 +196,7 @@ where
                 action_id,
                 prompt,
                 actor,
+                prompter,
             },
         )
         .await
@@ -269,7 +268,6 @@ impl<
     PromptComposer,
     Egress,
     Lifecycle,
-    Mentions,
     Notifier,
 > agent_session::domain::ports::SessionTurnObserver
     for AgentHarnessService<
@@ -281,7 +279,6 @@ impl<
         PromptComposer,
         Egress,
         Lifecycle,
-        Mentions,
         Notifier,
     >
 where
@@ -293,7 +290,6 @@ where
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
     Lifecycle: AgentSessionLifecyclePublisher,
-    Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
     fn signal(&self, id: AgentSessionId, signal: TurnSignal) {
@@ -324,7 +320,6 @@ impl<
     PromptComposer,
     Egress,
     Lifecycle,
-    Mentions,
     Notifier,
 > crate::domain::ports::HeldToolCallObserver
     for AgentHarnessService<
@@ -336,7 +331,6 @@ impl<
         PromptComposer,
         Egress,
         Lifecycle,
-        Mentions,
         Notifier,
     >
 where
@@ -348,7 +342,6 @@ where
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
     Lifecycle: AgentSessionLifecyclePublisher,
-    Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
     /// Through [`execute`](AgentHarnessService::execute), not `execute_here`:
@@ -368,7 +361,6 @@ impl<
     PromptComposer,
     Egress,
     Lifecycle,
-    Mentions,
     Notifier,
 >
     AgentHarnessInner<
@@ -380,7 +372,6 @@ impl<
         PromptComposer,
         Egress,
         Lifecycle,
-        Mentions,
         Notifier,
     >
 where
@@ -392,7 +383,6 @@ where
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
     Lifecycle: AgentSessionLifecyclePublisher,
-    Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
     /// Resolve current permission policy, failing closed if lookup fails.

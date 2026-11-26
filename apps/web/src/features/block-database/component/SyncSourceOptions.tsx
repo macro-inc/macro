@@ -1,5 +1,5 @@
 import { t } from '@app/lib/i18n';
-import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
+import { ConnectorIcon } from '@core/connectors/ConnectorIcon';
 import NotionIcon from '@icon/mcp-notion.svg';
 import type { DatabaseSyncSource } from '@service-cognition/generated/schemas/databaseSyncSource';
 import type { DatabaseSyncSources } from '@service-cognition/generated/schemas/databaseSyncSources';
@@ -30,7 +30,7 @@ export function SyncSourceOptions(props: SyncSourceOptionsProps) {
       <li class="flex flex-col gap-2 px-3 py-2.5">
         <SourceHeading
           icon={
-            <PipedreamConnectorIcon
+            <ConnectorIcon
               appSlug={GRANOLA_APP_SLUG}
               iconUrl={GRANOLA_ICON_URL}
               class="size-5"

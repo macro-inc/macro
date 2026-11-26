@@ -57,6 +57,10 @@ Document read/write/debug handlers declare their minimum session grant through
 Axum extractors; atomic reads/updates require a signed document grant even when
 an internal key is present. Surface grants remain kind-discriminated and exact
 to the requested surface. These are scoped sync JWTs, not app-session tokens.
+The import-only `/document/{id}/import-links` CAS requires an internal key and
+an exact signed owner grant. The importer fences it against its active body
+receipt. It persists and attributes the update, publishes the snapshot and
+broadcasts normally, and omits the `Edited` interaction.
 
 ## Checks
 
@@ -88,6 +92,10 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
   source's mappings first. A peer's first owner keeps it; registration only
   claims peers the system author holds.
   A new write path does the same (`tests/peer_authors.test.ts`).
+- `docker/sync-service.Dockerfile` fetches the tools `worker-build` would
+  download (wasm-opt, esbuild, wasm-bindgen) into its cache first, with
+  retries: wasm-opt and esbuild at the versions `worker-build` 0.8.1 pins.
+  Bumping `worker-build` there means bumping those two with it.
 - `migration-test-hooks` is test-only fault injection — never enable it in a
   deployed worker (see the feature's doc comment in `Cargo.toml`).
 - Provision `LEXICAL_SERVICE_AUTH_KEY` to match lexical-service before deploying; `just check-secrets <environment>` checks binding presence without reading values.

@@ -1,6 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 import { addresses } from '../addresses.ts';
-import { runFiles, startup } from '../startup.ts';
+import {
+  configured,
+  exitCodes,
+  NotConfigured,
+  runFiles,
+  startFlushLimitMs,
+  startOrExit,
+  startup,
+} from '../startup.ts';
 
 const reserved = ['agent'];
 
@@ -88,6 +96,25 @@ describe('startup', () => {
           token: 'capability',
           names: ['MACRO_API_KEY', 'OTHER'],
         },
+      },
+    });
+  });
+
+  test("a script's process gets the web app its parent was enrolled with", () => {
+    expect(
+      startup(
+        {
+          AGENT_WORKSPACE: '/w',
+          MUPPET_RELAY_URL: 'http://127.0.0.1:4000',
+          MUPPET_RELAY_TOKEN: 'capability',
+          MUPPET_WEB_APP_URL: 'http://localhost:3005',
+        },
+        reserved
+      )
+    ).toMatchObject({
+      kind: 'configured',
+      value: {
+        credentials: { kind: 'relayed', webApp: 'http://localhost:3005' },
       },
     });
   });
@@ -246,6 +273,7 @@ describe('addresses', () => {
       value: {
         presence: 'wss://connection.internal/cg',
         speech: 'https://egress.internal/brain/inference',
+        brain: 'https://egress.internal/brain',
         hosts: {
           storage: 'https://storage.internal/dss',
           properties: 'https://storage.internal/dss',
@@ -301,6 +329,21 @@ describe('addresses', () => {
     ).toMatchObject({ kind: 'invalid' });
   });
 
+  test('the CAPTCHA brain and owner links go where enrollment says', () => {
+    const configured = addresses({
+      MACRO_GATEWAY: 'http://proxy:30734',
+      OVERRIDE_AGENT_HARNESS_EGRESS_URL: 'http://agent-harness-service:8102/',
+      OVERRIDE_APP_SERVICE_URL: 'http://localhost:3005/',
+    });
+    expect(configured).toMatchObject({
+      kind: 'configured',
+      value: {
+        brain: 'http://agent-harness-service:8102/brain',
+        webApp: 'http://localhost:3005',
+      },
+    });
+  });
+
   test('needs the gateway, and URLs that parse, naming the key and never a value', () => {
     expect(addresses({ MACRO_API_KEY: 'mak_secret' })).toEqual({
       kind: 'invalid',
@@ -314,5 +357,97 @@ describe('addresses', () => {
       kind: 'invalid',
       message: 'OVERRIDE_AUTH_SERVICE_URL is not a URL',
     });
+  });
+});
+
+const exited = (code: number): never => {
+  throw new Error(`exited ${code}`);
+};
+
+test('a start that is not configured exports its spans, then exits with the configuration code', async () => {
+  const events: string[] = [];
+
+  await expect(
+    startOrExit(
+      async () => {
+        throw new NotConfigured('no claude', { cause: new Error('ENOENT') });
+      },
+      {
+        flush: async () => {
+          events.push('flush');
+        },
+        wait: () => new Promise(() => undefined),
+        report: (message) => events.push(message),
+        exit: (code) => {
+          events.push(`exit ${code}`);
+          return exited(code);
+        },
+      }
+    )
+  ).rejects.toThrow('exited 78');
+
+  expect(events).toEqual([
+    'flush',
+    "can't start: no claude",
+    `exit ${exitCodes.configuration}`,
+  ]);
+});
+
+test('an unreachable collector delays a failed start only by the flush limit', async () => {
+  const waited: number[] = [];
+
+  await expect(
+    startOrExit(
+      async () => {
+        throw new NotConfigured('no key');
+      },
+      {
+        flush: () => new Promise(() => undefined),
+        wait: async (ms) => {
+          waited.push(ms);
+        },
+        report: () => undefined,
+        exit: exited,
+      }
+    )
+  ).rejects.toThrow('exited 78');
+
+  expect(waited).toEqual([startFlushLimitMs]);
+});
+
+test('any other failure of the start is exported too, then rethrown, not turned into an exit', async () => {
+  const failure = new Error('schedules unreachable');
+  let flushed = false;
+
+  await expect(
+    startOrExit(
+      async () => {
+        throw failure;
+      },
+      {
+        flush: async () => {
+          flushed = true;
+        },
+        wait: () => new Promise(() => undefined),
+        report: () => undefined,
+        exit: exited,
+      }
+    )
+  ).rejects.toBe(failure);
+
+  expect(flushed).toBe(true);
+});
+
+test('what is not configured keeps its cause', async () => {
+  const cause = new Error('ENOENT');
+  const error = await configured(() => {
+    throw cause;
+  }).catch((thrown: unknown) => thrown);
+
+  expect(error).toBeInstanceOf(NotConfigured);
+  expect(error).toMatchObject({
+    name: 'NotConfigured',
+    message: 'ENOENT',
+    cause,
   });
 });

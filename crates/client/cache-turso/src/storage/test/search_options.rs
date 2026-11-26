@@ -35,11 +35,9 @@ fn compare_search_scan_options() {
         driver::execute(&connection, BASELINE_INDEX, vec![]).unwrap();
         eprintln!("baseline index build: {:?}", start.elapsed());
         for query in ["contact", "99999", "no-match"] {
-            let (covering, parameters) = search::statement(
-                SearchProfile::QuickAccessV1,
-                "document",
-                &SearchQuery::new(query),
-            );
+            let search_query = SearchQuery::new(query);
+            let (covering, parameters) =
+                search::statement(SearchProfile::QuickAccessV1, "document");
             let sql = covering.replace("search_documents_browse_idx", "search_baseline");
             let plan = driver::query(
                 &connection,
@@ -79,16 +77,23 @@ fn compare_search_scan_options() {
                             search::visit_row(
                                 row,
                                 SearchProfile::QuickAccessV1,
+                                &search_query,
                                 &mut key_buffer,
                                 &mut |document| {
                                     std::hint::black_box(document);
+                                    rows += 1;
                                 },
                             )?;
+                            return Ok(());
                         } else {
-                            std::hint::black_box(parse_search_document(
+                            let document = parse_search_document(
                                 &row.get_values().cloned().collect::<Vec<_>>(),
                                 SearchProfile::QuickAccessV1,
-                            )?);
+                            )?;
+                            if !search::may_match(&search_query, &document.search_text) {
+                                return Ok(());
+                            }
+                            std::hint::black_box(document);
                         }
                         rows += 1;
                         Ok(())

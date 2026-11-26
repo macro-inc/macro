@@ -37,9 +37,12 @@ export default {
   // Rail buttons
   hideFromSidebar: 'Hide from sidebar',
   unreadItems: 'Unread items',
-  unseenItems: {
-    one: '{{count}} unseen item',
-    other: '{{count}} unseen items',
+  unreadNotifications: {
+    one: '{{count}} unread notification',
+    other: '{{count}} unread notifications',
+  },
+  manyUnreadNotifications: {
+    other: 'More than {{count}} unread notifications',
   },
   activeCall: 'Active call',
   returnToCall: 'Return to call',
@@ -47,14 +50,12 @@ export default {
   more: 'More',
   moreOptions: 'More options',
   create: 'Create',
-  getMobileApp: 'Get the mobile app',
+  downloads: 'Downloads',
   help: 'Help',
   helpMessage: 'Message support',
   helpCall: 'Book a call',
   helpEmail: 'Email {{email}}',
   signedInAs: 'Signed in as {{name}}',
-  commandMenu: 'Command Menu',
-  searchEverything: 'Search everything',
 
   // Customize sidebar
   customizeSidebar: 'Customize sidebar',
@@ -84,4 +85,11 @@ export default {
   updateNativePreparingDescription:
     'Saving your work before Macro restarts to install the update.',
   updatePreparingRestart: 'Preparing to restart…',
+  updateDesktopFailedTitle: "Couldn't install the desktop app update",
+  updateNativeFailedDownloadingDescription:
+    'Macro is still on the version you had. The update is downloading again so you can try again.',
+  updateNativeFailedDescription:
+    'Macro is still on the version you had. Restart Macro to try installing the update again.',
+  updateDownloading: 'Downloading…',
+  updateTryAgain: 'Try again',
 };

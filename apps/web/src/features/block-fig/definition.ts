@@ -7,10 +7,10 @@ import {
 import { enableFigViewer, isFeatureEnabled } from '@core/constant/featureFlags';
 import { compiledFigModule } from '@core/fig-engine/compiled-module';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { lazy } from '@core/util/lazy';
 import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { err, ok } from 'neverthrow';
-import { lazy } from 'solid-js';
 import { FigOpening } from './components/fig-opening';
 
 export const FIG_MIME = 'application/x-figma';

@@ -5,7 +5,7 @@ use macro_event_broker::MacroEvent as _;
 use opensearch_client::OpensearchClient;
 use sqlx::PgPool;
 
-use super::{EventOutcome, MAX_PROCESSING_ATTEMPTS, PROCESSING_RETRY_BASE_DELAY, retry_processing};
+use super::{Attempted, Attempts, Handled};
 use crate::process::chat::{remove_chat_message, upsert_chat_message_by_ids};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -111,7 +111,8 @@ pub(super) async fn process_chat_event(
     event: &ChatMacroEvent,
     partition: i32,
     offset: i64,
-) -> EventOutcome {
+    attempts: &Attempts,
+) -> Attempted {
     let description = describe_chat_event(&event.event().event);
     if description.action == ChatIndexAction::Ignore {
         tracing::trace!(
@@ -121,52 +122,20 @@ pub(super) async fn process_chat_event(
             offset,
             "ignoring chat event without a search-index action"
         );
-        return EventOutcome::Ignored;
+        return Ok((Handled::Ignored, 0));
     }
 
-    let result = retry_processing(|attempt| async move {
-        tracing::trace!(
-            chat_id = description.chat_id,
-            event_type = description.event_type,
-            partition,
-            offset,
-            attempt,
-            "processing chat search-index event"
-        );
-        process_chat_index_action(db, opensearch_client, description.action)
-            .await
-            .inspect_err(|error| {
-                if attempt < MAX_PROCESSING_ATTEMPTS {
-                    let retry_delay =
-                        PROCESSING_RETRY_BASE_DELAY * 2u32.pow(attempt.saturating_sub(1));
-                    tracing::warn!(
-                        error = ?error,
-                        chat_id = description.chat_id,
-                        event_type = description.event_type,
-                        partition,
-                        offset,
-                        attempt,
-                        delay_secs = retry_delay.as_secs(),
-                        "chat search-index processing failed, retrying"
-                    );
-                }
-            })
-    })
-    .await;
-
-    match result {
-        Ok(()) => EventOutcome::Indexed,
-        Err(error) => {
-            tracing::error!(
-                error = ?error,
+    attempts
+        .run(|attempt| async move {
+            tracing::trace!(
                 chat_id = description.chat_id,
                 event_type = description.event_type,
                 partition,
                 offset,
-                attempts = MAX_PROCESSING_ATTEMPTS,
-                "dropping chat event after processing retries were exhausted"
+                attempt,
+                "processing chat search-index event"
             );
-            EventOutcome::Dropped
-        }
-    }
+            process_chat_index_action(db, opensearch_client, description.action).await
+        })
+        .await
 }

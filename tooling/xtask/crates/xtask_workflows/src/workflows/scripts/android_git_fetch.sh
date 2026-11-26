@@ -7,7 +7,7 @@
 gh_fetch() {
   local auth
   auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
-  LD_LIBRARY_PATH= git -c "http.https://github.com/.extraheader=" \
+  LD_LIBRARY_PATH='' git -c "http.https://github.com/.extraheader=" \
     -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
     fetch -q --depth=1 origin "$1"
 }

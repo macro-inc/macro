@@ -8,10 +8,7 @@ import {
 } from '@app/features/access-requests/access-requests';
 import type { SharingSource } from '@app/features/access-requests/context/contracts';
 import { shareEntity } from '@app/features/access-requests/core/types';
-import {
-  ShareRequestIcon,
-  useShareRequestTrigger,
-} from '@app/features/access-requests/share-request-trigger';
+import { useShareRequestTrigger } from '@app/features/access-requests/share-request-trigger';
 import { DirectAccessInvite } from '@app/features/access-requests/views/DirectAccessInvite';
 import {
   updatePipelineSharePermissions,
@@ -272,6 +269,7 @@ const permissionsBlockResource = createBlockResource(
     const id = useBlockId();
     const blockName = useBlockName();
     const itemType = blockNameToItemType(blockName);
+    if (itemType === 'email') return;
     return fetchSharePermissions(id, itemType);
   },
   { initialValue: undefined }
@@ -853,8 +851,11 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                       <div class="font-medium truncate">
                         <Show
                           when={
-                            props.channelNameMap.get(recipient.channel_id)
-                              ?.type !== 'direct_message'
+                            props.itemType === 'email'
+                              ? !props.channelNameMap.get(recipient.channel_id)
+                                  ?.name
+                              : props.channelNameMap.get(recipient.channel_id)
+                                  ?.type !== 'direct_message'
                           }
                           fallback={
                             props.channelNameMap.get(recipient.channel_id)
@@ -980,6 +981,7 @@ export function ShareModal(props: ShareModalProps) {
   const isBlockContext = () =>
     !!enclosingBlockId &&
     enclosingBlockId === props.id &&
+    props.itemType !== 'email' &&
     props.itemType !== 'agent_session' &&
     props.itemType !== 'initiative' &&
     props.itemType !== 'crm_pipeline' &&
@@ -989,9 +991,18 @@ export function ShareModal(props: ShareModalProps) {
   const queryClient = useQueryClient();
   const fallbackPermissionsQuery = useQuery(() => ({
     ...sharePermissionsQueryOptions(props.id, props.itemType),
-    enabled: !isBlockContext() && !!props.id,
+    enabled:
+      !isBlockContext() &&
+      !!props.id &&
+      (props.itemType !== 'email' ||
+        (props.open && props.userPermissions === Permissions.OWNER)),
   }));
   const sharePermission = () => {
+    if (
+      props.itemType === 'email' &&
+      props.userPermissions !== Permissions.OWNER
+    )
+      return undefined;
     if (isBlockContext()) {
       const result = permissionsBlockResource[0].latest;
       return result && !result.isErr() ? result.value : undefined;
@@ -1075,7 +1086,8 @@ export function ShareModal(props: ShareModalProps) {
   });
 
   const sharedChannels = createMemo(
-    () => sharedChannelIds(sharePermission()),
+    () =>
+      props.itemType === 'email' ? [] : sharedChannelIds(sharePermission()),
     undefined,
     {
       equals: (a, b) =>
@@ -1088,6 +1100,15 @@ export function ShareModal(props: ShareModalProps) {
 
   // Create a map of channel IDs to channel names
   const channelNameMap = createMemo(() => {
+    const permission = sharePermission();
+    if (permission && 'threadChannelShares' in permission) {
+      return new Map(
+        permission.threadChannelShares.map((share) => [
+          share.channel_id,
+          { name: share.channel_name ?? '', type: share.channel_type },
+        ])
+      );
+    }
     const data = channelNamesQuery.isPending
       ? undefined
       : channelNamesQuery.data;
@@ -1733,8 +1754,12 @@ export function ShareModal(props: ShareModalProps) {
                             <div class="font-medium truncate">
                               <Show
                                 when={
-                                  channelNameMap().get(recipient.channel_id)
-                                    ?.type !== 'direct_message'
+                                  props.itemType === 'email'
+                                    ? !channelNameMap().get(
+                                        recipient.channel_id
+                                      )?.name
+                                    : channelNameMap().get(recipient.channel_id)
+                                        ?.type !== 'direct_message'
                                 }
                                 fallback={
                                   channelNameMap().get(recipient.channel_id)
@@ -1862,6 +1887,12 @@ export function ShareModal(props: ShareModalProps) {
   );
 }
 
+function pendingRequestsLabel(count: number) {
+  return count === 1
+    ? '1 pending permission request'
+    : `${count} pending permission requests`;
+}
+
 export function ShareTrigger(props: {
   onClick: () => void;
   id?: string;
@@ -1869,6 +1900,8 @@ export function ShareTrigger(props: {
   hotkeyScope?: string;
   copyLink?: () => void;
   size?: 'sm' | 'md';
+  /** Compact mobile headers keep Copy link in the title drawer. */
+  showCopyLink?: boolean;
 }) {
   const isAuthenticated = useIsAuthenticated();
   const inBlock = isInBlock();
@@ -1907,7 +1940,7 @@ export function ShareTrigger(props: {
   // Hovering or focusing Share loads what the dialog shows first, so a click
   // opens it with its roster instead of waiting on the network.
   const warmShareDialog = () => {
-    if (!isAuthenticated()) return;
+    if (!isAuthenticated() || itemType() === 'email') return;
     if (inBlock) {
       const result = permissionsBlockResource[0].latest;
       fireAndForget(
@@ -1992,6 +2025,20 @@ export function ShareTrigger(props: {
   const iconSize = () =>
     isTouchDevice() || props.size === 'md' ? 'icon-md' : 'icon-sm';
 
+  const tooltip = () => {
+    const share =
+      shareStatus()?.tooltip ??
+      (blockType() === 'agent'
+        ? 'Share agent session'
+        : blockType() === 'initiative'
+          ? 'Share project'
+          : inBlock
+            ? 'This item has been shared with you.'
+            : `Share ${blockType()}`);
+    if (requests.count() === 0) return share;
+    return `${share} · ${pendingRequestsLabel(requests.count())}`;
+  };
+
   return (
     <HeaderActionGroup label="Sharing" size={props.size}>
       <div
@@ -2004,21 +2051,10 @@ export function ShareTrigger(props: {
           grouped
           size={isTouchDevice() ? undefined : props.size}
           label="Share"
-          tooltip={
-            shareStatus()?.tooltip ??
-            (blockType() === 'agent'
-              ? 'Share agent session'
-              : blockType() === 'initiative'
-                ? 'Share project'
-                : inBlock
-                  ? 'This item has been shared with you.'
-                  : `Share ${blockType()}`)
-          }
-          icon={
-            <ShareRequestIcon count={requests.count()}>
-              <IconShared class="size-4" />
-            </ShareRequestIcon>
-          }
+          tooltip={tooltip()}
+          count={requests.count()}
+          countLabel={pendingRequestsLabel(requests.count())}
+          icon={<IconShared class="size-4" />}
           onClick={() => {
             if (!isAuthenticated()) {
               openLoginModal();
@@ -2029,14 +2065,19 @@ export function ShareTrigger(props: {
           }}
         />
 
-        <CopyButton
-          as={ButtonGroup.Button}
-          variant="ghost"
-          tooltip="Copy Share Link"
-          size={iconSize()}
-          onClick={ShareLinkAction().action}
-          icon={<Dynamic component={ShareLinkAction().icon} class="size-3.5" />}
-        />
+        <Show when={props.showCopyLink !== false}>
+          <CopyButton
+            as={ButtonGroup.Button}
+            variant="ghost"
+            aria-label="Copy Share Link"
+            tooltip="Copy Share Link"
+            size={iconSize()}
+            onClick={ShareLinkAction().action}
+            icon={
+              <Dynamic component={ShareLinkAction().icon} class="size-3.5" />
+            }
+          />
+        </Show>
       </div>
     </HeaderActionGroup>
   );

@@ -5,6 +5,7 @@ import ContactIcon from '@icon/system/regular/address-book.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
 import { Avatar, Badge, Tooltip } from '@ui';
 import { Show } from 'solid-js';
+import { AddToPipeline } from '../add-to-pipeline';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmContact as CrmContactResponse } from '../core/contact';
 import { ContactCompanyField, ContactEmailField } from './contact-properties';
@@ -42,7 +43,8 @@ export function ContactHeader(props: {
   contact?: CrmContactResponse;
   onOpenCompany?: (companyId: string) => boolean;
 }) {
-  const { contactInitials: getInitialsFromName } = useCrmContext();
+  const context = useCrmContext();
+  const getInitialsFromName = context.contactInitials;
   // Default avatar mirrors the channel user avatar: initials on a flat circle.
   // Contacts have no photo, so initials come from the name or email.
   const initials = () => {
@@ -86,6 +88,18 @@ export function ContactHeader(props: {
             />
           )}
         </Show>
+        <Show when={props.contact}>
+          {(contact) => (
+            <AddToPipeline
+              record={{
+                type: 'contact',
+                id: contact().id,
+                name: contact().name || (contact().email ?? ''),
+                detail: contact().email ?? '',
+              }}
+            />
+          )}
+        </Show>
       </div>
       <Show when={props.contact}>
         {(contact) => (
@@ -93,9 +107,10 @@ export function ContactHeader(props: {
             class="mt-3 flex flex-wrap items-center gap-2"
             aria-label="Contact details"
           >
-            <ContactEmailField contact={contact()} />
+            <ContactEmailField contact={contact()} surface="header" />
             <ContactCompanyField
               contact={contact()}
+              surface="header"
               onOpenCompany={props.onOpenCompany}
             />
             <Tooltip label={formatDateAndTime(contact().lastInteraction)}>
