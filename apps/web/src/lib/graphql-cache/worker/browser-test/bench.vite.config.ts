@@ -21,7 +21,9 @@ function sampleMemoryOnEveryHeartbeat(): Plugin {
     transform(code, id) {
       if (!id.endsWith('/worker/cache-engine-runtime.ts')) return;
       if (!code.includes(MEMORY_SAMPLE_INTERVAL)) {
-        this.error(`cache-engine-runtime.ts no longer has ${MEMORY_SAMPLE_INTERVAL}`);
+        this.error(
+          `cache-engine-runtime.ts no longer has ${MEMORY_SAMPLE_INTERVAL}`
+        );
       }
       return code.replace(
         MEMORY_SAMPLE_INTERVAL,
