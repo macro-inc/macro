@@ -198,6 +198,36 @@ fn an_empty_cache_takes_the_schema_and_reopens_without_sorting() {
 }
 
 #[test]
+fn index_documents_under_no_stored_schema_are_sorted_like_records() {
+    block_on(async {
+        // A projection is written without its record, so a cache that stores
+        // no schema can hold index documents and nothing else.
+        let mut storage = TursoStorage::open_in_memory("schema-documents").unwrap();
+        storage
+            .put_batch_with_projections(
+                Vec::new(),
+                vec![ProjectionMutation::Replace(authoritative_projection(
+                    "Thing:0", "owner",
+                ))],
+            )
+            .await
+            .unwrap();
+        let documents = "SELECT count(*) FROM index_documents WHERE record_key = 'Thing:0'";
+        assert_eq!(count(&storage, documents), 1);
+
+        let adoption = storage
+            .adopt_schema(
+                &schema(RETYPED),
+                &ProjectionInputs::none(),
+                Unrecorded::Known(schema(OLD)),
+            )
+            .unwrap();
+        assert_eq!(adoption.change, types(&["Thing"], false));
+        assert_eq!(count(&storage, documents), 0);
+    });
+}
+
+#[test]
 fn a_compatible_change_keeps_every_row() {
     block_on(async {
         let storage = populate(TursoStorage::open_in_memory("schema-compatible").unwrap()).await;

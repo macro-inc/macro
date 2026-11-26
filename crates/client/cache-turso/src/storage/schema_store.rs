@@ -59,6 +59,8 @@ const SEVERAL_BUILDS: &str = "several-builds";
 /// Whether the cache holds a record besides storage's own metadata.
 const ANY_RECORD: &str = "SELECT 1 FROM records WHERE __typename <> '__meta' LIMIT 1";
 const ANY_QUEUED: &str = "SELECT 1 FROM mutation_queue LIMIT 1";
+/// Projections write index documents without their records.
+const ANY_INDEX_DOCUMENT: &str = "SELECT 1 FROM index_documents LIMIT 1";
 const TYPE_RECORDS_DELETE: &str = "DELETE FROM records WHERE __typename = ?1";
 /// A type's index documents, by the `Typename:` prefix of their record keys
 /// ([`key_ranges`]). Their facts go first: a cascade deletes them one document
@@ -318,13 +320,15 @@ fn resets_after(error: TursoStorageError) -> bool {
     }
 }
 
-/// Whether the cache holds no record and no queued write: nothing a schema
-/// shaped.
+/// Whether the cache holds no record, no queued write and no index document:
+/// nothing a schema shaped.
 pub(super) fn is_empty(connection: &Db) -> Result<bool, TursoStorageError> {
-    Ok(
-        driver::query(connection, ANY_RECORD, Vec::new())?.is_empty()
-            && driver::query(connection, ANY_QUEUED, Vec::new())?.is_empty(),
-    )
+    for sql in [ANY_RECORD, ANY_QUEUED, ANY_INDEX_DOCUMENT] {
+        if !driver::query(connection, sql, Vec::new())?.is_empty() {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 /// Applies `change`'s tier and stores its schema, inside the caller's
@@ -1033,8 +1037,8 @@ pub(super) fn salvaged(connection: &Db) -> Option<StoredRow> {
 /// would have in that database. One that stores another schema already, or
 /// `held_nothing` false and no schema, is made unreadable instead: no one
 /// schema describes both, so the adoption resets it, keeping every queued
-/// write and none of their overlays. `held_nothing` is whether it held no
-/// records or queue before this import.
+/// write and none of their overlays. `held_nothing` is whether it held
+/// nothing a schema shaped ([`is_empty`]) before this import.
 pub(super) fn import(
     connection: &Db,
     carried: Option<&StoredRow>,
