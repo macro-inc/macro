@@ -6,6 +6,8 @@ import HashIcon from '@icon/system/regular/hash.svg';
 import QuestionMarkIcon from '@icon/system/regular/question-mark.svg';
 import {
   useChannelLabelsQuery,
+  useChannelSectionPreviewQuery,
+  useChannelSectionsQuery,
   useSmartTagPreviewQuery,
 } from '@queries/channel-labels/channel-labels';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
@@ -45,14 +47,19 @@ export type SectionDialogProps = {
   scope?: ChannelLabelScopeSelection;
   canShare: boolean;
   initial?: ChannelLabel;
+  /** Use `/channel-sections` queries directly (needed when only the redesign flag is active). */
+  sectionMode?: boolean;
   onConfirm: (value: SectionDialogValue) => Promise<void | boolean>;
 };
 
 function SmartSectionPreview(props: {
   pattern: Accessor<string>;
   scope: Accessor<ChannelLabelScopeSelection>;
+  sectionMode?: boolean;
 }) {
-  const preview = useSmartTagPreviewQuery(props.pattern, props.scope);
+  const preview = props.sectionMode
+    ? useChannelSectionPreviewQuery(props.pattern, props.scope)
+    : useSmartTagPreviewQuery(props.pattern, props.scope);
   const data = () => (!preview.isPending ? preview.data : undefined);
   const count = () => data()?.totalCount ?? 0;
   const matches = () => data()?.channels ?? [];
@@ -158,7 +165,9 @@ function SmartSectionPreview(props: {
 
 function SectionDialog(props: SectionDialogProps & ManagedDialogProps) {
   const initialScope = props.scope ?? 'personal';
-  const teamLabels = useChannelLabelsQuery();
+  const teamLabels = props.sectionMode
+    ? useChannelSectionsQuery()
+    : useChannelLabelsQuery();
   const directory = useChannelDirectory();
   const [name, setName] = createSignal(props.initial?.name ?? '');
   const [scope, setScope] = createSignal<ChannelLabelScopeSelection>(
@@ -370,7 +379,11 @@ function SectionDialog(props: SectionDialogProps & ManagedDialogProps) {
               </p>
             </Show>
             <Show when={kind() === 'smart' && trimmedPattern().length > 0}>
-              <SmartSectionPreview pattern={trimmedPattern} scope={scope} />
+              <SmartSectionPreview
+                pattern={trimmedPattern}
+                scope={scope}
+                sectionMode={props.sectionMode}
+              />
             </Show>
             <Show when={scope() === 'team'}>
               <p class="text-xs leading-5 text-warning">

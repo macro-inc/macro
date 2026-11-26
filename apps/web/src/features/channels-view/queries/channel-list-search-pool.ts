@@ -2,7 +2,7 @@ import { useChannelDirectory } from '@core/context/channels';
 import type { ChannelEntity } from '@entity';
 import { toChannelListItem } from '@queries/channel/directory-core';
 import { mapChannelToEntity } from '@queries/channel/list-entity';
-import { createMemo } from 'solid-js';
+import { type Accessor, createMemo } from 'solid-js';
 
 /**
  * Every channel the viewer is in, as search entities. The Soup `search` list
@@ -10,11 +10,18 @@ import { createMemo } from 'solid-js';
  * complete list to find a conversation from the first keystroke. Names arrive
  * viewer-resolved: a DM carries the other participant's display name and an
  * agent DM its persona name.
+ *
+ * Pass `enabled: () => false` when a consumer (such as the redesigned sidebar)
+ * searches the directory lazily on demand instead of eagerly converting every
+ * directory channel into a REST-shaped `ChannelEntity`.
  */
-export function useChannelListSearchPool() {
+export function useChannelListSearchPool(
+  enabled: Accessor<boolean> = () => true
+) {
   const { channels } = useChannelDirectory();
-  return createMemo<ChannelEntity[]>(() =>
-    channels().map((record) => {
+  return createMemo<ChannelEntity[]>(() => {
+    if (!enabled()) return [];
+    return channels().map((record) => {
       const channel = toChannelListItem(record);
       return {
         ...mapChannelToEntity({
@@ -28,6 +35,6 @@ export function useChannelListSearchPool() {
         }),
         name: record.agentDm?.name ?? (record.name || 'Unknown Channel'),
       };
-    })
-  );
+    });
+  });
 }

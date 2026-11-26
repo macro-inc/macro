@@ -71,6 +71,7 @@ import {
 import { createChannelDetailSource } from './queries/channel-detail-source';
 import { useChannelListSearchPool } from './queries/channel-list-search-pool';
 import { createChannelSearchSource } from './queries/channel-search-source';
+import { ChannelSidebarDesktop } from './redesign/views/ChannelSidebarDesktop';
 import { channelsTour } from './tour';
 
 const ChannelSourcesContext =
@@ -196,32 +197,43 @@ function DesktopChannelsRail(props: {
   onSearchOpenChange: (open: boolean) => void;
 }) {
   const listChannels = props.localChannels;
-  const { sectionsEnabled } = useChannelsView();
+  const { sectionsEnabled, redesignEnabled } = useChannelsView();
+  const isRedesign = () => redesignEnabled?.() ?? false;
   const [searchQuery, setSearchQuery] = createSignal('');
   const searchSource = createChannelSearchSource({
     additionalLocalChannels: listChannels,
     text: searchQuery,
-    enabled: () => props.searchOpen && !sectionsEnabled(),
+    enabled: () => !isRedesign() && props.searchOpen && !sectionsEnabled(),
     scope: () => 'search',
     source: () => props.sources.search,
   });
   const sectionSearch = createSectionSearchSource({
-    enabled: () => props.searchOpen && sectionsEnabled(),
+    enabled: () => !isRedesign() && props.searchOpen && sectionsEnabled(),
     text: searchQuery,
     recent: () => props.sources.search,
     localChannels: listChannels,
   });
   return (
-    <ChannelsRail
-      sources={{
-        ...props.sources,
-        search: sectionsEnabled() ? sectionSearch : searchSource,
-      }}
-      searchQuery={searchQuery()}
-      onSearchQueryChange={setSearchQuery}
-      searchOpen={props.searchOpen}
-      onSearchOpenChange={props.onSearchOpenChange}
-    />
+    <Show
+      when={isRedesign()}
+      fallback={
+        <ChannelsRail
+          sources={{
+            ...props.sources,
+            search: sectionsEnabled() ? sectionSearch : searchSource,
+          }}
+          searchQuery={searchQuery()}
+          onSearchQueryChange={setSearchQuery}
+          searchOpen={props.searchOpen}
+          onSearchOpenChange={props.onSearchOpenChange}
+        />
+      }
+    >
+      <ChannelSidebarDesktop
+        sources={props.sources}
+        localChannels={listChannels}
+      />
+    </Show>
   );
 }
 
@@ -264,9 +276,14 @@ function ChannelsViewRoot(props: {
     mobileLayout,
     sectionsLoading,
     sectionsEnabled,
+    redesignEnabled,
+    redesignLoading,
     selectedChannel,
     setSelectedChannel,
   } = useChannelsView();
+  const flagsLoading = () =>
+    sectionsLoading() || (redesignLoading?.() ?? false);
+  const isRedesign = () => redesignEnabled?.() ?? false;
   const threadsTab = () => !isTouchDevice() && tab() === 'threads';
   // Threads fill Main like a conversation, so going back leaves them first.
   const returnToList = () => {
@@ -276,7 +293,7 @@ function ChannelsViewRoot(props: {
   // Narrow desktop, the rail and the conversation take turns at full width.
   // The loading spinner has no rail to take turns with.
   props.registerAsideList(() =>
-    isTouchDevice() || sectionsLoading()
+    isTouchDevice() || flagsLoading()
       ? undefined
       : {
           open: selectedChannel() !== undefined || threadsTab(),
@@ -285,11 +302,22 @@ function ChannelsViewRoot(props: {
   );
   onCleanup(() => props.registerAsideList(undefined));
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
-  const localChannels = useChannelListSearchPool();
+  // The redesigned sidebar searches `useChannelDirectory()` lazily inside
+  // Quick Switch instead of eagerly converting thousands of directory channels
+  // into `ChannelEntity` rows on Chat open.
+  const localChannels = useChannelListSearchPool(() => !isRedesign());
 
   const sources = useChannelsSources(
     (scope) => {
       if (isTouchDevice()) {
+        if (isRedesign()) {
+          return (
+            scope === 'recents' ||
+            scope === 'team_channels' ||
+            scope === 'channels' ||
+            scope === 'direct_messages'
+          );
+        }
         return (
           scope === 'recents' ||
           (!sectionsLoading() &&
@@ -297,7 +325,16 @@ function ChannelsViewRoot(props: {
             scope === 'direct_messages')
         );
       }
-      if (sectionsLoading()) return false;
+      if (flagsLoading()) return false;
+      if (isRedesign()) {
+        if (scope === 'search') return false;
+        if (scope === 'threads') return tab() === 'threads';
+        if (tab() !== 'browse') return false;
+        if (scope === 'direct_messages') {
+          return state.expandedGroups.direct_messages;
+        }
+        return true;
+      }
       if (railSearchOpen()) return scope === 'search';
       if (scope === 'search') return false;
       if (scope === 'recents') return tab() === 'recents';
@@ -316,7 +353,7 @@ function ChannelsViewRoot(props: {
     <ListEntityMetadataQueryProvider>
       <StaticMarkdownContext>
         <Show
-          when={!sectionsLoading()}
+          when={!flagsLoading()}
           fallback={
             <div class="grid size-full place-items-center">
               <SpinnerIcon
