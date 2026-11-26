@@ -1,4 +1,5 @@
 import kestrel from './assets/kestrel.svg';
+import { createFixtureBrainEmailReader } from './brain-email-fixture';
 import {
   type BrainObservation,
   type BrainReader,
@@ -11,6 +12,7 @@ import { fleetBots, fleetViewer } from './fleet-fixture';
 import { hireFleetPath, hireReceiptFor } from './hire-fixture';
 
 export const fixtureViewer = fleetViewer.viewerId;
+export const readBrainEmailFixture = createFixtureBrainEmailReader();
 
 type Fixture = Pick<
   BrainSnapshot,

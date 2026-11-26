@@ -20,11 +20,11 @@ synthetic team and offer responses. See [Hire checkout](HIRE.md).
   states. A confirmed Hire uses its current-tab fixture receipt and exact
   team/agent route. Browser Back from a Hub restores rail position and the
   exact card focus from the originating history entry.
-- `src/brain.tsx` mounts Overview and Activity. `src/brain-model.ts` owns the
+- `src/brain.tsx` mounts Overview, Activity, and Email. `src/brain-model.ts` owns the
   viewer/team/agent reader and source-safe journal projection. The local
   fixture adapter reuses Fleet identity and the exact accepted Hire receipt.
   Replace the reader at the composition boundary when the backend contract is
-  available. Email and Access have reserved component seams.
+  available. Access has a reserved component seam.
 - `src/return-intent.ts`, `src/draft.ts`, and `src/session.ts` own the handoff.
 - `scripts/verify-bots-boundary.ts` and `scripts/botsBoundary.ts` enforce isolation.
   Keep imports inside this app or an explicitly allowed workspace package.
@@ -48,6 +48,14 @@ then `bun run --filter @macro-inc/bots preview`. That preview serves only
 `dist-local`. Set `BOTS_PREVIEW_HOST` to a single exact hostname when an
 authorized local reverse proxy needs a forwarded Host header.
 
-The default build writes `dist` and excludes the Fleet, Hire and Brain fixtures. Keep
+The default build writes `dist` and excludes the Fleet, Hire, Brain, and Brain Email fixtures. Keep
 `dev.bots.macro.com` and `bots.macro.com` as planning targets until the relevant
 auth, infrastructure, and release changes are approved.
+
+## Brain Email
+
+`src/brain-email-reader.ts` defines the scoped, read-only inbox and thread
+port. `src/brain-email.tsx` supplies the Email view and mailbox identity
+slot. Pass the same mailbox accessor to both after validating the current
+viewer, team, and agent. In the local fixture preview, open Finch's Hub from
+Fleet and select Email for the synthetic mailbox.
