@@ -145,6 +145,14 @@ export {
   type OpResultOf,
 } from './entities/databases/database';
 export type { DatabaseRow } from './entities/databases/row';
+export {
+  DatabaseSync,
+  type DatabaseSyncColumn,
+  type DatabaseSyncDetachedColumn,
+  type DatabaseSyncSource,
+  type DatabaseSyncSources,
+  NotionDataSource,
+} from './entities/databases/sync';
 export type { DatabaseTable } from './entities/databases/table';
 export type { DatabaseView } from './entities/databases/view';
 export type { DatabaseWebhook } from './entities/databases/webhook';
@@ -157,14 +165,6 @@ export type { Link } from './entities/email/link';
 export type { EmailMessage } from './entities/email/message';
 export type { EmailThread } from './entities/email/thread';
 export type { ForeignEntity } from './entities/foreign/foreign-entity';
-export {
-  DatabaseSync,
-  type DatabaseSyncColumn,
-  type DatabaseSyncDetachedColumn,
-  type DatabaseSyncSource,
-  type DatabaseSyncSources,
-  NotionDataSource,
-} from './entities/databases/sync';
 export {
   Form,
   type FormAnswer,
