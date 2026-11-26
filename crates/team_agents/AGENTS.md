@@ -89,6 +89,7 @@ agent runtime reports the same way.
 - `src/domain/service.rs`: invite, list, remove and enrollment issuance.
 - `src/domain/ports.rs`: what the service needs from other crates.
 - `src/domain/admission.rs`: agent admission for the vault.
+- [Hire intent proof](HIRE_INTENT.md): test-only offer and receipt protocol.
 
 ## Scope
 
