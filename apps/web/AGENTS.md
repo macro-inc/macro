@@ -353,8 +353,9 @@ A routine step's entity knobs (the real `RoutineSteps` and a `SuggestionCard`,
 with stand-ins for the picked items' names) have a backend-free desktop,
 narrow-pane and phone regression: every picked item stays inside its card, a
 sentence of many items wraps with short names whole, a long item ends in an
-ellipsis with the comma after it on its line, a long value under Settings
-leaves its label room, and a link there wraps inside the card.
+ellipsis with the comma after it on its line and its whole name on hover, a
+long value under Settings leaves its label room, and a link there with
+nowhere to break breaks to fit its column.
 Keep `KnobEntityValue` an inline grid whose name column can shrink to 0: an
 inline flex row is as wide as its whole name, which pushed the card's edge aside:
 `bunx playwright test --config src/features/routines/browser-test/playwright.config.ts knob-overflow.browser.e2e.ts`.

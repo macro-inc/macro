@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page, test } from '@playwright/test';
+import { ENTITY_NAMES } from './stubs/entities';
 
 const FIXTURE = '/src/features/routines/browser-test/knobs.html';
 const ALERT = /^Alert: insight 'GraphQL soup/;
@@ -224,6 +225,26 @@ for (const width of WIDTHS) {
       // At phone width the link, which has nowhere to break, is wider than
       // its column, so it breaks onto a second line rather than running out.
       if (width.touch) expect(await textLines(link)).toBeGreaterThan(1);
+    });
+
+    test('a cut name shows in full on hover', async ({ page }) => {
+      test.skip(width.touch, 'Touch devices have no tooltips.');
+      await open(page);
+      const card = page.getByRole('group', { name: 'Summarize the alert' });
+      await card.locator('p').getByText(ALERT).hover();
+      await expect(page.getByRole('tooltip')).toHaveText(
+        ENTITY_NAMES['thread-alert']
+      );
+      // A name that fits has nothing more to show.
+      await page.mouse.move(0, 0);
+      await expect(page.getByRole('tooltip')).toHaveCount(0);
+      const short = page
+        .getByRole('group', { name: 'Echo entity knobs' })
+        .locator('p')
+        .getByText('Shared assets');
+      await short.hover();
+      await page.waitForTimeout(1000);
+      await expect(page.getByRole('tooltip')).toHaveCount(0);
     });
 
     test('a suggestion card keeps a long item inside', async ({ page }) => {

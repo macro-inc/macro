@@ -7,7 +7,7 @@ import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
 import { usePropertyEntityDisplay } from '@property/hooks';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { Button, cn, InputGroup, RadioGroup } from '@ui';
+import { Button, cn, InputGroup, RadioGroup, Tooltip } from '@ui';
 import { createMemo, createSignal, Show, Suspense } from 'solid-js';
 import { Virtualizer } from 'virtua/solid';
 import {
@@ -72,7 +72,7 @@ function EntityName(props: { id: string; type: EntityType }) {
           <UserIcon id={props.id} size="sm" suppressClick showTooltip={false} />
         </Show>
       </span>
-      <span class="truncate">{display.name()}</span>
+      <ItemName name={display.name()} />
     </>
   );
 }
@@ -84,8 +84,23 @@ function DatabaseName(props: { id: string }) {
   return (
     <>
       <EntityIcon targetType="database" size="xs" class="shrink-0" />
-      <span class="truncate">{name()}</span>
+      <ItemName name={name()} />
     </>
+  );
+}
+
+/** A picked item's name; hovering it shows all of it when it's cut short. */
+function ItemName(props: { name: string }) {
+  let name!: HTMLSpanElement;
+  return (
+    <Tooltip.Root measureTarget={() => name}>
+      <Tooltip.Trigger as="span" ref={name} class="truncate">
+        {props.name}
+      </Tooltip.Trigger>
+      <Tooltip.Portal>
+        <Tooltip.Content>{props.name}</Tooltip.Content>
+      </Tooltip.Portal>
+    </Tooltip.Root>
   );
 }
 
