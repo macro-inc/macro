@@ -7,6 +7,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
+import { Dialog } from '@ui/components/Dialog';
 import { createSignal, type JSX, type ParentProps } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMobileSettingsState } from './context/mobile-settings';
@@ -112,6 +113,25 @@ describe('unavailable mobile settings sections', () => {
 
     fireEvent.pointerDown(document.body);
     expect(onClose).toHaveBeenCalled();
+    expect(settings.open()).toBe(false);
+  });
+
+  it('keeps settings open when a control in a portaled modal is tapped', () => {
+    const { settings, onClose } = setup('Account');
+    const portal = render(() => (
+      <Dialog open fullscreen>
+        <Dialog.Title>Reconnect inbox</Dialog.Title>
+        <button type="submit">Connect inbox</button>
+      </Dialog>
+    ));
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: 'Connect inbox' })
+    );
+    expect(settings.open()).toBe(true);
+    expect(onClose).not.toHaveBeenCalled();
+
+    portal.unmount();
+    fireEvent.pointerDown(document.body);
     expect(settings.open()).toBe(false);
   });
 

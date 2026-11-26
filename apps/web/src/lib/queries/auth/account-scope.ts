@@ -17,6 +17,8 @@ const ACCOUNT_SOURCE_PREFIXES = [
   channelKeys.directory._def,
   channelKeys.quickAccessGraphql._def,
   emailKeys.links._def,
+  emailKeys.inboxSuggestion._def,
+  authKeys.emailConnectionProviders._def,
   emailKeys.linksHealthProbe._def,
   emailKeys.userLabels._def,
   authKeys.userNameSelf._def,

@@ -21,7 +21,11 @@ import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { type UserInfoData, useUserInfoQuery } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
 import { type Connector, useConnectors } from '@queries/connectors';
-import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
+import {
+  invalidateEmailLinks,
+  useEmailLinksQuery,
+  useInboxSuggestion,
+} from '@queries/email/link';
 import { queryReadyGate } from '@queries/gate';
 import { useGithubStarsQuery } from '@queries/github-stars';
 import { useGtmInviteOfferQuery } from '@queries/gtm-invite/links';
@@ -242,12 +246,23 @@ export function createAppOnboardingContext(): OnboardingContext {
       if (!provider) return startAddInbox();
       return match(provider)
         .with('google', () => startAddInbox({ provider: 'GMAIL' }))
+        .with('imap', () => startAddInbox({ provider: 'IMAP' }))
         .with('microsoft', () =>
           startAddInbox({ provider: 'OUTLOOK', scopes: 'gmail_and_calendar' })
         )
         .exhaustive();
     },
     createOutlookAvailability: createAppOutlookAvailability,
+    createImapSuggestion: () => {
+      const suggestion = useInboxSuggestion(() => true);
+      return () => {
+        if (!queryReadyGate(suggestion)) return;
+        return match(suggestion.data.offer)
+          .with('imap', () => suggestion.data.email)
+          .with('none', 'gmail', 'outlook', () => undefined)
+          .exhaustive(() => undefined);
+      };
+    },
 
     createToolCatalog: createOnboardingToolCatalog,
     createConnectedTools: ({ poll }) => {

@@ -82,7 +82,15 @@ the Soup-backed thread list, and saved email views.
   is explicitly pinned above those sections.
 - Saved-view creation uses the shared `create-saved-view-creation` lifecycle and route-owned `SavedViewDraftHost` leave protection.
 
+The first-visit panel in `components/EmailEmptyState.tsx` uses the authenticated
+inbox suggestion and the shared picker in `@core/email-link`. IMAP opens the
+credential form directly; desktop and phone use the same field validation.
+`EmailList` owns the connect flow and passes its callback to the empty state;
+loading/refetch branch changes preserve the chooser and IMAP form.
+
 ## Gotchas
+
+- Coalesce automatic mailbox hints behind the mounted reader's page fetch; use head revalidation only for cache-maintained chronological lists. Prefer the fresh head copy, discard missing rows strictly inside the authoritative head range (retain timestamp ties), and rebuild the loaded chain without clearing visible rows when a full head has no unchanged key-and-timestamp anchor; reset only for a complete head with continuation pages. REST, non-maintained GraphQL, Spam/Trash and reconnect catch-up reload the chain behind the same gate. A clean visibility change does no IO; reconnect catch-up is spread across readers. Explicit refresh still rebuilds all loaded pages; hints never rerun service search or alias/admission chains.
 
 - Append each new or duplicated view as a selected draft after saved email views; retain builder name, sharing, and filters until Save or Discard, and confirm leaving dirty new drafts without prompting for saved-view edits.
 - Keep saved-view appearance live in sidebar rows and breadcrumbs even with unsaved filters; expose owner-only Change icon in the shared menus behind `enableEntityAppearance`.

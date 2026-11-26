@@ -21,6 +21,11 @@ import {
   useEmailDataSource,
 } from './use-email-query';
 
+const automaticRefresh = vi.hoisted(() => vi.fn());
+vi.mock('./use-email-list-refresh', () => ({
+  useEmailListRefresh: automaticRefresh,
+}));
+
 const localDrafts = vi.hoisted(() => ({ read: (): LocalDraft[] => [] }));
 // A test can swap in signals for the label list.
 const labelCatalog = vi.hoisted(() => ({
@@ -115,7 +120,11 @@ vi.mock('@service-storage/websocket', () => ({
   createWebSocketJob: vi.fn(),
 }));
 vi.mock('@service-connection/websocket', () => ({
-  ws: { addEventListener: vi.fn(), send: vi.fn() },
+  ws: {
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    send: vi.fn(),
+  },
   state: () => 'closed',
   createConnectionBlockWebsocketEffect: vi.fn(),
   createConnectionWebsocketEffect: vi.fn(),
@@ -279,6 +288,7 @@ function mount(search = '', keepRowsWhileSearching = false) {
       fetchNextPage: listNext,
       refetch: vi.fn(async () => {}),
       refresh: vi.fn(async () => {}),
+      refreshHead: vi.fn(async () => {}),
       resetToInitialPage: vi.fn(),
     };
     const extraLists: {
@@ -307,6 +317,7 @@ function mount(search = '', keepRowsWhileSearching = false) {
         fetchNextPage: vi.fn(async () => {}),
         refetch: vi.fn(async () => {}),
         refresh: vi.fn(async () => {}),
+        refreshHead: vi.fn(async () => {}),
         resetToInitialPage: vi.fn(),
         get data() {
           if (retentionLoading()) throw new Error('Read pending retained mail');
@@ -364,6 +375,41 @@ function mount(search = '', keepRowsWhileSearching = false) {
 }
 
 describe('Email list query transitions', () => {
+  it.each(['spam', 'trash'] as const)(
+    'keeps the mounted %s full correctness read without refreshing admission lookups',
+    async (tab) => {
+      const root = mount();
+      root.setState('tab', tab);
+      const options: Parameters<
+        typeof import('./use-email-list-refresh').useEmailListRefresh
+      >[0] = automaticRefresh.mock.lastCall![0];
+      expect(options.enabled()).toBe(true);
+      await options.refresh(false);
+      expect(root.query.refresh).toHaveBeenCalledOnce();
+      expect(root.query.refreshHead).not.toHaveBeenCalled();
+      expect(
+        root.extraLists.every(
+          ({ query }) => vi.mocked(query.refresh).mock.calls.length === 0
+        )
+      ).toBe(true);
+    }
+  );
+
+  it('limits ordinary automatic refresh to the head but keeps explicit refresh full', async () => {
+    const root = mount();
+    const options: Parameters<
+      typeof import('./use-email-list-refresh').useEmailListRefresh
+    >[0] = automaticRefresh.mock.lastCall![0];
+    await options.refresh(false);
+    expect(root.query.refreshHead).toHaveBeenCalledOnce();
+    expect(root.query.refresh).not.toHaveBeenCalled();
+    await options.refresh(true);
+    expect(root.query.refresh).toHaveBeenCalledOnce();
+    expect(root.query.refreshHead).toHaveBeenCalledOnce();
+    await root.source.refresh();
+    expect(root.query.refresh).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps the rows on screen as previous rows while a search loads', () => {
     vi.useFakeTimers();
     try {

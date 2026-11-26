@@ -43,6 +43,7 @@ export function CalendarPermissionPrompt() {
       (linksQuery.isSuccess ? linksQuery.data.links : []).filter(
         (link) =>
           link.macro_id === userId() &&
+          link.provider !== 'IMAP' &&
           link.needs_calendar_permission &&
           !link.needs_reauth &&
           !link.calendar_disabled

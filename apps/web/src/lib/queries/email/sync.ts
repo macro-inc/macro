@@ -9,25 +9,10 @@ import {
   RefreshEmailEventOneOfOneoneEvent,
   RefreshEmailEventOneOfOnethreeEvent,
 } from '@service-email/generated/schemas';
-import { leadingAndTrailing, throttle } from '@solid-primitives/scheduled';
 import { clearBackfillProgress, setBackfillProgress } from './backfill';
 import { invalidateEmailFolderQueries } from './folder-cache';
 import { emailKeys } from './keys';
 import { invalidateEmailLinks } from './link';
-
-const BACKFILL_SOUP_REFRESH_INTERVAL = 5_000;
-
-const throttledBackfillSoupRefresh = leadingAndTrailing(
-  throttle,
-  invalidateAllSoup,
-  BACKFILL_SOUP_REFRESH_INTERVAL
-);
-
-const throttledFolderRefresh = leadingAndTrailing(
-  throttle,
-  () => fireAndForget(invalidateEmailFolderQueries(), 'email-folders'),
-  BACKFILL_SOUP_REFRESH_INTERVAL
-);
 
 // The gateway double-encodes the payload, so callers must JSON-parse `data.data`
 // (via `withParsedWebsocketPayload`) before passing it here.
@@ -40,17 +25,16 @@ function asRefreshEmailEvent(payload: unknown): RefreshEmailEvent | undefined {
 }
 
 /**
- * Handles `refresh_email` websocket events. Steady-state mutations
- * (`upsert_message`, `update_labels`, `delete_message`) already invalidate soup
- * through the notification-driven path. Spam/Trash use isolated REST previews,
- * so refresh those lists explicitly without refetching cache-maintained views.
+ * Handles global `refresh_email` effects. Mounted mail readers independently
+ * refresh their matching links, including when notifications are suppressed.
+ * Spam/Trash bypass both shared caches: their mounted readers perform a
+ * coalesced full refresh after paging settles, instead of a head extension.
  *
  * Backfill produces no notifications, so these are its only refresh signals.
- * `backfill_progress` carries live progress: it refetches soup (throttled,
- * because the backend emits one event per batch of threads) and on `complete`
- * refetches the links list so the inbox's `sync_status` settles out of
- * `SYNCING`, with a toast. The legacy `backfill` event now only signals
- * failure. `photo_synced` refetches the links list so the inbox's derived
+ * `backfill_progress` carries live progress; mounted readers coalesce its
+ * bounded head updates. On `complete` it refetches the links list so the inbox's `sync_status` settles out of
+ * `SYNCING`, with a toast. The `backfill` event carries completion without
+ * thread counts, or legacy failure. `photo_synced` refetches links so the inbox's derived
  * `photo_url` lands once its self-contact photo finishes uploading.
  * `focus_updated` belongs to the mounted Focus list (see `useEmailFocusQuery`).
  */
@@ -63,7 +47,7 @@ export function handleRefreshEmail(payload: unknown): void {
     event.event === 'update_labels' ||
     event.event === 'delete_message'
   ) {
-    throttledFolderRefresh();
+    fireAndForget(invalidateEmailFolderQueries('none'), 'email-folder-refresh');
     queryClient.invalidateQueries({
       queryKey: emailKeys.composeDraftState._def,
     });
@@ -87,9 +71,15 @@ export function handleRefreshEmail(payload: unknown): void {
     return;
   }
 
-  // Backfill failed — settle the links row out of `SYNCING` and surface it.
-  // Progress and completion now arrive as `backfill_progress` instead.
+  // Folder imports have no thread counts, but still send completion. Legacy
+  // jobs also use this event for failure; counted jobs use backfill_progress.
   if (event.event === 'backfill') {
+    invalidateAllSoup('none');
+    if (event.status === BackfillStatus.complete) {
+      clearBackfillProgress(event.link_id);
+      invalidateEmailLinks();
+      return;
+    }
     if (event.status === BackfillStatus.failed) {
       clearBackfillProgress(event.link_id);
       invalidateEmailLinks();
@@ -101,12 +91,14 @@ export function handleRefreshEmail(payload: unknown): void {
   }
 
   // Live backfill progress. Record `completed_threads`/`total_threads` for the
-  // progress UI and keep soup fresh (throttled, one event per batch). On
+  // progress UI. Mounted readers own list refreshes; a global invalidation
+  // would bypass their pagination gate and restart every loaded page. On
   // completion, drop the progress entry and settle the links row out of
   // `SYNCING` with a toast.
   if (event.event === RefreshEmailEventOneOfOnethreeEvent.backfill_progress) {
-    throttledBackfillSoupRefresh();
-
+    // Historical imports create neither notifications nor own touches, so
+    // Home's activity feeds need no read. Inactive REST lists still reopen stale.
+    invalidateAllSoup('none');
     if (event.status === BackfillStatus.complete) {
       clearBackfillProgress(event.link_id);
       invalidateEmailLinks();

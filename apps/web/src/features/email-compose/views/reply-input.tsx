@@ -260,6 +260,9 @@ function LoadedReplyInputView(
       setDraftBackMenuOpen(false);
       return;
     }
+    // Back is a composer action even before the user types. A newer draft
+    // snapshot must not replace the composer while its close flow is active.
+    props.onEngaged?.();
     if (collectDraft()) setDraftBackMenuOpen(true);
     else fireAndForget(deleteDraftAndReset(), 'email-compose');
   };

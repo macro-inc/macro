@@ -1471,7 +1471,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Always persist composer sends in account-scoped IndexedDB and dispatch through the fetch-only email client, without a feature flag; cache health and unrelated mutation queues must not gate delivery. See `docs/architecture/email.md` for state and rollout invariants.
 - Retain sender ownership, draft signal settings, and primary-inbox selection in the same viewer-scoped inbox snapshot used by the composer; pending catalog refreshes must not block saves or sends, and account changes must clear that snapshot.
 - Retry a failed browser cache on reconnect/foreground or draft Retry (`canRetryCacheFailure`); retain the same scope and block draft sync until the replacement queue is readable. Never retry a superseded build (`cache-superseded`) or an untyped native failure, and reset the count and backoff only after a restarted cache stays up for `RECOVERY_HEALTHY_MS`. A host that ends its outage is proved at once (`available()`), also offline or hidden.
-- Touch email replies and forwards use the full-screen composer with the shared new-email header actions; preserve thread state underneath and flush local edits before closing.
+- Touch email replies and forwards use the full-screen composer with the shared new-email header actions; preserve thread state underneath and flush local edits before closing. Treat Back as engaging the reply composer so a refreshed draft snapshot cannot replace an open draft options menu.
 - Include unsynced email working copies in Drafts and mobile name search even
   before a GraphQL save, and warm sending accounts alongside backfill. Preserve
   inbox, alias, and facet scope.
@@ -1597,7 +1597,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Never restore explicitly invalidated membership from an older view's snapshot.
 - Sender filter writes and Undo return no per-thread classification. Refresh
   active GraphQL Soup readers with an email Importance predicate so their
-  server pages reconcile Signal and Noise membership.
+  server pages reconcile Signal and Noise membership. In browser scenarios,
+  establish the sender menu after the Noise view settles; a replaced first row
+  can close the menu before its item is available.
 - Project calendar invitations from GraphQL Mail aggregate facts into the
   shared row flag so the Calendar invite facet also matches inline invitations.
 - Render user-visible text in new UI, and every menu and navigation label,
@@ -2313,3 +2315,20 @@ legacy header does not reserve an empty band. The responsive vault fixture is ex
 per-file worker (`lib/core/password-import`); the parsed export lives only in
 the import primitive's closure while the dialog is open, and sessionStorage
 holds only the import id. See the [Passwords walkthrough](../../docs/agent-guide/passwords.md).
+
+## Email
+
+- Keep inbox connection flows under stable Home, Mail, or app hosts so loading
+  and refetching preserve dialogs. Swap the chooser for IMAP once the form is ready.
+- Discover IMAP settings for the signed-in address or load the bound link on
+  reconnect. Use the signed-in address as the OAuth hint.
+- Keep credentials in the capture-excluded form and clear them after attempts.
+  Preserve confirmed endpoints and match generated refusal codes for retry guidance.
+- Use the server's effective folder roles throughout settings. Keep server
+  Drafts out of sync controls and unsynced-folder counts.
+- Refresh mounted inbox readers from matching mailbox events regardless of
+  notification settings. Scope deferred work to the current account and list.
+- Replay only fixed-state or deduplicated mutations. Show a delivery warning
+  only when the service reports an unconfirmed send.
+
+See the [Email walkthrough](../../docs/agent-guide/email.md) for browser checks.

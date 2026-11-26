@@ -41,6 +41,7 @@ export type FakeOnboardingWorld = {
   inboxesToConnect: string[];
   /** Whether the server lets this user connect an Outlook inbox. */
   outlookAvailable: boolean;
+  imapSuggestion?: string;
   record: OnboardingRecord;
   teams: Team[];
   invites: TeamInvite[];
@@ -262,6 +263,7 @@ export function createFakeOnboarding(
         })
       );
     },
+    createImapSuggestion: () => () => world.imapSuggestion,
     createOutlookAvailability: () => () => world.outlookAvailable,
     createToolCatalog: () => {
       const [search, setSearch] = createSignal('');

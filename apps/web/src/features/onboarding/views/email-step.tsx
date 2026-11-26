@@ -16,6 +16,7 @@ export function EmailStep(props: {
 }) {
   const context = useOnboardingContext();
   const inboxes = createEmailAccounts(context, context.createEmailAccounts());
+  const suggestedImapAddress = context.createImapSuggestion();
   const outlookAvailable = context.createOutlookAvailability();
   const offerOutlook = () => props.mode === 'work' && outlookAvailable();
 
@@ -54,16 +55,20 @@ export function EmailStep(props: {
       }
       onRetry={inboxes.retry}
       onConnectWork={() =>
-        fireAndForget(
-          inboxes.connect('work', offerOutlook() ? 'google' : undefined),
-          'onboarding'
-        )
+        fireAndForget(inboxes.connect('work', 'google'), 'onboarding')
       }
       onConnectMicrosoft={
         offerOutlook()
           ? () =>
               fireAndForget(inboxes.connect('work', 'microsoft'), 'onboarding')
           : undefined
+      }
+      imapAddress={props.mode === 'work' ? suggestedImapAddress() : undefined}
+      onChooseAccount={() =>
+        fireAndForget(inboxes.connect('work'), 'onboarding')
+      }
+      onConnectImap={() =>
+        fireAndForget(inboxes.connect('work', 'imap'), 'onboarding')
       }
       onConnectPersonal={() =>
         fireAndForget(inboxes.connect('personal'), 'onboarding')

@@ -657,10 +657,30 @@ const HTML_ENTRIES = {
   canvasRender: resolve(__dirname, 'canvas-render.html'),
 };
 
+/** Avoid a redundant gateway preconnect in same-origin bundles. */
+function stripSameOriginPreconnect(): Plugin {
+  return {
+    name: 'same-origin-preconnect',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'pre',
+      handler(html, { filename }) {
+        if (filename !== HTML_ENTRIES.app) return html;
+        return html.replace(/<link\b[^>]*\bhref="%GATEWAY_ORIGIN%"[^>]*>/, '');
+      },
+    },
+  };
+}
+
 export const createAppViteConfig = (): UserConfigFn => {
   return ({ command, mode }) => {
     const ENV_MODE = process.env.MODE ?? mode;
     const NO_MINIFY = process.env.NO_MINIFY === 'true';
+    const sameOriginLocalBundle =
+      ENV_MODE === 'development' &&
+      process.env.VITE_LOCAL_SERVERS === 'ALL' &&
+      process.env.VITE_LOCAL_BACKEND_ORIGIN === 'same-origin' &&
+      process.env.VITE_LOCAL_ONLY === 'true';
 
     return {
       base: command === 'serve' ? '/' : '/app',
@@ -673,6 +693,7 @@ export const createAppViteConfig = (): UserConfigFn => {
         },
       },
       plugins: [
+        sameOriginLocalBundle && stripSameOriginPreconnect(),
         devHttps(),
         devCompression(),
         devExternalSourcemaps(),

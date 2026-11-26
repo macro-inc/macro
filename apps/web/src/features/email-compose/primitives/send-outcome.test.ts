@@ -1,3 +1,4 @@
+import { deepEqual } from '@core/util/compareUtils';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type {
@@ -17,7 +18,7 @@ import type { ReplyComposerOptions } from './reply-composer';
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
-const providers = ['GMAIL', 'OUTLOOK'] as const;
+const providers = ['GMAIL', 'OUTLOOK', 'IMAP'] as const;
 const teammate: EmailRecipient = {
   kind: 'custom',
   id: 'teammate@example.com',
@@ -43,7 +44,20 @@ function outbox(provider: EmailInbox['provider']) {
   }));
   const watchers = new Map<string, (progress: EmailSendProgress) => void>();
   context.delivery.watchSend = vi.fn((sendAttemptId, changed) => {
-    watchers.set(sendAttemptId, changed);
+    let last: EmailSendProgress | undefined;
+    watchers.set(sendAttemptId, (progress) => {
+      if (last && deepEqual(last, progress)) return;
+      last = progress;
+      if (
+        progress.state === 'sent' ||
+        progress.state === 'failed' ||
+        progress.state === 'cancelled' ||
+        progress.state === 'untracked'
+      ) {
+        watchers.delete(sendAttemptId);
+      }
+      changed(progress);
+    });
     return () => watchers.delete(sendAttemptId);
   });
   return {
@@ -528,6 +542,41 @@ it.each(providers)(
         'open 2 success: Sending… [Undo]',
         'update 2 success: Email sent',
       ]);
+    } finally {
+      reply.dispose();
+    }
+  }
+);
+
+it.each(providers)(
+  '%s: a queue deadline cannot infer uncertainty before a real provider outcome',
+  async (provider) => {
+    const { context, report } = outbox(provider);
+    const notices = recordNotices(context);
+    const reply = mountReplyComposer(context);
+    try {
+      await reply.sendEmail();
+      const accepted = {
+        state: 'accepted',
+        undoUntil: new Date(Date.now()).toISOString(),
+      } as const;
+      report(accepted);
+      for (let poll = 0; poll < 5; poll++) {
+        await vi.advanceTimersByTimeAsync(5_000);
+        report(accepted);
+      }
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(notices.log.at(-1)).toContain('success: Still sending…');
+      report({ state: 'pending' });
+      for (let poll = 0; poll < 6; poll++) {
+        await vi.advanceTimersByTimeAsync(5_000);
+        report({ state: 'pending' });
+      }
+      expect(notices.log.at(-1)).toContain('success: Still sending…');
+      report({ state: 'unconfirmed' });
+      expect(notices.log.at(-1)).toContain('alert: Delivery unconfirmed');
+      report({ state: 'sent' });
+      expect(notices.log.at(-1)).toContain('success: Email sent');
     } finally {
       reply.dispose();
     }

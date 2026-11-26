@@ -1,5 +1,5 @@
 import { DOCS_BASE } from '@app/constants/docs-links';
-import { useAddInboxFlow, useEmailLinksStatus } from '@core/email-link';
+import { type useAddInboxFlow, useEmailLinksStatus } from '@core/email-link';
 import { fireAndForget } from '@core/util/fireAndForget';
 import EmptyStateInboxTrayGraphic from '@design/empty-state-inbox-tray.svg';
 import EmptyStateNoFilterMatchGraphic from '@design/empty-state-no-filter-match.svg';
@@ -8,10 +8,11 @@ import { EmptyStatePanel, FilteredHiddenBanner } from '@ui';
 import { Match, Switch } from 'solid-js';
 import { useHomeView } from '../home-view-context';
 
-export function HomeEmptyState() {
+export function HomeEmptyState(props: {
+  onConnect: ReturnType<typeof useAddInboxFlow>;
+}) {
   const { state, setFacets } = useHomeView();
   const emailActive = useEmailLinksStatus();
-  const startAddInbox = useAddInboxFlow();
   const searchText = () => state.search.trim();
   const hasActiveFilters = () =>
     Object.values(state.facets).some((optionIds) => optionIds.length > 0);
@@ -51,7 +52,7 @@ export function HomeEmptyState() {
           description="Your recent work and notifications will appear here. Connect email to include your inbox, too."
           primaryAction={{
             label: 'Connect email',
-            onClick: () => fireAndForget(startAddInbox(), 'add-inbox'),
+            onClick: () => fireAndForget(props.onConnect(), 'add-inbox'),
           }}
           documentationUrl={`${DOCS_BASE}/product/home`}
         />

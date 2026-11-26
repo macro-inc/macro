@@ -24,6 +24,10 @@ import {
 import { useUpdateEmailSettingsMutation } from '../email/settings';
 import { currentQueryAccount, resetQueryAccountSession } from './account-scope';
 import { authKeys } from './keys';
+import {
+  fetchEmailConnectionProviders,
+  useEmailConnectionProviders,
+} from './outlook-link';
 
 const api = vi.hoisted(() => ({
   links: vi.fn(),
@@ -31,6 +35,7 @@ const api = vi.hoisted(() => ({
   patch: vi.fn(),
   remove: vi.fn(),
   refresh: vi.fn(),
+  providers: vi.fn(),
 }));
 const [viewer, setViewer] = createSignal('macro|one@example.com');
 let client: QueryClient;
@@ -42,6 +47,9 @@ vi.mock('../client', () => ({
 vi.mock('@core/context/user', () => ({
   useUserId: () => viewer,
   useIsAuthenticated: () => () => true,
+}));
+vi.mock('@service-auth/client', () => ({
+  authServiceClient: { emailConnectionProviders: api.providers },
 }));
 vi.mock('@service-email/client', () => ({
   emailClient: {
@@ -160,6 +168,61 @@ it('switches mounted lists without exposing legacy or previous-account rows', as
       .getQueryData<{ id: string }[]>(channelKeys.directory(viewer()).queryKey)
       ?.map((channel) => channelName(channel.id))
   ).toEqual(['two-channel']);
+});
+
+it('loads the approval link after sign-in is restored and fences a late result for another account', async () => {
+  client.removeQueries({ queryKey: authKeys.userInfo.queryKey });
+  setViewer('');
+  const providers = (url: string) =>
+    ok({
+      gmail: true,
+      outlook: true,
+      imap: false,
+      outlook_admin_consent_url: url,
+    });
+  const oldRead = Promise.withResolvers<ReturnType<typeof providers>>();
+  const nextRead = Promise.withResolvers<ReturnType<typeof providers>>();
+  api.providers
+    .mockResolvedValueOnce(providers('first-approval'))
+    .mockReturnValueOnce(oldRead.promise)
+    .mockReturnValueOnce(nextRead.promise);
+
+  function Approval() {
+    const options = useEmailConnectionProviders(() => true);
+    return (
+      <output>{options()?.outlook_admin_consent_url ?? 'unavailable'}</output>
+    );
+  }
+  const view = render(() => (
+    <QueryClientProvider client={client}>
+      <Approval />
+    </QueryClientProvider>
+  ));
+  function signIn(userId: string) {
+    batch(() => {
+      client.setQueryData(authKeys.userInfo.queryKey, {
+        id: userId,
+        authenticated: true,
+      });
+      setViewer(userId);
+    });
+  }
+
+  expect(view.container.textContent).toBe('unavailable');
+  expect(api.providers).not.toHaveBeenCalled();
+  signIn('macro|one@example.com');
+  await view.findByText('first-approval');
+  const refreshing = client.refetchQueries({
+    queryKey: authKeys.emailConnectionProviders._def,
+  });
+  await vi.waitFor(() => expect(api.providers).toHaveBeenCalledTimes(2));
+  signIn('macro|two@example.com');
+  await view.findByText('unavailable');
+  oldRead.resolve(providers('stale-approval'));
+  await refreshing;
+  expect(view.container.textContent).toBe('unavailable');
+  nextRead.resolve(providers('second-approval'));
+  await view.findByText('second-approval');
 });
 
 it("leaves the previous account's cached inboxes alone when the mounted inbox list switches accounts", () => {
@@ -345,6 +408,24 @@ it('forgets the previous account’s routine drafts', async () => {
   client.setQueryData(key, [{ id: 'draft-1', state: 'drafting' }]);
   await resetQueryAccountSession();
   expect(client.getQueryData(key)).toBeUndefined();
+});
+
+it('loads chooser capabilities without coupling discovery to an OAuth callback origin', async () => {
+  await resetQueryAccountSession();
+  await client.fetchQuery({
+    queryKey: authKeys.userInfo.queryKey,
+    queryFn: async () => ({ id: viewer(), authenticated: true }),
+    staleTime: 0,
+  });
+  api.providers.mockResolvedValueOnce(
+    ok({ gmail: true, outlook: false, imap: true })
+  );
+  expect(await fetchEmailConnectionProviders()).toEqual({
+    gmail: true,
+    outlook: false,
+    imap: true,
+  });
+  expect(api.providers).toHaveBeenCalledExactlyOnceWith(undefined);
 });
 
 // Directories ignore another sign-in's writes, but the store kept them, their

@@ -8,5 +8,14 @@ export function EmailMessageOperation(props: { message: EmailMessage }) {
     () => props.message.db_id,
     () => props.message.thread_db_id
   );
-  return <MessageOperationRecovery source={source} />;
+  return (
+    <MessageOperationRecovery
+      source={source}
+      recipientEmails={[
+        ...props.message.to,
+        ...props.message.cc,
+        ...props.message.bcc,
+      ].map((recipient) => recipient.email)}
+    />
+  );
 }

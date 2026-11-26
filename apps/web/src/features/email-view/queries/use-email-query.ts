@@ -59,7 +59,9 @@ import {
   type EmailSearchContext,
   facetsLeftToClient,
 } from './email-search';
+import { linkInView } from './link-in-view';
 import { emailAdmissionBatches, mergeEmailAdmission } from './read-admission';
+import { useEmailListRefresh } from './use-email-list-refresh';
 import { useFocusEmailSource } from './use-focus-email-source';
 import { useReminderEmailSource } from './use-reminder-email-source';
 import { useScheduledEmailSource } from './use-scheduled-email-source';
@@ -826,7 +828,7 @@ export function useEmailDataSource(
   const items = createSoupRowStore(() => shownRows().items);
   const isLoading = () => awaitsRows() && !shownRows().previous;
 
-  return {
+  const dataSource = {
     positions: {
       hold: (entityIds) => positions.hold(listEntities(), entityIds),
     },
@@ -941,4 +943,26 @@ export function useEmailDataSource(
       }
     },
   } satisfies EmailDataSource;
+  useEmailListRefresh({
+    enabled: () => sourceEnabled() && state.inboxIds?.length !== 0,
+    scope,
+    matchesLink: (linkId) => linkInView(state, linkId),
+    isFetching: () => dataSource.isFetching() || dataSource.isLoadingMore(),
+    refresh: async (catchUp) => {
+      // These sources own their own invalidation, and service search is a
+      // submitted snapshot. Generic mailbox hints extend ordinary lists only.
+      if (
+        showsReminders() ||
+        showsScheduled() ||
+        showsFocus() ||
+        usesServiceSearch()
+      )
+        return;
+      // Isolated folder previews bypass both shared caches. Their known rows
+      // require a full read, still coalesced behind the same paging gate.
+      if (catchUp || isExcludedEmailFolder(state.tab)) await query.refresh();
+      else await query.refreshHead();
+    },
+  });
+  return dataSource;
 }

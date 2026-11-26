@@ -154,12 +154,7 @@ it('preserves actions and only reports explicit dismissal as a user dismissal', 
   expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
   expect(onUserDismiss).toHaveBeenCalledOnce();
-  expect(
-    screen
-      .getByText('Action required')
-      .closest('[data-macro-toast]')
-      ?.hasAttribute('data-closed')
-  ).toBe(true);
+  expect(screen.queryByText('Action required')).toBeNull();
 });
 
 it('does not nest buttons inside the dismiss button', () => {
@@ -167,6 +162,23 @@ it('does not nest buttons inside the dismiss button', () => {
   toast.success('Accessible notice', { stack: true });
   const close = screen.getByRole('button', { name: 'Close' });
   expect(close.querySelector('button')).toBeNull();
+});
+
+it('remembers an explicit dismissal when the toast region remounts', () => {
+  const first = render(() => <ToastRegion />);
+  toast.custom({ title: 'Dismissed prompt' }, { persistent: true });
+  toast.custom({ title: 'Unanswered prompt' }, { persistent: true });
+
+  const dismissed = screen
+    .getByText('Dismissed prompt')
+    .closest('[data-macro-toast]');
+  expect(dismissed).not.toBeNull();
+  fireEvent.click(dismissed!.querySelector('button')!);
+  first.unmount();
+
+  render(() => <ToastRegion />);
+  expect(screen.queryByText('Dismissed prompt')).toBeNull();
+  expect(screen.getByText('Unanswered prompt')).toBeTruthy();
 });
 
 it('keeps only the latest transient notice on mobile', () => {

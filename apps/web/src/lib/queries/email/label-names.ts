@@ -1,5 +1,6 @@
 import { useEmailLinksContext } from '@core/context/emailLinks';
 import { ApiLabelType } from '@service-email/generated/schemas';
+import type { GraphqlEmailProvider } from '@service-storage/graphql/generated/graphql';
 import { type Accessor, createMemo } from 'solid-js';
 import { queryReadyGate } from '../gate';
 import { useEmailUserLabelsQuery } from './labels';
@@ -32,7 +33,7 @@ export type ShownLabel = LabelNames & { id: string; linkId: string };
 /** Each label's names, nested within its own inbox. */
 export function labelNamesOf(
   labels: readonly InboxLabel[],
-  providerOf: (linkId: string) => 'GMAIL' | 'OUTLOOK' | undefined
+  providerOf: (linkId: string) => GraphqlEmailProvider | undefined
 ): Map<string, LabelNames> {
   const byInbox = new Map<string, InboxLabel[]>();
   for (const label of labels) {
@@ -93,11 +94,10 @@ export function useEmailLabelNames(enabled: Accessor<boolean> = () => true) {
       ? catalog.data.labels.filter((label) => label.type === ApiLabelType.User)
       : [];
   return createMemo(() =>
-    labelNamesOf(made(), (linkId) => {
-      const provider = links().find((link) => link.id === linkId)?.provider;
-      if (provider === 'OUTLOOK') return 'OUTLOOK';
-      return provider ? 'GMAIL' : undefined;
-    })
+    labelNamesOf(
+      made(),
+      (linkId) => links().find((link) => link.id === linkId)?.provider
+    )
   );
 }
 

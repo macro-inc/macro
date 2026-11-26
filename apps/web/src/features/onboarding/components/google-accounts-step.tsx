@@ -1,6 +1,7 @@
 import GoogleIcon from '@icon/macro-google.svg';
 import MicrosoftIcon from '@icon/microsoft-color.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import HandIcon from '@icon/system/regular/hand-palm.svg';
 import LockIcon from '@icon/system/regular/lock-key.svg';
 import ShieldIcon from '@icon/system/regular/shield-check.svg';
@@ -26,6 +27,9 @@ export interface GoogleAccountsStepProps {
   onConnectPersonal: () => void;
   /** Sign-up offers Microsoft beside Google; the signed-in flow does not. */
   onConnectMicrosoft?: () => void;
+  imapAddress?: string;
+  onConnectImap?: () => void;
+  onChooseAccount?: () => void;
   onContinue?: () => void;
   onSkip?: () => void;
 }
@@ -43,13 +47,14 @@ export function GoogleAccountsStep(props: GoogleAccountsStepProps) {
     personal() ? !!props.personalEmail : !!props.workConnected;
   const blocked = () =>
     !!props.disabled || !!props.loading || !!props.connecting;
+  const withImap = () => !personal() && !!props.imapAddress && !connected();
   const withMicrosoft = () => !personal() && !!props.onConnectMicrosoft;
   const googleConnecting = () =>
     !!props.connecting && !props.microsoftConnecting;
   const googleLabel = () => {
     if (props.loading) return 'Checking connection…';
     if (googleConnecting()) return 'Opening Google…';
-    if (withMicrosoft()) return 'Continue with Google';
+    if (withMicrosoft() || withImap()) return 'Continue with Google';
     if (personal()) return 'Connect personal email';
     if (props.workNeedsReconnect) return 'Reconnect work email';
     return 'Connect work email';
@@ -64,7 +69,9 @@ export function GoogleAccountsStep(props: GoogleAccountsStepProps) {
           tabindex="-1"
           class="font-[Roboto_Slab_Variable] text-[clamp(22px,6.6vw,30px)] font-[315] leading-[1.2] tracking-[-.025em] [text-wrap:balance] sm:text-[36px]"
         >
-          {withMicrosoft() ? (
+          {withImap() ? (
+            'Connect your work email.'
+          ) : withMicrosoft() ? (
             <>
               Continue with your work <br />
               email and calendar.
@@ -82,6 +89,10 @@ export function GoogleAccountsStep(props: GoogleAccountsStepProps) {
               'Connect through Google to read, send, and organize email and manage your calendars in Macro. Agents ask for your approval before sending email. Your password stays with Google, and you can disconnect anytime.'
             }
           >
+            <Match when={withImap()}>
+              Read and reply to messages in Macro using the inbox for your
+              sign-in address.
+            </Match>
             <Match when={withMicrosoft()}>
               {/* Fixed breaks: line 2 is 60–80% of line 1, and line 1 is no
                   wider than the heading's last line. Phones only fit the
@@ -129,7 +140,7 @@ export function GoogleAccountsStep(props: GoogleAccountsStepProps) {
               onClick={() =>
                 personal() ? props.onConnectPersonal() : props.onConnectWork()
               }
-              class="flex min-h-14 w-full items-center justify-center gap-3 rounded-full border border-transparent bg-ink px-6 py-4 text-base font-medium text-surface transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink disabled:opacity-40"
+              class="ph-no-capture flex min-h-14 w-full items-center justify-center gap-3 rounded-full border border-transparent bg-ink px-6 py-4 text-base font-medium text-surface transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink disabled:opacity-40"
             >
               <Show
                 when={googleConnecting() || props.loading}
@@ -185,6 +196,27 @@ export function GoogleAccountsStep(props: GoogleAccountsStepProps) {
             {props.microsoftConnecting
               ? 'Opening Microsoft…'
               : 'Continue with Microsoft'}
+          </button>
+        </Show>
+        <Show when={withImap() && props.onConnectImap}>
+          <button
+            type="button"
+            disabled={blocked()}
+            onClick={() => props.onConnectImap?.()}
+            class="ph-no-capture flex min-h-12 w-full items-center justify-center gap-3 rounded-full border border-edge bg-surface px-5 py-3 text-sm font-medium text-ink hover:bg-ink/5 disabled:opacity-40"
+          >
+            <EnvelopeIcon class="size-5 shrink-0" aria-hidden="true" />
+            Connect {props.imapAddress}
+          </button>
+        </Show>
+        <Show when={withImap() && props.onChooseAccount}>
+          <button
+            type="button"
+            disabled={blocked()}
+            onClick={props.onChooseAccount}
+            class="rounded-full border border-edge px-5 py-3 text-sm font-medium text-ink hover:bg-ink/5 disabled:opacity-40"
+          >
+            Use a different account
           </button>
         </Show>
         <Show when={!connected() && props.onSkip}>
