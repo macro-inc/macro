@@ -31,8 +31,8 @@ pub enum StreamPart {
         delta: String,
     },
     /// A started call that will never finish: the loop threw away the reply
-    /// that wrote it (the reply also called a tool that was not loaded, so the
-    /// model was asked again) and the call never ran.
+    /// that wrote it (the reply also called a tool that was not loaded or does
+    /// not exist, so the model was asked again) and the call never ran.
     ToolCallDropped {
         /// The [`ToolCallStart::id`] of the dropped call.
         id: String,

@@ -83,7 +83,7 @@ pub(crate) const TURN_FAILED_REPLY: &str = "I ran into an error and stopped befo
 
 /// Why a dropped call's row closes failed (see [`StreamPart::ToolCallDropped`]).
 pub(crate) const DROPPED_TOOL_CALL: &str =
-    "Not run: the model rewrote this step after calling a tool that was not loaded yet.";
+    "Not run: the model rewrote this step after calling a tool it could not run yet.";
 
 /// A failed turn's error inside `genai_telemetry::withhold_content`: the
 /// model library's text can quote the prompt or the answer, and the ACP
