@@ -27,7 +27,8 @@ pub(super) enum Refusal {
     Permanent,
     /// A calendar that counts lost its grant.
     ReauthRequired,
-    /// No primary calendar the host can write is left to take the booking.
+    /// No primary calendar the host can write is left to take the booking:
+    /// on the link's chosen inbox, when it names one.
     NoCreationCalendar,
 }
 
@@ -108,12 +109,14 @@ impl HostCalendars<'_> {
     }
 
     /// Whether `calendar` can take a booking's event: a primary calendar the
-    /// host can write whose grant still works. A transient sync failure does
-    /// not stop a provider write, and one that fails is retried by recovery.
-    pub fn can_take_bookings(&self, calendar: &VisibleCalendar) -> bool {
+    /// host can write whose grant still works, on `inbox` when the link books
+    /// on a chosen connected inbox. A transient sync failure does not stop a
+    /// provider write, and one that fails is retried by recovery.
+    pub fn can_take_bookings(&self, calendar: &VisibleCalendar, inbox: Option<Uuid>) -> bool {
         let failure = self.freshness(calendar.id).and_then(|c| c.failure);
         calendar.is_primary
             && calendar.is_writable
+            && inbox.is_none_or(|inbox| calendar.email_link_id == inbox)
             && !matches!(
                 failure,
                 Some(CalendarSyncFailure::Permanent | CalendarSyncFailure::ReauthRequired)
@@ -122,9 +125,14 @@ impl HostCalendars<'_> {
 
     /// Check that every calendar counting toward the host's busy time is
     /// current enough to offer their free time, logging each one that is
-    /// not. A calendar with Busy off never changes their availability, so
-    /// its sync state never matters here.
-    pub fn check_availability(&self, now: DateTime<Utc>) -> Result<Served, Refusal> {
+    /// not, and that a calendar can take the booking (`inbox`'s, when the
+    /// link books on a chosen connected inbox). A calendar with Busy off
+    /// never changes their availability, so its sync state never matters here.
+    pub fn check_availability(
+        &self,
+        now: DateTime<Utc>,
+        inbox: Option<Uuid>,
+    ) -> Result<Served, Refusal> {
         let mut served = Served::Current;
         let mut refusal = None;
         for email_link_id in &self.health.unlisted_inboxes {
@@ -176,7 +184,11 @@ impl HostCalendars<'_> {
         if let Some(refusal) = refusal {
             return Err(refusal);
         }
-        if !self.calendars.iter().any(|c| self.can_take_bookings(c)) {
+        if !self
+            .calendars
+            .iter()
+            .any(|c| self.can_take_bookings(c, inbox))
+        {
             tracing::warn!(
                 reason = Refusal::NoCreationCalendar.as_str(),
                 "refusing booking availability: no calendar can take the booking"

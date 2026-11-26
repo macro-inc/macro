@@ -56,13 +56,13 @@ export const lifecycle = (): Lifecycle => {
   const preWake = channel<{
     readonly wake: WakeContext;
     readonly add: (text: string) => void;
-  }>();
+  }>('dependent');
   const postReply = channel<{
     readonly wake: WakeContext;
     readonly reply: string;
-  }>();
-  const postStateUpdate = channel<{ readonly path: string }>();
-  const failed = channel<Failure>();
+  }>('dependent');
+  const postStateUpdate = channel<{ readonly path: string }>('dependent');
+  const failed = channel<Failure>('dependent');
   return {
     hooks: {
       preWake: preWake.source,

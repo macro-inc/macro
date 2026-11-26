@@ -62,7 +62,9 @@ vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
 }));
 vi.mock('@property/tags', () => ({ useLocalDocTags: vi.fn() }));
 vi.mock('@queries/properties/definitions', () => ({}));
-vi.mock('@queries/properties/tags', () => ({}));
+vi.mock('@queries/properties/tags', () => ({
+  useTagsQuery: () => ({ isSuccess: false }),
+}));
 vi.mock('@queries/properties/entity', () => ({
   fetchEntityProperties: vi.fn(),
 }));
@@ -112,19 +114,30 @@ vi.mock('@core/context/quickAccess', () => ({
   useQuickAccess: () => ({
     useList: () => ({
       items: () => [
-        { id: 'team-channel', data: { name: 'engineering' } },
-        { id: 'julia-dm', data: { name: 'Julia direct message' } },
+        {
+          id: 'team-channel',
+          bucket: 'channel',
+          data: { name: 'engineering' },
+        },
+        {
+          id: 'julia-dm',
+          bucket: 'dm',
+          data: { name: 'Julia direct message' },
+        },
       ],
     }),
   }),
 }));
-vi.mock('@core/context/channels', () => ({
-  useChannelsContext: () => ({
-    channels: () => [
-      { id: 'team-channel', name: 'engineering', participants: [{}, {}, {}] },
-    ],
-  }),
-}));
+vi.mock('@core/context/channels', async () => {
+  const { directoryChannel, directoryParticipant } = await import(
+    '@queries/channel/tests/directory-channel'
+  );
+  const channel = directoryChannel('team-channel', {
+    name: 'engineering',
+    participants: ['a', 'b', 'c'].map((id) => directoryParticipant(id)),
+  });
+  return { useChannelDirectory: () => ({ channels: () => [channel] }) };
+});
 vi.mock('@queries/contacts/use-references', () => ({
   useContactReferences: () => ({
     lookup: (label: string) =>
@@ -347,12 +360,7 @@ describe('destination adapters', () => {
     expect(mocks.replace).toHaveBeenCalledWith({
       next: expect.objectContaining({
         params: expect.objectContaining({
-          initialFilters: expect.objectContaining({
-            include: expect.objectContaining({
-              emailLinkId: ['inbox'],
-              emailImportance: false,
-            }),
-          }),
+          initialQuery: 'type:email inbox:me@example.com in:noise budget',
         }),
       }),
     });
@@ -368,7 +376,28 @@ describe('destination adapters', () => {
       )
     ).rejects.toThrow();
   });
-  it('opens global search with resolved sender and DM filters rather than dropping them', async () => {
+  it('opens global search on a channel by its name', async () => {
+    const searchFilters = JSON.stringify({
+      type: 'channels',
+      channels: { in: ['team-channel'], from: [] },
+    });
+    const result = await execute(
+      input('search', { query: 'budget', searchFilters })
+    );
+    result.open?.();
+    expect(mocks.replace).toHaveBeenCalledWith({
+      next: expect.objectContaining({
+        id: 'search',
+        params: expect.objectContaining({
+          initialQuery: 'type:channel in:#engineering budget',
+          initialBindings: [
+            { token: 'in:#engineering', channelIds: ['team-channel'] },
+          ],
+        }),
+      }),
+    });
+  });
+  it('opens global search on a DM by its name, bound to its id', async () => {
     const searchFilters = JSON.stringify({
       type: 'channels',
       channels: { in: ['julia-dm'], from: ['John'] },
@@ -381,13 +410,14 @@ describe('destination adapters', () => {
       next: expect.objectContaining({
         id: 'search',
         params: expect.objectContaining({
-          initialQuery: 'budget',
-          initialFilters: expect.objectContaining({
-            include: expect.objectContaining({
-              channelSenderId: ['macro|john@example.com'],
-              channelId: ['julia-dm'],
-            }),
-          }),
+          initialQuery:
+            'type:channel in:#"Julia direct message" from:john@example.com budget',
+          initialBindings: [
+            {
+              token: 'in:#"Julia direct message"',
+              channelIds: ['julia-dm'],
+            },
+          ],
         }),
       }),
     });

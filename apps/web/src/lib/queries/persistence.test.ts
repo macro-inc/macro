@@ -77,18 +77,18 @@ function createScope(
 
 describe('setupQueryPersistence', () => {
   it('allowlists persisted channel query families', () => {
-    expect(shouldPersistChannelQuery(channelKeys.listChannels._def)).toBe(
+    expect(shouldPersistChannelQuery(channelKeys.directory._def)).toBe(false);
+    expect(shouldPersistChannelQuery(['channel', 'directory', ''])).toBe(false);
+    // The REST list and activity reads are gone; what they saved is pruned.
+    expect(shouldPersistChannelQuery(['channel', 'listChannels', 'v'])).toBe(
       false
     );
-    expect(
-      shouldPersistChannelQuery(channelKeys.listChannels(undefined).queryKey)
-    ).toBe(false);
-    expect(shouldPersistChannelQuery(channelKeys.activity._def)).toBe(false);
+    expect(shouldPersistChannelQuery(['channel', 'activity', 'v'])).toBe(false);
     expect(shouldPersistChannelQuery(channelKeys.withID('a').queryKey)).toBe(
       false
     );
     expect(
-      shouldPersistChannelQuery(channelKeys.listChannels('viewer').queryKey)
+      shouldPersistChannelQuery(channelKeys.directory('viewer').queryKey)
     ).toBe(true);
     expect(
       shouldPersistChannelQuery(
@@ -227,13 +227,13 @@ describe('setupQueryPersistence', () => {
     queryClient.setQueryData(messageQueryKey, { value: 'skip' });
     expect(store.set).not.toHaveBeenCalled();
 
-    queryClient.setQueryData(channelKeys.listChannels('viewer').queryKey, {
+    queryClient.setQueryData(channelKeys.directory('viewer').queryKey, {
       value: 'persist',
     });
     expect(store.set).toHaveBeenCalledTimes(1);
     expect(
       (store.set.mock.calls[0]![0] as PersistedQueryEntry).queryKey
-    ).toEqual(channelKeys.listChannels('viewer').queryKey);
+    ).toEqual(channelKeys.directory('viewer').queryKey);
   });
 
   it('restores query data from store on added event', async () => {

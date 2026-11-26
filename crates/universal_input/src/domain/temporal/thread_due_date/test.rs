@@ -914,6 +914,81 @@ async fn an_unreadable_event_keeps_the_due_date() {
 
     assert_eq!(response.due_on, Some(day(2026, 10, 23)));
     assert_eq!(response.event_on, None);
+    assert!(!response.rejected);
+}
+
+#[tokio::test]
+async fn an_ungrounded_deadline_answers_rejected_with_no_days_and_its_usage() {
+    struct WrongMessage;
+    impl ThreadFactExtractor for WrongMessage {
+        async fn extract_thread_facts(
+            &self,
+            _: &ThreadDueDateRequest,
+            _: UsageContext,
+        ) -> Result<ExtractedFacts, InputError> {
+            Ok(ExtractedFacts {
+                facts: ThreadFacts {
+                    // "Friday" is in the second message, not the first.
+                    deadlines: vec![weekday(
+                        0,
+                        "Friday",
+                        Weekday::Friday,
+                        WeekRelation::Upcoming,
+                    )],
+                    closures: vec![],
+                    events: vec![event(1, "Monday", Weekday::Monday, WeekRelation::Upcoming)],
+                },
+                usage: Some(nemotron_usage()),
+            })
+        }
+    }
+    let service = ThreadDueDateService::new(WrongMessage, Arc::new(DisabledAiAdmissionService));
+
+    let response = service
+        .due_date(
+            owner(),
+            request(vec![
+                message(day(2026, 10, 20), "Can you look at the contract?"),
+                message(day(2026, 10, 21), "Send it by Friday for Monday."),
+            ]),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        response,
+        ThreadDueDateResponse {
+            due_on: None,
+            event_on: None,
+            usage: Some(nemotron_usage()),
+            rejected: true,
+        }
+    );
+}
+
+#[test]
+fn rejected_is_sent_only_when_set_and_read_as_false_when_absent() {
+    let answered = ThreadDueDateResponse {
+        due_on: None,
+        event_on: None,
+        usage: None,
+        rejected: false,
+    };
+    assert_eq!(
+        serde_json::to_value(&answered).unwrap(),
+        json!({"due_on": null, "event_on": null})
+    );
+    let rejected = ThreadDueDateResponse {
+        rejected: true,
+        ..answered.clone()
+    };
+    assert_eq!(
+        serde_json::to_value(&rejected).unwrap(),
+        json!({"due_on": null, "event_on": null, "rejected": true})
+    );
+    let from_an_older_harness: ThreadDueDateResponse =
+        serde_json::from_value(json!({"due_on": null})).unwrap();
+    assert_eq!(from_an_older_harness, answered);
 }
 
 fn nemotron_usage() -> DueDateUsage {

@@ -1,12 +1,14 @@
-import type {
-  ImportRun,
-  ImportSource,
-  NotionImportReport,
+import {
+  type ImportRun,
+  type ImportSource,
+  type NotionImportReport,
+  parseRunErrorKind,
+  type RunErrorKind,
 } from '@service-cognition/import';
 import { match } from 'ts-pattern';
 
 /** Sources reviewed as a whole workspace, each with its own report. */
-export type WorkspaceSource = 'notion' | 'linear' | 'jira';
+export type WorkspaceSource = 'notion' | 'linear' | 'jira' | 'hubspot';
 
 /** Where one import job stands, as the tray shows it. */
 export type ImportJobPhase =
@@ -16,17 +18,50 @@ export type ImportJobPhase =
   | { kind: 'choosingChannels' }
   | { kind: 'importing'; done: number; total: number }
   | { kind: 'importingChannels'; channels: number }
-  | { kind: 'completed' }
-  | { kind: 'failed' }
+  /** `partial` when some objects could not be imported. */
+  | { kind: 'completed'; partial: boolean }
+  /** `errorKind` says why, when the server recorded it. */
+  | { kind: 'failed'; errorKind: RunErrorKind | null }
   | { kind: 'cancelled' };
 
-/** How long a run that stopped moving stays in the tray. */
+/** How long a run waiting on the owner (a plan to approve) stays listed. */
 export const RECENT_MS = 60 * 60 * 1000;
+
+/** How long a finished or cancelled run stays listed, like a toast. */
+export const FINISHED_MS = 5 * 1000;
+
+/** How long a failure stays listed when it is never dismissed. */
+export const FAILED_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * How long after its last change a run that stopped moving stays listed:
+ * a finished one briefly, a failed one until it is dismissed or a week old,
+ * and one that finished with failures until it is dismissed.
+ */
+function listedFor(run: ImportRun): number {
+  return (
+    match(run.status)
+      // One that finished with objects it could not import needs action, so
+      // it stays until dismissed, however old.
+      .with('completed', () =>
+        run.error ? Number.POSITIVE_INFINITY : FINISHED_MS
+      )
+      .with('dismissed', () => FINISHED_MS)
+      .with('failed', () => FAILED_MS)
+      .with('running', 'ready', 'importing', () => RECENT_MS)
+      .exhaustive()
+  );
+}
 
 export function isWorkspaceSource(
   source: ImportSource
 ): source is WorkspaceSource {
-  return source === 'notion' || source === 'linear' || source === 'jira';
+  return (
+    source === 'notion' ||
+    source === 'linear' ||
+    source === 'jira' ||
+    source === 'hubspot'
+  );
 }
 
 /** Identifies one state of a run, so dismissing it hides only that state. */
@@ -41,8 +76,8 @@ export function isMoving(run: ImportRun, slackChannelsImporting: number) {
 }
 
 /**
- * The runs the tray lists: every moving run, and the rest while they
- * changed within `RECENT_MS` and were not dismissed.
+ * The runs the tray lists: every moving run, and the rest until dismissed
+ * or their listing time (`listedFor`) has passed.
  */
 export function visibleImportRuns(
   runs: readonly ImportRun[],
@@ -57,7 +92,7 @@ export function visibleImportRuns(
     if (options.dismissed.has(importJobKey(run))) return false;
 
     const age = options.now - Date.parse(run.updated_at);
-    return age < RECENT_MS;
+    return age < listedFor(run);
   });
 }
 
@@ -72,7 +107,8 @@ export function nextExpiry(
 ): number | null {
   const expiries = visible
     .filter((run) => !isMoving(run, slackChannelsImporting))
-    .map((run) => Date.parse(run.updated_at) + RECENT_MS);
+    .map((run) => Date.parse(run.updated_at) + listedFor(run))
+    .filter(Number.isFinite);
   return expiries.length === 0 ? null : Math.min(...expiries);
 }
 
@@ -117,8 +153,14 @@ export function importJobPhase(
         (report?.waitingOnTeammates ?? 0);
       return { kind: 'importing', done, total: done + remaining };
     })
-    .with('completed', () => ({ kind: 'completed' }))
-    .with('failed', () => ({ kind: 'failed' }))
+    .with('completed', () => ({
+      kind: 'completed',
+      partial: Boolean(run.error),
+    }))
+    .with('failed', () => ({
+      kind: 'failed',
+      errorKind: parseRunErrorKind(run.error_kind),
+    }))
     .with('dismissed', () => ({ kind: 'cancelled' }))
     .exhaustive();
 }

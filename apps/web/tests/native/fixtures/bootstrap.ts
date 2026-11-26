@@ -1,5 +1,6 @@
 import type { AiUsageSnapshot } from '../../../src/lib/service-clients/service-auth/ai-billing-types';
 import type { Link } from '../../../src/lib/service-clients/service-email/generated/schemas/link';
+import type { ListLabelsResponse } from '../../../src/lib/service-clients/service-email/generated/schemas/listLabelsResponse';
 import type { ListChannelNotificationSettingsResponse } from '../../../src/lib/service-clients/service-notification/generated/schemas/listChannelNotificationSettingsResponse';
 import type { ListSectionNotificationSettingsResponse } from '../../../src/lib/service-clients/service-notification/generated/schemas/listSectionNotificationSettingsResponse';
 import { accounts, EMAIL, identity, USER_ID } from './mail';
@@ -49,6 +50,8 @@ const CHANNEL_NOTIFICATION_SETTINGS: ListChannelNotificationSettingsResponse = {
 const SECTION_NOTIFICATION_SETTINGS: ListSectionNotificationSettingsResponse = {
   sections: [],
 };
+// The fixture inbox has no labels of its own, so Mail rows show none.
+const EMAIL_LABELS: ListLabelsResponse = { labels: [] };
 const name = { id: USER_ID, first_name: 'Offline', last_name: 'Fixture' };
 
 /** Empty, unrelated app-chrome resources. Unlisted requests remain errors. */
@@ -73,10 +76,9 @@ export const bootstrapResponses = new Map<
   ],
   ['GET /email/email/links', { body: { links: [link] } }],
   ['POST /email/email/links/health-check', { body: {} }],
+  ['GET /email/email/labels', { body: EMAIL_LABELS }],
   ['GET /calendar/calendars', { body: { calendars: [] } }],
   ['GET /contacts/contacts', { body: { contacts: [] } }],
-  ['GET /dss/comms/channels', { body: { items: [], next_cursor: null } }],
-  ['GET /dss/channels/activity', { body: [] }],
   ['GET /dss/bots', { body: [] }],
   ['GET /dss/agents', { body: [] }],
   ['GET /dss/harnesses', { body: [] }],
@@ -103,8 +105,7 @@ export const bootstrapResponses = new Map<
     { body: { configOptions: [] } },
   ],
   ['POST /agent-harness/agent-sessions/warm', { body: {} }],
-  ['GET /cognition/mcp/servers', { body: [] }],
-  ['GET /cognition/pipedream/mcp/connections', { body: [] }],
+  ['GET /cognition/connectors', { body: [] }],
   ['GET /cognition/onboarding/prompts', { body: { dismissed: [] } }],
   ['GET /cognition/import/state', { body: { runs: [], entities: [] } }],
   ['POST /scheduled-action/suggestions/seen', { body: {} }],

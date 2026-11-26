@@ -25,7 +25,7 @@ import { useChatInputContext } from '@core/component/AI/context';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import { toast } from '@core/component/Toast/Toast';
 import { useSettingsState } from '@core/constant/SettingsState';
-import { useChannelsContext } from '@core/context/channels';
+import { useChannelDirectory } from '@core/context/channels';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useAddInboxFlow } from '@core/email-link';
 import { recipientEntityMapper } from '@core/user/combinedRecipient';
@@ -36,6 +36,10 @@ import {
 } from '@queries/auth/account-scope';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import { useCreateCalendarEventMutation } from '@queries/calendar/mutations';
+import {
+  isMessageDestinationChannel,
+  toChannelListItem,
+} from '@queries/channel/directory-core';
 import {
   useGetOrCreateDirectMessageMutation,
   useGetOrCreatePrivateChannelMutation,
@@ -57,14 +61,18 @@ import {
 } from '../calendar/utils/calendar-description';
 import { buildRecurrenceLines } from '../calendar/utils/recurrence';
 import { authoredMentions } from '../channel/Input/message-payload';
-import { searchNeedsKeywords } from '../next-soup/core/search-filters';
-import { compileSearchQuery } from '../next-soup/core/search-query';
 import { createGlobalSearchOpener } from '../next-soup/open-search';
+import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
+import { createTagOptions } from '../next-soup/soup-view/filters-bar/tag-filter-state';
 import type { InputCapabilities } from './context/capabilities';
 import type { InputFields, Intent, Submission } from './core/input';
 import { type Recipient, resolveRecipients } from './core/recipients';
 import { parseRecurrenceDraft } from './core/recurrence';
-import { resolveSearchFilters } from './core/search';
+import {
+  type SearchDraftText,
+  searchDraftText,
+  searchNeedsWord,
+} from './core/search';
 import { useInputPeople } from './queries/input-people';
 import { createTaskFieldSource } from './queries/task-field-source';
 
@@ -98,12 +106,14 @@ export function createInputActions(
   const group = useGetOrCreatePrivateChannelMutation();
   const sendMessage = useSendMessageMutation();
   const history = useUpsertToHistoryMutation();
-  const channelContext = useChannelsContext();
+  const directory = useChannelDirectory();
   const messageChannels = createMemo(() =>
-    channelContext
+    directory
       .channels()
-      .filter((channel) => channel.participants.length > 2)
-      .map(recipientEntityMapper('channel'))
+      .filter(isMessageDestinationChannel)
+      .map((channel) =>
+        recipientEntityMapper('channel')(toChannelListItem(channel))
+      )
   );
   const destinations = createMemo(() =>
     messageChannels().map(
@@ -117,6 +127,7 @@ export function createInputActions(
   const people = useInputPeople(fields, host.intent, destinations);
   const person = people.lookup;
   const searchableChannels = useQuickAccess().useList('channel', 'dm');
+  const tagOptions = createTagOptions();
   const searchChannels = (): Recipient[] =>
     searchableChannels.items().map((channel) => ({
       id: channel.id,
@@ -149,6 +160,21 @@ export function createInputActions(
       .inboxes()
       .find((a) => a.id === (f.inboxId || email.accounts.primaryId())) ??
     (!f.inboxId ? email.accounts.inboxes()[0] : undefined);
+  const search = (f: InputFields): SearchDraftText =>
+    searchDraftText(f, {
+      people: person,
+      channels: searchChannels(),
+      inboxes: email.accounts.inboxes(),
+      names: {
+        userId,
+        tag: (id) => tagOptions.optionsById().get(id)?.label,
+        channel: (id) =>
+          searchChannels().find((channel) => channel.id === id)?.label,
+        inbox: (id) =>
+          email.accounts.inboxes().find((inbox) => inbox.id === id)
+            ?.email_address,
+      },
+    });
   const connectGoogle = async () => {
     if (connectingGoogle()) return;
     setConnectingGoogle(true);
@@ -208,15 +234,10 @@ export function createInputActions(
   };
   const validate: InputCapabilities['validate'] = (input) => {
     if (input.intent === 'search') {
-      const filters = resolveSearchFilters(
-        input.fields.searchFilters,
-        person,
-        searchChannels(),
-        email.accounts.inboxes()
-      );
-      if (filters.unresolved.length)
-        return `Choose a specific person or channel for ${filters.unresolved.join(', ')}`;
-      if (searchNeedsKeywords(filters.state, input.fields.query))
+      const draft = search(input.fields);
+      if (draft.unresolved.length)
+        return `Choose a specific person or channel for ${draft.unresolved.join(', ')}`;
+      if (searchNeedsWord(draft.text, draft.bindings))
         return 'Add search text to search by sender or speaker.';
     }
     if (input.intent === 'task') {
@@ -349,21 +370,16 @@ export function createInputActions(
         };
       })
       .with('search', async () => {
-        const { state } = resolveSearchFilters(
-          f.searchFilters,
-          person,
-          searchChannels(),
-          email.accounts.inboxes()
-        );
-        const search = {
-          query: f.query.trim(),
-          filters: compileSearchQuery(state),
-          clientFilters: {
-            and: ['search-supported' as const],
-            or: state.type === 'all' ? [] : [state.type],
-          },
+        // Search opens on the same text the draft's field shows.
+        const draft = search(f);
+        const preset = getViewPreset('search');
+        const opened = {
+          query: draft.text.trim(),
+          bindings: draft.bindings,
+          filters: preset?.filters ?? {},
+          clientFilters: preset?.clientFilters ?? {},
         };
-        return { message: 'Search opened', open: () => openSearch(search) };
+        return { message: 'Search opened', open: () => openSearch(opened) };
       })
       .with('note', async () => {
         const created = await createDocumentWithTags(
@@ -527,6 +543,7 @@ export function createInputActions(
     selectedCalendar,
     selectedInbox,
     inboxes: email.accounts.inboxes,
+    search,
     connectGoogle,
     connectingGoogle: () =>
       connectingGoogle() ||

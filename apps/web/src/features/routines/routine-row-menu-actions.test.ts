@@ -40,6 +40,8 @@ vi.mock('./queries/routine-sources', () => ({
     }),
     run: vi.fn(),
     runPending: () => false,
+    stop: vi.fn(),
+    stopPending: () => false,
     duplicate: vi.fn(),
     keepAsOwn: vi.fn(),
     createdCount: () =>

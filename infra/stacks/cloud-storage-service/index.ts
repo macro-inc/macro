@@ -6,6 +6,7 @@ import {
   DOCUMENT_STORAGE_GATEWAY_URL,
   getMacroApiToken,
   getMacroNotify,
+  getMcpCredentialsKey,
   getSearchEventQueue,
   getServiceUrl,
   ServiceUrl,
@@ -334,6 +335,11 @@ const callRecordingStack = new pulumi.StackReference('call-recording-stack', {
   name: `macro-inc/call-recording/${stack}`,
 });
 
+// The agent API and the Macro agent's connector tools build their connectors
+// from MCP_CREDENTIALS_KEY_SECRET_NAME at startup; without read access to that
+// secret the service fails to start, so the name and the grant ship together.
+const mcpCredentialsKey = getMcpCredentialsKey();
+
 const callRecordingCrudPolicyArn: pulumi.Output<string> = callRecordingStack
   .getOutput('crudPolicyArn')
   .apply((t) => t as string);
@@ -376,6 +382,7 @@ const cloudStorageService = new CloudStorageService(
       githubSyncAppPemArn,
       calWebhookSecretKeyArn,
       calEventTypeContentNamesKeyArn,
+      mcpCredentialsKey.secretArn,
     ],
     slackImportUploadPolicyArn: slackImportQueue.uploadPolicy.arn,
     callRecordingCrudPolicyArn,
@@ -387,6 +394,10 @@ const cloudStorageService = new CloudStorageService(
         value: githubPullRequestPatchBucket.bucket,
       },
       // OpenTelemetry / Datadog tracing configuration
+      {
+        name: 'MCP_CREDENTIALS_KEY_SECRET_NAME',
+        value: mcpCredentialsKey.secretName,
+      },
       {
         name: 'DD_SERVICE',
         value: 'cloud-storage-service',

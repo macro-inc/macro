@@ -11,7 +11,7 @@ import { match } from 'ts-pattern';
 
 const NIL_ENTITY_ID = '00000000-0000-0000-0000-000000000000';
 
-type OrExpr<T> = T | { or: { left: OrExpr<T>; right: OrExpr<T> } };
+export type OrExpr<T> = T | { or: { left: OrExpr<T>; right: OrExpr<T> } };
 
 /** A Soup entity with a known identity, independent of list membership. */
 export type SoupEntityRef = {
@@ -73,11 +73,14 @@ export function soupEntityKey(entity: {
 
 // Balanced trees stay below the GraphQL filter ingress depth limit even for
 // a full preview batch. A left-folded OR tree does not.
-function or<T>(items: T[]): OrExpr<T> | undefined {
+export function balancedOr<T>(items: T[]): OrExpr<T> | undefined {
   if (items.length < 2) return items[0];
   const middle = Math.floor(items.length / 2);
   return {
-    or: { left: or(items.slice(0, middle))!, right: or(items.slice(middle))! },
+    or: {
+      left: balancedOr(items.slice(0, middle))!,
+      right: balancedOr(items.slice(middle))!,
+    },
   };
 }
 
@@ -96,42 +99,45 @@ export function buildGraphqlEntitiesSoupInput(
   const input = buildGraphqlEntitySoupInput('DOCUMENT', NIL_ENTITY_ID);
   if (!input || !('initial' in input) || !input.initial) return undefined;
   const base = input.initial.filters!;
-  const initiativeFilter = or(
+  const initiativeFilter = balancedOr(
     ids('INITIATIVE').map((id) => ({ literal: { id } }))
   );
-  const databaseRowFilter = or(
+  const databaseRowFilter = balancedOr(
     ids('DATABASE_ROW').map((id) => ({ literal: { id } }))
   );
   const filters: GraphqlEntityFilterAst = {
     ...base,
     ...(databaseRowFilter ? { databaseRowFilter } : {}),
     documentFilter:
-      or(ids('DOCUMENT', 'TASK').map((id) => ({ literal: { id } }))) ??
+      balancedOr(ids('DOCUMENT', 'TASK').map((id) => ({ literal: { id } }))) ??
       base.documentFilter,
     ...(initiativeFilter ? { initiativeFilter } : {}),
     projectFilter:
-      or(
+      balancedOr(
         ids('PROJECT').map((projectIdSelf) => ({ literal: { projectIdSelf } }))
       ) ?? base.projectFilter,
     chatFilter:
-      or(ids('CHAT').map((chatId) => ({ literal: { chatId } }))) ??
+      balancedOr(ids('CHAT').map((chatId) => ({ literal: { chatId } }))) ??
       base.chatFilter,
     emailFilter: {
       tree:
-        or(ids('THREAD').map((threadId) => ({ literal: { threadId } }))) ??
-        base.emailFilter!.tree,
+        balancedOr(
+          ids('THREAD').map((threadId) => ({ literal: { threadId } }))
+        ) ?? base.emailFilter!.tree,
     },
     channelFilter:
-      or(ids('CHANNEL').map((channelId) => ({ literal: { channelId } }))) ??
-      base.channelFilter,
+      balancedOr(
+        ids('CHANNEL').map((channelId) => ({ literal: { channelId } }))
+      ) ?? base.channelFilter,
     callFilter:
-      or(ids('CALL_RECORD').map((callId) => ({ literal: { callId } }))) ??
-      base.callFilter,
+      balancedOr(
+        ids('CALL_RECORD').map((callId) => ({ literal: { callId } }))
+      ) ?? base.callFilter,
     crmCompanyFilter:
-      or(ids('COMPANY').map((id) => ({ literal: { id } }))) ??
+      balancedOr(ids('COMPANY').map((id) => ({ literal: { id } }))) ??
       base.crmCompanyFilter,
     calendarEventFilter:
-      or(ids('CALENDAR_EVENT').map((id) => ({ literal: { id } }))) ??
+      balancedOr(ids('CALENDAR_EVENT').map((id) => ({ literal: { id } }))) ??
       base.calendarEventFilter,
   };
   const count = new Set(

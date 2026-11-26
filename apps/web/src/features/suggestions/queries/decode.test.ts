@@ -37,7 +37,11 @@ it('reads a running background suggestion with the server’s status and what it
     runMode: 'background',
     prompt: 'Summarize this week and post it.',
     sends: 'Posts the weekly status summary in #ops',
-    run: { sessionId: 'session-1', startedAt: '2026-11-09T08:00:00Z' },
+    run: {
+      sessionId: 'session-1',
+      startedAt: '2026-11-09T08:00:00Z',
+      stopping: false,
+    },
     title: 'Post the weekly status summary',
     summary: 'This week has none.',
     importance: 80,
@@ -115,10 +119,63 @@ it('keeps the server’s two lists in order, open then done, with its counts', (
   expect(feed.counts).toEqual(counts);
 });
 
+it('reads the topics, and each suggestion’s own', () => {
+  const topic = { key: 'customer:acme', name: 'Acme renewal' };
+  const feed = toFeed({
+    suggestions: [{ ...WIRE, topic }],
+    counts: COUNTS,
+    topics: [
+      {
+        ...topic,
+        reason: {
+          text: 'Renews December 1',
+          source: { entityType: 'email_thread', entityId: 'thread' },
+        },
+        open: 1,
+      },
+      { key: 'event:offsite', name: 'Offsite', reason: null, open: 0 },
+    ],
+  });
+
+  expect(feed.suggestions[0].topic).toEqual(topic);
+  expect(feed.topics).toEqual([
+    { ...topic, reason: 'Renews December 1' },
+    { key: 'event:offsite', name: 'Offsite' },
+  ]);
+  // A server that has no topics yet.
+  expect(toFeed({ suggestions: [], counts: COUNTS }).topics).toEqual([]);
+});
+
 it('reads a feed asked for with a limit, which has no done list', () => {
   const open = { ...WIRE, id: 'open', status: 'open', run: null } as const;
 
   expect(
     toFeed({ suggestions: [open], counts: COUNTS }).suggestions
   ).toHaveLength(1);
+});
+
+it('keeps the line a run reported, and that a run asked to stop is stopping', () => {
+  const run = WIRE.run;
+  if (!run) throw new Error('the fixture has a run');
+
+  expect(
+    toSuggestion({
+      ...WIRE,
+      run: {
+        ...run,
+        state: 'cancelling',
+        report: '3 quotes compared · Nothing was sent',
+      },
+    })
+  ).toMatchObject({
+    run: {
+      stopping: true,
+      report: '3 quotes compared · Nothing was sent',
+    },
+  });
+  expect(
+    toSuggestion({ ...WIRE, run: { ...run, report: null } })
+  ).toMatchObject({
+    run: { stopping: false },
+  });
 });

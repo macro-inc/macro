@@ -1,0 +1,173 @@
+// The second tier of trace ingest. Alloy ingest routes every span of a trace
+// here by its trace id, so one replica sees the whole trace: it counts span
+// metrics and service graphs from all of it, waits for the trace to settle,
+// and sends Tempo the traces ./default.nix's policies keep.
+
+otelcol.receiver.otlp "spans" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+    max_recv_msg_size = "16MiB"
+  }
+  output { traces = [otelcol.processor.memory_limiter.spans.input] }
+}
+
+// Over the limit, ingest is refused and retries; what is held is decided and
+// released within the wait.
+otelcol.processor.memory_limiter "spans" {
+  check_interval = "1s"
+  limit = "@MEMORY_LIMIT@"
+  spike_limit = "@MEMORY_SPIKE@"
+  output { traces = [otelcol.processor.transform.root.input] }
+}
+
+// The root span carries its service's name, so a trace is charged to it. What a
+// sender put there is dropped first.
+otelcol.processor.transform "root" {
+  error_mode = "ignore"
+  trace_statements {
+    context = "resource"
+    statements = [`delete_key(attributes, "macro.sampling.root")`]
+  }
+  trace_statements {
+    context = "span"
+    statements = [
+      `delete_key(attributes, "macro.sampling.root")`,
+@ROOT_STATEMENTS@
+    ]
+  }
+  output {
+    traces = [
+      otelcol.connector.spanmetrics.all.input,
+      otelcol.connector.servicegraph.all.input,
+      otelcol.processor.tail_sampling.traces.input,
+    ]
+  }
+}
+
+// The series Tempo's metrics generator wrote, now from every span instead of
+// the sampled ones.
+otelcol.connector.spanmetrics "all" {
+  namespace = "traces.spanmetrics"
+  // Span names are unbounded.
+  exclude_dimensions = ["span.name"]
+  dimension { name = "deployment.environment" }
+  // Every instance of a service is one series.
+  resource_metrics_key_attributes = ["service.name"]
+  aggregation_cardinality_limit = 5000
+  metrics_flush_interval = "30s"
+  metrics_expiration = "15m"
+  histogram {
+    unit = "s"
+    explicit { buckets = ["2ms", "4ms", "8ms", "16ms", "32ms", "64ms", "128ms", "256ms", "512ms", "1024ms", "2048ms", "4096ms", "8192ms", "16384ms"] }
+  }
+  exemplars { enabled = true }
+  output { metrics = [otelcol.processor.transform.series.input] }
+}
+
+otelcol.connector.servicegraph "all" {
+  dimensions = ["deployment.environment"]
+  virtual_node_peer_attributes = ["peer.service", "db.name", "db.system", "db.system.name"]
+  latency_histogram_buckets = ["100ms", "200ms", "400ms", "800ms", "1600ms", "3200ms", "6400ms", "12800ms"]
+  metrics_flush_interval = "30s"
+  store {
+    max_items = 10000
+    ttl = "10s"
+  }
+  output { metrics = [otelcol.processor.filter.unknown_peers.input] }
+}
+
+// A call whose other end sent no span and has no peer attribute would be an
+// edge to "unknown".
+otelcol.processor.filter "unknown_peers" {
+  error_mode = "ignore"
+  metrics {
+    datapoint = [`attributes["connection_type"] == "virtual_node" and attributes["server"] == "unknown"`]
+  }
+  output { metrics = [otelcol.processor.transform.series.input] }
+}
+
+// The generator's names and labels. Resource attributes would become a `job`
+// and `instance` the generator's series never had.
+otelcol.processor.transform "series" {
+  error_mode = "ignore"
+  metric_statements {
+    context = "metric"
+    statements = [
+      `set(unit, "") where name == "traces.spanmetrics.duration"`,
+      `set(name, "traces.spanmetrics.latency") where name == "traces.spanmetrics.duration"`,
+    ]
+  }
+  metric_statements {
+    context = "datapoint"
+    statements = [
+      `set(attributes["service"], attributes["service.name"]) where attributes["service.name"] != nil`,
+      `delete_key(attributes, "service.name")`,
+      // An edge is the server's environment's. Between two environments it also
+      // names the client's, or both edges would write one series.
+      `set(attributes["deployment.environment"], attributes["client_deployment.environment"]) where attributes["client_deployment.environment"] != nil`,
+      `set(attributes["deployment.environment"], attributes["server_deployment.environment"]) where attributes["server_deployment.environment"] != nil`,
+      `set(attributes["client_environment"], attributes["client_deployment.environment"]) where attributes["client_deployment.environment"] != nil and attributes["server_deployment.environment"] != nil and attributes["client_deployment.environment"] != attributes["server_deployment.environment"]`,
+      `delete_matching_keys(attributes, "^(client|server)_deployment.environment$")`,
+    ]
+  }
+  metric_statements {
+    context = "resource"
+    statements = [`delete_matching_keys(attributes, ".*")`]
+  }
+  output { metrics = [otelcol.exporter.prometheus.series.input] }
+}
+
+otelcol.exporter.prometheus "series" {
+  include_target_info = false
+  include_scope_info = false
+  include_scope_labels = false
+  forward_to = [prometheus.remote_write.mimir.receiver]
+}
+
+// Every replica counts its own share of the traces, so each needs a label of
+// its own; the StatefulSet's pod name stays across restarts.
+prometheus.remote_write "mimir" {
+  external_labels = { sampler = constants.hostname }
+  endpoint { url = "@MIMIR_PUSH@" }
+}
+
+otelcol.processor.tail_sampling "traces" {
+  decision_wait = "@DECISION_WAIT@"
+  num_traces = @NUM_TRACES@
+  // One shard: each has its own rate limiters, so more would multiply every
+  // budget. Late spans follow a trace that was kept. One that was dropped is
+  // forgotten once another is dropped, so its late spans are judged again and
+  // an error after the wait is still kept; a cache of one is what makes the
+  // processor forget it rather than remember it until `num_traces` is reached.
+  decision_cache = {
+    sampled_cache_size = @SAMPLED_CACHE@,
+    non_sampled_cache_size = 1,
+  }
+
+@POLICIES@
+  output { traces = [otelcol.processor.transform.unmark.input] }
+}
+
+otelcol.processor.transform "unmark" {
+  error_mode = "ignore"
+  trace_statements {
+    context = "span"
+    statements = [`delete_key(attributes, "macro.sampling.root")`]
+  }
+  output { traces = [otelcol.processor.batch.kept.input] }
+}
+
+otelcol.processor.batch "kept" {
+  timeout = "1s"
+  send_batch_size = 512
+  send_batch_max_size = 1024
+  output { traces = [otelcol.exporter.otlp.tempo.input] }
+}
+
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "@TEMPO@"
+    tls { insecure = true }
+  }
+  sending_queue { queue_size = 512 }
+}

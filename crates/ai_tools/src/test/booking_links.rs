@@ -64,7 +64,7 @@ impl Directory for Members {
 }
 struct FakeCalendar;
 impl Calendars for FakeCalendar {
-    async fn creation_calendar(&self, _: &str) -> Result<Uuid, Error> {
+    async fn creation_calendar(&self, _: &str, _: Option<Uuid>) -> Result<Uuid, Error> {
         Ok(Uuid::now_v7())
     }
     async fn busy(
@@ -72,6 +72,7 @@ impl Calendars for FakeCalendar {
         _: &[String],
         _: DateTime<Utc>,
         _: DateTime<Utc>,
+        _: Option<Uuid>,
         _: Option<Uuid>,
     ) -> Result<Vec<BusyRange>, Error> {
         Ok(vec![])
@@ -84,6 +85,14 @@ impl Calendars for FakeCalendar {
     }
     async fn reschedule(&self, _: &BookingRecord) -> Result<(), Error> {
         Ok(())
+    }
+}
+impl BookingAccounts for FakeCalendar {
+    async fn booking_accounts(
+        &self,
+        _: &str,
+    ) -> Result<Vec<calendar_scheduling::domain::booking_links::BookingAccount>, Error> {
+        Ok(vec![])
     }
 }
 type Context = BookingLinkToolContext<Service<PostgresRepository, FakeCalendar, Members>>;

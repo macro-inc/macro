@@ -263,9 +263,11 @@ impl<P: ProjectAgentInheritance, I: ProjectMemberships, A: ProjectAssignmentAcce
                 | PropertiesErr::PermissionDenied
                 | PropertiesErr::NotFound
                 | PropertiesErr::OptionNotFound
+                | PropertiesErr::OptionInAnotherDefinition
                 | PropertiesErr::EntityPropertyNotFound
                 | PropertiesErr::RequiredProperty
                 | PropertiesErr::DuplicateOptionValue
+                | PropertiesErr::DuplicateDefinitionName
                 | PropertiesErr::ConflictingTeamLabel(_)
                 | PropertiesErr::SystemPropertyNotModifiable
                 | PropertiesErr::ReservedName(_)

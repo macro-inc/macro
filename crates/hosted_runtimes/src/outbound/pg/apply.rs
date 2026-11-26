@@ -1,6 +1,7 @@
 //! Applying lifecycle events under the host and computer locks.
 
 use super::*;
+use crate::domain::lifecycle::Rejected;
 
 impl PgComputerRepo {
     /// Serialize host transitions before locking computer or timer rows.
@@ -106,10 +107,28 @@ impl PgComputerRepo {
             span.record("event", tag);
         }
 
+        // The runtime request takes the same computer lock. Reject explicit
+        // power and release requests before they change the phase required
+        // for image recovery.
+        if matches!(event, Event::PowerOn | Event::PowerOff | Event::ReleaseNow)
+            && Self::runtime_update_pending(tx, computer_id, false).await?
+        {
+            let rejected = Rejected::RuntimeUpdateInProgress;
+            span.record("rejected", tracing::field::debug(rejected));
+            return Ok(Some(Applied::Rejected(rejected)));
+        }
+
         let host = computer.host;
         if matches!(event, Event::PowerOn) {
             // On to the lifecycle already; only its guest sleeps.
             Self::request_wake_in(tx, computer_id, now).await?;
+        }
+        if matches!(
+            event,
+            Event::MacrodConnected | Event::MacrodConnectedWithoutAgentHandOff
+        ) {
+            // An image upgrade under way waits for exactly this.
+            Self::note_upgrade_reconnect(tx, computer_id, now).await?;
         }
         let host_has_room =
             Self::host_has_room(tx, host, computer.id, computer.resources, now).await?;

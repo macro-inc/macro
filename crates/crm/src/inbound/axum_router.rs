@@ -13,6 +13,9 @@ pub mod set_company_name;
 /// Toggle the `hidden` flag on a `crm_contacts` row.
 pub mod set_contact_hidden;
 
+/// Add or remove one of a company's domains.
+pub mod company_domains;
+
 pub mod contact_emails;
 pub mod set_contact_company;
 pub mod set_contact_email;
@@ -213,6 +216,11 @@ where
             put(set_company_name::handler::<C, St, Eas, Auth>),
         )
         .route(
+            "/companies/{company_id}/domains",
+            put(company_domains::add_handler::<C, St, Eas, Auth>)
+                .delete(company_domains::remove_handler::<C, St, Eas, Auth>),
+        )
+        .route(
             "/companies/by-domain",
             get(get_company_by_domain::handler::<C, St, Eas, Auth>),
         )
@@ -390,6 +398,19 @@ impl IntoResponse for CrmError {
                 StatusCode::CONFLICT,
                 Json(ErrorResponse {
                     message: "crm company is archived; restore it before making this change".into(),
+                }),
+            ),
+            CrmError::CompanyDomainTaken(holder) => {
+                return (
+                    StatusCode::CONFLICT,
+                    Json(company_domains::CompanyDomainTakenResponse::from(holder)),
+                )
+                    .into_response();
+            }
+            CrmError::CompanyDomainAdminRequired => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message: "this company's email sync is off, so only a team admin or owner can remove its domains: removing one lets that domain's mail back into the CRM".into(),
                 }),
             ),
             CrmError::CompanyAlreadyExistsForTeam => (

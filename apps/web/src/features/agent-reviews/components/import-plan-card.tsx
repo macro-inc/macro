@@ -1,7 +1,10 @@
+import { isMobile } from '@core/mobile/isMobile';
+import IconHubSpot from '@icon/import/hubspot.svg';
 import IconJira from '@icon/import/jira.svg';
 import IconNotion from '@icon/import/notion.svg';
 import IconLinear from '@icon/mcp-linear.svg';
 import CaretDown from '@icon/system/regular/caret-down.svg';
+import type { RunErrorKind } from '@service-cognition/import';
 import { ActionDialogShell } from '@ui/components/ActionDialogShell';
 import { Button } from '@ui/components/Button';
 import { Card } from '@ui/components/Card';
@@ -10,6 +13,7 @@ import { cn } from '@ui/utils/classname';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
+  failureCopy,
   type ImportDraft,
   type ImportedCopy,
   type ImportPlanEntry,
@@ -18,9 +22,13 @@ import {
   type ImportReviewPhase,
   type ImportTotal,
   type ImportVolume,
+  omissionCountLabel,
+  omissionTotals,
+  sourceLabel,
   volumeLabel,
 } from '../core/import-plan';
 import { ImportPlanRow } from './import-plan-row';
+import { ImportReportDetails } from './import-report-details';
 
 function plural(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? '' : 's'}`;
@@ -46,11 +54,81 @@ function ProgressBar(props: { done: number; total: number }) {
   );
 }
 
+function failedItemSentence(count: number) {
+  return `${count}\u00a0${count === 1 ? 'item' : 'items'} couldn’t be imported.`;
+}
+
+/** A failed plan or write: a plain first line, then what happened, muted. */
+function Failure(props: {
+  stage: 'plan' | 'write';
+  source: ImportDraft['source'];
+  errorKind: RunErrorKind | null;
+  /** Labelled `Dismissed` too, once the owner dismissed it. */
+  dismissed: boolean;
+}) {
+  const copy = () => failureCopy(props.stage, props.source, props.errorKind);
+  return (
+    <div role="alert" class="flex min-w-0 flex-col gap-0.5">
+      <p class="text-sm text-failure">
+        {copy().headline}
+        <Show when={props.dismissed}>
+          <span class="text-ink-muted"> Dismissed.</span>
+        </Show>
+      </p>
+      <Show when={copy().detail}>
+        {(detail) => (
+          <p class="line-clamp-3 min-w-0 text-xs text-ink-muted wrap-break-word">
+            {detail()}
+          </p>
+        )}
+      </Show>
+    </div>
+  );
+}
+
 function PhaseStatus(props: {
+  source: ImportDraft['source'];
   phase: ImportReviewPhase;
   progress: ImportProgress | undefined;
 }) {
   const imported = () => props.progress?.imported ?? 0;
+  const outcome = () => {
+    if (props.source === 'hubspot') {
+      return `Imported ${plural(imported(), 'object')}`;
+    }
+    const confirmed = props.progress?.confirmed;
+    const failures =
+      props.progress?.failureCount ?? props.progress?.failures.length ?? 0;
+    const failed = failures > 0 ? ` ${failedItemSentence(failures)}` : '';
+    if (!confirmed) {
+      // Without confirmed counts, say how many of the planned objects made it.
+      return failures > 0
+        ? `Imported ${imported()} of ${plural(imported() + failures, 'object')}`
+        : `Imported ${plural(imported(), 'object')}`;
+    }
+    const parts = [
+      confirmed.documents > 0 ? plural(confirmed.documents, 'page') : '',
+      confirmed.databases > 0
+        ? `${plural(confirmed.databases, 'database')} (${plural(confirmed.databaseRows - (confirmed.partialDatabaseRows ?? 0), 'row')})`
+        : '',
+      confirmed.taskLists > 0
+        ? `${plural(confirmed.taskLists, 'task list')} (${plural(confirmed.tasks - (confirmed.partialTasks ?? 0), 'task')})`
+        : '',
+    ].filter(Boolean);
+    const volume = new Intl.ListFormat('en', { type: 'conjunction' }).format(
+      parts
+    );
+    const leftOut = omissionTotals(props.progress?.details);
+    const needsYou = omissionTotals(props.progress?.details, 'by_hand');
+    const written = volume ? `Imported ${volume}.` : 'Nothing was imported.';
+    const choices =
+      leftOut.total > 0 ? ` ${omissionCountLabel(leftOut)} left out.` : '';
+    const byHand =
+      needsYou.total > 0
+        ? ` ${omissionCountLabel(needsYou)} ${needsYou.total === 1 ? 'needs' : 'need'} you.`
+        : '';
+    return written + choices + byHand + failed;
+  };
   const total = () =>
     imported() +
     (props.progress?.waiting ?? 0) +
@@ -58,9 +136,21 @@ function PhaseStatus(props: {
   // Rebuild only when the phase changes, not on every progress tick.
   const kind = createMemo(() => props.phase.kind);
   const error = () =>
-    props.phase.kind === 'failed' || props.phase.kind === 'unknown'
-      ? props.phase.error
-      : null;
+    props.phase.kind === 'unknown' ? props.phase.error : null;
+  const writeFailure = () =>
+    props.phase.kind === 'failed' ? props.phase.errorKind : null;
+  const planFailure = () =>
+    match(props.phase)
+      .with({ kind: 'planFailed' }, ({ errorKind }) => ({
+        errorKind,
+        dismissed: false,
+      }))
+      .with({ kind: 'dismissed' }, ({ planFailure }) =>
+        planFailure
+          ? { errorKind: planFailure.errorKind, dismissed: true }
+          : null
+      )
+      .otherwise(() => null);
   return (
     <>
       {match(kind())
@@ -90,27 +180,48 @@ function PhaseStatus(props: {
         ))
         .with('completed', () => (
           <p role="status" class="text-sm text-ink">
-            Imported {plural(imported(), 'object')}
-            <Show when={props.progress?.error}>
+            {outcome()}
+            <Show when={!props.progress?.details && props.progress?.error}>
               {(error) => <span class="text-failure"> — {error()}</span>}
             </Show>
           </p>
         ))
         .with('stopped', () => (
           <p role="status" class="text-sm text-ink">
-            Import stopped — {plural(imported(), 'imported object')}{' '}
+            Import stopped —{' '}
+            {plural(
+              imported(),
+              props.source === 'hubspot' ? 'imported object' : 'imported item'
+            )}{' '}
             {imported() === 1 ? 'stays' : 'stay'}
           </p>
         ))
         .with('failed', () => (
-          <p role="alert" class="text-sm text-failure">
-            {error()}
-          </p>
+          <Failure
+            stage="write"
+            source={props.source}
+            errorKind={writeFailure()}
+            dismissed={false}
+          />
         ))
-        .with('dismissed', () => (
-          <p role="status" class="text-sm text-ink-muted">
-            Dismissed — nothing was imported
-          </p>
+        .with('planFailed', 'dismissed', () => (
+          <Show
+            when={planFailure()}
+            fallback={
+              <p role="status" class="text-sm text-ink-muted">
+                Dismissed — nothing was imported
+              </p>
+            }
+          >
+            {(failure) => (
+              <Failure
+                stage="plan"
+                source={props.source}
+                errorKind={failure().errorKind}
+                dismissed={failure().dismissed}
+              />
+            )}
+          </Show>
         ))
         .with('unknown', () => (
           <p role="alert" class="text-sm text-failure">
@@ -214,6 +325,8 @@ type ImportPlanCardProps = {
   canAct: boolean;
   /** Trimming and approving are open. */
   editable: boolean;
+  /** Dismissing is open: the plan is ready, or failed. */
+  dismissable: boolean;
   /** The agent approved it because the owner told it to in chat. */
   startedByAgent: boolean;
   working: boolean;
@@ -229,6 +342,10 @@ type ImportPlanCardProps = {
   onApprove: () => void;
   onDismiss: () => void;
   onStop: () => void;
+  /** Runs the source's connect flow again; absent where it can't. */
+  onReconnect?: () => void;
+  /** The connect flow is open. */
+  reconnecting?: boolean;
 };
 
 /** What the plan holds per kind, e.g. "Databases 18 (405 rows)". */
@@ -264,6 +381,25 @@ function PlanContents(
   const running = () =>
     props.phase.kind === 'starting' || props.phase.kind === 'importing';
   const failures = () => props.progress?.failures ?? [];
+  // A failed plan has nothing to approve, and a dismissed one nothing left to
+  // do, so neither shows its summary or rows (which would read 'Waiting').
+  const planFailed = () =>
+    props.phase.kind === 'planFailed' || props.phase.kind === 'dismissed';
+  const reconnect = () =>
+    match(props.phase)
+      .with(
+        { kind: 'planFailed' },
+        { kind: 'failed' },
+        ({ errorKind }) =>
+          failureCopy('plan', props.source ?? 'notion', errorKind).reconnect
+      )
+      .otherwise(() => false);
+  const details = () =>
+    props.phase.kind === 'completed' ||
+    ((props.phase.kind === 'failed' || props.phase.kind === 'stopped') &&
+      props.progress?.confirmed)
+      ? props.progress?.details
+      : undefined;
   return (
     <>
       <header class="flex min-w-0 flex-col gap-0.5">
@@ -272,6 +408,7 @@ function PlanContents(
             .with('notion', () => <IconNotion class="size-4" />)
             .with('linear', () => <IconLinear class="size-4" />)
             .with('jira', () => <IconJira class="size-4" />)
+            .with('hubspot', () => <IconHubSpot class="size-4" />)
             .exhaustive()}
         </span>
         <Show
@@ -282,20 +419,38 @@ function PlanContents(
         >
           <ActionDialogShell.Title>{props.title}</ActionDialogShell.Title>
         </Show>
-        <Show when={props.summary}>
+        <Show when={props.summary && !planFailed() && !details()}>
           <p class="text-xs text-ink-muted">{props.summary}</p>
         </Show>
         <Show when={(choosing() || planning()) && props.sharingSummary}>
           <p class="text-xs text-ink-muted">{props.sharingSummary}</p>
         </Show>
       </header>
-      <PlanTotals totals={props.totals} />
-      <Show when={props.progress?.warnings?.length}>
-        <ul aria-label="Import warnings" class="text-xs text-ink-muted">
-          <For each={props.progress?.warnings}>
-            {(warning) => <li>{warning}</li>}
-          </For>
-        </ul>
+      <Show when={!planFailed() && !details()}>
+        <PlanTotals totals={props.totals} />
+        <Show
+          when={
+            (choosing() || planning() || running()) &&
+            (props.source ?? 'notion') === 'notion' &&
+            (props.volume.databases > 0 || props.volume.taskLists > 0)
+          }
+        >
+          <p class="text-xs text-ink-muted">
+            Row and task counts are estimates.
+          </p>
+        </Show>
+      </Show>
+      <Show when={!details() && props.progress?.warnings?.length}>
+        <details open={!isMobile()} class="min-w-0 text-xs text-ink-muted">
+          <summary class="min-h-11 content-center">
+            {plural(props.progress?.warnings?.length ?? 0, 'notice')}
+          </summary>
+          <ul aria-label="Import warnings" class="wrap-break-word">
+            <For each={props.progress?.warnings}>
+              {(warning) => <li>{warning}</li>}
+            </For>
+          </ul>
+        </details>
       </Show>
       <Show when={props.alert}>
         <div class="flex flex-wrap items-center gap-2">
@@ -318,11 +473,32 @@ function PlanContents(
       </Show>
       <Show
         when={planning()}
-        fallback={<PhaseStatus phase={props.phase} progress={props.progress} />}
+        fallback={
+          <PhaseStatus
+            source={props.source ?? 'notion'}
+            phase={props.phase}
+            progress={props.progress}
+          />
+        }
       >
         <p role="status" class="text-xs text-ink-muted">
           {props.planningStatus}
         </p>
+      </Show>
+      <Show when={details()}>
+        {(report) => (
+          <ImportReportDetails
+            details={report()}
+            failures={failures()}
+            failureCount={props.progress?.failureCount ?? failures().length}
+            confirmed={props.progress?.confirmed}
+            error={
+              props.phase.kind === 'stopped'
+                ? null
+                : (props.progress?.error ?? null)
+            }
+          />
+        )}
       </Show>
       <Show when={props.startedByAgent}>
         <p class="text-xs text-ink-muted">
@@ -332,13 +508,13 @@ function PlanContents(
         </p>
       </Show>
       <Show
-        when={props.hasPlan}
+        when={props.hasPlan && !planFailed()}
         fallback={
-          <Show when={!planning()}>
+          <Show when={!planning() && !planFailed()}>
             <p class="text-xs text-ink-muted">
               {props.alreadyInMacro.length > 0
                 ? 'Everything shared by this source is already in Macro.'
-                : 'The plan has no objects to show.'}
+                : 'The plan has no items to show.'}
             </p>
           </Show>
         }
@@ -365,6 +541,7 @@ function PlanContents(
                 showStatus={
                   !choosing() && !planning() && props.phase.kind !== 'preparing'
                 }
+                showRowEstimate={!details() || !props.progress?.confirmed}
                 onToggleExpanded={() => props.onToggleExpanded(node.id)}
                 onToggleRows={() => props.onToggleRows(node.id)}
                 onIncludedChange={(included) =>
@@ -390,7 +567,7 @@ function PlanContents(
           )}
         </Show>
       </Show>
-      <Show when={props.alreadyInMacro.length > 0}>
+      <Show when={props.alreadyInMacro.length > 0 && !planFailed()}>
         <AlreadyInMacro
           summary={props.alreadyInMacroSummary}
           entries={props.alreadyInMacro}
@@ -398,10 +575,14 @@ function PlanContents(
           onOpenEntity={props.onOpenEntity}
         />
       </Show>
-      <Show when={failures().length > 0}>
+      <Show when={!details() && failures().length > 0}>
         <section aria-label="Failures" class="flex flex-col gap-1">
           <h4 class="text-xs font-medium text-ink-muted">
-            {plural(failures().length, 'object')} couldn't be imported
+            {props.source === 'hubspot'
+              ? `${plural(failures().length, 'object')} couldn't be imported`
+              : failedItemSentence(
+                  props.progress?.failureCount ?? failures().length
+                )}
           </h4>
           <ul class="flex flex-col gap-0.5">
             <For each={failures()}>
@@ -424,7 +605,7 @@ function PlanContents(
           <Button
             variant="ghost"
             size="sm"
-            disabled={!props.editable}
+            disabled={!props.dismissable}
             onClick={() => props.onDismiss()}
           >
             Dismiss
@@ -437,6 +618,36 @@ function PlanContents(
           >
             {planning() ? 'Import' : `Import ${volumeLabel(props.volume)}`}
           </Button>
+        </footer>
+      </Show>
+      <Show
+        when={
+          props.canAct && (props.phase.kind === 'planFailed' || reconnect())
+        }
+      >
+        <footer class="flex flex-wrap justify-end gap-2">
+          <Show when={props.phase.kind === 'planFailed'}>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={!props.dismissable}
+              onClick={() => props.onDismiss()}
+            >
+              Dismiss
+            </Button>
+          </Show>
+          <Show when={reconnect() && props.onReconnect}>
+            {(onReconnect) => (
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={props.reconnecting}
+                onClick={() => onReconnect()()}
+              >
+                Reconnect {sourceLabel(props.source ?? 'notion')}
+              </Button>
+            )}
+          </Show>
         </footer>
       </Show>
       <Show when={props.canAct && running()}>

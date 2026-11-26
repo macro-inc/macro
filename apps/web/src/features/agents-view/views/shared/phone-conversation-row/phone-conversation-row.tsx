@@ -3,6 +3,7 @@ import { unreadFilterFn } from '@entity/utils/filter';
 import ArchiveIcon from '@icon/system/regular/archive.svg';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
+import { PhoneListLeading } from '../../../components/phone-list-leading';
 import { SessionStatusGlyph } from '../../../components/session-status-glyph/session-status-glyph';
 import type { ConversationActions } from '../../../context/conversation-actions';
 import { conversationState } from '../../../core/conversation-state';
@@ -52,20 +53,23 @@ export function PhoneConversationRow(props: {
       : t('agentWork.untitledChat'));
   const match = () => literalSearchRange(title(), props.search);
   return (
-    <div class="soup-list-entity flex h-[46px] w-full min-w-0 items-center gap-2 px-3 text-ink">
+    <div
+      data-press-surface
+      class="soup-list-entity flex h-[46px] w-full min-w-0 shrink-0 items-center gap-2 px-3 text-ink"
+    >
       <Button
         appearance="bare"
         class="flex h-full min-w-0 flex-1 items-center gap-2 p-0 text-left font-normal focus-visible:outline-2 focus-visible:outline-edge-focus"
         onClick={props.onOpen}
       >
-        <span class="flex size-5 shrink-0 items-center justify-center">
+        <PhoneListLeading>
           <Show
             when={props.archived}
             fallback={<SessionStatusGlyph state={status()} />}
           >
             <ArchiveIcon class="size-3.5 text-ink-muted" />
           </Show>
-        </span>
+        </PhoneListLeading>
         <span class="min-w-0 flex-1 truncate text-base font-normal">
           <Show when={match()} fallback={title()}>
             {(range) => (

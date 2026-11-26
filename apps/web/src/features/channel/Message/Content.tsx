@@ -1,7 +1,9 @@
+import { ScreenLinkChips } from '@app/features/agent-screen/screen-chip';
 import { AgentReplyLinks } from '@components/app/split-layout/split-router/agent-reply-links';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
+import { isAgentAccount, tryMacroId } from '@core/user';
 import { isEmojiOnly } from '@core/util/string';
 import CaretRight from '@icon/system/regular/caret-right.svg';
 import { isBotSenderId } from '@queries/messages/message-sender';
@@ -82,6 +84,9 @@ export function Content(props: ContentProps) {
   const bigEmoji = createMemo(() => isEmojiOnly(content()));
   // An agent's references stand out from its text, as in its session view.
   const fromAgent = () => isBotSenderId(message().sender_id);
+  // An agent teammate writes as its own account, not as a bot.
+  const fromAgentTeammate = () =>
+    isAgentAccount(tryMacroId(message().sender_id));
   const terms = createMemo(() => termsLookup?.(message().id));
 
   const [markdownRoot, setMarkdownRoot] = createSignal<HTMLDivElement>();
@@ -118,7 +123,15 @@ export function Content(props: ContentProps) {
           props.class
         )}
       >
-        <Show when={fromAgent()} fallback={shownBody()}>
+        <Show
+          when={fromAgent()}
+          fallback={
+            // An agent teammate's links to its screen read as chips.
+            <Show when={fromAgentTeammate()} fallback={shownBody()}>
+              <ScreenLinkChips>{shownBody()}</ScreenLinkChips>
+            </Show>
+          }
+        >
           {/* An agent's links to Macro open in the app, as its mention chips do. */}
           <AgentReplyLinks>{shownBody()}</AgentReplyLinks>
         </Show>

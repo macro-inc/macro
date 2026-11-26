@@ -8,7 +8,7 @@ import { createEmailWalkthrough } from '../../primitives/createEmailWalkthrough'
 import { createCallPlayback } from '../calls/CallRecord';
 import { trainingReview } from '../calls/call-fixtures';
 import '../calls/call-stories.css';
-import { createSitePalette } from '../../../setup/sitePalette';
+import { sitePalette } from '../../../setup/sitePalette';
 import { DemoCursor } from '../DemoCursor';
 import { DocMention } from '../documents/DocMention';
 import { HomepageConversation } from '../HomepageConversation';
@@ -50,7 +50,6 @@ export default function HomepageProductPreview(props: {
   kind: HomepagePreviewKind;
   documentOnly?: boolean;
 }) {
-  const sitePalette = createSitePalette();
   let canvas!: HTMLDivElement;
   const [phase, setPhase] = createSignal(0);
   const [cycle, setCycle] = createSignal(1);

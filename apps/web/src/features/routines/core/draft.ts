@@ -3,7 +3,7 @@ import type { StepDraft } from './routine-steps';
 import type { RoutineTarget } from './routine-target';
 import type { RoutineTriggerDraft } from './routine-triggers';
 
-/** A Pipedream app, as stored on the routine's task. */
+/** A catalog app, as stored on the routine's task. */
 export type RoutineApp = { app_slug: string; server_name: string };
 
 export type ScheduleFrequency = 'week' | 'month' | 'once';

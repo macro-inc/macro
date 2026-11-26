@@ -94,7 +94,7 @@ async fn main() {
         Arc::new(DisabledAiAdmissionService),
     );
     let (mut due, mut event) = (Score::default(), Score::default());
-    let (mut failed, mut calls) = (0_u32, 0_u32);
+    let (mut failed, mut rejected, mut calls) = (0_u32, 0_u32, 0_u32);
     let (mut input_tokens, mut output_tokens, mut cache_read_tokens) = (0_u64, 0_u64, 0_u64);
     let mut latencies = Vec::new();
     let mut results = Vec::new();
@@ -112,10 +112,14 @@ async fn main() {
             )
             .await;
         latencies.push(started.elapsed().as_millis());
-        // An answer that fails validation stores no date, so it scores as none.
+        // A rejected answer (one citing text the thread lacks) and a failed
+        // read both store no date, so both score as none.
         let response = answer.as_ref().ok();
+        let was_rejected = response.is_some_and(|response| response.rejected);
         if answer.is_err() {
             failed += 1;
+        } else if was_rejected {
+            rejected += 1;
         }
         if let Some(usage) = response.and_then(|response| response.usage.as_ref()) {
             input_tokens += usage.input_tokens;
@@ -132,7 +136,8 @@ async fn main() {
             "expected_event_on": case.expected_event_on,
             "event_on": got_event,
             "event_verdict": event.add(case.expected_event_on, got_event),
-            "rejected_answer": answer.is_err(),
+            "rejected_answer": was_rejected,
+            "failed": answer.is_err(),
         }));
     }
     latencies.sort_unstable();
@@ -145,7 +150,9 @@ async fn main() {
         "due_dates": due.report(),
         "events": event.report(),
         "calls": calls,
-        "rejected_answers": failed,
+        "rejected_answers": rejected,
+        "rejection_rate": f64::from(rejected) / f64::from(calls.max(1)),
+        "failed_reads": failed,
         "failure_rate": f64::from(failed) / f64::from(calls.max(1)),
         "tokens": {
             "input": input_tokens,

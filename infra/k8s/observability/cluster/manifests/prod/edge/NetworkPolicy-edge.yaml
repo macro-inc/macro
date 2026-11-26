@@ -21,6 +21,17 @@ spec:
               app.kubernetes.io/instance: alloy-ingest
               app.kubernetes.io/name: alloy
     - ports:
+        - port: 8080
+          protocol: TCP
+      to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argocd
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: argocd
+              app.kubernetes.io/name: argocd-server
+    - ports:
         - port: 3100
           protocol: TCP
         - port: 8080

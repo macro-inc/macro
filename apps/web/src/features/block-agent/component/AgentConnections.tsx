@@ -1,7 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
-import { AppConnectionContext } from '@core/pipedream/connection-context';
+import { AppConnectionContext } from '@core/connectors/connection-context';
 import { reportAgentSessionAppConnected } from '@queries/agent-session/app-connections';
-import { connectPipedreamApp } from '@queries/pipedream-connectors';
+import { appConnectorKey, connectConnector } from '@queries/connectors';
 import { isSessionArchived } from '@service-agent-harness/session-archive';
 import type { ParentProps } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
@@ -25,7 +25,8 @@ export function AgentConnections(props: ParentProps) {
         .messages()
         .map((message) => message.key)
         .join(',')}`,
-    connect: connectPipedreamApp,
+    connect: async (app) =>
+      await connectConnector({ key: appConnectorKey(app.appSlug) }),
     resume: async (app) => {
       const sessionId = state.sessionId();
       if (!sessionId) throw new Error('No agent session to continue');

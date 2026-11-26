@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 
 // All API data is local to this fixture; rich previews use its seeded cache.
 test.beforeEach(async ({ page }) => {
@@ -99,6 +99,37 @@ for (const admin of [false, true]) {
     await expect(
       dialog.getByText('member@example.com', { exact: true })
     ).toBeInViewport();
+    const share = dialog
+      .getByText('Sharing off', { exact: true })
+      .locator('xpath=ancestor::section')
+      .getByRole('button', { name: 'Share my emails with CRM', exact: true });
+    await expect(share).toBeInViewport();
+    // Beside the status on desktop, wrapped right under it on a phone, and
+    // above both blacklists either way.
+    const status = await dialog
+      .getByText('Sharing off', { exact: true })
+      .boundingBox();
+    const shareBox = await share.boundingBox();
+    const teamHeading = await dialog
+      .getByRole('heading', { name: 'Team blacklist', exact: true })
+      .boundingBox();
+    expect(
+      status && shareBox && shareBox.y < status.y + status.height + 16
+    ).toBe(true);
+    expect(
+      shareBox && teamHeading && shareBox.y + shareBox.height < teamHeading.y
+    ).toBe(true);
+    // Sections keep the settings page's spacing inside the dialog.
+    const sections = await dialog
+      .locator('section')
+      .evaluateAll((nodes) =>
+        nodes.map((node) => node.getBoundingClientRect())
+      );
+    expect(sections.length).toBeGreaterThan(2);
+    for (let i = 1; i < sections.length; i++)
+      expect(sections[i].top - sections[i - 1].bottom).toBeGreaterThanOrEqual(
+        24
+      );
     await page.screenshot({ path: testInfo.outputPath('privacy-review.png') });
     const teamRemove = dialog.getByRole('button', {
       name: 'Remove team.example.com',
@@ -108,8 +139,9 @@ for (const admin of [false, true]) {
       name: 'Remove personal.example.com',
       exact: true,
     });
+    // Like Team > Members, a member is not shown an action only admins have.
     if (admin) await expect(teamRemove).toBeEnabled();
-    else await expect(teamRemove).toBeDisabled();
+    else await expect(teamRemove).toHaveCount(0);
     await expect(personalRemove).toBeEnabled();
     await personalRemove.click();
     await expect(page.getByTestId('last-change')).toHaveText(
@@ -133,9 +165,7 @@ for (const admin of [false, true]) {
     await page.screenshot({
       path: testInfo.outputPath('privacy-controls.png'),
     });
-    await dialog
-      .getByRole('button', { name: 'Share my emails with CRM', exact: true })
-      .click();
+    await share.click();
     await expect(page.getByTestId('last-change')).toHaveText(
       JSON.stringify({
         action: 'set_consent',
@@ -178,6 +208,54 @@ test('disconnected mailbox cannot opt in while exclusions remain editable', asyn
   await expect(
     page.getByRole('textbox', { name: 'Domain to block for my emails' })
   ).toBeEnabled();
+});
+
+test('disconnected mailbox connects from the dialog by keyboard and stays unshared', async ({
+  page,
+}, testInfo) => {
+  const phone = testInfo.project.name === 'phone';
+  if (phone) await page.setViewportSize({ width: 320, height: 740 });
+  await page.goto('/?disconnected');
+  const settings = page.getByRole('button', {
+    name: 'Email settings',
+    exact: true,
+  });
+  await settings.click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText('No email connected')).toBeVisible();
+  const connect = dialog.getByRole('button', {
+    name: 'Connect email',
+    exact: true,
+  });
+  await expect(connect).toBeVisible();
+  const box = await connect.boundingBox();
+  const viewport = page.viewportSize();
+  expect(box && viewport && box.x + box.width <= viewport.width).toBe(true);
+  // The dialog opens on its title. The desktop header's Close button comes
+  // next; the phone drawer has no Close button, so the mailbox row is first.
+  await expect(
+    dialog.getByRole('heading', { name: 'Contribute your emails to CRM' })
+  ).toBeFocused();
+  if (!phone) await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  await expect(connect).toBeFocused();
+  await page.keyboard.press('Enter');
+
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByTestId('mailbox-connections')).toHaveText('1');
+  await settings.click();
+  await expect(dialog.getByText('member@example.com')).toBeVisible();
+  await expect(dialog.getByText('Sharing off')).toBeVisible();
+  await expect(
+    dialog.getByRole('button', { name: 'Connect email', exact: true })
+  ).toHaveCount(0);
+  await expect(
+    dialog.getByRole('button', {
+      name: 'Share my emails with CRM',
+      exact: true,
+    })
+  ).toBeEnabled();
+  await expect(page.getByTestId('last-change')).toHaveText('');
 });
 
 test('banner opens review using the device input mode', async ({
@@ -231,6 +309,77 @@ test('banner opens review using the device input mode', async ({
   ).toBeEnabled();
 });
 
+async function openTeamBlacklist(page: Page, query: string) {
+  await page.goto(query);
+  const open = page.getByRole('button', {
+    name: 'Email settings',
+    exact: true,
+  });
+  await open.waitFor();
+  await open.click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  return {
+    dialog,
+    team: dialog
+      .getByRole('heading', { name: 'Team blacklist', exact: true })
+      .locator('xpath=ancestor::section'),
+  };
+}
+
+const archivedCompanyId = '00000000-0000-4000-8000-000000000060';
+
+test('an archived company’s team domain points an admin at the company instead of Remove', async ({
+  page,
+}, testInfo) => {
+  const { dialog, team } = await openTeamBlacklist(
+    page,
+    '/?admin&archived-domain'
+  );
+  await expect(
+    team.getByText(
+      'Its company is archived. Restore the company first to remove this domain.',
+      { exact: true }
+    )
+  ).toBeVisible();
+  await expect(
+    team.getByRole('button', {
+      name: 'Remove archived.example.com',
+      exact: true,
+    })
+  ).toHaveCount(0);
+  await expect(
+    team.getByRole('button', { name: 'Remove team.example.com', exact: true })
+  ).toBeEnabled();
+  await page.screenshot({ path: testInfo.outputPath('archived-domain.png') });
+  await team
+    .getByRole('button', {
+      name: 'Open the archived company for archived.example.com',
+      exact: true,
+    })
+    .click();
+  await expect(dialog).not.toBeVisible();
+  await expect(
+    page.locator(`[data-testid=pane][data-content="${archivedCompanyId}"]`)
+  ).toHaveCount(1);
+  await expect(page.getByTestId('last-change')).toHaveText('');
+});
+
+test('a refused removal from a stale list says to restore the company', async ({
+  page,
+}) => {
+  const { team } = await openTeamBlacklist(page, '/?admin&stale-archived');
+  await team
+    .getByRole('button', { name: 'Remove archived.example.com', exact: true })
+    .click();
+  await expect(page.getByTestId('toast')).toHaveText(
+    'This domain’s company is archived. Restore the company first to remove this domain.'
+  );
+  await expect(
+    team.getByText('archived.example.com', { exact: true })
+  ).toBeVisible();
+});
+
 test('owner can inspect and remove a private-thread exception', async ({
   page,
 }, testInfo) => {
@@ -251,9 +400,7 @@ test('owner can inspect and remove a private-thread exception', async ({
   await expect(
     dialog.getByText('Private conversation', { exact: true })
   ).toBeVisible();
-  await expect(
-    dialog.getByText(/A teammate’s contributed copy can still be visible/)
-  ).toBeVisible();
+  await expect(dialog.getByText(/Only your copy is hidden/)).toBeVisible();
   expect(
     await dialog.evaluate(
       (element) => element.scrollWidth <= element.clientWidth

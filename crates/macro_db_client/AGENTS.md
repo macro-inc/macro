@@ -56,6 +56,10 @@ with their `email_links` row; `user_id` and `list_key` on them repeat the link's
 owner and provider on purpose, so reads never join `email_links`. List rows have no
 foreign key: the contacts worker removes them on account deletion.
 
+`agent_runtime_update` stores leased dev operator requests for one
+Firecracker teammate. Unfinished rows hold the computer and keep the
+presigned download URL, which is cleared when an outcome is written.
+
 ## Boundaries
 
 - Depends on: `entity_access_db_utils`, `entity_registry_db_utils`,
@@ -101,6 +105,10 @@ Task-template rows cascade with personal users or teams; nullable creator attrib
 team foreign key cascades, and the passwords repository includes it in retained
 data checks and explicit vault purge. It does not depend on a successful item.
 
+`import_run.error_kind` (migration `20261122042907`) is nullable TEXT checked
+against the import crate's `RunErrorKind`; NULL while a run has not failed and
+on runs that failed before it existed. Older binaries ignore it.
+
 `import_run.personal_root_folder_id` and `personal_folder_ids` are nullable,
 additive state owned by the import repository. Preserve both when a later run
 restarts, just like `root_folder_id`; they identify the user's persistent
@@ -108,6 +116,14 @@ owner-only Notion mirror. No existing folders or import rows are backfilled.
 
 ## Gotchas
 
+- `entity_access`, `"Document"`, `"Chat"`, `"Project"` and `document_sub_type`
+  carry the `source_items` triggers. Each commit that wrote one of them takes
+  ACCESS SHARE on all five, so DDL that needs ACCESS EXCLUSIVE on any of them
+  (`ALTER TABLE`, a non-concurrent index) also stalls writers to the other
+  four: give it a short `lock_timeout`. A mass update of these tables rewrites
+  its items' `source_items` rows at commit while holding their buckets; update
+  in small committed batches, or remove the triggers, update, and backfill
+  (`docs/runbooks/source-items.md`). Writers must use READ COMMITTED.
 - `document_email` has a statement-level `AFTER DELETE` trigger
   (`document_email_release`, migration `20261116200143`) that queues each
   document a statement unlinks in `released_email_attachment_documents`, even
@@ -189,6 +205,15 @@ owner-only Notion mirror. No existing folders or import rows are backfilled.
   build replacement indexes before dropping old constraints, and validate large
   table checks in a later transaction. See the Outlook rollout notes in
   `docs/design/outlook-email-support.md` for failure recovery and deployment order.
+- `macro_user_links_link_primary_idx` `(link_id, primary_macro_id)` (migration
+  `20261119030403`) replaced `macro_user_links_link_idx` (dropped by
+  `20261119030951`): it serves every lookup by `link_id`, the `email_links`
+  delete cascade included, and probes one delegation by link and account.
+  Apply both with a short session `lock_timeout` (for SQLx CLI,
+  `PGOPTIONS='-c lock_timeout=5s'`). If the build is interrupted, drop the
+  invalid index (`DROP INDEX CONCURRENTLY macro_user_links_link_primary_idx`)
+  before retrying: the migration has no `IF NOT EXISTS`, so the old index is
+  never dropped while the new one is unusable.
 - Quote and alias camelCase columns to Rust field names
   (`SELECT "userId" AS user_id`); don't guess spelling — check `migrations/`.
 - Saved-view sharing uses current team membership and chronological owner/team indexes.
@@ -228,13 +253,14 @@ expiry sweep belong to `mcp_auth_proxy`. Rows carry `expires_at` and have no
 foreign keys; the broker deletes expired rows.
 
 - Spam/Trash candidate indexes cover `email_messages(link_id, id)` only for the corresponding positive `mailbox_state` JSON containment predicate; keep query literals aligned with the partial-index predicates.
-- If either concurrent folder-index migration is interrupted, inspect `pg_index.indisvalid` and drop only its invalid index before retrying; `CREATE INDEX IF NOT EXISTS` would silently preserve an unusable index.
+- If a concurrent index migration is interrupted, inspect `pg_index.indisvalid` and drop only its invalid index before retrying; `CREATE INDEX IF NOT EXISTS` would silently preserve an unusable index.
 - `idx_ep_crm_record_references_gin` (migration `20261119222316`) holds only the `entity_properties` values that reference a company or contact outside the Companies and Contacts properties and database rows. Soup's CRM property edges use it by repeating its predicate; keep the two in step. If its concurrent build is interrupted, inspect `pg_index.indisvalid` and drop only the invalid index before retrying.
 - `document::get_all_documents::get_documents_to_delete` pages expired trash in `("deletedAt", id)` order through the partial `idx_document_deleted_at_id`, under a 10 s statement timeout; keep its `ORDER BY` and keyset comparison matching that index, or each page reads the whole Document table.
 
 - `agent_correlation` owns invocation mappings; activity and scheduled-email correlation columns remain nullable for older writers. Build the activity correlation index concurrently, outside a transaction.
 Hosted runtime enrollment generations are additive counters owned by
-`hosted_runtimes`.
+`hosted_runtimes`. So are `image_upgrade` and `image_upgrade_computer`
+(operator image upgrades); their rows go with their computer.
 
 `password_item_entities`, `password_folders`, `password_activity`,
 `password_write_intents`, `password_totp_enrollments`, `password_team_lifecycle`,
@@ -257,3 +283,9 @@ its membership, mailbox and thread foreign keys cascade deletion. The CRM domain
 owns writes and owner-only listing; `crm_email_thread_excluded` is the independent
 veto used by the shared eligibility function and mirrored in set-based ingestion
 and the inline Team reader, including selected contribution.
+
+`import_entity_notion_review_sources_idx` bounds review dependency reconciliation
+by `(review_id, user_id)` for staged Notion data sources. Keep those literal
+predicates aligned with the import query. Entering/leaving that subset maintains
+one extra index entry; metadata is absent from the predicate so ordinary plan
+metadata updates can remain HOT. The general review index still serves page rows.

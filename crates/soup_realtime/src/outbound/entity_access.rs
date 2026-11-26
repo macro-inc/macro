@@ -4,6 +4,7 @@
 mod test;
 
 use entity_access::domain::ports::EntityAudienceLookup;
+use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 use rootcause::prelude::{Report, ResultExt as _};
 
@@ -71,5 +72,17 @@ where
             }));
         }
         Ok(shared_access)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn current_channel_members(
+        &self,
+        channel_id: &str,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        self.service
+            .get_current_channel_users(channel_id)
+            .await
+            .context("failed to read current channel members")
+            .map_err(Report::into_dynamic)
     }
 }

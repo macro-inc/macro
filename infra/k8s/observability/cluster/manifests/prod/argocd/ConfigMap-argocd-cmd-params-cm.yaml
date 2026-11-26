@@ -15,6 +15,9 @@ data:
   repo.server: argocd-repo-server:8081
   reposerver.log.format: text
   reposerver.log.level: info
+  server.dex.server: https://argocd-dex-server:5556
+  server.dex.server.strict.tls: "false"
+  server.insecure: "true"
   server.log.format: text
   server.log.level: info
   server.repo.server.strict.tls: "false"

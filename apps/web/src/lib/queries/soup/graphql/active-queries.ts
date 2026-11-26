@@ -1,5 +1,6 @@
 import type { QueryRevalidation } from '@graphql-cache/exchange/optimistic';
 import { type Client, createRequest } from '@urql/core';
+import { forgetSoupNetworkAnswers } from './network-freshness';
 
 /** An explicit mutation target; detail readers opt out of generic list refreshes. */
 export type GraphqlSoupRefreshTarget = {
@@ -16,6 +17,8 @@ type ActiveGraphqlSoupQuery = {
   body?: () => unknown;
   /** The normalized cache keeps this list's rows and membership current. */
   cacheMaintained?: () => boolean;
+  /** The list never shows, filters or sorts by notification or read state. */
+  ignoresNotifications?: () => boolean;
 };
 
 const activeQueries = new Set<ActiveGraphqlSoupQuery>();
@@ -90,6 +93,8 @@ export function getActiveGraphqlSoupRevalidations(
   client?: Pick<Client, 'query'>,
   options: { unmaintainedOnly?: boolean } = {}
 ): QueryRevalidation[] {
+  // Asked for by a write: lists that mount after it read the server again.
+  forgetSoupNetworkAnswers();
   const queries = new Map<number, QueryRevalidation>();
   for (const source of revalidationSources) {
     if (client && source.client && source.client() !== client) continue;
@@ -125,11 +130,16 @@ export async function refreshActiveGraphqlSoupQueries(
     where?: (body: unknown) => boolean;
     /** Skip lists the cache keeps current: the write already updated them. */
     unmaintainedOnly?: boolean;
+    /** The write changed only notification or read state. */
+    notificationsOnly?: boolean;
   } = {}
 ): Promise<void> {
+  forgetSoupNetworkAnswers();
   const applicable = (query: ActiveGraphqlSoupQuery) => {
     if (!query.isEnabled()) return false;
     if (options.unmaintainedOnly && query.cacheMaintained?.()) return false;
+    if (options.notificationsOnly && query.ignoresNotifications?.())
+      return false;
     if (options.where && !options.where(query.body?.())) return false;
     if (!query.target) return true;
     const target = query.target();

@@ -120,3 +120,98 @@ fn the_database_host_carries_how_databases_work_and_no_other_area() {
     // email tool; the scoped prompt must omit its action rules.
     assert!(!prompt.contains("MUST use the `SendEmail` tool"));
 }
+
+fn chat_user() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from_email("chat@example.com").unwrap()
+}
+
+fn tool_names(tools: &connectors::UserMcpTools) -> Vec<String> {
+    let mut names: Vec<String> = tools.catalog().into_iter().map(|tool| tool.name).collect();
+    names.sort();
+    names
+}
+
+/// Chat loads the tools of exactly the connections the rules leave usable:
+/// an enabled Pipedream app and a server added by URL, never a disabled app
+/// or one whose grant needs authorizing again.
+#[tokio::test]
+async fn chat_loads_the_tools_of_usable_connections_only() {
+    use connectors::fake::{FakeConnection, FakeConnectors};
+    let connectors = FakeConnectors::new()
+        .with_connection(
+            &chat_user(),
+            FakeConnection::app("linear")
+                .named("Linear")
+                .with_tools(&["create_issue"]),
+        )
+        .with_connection(
+            &chat_user(),
+            FakeConnection::server("https://mcp.example.com/mcp")
+                .named("Example")
+                .with_tools(&["lookup"]),
+        )
+        .with_connection(
+            &chat_user(),
+            FakeConnection::app("asana")
+                .named("Asana")
+                .with_tools(&["create_task"])
+                .disabled(),
+        )
+        .with_connection(
+            &chat_user(),
+            FakeConnection::app("notion")
+                .named("Notion")
+                .with_tools(&["search"])
+                .needs_reauth(),
+        )
+        .build();
+
+    let names = tool_names(&user_mcp_tools(&connectors, &chat_user()).await);
+
+    assert_eq!(names.len(), 2, "{names:?}");
+    assert!(
+        names.iter().any(|name| name.ends_with("create_issue")),
+        "{names:?}"
+    );
+    assert!(
+        names.iter().any(|name| name.ends_with("lookup")),
+        "{names:?}"
+    );
+}
+
+/// A flagged user's app that Macro Connect serves loads through Connect; an
+/// unflagged user holding the same app through Pipedream loads it too. Each
+/// gets the connection the rules count for them, and nothing else.
+#[tokio::test]
+async fn chat_loads_the_connection_that_counts_for_the_user() {
+    use connectors::fake::{FakeConnection, FakeConnectors};
+    let flagged = MacroUserIdStr::try_from_email("flagged@example.com").unwrap();
+    let connectors = FakeConnectors::new()
+        .with_connect_app("linear", true)
+        .with_macro_connect_enabled(&flagged)
+        .with_connection(
+            &flagged,
+            FakeConnection::app("linear")
+                .named("Linear")
+                .with_tools(&["create_issue"]),
+        )
+        .with_connection(
+            &chat_user(),
+            FakeConnection::app("linear")
+                .named("Linear")
+                .with_tools(&["create_issue"]),
+        )
+        .build();
+
+    for user in [flagged, chat_user()] {
+        let names = tool_names(&user_mcp_tools(&connectors, &user).await);
+        assert_eq!(names.len(), 1, "{names:?}");
+    }
+}
+
+#[tokio::test]
+async fn a_user_with_no_connections_gets_no_mcp_tools() {
+    let connectors = connectors::fake::FakeConnectors::new().build();
+
+    assert!(user_mcp_tools(&connectors, &chat_user()).await.is_empty());
+}

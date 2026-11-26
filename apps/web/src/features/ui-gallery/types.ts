@@ -50,7 +50,7 @@ export type ComponentDoc = {
   exports?: string[];
   demos: DocDemo[];
   /**
-   * Type names to show under Props, resolved from the `@ui` component sources.
+   * Type names to show under Props, resolved from discovered component sources.
    * Defaults to `<name>Props`. Naming them is only needed when that default is
    * unhelpful — `Panel` points at `SurfaceProps`, which is where its props
    * actually live.

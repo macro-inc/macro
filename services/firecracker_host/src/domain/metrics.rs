@@ -47,6 +47,8 @@ pub enum Operation {
     SetEnrollment,
     /// Remove the enrollment.
     ClearEnrollment,
+    /// Boot from a system disk of another image.
+    ReplaceSystemDisk,
 }
 
 impl Operation {
@@ -83,6 +85,8 @@ pub enum Repair {
     StaleHibernationDiscarded,
     /// `macro-restore` run in a guest restored before the agent died.
     RestoreResumed,
+    /// A system disk no record names (a replacement cut short) deleted.
+    LeftoverSystemDiskRemoved,
 }
 
 /// How a golden build ended.
@@ -480,6 +484,7 @@ fn error_code(error: &HostError) -> &'static str {
         HostError::NoNetworkSlot => "no_network_slot",
         HostError::InvalidState(_) => "invalid_state",
         HostError::GuestUnreachable(_) => "guest_unreachable",
+        HostError::Hibernated(_) => "hibernated",
         HostError::Staged(_) => "staged",
         HostError::Busy(_) => "busy",
         HostError::MoveRefused(_) => "move_refused",

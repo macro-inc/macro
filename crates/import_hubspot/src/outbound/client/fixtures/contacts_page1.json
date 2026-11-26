@@ -1,0 +1,9 @@
+{"results": [
+  {"id": "7001", "properties": {"firstname": "Grace", "lastname": "Hopper", "email": "grace@acme.example", "hs_additional_emails": "g.hopper@acme-io.example;grace.home@example.net", "hubspot_owner_id": "102"},
+   "associations": {"companies": {"results": [
+     {"id": "5001", "type": "contact_to_company"},
+     {"id": "5001", "type": "contact_to_company_unlabeled"},
+     {"id": "5002", "type": "contact_to_company_unlabeled"}
+   ], "paging": {"next": {"after": "MjA=", "link": "x"}}}}},
+  {"id": "7002", "properties": {"firstname": "", "lastname": null, "email": null}}
+]}

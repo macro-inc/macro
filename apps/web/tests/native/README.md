@@ -33,7 +33,19 @@ account, Docker, sudo, or local backend stack is required.
 
 ### Expected result
 
-Both suites must pass. The full suite checks native Soup predicate evaluation via
+Both suites must pass. Both resize the window to 400px wide while online and
+expect every Email list header control, Search included, inside the header,
+then restore the size and expect the view options (the reading pane toggle) back.
+They then open two more splits beside Email, resize the window to 1000px and
+900px wide (a third each), expect the same, and close the splits again.
+They then open Tasks, narrow the window from 520px to 400px and expect every
+Tasks list header control, New and Search included, inside the header, then
+restore the size and expect the layout switch and Group by back.
+They then open Calendar and expect its header controls, Search events included,
+inside the header and uncovered at 440px, 400px, 360px and 320px (where Search
+wraps onto its own row, where it is also opened and must leave the other
+controls in view) and at the restored size.
+The full suite checks native Soup predicate evaluation via
 `graphql_cache_entity_filter`, including filter combinations never fetched online,
 then reloads the webview with the API still down and expects All mail to render
 from the native cache (identity comes from the persisted user-info query), with
@@ -60,7 +72,10 @@ hint exists (`user-info-gate.ts`), and reads it once at startup. Unrelated
 app-chrome reads (billing, language, system status, routines, MCP connections,
 calendars, forms, harnesses, saved views, work feed, contacts) return explicit
 empty resources, in `fixtures/bootstrap.ts` and as empty `GraphqlUser` fields in
-`fixtures/server.ts`. Unexpected requests,
+`fixtures/server.ts`; the running-timer read (`user.timeTracking`) gets no timer
+and the current server clock. The fixture user joined no channels, so the channel
+backfill lane (`SoupChannelDirectoryBackfill`) and the directory's network
+fallback (`ChannelDirectoryPage`) read an empty directory. Unexpected requests,
 unknown cursors and GraphQL validation errors are recorded and fail the smoke
 suite; nothing forwards to hosted services. This does not test the Rust HTTP
 server's authorization, SQL, or Gmail synchronization.

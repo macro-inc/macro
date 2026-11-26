@@ -3,7 +3,7 @@ import type { ReviewUpdates } from '@app/features/agent-reviews/queries/reviews'
 import { PersistedReview } from '@app/features/agent-reviews/views/persisted-review';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
-import { ChannelsContextProvider } from '@core/context/channels';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessProvider } from '@core/context/quickAccess/QuickAccessProvider';
 import { UserContextProvider } from '@core/context/user';
@@ -13,6 +13,7 @@ import {
   useHotKeyRoot,
 } from '@core/hotkey/hotkeys';
 import { EntityProvider } from '@entity';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import { queryClient } from '@queries/client';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { createSignal } from 'solid-js';
@@ -52,7 +53,9 @@ function Fixture() {
           <EntityProvider>
             <UserContextProvider>
               <EmailLinksContextProvider>
-                <ChannelsContextProvider>
+                <ChannelDirectoryProvider
+                  directory={staticChannelDirectory(() => [])}
+                >
                   <QuickAccessProvider>
                     <main class="min-h-screen bg-surface p-4 text-ink">
                       <PersistedReview
@@ -64,7 +67,7 @@ function Fixture() {
                       <output data-testid="created">{created()}</output>
                     </main>
                   </QuickAccessProvider>
-                </ChannelsContextProvider>
+                </ChannelDirectoryProvider>
               </EmailLinksContextProvider>
             </UserContextProvider>
           </EntityProvider>

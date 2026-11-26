@@ -3,13 +3,11 @@
 /// Minting a scoped GitHub App installation credential.
 pub mod github_tokens;
 
-/// Resolving an owner's custom (URL-added) MCP servers to upstream calls.
-pub mod custom_mcp;
-
 /// Answering the reserved `macro` slug with Macro's own MCP server.
 pub mod macro_mcp;
 
-/// Resolving an owner's Pipedream-connected apps to scoped upstream calls.
+/// Resolving an owner's connected apps and custom servers, within what the
+/// session's agent was given, through the connectors service.
 pub mod mcp_credentials;
 
 /// Resolving a sandbox's session token to the session it stands for.

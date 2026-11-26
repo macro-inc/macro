@@ -28,8 +28,10 @@ ast-grep patterns now catch.
   variant.
 - Ask the user before adding a linter, a tool package or a dependency for a
   check.
-- A check that must block merging runs in a required CI job. Conventions, which
-  runs every ast-grep rule, isn't required.
+- A check that must block merging runs in a job `CI gate` waits for, since that
+  is the status `main` requires (`pr_ci.rs`). Conventions, which runs every
+  ast-grep rule, is one: an ast-grep rule with `severity: error` blocks merging
+  once a pull request changes code it scans.
 
 Check: the change adds no new linter configuration, tool package or lockfile for
 a check, and each new check fails on the mistake it guards against.

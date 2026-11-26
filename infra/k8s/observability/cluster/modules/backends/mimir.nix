@@ -76,17 +76,28 @@ let
       tokens_file_path = "${data}/store-gateway-tokens";
     };
 
+    # Mimir queues each query's work, after sharding and time splitting, and
+    # past 100 queued parts per pod refuses with 429. A Grafana dashboard loads
+    # all its panels at once: one pod refused 38 of the agents dashboard's 43
+    # queries. In a local replay, two loads at once fit under 2000.
+    query_scheduler.max_outstanding_requests_per_tenant = 2000;
+
     limits = {
       # Prometheus' --storage.tsdb.retention.time on the host.
       compactor_blocks_retention_period = "30d";
       # Prometheus' --enable-feature=exemplar-storage, at its default size.
-      # Tempo's span metrics carry trace IDs as exemplars.
+      # The sampler's span metrics carry trace IDs as exemplars.
       max_global_exemplars_per_user = 100000;
-      # Prometheus has no series limit; Mimir defaults to 150k. The host holds
-      # about 53k; each of the two metrics generators may add up to 50k (its
-      # own cap), and the node Alloy adds the cluster's own node, kubelet and
-      # cAdvisor series.
-      max_global_series_per_user = 300000;
+      # Prometheus has no series limit; Mimir defaults to 150k. Dev and the
+      # cluster's own series are about 185k; prod adds up to 20k custom
+      # metrics and the samplers' span metrics and service graphs.
+      max_global_series_per_user = 450000;
+      # So that one metric whose label turns out to be free text can't take
+      # them all. The largest has about 3k.
+      max_global_series_per_metric = 20000;
+      # OTLP delta counts and histograms are stored as they come instead of
+      # refused; queries sum them with sum_over_time. Experimental in Mimir.
+      otel_native_delta_ingestion = true;
       # Mimir's 10k samples/s would cut off senders catching up after an
       # outage; the host takes about 900/s.
       ingestion_rate = 50000;
@@ -94,7 +105,7 @@ let
     };
   };
 
-  memoryLimitMiB = 2048;
+  memoryLimitMiB = 3072;
 in
 {
   applications.mimir = {
@@ -170,7 +181,7 @@ in
                 resources = {
                   requests = {
                     cpu = "100m";
-                    memory = "1Gi";
+                    memory = "1536Mi";
                   };
                   limits.memory = "${toString memoryLimitMiB}Mi";
                 };
@@ -264,11 +275,6 @@ in
               shared.writers
               shared.readers
               shared.nodeAlloy
-              # Tempo's metrics generator: span metrics and service graphs.
-              (shared.pods {
-                "app.kubernetes.io/name" = "tempo";
-                "app.kubernetes.io/component" = "metrics-generator";
-              })
             ];
             ports = shared.tcp [ ports.http ];
           }

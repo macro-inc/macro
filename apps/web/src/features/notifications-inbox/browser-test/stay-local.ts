@@ -8,11 +8,6 @@ export async function stayLocal(page: Page) {
     const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
     if (loopback && request.method() === 'GET') {
       const responses: Record<string, object> = {
-        '/__macro_dev/gateway/dss/comms/channels': {
-          items: [],
-          next_cursor: null,
-        },
-        '/__macro_dev/gateway/dss/channels/activity': [],
         '/__macro_dev/gateway/email/email/links': { links: [] },
       };
       const response = responses[url.pathname];

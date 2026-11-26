@@ -24,14 +24,23 @@ execution, display) that don't belong to a single domain.
 - `src/import_workspace.rs`: `ToolEntityCreator` as the import crate's
   `WorkspaceWriter` (folders, documents, tasks, databases as Macro AI for the
   user), sharing its document/task paths with `EntityCreator`; Notion bodies
-  go through `DocumentCreator::create_notion_markdown`. `share_with_team`
+  go through `DocumentCreator::create_notion_markdown`, including page-local
+  typed database-card occurrence maps. Database creation uses caller-reserved ids
+  and owner-only filing; saved-view creation safely reuses committed ids after a
+  lost response. The folder privacy port checks concrete grants and ancestry,
+  leaving the import domain to reuse its persistent personal mirror when needed.
+  `share_with_team`
   shares a folder through `ProjectService::edit_project` (edit level) and a
   document through `DocumentService::set_team_share`. Notion pages and tasks
   are created with their page's dates (`NewDocumentMetadata::created_at` /
   `updated_at`), and folders through
   `ProjectService::create_project_dated_by_contents`, so the copy keeps
-  Notion's dates. Reviewed workspace imports carry a typed `ImportVisibility`
-  through document, task, folder and tracker-project creation: personal items
+  Notion's dates. The workspace writer captures a Notion document's initial
+  snapshot revision. The deferred rewrite requires a matching ledger receipt
+  and owner access, then calls sync-service's internal link update with the
+  inspected revision. Reviewed workspace imports carry a typed
+  `ImportVisibility` through document, task, folder and tracker-project
+  creation: personal items
   get an exact OFF override before insertion; shared items retain defaults.
   Personal tasks also omit teammate assignees, returning a typed notice for the
   import report; keep the same verdict on every property pass, including retries.
@@ -44,6 +53,18 @@ execution, display) that don't belong to a single domain.
   state through their owning domain ports, independently of viewer permissions;
   root-folder reuse separately checks view access. Transient read failures propagate
   so the import domain does not invalidate a live copy on an outage.
+Return `SourceStopReason::RecordedTableMissing` only when the recorded table
+is gone; keep storage and database-service failures retryable so reservation
+never permanently downgrades page cards on an outage. Normalize database
+validation, not-found, explicit resource permission and version-conflict errors
+into `DatabaseWriteFailure`; repository/service outages stay run-wide. The
+import domain owns source retry thresholds and link fallback decisions.
+Map project/folder receipt and grant-read errors to `FolderUnavailable`, so the
+next run rechecks the folder. Type folder creation/existence errors too, including
+parent authorization and target liveness reads. Keep database access failures source-scoped.
+Missing deterministic starter table/title IDs return typed errors without raw
+ids or messages; never select another table or column by position.
+
 - `src/import_workspace/lifecycle.rs`: physical lifecycle dispatch through owning
   ports. PostgreSQL adapter tests cover live targets without grants,
   trash/restore/purge and transient failures; hosts never reach service repos.
@@ -72,7 +93,8 @@ execution, display) that don't belong to a single domain.
 ## Boundaries
 
 - Depends on: nearly every domain crate with tools (`forms`,
-  `agent_session`, `anthropic` (code execution), `web_search` (`WebSearch`,
+  `agent_session`, `anthropic` (wire types for the legacy code-execution
+  schemas), `web_search` (`WebSearch`,
   `WebFetch` via Tavily), `initiative`, `collab_surface`, `favorites`,
   `messages`, `routines`, `ai_billing`, `ai_usage`, `ai_toolset`, `agent`),
   plus `bot_id`, `attachment`, `static_file`.
@@ -117,3 +139,9 @@ Reviewed Linear/Jira imports also register read-only tracker connections in ever
 host. `src/import_trackers.rs` creates stable-id tasks via ordinary markdown and
 projects via `InitiativeServiceImpl::create_imported`, with Macro AI attribution;
 project, parent and label writes pass through the owning property services.
+`src/import_hubspot.rs` (`HubspotCrmWriter`) is the HubSpot import's
+`CrmImportWriter`: CRM records and pipeline entries through
+`crm::domain::record_import` as Macro AI for the user, with the team roster
+for owner matching. Every host that builds the import service registers it
+with the `import_hubspot` reader.
+

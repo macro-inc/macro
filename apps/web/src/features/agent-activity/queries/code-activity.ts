@@ -11,10 +11,12 @@ import type {
 } from '@service-agent-fold/generated/types';
 import { useQueries } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
+import { isUnnamedOutcome } from '../core/unnamed-outcomes';
 
 /**
  * Share the session view's observed SDK activity while an inline run is open.
  * Without a `segment` there is no run to look into, and `rows` stand as given.
+ * A program that failed or stopped without naming a step is left out.
  */
 export function createCodeActivityRows(
   sessionId: Accessor<string>,
@@ -67,6 +69,8 @@ export function createCodeActivityRows(
         }))
       );
     });
-    return rows().flatMap((row) => replacements.get(row.id) ?? [row]);
+    return rows().flatMap(
+      (row) => replacements.get(row.id) ?? (isUnnamedOutcome(row) ? [] : [row])
+    );
   };
 }

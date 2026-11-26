@@ -18,6 +18,8 @@ impl Query {
 /// Writer accepting only the exact authorized fixture assignment.
 struct DeleteWriter;
 
+impl crate::catalog::PropertyCatalogWriter for DeleteWriter {}
+
 impl EntityPropertyWriter for DeleteWriter {
     async fn delete_entity_property(
         &self,

@@ -64,8 +64,10 @@ impl<S: EntityAccessService> SuggestionAccess for EntitySuggestionAccess<S> {
     }
 }
 
-/// Whether `part` is a part of `target`'s item: a message of its channel or
-/// of its email thread. Other items have no parts a suggestion can name.
+/// Whether `part` is a part of `target`'s item: a message of its channel that
+/// wasn't deleted, or one of its email thread that the mailbox still holds.
+/// Other items have no parts a suggestion can name. The `LIMIT 1` keeps each
+/// lookup on the message's primary key: the plain filter may walk the channel.
 pub(crate) async fn part_of(
     pool: &PgPool,
     target: &Target,
@@ -78,9 +80,12 @@ pub(crate) async fn part_of(
         EntityType::Channel => {
             sqlx::query_scalar!(
                 r#"SELECT EXISTS (
-                       SELECT 1 FROM comms_messages
-                       WHERE id = $1 AND parent_entity_type = 'channel'
-                         AND parent_entity_id = $2
+                       SELECT 1 FROM (
+                           SELECT parent_entity_type, parent_entity_id, deleted_at
+                           FROM comms_messages WHERE id = $1 LIMIT 1
+                       ) m
+                       WHERE m.parent_entity_type = 'channel'
+                         AND m.parent_entity_id = $2 AND m.deleted_at IS NULL
                    ) AS "found!""#,
                 part,
                 item.to_string(),
@@ -91,7 +96,12 @@ pub(crate) async fn part_of(
         EntityType::EmailThread => {
             sqlx::query_scalar!(
                 r#"SELECT EXISTS (
-                       SELECT 1 FROM email_messages WHERE id = $1 AND thread_id = $2
+                       SELECT 1 FROM (
+                           SELECT thread_id, mailbox_state
+                           FROM email_messages WHERE id = $1 LIMIT 1
+                       ) m
+                       WHERE m.thread_id = $2
+                         AND NOT COALESCE((m.mailbox_state->>'provider_missing')::boolean, false)
                    ) AS "found!""#,
                 part,
                 item,

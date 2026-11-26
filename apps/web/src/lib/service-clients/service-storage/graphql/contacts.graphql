@@ -71,6 +71,17 @@ query ContactDirectoryByEmails($emails: [String!]!) {
 }
 
 # Reference lookup keeps matching server-side, before the bounded page limit.
+# Behind `enable-named-contact-search`: the people the text names across the
+# whole directory, ranked by the server. A server without the field refuses it.
+query ContactNamedPeople($search: String!, $limit: Int) {
+  user {
+    id
+    contactsNamedBy(search: $search, limit: $limit) {
+      ...ContactDirectoryFields
+    }
+  }
+}
+
 query ContactReferencePage($limit: Int, $after: String, $search: String!, $matching: GraphqlContactMatching!) {
   user {
     id

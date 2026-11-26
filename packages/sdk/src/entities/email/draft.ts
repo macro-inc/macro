@@ -2,10 +2,14 @@ import type {
   AddDraftAttachmentRequest,
   ApiDraftInput,
 } from '../../../generated/email/types.gen';
+import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { EmailAttachment } from './attachment';
 import { EmailMessage } from './message';
 import type { EmailThread } from './thread';
+
+// The largest page the thread route returns.
+const THREAD_PAGE_SIZE = 100;
 
 /** Draft content; relationships use message and thread handles. */
 export type DraftOptions = Omit<
@@ -210,6 +214,67 @@ export class EmailDraft extends EmailMessage {
   }
 
   /**
+   * The files attached to this draft: uploads reserved with
+   * {@link addAttachment} (`pending` until `complete()` runs) and attachments
+   * forwarded with {@link forwardAttachment}. A draft's files are not among
+   * {@link attachments}, which lists a message's received or sent files.
+   *
+   * @readonly
+   */
+  async draftAttachments(): Promise<DraftAttachment[]> {
+    const { thread_db_id } = await this.detail.get();
+    const record = await this.threadRecord(thread_db_id);
+    if (!record) throw new Error(`Draft ${this.id} is not in its thread`);
+    return [
+      ...record.attachments_draft.map((a) =>
+        DraftAttachment.byId(
+          this.client,
+          this,
+          a.id,
+          false,
+          record.draft_generation,
+          {
+            fileName: a.file_name,
+            contentType: a.content_type,
+            size: a.size,
+            pending: a.upload_pending,
+          },
+        ),
+      ),
+      ...record.attachments_forwarded.map((a) =>
+        DraftAttachment.byId(
+          this.client,
+          this,
+          a.attachment_id,
+          true,
+          record.draft_generation,
+          {
+            fileName: a.filename ?? undefined,
+            contentType: a.mime_type ?? undefined,
+            size: a.size_bytes ?? undefined,
+            pending: false,
+          },
+        ),
+      ),
+    ];
+  }
+
+  // The thread route is the one that returns a draft's files; read it a page
+  // at a time until the draft appears or the thread ends.
+  private async threadRecord(threadId: string) {
+    for (let offset = 0; ; offset += THREAD_PAGE_SIZE) {
+      const { thread } = unwrap(
+        await this.client.email.getThread({
+          path: { thread_id: threadId },
+          query: { offset, limit: THREAD_PAGE_SIZE },
+        }),
+      );
+      const record = thread.messages.find((m) => m.db_id === this.id);
+      if (record || thread.messages.length < THREAD_PAGE_SIZE) return record;
+    }
+  }
+
+  /**
    * Forward an existing attachment into this draft.
    *
    * @write
@@ -291,6 +356,8 @@ export class DraftAttachment {
     readonly forwarded: boolean,
     /** Draft generation captured when the attachment was reserved. */
     readonly draftGeneration: number,
+    /** The file, when read from the draft by {@link EmailDraft.draftAttachments}. */
+    readonly file?: DraftAttachmentFile,
   ) {}
 
   /** Construct a draft scoped attachment handle. */
@@ -300,8 +367,9 @@ export class DraftAttachment {
     id: string,
     forwarded = false,
     draftGeneration = 0,
+    file?: DraftAttachmentFile,
   ): DraftAttachment {
-    return new DraftAttachment(draft, id, forwarded, draftGeneration);
+    return new DraftAttachment(draft, id, forwarded, draftGeneration, file);
   }
 
   /**
@@ -331,8 +399,21 @@ export class DraftAttachment {
       draftId: this.draft.id,
       forwarded: this.forwarded,
       draftGeneration: this.draftGeneration,
+      ...(this.file && { file: this.file }),
     };
   }
+}
+
+/** A draft attachment's file, as the draft holds it. */
+export interface DraftAttachmentFile {
+  /** File name. */
+  fileName?: string;
+  /** MIME type. */
+  contentType?: string;
+  /** Size in bytes. */
+  size?: number;
+  /** An upload whose `complete()` has not run yet. */
+  pending: boolean;
 }
 
 /** Translate draft content to the generated contract. */

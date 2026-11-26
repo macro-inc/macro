@@ -2,12 +2,13 @@ import '@app/index.css';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { initializeLexical } from '@core/component/LexicalMarkdown/init';
-import { ChannelsContextProvider } from '@core/context/channels';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { QuickAccessProvider } from '@core/context/quickAccess/QuickAccessProvider';
 import { UserContextProvider } from '@core/context/user';
 import { useHotKeyRoot } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { EntityProvider } from '@entity';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { createSignal, For, onCleanup, Show } from 'solid-js';
 import { render } from 'solid-js/web';
@@ -33,7 +34,9 @@ function Fixture() {
         <PosthogProvider>
           <EntityProvider>
             <UserContextProvider>
-              <ChannelsContextProvider>
+              <ChannelDirectoryProvider
+                directory={staticChannelDirectory(() => [])}
+              >
                 <QuickAccessProvider>
                   <main class="min-h-screen bg-page p-4 text-ink space-y-4">
                     <nav class="flex gap-2">
@@ -69,7 +72,7 @@ function Fixture() {
                     </div>
                   </main>
                 </QuickAccessProvider>
-              </ChannelsContextProvider>
+              </ChannelDirectoryProvider>
             </UserContextProvider>
           </EntityProvider>
         </PosthogProvider>

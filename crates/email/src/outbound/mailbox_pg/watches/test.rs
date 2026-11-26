@@ -1,5 +1,6 @@
 use super::*;
-use crate::domain::mailbox::live_pass::StreamKind;
+use crate::domain::mailbox::claim::StreamClaim;
+use crate::domain::mailbox::schedule::POLL_INTERVALS;
 use email_api_client::domain::models::EmailApiError;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sha2::{Digest, Sha256};
@@ -65,7 +66,7 @@ async fn only_a_matching_verifier_can_bind_an_unknown_create_and_wake_the_mailbo
     .unwrap();
     assert_eq!(row.provider_id.as_deref(), Some("sub"));
     assert!(
-        repo.claim_stream(Uuid::new_v4(), StreamKind::MailFolder)
+        repo.claim_stream(Uuid::new_v4(), StreamClaim::LongestDue)
             .await
             .unwrap()
             .is_some()
@@ -92,7 +93,7 @@ async fn only_a_matching_verifier_can_bind_an_unknown_create_and_wake_the_mailbo
 async fn notification_during_a_delta_page_is_not_erased_by_its_checkpoint(db: PgPool) {
     let (repo, _, _, id) = setup(&db).await;
     let stream = repo
-        .claim_stream(Uuid::new_v4(), StreamKind::MailFolder)
+        .claim_stream(Uuid::new_v4(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .unwrap();
@@ -100,11 +101,11 @@ async fn notification_during_a_delta_page_is_not_erased_by_its_checkpoint(db: Pg
         .receive(id, vec![notification("secret", "sub", WatchHint::Changed)])
         .await
         .unwrap();
-    repo.commit_page(&stream, &super::super::test::page())
+    repo.commit_page(&stream, &super::super::test::page(), POLL_INTERVALS)
         .await
         .unwrap();
     assert!(
-        repo.claim_stream(Uuid::new_v4(), StreamKind::MailFolder)
+        repo.claim_stream(Uuid::new_v4(), StreamClaim::LongestDue)
             .await
             .unwrap()
             .is_some(),
@@ -347,7 +348,7 @@ async fn a_change_notification_makes_a_folders_live_pass_due(db: PgPool) {
         .unwrap();
 
     let pass = repo
-        .claim_stream(Uuid::new_v4(), StreamKind::LivePass)
+        .claim_stream(Uuid::new_v4(), StreamClaim::LivePass)
         .await
         .unwrap()
         .unwrap();
@@ -416,7 +417,7 @@ async fn subscription_writes_behind_a_share_locked_link_fail_fast(db: PgPool) {
     .unwrap();
     assert!(row.provider_id.is_none());
     assert!(
-        repo.claim_stream(Uuid::new_v4(), StreamKind::MailFolder)
+        repo.claim_stream(Uuid::new_v4(), StreamClaim::LongestDue)
             .await
             .unwrap()
             .is_none(),
@@ -453,7 +454,7 @@ async fn a_notification_keeps_a_due_folder_ahead_of_folders_due_after_it(db: PgP
         .unwrap();
 
     let claimed = repo
-        .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
+        .claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .unwrap();
@@ -551,7 +552,7 @@ async fn a_mailbox_still_importing_queues_no_notified_message(db: PgPool) {
 
     assert!(!queued(&db, link, "old-mail").await);
     assert!(
-        repo.claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
+        repo.claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
             .await
             .unwrap()
             .is_some(),
@@ -637,7 +638,7 @@ async fn a_folder_page_listing_a_notified_message_reads_it_as_its_own(db: PgPool
         .await
         .unwrap();
     let stream = repo
-        .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
+        .claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .unwrap();
@@ -650,6 +651,7 @@ async fn a_folder_page_listing_a_notified_message_reads_it_as_its_own(db: PgPool
             position: StreamPosition::Checkpoint(StreamToken::new("checkpoint-2".into())),
             reader_revision: 1,
         },
+        POLL_INTERVALS,
     )
     .await
     .unwrap();

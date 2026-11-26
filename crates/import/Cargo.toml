@@ -5,7 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
-agent_runtime_protocol = { path = "../agent_runtime_protocol", default-features = false }
+agent_runtime_protocol = { path = "../agent_runtime_protocol", default-features = false, features = ["utoipa"] }
 agent_session = { path = "../agent_session", default-features = false }
 ai_billing = { path = "../ai_billing" }
 rootcause = { workspace = true }
@@ -23,10 +23,11 @@ macro_authorization = { path = "../macro_authorization", default-features = fals
   "axum",
 ] }
 macro_user_id = { path = "../macro_user_id" }
-mcp_select = { path = "../mcp_select" }
+connectors = { path = "../connectors" }
 model-entity = { path = "../model-entity" }
 import_notion = { path = "../import_notion" }
 import_tracker = { path = "../import_tracker" }
+import_hubspot = { path = "../import_hubspot" }
 models_databases = { path = "../models_databases" }
 models_properties = { path = "../models_properties" }
 properties = { path = "../properties", default-features = false, features = [
@@ -48,6 +49,7 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+connectors = { path = "../connectors", features = ["test-fakes"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 model_user = { path = "../model_user" }
 tower = { workspace = true, features = ["util"] }

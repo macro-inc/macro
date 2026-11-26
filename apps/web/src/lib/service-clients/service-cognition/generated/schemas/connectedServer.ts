@@ -6,13 +6,15 @@
  */
 
 /**
- * One of the user's MCP server connections, as the setup page sees it.
+ * One of the user's usable connections, an app or a server added by URL,
+as the setup page sees it.
  */
 export interface ConnectedServer {
-  /** Whether the user has completed OAuth against it. */
+  /** Whether it is usable; always true, since only usable connections are
+listed. */
   authenticated: boolean;
-  /** The server's display name. */
+  /** The display name. */
   name: string;
-  /** The server URL. */
+  /** The app's slug, or the server's URL. */
   url: string;
 }

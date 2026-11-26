@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH previous AS MATERIALIZED (\n                   SELECT id, config, revision FROM saved_view\n                   WHERE id = $1 AND config->>'kind' = 'crm-list'\n                     AND config->>'teamId' = $4::uuid::text\n                     AND jsonb_typeof(config->'companyIds') = 'array'\n                     AND config->'companyIds' ?| $2\n                   FOR UPDATE\n               ), rewritten AS (\n                   SELECT p.id, COALESCE((\n                       SELECT jsonb_agg(company ORDER BY first_seen)\n                       FROM (\n                           SELECT CASE WHEN element = ANY($2) THEN $3::uuid::text ELSE element END AS company,\n                                  MIN(position) AS first_seen\n                           FROM jsonb_array_elements_text(p.config->'companyIds') WITH ORDINALITY AS e(element, position)\n                           GROUP BY 1\n                       ) companies\n                   ), '[]'::jsonb) AS company_ids\n                   FROM previous p\n               ), updated AS (\n                   UPDATE saved_view v\n                   SET config = jsonb_set(v.config, '{companyIds}', r.company_ids),\n                       revision = v.revision + 1, updated_at = NOW()\n                   FROM rewritten r WHERE v.id = r.id\n               )\n               SELECT config AS \"config!\", revision AS \"revision!\" FROM previous",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "config!",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "revision!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "66e01767859969d8a05d9309d10c973dd17952ad927b0c842f4d6c923df52243"
+}

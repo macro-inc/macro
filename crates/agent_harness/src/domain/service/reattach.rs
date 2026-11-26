@@ -112,7 +112,6 @@ impl<
     PromptComposer,
     Egress,
     Lifecycle,
-    Mentions,
     Notifier,
 >
     AgentHarnessService<
@@ -124,7 +123,6 @@ impl<
         PromptComposer,
         Egress,
         Lifecycle,
-        Mentions,
         Notifier,
     >
 where
@@ -136,7 +134,6 @@ where
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
     Lifecycle: AgentSessionLifecyclePublisher,
-    Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
     /// Load the sessions a runtime that dialed in again still serves.

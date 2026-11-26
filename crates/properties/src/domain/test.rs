@@ -4,13 +4,15 @@ mod database_rows;
 mod initiatives;
 mod options_batch;
 mod project_agents;
+mod start_and_due;
+mod time_logged;
 
 use super::service_impl::PropertiesServiceImpl;
 use crate::domain::error::PropertiesErr;
 use crate::domain::model::{
-    EditReceipt, EntityPropertyMutationSnapshot, GetOrCreateTagDefinitionResult,
-    PropertyAccessReceiptExt, TagScope, UpdatePropertyOptionOutcome, ViewReceipt,
-    canonical_entity_type,
+    CreatePropertyDefinitionOutcome, CreatePropertyOptionWithIdOutcome, EditReceipt,
+    EntityPropertyMutationSnapshot, GetOrCreateTagDefinitionResult, PropertyAccessReceiptExt,
+    TagScope, UpdatePropertyOptionOutcome, ViewReceipt, canonical_entity_type,
 };
 use crate::domain::{
     ports::{MockNotificationService, MockPermissionService, MockPropertiesRepo},
@@ -270,7 +272,9 @@ async fn property_definition_event_create_publishes_authoritative_snapshot() {
 
     let mut repo = MockPropertiesRepo::new();
     repo.expect_create_property_definition()
-        .return_once(move |_, _, _, _, _, _| Box::pin(async move { Ok(property) }));
+        .return_once(move |_, _, _, _, _, _| {
+            Box::pin(async move { Ok(CreatePropertyDefinitionOutcome::Created(property)) })
+        });
     let event_broker = RecordingEventBroker::default();
     let service = service_with_event_broker(repo, event_broker.clone());
 
@@ -466,11 +470,13 @@ async fn create_property_definition_allows_a_name_that_only_resembles_a_built_in
         .withf(|_, display_name, _, _, _, _| display_name == "Contact")
         .return_once(|_, _, _, _, _, _| {
             Box::pin(async {
-                Ok(property_definition_for_event(
-                    Uuid::from_u128(0xC1),
-                    "Contact",
-                    DataType::Entity,
-                    true,
+                Ok(CreatePropertyDefinitionOutcome::Created(
+                    property_definition_for_event(
+                        Uuid::from_u128(0xC1),
+                        "Contact",
+                        DataType::Entity,
+                        true,
+                    ),
                 ))
             })
         });
@@ -558,7 +564,9 @@ async fn property_definition_event_broker_scheduling_failure_is_non_fatal() {
 
     let mut repo = MockPropertiesRepo::new();
     repo.expect_create_property_definition()
-        .return_once(move |_, _, _, _, _, _| Box::pin(async move { Ok(property) }));
+        .return_once(move |_, _, _, _, _, _| {
+            Box::pin(async move { Ok(CreatePropertyDefinitionOutcome::Created(property)) })
+        });
     let service = service_with_event_broker(repo, RecordingEventBroker::failing());
 
     let result = service
@@ -1122,8 +1130,12 @@ async fn property_option_event_delete_not_found_outcome_publishes_nothing() {
 
     let mut repo = MockPropertiesRepo::new();
     expect_owned_modifiable_definition(&mut repo, definition);
-    repo.expect_get_property_option()
-        .return_once(move |_| Box::pin(async move { Ok(Some(option)) }));
+    // Found, then gone by the time the delete runs.
+    let mut reads = vec![None, Some(option)];
+    repo.expect_get_property_option().returning(move |_| {
+        let read = reads.pop().flatten();
+        Box::pin(async move { Ok(read) })
+    });
     repo.expect_delete_property_option()
         .return_once(|_, _| Box::pin(async { Ok(None) }));
     let event_broker = RecordingEventBroker::default();
@@ -1135,6 +1147,76 @@ async fn property_option_event_delete_not_found_outcome_publishes_nothing() {
 
     assert!(matches!(result, Err(PropertiesErr::OptionNotFound)));
     assert!(event_broker.events().is_empty());
+}
+
+/// Deletes an option that a promotion moves to another definition between
+/// the delete's read and its scoped delete; `owns_new_home` says whether the
+/// caller can see the definition it moved to.
+async fn delete_after_a_move(owns_new_home: bool) -> Result<(), PropertiesErr> {
+    let property_definition_id = Uuid::from_u128(0xD5);
+    let option_id = Uuid::from_u128(0xD6);
+    let definition = property_definition_for_event(
+        property_definition_id,
+        "Tags",
+        DataType::SelectString,
+        false,
+    );
+    let option = property_option_for_event(
+        option_id,
+        property_definition_id,
+        0,
+        PropertyOptionValue::String("Shared".to_string()),
+        None,
+    );
+    let moved = PropertyOption {
+        property_definition_id: Uuid::from_u128(0xD7),
+        ..option.clone()
+    };
+
+    let mut repo = MockPropertiesRepo::new();
+    let named = definition.clone();
+    repo.expect_get_property_definition().returning(move |id| {
+        let found = (id == property_definition_id).then(|| named.clone());
+        Box::pin(async move { Ok(found) })
+    });
+    repo.expect_get_property_definition_with_owner()
+        .returning(move |id, _, _| {
+            let owned = (id == property_definition_id || owns_new_home).then(|| definition.clone());
+            Box::pin(async move { Ok(owned) })
+        });
+    let mut reads = vec![moved, option];
+    repo.expect_get_property_option().returning(move |_| {
+        let read = reads.pop();
+        Box::pin(async move { Ok(read) })
+    });
+    repo.expect_delete_property_option()
+        .return_once(|_, _| Box::pin(async { Ok(None) }));
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+
+    let result = service
+        .delete_property_option(&caller_user_id(), None, property_definition_id, option_id)
+        .await;
+    assert!(event_broker.events().is_empty());
+    result
+}
+
+#[tokio::test]
+async fn a_delete_whose_option_moves_before_it_runs_is_told_it_lives_on() {
+    let result = delete_after_a_move(true).await;
+    assert!(
+        matches!(result, Err(PropertiesErr::OptionInAnotherDefinition)),
+        "{result:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_delete_whose_option_moves_out_of_sight_is_told_it_is_gone() {
+    let result = delete_after_a_move(false).await;
+    assert!(
+        matches!(result, Err(PropertiesErr::OptionNotFound)),
+        "{result:?}"
+    );
 }
 
 #[tokio::test]
@@ -4802,4 +4884,152 @@ async fn get_or_create_option_rejects_unowned_definition() {
         )
         .await;
     assert!(matches!(result, Err(PropertiesErr::NotFound)));
+}
+
+fn add_tag_request(value: &str) -> AddPropertyOptionRequest {
+    AddPropertyOptionRequest::SelectString {
+        option: AddStringOptionRequest {
+            display_order: 3,
+            value: value.to_string(),
+            color: Some("#123456".to_string()),
+        },
+    }
+}
+
+#[tokio::test]
+async fn add_option_with_id_creates_under_the_client_id() {
+    let property_definition_id = Uuid::from_u128(0xD1);
+    let option_id = Uuid::from_u128(0xD2);
+    let definition =
+        property_definition_for_event(property_definition_id, "Tags", DataType::Tag, true);
+    let option = property_option_for_event(
+        option_id,
+        property_definition_id,
+        3,
+        PropertyOptionValue::String("Lead".to_string()),
+        None,
+    );
+
+    let mut repo = MockPropertiesRepo::new();
+    expect_owned_modifiable_definition(&mut repo, definition);
+    repo.expect_create_property_option_with_id()
+        .withf(move |id, definition, _, _, _| {
+            *id == option_id && *definition == property_definition_id
+        })
+        .return_once(move |_, _, _, _, _| {
+            Box::pin(async move { Ok(CreatePropertyOptionWithIdOutcome::Created(option)) })
+        });
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+
+    let created = service
+        .add_property_option_with_id(
+            &caller_user_id(),
+            None,
+            property_definition_id,
+            option_id,
+            &add_tag_request("Lead"),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(created.id, option_id);
+    assert_eq!(
+        only_published_property_event(&event_broker).envelope["event_type"],
+        "property_option.created"
+    );
+}
+
+#[tokio::test]
+async fn a_replayed_add_answers_with_its_option_and_publishes_nothing() {
+    let property_definition_id = Uuid::from_u128(0xD3);
+    let option_id = Uuid::from_u128(0xD4);
+    let definition =
+        property_definition_for_event(property_definition_id, "Tags", DataType::Tag, true);
+    let existing = property_option_for_event(
+        option_id,
+        property_definition_id,
+        3,
+        PropertyOptionValue::String("Lead".to_string()),
+        None,
+    );
+
+    let mut repo = MockPropertiesRepo::new();
+    expect_owned_modifiable_definition(&mut repo, definition);
+    repo.expect_create_property_option_with_id()
+        .return_once(|_, _, _, _, _| {
+            Box::pin(async { Ok(CreatePropertyOptionWithIdOutcome::IdTaken) })
+        });
+    repo.expect_get_property_option()
+        .return_once(move |_| Box::pin(async move { Ok(Some(existing)) }));
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+
+    let replayed = service
+        .add_property_option_with_id(
+            &caller_user_id(),
+            None,
+            property_definition_id,
+            option_id,
+            &add_tag_request("Lead"),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(replayed.id, option_id);
+    assert!(event_broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn an_option_id_held_by_another_option_is_refused() {
+    let property_definition_id = Uuid::from_u128(0xD5);
+    let option_id = Uuid::from_u128(0xD6);
+    let definition =
+        property_definition_for_event(property_definition_id, "Tags", DataType::Tag, true);
+    // Another definition's option already holds the id.
+    let other = property_option_for_event(
+        option_id,
+        Uuid::from_u128(0xD7),
+        0,
+        PropertyOptionValue::String("Lead".to_string()),
+        None,
+    );
+
+    let mut repo = MockPropertiesRepo::new();
+    expect_owned_modifiable_definition(&mut repo, definition);
+    repo.expect_create_property_option_with_id()
+        .return_once(|_, _, _, _, _| {
+            Box::pin(async { Ok(CreatePropertyOptionWithIdOutcome::IdTaken) })
+        });
+    repo.expect_get_property_option()
+        .return_once(move |_| Box::pin(async move { Ok(Some(other)) }));
+    let service = service_with_event_broker(repo, RecordingEventBroker::default());
+
+    let refused = service
+        .add_property_option_with_id(
+            &caller_user_id(),
+            None,
+            property_definition_id,
+            option_id,
+            &add_tag_request("Lead"),
+        )
+        .await;
+
+    assert!(matches!(refused, Err(PropertiesErr::Validation(_))));
+}
+
+#[tokio::test]
+async fn a_nil_option_id_is_refused() {
+    let service =
+        service_with_event_broker(MockPropertiesRepo::new(), RecordingEventBroker::default());
+    let refused = service
+        .add_property_option_with_id(
+            &caller_user_id(),
+            None,
+            Uuid::from_u128(0xD8),
+            Uuid::nil(),
+            &add_tag_request("Lead"),
+        )
+        .await;
+    assert!(matches!(refused, Err(PropertiesErr::Validation(_))));
 }

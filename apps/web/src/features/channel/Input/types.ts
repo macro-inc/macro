@@ -4,7 +4,8 @@ import type { EntityData } from '@entity';
 import type { PersistenceKey } from '@queries/persistence';
 import type { InputAttachmentTracker as Tracker } from './attachment-tracker';
 
-export type InputAttachmentKind = 'video' | 'image' | 'document';
+/** `audio` is only a recorded voice memo; picked audio files stay documents. */
+export type InputAttachmentKind = 'video' | 'image' | 'audio' | 'document';
 
 export type InputAttachmentData = {
   id: string;

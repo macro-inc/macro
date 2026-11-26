@@ -7,7 +7,7 @@ use graphql_soup::SoupEntityEdges;
 
 use crate::{
     context::{WorkFeedGraphqlContext, to_graphql_error},
-    inputs::{MarkWorkFeedItemsDoneInput, UndoWorkFeedItemsDoneInput},
+    inputs::{MAX_DONE_ITEMS, MarkWorkFeedItemsDoneInput, UndoWorkFeedItemsDoneInput},
     objects::GraphqlWorkFeedPatch,
 };
 
@@ -75,7 +75,7 @@ impl<E: SoupEntityEdges> WorkFeedMutationRoot<E> {
     ) -> async_graphql::Result<UndoWorkFeedItemsDonePayload<E>> {
         let user = require_authenticated_user(ctx)?;
         let context = ctx.data::<WorkFeedGraphqlContext>()?;
-        let receipt = DoneReceipt::decode(&input.undo_token)
+        let receipt = DoneReceipt::decode_at_most(&input.undo_token, MAX_DONE_ITEMS)
             .map_err(|_| async_graphql::Error::new("invalid work feed undo token"))?;
         let scope = input.scope.unwrap_or_default().into_scope();
         let viewer = context.viewer(user).await?;

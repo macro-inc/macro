@@ -3,8 +3,10 @@ use axum::{Json, extract::State};
 use entity_access::domain::models::OwnerTeamRole;
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::OptionalMacroUserTeamExtractorV2;
+use hosted_runtimes::domain::models::BillingInterval;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use serde::{Deserialize, Serialize};
+use teams::domain::model::BillingCadence;
 use utoipa::ToSchema;
 
 use super::{PaidPlan, StripeOperationError};
@@ -39,6 +41,10 @@ pub struct CreateCheckoutSessionV2Request {
     /// The plan to subscribe to. Defaults to Premium.
     #[serde(default)]
     pub plan: Option<PaidPlan>,
+    /// How often the subscription bills. Defaults to monthly. Premium is
+    /// sold monthly only; Business and Max are sold monthly or annually.
+    #[serde(default)]
+    pub interval: Option<BillingInterval>,
     /// Request the automatic, first-subscription 30-day Premium trial.
     #[serde(default)]
     pub onboarding_trial: bool,
@@ -104,6 +110,10 @@ pub async fn create_checkout_session<Eas: EntityAccessService>(
         .create(CheckoutRequest {
             user_id: user.authorization.user.macro_user_id.clone(),
             plan: req.plan.unwrap_or(PaidPlan::Premium),
+            interval: match req.interval.unwrap_or(BillingInterval::Month) {
+                BillingInterval::Month => BillingCadence::Month,
+                BillingInterval::Year => BillingCadence::Year,
+            },
             onboarding_trial: req.onboarding_trial,
             success_url: req.success_url,
             cancel_url: req.cancel_url,

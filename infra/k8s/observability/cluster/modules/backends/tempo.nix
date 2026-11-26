@@ -4,13 +4,23 @@
 # in S3. Two of each stateless part, so a rollout or a lost node keeps
 # ingest and queries up; one compactor, which only works in the background.
 #
-# The metrics generator turns spans into span metrics and service graphs
-# and writes them to Mimir, and keeps recent blocks for TraceQL metrics.
-# Retention, processors and their limits are the host's (lib.nix `host`).
+# The compactor and queriers hold whole traces, so a few large ones set their
+# memory: at 1Gi both ran out on dev traffic alone, and at 2.5Gi the
+# compactor still ran out within seconds of starting to compact, so blocks
+# piled up unmerged and past retention. The compactor also merges fewer traces
+# per output block than Tempo's default. It runs on the m7g.xlarge nodes'
+# headroom; a second compactor would double its reservation.
+#
+# The compactor waits a minute for its ring and then reads the whole
+# blocklist before /ready answers, which outlasted the chart's liveness
+# probe (60s delay, three misses), so its probe waits longer.
+#
+# The metrics generator only keeps recent blocks for TraceQL metrics: span
+# metrics and service graphs come from the sampler (../sampler), before it
+# drops anything. Retention and processors are the host's (lib.nix `host`).
 {
   charts,
   config,
-  lib,
   ...
 }:
 let
@@ -40,6 +50,15 @@ let
     resources = resources request limit;
   };
 
+  # The Go runtime collects harder as it nears this, before the kernel kills
+  # the container at `limit`.
+  goMemLimit = limit: [
+    {
+      name = "GOMEMLIMIT";
+      value = "${toString (limit * 85 / 100)}MiB";
+    }
+  ];
+
   volume = {
     enabled = true;
     size = "10Gi";
@@ -55,7 +74,11 @@ in
       values = {
         reportingEnabled = false;
         traces.otlp = {
-          grpc.enabled = true;
+          grpc = {
+            enabled = true;
+            # The default is 4 MiB, which a batch of 1024 spans can exceed.
+            receiverConfig.max_recv_msg_size_mib = 16;
+          };
           http.enabled = true;
         };
 
@@ -65,9 +88,19 @@ in
           podSecurityContext = shared.podSecurityContext 1000;
           securityContext = shared.containerSecurityContext;
           structuredConfig = {
+            # The chart's 4 MiB is less than a distributor may take in (below);
+            # it forwards what it took in to each ingester in one message.
+            server = {
+              grpc_server_max_recv_msg_size = 16777216;
+              grpc_server_max_send_msg_size = 16777216;
+            };
             inherit (host.tempo) query_frontend;
             ingester.max_block_duration = host.tempo.ingester.max_block_duration;
-            compactor.compaction.block_retention = host.tempo.compactor.compaction.block_retention;
+            compactor.compaction = {
+              inherit (host.tempo.compactor.compaction) block_retention;
+              # Tempo's default is 6M.
+              max_compaction_objects = 1000000;
+            };
           };
         };
         serviceAccount.automountServiceAccountToken = false;
@@ -101,34 +134,35 @@ in
               }
             ];
           };
-          resources = resources "1Gi" "2Gi";
+          extraEnv = goMemLimit 4096;
+          resources = resources "2Gi" "4Gi";
         };
         distributor = stateless "distributor" 2 "128Mi" "512Mi";
-        querier = stateless "querier" 2 "256Mi" "1Gi";
+        # Each search job can read a block's largest traces, so a querier runs
+        # few at once (the chart's 20 ran out of memory on one wide search).
+        querier = stateless "querier" 2 "1Gi" "3Gi" // {
+          config.max_concurrent_queries = 5;
+          extraEnv = goMemLimit 3072;
+        };
         queryFrontend = stateless "query-frontend" 2 "128Mi" "512Mi";
-        compactor = stateless "compactor" 1 "256Mi" "1Gi";
+        compactor = stateless "compactor" 1 "4Gi" "6Gi" // {
+          livenessProbe = {
+            httpGet = {
+              path = "/ready";
+              port = "http-metrics";
+            };
+            initialDelaySeconds = 180;
+            timeoutSeconds = 5;
+          };
+        };
 
-        metricsGenerator = stateless "metrics-generator" 2 "256Mi" "1Gi" // {
+        metricsGenerator = stateless "metrics-generator" 2 "256Mi" "2Gi" // {
           enabled = true;
+          extraEnv = goMemLimit 2048;
           kind = "StatefulSet";
           persistence = volume;
           config = {
-            # The host's processors with Tempo's default histogram buckets
-            # (the chart sets its own, which changes the `le` labels).
-            processor = lib.recursiveUpdate {
-              service_graphs.histogram_buckets = null;
-              span_metrics.histogram_buckets = null;
-            } host.tempo.metrics_generator.processor;
-            storage = {
-              remote_write = [
-                {
-                  url = shared.endpoints.mimir.push;
-                  send_exemplars = true;
-                }
-              ];
-              # Mimir runs without tenants.
-              remote_write_add_org_id_header = false;
-            };
+            inherit (host.tempo.metrics_generator) metrics_ingestion_time_range_slack processor;
           };
         };
       };
@@ -142,13 +176,6 @@ in
           {
             from = [ shared.nodeAlloy ];
             ports = shared.tcp [ 3200 ];
-          }
-        ];
-        # The metrics generator's remote write.
-        egress = [
-          {
-            to = [ (shared.pods { "app.kubernetes.io/name" = "mimir"; }) ];
-            ports = shared.tcp [ 8080 ];
           }
         ];
       };

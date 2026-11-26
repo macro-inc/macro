@@ -1,7 +1,7 @@
 import { whenSplitManagerReady } from '@app/signal/splitLayout';
 import { registerPushRegistrationLifecycle } from '@core/auth/push-registration-lifecycle';
 import { ENABLE_CALLKIT } from '@core/constant/featureFlags';
-import { useChannelsContext } from '@core/context/channels';
+import { loadedChannel, useChannelDirectory } from '@core/context/channels';
 import { isPlatform } from '@core/util/platform';
 import { useUserNames } from '@queries/auth';
 import { invalidateActiveCallQueries } from '@queries/call/call';
@@ -667,13 +667,13 @@ export async function syncNativeCallStateAfterLeave(
 
 function useCallKitNativeMetadataSync() {
   const nativeCall = useNativeCallState();
-  const channelsCtx = useChannelsContext();
+  const directory = useChannelDirectory();
 
   const channelMetadata = createMemo((): NativeCallChannelMetadata | null => {
     const channelId = nativeCall.activeChannelId();
     if (!channelId) return null;
 
-    const listedChannel = channelsCtx.channelsById()[channelId];
+    const listedChannel = loadedChannel(directory.lookup(channelId));
     if (listedChannel) {
       return {
         channelId,

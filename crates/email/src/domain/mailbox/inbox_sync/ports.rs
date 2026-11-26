@@ -1,6 +1,7 @@
 //! Capabilities for processing one delivered Gmail inbox update.
 
 use super::super::connection::ConnectionSourceError;
+use super::ThreadReindexQueue;
 use email_api_client::domain::models::EmailApiError;
 use futures::future::BoxFuture;
 use models_email::gmail::inbox_sync::InboxSyncPubsubMessage;
@@ -75,12 +76,15 @@ pub trait InboxSyncDeleteTransaction: InboxSyncTransaction {
 /// One atomic addition or removal of a message's provider labels.
 pub trait InboxSyncLabelTransaction: InboxSyncTransaction {
     /// Insert the provider labels, without staging an outbound Gmail write.
+    /// Returns the user labels the thread gained: none of its other messages,
+    /// drafts aside, carried them.
     fn add_labels(
         &mut self,
         link_id: Uuid,
         message_id: Uuid,
+        thread_id: Uuid,
         labels: &[String],
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
 
     /// Delete the provider labels from this message.
     fn remove_labels(
@@ -154,7 +158,7 @@ pub trait InboxSyncGmail: Send + Sync + 'static {
 }
 
 /// Primary and retry publication of inbox-sync operations.
-pub trait InboxSyncQueue: Send + Sync + 'static {
+pub trait InboxSyncQueue: ThreadReindexQueue {
     /// The original queue cause.
     type Err: ConnectionSourceError;
     /// Publish follow-up work to the primary queue.

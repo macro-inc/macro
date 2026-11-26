@@ -2,7 +2,7 @@
 
 use super::properties_pg_repo::PropertiesPgRepo;
 use super::property_definition_queries;
-use crate::domain::model::PropertyDefinitionOwner;
+use crate::domain::model::{CreatePropertyDefinitionOutcome, PropertyDefinitionOwner};
 use crate::domain::ports::PropertiesRepo;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -11,11 +11,11 @@ use models_properties::{DataType, EntityType};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
-fn user_1() -> MacroUserIdStr<'static> {
+pub(super) fn user_1() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str("macro|user1@test.com").unwrap()
 }
 
-fn user_2() -> MacroUserIdStr<'static> {
+pub(super) fn user_2() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str("macro|user2@test.com").unwrap()
 }
 
@@ -194,6 +194,78 @@ async fn get_property_definition_with_owner_checks_ownership(
     Ok(())
 }
 
+/// Both listings order names by their Rust lowercase, then by id, so a name
+/// with a leading space, underscore or emoji, and each of two names equal but
+/// for case, sits in the same place in each. A non-C database collation skips
+/// those characters when it sorts.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn listings_order_names_alike(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool);
+    let user = user_3();
+    for name in [
+        "Zeta",
+        " leading space",
+        "_under",
+        "alpha",
+        "\u{1F680} launch",
+        "Mixed",
+        "same",
+        "Same",
+    ] {
+        repo.create_property_definition(
+            PropertyDefinitionOwner::User(&user),
+            name,
+            DataType::String,
+            false,
+            None,
+            Vec::new(),
+        )
+        .await?
+        .into_created()
+        .expect("created");
+    }
+
+    let plain: Vec<(String, Uuid)> = repo
+        .list_property_definitions(None, Some(&user), false)
+        .await?
+        .into_iter()
+        .map(|d| (d.display_name, d.id))
+        .collect();
+    let with_options: Vec<(String, Uuid)> = repo
+        .list_property_definitions_with_options(None, Some(&user), false)
+        .await?
+        .into_iter()
+        .map(|d| (d.definition.display_name, d.definition.id))
+        .collect();
+    assert_eq!(plain, with_options);
+
+    // Names equal but for case follow their ids.
+    let mut same: Vec<&(String, Uuid)> = plain
+        .iter()
+        .filter(|(name, _)| name.eq_ignore_ascii_case("same"))
+        .collect();
+    assert_eq!(same.len(), 2);
+    same.sort_by_key(|(_, id)| *id);
+    let ties: Vec<&str> = same.iter().map(|(name, _)| name.as_str()).collect();
+    let names: Vec<&str> = plain.iter().map(|(name, _)| name.as_str()).collect();
+
+    let expected = [
+        " leading space",
+        "_under",
+        "alpha",
+        "Mixed",
+        ties[0],
+        ties[1],
+        "Zeta",
+        "\u{1F680} launch",
+    ];
+    assert_eq!(names, expected);
+    Ok(())
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../fixtures", scripts("properties"))
@@ -280,7 +352,9 @@ async fn create_property_definition_simple(pool: Pool<Postgres>) -> anyhow::Resu
             None,
             Vec::new(),
         )
-        .await?;
+        .await?
+        .into_created()
+        .expect("created");
 
     assert_eq!(property.display_name, "New Test Property");
     assert_eq!(property.data_type, DataType::String);
@@ -306,7 +380,9 @@ async fn create_property_definition_user_owned(pool: Pool<Postgres>) -> anyhow::
             None,
             Vec::new(),
         )
-        .await?;
+        .await?
+        .into_created()
+        .expect("created");
 
     assert_eq!(property.display_name, "My User Property");
     assert_eq!(property.data_type, DataType::Number);
@@ -333,9 +409,12 @@ async fn create_property_definition_duplicate_name_fails(
             None,
             Vec::new(),
         )
-        .await;
+        .await?;
 
-    assert!(result.is_err());
+    assert!(matches!(
+        result,
+        CreatePropertyDefinitionOutcome::DuplicateName
+    ));
 
     Ok(())
 }
@@ -361,7 +440,9 @@ async fn create_property_definition_with_options(pool: Pool<Postgres>) -> anyhow
             None,
             options,
         )
-        .await?;
+        .await?
+        .into_created()
+        .expect("created");
 
     let option_count: i64 = sqlx::query_scalar!(
         r#"SELECT COUNT(*) as "count!" FROM property_options WHERE property_definition_id = $1"#,
@@ -390,7 +471,9 @@ async fn create_property_definition_specific_entity(pool: Pool<Postgres>) -> any
             Some(EntityType::Document),
             Vec::new(),
         )
-        .await?;
+        .await?
+        .into_created()
+        .expect("created");
 
     assert_eq!(property.specific_entity_type, Some(EntityType::Document));
 

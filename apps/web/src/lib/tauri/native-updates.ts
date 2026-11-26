@@ -1,19 +1,41 @@
+import type { Report as NativeUpdateReport } from '@app/observability/generated/native-update';
+import { reportNativeUpdate } from '@app/observability/native-update';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
 import { hasAutomaticReloadHolds } from '@core/util/reloadForNewerBuild';
+import { Telemetry } from '@macro-inc/observability';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { createSignal, onCleanup, onMount } from 'solid-js';
 import { match } from 'ts-pattern';
+import type { Snapshot, Status } from './generated/native-update-status';
 import { createNativeUpdatePreparation } from './native-update-preparation';
+import { stageDeployedBundle } from './stage-bundle';
 
-export type NativeUpdateStatus =
-  | { status: 'Disabled' | 'Idle' | 'Checking' | 'Installing' }
-  | { status: 'Downloading' | 'Ready'; data: { version: string } }
-  | { status: 'Error'; data: { message: string } };
+/**
+ * The host's `Snapshot`. Binaries from before failed installs were reported
+ * send the status alone, without `failedInstallVersion`.
+ */
+export type NativeUpdateStatus = Status &
+  Partial<Pick<Snapshot, 'failedInstallVersion'>>;
+
+/**
+ * True while the previous launch's failed install is being tried again: the
+ * update is downloading again or is ready. A check alone may find nothing to
+ * install, so it doesn't count.
+ */
+export function retryingFailedInstall(status: NativeUpdateStatus): boolean {
+  if (!status.failedInstallVersion) return false;
+  return status.status === 'Downloading' || status.status === 'Ready';
+}
 
 export function nativeUpdateDescription(status: NativeUpdateStatus): string {
+  if (retryingFailedInstall(status)) {
+    return status.status === 'Ready'
+      ? "The last app update couldn't be installed. Restart to try again."
+      : "The last app update couldn't be installed. Downloading it again…";
+  }
   return match(status)
     .with(
       { status: 'Disabled' },
@@ -34,6 +56,8 @@ export function nativeUpdateDescription(status: NativeUpdateStatus): string {
     .exhaustive();
 }
 
+const TAKE_REPORTS = 'take_native_update_reports';
+
 /** Desktop lifecycle integration, scoped to the Tauri provider. */
 export function createNativeUpdates(flush: () => Promise<void>) {
   const preparation = createNativeUpdatePreparation({
@@ -43,15 +67,23 @@ export function createNativeUpdates(flush: () => Promise<void>) {
   const [preparing, setPreparing] = createSignal(false);
   const [status, setStatus] = createSignal<NativeUpdateStatus>({
     status: 'Disabled',
+    failedInstallVersion: null,
   });
   let disposed = false;
   let unsubscribe = () => {};
+  let unsubscribeReports = () => {};
 
   async function restart() {
     if (status().status !== 'Ready' || preparing()) return;
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
       setPreparing(true);
+      // Fetch the deployed web bundle while saves finish, so the new version
+      // starts on it instead of asking for another restart. Work that blocks
+      // the restart would only leave a download behind.
+      const staging = hasAutomaticReloadHolds()
+        ? undefined
+        : stageDeployedBundle();
       await Promise.race([
         preparation.prepare(),
         new Promise<never>((_, reject) => {
@@ -66,6 +98,10 @@ export function createNativeUpdates(flush: () => Promise<void>) {
           );
         }),
       ]);
+      await staging;
+      // A call, upload or import may have started while the bundle downloaded.
+      if (hasAutomaticReloadHolds())
+        throw new Error('Finish your current work before restarting Macro.');
       await invoke('restart_native_update');
     } catch (error) {
       setPreparing(false);
@@ -110,12 +146,54 @@ export function createNativeUpdates(flush: () => Promise<void>) {
     }
   }
 
+  /** Sends the check and install outcomes the host has collected. */
+  async function drainReports() {
+    let reports: NativeUpdateReport[];
+    try {
+      reports = await invoke<NativeUpdateReport[]>(TAKE_REPORTS);
+    } catch (error) {
+      // Older binaries do not report update outcomes.
+      if (error !== `Command ${TAKE_REPORTS} not found`)
+        Telemetry.error(error, { surface: 'native-updates' });
+      return;
+    }
+    // The host has already let go of these; one bad report must not drop the rest.
+    for (const report of reports) {
+      try {
+        reportNativeUpdate(report);
+      } catch (error) {
+        Telemetry.error(error, { surface: 'native-updates' });
+      }
+    }
+  }
+
+  async function initializeReports() {
+    try {
+      const stop = await listen('native-update-report', () =>
+        fireAndForget(drainReports(), 'native-updates')
+      );
+      if (disposed) {
+        fireAndForget(stop(), 'native-updates');
+        return;
+      }
+      unsubscribeReports = () => fireAndForget(stop(), 'native-updates');
+    } catch (error) {
+      Telemetry.error(error, { surface: 'native-updates' });
+      return;
+    }
+    // Reports from before this document listened, such as the last install.
+    await drainReports();
+  }
+
   onMount(() => {
-    if (isPlatform('desktop')) fireAndForget(initialize(), 'native-updates');
+    if (!isPlatform('desktop')) return;
+    fireAndForget(initialize(), 'native-updates');
+    fireAndForget(initializeReports(), 'native-updates');
   });
   onCleanup(() => {
     disposed = true;
     unsubscribe();
+    unsubscribeReports();
   });
   return {
     status,

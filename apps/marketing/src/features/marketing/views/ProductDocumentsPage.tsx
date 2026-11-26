@@ -1,14 +1,11 @@
-import { TimelineArtworkBand } from '../../../app/routes/RouteDocuments';
 import { setPageSeo } from '../../../app/utils/utilSeo';
 import { FeatureComparisons } from '../components/comparisons/FeatureComparisons';
-import { DemoInteractionBoundary } from '../components/DemoInteractionBoundary';
-import { DocumentProjectDemo } from '../components/documents/DocumentProjectDemo';
-import { DocumentReferencesDemo } from '../components/documents/DocumentReferencesDemo';
 import { FeaturePageFaq, FeaturePageSection } from '../components/FeaturePage';
+import { FeaturePhoneScreens } from '../components/FeatureScreenshot';
 import { HomepageClosing } from '../components/HomepageClosing';
-import HomepageCollaborativeDoc from '../components/HomepageCollaborativeDoc';
 import { ProductHero, ProductPage } from '../components/product/ProductPage';
 import { documentComparisons } from '../core/feature-comparisons';
+import { featureScreens, phoneScreens } from '../core/feature-screens';
 
 const documentsFaq = [
   {
@@ -29,7 +26,7 @@ const documentsFaq = [
     q: 'Can my team and agents edit together?',
     a: (
       <>
-        Yes. People and agents can edit the same document in real time, and
+        Yes. People and agents can edit the same document in real time and
         teammates can comment on specific text. Ask an agent to update the
         document while you keep writing. See <a href="/agents">Macro Agents</a>.
       </>
@@ -41,7 +38,7 @@ const documentsFaq = [
   },
   {
     q: 'Can I share a document outside my team?',
-    a: 'Yes. Share by email address, or turn on a public link so anyone with the link can view a preview without an account.',
+    a: 'Yes. Share by email address or turn on a public link so anyone with the link can view a preview without an account.',
   },
   {
     q: 'Does mentioning someone notify them?',
@@ -66,7 +63,7 @@ export function RouteDocuments() {
   setPageSeo({
     title: 'Macro Docs | Write With Your Team and Your Agents',
     description:
-      'The local-first simplicity of Markdown, with mentioning and live collaboration with agents. Edit offline and sync your changes when you reconnect.',
+      'The local-first simplicity of Markdown with mentioning and live collaboration with agents. Edit offline and sync your changes when you reconnect.',
     path: '/documents',
   });
   return (
@@ -75,49 +72,38 @@ export function RouteDocuments() {
         <ProductHero
           product="Docs"
           title="High speed agentic documents."
-          description="Version-controlled markdown, @linked to your work. Edit alongside agents with live cursors."
+          description="Docs gives you collaborative plain markdown with version history, multiplayer cursors, and live AI agent editing."
           cta="documents_hero_get_started"
           tutorial="docs"
         />
         <FeaturePageSection
           id="document-agents"
-          demo={{ tone: 'documents', glassFrame: false }}
           title="Macro Agents get a live cursor in the doc."
-          description="Agents edit the document live, at the same time as you and your team, as opposed to editing the markdown file and giving you a diff. If you go offline and come back on, your changes sync to your peers and conflict resolution happens automatically."
-        >
-          <DemoInteractionBoundary
-            class="feature-page-visual doc-story-page-fade"
-            label="Live document collaboration"
-            render={() => <DocumentProjectDemo teamEditing />}
-          />
-        </FeaturePageSection>
+          description="Macro Agents edit right beside you with a live cursor instead of making you review markdown diffs. If you go offline, CRDT sync merges everyone’s edits automatically when you reconnect."
+          screen={featureScreens['document-agents']}
+        />
         <FeaturePageSection
           id="document-links"
-          demo={{ tone: 'documents', glassFrame: false }}
           title="@mention anything in your workspace."
-          description="@mention a customer email from Macro Mail, a task from Macro Tasks, a call, or another doc. Click any of them and it opens right next to the doc, in a split screen."
-        >
-          <HomepageCollaborativeDoc showHistory={false} />
-        </FeaturePageSection>
+          description="Type @ to mention Macro Mail, Macro Tasks, Macro Calls, or another doc. Click any pill and it opens side by side in split screen."
+          screen={featureScreens['document-links']}
+        />
         <FeaturePageSection
           id="document-organization"
-          demo={{ tone: 'documents', glassFrame: false }}
           title="Linked both ways."
-          description="@mention a doc in a message and both know about each other. The email, the tasks, and the call you mentioned all know about this doc too, so your workspace becomes a web of context you can navigate in either direction."
-        >
-          <DemoInteractionBoundary
-            class="feature-page-visual"
-            label="Document references"
-            render={() => <DocumentReferencesDemo />}
-          />
-        </FeaturePageSection>
+          description="Every @mention works both ways: the emails, tasks, and calls you reference automatically link back to the doc so nothing gets orphaned."
+          screen={featureScreens['document-organization']}
+        />
         <FeaturePageSection
           id="document-version-control"
           title="Version control for every edit."
-          description="Track changes by people and agents over time, and scrub back through earlier versions. Docs are just plain markdown, so you can export to a markdown file and import one just as easily."
-        >
-          <TimelineArtworkBand topGap="40px" />
-        </FeaturePageSection>
+          description="Track changes by people and agents over time and scrub back through earlier versions. Docs are just plain markdown so you can export to a markdown file and import one just as easily."
+          screen={featureScreens['document-version-control']}
+        />
+        <FeaturePhoneScreens
+          screens={phoneScreens['documents']}
+          product="Docs"
+        />
         <section
           id="documents-comparison"
           aria-label="Compare Macro and Notion"

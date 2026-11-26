@@ -8,8 +8,14 @@ const mocks = vi.hoisted(() => ({
   channel: (): ChannelEntity | undefined => undefined,
 }));
 
+// The agent screen's DM button has its own tests (agent-screen/dm-screen-button).
+vi.mock('@app/features/agent-screen/dm-screen-button', () => ({
+  DmScreenButton: () => null,
+  useDmScreenHarnessId: () => () => undefined,
+}));
 vi.mock('@app/components/view-shell', () => ({
   ViewShell: { TopBar: mocks.pass },
+  useViewTabHotkeys: () => {},
 }));
 vi.mock('@app/features/chat/ChatWithAgentButton', () => ({
   ChatWithAgentButton: (props: {
@@ -103,6 +109,7 @@ vi.mock('@app/components/priority-collapse/createPriorityCollapser', () => ({
 }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitDisplayName: () => {},
+  useSplitPanel: () => undefined,
   useSplitPanelOrThrow: () => ({ splitHotkeyScope: 'test-scope' }),
 }));
 vi.mock('@core/constant/allBlocks', () => ({
@@ -110,14 +117,14 @@ vi.mock('@core/constant/allBlocks', () => ({
   resolveBlockAlias: (type: string) => type,
 }));
 vi.mock('@core/context/channels', () => ({
-  useChannel: () => () => ({ agent_dm: false }),
+  useChannel: () => () => ({
+    id: 'channel-1',
+    name: 'Design',
+    channelType: 'private',
+    agentDm: null,
+  }),
   useChannelName: () => () => 'Design',
   useChannelType: () => () => 'private',
-  useChannelsContext: () => ({
-    channelsById: () => ({
-      'channel-1': { name: 'Design', channel_type: 'private' },
-    }),
-  }),
 }));
 vi.mock('@queries/channel/channel-participants', () => ({
   useChannelParticipantsQuery: () => ({ isSuccess: false, data: undefined }),

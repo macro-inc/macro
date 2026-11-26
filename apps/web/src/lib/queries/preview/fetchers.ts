@@ -3,7 +3,6 @@ import {
   fetchCrmRecordPreviews,
 } from '@app/features/crm/preview-adapter';
 import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
-import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { itemToSafeName } from '@core/constant/allBlocks';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
 import type { ResultError } from '@core/util/result';
@@ -15,9 +14,11 @@ import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { entityMessagesClient } from '@service-storage/messages';
 import { formatDocumentName } from '@service-storage/util/filename';
+import { ResultAsync } from 'neverthrow';
 import { fetchAgentSessionMentionPreviews } from '../agent-session/mention-fetchers';
 import { representativeThreadMessage } from '../email/thread-subject';
 import { normalizeMessageSender } from '../messages/message-sender';
+import { fetchGraphqlSoupEntities } from '../soup/graphql/fetch-page';
 import { fetchCachedDatabaseDetail } from '../storage/databases';
 import { failedReadAccess } from './failed-read';
 import type { ItemEntity, MessageContext, PreviewItem } from './types';
@@ -254,14 +255,13 @@ async function fetchProjectPreviews(
 async function fetchInitiativePreviews(
   initiativeIds: string[]
 ): Promise<PreviewItem[]> {
-  const result = await storageServiceClient.getSoupItems({
-    params: {},
-    body: {
-      ...QUERY_FILTERS_BASE,
-      initiative_filters: { initiative_ids: initiativeIds },
-      limit: initiativeIds.length,
-    },
-  });
+  const result = await ResultAsync.fromPromise(
+    fetchGraphqlSoupEntities(
+      initiativeIds.map((entityId) => ({ entityType: 'INITIATIVE', entityId })),
+      { requestPolicy: 'network-only' }
+    ),
+    (error) => error
+  );
 
   if (result.isErr()) {
     console.error('Failed to fetch project previews');
@@ -432,14 +432,30 @@ async function fetchFormPreviews(ids: string[]): Promise<PreviewItem[]> {
   );
 }
 
-/** A routine previews from its own read; one that is gone reads as deleted. */
+/**
+ * A routine previews from its own read; one that is gone reads as deleted.
+ * The server reads a routine only to its owner, so anyone else previews it
+ * from its shared template, and without one it stays unavailable.
+ */
 async function fetchRoutinePreviews(ids: string[]): Promise<PreviewItem[]> {
   return Promise.all(
     ids.map(async (id): Promise<PreviewItem> => {
       const base = { id, type: 'routine', loading: false } as const;
       const routine = await scheduledActionClient.getRoutine(id);
-      if (routine.isErr())
-        return { ...base, access: failedReadAccess(routine.error) };
+      if (routine.isErr()) {
+        const template = await scheduledActionClient.getTemplate(id);
+        if (template.isErr())
+          return { ...base, access: failedReadAccess(routine.error) };
+        return {
+          ...base,
+          access: 'access',
+          rawName: template.value.name,
+          name: template.value.name,
+          appearance: readEntityAppearance(template.value.appearance),
+          owner: template.value.author,
+          updatedAt: template.value.updated_at,
+        };
+      }
       return {
         ...base,
         access: 'access',

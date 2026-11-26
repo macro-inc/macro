@@ -1,8 +1,10 @@
 import { SlackImport } from '@app/features/slack-import/slack-import';
+import { toast } from '@core/component/Toast/Toast';
+import { ConnectorIcon } from '@core/connectors/ConnectorIcon';
+import { createConnectAction } from '@core/connectors/connect-action';
 import { ENABLE_EMAIL } from '@core/constant/featureFlags';
 import { useEmailLinks } from '@core/email-link';
 import { OutlookBetaBadge } from '@core/email-link/OutlookBetaBadge';
-import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { openExternalUrl } from '@core/util/url';
 import ClaudeIcon from '@icon/claude-color.svg';
@@ -10,6 +12,10 @@ import GmailIcon from '@icon/gmail-color.svg';
 import OutlookIcon from '@icon/outlook-color.svg';
 import DesktopIcon from '@icon/system/regular/desktop.svg';
 import { useOutlookAvailable } from '@queries/auth/outlook-link';
+import {
+  GITHUB_CONNECTOR_KEY,
+  useRemoveConnectorMutation,
+} from '@queries/connectors';
 import { useUserTeamsQuery } from '@queries/team/teams';
 import type { Team as TeamSummary } from '@service-auth/generated/schemas/team';
 import {
@@ -24,7 +30,7 @@ import {
 } from '../../granola-connect/core/granola';
 import { createGranolaConnection } from '../../granola-connect/primitives/create-granola-connection';
 import { useConnectInbox } from '../Email';
-import { GITHUB_APP_INSTALL_URL, useGithubConnection } from '../GitHub';
+import { GITHUB_APP_INSTALL_URL, useGithubAccountLink } from '../GitHub';
 import { ConnectAction } from '../integration-ui';
 import { useTeamViewer } from '../Team';
 import { ConnectionRowActions } from './connection-more';
@@ -35,7 +41,7 @@ import {
   type ConnectionsModel,
   CURATED_AI,
   type CuratedAiProvider,
-  capabilitiesFor,
+  capabilityFor,
 } from './model';
 import { providerIcon } from './provider-meta';
 import { useConnectionsView } from './view-state';
@@ -47,7 +53,7 @@ export type IntegrationItemHosts = {
   onOpenLocalAgents?: () => void;
 };
 
-function capabilityStatus(status: CapabilityStatus): IntegrationStatus {
+function integrationStatus(status: CapabilityStatus): IntegrationStatus {
   return match(status)
     .with('connected', () => 'connected' as const)
     .with('off', () => 'disconnected' as const)
@@ -60,8 +66,9 @@ function agentToolStatus(
   model: Accessor<ConnectionsModel>,
   provider: CuratedAiProvider
 ): IntegrationStatus {
-  const capability = capabilitiesFor(model(), provider)[0];
-  return capabilityStatus(capability?.status ?? 'not-connected');
+  return integrationStatus(
+    capabilityFor(model(), provider)?.status ?? 'not-connected'
+  );
 }
 
 function emailItem(
@@ -163,26 +170,62 @@ export function useEmailItems(
 
 /**
  * One GitHub row for the account link (pull requests, reviews, repositories)
- * and the agent tools, which are managed from its menu.
+ * and the agent tools, which are managed from its menu. Whether GitHub is
+ * connected is the connectors list's answer: for someone on Macro Connect a
+ * linked account does not count. The link supplies only the username and
+ * the GitHub App setup.
  */
 export function useGithubItem(
   model: Accessor<ConnectionsModel>
 ): IntegrationItem {
-  const github = useGithubConnection();
+  const link = useGithubAccountLink();
   const view = useConnectionsView();
-  const agentStatus = () => agentToolStatus(model, 'github');
+  const remove = useRemoveConnectorMutation();
+  const capability = () => capabilityFor(model(), 'github');
+  const status = () => agentToolStatus(model, 'github');
+  const { connect, busy } = createConnectAction({
+    key: () => GITHUB_CONNECTOR_KEY,
+    name: () => 'GitHub',
+  });
+  const startConnect = () => fireAndForget(connect(), 'github-settings');
+  const disconnect = () =>
+    remove.mutate(
+      { key: GITHUB_CONNECTOR_KEY },
+      {
+        onSuccess: () => toast.success('Disconnected GitHub from Macro'),
+        onError: () => toast.failure('Failed to disconnect GitHub'),
+      }
+    );
 
   function Actions() {
     return (
-      <Switch>
-        <Match when={github.status() === 'linked'}>
+      <Switch
+        fallback={
+          <ConnectAction
+            label="Connect"
+            ariaLabel="Connect GitHub"
+            onClick={startConnect}
+            loading={busy()}
+          />
+        }
+      >
+        <Match
+          when={
+            capability()?.status === 'connected' ||
+            capability()?.status === 'off'
+          }
+        >
           <ConnectionRowActions
             items={[
-              {
-                label: 'Configure GitHub App',
-                icon: 'external',
-                onSelect: () => openExternalUrl(GITHUB_APP_INSTALL_URL),
-              },
+              ...(link.linked()
+                ? [
+                    {
+                      label: 'Configure GitHub App',
+                      icon: 'external' as const,
+                      onSelect: () => openExternalUrl(GITHUB_APP_INSTALL_URL),
+                    },
+                  ]
+                : []),
               {
                 label: 'Agent tools',
                 icon: 'settings',
@@ -192,26 +235,18 @@ export function useGithubItem(
                 label: 'Disconnect',
                 icon: 'disconnect',
                 danger: true,
-                disabled: github.disconnecting(),
-                onSelect: () =>
-                  fireAndForget(github.disconnect(), 'github-settings'),
+                disabled: remove.isPending,
+                onSelect: disconnect,
               },
             ]}
           />
         </Match>
-        <Match when={github.status() === 'reauthentication_required'}>
+        <Match when={capability()?.status === 'action-required'}>
           <ConnectAction
             label="Reconnect"
-            onClick={() => fireAndForget(github.reconnect(), 'github-settings')}
-            disabled={github.reconnecting()}
-          />
-        </Match>
-        <Match when={!github.loading()}>
-          <ConnectAction
-            label="Connect"
-            ariaLabel="Connect GitHub"
-            onClick={() => fireAndForget(github.connect(), 'github-settings')}
-            disabled={github.connecting()}
+            ariaLabel="Reconnect GitHub"
+            onClick={startConnect}
+            loading={busy()}
           />
         </Match>
       </Switch>
@@ -226,15 +261,15 @@ export function useGithubItem(
     get description() {
       const summary =
         'Pull request reviews and status in Macro, and repository access for agents.';
-      const username = github.username();
+      const username = link.username();
       return username ? `@${username} · ${summary}` : summary;
     },
     categories: ['Code', 'Agent tools'],
     get status() {
-      return github.connectionState() ?? agentStatus();
+      return status();
     },
     get statusLabel() {
-      return github.connectionState() === 'attention'
+      return capability()?.status === 'action-required'
         ? 'Reconnect required'
         : undefined;
     },
@@ -242,27 +277,38 @@ export function useGithubItem(
   };
 }
 
-/** Slack export import for team admins, else the agent-led channel import. */
-function SlackImportAction() {
+/**
+ * Slack export import for team admins, else the agent-led channel import
+ * when it is `offered`.
+ */
+function SlackImportAction(props: { offered: boolean }) {
   const teams = useUserTeamsQuery();
   const team = () => (teams.isSuccess ? teams.data[0] : undefined);
   return (
     <Show
       when={team()}
       keyed
-      fallback={<ImportAction appSlug="slack" name="Slack" />}
+      fallback={<OfferedSlackImport offered={props.offered} />}
     >
-      {(found) => <TeamSlackImport team={found} />}
+      {(found) => <TeamSlackImport team={found} offered={props.offered} />}
     </Show>
   );
 }
 
-function TeamSlackImport(props: { team: TeamSummary }) {
+function OfferedSlackImport(props: { offered: boolean }) {
+  return (
+    <Show when={props.offered}>
+      <ImportAction appSlug="slack" name="Slack" />
+    </Show>
+  );
+}
+
+function TeamSlackImport(props: { team: TeamSummary; offered: boolean }) {
   const { isAdminOrOwner } = useTeamViewer(() => props.team);
   return (
     <Show
       when={isAdminOrOwner()}
-      fallback={<ImportAction appSlug="slack" name="Slack" />}
+      fallback={<OfferedSlackImport offered={props.offered} />}
     >
       <SlackImport
         teamId={props.team.id}
@@ -298,15 +344,24 @@ export function useAgentProviderItem(
   const view = useConnectionsView();
   const name = CURATED_AI[provider].title;
   const status = () => agentToolStatus(model, provider);
+  // Before connecting, Import connects first; after, the connection must
+  // provide what the import reads.
+  const importOffered = () =>
+    status() === 'available' ||
+    (capabilityFor(model(), provider)?.importAvailable ?? false);
 
   function Actions() {
     return (
       <>
         <Show
           when={provider === 'slack'}
-          fallback={<ImportAction appSlug={provider} name={name} />}
+          fallback={
+            <Show when={importOffered()}>
+              <ImportAction appSlug={provider} name={name} />
+            </Show>
+          }
         >
-          <SlackImportAction />
+          <SlackImportAction offered={importOffered()} />
         </Show>
         <ConnectAction
           label={status() === 'available' ? 'Connect' : 'Manage'}
@@ -355,7 +410,12 @@ export function useGranolaItem(): IntegrationItem {
             loading={granola.connecting()}
           />
         </Match>
-        <Match when={granola.status() === 'available'}>
+        <Match
+          when={
+            granola.status() === 'available' ||
+            granola.status() === 'needs-reauth'
+          }
+        >
           <ConnectAction
             label="Connect"
             ariaLabel="Connect Granola"
@@ -372,7 +432,7 @@ export function useGranolaItem(): IntegrationItem {
     name: 'Granola',
     kind: 'native',
     icon: (
-      <PipedreamConnectorIcon
+      <ConnectorIcon
         appSlug={GRANOLA_APP_SLUG}
         iconUrl={GRANOLA_ICON_URL}
         class="size-5"
@@ -385,10 +445,17 @@ export function useGranolaItem(): IntegrationItem {
       const status = granola.status();
       if (status === 'connected') return 'connected';
       if (status === 'disabled') return 'disconnected';
+      if (status === 'needs-reauth') return 'attention';
       return 'available';
     },
     get statusLabel() {
-      return granola.status() === 'disabled' ? 'Paused' : undefined;
+      return match(granola.status())
+        .with('disabled', () => 'Paused')
+        .with('needs-reauth', () => 'Reconnect required')
+        .with('connected', () =>
+          granola.syncs() ? undefined : "Connected · Meetings don't sync"
+        )
+        .otherwise(() => undefined);
     },
     Actions,
   };

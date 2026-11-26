@@ -92,6 +92,15 @@ function decodeAction(
       kind: 'responded' as const,
     }))
     .with(
+      { __typename: 'GraphqlActivityTimeLogged' },
+      ({ minutes, entryDate, source }) => ({
+        kind: 'time-logged' as const,
+        minutes,
+        entryDate,
+        source: source === 'TIMER' ? ('timer' as const) : ('manual' as const),
+      })
+    )
+    .with(
       { __typename: 'GraphqlActivityPropertyChanged' },
       ({ property, from, to }) => ({
         kind: 'property-changed' as const,
@@ -112,6 +121,21 @@ function decodeAction(
       ({ participant }) => ({
         kind: 'participant-removed' as const,
         participant,
+      })
+    )
+    .with(
+      { __typename: 'GraphqlActivityRecordMerged' },
+      ({ merged, dropped }) => ({
+        kind: 'record-merged' as const,
+        merged: merged.map((record) => ({
+          id: record.id,
+          name: record.name ?? null,
+        })),
+        dropped: dropped.map((value) => ({
+          property: value.property,
+          record: value.record,
+          value: value.value as unknown,
+        })),
       })
     )
     .with({ __typename: 'GraphqlActivityUnknownAction' }, ({ tag }) => ({

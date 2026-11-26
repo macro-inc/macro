@@ -50,6 +50,7 @@ fn content(key: &str) -> SuggestionContent {
         summary: "Three arrived.".to_owned(),
         importance: 50,
         categories: Vec::new(),
+        topic: None,
         about: Vec::new(),
         prompt: Some("Compare them.".to_owned()),
         sends: None,
