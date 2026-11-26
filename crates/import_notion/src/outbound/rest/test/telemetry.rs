@@ -329,6 +329,52 @@ async fn an_unauthorized_answer_is_final_after_one_attempt() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn an_ok_answer_that_does_not_decode_fails_the_request_span() {
+    let (captured, _guard) = capture();
+    let client = client(vec![answer(
+        StatusCode::OK,
+        &format!(r#"{{"object":"page_markdown","markdown":"{NOTION_WORDS} {PAGE_DASHED}"#),
+    )]);
+
+    let error = client.page_markdown(&page()).await.unwrap_err();
+
+    assert!(matches!(error, NotionError::Decode(_)));
+    assert_eq!(
+        captured.requests(),
+        vec![fields(&[
+            ("endpoint", "page_markdown"),
+            ("method", "GET"),
+            ("attempts", "1"),
+            ("status", "200"),
+            ("outcome", "not_retryable"),
+            ("error_class", "decode"),
+        ])]
+    );
+    assert_eq!(
+        captured.failures(),
+        vec![fields(&[
+            ("message", "Notion request failed"),
+            ("endpoint", "page_markdown"),
+            ("attempts", "1"),
+            ("status", "200"),
+            ("outcome", "not_retryable"),
+            ("error_class", "decode"),
+        ])]
+    );
+    assert_eq!(
+        captured.errors(),
+        vec![(
+            Some("notion.request"),
+            fields(&[("error", "unexpected Notion response")])
+        )]
+    );
+    for value in captured.every_value() {
+        assert!(!value.contains(NOTION_WORDS), "body leaked in {value:?}");
+        assert!(!value.contains(PAGE_DASHED), "body leaked in {value:?}");
+    }
+}
+
+#[tokio::test(start_paused = true)]
 async fn no_span_or_log_carries_a_notion_id_url_or_notions_words() {
     let (captured, _guard) = capture();
     let words = format!(

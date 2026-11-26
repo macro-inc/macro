@@ -131,11 +131,13 @@ pub enum NotionEndpoint {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::IntoStaticStr, strum::Display)]
 #[strum(serialize_all = "snake_case")]
 pub enum RequestOutcome {
-    /// Notion answered successfully, after `attempts` tries.
+    /// Notion answered successfully, after `attempts` tries, with a body
+    /// that decoded.
     Succeeded,
     /// Every attempt hit a rate limit or a transient failure.
     Exhausted,
-    /// The failure is final, so it was not retried.
+    /// The failure is final, so it was not retried; this includes a
+    /// successful answer whose body did not decode.
     NotRetryable,
 }
 
@@ -300,14 +302,9 @@ impl<Transport: NotionTransport> NotionRestClient<Transport> {
         Self { transport, pacer }
     }
 
-    async fn request<Body: DeserializeOwned>(&self, read: NotionRead) -> Result<Body, NotionError> {
-        let text = self.send(&read).await?;
-        serde_json::from_str(&text)
-            .map_err(|error| NotionError::Decode(format!("{}: {error}", read.endpoint())))
-    }
-
     // `err` records the content-free `Display` as an ERROR event, which marks
-    // the exported span as failed.
+    // the exported span as failed. Decoding happens inside the span, so a 200
+    // whose body is not the expected shape is a failed request too.
     #[tracing::instrument(
         name = "notion.request",
         skip_all,
@@ -322,8 +319,14 @@ impl<Transport: NotionTransport> NotionRestClient<Transport> {
             transport_class = tracing::field::Empty,
         )
     )]
-    async fn send(&self, read: &NotionRead) -> Result<String, NotionError> {
-        let (result, attempts) = self.attempt(read).await;
+    async fn request<Body: DeserializeOwned>(&self, read: NotionRead) -> Result<Body, NotionError> {
+        let (sent, mut attempts) = self.attempt(&read).await;
+        let result = sent.and_then(|text| {
+            serde_json::from_str(&text).map_err(|error| {
+                attempts.outcome = RequestOutcome::NotRetryable;
+                NotionError::Decode(format!("{}: {error}", read.endpoint()))
+            })
+        });
         let span = tracing::Span::current();
         span.record("attempts", attempts.count);
         if let Some(status) = attempts.status {

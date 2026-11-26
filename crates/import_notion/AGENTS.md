@@ -54,7 +54,9 @@ maps a data source onto Macro database columns and cells
   `outcome` (`RequestOutcome`), and on failure `error_class` and
   `transport_class`. A final failure is recorded through `err`, an ERROR
   event with the content-free `Display` that marks the exported span as
-  failed, and one `warn!` with those fields except `method`. Never record a request's path, query, body, or Notion's response.
+  failed, and one `warn!` with those fields except `method`. The body is decoded
+  inside the span: a 200 that does not decode is `not_retryable` with
+  `error_class` `decode`. Never record a request's path, query, body, or Notion's response.
   `NotionError`'s `Display` and `Debug` show only its class, status and
   transport class, so `?error` stays safe. Planning stage spans
   (`notion.plan.*`) carry a typed `stage` (`PlanStage`).
