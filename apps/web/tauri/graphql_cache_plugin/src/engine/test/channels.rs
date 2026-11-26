@@ -62,6 +62,15 @@ fn request(
     docs: &BTreeMap<String, String>,
     live: Option<Option<&str>>,
 ) -> EntityFilterRequest {
+    serde_json::from_value(request_json(batch, ids, docs, live)).unwrap()
+}
+
+fn request_json(
+    batch: usize,
+    ids: &[(String, String)],
+    docs: &BTreeMap<String, String>,
+    live: Option<Option<&str>>,
+) -> serde_json::Value {
     let mut request = serde_json::json!({
         "filters": by_ids_filters(ids),
         "sortMethod": "CREATED_AT",
@@ -82,7 +91,7 @@ fn request(
             "since": since,
         });
     }
-    serde_json::from_value(request).unwrap()
+    request
 }
 
 /// Every channel the seed writes, as (id, createdAt), in seed order.
@@ -186,6 +195,72 @@ fn one_channel_changed(seed: &[Op], round: usize) -> Op {
     }
 }
 
+/// An op as the dataset files spell it, for the browser bench.
+fn op_json(op: &Op) -> serde_json::Value {
+    serde_json::json!({
+        "lane": op.lane,
+        "op": if op.write { "write" } else { "hydrate" },
+        "doc": op.doc,
+        "operationName": op.operation_name,
+        "variables": op.variables,
+        "data": op.data,
+    })
+}
+
+/// Writes what the browser bench replays (`bench-harness.ts` `channelPass`)
+/// into `<out>`: the views' requests, the by-ID answers, and per round the
+/// unrelated and one-channel writes, so both engines measure the same bytes.
+fn dump(
+    out: &std::path::Path,
+    seed: &[Op],
+    foreground: &[Op],
+    batches: &[&[(String, String)]],
+    docs: &BTreeMap<String, String>,
+    rounds: usize,
+) {
+    std::fs::create_dir_all(out).unwrap();
+    let requests: Vec<_> = batches
+        .iter()
+        .enumerate()
+        .map(|(batch, ids)| request_json(batch, ids, docs, Some(None)))
+        .collect();
+    std::fs::write(
+        out.join("requests.json"),
+        serde_json::to_vec(&requests).unwrap(),
+    )
+    .unwrap();
+    let lines = |ops: Vec<Op>| {
+        ops.iter()
+            .map(|op| serde_json::to_string(&op_json(op)).unwrap() + "\n")
+            .collect::<String>()
+    };
+    let by_ids = batches
+        .iter()
+        .enumerate()
+        .map(|(batch, ids)| by_ids_response(seed, batch, ids))
+        .collect();
+    std::fs::write(out.join("by-ids.ndjson"), lines(by_ids)).unwrap();
+    let unrelated: Vec<&Op> = foreground
+        .iter()
+        .filter(|op| op.lane == "home-refresh")
+        .collect();
+    let writes = (0..rounds)
+        .flat_map(|round| {
+            [
+                Op {
+                    lane: "unrelated".to_owned(),
+                    ..unrelated[round % unrelated.len()].clone()
+                },
+                Op {
+                    lane: "one_channel".to_owned(),
+                    ..one_channel_changed(seed, round)
+                },
+            ]
+        })
+        .collect();
+    std::fs::write(out.join("writes.ndjson"), lines(writes)).unwrap();
+}
+
 #[test]
 #[ignore = "benchmark: needs CACHE_BENCH_DATA, a `cache-bench generate --tier chat` dataset"]
 fn native_channel_batches_bench() {
@@ -200,6 +275,17 @@ fn native_channel_batches_bench() {
     let identity = seed[0].data["user"]["id"].as_str().unwrap().to_owned();
     let all = channels(&seed);
     let batches: Vec<&[(String, String)]> = all.chunks(BATCH_SIZE).collect();
+    if let Some(out) = std::env::var_os("CACHE_BENCH_CHANNEL_DUMP") {
+        dump(
+            std::path::Path::new(&out),
+            &seed,
+            &foreground,
+            &batches,
+            &docs,
+            rounds,
+        );
+        return;
+    }
     let dir = data.join("native-channels");
     let path = dir.join("cache.turso");
     let seeded = path.exists();
