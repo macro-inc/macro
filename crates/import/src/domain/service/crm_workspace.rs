@@ -1,4 +1,4 @@
-//! CRM planning and writes, shared by every CRM importer (HubSpot first). Each
+//! CRM planning and writes, shared by the HubSpot and Attio importers. Each
 //! source reads its own inventory and converts it into a [`plan::CrmInventory`];
 //! from there planning and writing are the same. Deterministic: there is no
 //! decision model; every object Macro CRM can hold is copied, and what it
@@ -47,6 +47,14 @@ impl CrmKinds {
         company: ImportKind::HubspotCompany,
         contact: ImportKind::HubspotContact,
         deal: ImportKind::HubspotDeal,
+    };
+
+    pub(in crate::domain::service) const ATTIO: Self = Self {
+        source: ImportSource::Attio,
+        pipeline: ImportKind::AttioPipeline,
+        company: ImportKind::AttioCompany,
+        contact: ImportKind::AttioPerson,
+        deal: ImportKind::AttioDeal,
     };
 
     /// Kinds in write order: what a later kind links to is written first.
@@ -143,7 +151,7 @@ pub(in crate::domain::service) struct CrmMeta {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub losses: Vec<CrmLoss>,
     /// Named apart from the shared report's text `summary`. Its stored name
-    /// predates other CRM sources and stays.
+    /// predates Attio and stays.
     #[serde(
         default,
         rename = "hubspotSummary",
@@ -191,6 +199,7 @@ where
             .ok_or(ImportError::CrmAccessRequired)?;
         match self.workspace_source {
             ImportSource::Hubspot => self.check_hubspot_connected(user).await,
+            ImportSource::Attio => self.check_attio_connected(user).await,
             ImportSource::Linear
             | ImportSource::Jira
             | ImportSource::Notion

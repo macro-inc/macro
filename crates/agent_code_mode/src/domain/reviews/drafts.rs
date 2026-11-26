@@ -43,6 +43,8 @@ pub enum ImportReviewSource {
     Jira,
     /// A HubSpot plan, staged by ImportFromHubspot.
     Hubspot,
+    /// An Attio plan, staged by ImportFromAttio.
+    Attio,
 }
 
 impl From<ImportReviewSource> for import::domain::models::ImportSource {
@@ -52,6 +54,7 @@ impl From<ImportReviewSource> for import::domain::models::ImportSource {
             ImportReviewSource::Linear => Self::Linear,
             ImportReviewSource::Jira => Self::Jira,
             ImportReviewSource::Hubspot => Self::Hubspot,
+            ImportReviewSource::Attio => Self::Attio,
         }
     }
 }

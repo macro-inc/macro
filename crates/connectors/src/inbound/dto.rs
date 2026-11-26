@@ -197,6 +197,11 @@ impl Importable {
         self
     }
 
+    /// The flag `app`'s import waits on, if it is flagged.
+    pub fn flag(&self, app: &ConnectorId) -> Option<&'static str> {
+        self.flagged.get(app).map(|(_, flag)| *flag)
+    }
+
     /// The flags some app's import waits on.
     pub(crate) fn flags(&self) -> impl Iterator<Item = &'static str> + '_ {
         self.flagged.values().map(|(_, flag)| *flag)

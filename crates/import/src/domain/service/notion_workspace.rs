@@ -195,7 +195,10 @@ where
         sharing: Option<NotionSharing>,
         wait: Duration,
     ) -> Result<NotionImportReport> {
-        let sharing = if self.workspace_source == ImportSource::Hubspot {
+        let sharing = if matches!(
+            self.workspace_source,
+            ImportSource::Hubspot | ImportSource::Attio
+        ) {
             // CRM records belong to the team; there is no personal copy.
             self.check_crm_access(user).await?;
             NotionSharing::Team
@@ -588,13 +591,20 @@ where
         } else {
             match &outcome {
                 Ok(0) => (RunStatus::Completed, None, None),
-                Ok(failed) if self.workspace_source == ImportSource::Hubspot => (
-                    RunStatus::Completed,
-                    Some(format!(
-                        "{failed} objects could not be imported. Plan again to retry them."
-                    )),
-                    None,
-                ),
+                Ok(failed)
+                    if matches!(
+                        self.workspace_source,
+                        ImportSource::Hubspot | ImportSource::Attio
+                    ) =>
+                {
+                    (
+                        RunStatus::Completed,
+                        Some(format!(
+                            "{failed} objects could not be imported. Plan again to retry them."
+                        )),
+                        None,
+                    )
+                }
                 Ok(failed) => (
                     RunStatus::Completed,
                     Some(report::partial_write_error(*failed)),
@@ -968,6 +978,7 @@ pub fn failure_kind(error: &ImportError) -> RunErrorKind {
         },
         ImportError::Tracker(error) => tracker_failure_kind(error),
         ImportError::Hubspot(error) => hubspot_failure_kind(error),
+        ImportError::Attio(error) => attio_failure_kind(error),
         ImportError::NotionNotConnected => RunErrorKind::NotConnected,
         ImportError::Admission(_) => RunErrorKind::UsageRefused,
         ImportError::UnsupportedDiscovery(_)
@@ -1017,6 +1028,20 @@ fn hubspot_failure_kind(error: &import_hubspot::domain::HubspotError) -> RunErro
             RunErrorKind::Unreachable
         }
         HubspotError::Decode(_) => RunErrorKind::Internal,
+    }
+}
+
+/// The kind of an Attio failure.
+fn attio_failure_kind(error: &import_attio::domain::AttioError) -> RunErrorKind {
+    use import_attio::domain::AttioError;
+    match error {
+        AttioError::NotConnected => RunErrorKind::NotConnected,
+        AttioError::NeedsReauth => RunErrorKind::AccessLost,
+        AttioError::Unavailable => RunErrorKind::RateLimited,
+        AttioError::Tool { .. } | AttioError::TimedOut(_) | AttioError::Transport(_) => {
+            RunErrorKind::Unreachable
+        }
+        AttioError::MissingTool(_) | AttioError::Decode(_) => RunErrorKind::Internal,
     }
 }
 

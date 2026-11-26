@@ -372,6 +372,8 @@ pub(in crate::domain::service) fn report(
     }
     report.hubspot =
         super::super::hubspot_workspace::report(review_id, current.iter().map(|(row, _)| *row));
+    report.attio =
+        super::super::attio_workspace::report(review_id, current.iter().map(|(row, _)| *row));
     Ok(report)
 }
 
