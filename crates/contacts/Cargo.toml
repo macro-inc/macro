@@ -9,6 +9,7 @@ axum = [
   "dep:axum",
   "dep:axum-extra",
   "dep:macro_authorization",
+  "dep:models_pagination",
   "dep:rate_limit",
   "dep:utoipa",
 ]
@@ -65,6 +66,7 @@ macro_env = { path = "../macro_env" }
 macro_user_id = { path = "../macro_user_id" }
 macro_db_client = { path = "../macro_db_client", optional = true }
 macro_tower_layers = { path = "../macro_tower_layers", optional = true }
+models_pagination = { path = "../models_pagination", optional = true }
 non_empty = { path = "../non_empty", optional = true }
 opentelemetry = { workspace = true, features = ["trace"], optional = true }
 rootcause = { workspace = true }

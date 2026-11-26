@@ -1,5 +1,6 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { createControlFocusScopes } from '@core/util/create-control-focus-scopes';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import GitBranchIcon from '@icon/system/regular/git-branch.svg';
@@ -12,6 +13,7 @@ import {
   For,
   type JSX,
   Match,
+  onCleanup,
   Show,
   Switch,
 } from 'solid-js';
@@ -42,6 +44,7 @@ export function RepositoryPicker(props: {
   /** Use the joined repository/branch pill in the phone accessory only. */
   compactPhone?: boolean;
   onOpenChange?: (open: boolean) => void;
+  onFocusScopeChange?: (active: boolean) => void;
   branch: string;
   /** This runtime always starts new worktrees from main. */
   branchLocked?: boolean;
@@ -64,13 +67,18 @@ export function RepositoryPicker(props: {
   onSelectBranch: (branch: string) => void;
 }) {
   const listId = createUniqueId();
+  const setFocusScope = createControlFocusScopes<'repository' | 'branch'>(
+    (active) => props.onFocusScopeChange?.(active)
+  );
   const [repoOpen, updateRepoOpen] = createSignal(false);
   const [branchOpen, updateBranchOpen] = createSignal(false);
   const setRepoOpen = (open: boolean) => {
+    if (open) setFocusScope('repository', true);
     updateRepoOpen(open);
     props.onOpenChange?.(open || branchOpen());
   };
   const setBranchOpen = (open: boolean) => {
+    if (open) setFocusScope('branch', true);
     updateBranchOpen(open);
     props.onOpenChange?.(open || repoOpen());
   };
@@ -196,6 +204,13 @@ export function RepositoryPicker(props: {
     >
       <RepositoryPickerMenu
         open={repoOpen()}
+        onDispose={() => {
+          setRepoOpen(false);
+          setFocusScope('repository', false);
+        }}
+        onCloseFocus={() => {
+          if (!repoOpen()) setFocusScope('repository', false);
+        }}
         onOpenChange={(open) => {
           setRepoOpen(open);
           setError('');
@@ -334,6 +349,13 @@ export function RepositoryPicker(props: {
       <Show when={props.repoUrl}>
         <RepositoryPickerMenu
           open={branchOpen()}
+          onDispose={() => {
+            setBranchOpen(false);
+            setFocusScope('branch', false);
+          }}
+          onCloseFocus={() => {
+            if (!branchOpen()) setFocusScope('branch', false);
+          }}
           onOpenChange={(open) => {
             setBranchOpen(open && !props.branchLocked);
             setError('');
@@ -491,6 +513,8 @@ export function RepositoryPicker(props: {
 function RepositoryPickerMenu(props: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onCloseFocus: () => void;
+  onDispose: () => void;
   label: string;
   triggerLabel?: string;
   triggerClass: string;
@@ -500,6 +524,7 @@ function RepositoryPickerMenu(props: {
   children: JSX.Element;
 }) {
   let content: HTMLDivElement | undefined;
+  onCleanup(props.onDispose);
   return (
     <Show
       when={isTouchDevice()}
@@ -519,6 +544,7 @@ function RepositoryPickerMenu(props: {
             {props.trigger}
           </Dropdown.Trigger>
           <Dropdown.Content
+            onCloseAutoFocus={() => queueMicrotask(props.onCloseFocus)}
             class="w-80 max-w-[calc(100vw-1rem)]"
             ref={(element: HTMLDivElement) => {
               content = element;
@@ -545,6 +571,7 @@ function RepositoryPickerMenu(props: {
         side="bottom"
         open={props.open}
         onOpenChange={props.onOpenChange}
+        onFinalFocus={() => queueMicrotask(props.onCloseFocus)}
         restoreFocus
       >
         <MobileDrawer.Trigger

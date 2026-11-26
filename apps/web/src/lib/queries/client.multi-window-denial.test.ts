@@ -57,7 +57,7 @@ vi.mock('@core/constant/servers', () => ({
 }));
 
 const TEAM = '00000000-0000-4000-8000-000000000001';
-const CHANNELS = ['channel', 'listChannels', 'viewer'];
+const CHANNELS = ['channel', 'directory', 'viewer'];
 const IDENTITY = authKeys.userInfo.queryKey;
 const hashOf = (key: readonly unknown[]) => JSON.stringify(key);
 const saved = (

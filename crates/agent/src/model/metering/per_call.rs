@@ -83,14 +83,14 @@ impl PerCallUsage {
             ModelSpeed::Fast => price_key.push_str(":fast"),
             ModelSpeed::Ultrafast => price_key.push_str(":ultrafast"),
         }
-        // OpenAI's threshold uses inclusive prompt tokens, per call, not the sum
-        // of all prompts in a tool loop. Reasoning is billed as output once.
-        if self.model.starts_with("openai/")
+        // The threshold uses inclusive prompt tokens, per call, not the sum of
+        // all prompts in a tool loop. Reasoning is billed as output once.
+        if let Some(threshold) = ModelSpeed::long_context_threshold(&self.model)
             && tokens
                 .input()
                 .saturating_add(tokens.cache_read())
                 .saturating_add(tokens.cache_write())
-                > 272_000
+                > threshold
         {
             price_key.push_str(":long");
         }

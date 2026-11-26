@@ -1,6 +1,5 @@
-import { SLACK_CONNECT_SLUG } from '@core/pipedream/slugs';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { connectPipedreamApp } from '@queries/pipedream-connectors';
+import { appConnectorKey, connectConnector } from '@queries/connectors';
 import { Button } from '@ui';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { SettingsPage } from '../../primitives';
@@ -24,14 +23,11 @@ export function SlackChannelImportFlow(props: {
     setBusy(true);
     setError(undefined);
     try {
-      const outcome = await connectPipedreamApp({
-        appSlug: SLACK_CONNECT_SLUG,
-        serverName: 'Slack',
+      const outcome = await connectConnector({
+        key: appConnectorKey('slack'),
       });
       if (disposed) return;
       if (outcome === 'connected') setAuthorized(true);
-      if (outcome === 'unsupported')
-        setError('Slack connections are not available on this deployment.');
     } catch {
       if (!disposed) setError('Could not connect Slack. Please try again.');
     } finally {

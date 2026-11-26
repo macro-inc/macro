@@ -1,3 +1,4 @@
+import { isProjectSection } from '@app/features/projects/core/project';
 import { parseProjectRoute } from '@app/features/projects/core/route';
 import { isRecord } from '@app/lib/split-router';
 import { paneRoute } from '@app/routes/app-route';
@@ -8,7 +9,7 @@ function projectDetails(match: unknown) {
   if (!isRecord(match.params)) return;
   const { projectId, section } = match.params;
   if (typeof projectId !== 'string' || !projectId) return;
-  if (section !== 'overview' && section !== 'tasks') return;
+  if (!isProjectSection(section)) return;
   return { kind: 'detail' as const, projectId, section };
 }
 

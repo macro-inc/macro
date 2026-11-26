@@ -52,6 +52,13 @@ fn people_trace_correlation(value: Option<&str>) -> Option<&str> {
     })
 }
 
+/// The trace id of a well-formed `traceparent`, for a receive span's
+/// `upstream.trace_id`; `None` for anything else, since the iOS subscriber
+/// panics on a NUL in a span field.
+fn upstream_trace_id(traceparent: Option<&str>) -> Option<&str> {
+    people_trace_correlation(traceparent)?.split('-').nth(1)
+}
+
 fn engine_handle(state: &State<'_, CacheState>) -> Result<EngineHandle, String> {
     state
         .0
@@ -60,6 +67,37 @@ fn engine_handle(state: &State<'_, CacheState>) -> Result<EngineHandle, String> 
         .as_ref()
         .map(|cache| cache.handle.clone())
         .ok_or_else(|| "graphql cache not initialized (call graphql_cache_init first)".to_string())
+}
+
+/// The handle for a read the webview may abandon: given `request_id`, the read
+/// gives the engine back without reading if `graphql_cache_abandon` names it
+/// before its turn.
+fn reading_handle(
+    state: &State<'_, CacheState>,
+    request_id: Option<String>,
+) -> Result<EngineHandle, String> {
+    Ok(engine_handle(state)?.abandonable(request_id))
+}
+
+/// The webview stopped waiting for the read sent with `request_id`: if it has
+/// not got the engine yet, it will skip reading when it does, so reads nobody
+/// waits for do not hold the engine ahead of the ones somebody does. Says
+/// whether the read was still running. Takes no engine lock. Older bundles
+/// never send it; newer ones ignore its absence on older binaries.
+#[tauri::command]
+pub async fn graphql_cache_abandon(
+    state: State<'_, CacheState>,
+    request_id: String,
+) -> Result<bool, String> {
+    // Not through a cloned handle: shutdown fails while another handle lives.
+    Ok(state
+        .0
+        .lock()
+        .map_err(|_| "graphql cache state poisoned".to_string())?
+        .as_ref()
+        .ok_or_else(|| "graphql cache not initialized (call graphql_cache_init first)".to_string())?
+        .handle
+        .abandon(&request_id))
 }
 
 /// Opens (or creates) the cache for `scope`. Idempotent for the same scope;
@@ -77,11 +115,18 @@ pub async fn graphql_cache_init<R: Runtime>(
     // persisted definitions needed by queued work instead of reverting to only
     // the metadata embedded in the binary.
     let schema_sdl = cache_core::meta::BUNDLED_SCHEMA_SDL.to_owned();
-    graphql_cache_init_with_schema(app, state, scope, hot_capacity, schema_sdl).await
+    graphql_cache_init_with_schema(app, state, scope, hot_capacity, schema_sdl, None).await
 }
 
 /// Parses bundle SDL while retaining native cache execution and native Turso storage.
 /// The dedicated command prevents old binaries from silently ignoring the schema payload.
+/// The span logs no error: one can quote the bundle's SDL. The webview records
+/// the returned error, and the storage open logs its own.
+#[tracing::instrument(
+    name = "graphql_cache.ipc.receive",
+    skip_all,
+    fields(graphql_cache.ipc.command = "init", upstream.trace_id = upstream_trace_id(traceparent.as_deref()))
+)]
 #[tauri::command]
 pub async fn graphql_cache_init_with_schema<R: Runtime>(
     app: AppHandle<R>,
@@ -89,6 +134,7 @@ pub async fn graphql_cache_init_with_schema<R: Runtime>(
     scope: String,
     hot_capacity: Option<u32>,
     schema_sdl: String,
+    traceparent: Option<String>,
 ) -> Result<(), String> {
     let incoming = cache_core::meta::Schema::from_sdl(&schema_sdl).map_err(|e| e.to_string())?;
     let dir = app
@@ -122,9 +168,7 @@ pub async fn graphql_cache_init_with_schema<R: Runtime>(
             };
             // Validate persisted metadata before opening or modifying user storage.
             crate::engine::persist_schema(&schema_path, &schema)?;
-            let database =
-                TursoFileDatabase::new(dir.join("cache.turso")).map_err(|e| e.to_string())?;
-            let storage = database.open_or_reset(&scope).map_err(|e| e.to_string())?;
+            let storage = open_storage(&dir.join("cache.turso"), &scope)?;
             let events = app.clone();
             let handle = EngineHandle::with_schema(storage, hot_capacity, schema)
                 .with_authority_listener(scope.clone(), move |authority| {
@@ -142,6 +186,34 @@ pub async fn graphql_cache_init_with_schema<R: Runtime>(
         }
     };
     handle.install_schema(&incoming, &schema_path).await
+}
+
+/// Opens the cache file for `scope`, replacing it when it is incompatible or
+/// uncertain. A file an older build wrote at an earlier storage version is
+/// upgraded in place first; the span records the version it came from, and an
+/// event reports it with the open's duration, since the native subscriber
+/// prints events, not span fields recorded late.
+#[tracing::instrument(
+    name = "graphql_cache.native.open",
+    skip_all,
+    fields(graphql_cache.storage.upgraded_from = tracing::field::Empty),
+    err
+)]
+fn open_storage(path: &std::path::Path, scope: &str) -> Result<cache_turso::TursoStorage, String> {
+    let started = std::time::Instant::now();
+    let storage = TursoFileDatabase::new(path)
+        .and_then(|database| database.open_or_reset(scope))
+        .map_err(|e| e.to_string())?;
+    if let Some(version) = storage.upgraded_from_storage_version() {
+        tracing::Span::current().record("graphql_cache.storage.upgraded_from", version);
+        tracing::info!(
+            graphql_cache.storage.upgraded_from = version,
+            graphql_cache.storage.open_ms =
+                u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+            "graphql cache storage upgraded in place"
+        );
+    }
+    Ok(storage)
 }
 
 /// Returns the current in-memory cache revision as a decimal string.
@@ -172,8 +244,11 @@ pub async fn graphql_cache_current_authority(
     state: State<'_, CacheState>,
     identity: String,
     traceparent: Option<String>,
+    request_id: Option<String>,
 ) -> Result<cache_core::engine::authority::CacheAuthority, String> {
-    engine_handle(&state)?.current_authority(&identity).await
+    reading_handle(&state, request_id)?
+        .current_authority(&identity)
+        .await
 }
 
 /// Apply a fresh permission proof under the cache owner's mutation lock.
@@ -219,6 +294,10 @@ pub async fn graphql_cache_transition_authority<R: Runtime>(
     fields(graphql_cache.ipc.command = "read", upstream.trace_id = traceparent.as_deref().and_then(|parent| parent.split('-').nth(1))),
     err
 )]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Tauri command fields preserve the existing flat IPC wire contract"
+)]
 #[tauri::command]
 pub async fn graphql_cache_read(
     state: State<'_, CacheState>,
@@ -228,8 +307,9 @@ pub async fn graphql_cache_read(
     variables: Option<Variables>,
     entity_resolvers: Option<Vec<EntityResolver>>,
     traceparent: Option<String>,
+    request_id: Option<String>,
 ) -> Result<ReadResultWire, String> {
-    engine_handle(&state)?
+    reading_handle(&state, request_id)?
         .read(
             op_id,
             query,
@@ -261,8 +341,9 @@ pub async fn graphql_cache_watch(
     entity_resolvers: Option<Vec<EntityResolver>>,
     since: Option<String>,
     traceparent: Option<String>,
+    request_id: Option<String>,
 ) -> Result<cache_core::engine::watch_query::QueryUpdate, String> {
-    engine_handle(&state)?
+    reading_handle(&state, request_id)?
         .watch(
             op_id,
             query,
@@ -281,8 +362,9 @@ pub async fn graphql_cache_read_records_by_keys(
     document: String,
     fragment_name: String,
     keys: Vec<String>,
+    request_id: Option<String>,
 ) -> Result<RecordSelectionResultWire, String> {
-    engine_handle(&state)?
+    reading_handle(&state, request_id)?
         .read_records_by_keys(document, fragment_name, keys)
         .await
 }
@@ -292,8 +374,9 @@ pub async fn graphql_cache_read_records_by_keys(
 pub async fn graphql_cache_search(
     state: State<'_, CacheState>,
     request: SearchRequest,
+    request_id: Option<String>,
 ) -> Result<SearchPage, String> {
-    engine_handle(&state)?.search(request).await
+    reading_handle(&state, request_id)?.search(request).await
 }
 
 /// Read local person-context publication. A distinct command makes OTA capability explicit.
@@ -303,8 +386,11 @@ pub async fn graphql_cache_people_context(
     state: State<'_, CacheState>,
     scope: HydrationScope,
     traceparent: Option<String>,
+    request_id: Option<String>,
 ) -> Result<ContextState, String> {
-    engine_handle(&state)?.people_context(scope).await
+    reading_handle(&state, request_id)?
+        .people_context(scope)
+        .await
 }
 
 /// Persist one scoped local-context batch. JS publishes hydration-only hints.
@@ -330,8 +416,11 @@ pub async fn graphql_cache_people_search(
     state: State<'_, CacheState>,
     request: PeopleSearch,
     traceparent: Option<String>,
+    request_id: Option<String>,
 ) -> Result<PeopleSearchResult, String> {
-    engine_handle(&state)?.people_search(request).await
+    reading_handle(&state, request_id)?
+        .people_search(request)
+        .await
 }
 
 /// Read one bounded contact membership window without exposing names.
@@ -414,8 +503,13 @@ pub async fn graphql_cache_entity_filter(
     state: State<'_, CacheState>,
     request: EntityFilterRequest,
     traceparent: Option<String>,
+    request_id: Option<String>,
 ) -> Result<EntityFilterResult, String> {
-    engine_handle(&state)?.entity_filter(request).await
+    // Releasing a live view frees its slot, so it is never abandoned.
+    let releases = request.live_query.as_ref().is_some_and(|live| live.release);
+    reading_handle(&state, request_id.filter(|_| !releases))?
+        .entity_filter(request)
+        .await
 }
 
 /// Reads a registered live view without resending its selection and predicate.
@@ -432,8 +526,9 @@ pub async fn graphql_cache_entity_filter_resume(
     registration_id: cache_core::engine::live_query::LiveQueryRegistration,
     since: Option<String>,
     traceparent: Option<String>,
+    request_id: Option<String>,
 ) -> Result<Option<crate::engine::LiveQueryResult>, String> {
-    let update = engine_handle(&state)?
+    let update = reading_handle(&state, request_id)?
         .resume_entity_filter(id, registration_id, since)
         .await?;
     tracing::Span::current().record("graphql_cache.live_query.retained", update.is_some());
@@ -445,8 +540,11 @@ pub async fn graphql_cache_entity_filter_resume(
 pub async fn graphql_cache_calendar_range(
     state: State<'_, CacheState>,
     request: CalendarRangeRequest,
+    request_id: Option<String>,
 ) -> Result<CalendarRangeResultWire, String> {
-    engine_handle(&state)?.calendar_range(request).await
+    reading_handle(&state, request_id)?
+        .calendar_range(request)
+        .await
 }
 
 /// Applies fetched coverage, delta deletions, and sync state, then
@@ -787,8 +885,9 @@ pub async fn graphql_cache_inspect_query_variants(
     query: String,
     operation_name: Option<String>,
     path: Vec<InspectionPathSegment>,
+    request_id: Option<String>,
 ) -> Result<Vec<CachedQueryVariant>, String> {
-    engine_handle(&state)?
+    reading_handle(&state, request_id)?
         .inspect_query_variants(
             query,
             operation_name,
@@ -805,8 +904,9 @@ pub async fn graphql_cache_inspect_query(
     operation_name: Option<String>,
     path: Vec<InspectionPathSegment>,
     variable_filters: Option<Vec<serde_json::Map<String, serde_json::Value>>>,
+    request_id: Option<String>,
 ) -> Result<Vec<CachedQueryInstance>, String> {
-    engine_handle(&state)?
+    reading_handle(&state, request_id)?
         .inspect_query(
             query,
             operation_name,

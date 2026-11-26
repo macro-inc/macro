@@ -566,6 +566,28 @@ fn literal_tree<T>(literals: Vec<T>, impossible: T) -> Arc<Expr<T>> {
     Arc::new(nodes.pop().unwrap_or_else(|| Expr::val(impossible)))
 }
 
+/// The named channels, read as the REST channel read answers: mentioning
+/// participation either way makes the channel leg return every named channel
+/// the viewer can open, joined or not (a public channel, a team channel of
+/// their team), with `isParticipant` saying which. With none named, the nil
+/// id alone still rules the leg out.
+fn channel_tree(channels: Vec<ChannelLiteral>) -> Arc<Expr<ChannelLiteral>> {
+    if channels.is_empty() {
+        return literal_tree(channels, ChannelLiteral::ChannelId(Uuid::nil()));
+    }
+    let named = Arc::unwrap_or_clone(literal_tree(
+        channels,
+        ChannelLiteral::ChannelId(Uuid::nil()),
+    ));
+    Arc::new(Expr::and(
+        named,
+        Expr::or(
+            Expr::val(ChannelLiteral::IsParticipant(true)),
+            Expr::val(ChannelLiteral::IsParticipant(false)),
+        ),
+    ))
+}
+
 /// Parse an entity's id, which every Soup-hydrated entity carries as a UUID.
 fn entity_uuid(entity: &Entity<'static>) -> Result<Uuid, SoupItemLoaderError> {
     Uuid::parse_str(entity.entity_id.as_ref()).map_err(|error| {
@@ -653,7 +675,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
             tree: Some(Arc::new(Expr::val(EmailLiteral::ThreadId(nil)))),
             crm_scope: None,
         },
-        channel_filter: Some(literal_tree(channels, ChannelLiteral::ChannelId(nil))),
+        channel_filter: Some(channel_tree(channels)),
         channel_thread_filter: Some(literal_tree(
             channel_threads,
             ChannelThreadLiteral::ThreadId(nil),

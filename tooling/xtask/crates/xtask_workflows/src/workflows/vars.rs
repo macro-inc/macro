@@ -19,6 +19,9 @@ secret!(AWS_SECRET_ACCESS_KEY);
 secret!(CLA_CHECK_API_KEY);
 secret!(CLA_ORG_READ_TOKEN);
 secret!(CLOUDFLARE_API_TOKEN);
+secret!(CONNECTORS_E2E_ALERT_BOT_TOKEN);
+secret!(CONNECTORS_E2E_FLAGGED_API_KEY);
+secret!(CONNECTORS_E2E_UNFLAGGED_API_KEY);
 secret!(DAYTONA_API_KEY);
 secret!(DD_API_KEY);
 secret!(DD_APP_KEY);
@@ -41,6 +44,26 @@ secret!(SEGMENT_WRITE_KEY_PRODUCTION);
 /// [`super::alert_native_build_failures`] posts there too.
 pub const MACRO_BUILD_ALERT_WEBHOOK_URL: Var = Var("MACRO_BUILD_ALERT_WEBHOOK_URL");
 
+/// Webhook of the Macro channel the connectors end-to-end suite reports its
+/// failures to, a repo *variable*; it takes [`CONNECTORS_E2E_ALERT_BOT_TOKEN`]
+/// in an `x-macro-channel-bot-token` header ([`super::connectors_e2e`]).
+pub const CONNECTORS_E2E_ALERT_WEBHOOK_URL: Var = Var("CONNECTORS_E2E_ALERT_WEBHOOK_URL");
+
+/// What the connectors suite's test accounts hold, repo *variables*
+/// (`crates/connectors_e2e/AGENTS.md`): an app the flagged account connected
+/// through Macro Connect, an app the unflagged account connected through
+/// Pipedream, whether the unflagged account linked GitHub, an MCP server that
+/// needs no sign-in, and a Notion page to import.
+pub const CONNECTORS_E2E_CONNECT_APP: Var = Var("CONNECTORS_E2E_CONNECT_APP");
+/// See [`CONNECTORS_E2E_CONNECT_APP`].
+pub const CONNECTORS_E2E_PIPEDREAM_APP: Var = Var("CONNECTORS_E2E_PIPEDREAM_APP");
+/// See [`CONNECTORS_E2E_CONNECT_APP`].
+pub const CONNECTORS_E2E_GITHUB_LINKED: Var = Var("CONNECTORS_E2E_GITHUB_LINKED");
+/// See [`CONNECTORS_E2E_CONNECT_APP`].
+pub const CONNECTORS_E2E_MCP_SERVER_URL: Var = Var("CONNECTORS_E2E_MCP_SERVER_URL");
+/// See [`CONNECTORS_E2E_CONNECT_APP`].
+pub const CONNECTORS_E2E_NOTION_PAGE: Var = Var("CONNECTORS_E2E_NOTION_PAGE");
+
 /// Workload identity provider that lets CI authenticate to Google Play, a
 /// repo *variable*.
 pub const GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER: Var =
@@ -48,6 +71,26 @@ pub const GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER: Var =
 
 /// Service account CI acts as on Google Play, a repo *variable*.
 pub const GOOGLE_PLAY_SERVICE_ACCOUNT: Var = Var("GOOGLE_PLAY_SERVICE_ACCOUNT");
+
+/// Azure Artifact Signing for the Windows desktop installer, repo *variables*
+/// (ids, not secrets): CI signs in with its GitHub OIDC token as an Entra app
+/// whose federated credential trusts the `desktop-windows-signing` environment
+/// ([`super::desktop_windows`]). While any is empty, Windows builds stay
+/// unsigned workflow artifacts.
+pub const WINDOWS_SIGNING_AZURE_TENANT_ID: Var = Var("WINDOWS_SIGNING_AZURE_TENANT_ID");
+/// See [`WINDOWS_SIGNING_AZURE_TENANT_ID`]: the Entra app's client id.
+pub const WINDOWS_SIGNING_AZURE_CLIENT_ID: Var = Var("WINDOWS_SIGNING_AZURE_CLIENT_ID");
+/// See [`WINDOWS_SIGNING_AZURE_TENANT_ID`]: the regional endpoint, such as
+/// `https://eus.codesigning.azure.net`.
+pub const WINDOWS_SIGNING_ENDPOINT: Var = Var("WINDOWS_SIGNING_ENDPOINT");
+/// See [`WINDOWS_SIGNING_AZURE_TENANT_ID`]: the Artifact Signing account.
+pub const WINDOWS_SIGNING_ACCOUNT: Var = Var("WINDOWS_SIGNING_ACCOUNT");
+/// See [`WINDOWS_SIGNING_AZURE_TENANT_ID`]: the Public Trust certificate profile.
+pub const WINDOWS_SIGNING_PROFILE: Var = Var("WINDOWS_SIGNING_PROFILE");
+/// `true` lets a signed Windows build reach the release, the update feed and
+/// the download pages, a repo *variable*. Set it once a person has tested a
+/// signed build on Windows 10 and 11.
+pub const WINDOWS_DESKTOP_RELEASE: Var = Var("WINDOWS_DESKTOP_RELEASE");
 
 /// Cloudflare account id. A repo *variable* (not a secret).
 pub const CLOUDFLARE_ACCOUNT_ID: Var = Var("CLOUDFLARE_ACCOUNT_ID");
@@ -96,6 +139,12 @@ pub const WEB_CI_CACHE_TAG: &str = "web-ci";
 /// Nix-only PR checks. They read a Nix store back, so they stay off the small
 /// profile's default volume, where other jobs would overwrite that store.
 pub const NIX_CHECKS_CACHE_TAG: &str = "nix-checks";
+
+/// Namespace cache tag and remote sccache for the desktop app check
+/// (`desktop_check.rs`). Its own volume, because it holds the Tauri Linux
+/// libraries no other job needs, and PR jobs write it, so no release build may
+/// share it.
+pub const DESKTOP_CI_CACHE: &str = "desktop-ci";
 
 /// Namespace remote sccache used when the web checks compile Rust API schema
 /// generators. Kept separate from [`CI_SCCACHE_NAME`] because these jobs have

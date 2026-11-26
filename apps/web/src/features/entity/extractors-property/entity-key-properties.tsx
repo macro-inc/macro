@@ -49,10 +49,7 @@ function getEntityType(entity: EntityData): EntityType {
     .with({ type: 'channel_thread' }, () => EntityType.CHANNEL)
     .with({ type: 'call' }, () => EntityType.CHANNEL)
     .with({ type: 'crm_company' }, () => EntityType.COMPANY)
-    .with({ type: 'crm_contact' }, () => {
-      // No CONTACT in the properties-service EntityType yet.
-      throw new Error('crm contacts do not support properties');
-    })
+    .with({ type: 'crm_contact' }, () => EntityType.CONTACT)
     .with({ type: 'agent_session' }, () => {
       throw new Error(
         'agent sessions are not property-service mutation targets'

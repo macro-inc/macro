@@ -221,7 +221,6 @@
    Its demo sits in a bare .dummy-workspace so its buttons keep their type. */
 .product-page .review-agent-demo.dummy-workspace { display: block; height: auto; min-height: 0; background: none; color: inherit; font: inherit; text-align: inherit; }
 .product-page .review-agent-demo :is(section, div) { min-width: 0; }
-.product-page #coding-agents .homepage-feature-title { flex-direction: row; }
 
 @media (max-width: 699px) {
   .review-home > .dummy-rail { display: none; }
@@ -234,8 +233,6 @@
   .review-channel-invite { display: none; }
   .review-message-body { font-size: 14px; }
   .review-toast { right: 12px; bottom: 12px; width: calc(100% - 24px); }
-  .product-page #coding-agents .homepage-feature-title { gap: 16px; }
-  .product-page #coding-agents .homepage-feature-heading h2 { font-size: clamp(28px, 3.2vw, 40px); white-space: normal; }
   /* The homepage lays this demo out at an 18px gutter; give it the same room. */
   .product-page .review-agent-demo.dummy-workspace { width: calc(100% + 24px); margin-inline: -12px; }
 }

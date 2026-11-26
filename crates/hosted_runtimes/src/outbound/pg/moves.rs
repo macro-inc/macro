@@ -45,6 +45,35 @@ impl TryFrom<MoveRow> for ComputerMove {
     }
 }
 
+impl PgComputerRepo {
+    async fn held_with_runtime_recovery(
+        &self,
+        computer_id: ComputerId,
+        allow_image_recovery: bool,
+    ) -> Result<bool, PgComputerError> {
+        Ok(sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1 FROM computer_move
+                WHERE computer_id = $1 AND stage IN ('cutting_over', 'rolling_back')
+            ) OR EXISTS (
+                SELECT 1 FROM image_upgrade_computer plan
+                JOIN image_upgrade batch ON batch.id = plan.upgrade_id
+                WHERE plan.computer_id = $1 AND batch.finished_at IS NULL
+                  AND plan.state IN ('replacing', 'verifying', 'rolling_back')
+            ) OR EXISTS (
+                SELECT 1 FROM agent_runtime_update WHERE computer_id = $1
+                  AND (outcome IS NULL OR ($2 IS FALSE AND outcome = 'needs_operator' AND cleared_at IS NULL))
+            ) AS "held!"
+            "#,
+            computer_id.as_uuid(),
+            allow_image_recovery,
+        )
+        .fetch_one(&self.pool)
+        .await?)
+    }
+}
+
 impl ComputerMoves for PgComputerRepo {
     type Err = PgComputerError;
 
@@ -73,6 +102,11 @@ impl ComputerMoves for PgComputerRepo {
                 )));
             }
             Some(_) => {}
+        }
+        if Self::runtime_update_pending(&mut tx, computer_id, false).await? {
+            return Ok(Err(StartMoveError::NotMovable(
+                "runtime update or recovery is pending".to_owned(),
+            )));
         }
         // The ticket is 244 random bits (two v4 UUIDs, which are random by
         // construction); it is a one-time secret, not an id.
@@ -221,8 +255,20 @@ impl ComputerMoves for PgComputerRepo {
     async fn held_on(&self, host: HostId) -> Result<HashSet<ComputerId>, PgComputerError> {
         Ok(sqlx::query_scalar!(
             r#"
-            SELECT computer_id FROM computer_move
+            SELECT computer_id AS "computer_id!" FROM computer_move
             WHERE stage IN ('cutting_over', 'rolling_back') AND (from_host = $1 OR to_host = $1)
+            UNION
+            SELECT plan.computer_id FROM image_upgrade batch
+            JOIN image_upgrade_computer plan ON plan.upgrade_id = batch.id
+            JOIN hosted_runtime computer ON computer.id = plan.computer_id
+            WHERE batch.finished_at IS NULL
+              AND plan.state IN ('replacing', 'verifying', 'rolling_back')
+              AND computer.host_id = $1
+            UNION
+            SELECT request.computer_id FROM agent_runtime_update request
+            JOIN hosted_runtime computer ON computer.id = request.computer_id
+            WHERE (request.outcome IS NULL OR (request.outcome = 'needs_operator' AND request.cleared_at IS NULL))
+              AND computer.host_id = $1
             "#,
             host.into_inner(),
         )
@@ -234,17 +280,11 @@ impl ComputerMoves for PgComputerRepo {
     }
 
     async fn held(&self, computer_id: ComputerId) -> Result<bool, PgComputerError> {
-        Ok(sqlx::query_scalar!(
-            r#"
-            SELECT EXISTS (
-                SELECT 1 FROM computer_move
-                WHERE computer_id = $1 AND stage IN ('cutting_over', 'rolling_back')
-            ) AS "held!"
-            "#,
-            computer_id.as_uuid(),
-        )
-        .fetch_one(&self.pool)
-        .await?)
+        self.held_with_runtime_recovery(computer_id, false).await
+    }
+
+    async fn held_for_image(&self, computer_id: ComputerId) -> Result<bool, PgComputerError> {
+        self.held_with_runtime_recovery(computer_id, true).await
     }
 
     async fn postpone_effect(

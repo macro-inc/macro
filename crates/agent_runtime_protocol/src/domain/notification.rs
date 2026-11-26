@@ -81,18 +81,78 @@ pub enum ReviewSettlement {
     Actions(ReviewOutcome),
 }
 
+/// Why a run failed, as a closed set readers branch on instead of the error
+/// text. Stored in `import_run.error_kind`; `None` on runs that failed
+/// before it was recorded.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    schemars::JsonSchema,
+    specta::Type,
+    strum::EnumString,
+    strum::AsRefStr,
+)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum RunErrorKind {
+    /// The source said an object was missing or not shared with the
+    /// connection.
+    NotFound,
+    /// The connection may not read what the import asked for.
+    Forbidden,
+    /// The source refused the connection itself: revoked or expired.
+    AccessLost,
+    /// The connection's proxy could not use the account at all.
+    ConnectionUnavailable,
+    /// The source is not connected, or the connection is turned off.
+    NotConnected,
+    /// The source kept rate limiting the import.
+    RateLimited,
+    /// The source could not be reached or answered with an error.
+    Unreachable,
+    /// The AI work planning needs was refused (usage or billing).
+    UsageRefused,
+    /// The run stopped before it finished (its process went away too
+    /// often); starting it again picks up what is left.
+    Interrupted,
+    /// Anything else, on Macro's side. A kind this build does not know (a
+    /// newer writer's) reads as this one.
+    Internal,
+}
+
+impl<'de> Deserialize<'de> for RunErrorKind {
+    /// Tolerant: an unknown kind reads as `Internal`, so a payload from a
+    /// newer writer still decodes.
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let kind = String::deserialize(deserializer)?;
+        Ok(kind.parse().unwrap_or(Self::Internal))
+    }
+}
+
 /// The final report of an approved workspace import, with no page content.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportSettlement {
+    /// Fidelity losses and source snapshot labels retained by the import.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
     /// The workspace the import read.
     #[serde(default)]
     pub source: ImportWorkspace,
     /// How the write ended.
     pub outcome: ImportOutcome,
-    /// Why it failed, or what went wrong in a completed write.
+    /// Why it failed, written from `error_kind`, or what went wrong in a
+    /// completed write. Never the importer's raw error.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// Why it failed, when it did and the kind was recorded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_kind: Option<RunErrorKind>,
     /// Objects written into Macro.
     pub imported: u32,
     /// Objects the plan copies: as they are or as task lists from Notion,
@@ -102,8 +162,11 @@ pub struct ImportSettlement {
     pub documents: u32,
     /// Planned databases.
     pub databases: u32,
-    /// Rows those databases hold.
+    /// Rows written, including rows from database copies that stopped.
     pub database_rows: u32,
+    /// The subset of rows from unfinished database copies.
+    #[serde(default)]
+    pub partial_database_rows: u32,
     /// Planned task lists; issues that become tasks for Linear and Jira.
     pub task_lists: u32,
     /// Tasks those task lists or issues become.
@@ -124,6 +187,12 @@ pub struct ImportSettlement {
     pub root_folder_id: Option<Uuid>,
     /// Objects that could not be imported, at most [`MAX_IMPORT_ITEMS`].
     pub failures: Vec<ImportItem>,
+    /// Exact number of failed objects. Absent on settlements from older writers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure_count: Option<u32>,
+    /// At least one list was shortened for the settlement.
+    #[serde(default)]
+    pub details_truncated: bool,
     /// Objects left for the owner to handle by hand, at most [`MAX_IMPORT_ITEMS`].
     pub hand_items: Vec<ImportItem>,
 }
@@ -143,6 +212,8 @@ pub enum ImportWorkspace {
     Linear,
     /// Jira projects, epics and issues.
     Jira,
+    /// HubSpot deal pipelines, companies, contacts and deals.
+    Hubspot,
 }
 
 /// How an approved import's write ended.
@@ -198,6 +269,9 @@ pub enum DecisionOutcome {
     Dismissed,
     /// The batch contains mixed or unconfirmed results.
     Partial,
+    /// Every approved action was refused before it started (an import whose
+    /// plan was no longer ready); the review is open again, unchanged.
+    Refused,
 }
 
 /// Surface of a review decision.
@@ -261,7 +335,7 @@ pub fn notification_context(notifications: &[Notification]) -> Result<String, se
             escape(&payload),
         ));
     }
-    xml.push_str("</m-notifications>\nThese are system events, not user requests. Do not repeat completed actions or retry uncertain outcomes. Read final drafts through GetReview. If nothing needs saying and you have not called any tool in this turn, reply exactly <noop/>. After any tool call, summarize the result instead of replying with <noop/>.");
+    xml.push_str("</m-notifications>\nThese are system events, not user requests. Do not repeat completed actions or retry uncertain outcomes. Read final drafts through GetReview. If nothing needs saying and you have not called any tool in this turn, reply with <noop/> and nothing else: no text before or after it. After any tool call, summarize the result instead of replying with <noop/>.");
     Ok(xml)
 }
 
@@ -298,3 +372,6 @@ pub fn input_from_runtime(
     let params = request.params.as_ref()?.clone().into_value();
     serde_json::from_value(params.get("_meta")?.get(NOTIFICATIONS_META)?.clone()).ok()
 }
+
+#[cfg(test)]
+mod test;

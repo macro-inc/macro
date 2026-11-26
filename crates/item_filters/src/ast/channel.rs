@@ -60,7 +60,9 @@ pub enum ChannelLiteral {
     Importance(bool),
     /// this node value filters by whether the requesting user is an active participant
     /// of the channel. Its presence widens the candidate set to team channels of the
-    /// user's teams that they have not joined.
+    /// user's teams that they have not joined, and, when the filter admits only
+    /// channels it names by id, to public channels too: a by-id read then
+    /// returns every channel the user can open.
     IsParticipant(bool),
     /// An entity has a non-deleted notification in this exact state.
     NotificationState(crate::NotificationState),

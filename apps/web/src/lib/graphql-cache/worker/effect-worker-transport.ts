@@ -18,10 +18,11 @@ export const EFFECT_WORKER_RESPONSE_TAG = 1 as const;
 /** Effect's parent-to-runner close frame. */
 export const EFFECT_WORKER_CLOSE_FRAME = [EFFECT_WORKER_RESPONSE_TAG] as const;
 
-/** The browser replaced the runner global without replacing the page's port. */
+/** The runner is gone: the browser replaced its global without replacing the
+ * page's port, or ended it. */
 export class WorkerRestartedError extends Error {
-  constructor() {
-    super('Effect worker transport restarted');
+  constructor(message = 'Effect worker transport restarted') {
+    super(message);
     this.name = 'WorkerRestartedError';
   }
 }

@@ -20,10 +20,10 @@ use crate::inbound::toolset::{ImportToolContext, notion_import_toolset};
 use agent::types::{ChatMessage, ChatMessageContent, Role};
 use agent::{AgentLoop, PredefinedModel};
 use ai_toolset::{RequestContext, ToolResult, ToolSet, ToolSetError};
+use connectors::{ConnectorKey, McpConnectionsService, UserMcpTools};
 use futures::StreamExt;
 use import_notion::domain::ports::NotionConnections;
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_select::{ConnectorSelect, UserMcpTools};
 use std::collections::HashSet;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -32,8 +32,10 @@ use std::time::Duration;
 use uuid::Uuid;
 
 mod admission;
+mod hubspot_workspace;
 pub(crate) mod lifecycle;
 mod notion_workspace;
+pub use notion_workspace::failure_kind;
 mod tracker_workspace;
 mod workspace;
 pub use workspace::WorkspaceImporter;
@@ -317,6 +319,7 @@ pub struct ImportServiceImpl<R, S, C, W = NoSlackSource, N = NoNotionConnections
         ImportSource,
         Arc<dyn import_tracker::domain::model::TrackerConnections>,
     >,
+    hubspot: Option<HubspotImport>,
     slack_source: Arc<W>,
     mcp_tools: Arc<S>,
     creator: Arc<C>,
@@ -325,6 +328,14 @@ pub struct ImportServiceImpl<R, S, C, W = NoSlackSource, N = NoNotionConnections
     notifier: Option<ImportNotify>,
     jobs: WorkspaceJobs,
     mirror_locks: Arc<PersonalMirrorLocks>,
+    reservation_clock: Arc<dyn Fn() -> chrono::DateTime<chrono::Utc> + Send + Sync>,
+}
+
+/// The HubSpot reader and the CRM writer a host wires together.
+#[derive(Clone)]
+struct HubspotImport {
+    reader: Arc<dyn import_hubspot::domain::HubspotConnections>,
+    writer: Arc<dyn crate::domain::ports::CrmImportWriter>,
 }
 
 /// Weak slots keep in-run mirror exclusion per user without retaining inactive locks.
@@ -362,6 +373,7 @@ impl<R: Clone, S, C, W: SlackWorkspaceSource, N> Clone for ImportServiceImpl<R, 
             notion: self.notion.clone(),
             workspace_source: self.workspace_source,
             trackers: self.trackers.clone(),
+            hubspot: self.hubspot.clone(),
             slack_source: self.slack_source.clone(),
             mcp_tools: self.mcp_tools.clone(),
             creator: self.creator.clone(),
@@ -370,6 +382,7 @@ impl<R: Clone, S, C, W: SlackWorkspaceSource, N> Clone for ImportServiceImpl<R, 
             notifier: self.notifier.clone(),
             jobs: self.jobs.clone(),
             mirror_locks: self.mirror_locks.clone(),
+            reservation_clock: self.reservation_clock.clone(),
         }
     }
 }
@@ -387,6 +400,7 @@ impl<R, S, C> ImportServiceImpl<R, S, C> {
             notion: Arc::new(NoNotionConnections),
             workspace_source: ImportSource::Notion,
             trackers: Default::default(),
+            hubspot: None,
             slack_source: Arc::new(NoSlackSource),
             mcp_tools,
             creator,
@@ -395,6 +409,7 @@ impl<R, S, C> ImportServiceImpl<R, S, C> {
             notifier: None,
             jobs: WorkspaceJobs::new(),
             mirror_locks: Arc::new(PersonalMirrorLocks::default()),
+            reservation_clock: Arc::new(chrono::Utc::now),
         }
     }
 }
@@ -410,6 +425,7 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
             notion: self.notion,
             workspace_source: self.workspace_source,
             trackers: self.trackers,
+            hubspot: self.hubspot,
             mcp_tools: self.mcp_tools,
             creator: self.creator,
             recorder: self.recorder,
@@ -417,6 +433,7 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
             notifier: self.notifier,
             jobs: self.jobs,
             mirror_locks: self.mirror_locks,
+            reservation_clock: self.reservation_clock,
             slack_source: source,
         }
     }
@@ -429,6 +446,17 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
     ) -> Self {
         self.trackers.insert(ImportSource::Linear, linear);
         self.trackers.insert(ImportSource::Jira, jira);
+        self
+    }
+
+    /// Read HubSpot portals through `reader` and write them into the team's
+    /// CRM through `writer`. Hosts without it report HubSpot as unavailable.
+    pub fn with_hubspot(
+        mut self,
+        reader: Arc<dyn import_hubspot::domain::HubspotConnections>,
+        writer: Arc<dyn crate::domain::ports::CrmImportWriter>,
+    ) -> Self {
+        self.hubspot = Some(HubspotImport { reader, writer });
         self
     }
 
@@ -463,6 +491,7 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
             notion: connections,
             workspace_source: self.workspace_source,
             trackers: self.trackers,
+            hubspot: self.hubspot,
             mcp_tools: self.mcp_tools,
             creator: self.creator,
             recorder: self.recorder,
@@ -470,6 +499,7 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
             notifier: self.notifier,
             jobs: self.jobs,
             mirror_locks: self.mirror_locks,
+            reservation_clock: self.reservation_clock,
             slack_source: self.slack_source,
         }
     }
@@ -484,7 +514,7 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
 impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator,
 {
     /// Fail discovery runs that outlived their own timeout: their process died
@@ -632,9 +662,7 @@ where
         user: &MacroUserIdStr<'static>,
         source: ImportSource,
     ) -> anyhow::Result<Arc<UserMcpTools>> {
-        let mcp_tools = self
-            .mcp_tools
-            .connector_toolset(user, source.connector_ref())
+        let mcp_tools = source_tools(self.mcp_tools.as_ref(), user, source)
             .await?
             .ok_or_else(|| anyhow::anyhow!("no {} connection", source.as_ref()))?;
         anyhow::ensure!(
@@ -727,8 +755,9 @@ where
                 }
                 .await
             }
-            // Notion rows go through the agent session, never here.
-            ImportSource::Notion | ImportSource::Jira => return,
+            // Notion rows go through the agent session, never here; Jira and
+            // HubSpot rows only through their reviewed workspace writes.
+            ImportSource::Notion | ImportSource::Jira | ImportSource::Hubspot => return,
         };
 
         let persisted = match created {
@@ -892,7 +921,7 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportService
     for ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator,
 {
     #[tracing::instrument(skip(self, user), err)]
@@ -989,7 +1018,7 @@ where
 impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator,
 {
     #[tracing::instrument(skip(self, user, metadata), err)]
@@ -1080,7 +1109,7 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportStager
     for ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator,
 {
     async fn stage(
@@ -1172,7 +1201,7 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> NotionPageImpor
     for ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator,
 {
     #[tracing::instrument(skip(self, user), fields(page = page_url_or_id), err)]
@@ -1308,10 +1337,10 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportFinalizer
     for ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator,
 {
-    #[tracing::instrument(skip(self, user, content_markdown), err)]
+    #[tracing::instrument(skip(self, user, name, content_markdown, properties), fields(properties = properties.values.len(), tags = properties.tags.len()), err)]
     async fn finalize_document(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -1367,6 +1396,11 @@ where
                     "Jira imports require an approved workspace review.",
                 ));
             }
+            ImportSource::Hubspot => {
+                return Err(ImportError::NotReady(
+                    "HubSpot imports require an approved workspace review.",
+                ));
+            }
             ImportSource::Slack => {
                 return Err(ImportError::Other(anyhow::anyhow!(
                     "slack channels are not finalized as documents"
@@ -1391,6 +1425,21 @@ where
 
 /// The mangled name of the connector's Notion fetch tool. Notion exposes this
 /// as `notion-fetch` generally and as `fetch` on OpenAI-compatible surfaces.
+/// The tools of the user's connection to `source`'s app, when the connectors
+/// services count one as usable; `None` otherwise.
+pub(crate) async fn source_tools<S: McpConnectionsService>(
+    service: &S,
+    user: &MacroUserIdStr<'static>,
+    source: ImportSource,
+) -> anyhow::Result<Option<UserMcpTools>> {
+    let app = ConnectorKey::App(source.connector()?);
+    let connections = service.connections(user).await?;
+    let Some(handle) = connections.handles().find(|handle| *handle.key() == app) else {
+        return Ok(None);
+    };
+    Ok(Some(service.toolset(std::slice::from_ref(handle)).await))
+}
+
 fn notion_fetch_tool_name(mcp_tools: &impl ToolSet<()>) -> Option<String> {
     ToolSet::<()>::request_schemas(mcp_tools)?
         .into_iter()

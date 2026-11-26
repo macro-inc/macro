@@ -1,10 +1,11 @@
 import { emailToMacroId } from '@core/user/macroId';
 import type { PeopleContextUpdate } from '@graphql-cache/people/generated';
 import type { Link } from '@service-email/generated/schemas';
-import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
-import type { ApiActivity } from '@service-storage/generated/schemas/apiActivity';
 import { validate as validUuid } from 'uuid';
-import type { CachedGraphqlChannel } from '../channel/graphql';
+import type {
+  DirectoryChannel,
+  DirectoryParticipant,
+} from '../channel/directory-core';
 import { canonicalContactUserId } from './contact-user-id';
 
 export type PersonFactPatch = Extract<
@@ -24,51 +25,32 @@ function timestamp(value: string | null | undefined): number | null {
   const parsed = new Date(value).getTime();
   return Number.isSafeInteger(parsed) ? parsed : null;
 }
-function latest(...values: Array<number | null>): number | null {
-  let result: number | null = null;
-  for (const value of values)
-    if (value !== null && (result === null || value > result)) result = value;
-  return result;
-}
 
-type ContextChannel = Pick<
-  ApiChannelWithLatest,
-  'id' | 'name' | 'channel_type' | 'updated_at' | 'viewed_at'
+export type ContextChannel = Pick<
+  DirectoryChannel,
+  'id' | 'name' | 'channelType' | 'updatedAt' | 'viewedAt'
 > & {
-  participants: readonly Pick<
-    ApiChannelWithLatest['participants'][number],
-    'user_id'
-  >[];
+  participants: readonly Pick<DirectoryParticipant, 'userId'>[];
+  botParticipants: readonly unknown[];
 };
 
-/** A command target must still be a one-to-one DM in the newest metadata. */
-function commandTarget(
-  channel: ContextChannel,
-  overlay: CachedGraphqlChannel | undefined,
-  activityViewed: number | null,
-  viewer: string | undefined
-) {
-  if (overlay && overlay.channelType !== 'direct_message') return;
+/** A command target is a one-to-one DM: the viewer and one other person. */
+function commandTarget(channel: ContextChannel, viewer: string | undefined) {
+  // A bot in the conversation makes it more than one-to-one.
+  if (channel.botParticipants.length > 0) return;
   let other: string | undefined;
-  for (const participant of overlay?.participantIds ?? channel.participants) {
-    const id =
-      typeof participant === 'string' ? participant : participant.user_id;
-    if (canonicalContactUserId(id) === viewer) continue;
+  for (const { userId } of channel.participants) {
+    if (canonicalContactUserId(userId) === viewer) continue;
     if (other !== undefined) return;
-    other = id;
+    other = userId;
   }
   const userId =
     other === undefined ? undefined : canonicalContactUserId(other);
   if (!userId || !validUuid(channel.id)) return;
-  const name = overlay?.name ?? channel.name ?? '';
+  const name = channel.name ?? '';
   if (UTF8.encode(name).length > 4096) return;
-  const viewedAt = latest(
-    timestamp(channel.viewed_at),
-    timestamp(overlay?.viewedAt),
-    activityViewed
-  );
   const timestampMs =
-    viewedAt ?? timestamp(overlay?.updatedAt ?? channel.updated_at) ?? 0;
+    timestamp(channel.viewedAt) ?? timestamp(channel.updatedAt) ?? 0;
   return { userId, directMessage: { id: channel.id, name, timestampMs } };
 }
 
@@ -77,38 +59,25 @@ function commandTarget(
 export function buildContactContextFacts(input: {
   viewer: string;
   channels: readonly ContextChannel[];
-  activity: readonly Pick<ApiActivity, 'channel_id' | 'viewed_at'>[];
   links: readonly Pick<Link, 'email_address' | 'is_primary'>[];
-  cachedChannels: readonly CachedGraphqlChannel[];
 }): ReadonlyMap<string, PersonFacts> {
   const result = new Map<string, PersonFacts>();
   const viewer = canonicalContactUserId(input.viewer);
-  const viewed = new Map(
-    input.activity.map((row) => [row.channel_id, timestamp(row.viewed_at)])
-  );
-  const cached = new Map(
-    input.cachedChannels.map((channel) => [channel.id, channel])
-  );
   for (const channel of input.channels) {
-    if (channel.channel_type !== 'direct_message') continue;
-    // Preserve useDmActivityByUserId's source-order/first-other semantics,
-    // including group-DM activity; only one-to-one DMs become command targets.
+    if (channel.channelType !== 'direct_message') continue;
+    // Preserve useDmActivityByUserId's first-other semantics, including
+    // group-DM activity; only one-to-one DMs become command targets.
     const firstOther = channel.participants.find(
-      (person) => canonicalContactUserId(person.user_id) !== viewer
+      (person) => canonicalContactUserId(person.userId) !== viewer
     );
-    const peer = firstOther && canonicalContactUserId(firstOther.user_id);
+    const peer = firstOther && canonicalContactUserId(firstOther.userId);
     if (!peer) continue;
     const facts: PersonFacts = {
       ...(result.get(peer) ?? EMPTY_PERSON_FACTS),
-      lastInteractionMs: timestamp(channel.updated_at),
+      lastInteractionMs: timestamp(channel.updatedAt),
     };
     result.set(peer, facts);
-    const target = commandTarget(
-      channel,
-      cached.get(channel.id),
-      viewed.get(channel.id) ?? null,
-      viewer
-    );
+    const target = commandTarget(channel, viewer);
     if (!target) continue;
     const commandFacts = result.get(target.userId) ?? EMPTY_PERSON_FACTS;
     const commandTime = target.directMessage.timestampMs;

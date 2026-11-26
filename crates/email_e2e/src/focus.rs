@@ -1,6 +1,7 @@
 //! What `email_focus_worker` asks outside Macro's own database, stood in
 //! for: the model that answers the Focus questions about a thread, the
-//! agent harness route that reads the day a thread is due, and PostHog,
+//! agent harness route that reads the day a thread is due and the day of
+//! the meeting it is about, and PostHog,
 //! whose `enable-email-focus` flag puts a user's inboxes, and those linked
 //! to them, in the Focus rollout.
 //!
@@ -27,6 +28,7 @@ use axum::{Json, Router};
 use chrono::NaiveDate;
 use rootcause::prelude::*;
 use serde_json::{Value, json};
+use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
@@ -46,6 +48,9 @@ const DUE_DATE_ROUTE: &str = "/universal_input/thread-due-date";
 /// The question the worker asks first: would the owner want this thread
 /// in Focus (`FocusQuestion::ALL` in `crates/email`).
 const FOCUS_QUESTION: &str = "q0";
+/// The question whether the latest message asks the owner something they haven't
+/// answered, seventh in `FocusQuestion::ALL`.
+const NEEDS_RESPONSE_QUESTION: &str = "q6";
 /// The key the worker is given for the model API, which the stand-in asks
 /// for as the API does.
 pub(crate) const MODEL_API_KEY: &str = "email-e2e";
@@ -70,19 +75,44 @@ const NO: f64 = 0.0;
 struct Answers {
     /// Text that marks mail as belonging in Focus.
     focus: Vec<String>,
+    /// Text that marks mail as asking the owner something.
+    asks_owner: Vec<String>,
     /// Text that marks mail as due, with the day.
     due: Vec<(String, NaiveDate)>,
+    /// Text that marks mail as about a meeting, with the meeting's day.
+    events: Vec<(String, NaiveDate)>,
     /// The input of every question the model was asked, oldest first. Kept
     /// in memory for [`FocusClassifier::times_asked_about`] only: it is
     /// mail, and never reaches the scenario's record.
     asked: Vec<String>,
     /// The stand-in and route of every request, oldest first.
     calls: Vec<(&'static str, &'static str)>,
+    /// The tokens the model bills for each question it answers.
+    tokens_per_call: u64,
+    /// Until when the model turns every question away with a rate limit.
+    rate_limited_until: Option<Instant>,
+    /// When the model answered or turned away each question, oldest first.
+    model_requests: Vec<ModelRequest>,
     /// The addresses of the users whose Focus flag is off.
     flag_off: Vec<String>,
     /// Whether the worker has read the flag definitions, which it reads
     /// again only five minutes later.
     flag_read: bool,
+}
+
+/// One question the model was asked.
+#[derive(Debug, Clone)]
+pub struct ModelRequest {
+    /// When the model answered it, or turned it away.
+    pub at: Instant,
+    /// The tokens it billed; none for a question turned away.
+    pub tokens: u64,
+    /// Whether it was turned away with a rate limit.
+    pub rate_limited: bool,
+    /// Whether the mail it was about holds the scenario's text: see
+    /// [`FocusClassifier::requests_about`].
+    pub about: bool,
+    input: String,
 }
 
 /// The model, the due date reader and the Focus flag the Focus worker asks,
@@ -108,10 +138,23 @@ impl FocusClassifier {
         self.answers().focus.push(text.to_owned());
     }
 
+    /// From now on the model says a thread's latest message asks the owner
+    /// something they haven't answered when what the worker shows it holds
+    /// `text`.
+    pub fn ask_the_owner_when_mail_contains(&self, text: &str) {
+        self.answers().asks_owner.push(text.to_owned());
+    }
+
     /// From now on the agent harness reads `day` as the day a thread is due
     /// when the thread's subject or messages hold `text`.
     pub fn due_on_when_mail_contains(&self, text: &str, day: NaiveDate) {
         self.answers().due.push((text.to_owned(), day));
+    }
+
+    /// From now on the agent harness reads `day` as the day of the meeting a
+    /// thread is about when the thread's subject or messages hold `text`.
+    pub fn event_on_when_mail_contains(&self, text: &str, day: NaiveDate) {
+        self.answers().events.push((text.to_owned(), day));
     }
 
     /// Turns the Focus flag off for the user at `address`, so the worker
@@ -142,6 +185,34 @@ impl FocusClassifier {
             .iter()
             .filter(|input| input.contains(text))
             .count()
+    }
+
+    /// From now on the model bills `tokens` input tokens for each question it
+    /// answers (one until told otherwise), as TypeSafe does for a long thread.
+    pub fn bill_tokens_per_call(&self, tokens: u64) {
+        self.answers().tokens_per_call = tokens;
+    }
+
+    /// For the next `period` the model turns every question away with 429 Too
+    /// Many Requests, as TypeSafe does while the account is over its rate
+    /// limit. Jev tries a question three times within about a second and a
+    /// half, so a question first asked in the period is turned away for good
+    /// when the period is longer than that.
+    pub fn rate_limit_for(&self, period: std::time::Duration) {
+        self.answers().rate_limited_until = Some(Instant::now() + period);
+    }
+
+    /// Every question the model was asked so far, oldest first, with
+    /// [`ModelRequest::about`] telling which were about mail holding `text`.
+    pub fn requests_about(&self, text: &str) -> Vec<ModelRequest> {
+        self.answers()
+            .model_requests
+            .iter()
+            .map(|request| ModelRequest {
+                about: request.input.contains(text),
+                ..request.clone()
+            })
+            .collect()
     }
 
     /// The stand-in and route of every request so far, oldest first.
@@ -221,7 +292,8 @@ impl FocusStandIns {
 }
 
 /// The model: every question asked gets an answer, "yes" only to the Focus
-/// question about mail the scenario marked. The wire shape is the one
+/// question, and to whether the latest message asks the owner something, about
+/// mail the scenario marked. The wire shape is the one
 /// `jev::outbound::SystemOneJev` speaks with TypeSafe.
 async fn evaluate(
     State(classifier): State<FocusClassifier>,
@@ -234,7 +306,31 @@ async fn evaluate(
     }
     let input = request["state"].to_string();
     let mut answers = classifier.answers();
+    if answers
+        .rate_limited_until
+        .is_some_and(|until| Instant::now() < until)
+    {
+        answers.calls.push((MODEL_API, EVALUATE_ROUTE));
+        answers.model_requests.push(ModelRequest {
+            at: Instant::now(),
+            tokens: 0,
+            rate_limited: true,
+            about: false,
+            input,
+        });
+        return StatusCode::TOO_MANY_REQUESTS.into_response();
+    }
+    let tokens = answers.tokens_per_call.max(1);
+    answers.model_requests.push(ModelRequest {
+        at: Instant::now(),
+        // What the answer below bills: the input and one output token.
+        tokens: tokens + 1,
+        rate_limited: false,
+        about: false,
+        input: input.clone(),
+    });
     let in_focus = answers.focus.iter().any(|text| input.contains(text));
+    let asks_owner = answers.asks_owner.iter().any(|text| input.contains(text));
     answers.asked.push(input);
     answers.calls.push((MODEL_API, EVALUATE_ROUTE));
     let answered: serde_json::Map<String, Value> = request["questions"]
@@ -242,7 +338,8 @@ async fn evaluate(
         .into_iter()
         .flatten()
         .map(|(id, _)| {
-            let yes = in_focus && id == FOCUS_QUESTION;
+            let yes =
+                (in_focus && id == FOCUS_QUESTION) || (asks_owner && id == NEEDS_RESPONSE_QUESTION);
             (
                 id.clone(),
                 json!({ "type": "noul", "noul": if yes { YES } else { NO } }),
@@ -252,13 +349,13 @@ async fn evaluate(
     Json(json!({
         "model": request["model"],
         "answers": answered,
-        "usage": { "input_tokens": 1, "output_tokens": 1 },
+        "usage": { "input_tokens": tokens, "output_tokens": 1 },
     }))
     .into_response()
 }
 
-/// The agent harness's due date route: the day the scenario set for mail
-/// the thread holds, or none.
+/// The agent harness's due date route: the due day and the meeting's day
+/// the scenario set for mail the thread holds, or none.
 async fn due_date(
     State(classifier): State<FocusClassifier>,
     headers: HeaderMap,
@@ -273,12 +370,13 @@ async fn due_date(
     let thread = json!([request["subject"], request["messages"]]).to_string();
     let mut answers = classifier.answers();
     answers.calls.push((AGENT_HARNESS, DUE_DATE_ROUTE));
-    let due_on = answers
-        .due
-        .iter()
-        .find(|(text, _)| thread.contains(text))
-        .map(|(_, day)| day.format("%Y-%m-%d").to_string());
-    Json(json!({ "due_on": due_on })).into_response()
+    let day_for = |days: &[(String, NaiveDate)]| {
+        days.iter()
+            .find(|(text, _)| thread.contains(text))
+            .map(|(_, day)| day.format("%Y-%m-%d").to_string())
+    };
+    let (due_on, event_on) = (day_for(&answers.due), day_for(&answers.events));
+    Json(json!({ "due_on": due_on, "event_on": event_on })).into_response()
 }
 
 /// A header's value, empty when it is missing or not text.

@@ -31,7 +31,11 @@
 	opacity: 0.62;
 }
 
-.calendar-tool-preview .calendar-view .fc .calendar-event-emphasized {
+/* A draft is a tint of its calendar's color; the event it became keeps its own fill. */
+.calendar-tool-preview:not([data-event-created])
+	.calendar-view
+	.fc
+	.calendar-event-emphasized {
 	--fc-event-bg-color: color-mix(
 		in oklch,
 		var(--event-calendar-color, var(--color-calendar)) 22%,
@@ -42,6 +46,9 @@
 		var(--event-calendar-color, var(--color-calendar)) 72%,
 		var(--color-ink)
 	);
+}
+
+.calendar-tool-preview .calendar-view .fc .calendar-event-emphasized {
 	z-index: 4;
 	border-width: 2px;
 	box-shadow:

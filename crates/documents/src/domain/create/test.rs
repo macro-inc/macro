@@ -113,6 +113,18 @@ impl DocumentCreationService for FakeCreationService {
         panic!("unexpected mark_document_uploaded call")
     }
 
+    async fn ready_imported_document(
+        &self,
+        document_id: &str,
+        _edited_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), DocumentError> {
+        self.set_document_content(
+            document_id,
+            DocumentContent::ready(crate::domain::content::DocumentContentLocation::SyncService),
+        )
+        .await
+    }
+
     async fn set_document_content(
         &self,
         _document_id: &str,

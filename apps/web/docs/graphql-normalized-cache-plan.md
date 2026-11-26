@@ -79,7 +79,10 @@ entire cache in browser memory. With 10s of thousands of cached objects
     write-session token: logout closes admission and drains admitted durable
     write/delete operations before clearing registered hosts. Independent local
     auth cleanup and server sign-out begin without waiting for this drain; reload
-    and replacement admission still wait for all cleanup. Tracked contact writes
+    and replacement admission still wait for all cleanup. A browser cache not wiped
+    within ten seconds counts as a failed wipe: the scope rotates, so nothing opens
+    it again, and the wipe goes on while the page lives. A native cache gets no such
+    limit, as its running engine refuses a new scope. Tracked contact writes
     retain their exact physical host even if auth propagation retires the public
     wrapper, whose callbacks and subsequent operations are silenced immediately.
     Successful login
@@ -89,9 +92,9 @@ entire cache in browser memory. With 10s of thousands of cached objects
     replacement that keeps the same client and host objects. A readiness probe
     precedes tracking so failed initialization cannot strand a never-written key.
     Logical retirement keeps narrow cleanup usable through the retained owner.
-    Typed recoverable bootstrap/owner failures may reconstruct a cleanup-only host
+    Typed recoverable host/owner failures may reconstruct a cleanup-only host
     from the original backend/scope factory without booting a user client or queue;
-    unknown or quarantined failures cannot use this path. Failed repair retains
+    unknown failures cannot use this path. Failed repair retains
     keys/ownership, reports the failure, and leaves admission closed for retry.
     A no-op delete is not proof of storage cleanup, and a never-settling durable
     write cannot be bypassed by a timeout. Login waits for all logout wipes and teardown, not just
@@ -234,6 +237,11 @@ function on first call. The module is keyed by the asset URL it was compiled
 from and travels on a port of its own (`worker/compiled-engine.ts`); it cannot
 pass through the coordinator, which is a different agent cluster. If the module
 cannot be passed or instantiated, the worker loads the engine as before.
+The page also compiles the engine before its first worker exists, starting
+before its liveness lock, since a page that becomes owner otherwise downloads
+and compiles only after the lock, the coordinator and the election. A page the
+coordinator registers while another visible tab owns the cache drops that
+compile.
 
 ### 4.2 Multi-consumer strategy (browser only)
 
@@ -248,25 +256,47 @@ drain waits for that set to empty before closing the core, runner, and worker.
 The cache's validated envelopes, request ids, Web Locks, owner epochs,
 heartbeats, and replay policy remain application-owned. A normal `pagehide`
 uses a fenced navigation-departure message: the page terminates its dedicated
-worker, but the next owner opens the existing OPFS database. Only an
-unannounced liveness, transport, or engine failure **after the database
-open grant** selects `wipe-before-open`. A missed heartbeat alone is not owner
-loss: background tabs and their dedicated workers may be suspended while the
-SharedWorker still runs. The coordinator probes the physical owner Web Lock
-without waiting or stealing it; a held lock (or a failed probe) retries the
-heartbeat without changing epochs or touching storage. A released lock confirms
-silent worker termination and triggers the usual fenced recovery. Read deadlines
+worker, but the next owner opens the existing OPFS database. A page that leaves
+without saying so (a killed tab, a departure message that arrives after its
+liveness lock is released) or disposes its cache stops its worker the same way
+and is treated the same; a wipe already due stays due. The engine's
+port is not ordered with its page's, so a report it sent just before can be read
+too late and is then ignored. Only an engine failure
+reported by a page or seen by the coordinator **after the database open grant**
+selects `wipe-before-open`. A missed heartbeat alone is not owner loss: background tabs and their dedicated workers may be suspended while the
+SharedWorker still runs. The coordinator asks the browser whether that engine, by
+the client ID it reported when ready, still holds the physical owner Web Lock: the
+engine of another build may hold a lock of the same name. A held lock (or a failed
+probe) retries the heartbeat without changing epochs or touching storage. A
+released lock confirms silent worker termination and triggers the usual fenced
+recovery, which opens the existing database if another context holds the lock by
+then, as that one judged what the dead engine left. If the
+page's liveness lock is released too, the page left; the coordinator
+looks for it after a heartbeat interval, and also before an opening deadline ends
+an owner, and looks three times when looking fails. An answer, a hidden page or a
+departure that arrives meanwhile changes nothing: the engine is gone. Read deadlines
 still bound callers waiting on an unresponsive engine outside a visibility handoff.
 
 Protocol v10 reports tab visibility and epoch-fenced read states: `ready`,
 `waiting`, and `blocked`. A visible owner stays put even if another visible window
-gets focus. When its page hides, stop routing new work into that engine and ask it
-to drain immediately, without waiting for another visible consumer. An engine
-already loading/opening first finishes startup before draining. The runtime waits
+gets focus, and one that hides for less than a second keeps serving. After that,
+stop routing new work into that engine and ask it to drain, without waiting for
+another visible consumer. An engine
+already loading/opening first finishes startup before draining, and the time its
+page was hidden meanwhile counts. The runtime waits
 for admitted work and closes OPFS before acknowledging. Only then may another
 eligible visible page acquire the owner lock and open the existing database.
+A drain is looked at every five seconds in which some page is visible, or a newer
+build waits for it. One whose lock is free, after a heartbeat interval for its
+`engine-drained` to arrive, and one still draining at the third look, 15 s in, are
+ended as if their page had left (`ownerEvent: drain-timed-out`), so the next owner
+opens the existing database: a drain never ends in a wipe. A frozen one keeps its lock until it thaws or its page goes, and the
+next owner then runs into the lock's own time limit.
 Clients and their subscribers stay connected; an explicit page disposal can join
-the same drain and retire that page normally.
+the same drain and retire that page normally. A host disposed before it is ready
+leaves like a navigating page instead: it keeps the database and the cache scope,
+rejects its requests with `host-disposed`, and reports an admitted enqueue as
+uncertain.
 
 If no eligible tab is visible, the coordinator enters `parked` with no engine.
 Background cache work queues until a visible page resumes ownership; it never
@@ -324,7 +354,8 @@ to its event loop before starting (and again after each request), repeating
 while requests keep arriving (up to a bound), and then picks by priority. A
 typed search with nothing else queued starts at once. A visible consumer starts a one-second read budget
 covering drain/startup/resume; changes of candidate do not extend it. If everyone
-hides again, cancel that budget. On expiry, `blocked` allows ordinary query network
+hides again, cancel that budget: the next visible consumer starts a fresh one. On
+expiry, `blocked` allows ordinary query network
 fallback (`cache-only` still never forwards) without repeatedly paying ten seconds.
 Only read callers are canceled, not admitted engine work or writes. A typed
 search already sent is the exception: it has no network fallback, so it stays
@@ -336,6 +367,15 @@ blocked is refused like any read, and Quick Access replays it. `search` takes an
 host stops waiting, though the coordinator may still run its copy. Readiness
 restores deadlines and refreshes dependency registrations with preserved-storage
 semantics, including when startup finishes on its original owner.
+
+The second covers an owner change. A read that waits for an owner for any other
+reason (the first startup, a recovery) ends after ten seconds in which its page
+is visible, with `CacheRequestTimeoutError`; reads sent once an owner is ready get
+their ten seconds for its answer, as before. A cache-only reader has nothing to
+turn to, so it tells the two apart (`isOwnerHandoffBlockedError` or the timeout)
+and asks again when `onOwnerReady` reports that the owner answers: after a start,
+after a replaced engine's handshake, and after an owner change that was called
+off. `onCacheGenerationChanged` reports replaced engines only.
 
 A replacement also invalidates document-read cursors and in-flight snapshots.
 The exchange retries a still-current read once against the new generation instead
@@ -377,8 +417,11 @@ contexts/coordinator still needs the existing uncertain-outcome and server-side
 idempotency protections. Parking never reports an unpersisted enqueue as durable.
 
 The read budget never kills an owner, steals a lock, wipes storage, or replays a
-write. If a drain itself stalls, writes wait until it can finish or existing
-failure/navigation recovery applies. Owner telemetry adds `park-started`, `parked`,
+write. A write still queued in the coordinator after 30 s in which some page is
+visible is refused with `write-not-admitted`: no engine ever got it. The exchange
+returns that as the mutation's error, whatever else changed meanwhile, and never
+sends it to the API, where it would overtake writes made since. Settlements,
+removals and the queue's own bookkeeping keep waiting. Owner telemetry adds `park-started`, `parked`,
 `unpark-started`, and `unpark-completed` alongside the `visibility-handoff-*` events.
 The backend-free `parking.browser.e2e.ts` exercises physical release, retained
 clients/storage, a query admitted while parked completing across replacement
@@ -388,11 +431,20 @@ five queued catch-up commits producing one visible-cache refresh on return.
 
 Every departure rejects already-routed optimistic enqueues whose replies were
 lost as `admitted-enqueue-uncertain`, including requests from surviving tabs.
-An engine epoch fence does not undo a committed queue entry, and a planned
-recovery wipe has not erased it yet. The exchange must neither retry those
+An engine epoch fence does not undo a committed queue entry, and neither does a
+recovery wipe (4.3). The exchange must neither retry those
 enqueues nor forward them directly to the API. Requests queued at the coordinator
 but not yet routed remain eligible for one dispatch to the replacement engine;
 late old-epoch responses cannot settle the rejected requests.
+
+Any other request its owner left without an answer, drained or lost, is refused
+with `owner-epoch-lost`. A page still starting asks the next owner again and
+keeps its callers waiting, and so does an authority read, which startup waits on
+after the handshake. An authority read also waits out a suspension in the
+back/forward cache and a coordinator restart, so neither makes a starting page
+drop its host. Reads and writes are not replayed. During a handover the
+coordinator announced, a host told its owner was lost keeps sending it requests,
+which wait there for the next owner.
 
 Safari can recreate the SharedWorker global while retaining a page's MessagePort,
 including when another tab closes. A second Effect ready frame is a transport
@@ -402,9 +454,32 @@ The same host and subscribers survive. Pending operations reject without replay;
 an admitted optimistic enqueue is reported as uncertain so it cannot fall through
 to a second API write. Durable storage and the cache scope are preserved, while
 live-query dependencies and revision checkpoints are invalidated after reconnect.
-Restarted startup is bounded by the registration retry budget; exhaustion uses
-the normal session fallback without quarantining a healthy database. The
-`graphql_cache.owner` event records `ownerEvent: coordinator-restarted`.
+Restarted startup is bounded by the registration retry budget. A restart that
+cuts startup off, restarts that use up `COORDINATOR_CONNECT_ATTEMPTS`, and a
+registration whose every attempt met a restarted coordinator all reject with
+`CoordinatorRestartedError` (`owner-epoch-lost`), which preserves the database
+and scope and which page recovery retries, without the "Local cache unavailable"
+toast. The `graphql_cache.owner` event records
+`ownerEvent: coordinator-restarted`.
+
+A coordinator can also end without a word: Chromium ends it with the process of
+the page that started it. No port closes. The coordinator holds a Web Lock of its
+own for its life and names it in `registered` (`coordinatorLockName`); each page
+waits for that lock, shared, and takes being given it for a restart, as above. A
+coordinator that cannot take its lock works without one, and its end goes
+unnoticed until a connection that brought nothing for as long as an unanswered
+request, or while the host waits for an engine, is asked with a `ping`. No
+`pong` within five seconds is handled as a restart. A coordinator that drops a
+page's port after a message it could not read (`messageerror`) tells the page
+with `connection-closed`, which is handled the same way.
+
+A handshake nobody answers in its startup phase's time is treated like a lost
+connection: the same host connects again, within the same budget, and then ends
+with `request-timeout` and the database kept. `graphql_cache.owner` records each
+as `ownerEvent: startup-unanswered`. An authority read a ready owner leaves
+unanswered waits for a `ping` that is out, whose five seconds count only while the
+page is visible, and is then asked again, twice, before it ends with
+`request-timeout`, so the page can start over on a new host.
 
 Protocol v6 separates startup into asset loading, taking the database owner
 lock, and database opening. The engine loads/compiles WASM without touching OPFS
@@ -427,32 +502,57 @@ URL, or storage scope. Navigation and disposal cancel the wait; no new adapter
 is created by a canceled initialization, even if its timer already fired.
 `graphql_cache.registration_retry` reports the wait duration, retry number,
 triggering error class, and whether the wait completed or was canceled. This is
-separate from a repeated-ready restart and does not make generic transport
-failures storage-safe. Engine recovery retains its bounded five retries.
-Exhausted bootstrap retries preserve the cache
-scope only when the coordinator explicitly proves storage was untouched, not from
-a page's last-seen phase. Missing/broken transports remain conservatively
-uncertain. Pages retry proven untouched bootstrap and owner-lock failures on reconnect,
+separate from a repeated-ready restart.
+
+Retries are bounded in rate, never in number. The coordinator opens the database
+again after every failed attempt: at once after the first loss, then after
+100 ms, doubling to thirty seconds, each time with the open or wipe the last
+attempt still owed. An attempt counts as failed until its engine,
+answering heartbeats, has also answered a request beyond the handshake or been
+open for thirty seconds. Five failed attempts in a row, a busy owner lock, or busy
+files start an **outage**: the coordinator tells every page `cache-unavailable`
+with a reason, refuses queued reads and writes with `owner-lock-unavailable`, and
+goes on. A page that is shown, or registers visible, starts the next attempt at
+once. It keeps startup handshakes and mutation outcomes for the engine that ends
+the outage.
+
+A page's host is **paused** through an outage: `disabled` and `paused` are both
+true, `getGraphqlSoupCacheHost()` returns nothing (reactively), and reads and
+writes fail at once so callers use the network. The client, its socket, its queue
+and its subscribers stay. A handshake with a later engine ends it: the host
+serves again, subscriptions start over, and every mounted query asks the network
+again, since neither the cache nor the view has what was pushed meanwhile (once
+online, if the page is offline). Recovery proves the queue readable at once, also
+while the page is offline or hidden, and stream listeners then refetch as after a
+socket reconnect. A logout or login that meets a paused host starts no other for
+its storage: the logout rotates the scope, the login's repair fails. A pause loses a live query's
+registration like an owner change does, and keeps the CRM authority's
+generation.
+
+A host whose transport failed ends with `CacheHostFailedError` (or the
+typed error it failed with) and leaves its scope and database as they are: no
+handoff, drain, timeout or transport failure quarantines a scope. Pages retry it,
+and coordinator-restart and unanswered-startup failures, on reconnect,
 foregrounding, or explicit draft Retry, with jittered exponential backoff capped
-at thirty seconds. A newly registered host restarts an exhausted untouched
-coordinator at a new owner epoch with `open-existing`; failed hosts remain
-excluded. Draft writes stay blocked until the replacement opens and inspects
-the preserved mutation queue. A read refused because the database was moving
+at thirty seconds. Draft writes stay blocked until the replacement opens and
+inspects the preserved mutation queue. A read refused because the database was moving
 between owners (`owner-handoff-blocked`) leaves the host running, so recovery
 proves that same host readable on its next attempt instead of registering
-another. Unknown storage failures still require explicit recovery or an update
-(the compose banner offers Reload then); retry never rotates the scope or clears
-persisted data. A page whose build was superseded (`cache-superseded`) never
-retries: that coordinator never hands the database back, so the page waits for
-the reload prompt. A page also stops after ten relapses in a row
-(`MAX_RECOVERY_RELAPSES`): restarts that succeeded but whose cache failed again
-before staying up for a minute. A successful restart no longer resets the
-backoff on its own; the count and backoff reset only once the restarted cache
-stays up. A restart that fails outright, such as a lock another context still
-holds, keeps retrying at the capped backoff. `graphql.cache_recovery` records
+another. So does a restart that only lost its request: its owner was lost, the
+page was suspended, the read timed out, or the page replaced the host meanwhile.
+When a host fails during a restart, the failure it reports decides, not what the
+restart then rejects with. A native engine's unknown failures still require
+explicit recovery or an update (the compose banner offers Reload then); retry
+never rotates the scope or clears persisted data. A page whose build was
+superseded (`cache-superseded`) never retries: an older build never opens a
+database a newer one took, so the page waits for the reload prompt. A successful
+restart does not reset the backoff on its own; the count and backoff reset only
+once the restarted cache stays up for a minute. `graphql.cache_recovery` records
 each attempt and its failure, `graphql.cache_recovery_relapse` a restarted host
-that failed before staying up, and `graphql.cache_recovery_stopped` why the page
-stopped.
+that failed before staying up, `graphql.cache_off_past_limit` a cache that was off
+for five minutes while its page was visible, with the attempts made
+(`CACHE_OFF_LIMIT_MS`; the page goes on), and `graphql.cache_recovery_stopped` why
+a page stopped.
 Cache failure telemetry adds `cache.error_name` and `cache.error_detail`, each
 from a fixed list (`describeCacheError`), so the message itself never leaves.
 
@@ -472,12 +572,12 @@ draining it, answers:
 
 - **Yield**, if the requester is strictly newer. Every tab registered there gets
   `cache-superseded`, and later requests are refused with the
-  `cache-superseded` error code rather than `owner-lock-unavailable`. Each page retires its host to the network. The owner's
-  page leaves the way a navigating page does: it terminates its engine, which
-  releases the owner lock without counting as a lost owner. An enqueue that was
-  already sent is reported as uncertain rather than sent again, because it may
-  be in the durable queue that the newer build replays. Nothing is elected
-  again. The requester's engine, still retrying the lock, opens the same
+  `cache-superseded` error code rather than `owner-lock-unavailable`. Each page retires its host to the network. A
+  running engine is drained first, within the same limit as any drain (15 s), so
+  what it was given settles; it then releases the owner lock. An enqueue that
+  was already sent and still has no answer is reported as uncertain rather than
+  sent again, because it may be in the durable queue that the newer build
+  replays. Nothing is elected again. The requester's engine, still retrying the lock, opens the same
   database with its data and queued mutations. A holder whose engine is still
   opening or already draining the database (hiding its owner tab starts a
   drain, and opening the requesting tab usually hides it) answers at once but
@@ -485,30 +585,45 @@ draining it, answers:
   engine is interrupted while its files may be changing. If that engine is
   lost first, the promised handover completes in place of the reset election,
   so a build never wipes a database it agreed to hand over.
-- **Keep**, if the requester is not newer. The requester fails closed as below.
+- **Keep**, if the requester is not newer. The reply carries the holder's build
+  time. A holder of the requester's own build keeps the database only until it
+  closes, so the requester goes into an outage and tries on. Any other holder is
+  newer, and the requester's tabs are superseded.
 
 A superseded page offers a persistent reload prompt. It reloads by itself only
 while hidden, online, not holding work (a call or an upload, via
 `holdAutomaticReload`), and not focused on a text field that holds text.
 Otherwise it retries the next time it is hidden or comes back online. A page
 that registers with a superseded coordinator later, for example after a
-rollback or from stale HTML, only runs uncached, because a reload could land on
-the same build again. Its `cache-unavailable` notice carries `superseded: true`,
-so its host retires with `cache-superseded` and recovery does not retry it.
+rollback or from stale HTML, is told the same. Its reload could land on the same
+build again, so a tab reloads by itself once per build
+(`reloadForSupersededCache`) and after that only when its prompt is used.
 
 A coordinator that holds nothing but gets a request from a newer build sends
 its tabs there too, without answering. An unanswered request is posted again
 every second while the engine keeps retrying the lock: the holder may be
 between owners, or parked with the lock already free, and the requester's own
-retries then take it. When the holder keeps the database, or when the engine
-exhausts its retries (builds from before handover never answer, so their
-holders cost that whole wait), the coordinator fails closed:
-it refuses queued requests with `owner-lock-unavailable` and tells every
-registered page `cache-unavailable`. Those pages retire their host for the rest
-of the page session, without quarantine, toast, or error report; only a tab
-that registers later tries again. Nothing waits in line for the lock, and a
-build only ever yields to a newer one. A rollback therefore leaves the rolled-back
-build uncached until the newer tabs close, instead of reloading tabs in a loop.
+retries then take it. When a holder of the same build keeps the database, or
+when the engine exhausts its retries (builds from before handover never answer,
+so their holders cost that whole wait), an outage starts (above), without toast
+or error report. The notice carries why, as
+`unavailableReason`: `owner-lock-timeout` (the engine gave up on the lock),
+`no-takeover-channel` (no BroadcastChannel to ask the holder), `holder-kept`,
+`files-busy` (below), or `recovery-failed` (five attempts failed); a newer build
+taking over is `superseded`. The
+coordinator records it on its `graphql_cache.owner` event, the page logs one
+`graphql cache failed closed` warning per reason with `cache.unavailable_reason`
+(inside an anonymous span, so it carries no user id), and recovery spans that
+fail on it carry the same attribute. Worker events reach the reporter over a
+BroadcastChannel every open build shares, and a reporter drops an event with a
+field its build does not know; adding `unavailableReason` therefore moved the
+channel and its reporter lock to `v2`, so an older build's reporter never drops
+this build's owner events. Nothing waits in line for the lock, and a
+build only ever yields to a newer one. A rollback therefore leaves the
+rolled-back build's open tabs uncached until they reload after the newer tabs
+close, instead of reloading tabs in a loop. An owner the browser froze before its
+drain ended keeps its lock and files until it thaws or is discarded; stealing
+them could corrupt the database, so the outage lasts as long.
 
 The browser can also hand the owner lock to the next engine before a departing
 page's terminated worker has let go of the database files. Production logs show
@@ -516,7 +631,7 @@ that gap outlasting two seconds after a reload. Every holder of these files
 first holds the owner lock, so a busy file seen while holding it is a predecessor
 still exiting, not damage. The OPFS adapter waits up to ten seconds for busy
 files within one open or wipe. If they stay busy, the engine reports
-`storage-busy`, and the coordinator fails closed as above. It keeps that
+`storage-busy`, and an outage starts as above. The coordinator keeps that
 attempt's open or wipe requirement instead of escalating a failed open to a
 wipe, which could not remove open files anyway.
 
@@ -533,8 +648,8 @@ not open, which includes the unversioned name once the versions move past it.
 A newer version is kept, because its build may come back after a rollback. The page lists OPFS and, only if a stale name exists,
 starts a disposable worker (a file Turso cannot read may poison its OPFS
 registry) that deletes each stale database whose owner lock is free and whose
-`mutation_queue` is empty. Databases still queueing mutations, or whose queue
-cannot be counted, are kept and reported.
+`mutation_queue` is empty. Databases still queueing mutations, whose queue
+cannot be counted, or whose side file (4.3) holds a queue, are kept and reported.
 
 Browsers missing the required worker, lock, or OPFS
 capabilities use a storage-free no-op cache host. Tauri
@@ -551,12 +666,55 @@ paths remain behind the same `CacheHost` interface.
 Normalized records are serialized with `postcard` into `records.value`, behind a
 one-byte encoding tag: records of 256 bytes or more are stored deflated when that
 is smaller, and everything else stays raw. Other persisted payloads (queued
-mutations, optimistic layers, projections) remain plain postcard. A format bump
-that only changes the record encoding carries the previous database forward by
-dropping records, search projections, index facts, and calendar ranges — all
-refetchable — while keeping queued mutations, optimistic layers, and their
-projections. Native storage then compacts the migrated file with `VACUUM INTO`, so
-the upgrade reclaims the space instead of leaving freed pages behind.
+mutations, optimistic layers, projections) remain plain postcard. On native, a
+format bump that only changes the record encoding carries the previous file
+forward by dropping records, search projections, index facts, and calendar
+ranges — all refetchable — while keeping queued mutations, optimistic layers,
+and their projections; a browser opens a new database name instead, as above.
+Native storage then compacts the migrated file with `VACUUM INTO`, so the
+upgrade reclaims the space instead of leaving freed pages behind; a compaction
+that fails tries to keep the migrated file as it is.
+A recovery wipe in the browser keeps the mutation queue. Under the owner lock, the
+engine about to wipe opens the old database, copies what it queues (rows with their
+IDs, leases and attempt counts, their optimistic layers and shadows, the aliases
+they use, and the account binding) into a side file, `{database}-salvage`, and
+flushes it before it removes the database. The next open queues the copy again
+before it serves its first request, in one transaction that also records that this
+copy was taken, and then removes the side file. An engine may die between any two of
+these steps: the next one finds the old database, the copy, or both, and a copy
+already taken is never queued twice while its database can say so. A wipe that takes writes the side file does not hold
+(unreadable, given up, or no room for the copy) notes that and their number in the
+side file first, in room the copy and the read before it reserved, so the open that
+follows tells it even when this engine dies; a disk that had none of that room left is
+the exception, until the wipe has made some. A copy the old database had taken already, as far as
+that database can still say, is forgotten; one that may have been taken, because
+the database lost what it says or one of its two files, is queued but called
+`partial`. Only a side file that refused the note of its import and could be neither
+removed nor emptied, or one whose database then lost both files, passes for a copy
+nobody took. A wipe holds the side file open from before it reads the queue until
+it is done, unless it had to remove a copy it could not rewrite; one that finds
+another context at it waits, and leaves the database as it is when that takes too long. An open that lost something leaves the side file saying so, and only that;
+the engine removes it (`queueLossTold`) at the first request or heartbeat after
+`engine-ready`, which shows that the coordinator took it and so told its pages, and
+until then every later open tells it again.
+A database with one of its two files gone is noted there as a loss too before it is
+opened and reset, even when no copy says what it queued. A side file that cannot be read three times over is given up as
+`unreadable` rather than queued behind newer writes later; only one that can be neither
+removed nor emptied then can still come back, behind them and as `partial`. Records, the
+projections and index facts the server's answers gave them, and everything else
+refetchable are not carried; only the pending writes' own projections are. The copy
+is given up after three engines die reading the old database, three die taking the
+copy in, or eight wipes in two minutes, and a database bound to another account
+refuses it. Logout, an account switch, a mismatched identity and stale-database
+cleanup remove the copy with the database it belongs to. `graphql_cache.schema_init`
+reports a crossing as `cache.queue_outcome` (`kept`, `partial`, `unreadable`,
+`abandoned`), with `cache.queue_kept` and `cache.queue_dropped`;
+`graphql_cache.queue_read`, `recovery_wipe` and `queue_import` time its steps. The
+engine tells pages the queue's state apart from the database's (`queue` beside
+`openOutcome`): `reset` unless every queued write is still there under its ID, and
+only then do pages drop a mutation in flight and settle pending writes as lost. A
+native reset still drops the queue.
+
 Both hosts use the same `Storage` implementation and compound entity keys.
 Wasm futures are not `Send`, so the `Storage` trait's futures are bound by
 `MaybeSend` (`crates/maybe_send`): `Send` on native targets, where Tauri drives
@@ -808,7 +966,55 @@ Use one default per data shape:
 | Data shape | Default | Notes |
 | --- | --- | --- |
 | GraphQL document | `createLiveQuery` from `@graphql-cache/solid/create-live-query` | Cursor-paginated documents use `createUrqlInfiniteQuery` from `@app/lib/urql-solid`. |
-| Soup list | `createSoupLiveQuery` | Feature code reads it through `useSoupAstItemsQuery`, which adds the REST fallback for unsupported queries, grouping, and entity mapping. |
+| Soup list | `createSoupLiveQuery` | Feature code reads it through `useSoupAstItemsQuery`, which adds the REST fallback for unsupported queries, grouping, and entity mapping. One-shot reads (exports, previews) use `fetchGraphqlSoupPage` or `fetchGraphqlSoupEntities` from `lib/queries/soup/graphql/fetch-page.ts`, not the REST soup endpoints. |
+
+Every read that falls back to REST because the translator has no GraphQL
+form for it records a `soup.rest_fallback` span (attributes
+`soup.fallback.reason`, `.shape` and `.kind`) and logs one
+`soup.rest_fallback` warning per reason and shape
+(`lib/queries/soup/graphql/rest-fallback.ts`). The shape names only the sort,
+grouping, email view and targets, never ids or values (an unknown email view
+shows as `other`); the reason holds fixed text only: no filter value and no unrecognized literal key. A request made with
+`transport: 'rest'` is a choice, not a fallback, and is not recorded.
+
+Without the cache, writes read mounted Soup lists again
+(`refreshActiveGraphqlSoupQueries`), and so do agent-session metadata events
+(`agent-session/list-sync.ts`), which otherwise only read the session's row
+into the cache. A row read while the engine is still opening is written only
+once it opens, in line with lists that loaded meanwhile, so list-sync reads the
+row again after the host's `whenReady()` (`isReady()` says whether it is
+open, and is false while the host is `paused`, when writes are refused); a host
+without them is always ready, and a retired host
+(`createRetirableCacheHost` after `dispose()`) is never ready, so nothing
+reads into it. The reread runs after its pass, so
+later events never wait for the engine, and gives up after 60 s. A list that never shows, filters or sorts
+by unread state (the Quick Access and menu feeds) passes
+`ignoresNotifications: true`, and notification and email read-state writes
+refresh with `notificationsOnly: true`, which skips it. Such a list also reads
+its rows with `SoupPreviewPage` (the `preview` projection), so the server does
+not look up notifications for rows it never shows.
+
+A list's `staleTime` works as it does in TanStack: within `staleTime` of the
+last network answer this client gave to the same query (projection and first
+page), a list that mounts again reads with `cache-first` instead of
+`cache-and-network`, decided once, when the list first starts to fetch (`soup/graphql/network-freshness.ts`), so menus and
+pickers that open often don't read the server each time. Writes, Soup updates
+and `refreshActiveGraphqlSoupQueries` still update it while it is mounted, and
+a write (any `refreshActiveGraphqlSoupQueries` or Soup revalidation call)
+forgets every recorded answer, as invalidating the REST lists marked them
+stale, so a list that mounts after it reads the server again. So does the cache
+serving again after an outage, since it stored none of the answers given
+meanwhile. A
+`graphqlCacheFirstEntities` lookup reads the cache only with a sort the cache
+can order (`created_at` or `updated_at`, `isLocallySortable`); any other sort
+goes to the network.
+
+A write whose answer carries no Soup row (CRM contact creates, company renames,
+domain and email sync edits, pipeline imports) reads again the mounted lists that
+can show it, narrowed by `where` (`features/crm/queries/list-refresh.ts`). A
+chat rename from another client reaches maintained lists through Soup updates,
+so it reads again only the lists the cache does not maintain
+(`unmaintainedOnly`; every list when the cache is off).
 
 `createLiveQuery` is a document-first wrapper over `createUrqlQuery`: the
 document and variables are arguments, other options pass through, and the result
@@ -1327,6 +1533,252 @@ lane retains normal cursor pagination, retries, cancellation, storage-generation
 checks, and `graphql_cache.backfill` telemetry. Subsequent passes refresh all
 visible contacts because the contact filter has no updated-at watermark.
 
+## Channel directory lane
+
+The channel lane (`CHANNEL_SOUP_BACKFILL_LANE`, checkpoint `channel-directory-reconciled`)
+caches every channel the viewer joined with the fields a channel list needs
+(`ChannelDirectoryFields` in `channel-directory.graphql`): members, bots in
+`botParticipants`, team, agent DM and latest messages. The channel filter has no
+updated-at watermark, so every run is a full pass (`refreshAll`), 100 channels
+a page with 250 ms between pages. Every page, the first and each continuation
+(the cursor does not carry it), asks for `channelReads: PRIMARY`, so it reads
+memberships as the REST channel list does: a replica that lags a join or a
+leave would put a stale membership back. The server takes it only on a
+channel directory page (`SoupRequest::is_channel_directory_page`), so a page naming no channel id with
+an id filter is never sent. It pages by creation time (`CREATED_AT`),
+which never changes: by updated or viewed time, activity or a view on another
+device could move a channel the pass had not reached ahead of its cursor, and
+the pass would never return it.
+
+The lane's page fetcher (`queries/channel/directory-reconcile.ts`) also removes
+what a pass proves stale. When a pass that started at its first page finishes,
+each cached channel it did not return is read again by id, a hundred at a
+time, on the primary, as the lane's pages are. A by-id page is evidence only
+when it lists entity ids and either ends or returned every id it was asked for (a page
+that reaches its limit carries a cursor). Its answer is as of the moment it
+ran, and the viewer can be added back since, so each channel it no longer
+returns is read once more on its own
+(`ChannelDirectoryReconcileEntity`, the `user.soupEntity` read, four at a
+time) before it is deleted, and one the primary shows is kept and written back
+(`channel_directory.kept_by_primary`). At most 500 are confirmed on the
+primary in a pass: the rest wait, and the pass fails (`deferred`) so the next
+one goes on, rather than send the whole cache to single-channel reads when the
+by-id read answers with nothing. Its reads are tried three times. A cached id the server
+could not parse as a channel id is gone without a read: one such id would fail
+the whole read. The deletes carry the cache session taken before the reads, so
+the cache refuses them after a session transition, and a channel whose cached
+record changed while it was read (the viewer was added back) is read again
+instead of deleted, three rounds in all. The recheck and the delete are still
+two cache calls, so a write landing between them is deleted too: every deleted
+channel is read on the primary once more at the start of the next round (a
+round of its own after the last), and one the viewer can read again is written
+back by that read (`channel_directory.restored`). A failed read fails the
+attempt. The page fetcher keeps the channels still to look at again, so the
+next attempt, or the lane's retry of the last page, reads them first, and a
+pass never completes with a deleted channel it has not looked at again.
+A pass that cannot reconcile (it resumed from a cursor, a page lacked entity
+ids, or the cache belongs to another viewer) deletes nothing; one whose cache
+changed hands or generation, or whose reads or records kept failing or
+changing, stops before its next round of deletes and keeps what earlier rounds
+proved stale and deleted. Either fails its last page
+(`ChannelDirectoryPassUnproven`), so its checkpoint is never marked complete;
+the checkpoint id changed when this rule did, so a pass recorded complete
+without reconciling is never read as one. The lane restarts every run at its
+first page (`restartOnRun`); the previous pass's completion keeps the
+directory complete meanwhile. A retry within a run goes on from the failed
+page's cursor with the same page fetcher, which holds the evidence of the
+pages before it (`resumesAfter`), unless the pass was unproven or storage
+was replaced, which start the retry at the top. A page counts only once the
+lane asks for the page after it: the lane saves a page's cursor after the
+checks that follow its read, so a page whose checks failed is read again and
+only that answer counts. A by-id read also returns
+public and team channels the viewer opened without joining
+(`isParticipant: false`), so the cache holds those too: a joined list filters
+them out.
+
+`queries/channel/directory.ts` is the app's only reader of the viewer's
+channels: `ChannelDirectoryProvider` in `Root` supplies it, and
+`core/context/channels.ts` reads it (`useChannelDirectory`, `useChannel`,
+`useChannelLookup`, `useChannelName`). With the cache and its backfill on, it
+reads the lane's records from the cache's channel search buckets, again on
+visible cache changes and when the lane's checkpoint completes or fails, and
+is `complete` once a pass of the lane finished in the cache's current storage
+generation and the by-id read of every joined record that lacks a directory
+field (another query cached it thinner) has returned it or found it absent;
+another viewer's cache reads as empty. A read that failed keeps the directory
+incomplete until a later read answers, so callers that decide from absence
+never decide from it, and `readComplete()` reads the network. Only a scan
+that read the checkpoint as complete before it started may make the directory
+complete, and
+a scan is dropped when the viewer or storage generation changed while it ran;
+a storage reset (`onCacheGenerationChanged`) retires what it read at once.
+Without the cache it pages the lane's own query (`ChannelDirectoryPage`) into
+memory, never the REST channel list.
+
+A cold cache takes about a minute to fill on a large account, so a lookup of
+one channel answers `loaded`, `pending` or `missing`. An id no channel can
+have (not a UUID, such as a mistyped link) is missing at once and never read,
+since one would fail every id read with it. A channel a filling
+directory lacks is pending, and the lookup reads it by id (batched, 100 ids
+or 25 ms, two batches at a time), then rereads only the records that read
+wrote; it is missing once that read returns nothing for it or the directory
+completes without it. A returned id whose record cannot be read yet is read
+again, and so is one a read without complete evidence did not return. A read
+answers only for the record cached when it was sent, so a channel whose
+record lost a field after a read returned it is read again, and so is one
+whose record the cache wrote or changed after a read was sent that found it
+absent (the viewer may have joined it since), whether that write lands
+before the answer or after it. A read that wrote no record leaves the
+directory as it was, and one whose records match what the directory held
+publishes nothing. A batch still unanswered after 20 seconds has failed, so
+one that never settles cannot hold a read slot. An id that failed twice stays
+pending, and the failed ids are forgotten together at most every 30 seconds,
+once the tab is visible: a lookup still asking for one, the queue of records
+lacking a field, or the fallback's confirmations read it again, and an id
+nobody asks for any more is not read. Readers that decide from absence
+(section membership, scope checks) wait for `complete()`. Actions on a whole
+built-in section (mute, snooze, mark read) call `readComplete(signal)`, which
+always pages the network, as the REST list did for each action: a complete
+directory can still miss a channel joined on another device since its last
+pass. The pages read the primary page by page over seconds, so a change that
+lands meanwhile can reach the cache and not the walk; the cached directory
+settles each channel the walk and the cache disagree on
+(joined in one and not the other) with a read from the primary
+(`ChannelDirectoryEntity`, up to 200 of them, four at a time); a read that
+fails keeps the walk's answer, and so does every disagreement past the 200th.
+The walk is the action's own, not the directory's pages query, so the rail
+aborts it, and the primary reads after it, when it unmounts. When the lane gives up in a generation, the backfill marks it
+(`markSoupBackfillLaneFailed`, cleared by its next saved page, and kept in
+memory for the tab when storage refuses the write) and the directory pages the
+joined channels from the network instead. It does the same when the lane
+stalls: the lane saves its checkpoint after every page in whichever tab runs
+it, and 30 seconds with no save while the lane is unfinished (that tab closed
+or froze, or a request hung) starts the walk too. Its membership is the
+network's list, updated by each cached record that changed or was removed
+after that read began; a cached record unchanged since is older than the
+network's row, so a stale joined row the network left out stays out. A change
+proves no membership by itself: a changed record the network did not list
+shows only once a by-id read returns it, and a listed channel the cache never
+held is dropped once a by-id read finds it absent. So does every record the
+cache holds without every field: what the walk or the cache last showed of it
+no longer holds. A channel joined after the walk read its page, or rejoined
+after the viewer lost it (its record removed, or kept as a nonmember's),
+cached first by a query without the directory's fields, is listed only once a
+by-id read lands it with them, and a lookup of it waits for that read; a
+listed one the read finds absent is dropped. A read that returned a channel is
+forgotten once the cache removes that channel's record or holds it without a
+field, so a rejoin is read again.
+Those reads decide only with complete evidence (a cached record cannot vouch for a channel the viewer
+may have lost), and the directory is complete only once each has returned
+its channel or found it absent; until then a lookup of an unlisted channel
+one of them decides is pending, and a listed one answers with the network's
+row, as `channels()` shows it. A channel such a read found absent whose
+record the cache changes after that read was sent (the viewer may have
+rejoined it) is read again. A record that loses a field keeps what the walk
+last saw of it, so its later removal still drops the row. The rows, the walk's
+status and the reads still open are published as one value, so `complete()`
+never pairs one with another's older state, and a read that settles without
+adding or removing a row (it failed, or returned a listed channel) changes
+only which reads are open. The cache writes the walk's pages after answering
+them, so the directory waits for those writes (at most 10 seconds; the
+`channel_directory.fallback_pages_written` span attribute counts the pages
+the cache wrote, -1 when they did not settle in time) and then reads the
+cache again before showing them: what the walk wrote counts as
+held, and only the rest wait for a by-id read. A storage reset or a
+change of viewer under the walk starts it again, since what it saw went with
+the old cache. A lane pass that finishes later stops the walk and makes the
+cache answer alone again. `failed()` says
+the directory is not complete and that read failed; `retry()` reads again.
+Channel writes outside the cache's soup updates (join links, renames, new
+DMs, people added or removed) call `refreshChannelDirectory`, which rereads the in-memory directory,
+reading again after a first read that was already in flight; a full read
+(`readComplete()`) walks the pages itself (`walkCurrentJoinedChannels`) and
+walks again until no write of that QueryClient landed during its walk. Those pages, and the cache's soup update, trail the write: the
+pages take seconds to read again, and the update arrives a second or more later. So a
+caller that names the channels it wrote (`refreshChannelDirectory([id])`;
+message sends name none) also reads each one from the primary
+(`ChannelDirectoryEntity`, network only), and both directories of that
+QueryClient show the result (`own-writes.ts`) over whatever their source
+still holds, for at most a minute, until the source shows it or a later
+update. A channel the viewer can no longer read leaves the list the same
+way, and channels the write deleted (`removed`) leave it without a read. A
+read's writes share one hold, and those its source caught up with go in one
+change, so a bulk deletion of thousands of channels publishes the directory
+once as it lands and once as it goes. Once
+the source shows a write, it is let go for every directory, so a later
+removal or update is the source's to show. Each directory watches a channel
+from the moment its read is sent (`send`, then `settle` with what it found),
+so a channel its source lost while the read was in flight counts as removed
+after the write. Whether the viewer is in a channel is judged by their join
+time, since removing someone leaves the update time as it was: a write that
+has them in lets go once the source showed them in since that join and then
+out, and one that has them out (a leave, or a channel they can no longer
+read) holds only while the source lists them in it as it first did. Writes
+carry the account, the sign-in session and the order their reads were sent
+in, so an earlier read never replaces a later one; a storage reset or a new
+sign-in lets them all go, with the reads still in flight. A write of many channels reads at most twenty, four at a
+time; a link join, whose response names no channel, reads none. A read that fails, or that lands after the account
+changed, holds nothing (`channel_directory.own_writes` span).
+
+A read sent before the viewer left a channel (an event's refetch, a by-id
+read, another list's page), or a replica read sent just after, can land the
+channel back in the cache as joined. The cached directory remembers each
+joined channel it saw leave its complete list (removed, or kept as a
+nonmember's) and, 10 and 60 seconds after the leave, reads any that came back
+joined from the primary (`queries/channel/directory-departures.ts`, at most
+200 followed at once, four reads at a time): a channel the viewer is in again
+is forgotten, one they are out of is written back by that read, and one they
+can no longer read is deleted the way the lane deletes
+(`removeChannelsGoneOnPrimary`: only the record the read decided on, read on
+the primary once more after the delete). Nothing is hidden meanwhile: the
+channel shows as the cache has it until a check decides. A failed read waits
+for the next check. Departures live only in the page: a reload or a new
+storage generation forgets them, and so does a leave no open page saw; the
+lane's next pass reconciles those (`channel_directory.departure_recheck`
+span). The viewer's
+own views reach no soup update, so the channel view
+hands each recorded view to its tab's directory (`recordView`). That
+directory lays it over every record it reads for the rest of its life, so in
+that tab a page, a by-id read or a refetch read before the view never shows an
+older one. The cached directory also writes it onto the channel's cached record
+(`queries/channel/viewed-at.ts`, one stamp of a channel at a time, never
+moving back the view it read; two tabs stamping one channel at once can leave
+the older view), once the record exists, and again over a later record that
+holds an older view; other tabs see it when they read that record. Without
+the cache another tab shows it once its own pages are read again. Views made
+on another device reach no soup update either, so a cached record keeps the
+view it was read with until a pass of the lane rereads it: the cached
+directory's `viewsCurrent()` turns true only once a pass that started after
+the page loaded (`performance.timeOrigin`) has finished in the current storage
+generation, judged by the checkpoint's watermark, which is that pass's start.
+The in-memory directory is current once its pages were read in this page:
+pages restored from the device (kept for a week) are read again on mount and
+count only once that read lands. Until
+then `useChannelLastViewed` also asks `user.channelViewedAt` when a joined
+channel opens and shows the later of the record's view and the answer (the
+record's on no answer within five seconds); a tab that does not run the
+backfill stays not current until a pass starts after it loaded. A channel
+mention in rendered Markdown waits up to five seconds for a pending lookup.
+
+A by-id batch is a `channel_directory.by_id` span in the trace of the view
+whose lookup asked for its first id (`useChannelLookup` passes
+`useFlowTrace()`), so a channel opened on a cold cache shows its read under
+`view.*`. It records `requested`, `returned`, `unreadable`, `timed_out`,
+`retried` (ids read before) and `queued_ms`: from the oldest id's request or
+retry to the read, the batching wait plus the wait for a free read slot. A
+retry is read in that view's trace too, until the id settles.
+`channel_directory.read_keys` records `keys_outcome` (`read`, `unchanged`,
+`stale`, `scope_changed`) and
+`channel_directory.fallback` its `fallback_outcome` (`loaded`, `failed`). The
+reads under these spans, under `channel_directory.reconcile` (each by-id batch
+of a pass) and under `channel_directory.own_writes`, are sent inside the span,
+including those that start after an await. `useChannelLastViewed`'s ask is a
+`channel.last_view` span in the opening view's trace, whose
+`channel.last_view.outcome` says whether the open used the answer (`used`) or
+why it stopped waiting: five seconds passed (`timed_out`), the directory's
+record settled the open first (`superseded`), or the open closed (`closed`).
+Each stop aborts the request, so the span ends as the open stops waiting.
+
 ## Authoritative Mail membership repair
 
 The shared Soup adapter reconciles supported `UPDATED_AT` Mail first pages
@@ -1359,8 +1811,8 @@ matching compact projections into a Rust heap of at most `limit + 1` documents.
 It no longer retains per-bucket text catalogs. Matching and ranking semantics,
 optimistic overlays, and indexed empty-query browsing are preserved; leading
 wildcards still scan selected buckets. Storage schema 12 makes the browse index
-covering by appending search text and source hashes. This is an incompatible
-cutover, not a migration: native caches reset, including queued mutations;
+covering by appending search text and source hashes. Native caches upgrade in
+place through the registered 11 to 12 storage step, keeping queued mutations;
 browsers open a fresh `s4.v4.t12` file and do not replay older files' queues.
 Existing cleanup safeguards for those older files remain. That streaming-search
 cutover did not change the record format or schema epoch. See
@@ -1590,7 +2042,13 @@ a foreground authoritative write advances the admission epoch. A waiting page
 whose epoch is superseded returns an error before touching storage. The worker
 owner applies the same rule by rejecting earlier queued hydration within the
 current lifecycle segment. Foreground write order is preserved. An already
-running storage transaction finishes atomically.
+running storage transaction finishes atomically. The browser worker runs a
+hydrate in steps (`prepareHydrate`, one `stepHydrate` per projection pass,
+`stageHydrate`, then `commitHydrate`) and answers the read-only requests that
+arrived between them, the ones its queue would rank ahead of the hydrate's
+write; nothing that writes runs between them. The passes and the stage
+compute the write while they only read, so a read waits for one step and the
+commit that blocks reads is short.
 
 Soup backfill treats this supersession as flow control: it refetches the same
 cursor after a short interruptible delay, preserving its checkpoint. Ordinary
@@ -1623,7 +2081,20 @@ flushes earlier invalidations so other observers cannot overtake them. Disposal
 drops pending callbacks.
 
 Tauri cannot cancel a command, and the engine runs commands one at a time, so a
-caller that stops waiting only loses the outcome of work that still happens.
+caller that stops waiting loses only the outcome of work that still happens,
+with one exception. Timed commands other than init carry a `requestId`, and on
+timeout the host sends it to `graphql_cache_abandon`. A read on the engine's
+read path (`read`, `watch`, explicit keys, search, people context and search,
+entity filter and resume, calendar range, query inspection, current authority)
+that has not yet started reading keeps its place in the queue, and when its
+turn comes it finishes any interrupted retirement, as every read does, and
+gives the engine back without reading, so reads nobody waits for
+do not hold the engine ahead of live ones after a stall. An abandoned read of
+an operation registers that operation against every change and drops its
+retained watch view instead of reading: the next write reports it, and its
+next watch reads it whole. A read marked after it started reading finishes.
+Native ignores the id on a live-view release, so a disposed view still frees
+its slot, and on the other timed commands.
 As in worker-host, only reads and initialization have the ten-second deadline:
 a read falls back to the network, and every request waits behind init. Writes,
 hydration, queue claims and settlements, deletes, invalidations, teardown and

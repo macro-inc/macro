@@ -5,17 +5,17 @@ import { orderOnboardingTools } from '../primitives/tools';
 import { createOnboardingToolCatalog } from './tool-catalog';
 
 const mocks = vi.hoisted(() => ({ catalog: vi.fn(), query: vi.fn() }));
-vi.mock('@core/pipedream/catalog', () => ({
-  createPipedreamCatalogSearch: mocks.catalog,
-}));
-vi.mock('@queries/pipedream-connectors', () => ({
-  usePipedreamCatalogQuery: mocks.query,
+vi.mock('@queries/connectors', () => ({
+  createConnectorCatalogSearch: mocks.catalog,
+  useConnectorCatalogQuery: mocks.query,
 }));
 
 const entry = (slug: string, name = slug) => ({
-  app_slug: slug,
-  display_name: name,
-  icon_url: `https://example.com/${slug}.png`,
+  key: `app/${slug}`,
+  slug,
+  name,
+  iconUrl: `https://example.com/${slug}.png`,
+  categories: [],
 });
 
 afterEach(() => vi.clearAllMocks());
@@ -71,7 +71,7 @@ describe('onboarding directory adapter', () => {
       expect(mocks.query).not.toHaveBeenCalled();
       expect(mocks.catalog).toHaveBeenCalledOnce();
       catalog.setSearch('github');
-      setPage([entry('github', 'Pipedream GitHub')]);
+      setPage([entry('github', 'Directory GitHub')]);
       expect(catalog.entries()).toEqual([
         { slug: 'github', name: 'GitHub', iconUrl: null },
       ]);

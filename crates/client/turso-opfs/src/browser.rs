@@ -27,10 +27,34 @@ use web_sys::{
     FileSystemRemoveOptions, FileSystemSyncAccessHandle, WorkerGlobalScope,
 };
 
+mod sidecar;
 #[cfg(test)]
 mod test;
 
+pub use sidecar::Sidecar;
+
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
+
+/// Pages the connection keeps in Turso's page cache (about 31 MiB at the
+/// default 4 KiB page size).
+///
+/// Turso's wasm default is 100,000 pages (about 400 MB), and wasm linear memory
+/// never shrinks, so the cache grew with the database until the worker held
+/// hundreds of megabytes. Native Turso defaults to 2,000 pages; the browser keeps
+/// four times that, because a page the cache dropped is read again from the
+/// OPFS sync handle on the one worker that answers every tab.
+///
+/// The cap needs spilling, which `connect` turns on with it. Without spilling,
+/// a transaction that dirties more pages than the cap leaves nothing to evict,
+/// and Turso scans the whole cache before admitting each further page: clearing
+/// a 200 MB cache took 12 minutes instead of 2.4 seconds. A spill
+/// appends dirty pages to the WAL before COMMIT, as native Turso does by
+/// default; they stay uncommitted frames until the commit frame, and ROLLBACK
+/// discards them.
+/// Wasm Turso ships with spilling off because its asynchronous OPFS binding
+/// cannot wait for a spill's write mid-statement; the sync access handles here
+/// finish every write before it returns.
+const PAGE_CACHE_PAGES: i64 = 8_000;
 
 #[wasm_bindgen]
 extern "C" {
@@ -195,6 +219,27 @@ impl OpfsOwner {
     /// Returns the exact exclusive Web Lock name held by this owner.
     pub fn lock_name(&self) -> &str {
         &self.lock_name
+    }
+
+    /// Returns this identity's side file, which a wipe or reset leaves alone.
+    pub fn sidecar(&self) -> Sidecar {
+        Sidecar::new(self.id, self.database_path())
+    }
+
+    /// Returns whether exactly one of the two approved paths exists, which
+    /// [`open`](Self::open) answers with [`OpenResult::ResetRequired`] after it
+    /// created the other. Creates nothing. A path that cannot be looked up is
+    /// left for `open` to report.
+    pub async fn is_torn(&self) -> bool {
+        let Ok(root) = worker_root().await else {
+            return false;
+        };
+        let mut exists = [false; 2];
+        for role in FileRole::ALL {
+            let entry = JsFuture::from(root.get_file_handle(self.paths.get(role))).await;
+            exists[role.index()] = !entry.is_err_and(|error| is_not_found(&error));
+        }
+        exists[0] != exists[1]
     }
 
     /// Physically wipes and recreates both approved paths before any open.
@@ -364,8 +409,9 @@ impl OpfsOwner {
         Ok(())
     }
 
-    /// Deletes both approved paths without recreating them, then releases the
-    /// lock. This discards a database that no context uses any more.
+    /// Deletes both approved paths and the side file without recreating them,
+    /// then releases the lock. This discards a database that no context uses
+    /// any more.
     ///
     /// Unlike [`Self::recovery_wipe`], a failed removal does not poison the
     /// registry: the lock is still released, the error is returned, and any
@@ -379,7 +425,10 @@ impl OpfsOwner {
                     .start_wipe(self.id, self.paths.clone())
             })
             .map_err(state_error)?;
-        let removed = remove_paths(&self.paths).await;
+        let removed = match remove_paths(&self.paths).await {
+            Ok(()) => self.sidecar().remove().await,
+            error => error,
+        };
         REGISTRY
             .with(|registry| registry.borrow_mut().machine.finish_wipe(self.id))
             .map_err(state_error)?;
@@ -496,6 +545,25 @@ impl OpfsSession {
                 return Err(ConnectFailure::poisoned(turso_error("connect", error)));
             }
         };
+        if let Err((operation, error)) = connection
+            .execute(format!("PRAGMA cache_size = {PAGE_CACHE_PAGES}"))
+            .map_err(|error| ("cache_size", error))
+            .and_then(|()| {
+                connection
+                    .execute("PRAGMA cache_spill = ON")
+                    .map_err(|error| ("cache_spill", error))
+            })
+        {
+            let _ = connection.close();
+            drop(connection);
+            drop(database);
+            self.armed = false;
+            poison(
+                self.owner,
+                "Turso page cache setup failure made session health uncertain",
+            );
+            return Err(ConnectFailure::poisoned(turso_error(operation, error)));
+        }
         if let Err(error) = REGISTRY.with(|registry| {
             registry
                 .borrow_mut()
@@ -1277,11 +1345,12 @@ fn approved_paths(database_name: &str) -> Result<Paths, OpfsError> {
         || database_name == "."
         || database_name == ".."
         || database_name.ends_with("-wal")
+        || database_name.ends_with(sidecar::SUFFIX)
         || database_name.contains(['/', '\\', '\0'])
     {
         return Err(OpfsError::new(
             OpfsErrorKind::InvalidName,
-            "database identity must be a direct child and must not use the reserved -wal suffix",
+            "database identity must be a direct child and must not use a reserved suffix",
         ));
     }
     let wal = format!("{database_name}-wal");
@@ -1848,7 +1917,12 @@ fn connect_turso_database(database: &Arc<Database>) -> turso_core::Result<Arc<Co
     {
         return Err(LimboError::CompletionError(error));
     }
-    database.connect()
+    // Turso's checkpoint in COMMIT, and the log restart it enables, change
+    // the WAL's state, and the connection then drops its page cache at the
+    // next read. cache-turso copies the WAL itself, at fewer points.
+    let connection = database.connect()?;
+    connection.wal_auto_actions_disable();
+    Ok(connection)
 }
 
 #[cfg(test)]

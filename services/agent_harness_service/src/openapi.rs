@@ -2,11 +2,14 @@
 
 mod api;
 mod config;
+#[cfg(test)]
+mod test_spans;
 mod voice_gateway;
 /// Only the route modules the API document names, not the control plane.
 mod computers {
     pub(crate) mod claude;
     pub(crate) mod harnessd;
+    pub(crate) mod screen;
 }
 
 use utoipa::OpenApi;

@@ -28,6 +28,7 @@ fn event() -> EventType {
         location: String::new(),
         macro_call: false,
         google_meet: false,
+        email_link_id: None,
         enabled: true,
         schedule_id: Uuid::nil(),
         mode: SchedulingMode::Collective,

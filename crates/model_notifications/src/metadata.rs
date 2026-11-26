@@ -35,6 +35,7 @@ pub use ping::{PingAgent, PingMessage, PingMetadata};
 use rootcause::Report;
 use rootcause::report;
 use serde::{Deserialize, Serialize};
+use unicode_segmentation::UnicodeSegmentation;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -750,6 +751,52 @@ impl NotificationTitle for InboxReauthRequiredMetadata {
     }
 }
 
+/// Why someone's CRM email sharing rules changed without them.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CrmEmailSharingChangeReason {
+    /// Companies their rules named were merged into another.
+    CompaniesMerged,
+}
+
+/// Metadata for a notice that the recipient's CRM email sharing rules
+/// changed because of a teammate's action. It names no company, count or
+/// person: the recipient may not be able to see them, and their rules show
+/// what changed.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CrmEmailSharingChangedMetadata {
+    /// The team whose CRM the rules share mail with.
+    pub team_id: Uuid,
+    /// Why they changed.
+    pub reason: CrmEmailSharingChangeReason,
+}
+
+impl notification::domain::models::Notification for CrmEmailSharingChangedMetadata {
+    const TYPE_NAME: &'static str = "crm_email_sharing_changed";
+}
+
+impl NotificationTitle for CrmEmailSharingChangedMetadata {
+    fn format_title(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok("Your CRM email sharing changed".to_string())
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(match self.reason {
+            CrmEmailSharingChangeReason::CompaniesMerged => {
+                "Companies your sharing rules named were merged, so your rules were updated. Review them in CRM settings."
+            }
+        }
+        .to_string())
+    }
+}
+
 impl notification::domain::models::Notification for NewEmailMetadata {
     const TYPE_NAME: &'static str = "new_email";
 }
@@ -911,41 +958,57 @@ impl NotificationTitle for ChannelMessageSendMetadata {
 }
 
 const CHANNEL_REACTION_EXCERPT_MAX_CHARS: usize = 80;
+/// What 80 characters of at most four bytes each take, as the excerpt did
+/// when it was cut by `char`.
+const CHANNEL_REACTION_EXCERPT_MAX_BYTES: usize = CHANNEL_REACTION_EXCERPT_MAX_CHARS * 4;
 
+/// A reaction reads as Slack words its Activity item: who reacted, then
+/// "Reacted 👍 to: “message”", then the channel it happened in. The title is
+/// only the person, so an iOS communication notification names them and not
+/// a sentence.
 impl NotificationTitle for ChannelMessageReactionMetadata {
     fn format_title(
         &self,
         sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        let sender = sender_id
+        sender_id
             .map(|sender| sender.email_part().local_part().to_string())
-            .ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))?;
-        let message = parse_message_plain_text(&self.message_content)?
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ");
-        let excerpt: String = message
-            .chars()
-            .take(CHANNEL_REACTION_EXCERPT_MAX_CHARS)
-            .collect();
-        let suffix = if message.chars().count() > CHANNEL_REACTION_EXCERPT_MAX_CHARS {
-            "…"
-        } else {
-            ""
-        };
-        Ok(format!(
-            "{sender} reacted with {} to “{excerpt}{suffix}”",
-            self.emoji
-        ))
+            .ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))
     }
 
     fn format_body(
         &self,
         _sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
+        let message = parse_message_plain_text(&self.message_content)?
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        // Cut at whole characters, so a flag or a skin tone never splits, and
+        // within a byte budget, since one character can carry any number of
+        // combining marks and the push has a size limit.
+        let mut excerpt = String::new();
+        let mut cut = false;
+        for (index, grapheme) in message.graphemes(true).enumerate() {
+            if index == CHANNEL_REACTION_EXCERPT_MAX_CHARS
+                || excerpt.len() + grapheme.len() > CHANNEL_REACTION_EXCERPT_MAX_BYTES
+            {
+                cut = true;
+                break;
+            }
+            excerpt.push_str(grapheme);
+        }
+        let suffix = if cut { "…" } else { "" };
+        // A message with no text (only attachments) is "your message".
+        let reacted = if message.is_empty() {
+            format!("Reacted {} to your message", self.emoji)
+        } else {
+            format!("Reacted {} to: “{excerpt}{suffix}”", self.emoji)
+        };
+        // A direct message needs no place; the person already says where.
         Ok(match self.common.channel_type {
-            ChannelType::DirectMessage => "Direct message".to_string(),
-            _ => format!("#{}", self.common.channel_name),
+            ChannelType::DirectMessage => reacted,
+            _ => format!("{reacted}\n#{}", self.common.channel_name),
         })
     }
 }
@@ -2120,6 +2183,23 @@ pub struct RoutineRunFinishedMetadata {
     pub routine_name: String,
     /// How the run ended.
     pub outcome: RoutineRunOutcome,
+    /// The apps the routine needs connected, by name, when the run failed
+    /// because one of them is not. Empty for every other run.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub apps_to_connect: Vec<String>,
+}
+
+impl RoutineRunFinishedMetadata {
+    /// `apps_to_connect` as a phrase: "Linear", "Linear and Slack",
+    /// "Linear, Notion and Slack".
+    fn apps_phrase(&self) -> Option<String> {
+        let (last, rest) = self.apps_to_connect.split_last()?;
+        Some(if rest.is_empty() {
+            last.clone()
+        } else {
+            format!("{} and {last}", rest.join(", "))
+        })
+    }
 }
 
 impl Notification for RoutineRunFinishedMetadata {
@@ -2143,9 +2223,13 @@ impl NotificationTitle for RoutineRunFinishedMetadata {
     ) -> Result<String, rootcause::Report> {
         Ok(match self.outcome {
             RoutineRunOutcome::Succeeded => "A routine run finished.".to_string(),
-            RoutineRunOutcome::Failed => {
-                "A routine run failed. Open its history to see why.".to_string()
-            }
+            RoutineRunOutcome::Failed => match self.apps_phrase() {
+                Some(apps) if self.apps_to_connect.len() == 1 => {
+                    format!("It needs {apps} connected to run. Reconnect it.")
+                }
+                Some(apps) => format!("It needs {apps} connected to run. Reconnect them."),
+                None => "A routine run failed. Open its history to see why.".to_string(),
+            },
         })
     }
 }

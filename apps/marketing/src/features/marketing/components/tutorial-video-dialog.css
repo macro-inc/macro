@@ -7,12 +7,12 @@
 /* The video at 80% of the window, as in the app. Follows the site palette. */
 .tutorial-video-overlay { position: fixed; inset: 0; z-index: 10000; background: #000b; backdrop-filter: blur(12px); animation: tutorial-video-fade 180ms ease-out; }
 /* The html zoom scales viewport units, so undo it to fit the real viewport. */
-.tutorial-video-dialog { position: fixed; z-index: 10001; inset: 0; margin: auto; zoom: calc(1 / var(--site-scale, 1)); width: 80vw; height: 80dvh; display: flex; flex-direction: column; overflow: hidden; isolation: isolate; border: 1px solid var(--color-edge-muted); border-radius: 16px; background: var(--color-dialog); color: var(--color-ink); box-shadow: 0 32px 120px #0008; outline: none; font-family: 'Inter Variable', Inter, sans-serif; animation: tutorial-video-open 280ms cubic-bezier(.2,.8,.2,1); }
+.tutorial-video-dialog { position: fixed; z-index: 10001; inset: 0; margin: auto; zoom: calc(1 / var(--site-scale, 1)); width: 80vw; height: 80dvh; display: flex; flex-direction: column; overflow: hidden; isolation: isolate; border: 1px solid var(--color-edge-muted, #292929); border-radius: 16px; background: var(--color-dialog, #141416); color: var(--color-ink, #fff); box-shadow: 0 32px 120px #0008; outline: none; font-family: 'Inter Variable', Inter, sans-serif; animation: tutorial-video-open 280ms cubic-bezier(.2,.8,.2,1); }
 .tutorial-video-titlebar { display: flex; align-items: center; gap: 8px; flex-shrink: 0; height: 48px; padding: 0 8px 0 16px; }
-.tutorial-video-titlebar h2 { flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 14px/1.4 'Inter Variable', Inter, sans-serif; color: var(--color-ink); }
-.tutorial-video-dialog .tutorial-video-close { display: grid; place-items: center; width: 32px; height: 32px; padding: 8px; border: 0; border-radius: 8px; background: transparent; color: var(--color-ink-muted); }
-.tutorial-video-close:hover { background: color-mix(in srgb, var(--color-ink) 8%, transparent); color: var(--color-ink); }
-.tutorial-video-close:focus-visible { outline: 2px solid var(--color-ink); outline-offset: 2px; }
+.tutorial-video-titlebar h2 { flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 14px/1.4 'Inter Variable', Inter, sans-serif; color: var(--color-ink, #fff); }
+.tutorial-video-dialog .tutorial-video-close { display: grid; place-items: center; width: 32px; height: 32px; padding: 8px; border: 0; border-radius: 8px; background: transparent; color: var(--color-ink-muted, #a8a8a8); }
+.tutorial-video-close:hover { background: color-mix(in srgb, var(--color-ink, #fff) 8%, transparent); color: var(--color-ink, #fff); }
+.tutorial-video-close:focus-visible { outline: 2px solid var(--color-ink, #fff); outline-offset: 2px; }
 .tutorial-video-close svg { width: 16px; height: 16px; }
 .tutorial-video-stage { position: relative; display: flex; flex: 1; min-height: 0; align-items: center; justify-content: center; margin: 0 8px 8px; overflow: hidden; border-radius: 12px; background: #000; }
 .tutorial-video-stage video { display: block; width: 100%; max-height: 100%; object-fit: contain; outline: none; }

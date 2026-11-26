@@ -1,5 +1,6 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { SearchBar } from '@app/components/view-shell/SearchBar';
+import { isUpgrade } from '@app/features/paywall/plans';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
@@ -16,8 +17,12 @@ import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { fuzzyFilter } from '@core/util/fuzzy';
 import PlusIcon from '@icon/system/regular/plus.svg';
-import { useAiBillingSummaryQuery } from '@queries/auth';
+import {
+  useAiBillingSummaryQuery,
+  useSubscriptionStatusQuery,
+} from '@queries/auth';
 import { useComputersQuery } from '@queries/computers/computers';
+import { queryReadyGate } from '@queries/gate';
 import {
   useDeleteTeamInviteMutation,
   useResendTeamInviteMutation,
@@ -100,8 +105,7 @@ import { TeamAgentMenu, TeamMemberMenu } from './views/team-member-menu';
  * schema carries `plan`, read it defensively; every seat starts on Pro.
  */
 function memberPlan(member: TeamMember): PaidPlan {
-  const plan = (member as TeamMember & { plan?: PaidPlan }).plan;
-  return plan === 'max' ? 'max' : 'premium';
+  return (member as TeamMember & { plan?: PaidPlan }).plan ?? 'premium';
 }
 
 /** A person's ⋯: a menu on desktop, a sheet on touch, as Machines does. */
@@ -281,6 +285,16 @@ export function TeamMembers(props: { team: TeamSummary }) {
       billingSummary.data.seats > 1
     );
   };
+  // An annual team has no Pro seats. Admins read how it bills from the
+  // subscription status; until that answers, every plan is listed and the
+  // server refuses one that isn't sold.
+  const subscriptionStatus = useSubscriptionStatusQuery({
+    enabled: () => showSeatPlans() && isAdminOrOwner(),
+  });
+  const annualTeam = () =>
+    queryReadyGate(subscriptionStatus)
+      ? subscriptionStatus.data.interval === 'year'
+      : false;
   const setMemberPlanMutation = useSetTeamMemberPlanMutation();
   // Seat moves read and rewrite the subscription's item quantities, so only
   // one may be in flight per team: every plan menu waits while one runs.
@@ -288,8 +302,13 @@ export function TeamMembers(props: { team: TeamSummary }) {
 
   const crmAccessOf = (member: TeamMember) =>
     hasCrmAccess(member, teamQuery.data?.crm_member_access);
-  const pendingDowngradeOf = (member: TeamMember) =>
-    teamQuery.data?.scheduled_seat_plans?.[member.user_id]?.plan === 'premium';
+  // The cheaper plan a seat moves to at renewal, if one is scheduled.
+  const pendingDowngradeOf = (member: TeamMember): PaidPlan | undefined => {
+    const scheduled =
+      teamQuery.data?.scheduled_seat_plans?.[member.user_id]?.plan;
+    if (!scheduled || !isUpgrade(scheduled, memberPlan(member))) return;
+    return scheduled;
+  };
 
   // One muted line under the name: role, seat plan, and only what differs
   // from the usual (a Max seat dropping to Pro, CRM access turned off).
@@ -299,9 +318,10 @@ export function TeamMembers(props: { team: TeamSummary }) {
       roleName(member.role),
       showSeatPlans() && seatPlanName(plan),
       isAdminOrOwner() &&
-        plan === 'max' &&
         pendingDowngradeOf(member) &&
-        t('teamMembers.proAtRenewal'),
+        t('teamMembers.planAtRenewal', {
+          plan: seatPlanName(pendingDowngradeOf(member) ?? plan),
+        }),
       canManageCrm() && !crmAccessOf(member) && t('crm.memberAccessOff'),
     ]
       .filter(Boolean)
@@ -474,7 +494,10 @@ export function TeamMembers(props: { team: TeamSummary }) {
                             plan={
                               showSeatPlans() ? memberPlan(member()) : undefined
                             }
-                            pendingDowngrade={pendingDowngradeOf(member())}
+                            annual={annualTeam()}
+                            pendingDowngrade={
+                              pendingDowngradeOf(member()) !== undefined
+                            }
                             planPending={planMovePending()}
                             onPlanChange={(plan) => {
                               if (!props.team.id) return;
@@ -482,6 +505,7 @@ export function TeamMembers(props: { team: TeamSummary }) {
                                 teamId: props.team.id,
                                 userId: member().user_id,
                                 plan,
+                                from: memberPlan(member()),
                               });
                             }}
                             role={member().role}

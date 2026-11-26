@@ -20,7 +20,9 @@ State ownership, reactivity, and async error handling.
   third-party libs, navigation events) — never for deriving state; use `on()` to
   make dependencies explicit when an effect is warranted. Prefer wrapping the
   setter over `createEffect(() => { if (signal()) sideEffect() })` when setting
-  a value should also clear related UI, blur a control, or scroll.
+  a value should also clear related UI, blur a control, or scroll. Set a
+  library's state where it changes (a prop or an event handler), not
+  in an effect that watches the library and corrects it afterwards.
 - **FE-11** Check `solid-primitives` before writing a custom reactive utility.
 - **FE-70** Keep related state that changes together in one createStore, not parallel signals.
 - **FE-12** `async`/`await`, not `.then()`/`.catch()` chains; fallible calls
@@ -109,4 +111,12 @@ State ownership, reactivity, and async error handling.
   `@core/util/onElementConnect`, which runs the callback under the caller's
   owner, and register cleanup for setup-time resources (plugins, debounced
   saves) at setup, not in that callback. Enforced by ast-grep
-  `ts-/tsx-no-ownerless-element-connect`, CI error.
+  `ts-/tsx-no-ownerless-element-connect`, CI error. Code after an `await`
+  has no owner either: never call a query or mutation hook (`useMutation`,
+  a `use*Query` or `use*Mutation`) there or in a handler. Its computations
+  and cache subscription are never disposed: the computations can join the
+  reactive graph of views that are mounted, keeping them alive after they
+  close, and its observer keeps the mutation in the cache for the session.
+  Run such a mutation from module-scope options with
+  `queryClient.getMutationCache().build(...).execute(...)`, which leaves no
+  observer behind, as `recordHistoryView` in `queries/history` does.

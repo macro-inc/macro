@@ -5,10 +5,20 @@
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { ok } from 'neverthrow';
-import type { JSX } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildAgentModelTargets, useAgentModelsQueries } from './models';
+import {
+  agentModelsQueryOptions,
+  buildAgentModelTargets,
+  useAgentModelsQueries,
+  useAgentModelsQuery,
+} from './models';
+
+const account = vi.hoisted(() => ({
+  id: () => 'account-one' as string | undefined,
+}));
+vi.mock('@core/context/user', () => ({ useUserId: () => () => account.id() }));
 
 vi.mock('@service-agent-harness/client', () => ({
   agentHarnessServiceClient: {
@@ -35,6 +45,7 @@ function renderHook(factory: () => unknown) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  account.id = () => 'account-one';
   queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -125,5 +136,33 @@ describe('agent model discovery', () => {
       ).toBe(true);
     });
     expect(agentHarnessServiceClient.loadAgentModels).toHaveBeenCalledTimes(2);
+  });
+  it('does not reuse a previous account catalog while the new account loads', async () => {
+    const [userId, setUserId] = createSignal<string | undefined>('account-one');
+    account.id = userId;
+    const target = { harness: 'in-memory' as const };
+    queryClient.setQueryData(
+      agentModelsQueryOptions(target, 'account-one').queryKey,
+      {
+        status: 'available',
+        models: [{ id: 'old-model', name: 'Old model' }],
+      }
+    );
+    vi.mocked(agentHarnessServiceClient.loadAgentModels).mockReturnValue(
+      new Promise(() => {})
+    );
+    let catalog: ReturnType<typeof useAgentModelsQuery> | undefined;
+    renderHook(() => {
+      catalog = useAgentModelsQuery(() => target);
+    });
+    await vi.waitFor(() => expect(catalog?.isSuccess).toBe(true));
+    setUserId('account-two');
+    await vi.waitFor(() => expect(catalog?.isPending).toBe(true));
+    expect(
+      queryClient.getQueryData(
+        agentModelsQueryOptions(target, 'account-two').queryKey
+      )
+    ).toBeUndefined();
+    expect(agentHarnessServiceClient.loadAgentModels).toHaveBeenCalledOnce();
   });
 });

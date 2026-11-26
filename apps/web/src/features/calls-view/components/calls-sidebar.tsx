@@ -247,7 +247,9 @@ export function CallsSidebar(props: { onNavigate: () => void }) {
       {/* Hidden while loading so a connected user never sees it flash. */}
       <Show
         when={
-          granola.status() === 'available' || granola.status() === 'disabled'
+          granola.status() === 'available' ||
+          granola.status() === 'disabled' ||
+          granola.status() === 'needs-reauth'
         }
       >
         <ViewSidebar.Footer class="border-0">

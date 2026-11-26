@@ -108,7 +108,7 @@ pub enum SearchQueueMessage {
     // Chat
     /// SQS backfill work-queue contract for reconciling a chat message.
     ChatMessage(ChatMessage),
-    // Email backfills
+    // Email backfills, and the threads of a renamed label
     ExtractEmailThreadBatch(EmailThreadBatchMessage),
     // Channel
     ChannelMessageUpdate(ChannelMessageUpdate),

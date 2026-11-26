@@ -51,8 +51,11 @@ the app's disconnected paths.
   (`apps/web/dist`, or `EMAIL_E2E_DIST`) and proxies `/email` and `/dss` to
   that test's services, signing each request as the test's user with the
   services' internal headers. There is no authentication service: the few
-  `/auth` calls the app needs at startup are answered there, and `front.stub`
-  answers more. The bundle's own files reach the page from the test process
+  `/auth` calls the app needs at startup are answered there. The connector
+  list and catalog reads (`GET /cognition/connectors` and
+  `GET /cognition/connectors/catalog`) return an empty list and catalog page,
+  since the stack has no connector service. `front.stub` answers more.
+  The bundle's own files reach the page from the test process
   (a route in the fixture answers with what the front would send), not over
   the network.
 - The bundle is built by `just apps/web/build-email-e2e`: every service on the

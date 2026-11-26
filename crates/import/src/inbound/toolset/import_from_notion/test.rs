@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::models::RunErrorKind;
 use import_notion::domain::model::NotionId;
 
 #[test]
@@ -139,5 +140,55 @@ fn objects_waiting_on_a_teammate_are_explained_while_and_after_importing() {
     assert_eq!(
         message(NotionImportAction::Status, &report),
         "The import finished: 4 objects imported. 2 are being imported by a teammate at the same time and link to their copies once those are written."
+    );
+}
+
+#[test]
+fn a_failed_plan_is_explained_to_the_user_and_not_planned_again() {
+    let report = NotionImportReport {
+        status: Some(RunStatus::Failed),
+        error: Some("proxy detail the agent must not see".into()),
+        error_kind: Some(RunErrorKind::ConnectionUnavailable),
+        ..NotionImportReport::default()
+    };
+
+    assert_eq!(
+        message(NotionImportAction::Plan, &report),
+        "The Notion import failed: Macro couldn't use the user's Notion connection, so the user needs to reconnect Notion. Tell the user in one sentence why it failed and what they can do about it. Do not plan again, check its status, or present a review until the user asks you to try again."
+    );
+}
+
+#[test]
+fn a_plan_that_failed_before_kinds_were_recorded_says_so_plainly() {
+    let report = NotionImportReport {
+        status: Some(RunStatus::Failed),
+        error: Some("Notion object not found or not shared with the connection".into()),
+        ..NotionImportReport::default()
+    };
+
+    assert!(
+        message(NotionImportAction::Status, &report)
+            .starts_with("The Notion import failed: something went wrong on Macro's side."),
+    );
+}
+
+#[test]
+fn a_failed_plan_never_hands_the_agent_the_providers_text() {
+    let report = NotionImportReport {
+        status: Some(RunStatus::Failed),
+        error: Some("Notion could not complete the request: provider-secret-body".into()),
+        error_kind: Some(RunErrorKind::Unreachable),
+        ..NotionImportReport::default()
+    };
+    let response = ImportFromNotionResponse::for_agent(
+        report.clone(),
+        message(NotionImportAction::Status, &report),
+    );
+
+    let payload = serde_json::to_string(&response).unwrap();
+    assert!(!payload.contains("provider-secret-body"), "{payload}");
+    assert!(
+        payload.contains("\"errorKind\":\"unreachable\""),
+        "{payload}"
     );
 }

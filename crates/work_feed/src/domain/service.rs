@@ -8,8 +8,8 @@ use std::collections::{HashMap, HashSet};
 use attention_feed::domain::{
     acknowledge::Acknowledger,
     models::{
-        Acknowledgment, CandidateKeying, CandidateRequest, DoneReceipt, EntityFacts, FeedError,
-        FeedKey, FeedViewer, Loaded, counts_as_unseen, unseen_among,
+        Acknowledgment, CandidateKeying, CandidateRead, CandidateRequest, DoneReceipt, EntityFacts,
+        FeedError, FeedKey, FeedViewer, Loaded, counts_as_unseen, unseen_among,
     },
     ports::{CandidateSource, FeedMail, FeedNotifications, FeedSignals},
     reader::{self, FeedReader},
@@ -115,6 +115,7 @@ fn candidate_request(viewer: &FeedViewer, scope: &WorkFeedScope) -> CandidateReq
         after: None,
         only: None,
         assume_attention: false,
+        read: CandidateRead::Replica,
     }
 }
 
@@ -211,16 +212,23 @@ where
     M: FeedMail,
     G: FeedSignals,
 {
-    /// Current items for `keys` in `scope`, keyed by item.
+    /// Current items for `keys` in `scope`, keyed by item, read from `read`.
     async fn current(
         &self,
         viewer: &FeedViewer,
         scope: &WorkFeedScope,
         keys: &[FeedKey],
+        read: CandidateRead,
     ) -> Result<HashMap<FeedKey, Assembled<S::Entity>>, Report> {
         Ok(self
             .reader
-            .current(candidate_request(viewer, scope), keys)
+            .current(
+                CandidateRequest {
+                    read,
+                    ..candidate_request(viewer, scope)
+                },
+                keys,
+            )
             .await?
             .into_iter()
             .filter_map(|(key, loaded)| assemble_item(loaded).map(|assembled| (key, assembled)))
@@ -291,7 +299,11 @@ where
         if keys.is_empty() {
             return Ok(Vec::new());
         }
-        let mut current = self.current(&viewer, &scope, &keys).await?;
+        // Clients apply these entries over the Soup patches that announced the
+        // change, which were hydrated from the primary.
+        let mut current = self
+            .current(&viewer, &scope, &keys, CandidateRead::Committed)
+            .await?;
         Ok(keys
             .into_iter()
             .map(|key| match current.remove(&key) {
@@ -315,9 +327,16 @@ where
             });
         }
         // Evaluate each item in every feed's scope, whatever feed the caller
-        // was looking at, so done acknowledges what they observed.
+        // was looking at, so done acknowledges what they observed. Read from
+        // the primary: what they observed may have come from a live recompute
+        // the replica has not caught up with.
         let mut current = self
-            .current(&viewer, &WorkFeedScope::everything(), &keys)
+            .current(
+                &viewer,
+                &WorkFeedScope::everything(),
+                &keys,
+                CandidateRead::Committed,
+            )
             .await?;
 
         let mut acknowledgments = Vec::with_capacity(keys.len());

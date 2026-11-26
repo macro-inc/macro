@@ -21,7 +21,7 @@ mod test;
 
 use std::sync::LazyLock;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::CreationPrincipal;
 use serde::{Deserialize, Serialize};
@@ -212,6 +212,61 @@ pub struct AccessRequest {
     pub requester_name: Option<String>,
 }
 
+/// Payload of [`Action::RecordMerged`]. Only values the team can see are
+/// stored; a teammate's private value stays in the owning domain's merge log.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RecordMerge {
+    /// The merge, in the owning domain's merge log.
+    pub merge_id: Uuid,
+    /// The records merged in, with the names they had.
+    pub merged: Vec<MergedRecordName>,
+    /// Team-visible values the merge dropped because the entity's own won.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dropped: Vec<DroppedPropertyValue>,
+}
+
+/// A record merged into another, as it was named at the merge.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MergedRecordName {
+    /// The merged record's id, which now opens the entity.
+    pub id: String,
+    /// Its display name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
+/// A value a merge dropped.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DroppedPropertyValue {
+    /// Property definition id.
+    pub property: String,
+    /// The merged record that held it.
+    pub record: String,
+    /// The value.
+    pub value: Value,
+}
+
+/// Payload of [`Action::TimeLogged`]. The entry's note is never stored.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TimeLog {
+    /// Whole minutes logged.
+    pub minutes: u32,
+    /// The day the time counts for, as the person chose it.
+    pub entry_date: NaiveDate,
+    /// How the time was logged.
+    pub source: TimeLogSource,
+}
+
+/// How time was logged: typed, or saved by stopping a timer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TimeLogSource {
+    /// Typed as a length.
+    Manual,
+    /// Saved by stopping a timer.
+    Timer,
+}
+
 /// Task referenced by a project membership event. No task name is stored.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct InitiativeTaskChange {
@@ -282,6 +337,10 @@ pub enum Action {
     AppearanceChanged(AppearanceChange),
     /// A principal asked to join the entity (channel membership).
     AccessRequested(AccessRequest),
+    /// Time was logged on the entity (a task).
+    TimeLogged(TimeLog),
+    /// Other records were merged into the entity (a CRM company or contact).
+    RecordMerged(RecordMerge),
 }
 
 /// The names captured when an entity is renamed.
@@ -362,6 +421,8 @@ impl Action {
             Action::TaskAdded(change) | Action::TaskRemoved(change) => payload(change),
             Action::AppearanceChanged(change) => payload(change),
             Action::AccessRequested(request) => payload(request),
+            Action::TimeLogged(log) => payload(log),
+            Action::RecordMerged(merge) => payload(merge),
         };
         (tag, payload)
     }
@@ -407,6 +468,8 @@ impl Action {
             ActionTag::TaskRemoved => Ok(Action::TaskRemoved(parsed(payload)?)),
             ActionTag::AppearanceChanged => Ok(Action::AppearanceChanged(parsed(payload)?)),
             ActionTag::AccessRequested => Ok(Action::AccessRequested(parsed(payload)?)),
+            ActionTag::TimeLogged => Ok(Action::TimeLogged(parsed(payload)?)),
+            ActionTag::RecordMerged => Ok(Action::RecordMerged(parsed(payload)?)),
         }
     }
 }

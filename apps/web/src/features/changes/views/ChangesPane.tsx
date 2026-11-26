@@ -43,6 +43,7 @@ import {
   describeRange,
 } from '../core/changeset';
 import { createChangesNarrow } from '../primitives/create-changes-narrow';
+import { createLitRange } from '../primitives/create-lit-range';
 import {
   MAX_TREE_WIDTH,
   MIN_TREE_WIDTH,
@@ -241,6 +242,7 @@ function ChangesBodyContent(props: {
       />
     ),
   });
+  const litRange = createLitRange(notes.selection, review.pointed);
   const treeVisible = () => !props.narrow() && layout.treeOpen();
   const [wideDock, setWideDock] = createSignal<HTMLDivElement>();
   const [drawerDock, setDrawerDock] = createSignal<HTMLDivElement>();
@@ -407,7 +409,8 @@ function ChangesBodyContent(props: {
                       )}
                       annotations={notes.annotations}
                       renderAnnotation={notes.renderAnnotation}
-                      selection={notes.selection}
+                      selection={litRange}
+                      reveal={review.pointed}
                       onSelectLines={notes.onSelectLines}
                     />
                   </Match>

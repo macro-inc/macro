@@ -847,14 +847,18 @@ impl BootStubEnv {
             "local-stripe-webhook-secret".into(),
         );
         // ai_billing's mandatory pricing (crates/ai_billing/src/config.rs). Every
-        // host that composes billing refuses to boot without all four; these
-        // mirror the published plan table ($5 free cap, $15 Pro, $150 Max,
-        // list price + 25%). Doppler's shared_ai configs are authoritative.
+        // host that composes billing refuses to boot without all five; these
+        // mirror the published plan table ($5 free cap, $15 Pro, $45 Business,
+        // $150 Max, list price + 25%). Doppler's shared_ai configs are authoritative.
         env.insert(
             "AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS".into(),
             "500".into(),
         );
         env.insert("AI_USAGE_INCLUDED_ALLOWANCE_CENTS".into(), "1500".into());
+        env.insert(
+            "AI_USAGE_BUSINESS_INCLUDED_ALLOWANCE_CENTS".into(),
+            "4500".into(),
+        );
         env.insert(
             "AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS".into(),
             "15000".into(),
@@ -953,6 +957,9 @@ impl BootStubEnv {
         // Doppler; real provider calls still fail on the dummy keys.
         // Doppler's shared_ai name is singular: FIREWORK_API_KEY.
         env.insert("FIREWORK_API_KEY".into(), "local-firework-key".into());
+        // Empty turns the harness's CAPTCHA solving off (`notConfigured`): a
+        // placeholder key would send real tasks to CapSolver and fail them.
+        env.insert("CAPSOLVER_API_KEY".into(), String::new());
         env.insert("CEREBRAS_API_KEY".into(), "local-cerebras-key".into());
         env.insert(
             super::model_emulator::API_KEY_VAR.into(),

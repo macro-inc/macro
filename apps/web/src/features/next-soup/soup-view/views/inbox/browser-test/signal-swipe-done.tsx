@@ -10,7 +10,7 @@ import { macroLightTheme } from '@app/features/theme/themes/macro-light';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
-import { ChannelsContextProvider } from '@core/context/channels';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { UserContextProvider } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -21,6 +21,7 @@ import {
 } from '@entity';
 import type { NotificationSource } from '@notifications';
 import { authKeys } from '@queries/auth/keys';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import { queryClient } from '@queries/client';
 import { MutationUndoProvider } from '@queries/undo';
 import { QueryClientProvider } from '@tanstack/solid-query';
@@ -35,9 +36,12 @@ declare global {
   interface Window {
     /** Each row the delegate completed, in order. */
     __signalDone: string[];
+    /** Each row a click or tap opened, in order. */
+    __signalOpened: string[];
   }
 }
 window.__signalDone = [];
+window.__signalOpened = [];
 
 queryClient.setQueryData(authKeys.userInfo.queryKey, {
   id: 'macro|viewer@example.test',
@@ -69,8 +73,31 @@ const doc = (name: string, index: number) =>
     viewedAt: NOW - index * 60_000,
   }) as unknown as WithNotification<EntityData>;
 
+// `?links`: the list starts with a document whose comment holds a link.
+const LINKS = new URLSearchParams(location.search).has('links');
+
+const commented = (): WithNotification<EntityData> => ({
+  ...doc('Spec', -1),
+  notifications: () => [
+    {
+      id: 'comment-spec',
+      entity_type: 'document',
+      entity_id: 'doc-spec',
+      sender_id: 'macro|ana@example.test',
+      created_at: new Date(NOW).toISOString(),
+      notification_metadata: {
+        tag: 'commented_on_document',
+        content: { text: 'Read [the spec](https://example.test/spec) first' },
+      },
+    } as never,
+  ],
+});
+
 function Fixture() {
-  const [entities, setEntities] = createSignal(NAMES.map(doc));
+  const [entities, setEntities] = createSignal([
+    ...(LINKS ? [commented()] : []),
+    ...NAMES.map(doc),
+  ]);
   const [collapse, setCollapse] = createSignal<
     ((id: string) => Promise<void>) | undefined
   >();
@@ -151,6 +178,7 @@ function Fixture() {
                 occurrenceKey={rowIdOf(entity.id)}
                 hideCheckbox
                 isLastInGroup={index() === entities().length - 1}
+                onClick={() => window.__signalOpened.push(entity.id)}
               />
             )}
           </For>
@@ -167,7 +195,9 @@ render(
         <PosthogProvider>
           <EntityProvider>
             <UserContextProvider>
-              <ChannelsContextProvider>
+              <ChannelDirectoryProvider
+                directory={staticChannelDirectory(() => [])}
+              >
                 <EmailLinksContextProvider>
                   <MobileSettingsProvider>
                     <MutationUndoProvider>
@@ -175,7 +205,7 @@ render(
                     </MutationUndoProvider>
                   </MobileSettingsProvider>
                 </EmailLinksContextProvider>
-              </ChannelsContextProvider>
+              </ChannelDirectoryProvider>
             </UserContextProvider>
           </EntityProvider>
         </PosthogProvider>

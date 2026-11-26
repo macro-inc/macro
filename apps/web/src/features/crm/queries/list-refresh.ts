@@ -19,6 +19,16 @@ export function listCanIncludeCrm(body: unknown): boolean {
   return !(excludesCompanies && excludesContacts);
 }
 
+/** A CRM email list (a company's or contact's mail) or CRM activity, which
+ * show mail by the company's email policy. */
+export function listReadsCrmEmail(body: unknown): boolean {
+  return (
+    typeof body === 'object' &&
+    body !== null &&
+    ('ecd' in body || 'eca' in body || 'crma' in body)
+  );
+}
+
 /** Contacts are an explicit Soup target; an absent or excluded target cannot change. */
 export function listCanIncludeCrmContacts(body: unknown): boolean {
   return (

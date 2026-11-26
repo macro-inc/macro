@@ -1,6 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
-import { useQueryClient } from '@queries/client';
 import type { Accessor } from 'solid-js';
 import type { BlockName } from '../block';
 
@@ -24,9 +23,9 @@ async function record(
   try {
     const { track } = await import('./trackBlockOpened');
     if (authenticated() !== true) return;
-    // The tracker runs outside the query context provider, so it takes the
-    // client as an accessor.
-    track({ itemId, blockName, client: useQueryClient });
+    // No Solid owner is current after the await, so the tracker must not
+    // create computations (a mutation hook): nothing would dispose them.
+    track({ itemId, blockName });
   } catch (error) {
     Telemetry.error(error, { surface: 'track-block-opened', blockName });
   }

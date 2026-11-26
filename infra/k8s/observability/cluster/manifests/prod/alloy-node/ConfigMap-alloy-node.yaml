@@ -143,7 +143,7 @@ data:
       }
     }
 
-    // The backends' own metrics, from their pods on this node.
+    // The backends' and Alloy ingest's own metrics, from their pods on this node.
     discovery.kubernetes "backends" {
       role = "pod"
 
@@ -162,8 +162,15 @@ data:
 
       rule {
         source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
-        regex         = "loki|tempo|mimir"
+        regex         = "loki|tempo|mimir|alloy"
         action        = "keep"
+      }
+
+      // It scrapes itself.
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_instance"]
+        regex         = "derived-metrics"
+        action        = "drop"
       }
 
       rule {

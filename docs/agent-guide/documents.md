@@ -122,6 +122,15 @@ labeled rather than inferred. Canvas and file breadcrumb names follow live
 renames, including the tab title and title menu. Rename an open canvas and confirm
 its header updates immediately without reloading or remounting the editor.
 
+A document title saves 400ms after the last keystroke, and at once when the
+document closes. Create a document, type part of its title, pause, type the
+rest quickly, press Enter and type into the body: the whole title stays and
+survives a reload. The saved name never replaces a title with a save waiting
+or in flight, so delay GraphQL responses by about 1.5s to check it. After the
+title's save succeeds, a rename made elsewhere during it can show once the
+title has no newer edits; if the save reports a failure, the typed title stays
+on screen.
+
 Editable documents show matching **Add tags** and **Add property** pills below
 the title. Once tags are applied, **Add tags** becomes the existing tag name or
 count pill; clicking it reopens the picker. **Add property** opens the shared
@@ -2483,10 +2492,9 @@ stay text instead of becoming mentions, long pastes do not collapse into a
    focused**.
 2. `type_text` the title, then `submitKey: "Enter"` to drop into the body. Tab
    from the title also moves to the start of the body, without inserting a
-   paragraph. While a document is open, Tab and Shift+Tab never switch the
-   hosting view's tabs (e.g. Drive's My Files / Recent): opened from Drive,
-   focus a non-editable control in the document, press Tab, and the
-   document must stay open.
+   paragraph. While a document is open, Tab, Shift+Tab and the number keys
+   never leave it: opened from Drive, focus a non-editable control in the
+   document, press Tab and `2`, and the document must stay open.
 3. Type paragraphs with plain `type_text`; use Enter between paragraphs. Do NOT use `fill` —
    the editor is contenteditable and `fill` does not work on it.
 4. The document auto-saves continuously (collaborative CRDT; no save button). The tab title
@@ -2574,10 +2582,11 @@ Macro people and groups are pinned. The PostHog `disable-crm-contact-search`
 kill switch removes contact results and disables their search while leaving
 companies and Macro users available; existing contact mentions still work.
 Override locally with `VITE_DISABLE_CRM_CONTACT_SEARCH=true`. Results include cached companies even if they are
-absent from the first 500 companies in the REST Quick Access feed; the REST feed
-remains a fallback. Cache search covers synchronized companies, not the entire CRM.
+absent from the first 500 companies of the company suggestion feed, a GraphQL
+Soup page (`QUICK_ACCESS_CRM_COMPANIES_ARGS`); that page remains a fallback. Cache
+search covers synchronized companies, not the entire CRM.
 
-To verify, search for a cached company absent from that REST page, select it, and
+To verify, search for a cached company absent from that GraphQL page, select it, and
 check that the inserted company mention points to the correct company. Also check
 searching by domain and that an open picker updates when companies finish hydrating.
 Discard unsent test drafts rather than sending them.

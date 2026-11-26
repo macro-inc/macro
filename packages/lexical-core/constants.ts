@@ -82,6 +82,19 @@ export const SKIP_DOM_SELECTION_TAG = 'skip-dom-selection';
 export const FOCUS_TAG = 'focus';
 
 /**
+ * Tags for a write the person did not make in this editor, such as a
+ * decorator saving what it loaded or measured. Lexical keeps an editor's
+ * selection after it loses focus, and an update without these tags writes
+ * that selection back into the page, which moves focus into the editor from
+ * wherever the person is typing.
+ */
+export const BACKGROUND_UPDATE_TAGS = [
+  HISTORIC_TAG,
+  SKIP_DOM_SELECTION_TAG,
+  SKIP_SCROLL_INTO_VIEW_TAG,
+];
+
+/**
  * The marker a chat agent's reply carries while its turn runs, read as text
  * in notification excerpts, search, and plain-text previews.
  */

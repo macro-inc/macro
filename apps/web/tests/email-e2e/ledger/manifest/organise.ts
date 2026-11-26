@@ -1085,6 +1085,15 @@ export const organise = {
       ],
       note: 'tested on desktop in the thread opened from Home, where the title is not covered by the header; and on a phone',
     },
+    {
+      id: 'STL-997',
+      surface: 'SL-31',
+      fn: ['F-053'],
+      state:
+        'subject of more than three lines cut to three, with "Show full subject" / "Show less"',
+      trigger: 'open a thread with a long subject',
+      source: ['src/features/email-thread/components/email-thread-title.tsx'],
+    },
 
     // SL-32 side panel
     {

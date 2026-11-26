@@ -365,6 +365,15 @@ fn api_router(state: ApiContext) -> Router {
             ),
         )
         .nest(
+            "/time",
+            time_tracking::inbound::axum_router::time_tracking_router(
+                state.time_tracking_state.clone(),
+            )
+            .merge(time_tracking::inbound::report_router::time_report_router(
+                state.time_report_state.clone(),
+            )),
+        )
+        .nest(
             "/channel-sections",
             channel_labels::inbound::axum_router::channel_sections_router(
                 state.channel_sections_state.clone(),
@@ -478,6 +487,9 @@ fn api_router(state: ApiContext) -> Router {
                 )
                 .merge(crm::inbound::pipeline_workflows::router(
                     state.pipeline_workflow_state.clone(),
+                ))
+                .merge(crm::inbound::record_merge::router(
+                    state.merge_state.clone(),
                 )),
         )
         .merge(

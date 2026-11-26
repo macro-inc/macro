@@ -44,6 +44,35 @@ describe('soupPropertyToProperty stage labels', () => {
   });
 });
 
+describe('soupPropertyToProperty tags', () => {
+  const tags = (dataType: 'TAG' | 'SELECT_STRING'): SoupProperty => {
+    const base = stageSoupProperty('launch');
+    return {
+      ...base,
+      definition: {
+        ...base.definition,
+        id: 'labels',
+        data_type: dataType,
+        is_system: false,
+      },
+    };
+  };
+
+  it('reads a tag set as a select marked as tags', () => {
+    expect(soupPropertyToProperty(tags('TAG'))).toMatchObject({
+      valueType: 'SELECT_STRING',
+      isTag: true,
+      value: ['launch'],
+    });
+  });
+
+  it('leaves other selects unmarked', () => {
+    expect(soupPropertyToProperty(tags('SELECT_STRING'))).not.toHaveProperty(
+      'isTag'
+    );
+  });
+});
+
 describe('withTaskProject', () => {
   const status = {
     propertyId: 'status-row',
@@ -84,5 +113,44 @@ describe('withTaskProject', () => {
       specificEntityType: 'INITIATIVE',
     });
     expect(placeholder).toEqual(buildTaskProjectDefaultProperty());
+  });
+});
+
+describe('soupPropertyToProperty dates', () => {
+  const dueSoupProperty = (value: SoupProperty['value']): SoupProperty => ({
+    id: SYSTEM_PROPERTY_IDS.DUE_DATE,
+    definition: {
+      id: SYSTEM_PROPERTY_IDS.DUE_DATE,
+      display_name: 'Due Date',
+      data_type: 'DATE',
+      is_metadata: false,
+      is_multi_select: false,
+      is_system: true,
+      owner: { scope: 'system' },
+      specific_entity_type: null,
+      created_at: EPOCH_ZERO,
+      updated_at: EPOCH_ZERO,
+    },
+    value,
+  });
+
+  it('keeps whether a date has its time of day', () => {
+    expect(
+      soupPropertyToProperty(
+        dueSoupProperty({
+          type: 'Date',
+          value: '2026-11-27T09:00:00Z',
+          has_time: true,
+        })
+      )
+    ).toMatchObject({
+      valueType: 'DATE',
+      value: new Date('2026-11-27T09:00:00Z'),
+      hasTime: true,
+    });
+    const day = soupPropertyToProperty(
+      dueSoupProperty({ type: 'Date', value: '2026-11-27T05:00:00Z' })
+    );
+    expect('hasTime' in day).toBe(false);
   });
 });

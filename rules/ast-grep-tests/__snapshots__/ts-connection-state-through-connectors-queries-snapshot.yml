@@ -1,0 +1,178 @@
+id: ts-connection-state-through-connectors-queries
+snapshots:
+  ? |
+    await cognitionApiServiceClient.listPipedreamConnections();
+  : labels:
+    - source: cognitionApiServiceClient.listPipedreamConnections
+      style: primary
+      start: 6
+      end: 56
+    - source: cognitionApiServiceClient
+      style: secondary
+      start: 6
+      end: 31
+    - source: listPipedreamConnections
+      style: secondary
+      start: 32
+      end: 56
+  ? |
+    const all = await cognitionApiServiceClient.listConnectors();
+  : labels:
+    - source: cognitionApiServiceClient.listConnectors
+      style: primary
+      start: 18
+      end: 58
+    - source: cognitionApiServiceClient
+      style: secondary
+      start: 18
+      end: 43
+    - source: listConnectors
+      style: secondary
+      start: 44
+      end: 58
+  ? |
+    const on = flags.isEnabled('macro-connect');
+  : labels:
+    - source: '''macro-connect'''
+      style: primary
+      start: 27
+      end: 42
+  ? |
+    const servers = await cognitionApiServiceClient.listMcpServers();
+  : labels:
+    - source: cognitionApiServiceClient.listMcpServers
+      style: primary
+      start: 22
+      end: 62
+    - source: cognitionApiServiceClient
+      style: secondary
+      start: 22
+      end: 47
+    - source: listMcpServers
+      style: secondary
+      start: 48
+      end: 62
+  ? |
+    const step = await cognitionApiServiceClient.startConnect({ key });
+  : labels:
+    - source: cognitionApiServiceClient.startConnect
+      style: primary
+      start: 19
+      end: 57
+    - source: cognitionApiServiceClient
+      style: secondary
+      start: 19
+      end: 44
+    - source: startConnect
+      style: secondary
+      start: 45
+      end: 57
+  ? |
+    import type { ConnectStep } from '@service-cognition/client';
+  : labels:
+    - source: ConnectStep
+      style: primary
+      start: 14
+      end: 25
+    - source: '''@service-cognition/client'''
+      style: secondary
+      start: 33
+      end: 60
+    - source: import type { ConnectStep } from '@service-cognition/client';
+      style: secondary
+      start: 0
+      end: 61
+    - source: ConnectStep
+      style: secondary
+      start: 14
+      end: 25
+  ? |
+    import type { Connector } from '@service-cognition/generated/schemas/connector';
+  : labels:
+    - source: '''@service-cognition/generated/schemas/connector'''
+      style: primary
+      start: 31
+      end: 79
+    - source: import type { Connector } from '@service-cognition/generated/schemas/connector';
+      style: secondary
+      start: 0
+      end: 80
+  ? |
+    import type { PipedreamCatalogResponse } from '@service-cognition/generated/schemas/pipedreamCatalogResponse';
+  : labels:
+    - source: '''@service-cognition/generated/schemas/pipedreamCatalogResponse'''
+      style: primary
+      start: 46
+      end: 109
+    - source: import type { PipedreamCatalogResponse } from '@service-cognition/generated/schemas/pipedreamCatalogResponse';
+      style: secondary
+      start: 0
+      end: 110
+  ? |
+    import type { PipedreamConnectionResponse } from '@service-cognition/client';
+  : labels:
+    - source: PipedreamConnectionResponse
+      style: primary
+      start: 14
+      end: 41
+    - source: '''@service-cognition/client'''
+      style: secondary
+      start: 49
+      end: 76
+    - source: import type { PipedreamConnectionResponse } from '@service-cognition/client';
+      style: secondary
+      start: 0
+      end: 77
+    - source: PipedreamConnectionResponse
+      style: secondary
+      start: 14
+      end: 41
+  ? |
+    import type { ServerResponse } from '../../service-clients/service-cognition/client';
+  : labels:
+    - source: ServerResponse
+      style: primary
+      start: 14
+      end: 28
+    - source: '''../../service-clients/service-cognition/client'''
+      style: secondary
+      start: 36
+      end: 84
+    - source: import type { ServerResponse } from '../../service-clients/service-cognition/client';
+      style: secondary
+      start: 0
+      end: 85
+    - source: ServerResponse
+      style: secondary
+      start: 14
+      end: 28
+  ? |
+    import { PIPEDREAM_DISABLED } from '@service-cognition/client';
+  : labels:
+    - source: PIPEDREAM_DISABLED
+      style: primary
+      start: 9
+      end: 27
+    - source: '''@service-cognition/client'''
+      style: secondary
+      start: 35
+      end: 62
+    - source: import { PIPEDREAM_DISABLED } from '@service-cognition/client';
+      style: secondary
+      start: 0
+      end: 63
+    - source: PIPEDREAM_DISABLED
+      style: secondary
+      start: 9
+      end: 27
+  ? |
+    import { isFeatureEnabled, macroConnect } from '@core/constant/featureFlags';
+  : labels:
+    - source: macroConnect
+      style: primary
+      start: 27
+      end: 39
+    - source: macroConnect
+      style: secondary
+      start: 27
+      end: 39

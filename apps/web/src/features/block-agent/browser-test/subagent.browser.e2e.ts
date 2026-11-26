@@ -26,12 +26,14 @@ test('subagent rows read as a short label with a state, and keep the brief behin
   for (const [label, state] of [
     ['running', 'Running'],
     ['completed', 'Done'],
-    ['failed', 'Failed'],
+    ['failed', null],
   ] as const) {
     const row = session.locator(`[data-subagent-row="${label}"]`);
     const trigger = row.getByRole('button').first();
     await expect(trigger).toContainText('List open pull requests');
-    await expect(trigger).toContainText(state);
+    // A failed subagent names no state; the agent explains the failure.
+    if (state) await expect(trigger).toContainText(state);
+    else await expect(trigger).not.toContainText(/failed|running|done/i);
     await expect(trigger).not.toContainText('GitHub search tool');
     const box = await trigger.boundingBox();
     expect(box && box.x + box.width).toBeLessThanOrEqual(width);

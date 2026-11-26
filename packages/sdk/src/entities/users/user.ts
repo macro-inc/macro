@@ -43,6 +43,23 @@ export class User extends PropertiedEntity<UserName> implements Mentionable {
     return new User(client, name.id, name);
   }
 
+  /**
+   * Handles for users by id, seeded with their names and agent flags from one
+   * auth-service request, in the order given. An id the auth service does not
+   * name gets a plain handle that loads on first access.
+   */
+  static async named(client: MacroClient, ids: string[]): Promise<User[]> {
+    if (ids.length === 0) return [];
+    const { names } = unwrap(
+      await client.auth.getUserNamesWithEmail({ body: { user_ids: ids } }),
+    );
+    const byId = new Map(names.map((name: UserName) => [name.id, name]));
+    return ids.map((id) => {
+      const name = byId.get(id);
+      return name ? new User(client, id, name) : new User(client, id);
+    });
+  }
+
   /** A handle to the current authenticated user. */
   static async me(client: MacroClient): Promise<User> {
     const { user_id } = unwrap(await client.auth.getUserInfo());

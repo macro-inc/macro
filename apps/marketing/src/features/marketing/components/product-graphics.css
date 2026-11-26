@@ -12,12 +12,12 @@
 
 /* One edge per window, without a second specular rim or cast shadow. */
 .feature-page .feature-page-section
-  :is(.email-feature-demo:not(:has(.mail-sharing-stage)) .mail-app, .product-demo, .mail-sharing-email, .homepage-email-surface, .calendar-story-glass, .forms-card, .booking-story-card, .benefit-glass, .workspace-feature-scene, .macro-preview-back, .macro-preview-front, .mds-card, .homepage-pipeline-demo) {
+  :is(.email-feature-demo:not(:has(.mail-sharing-stage)) .mail-app, .product-demo, .mail-sharing-email, .homepage-email-surface, .benefit-glass, .macro-preview-back, .macro-preview-front, .mds-card) {
   border: 0;
   box-shadow: inset 0 0 0 1px var(--graphic-edge);
 }
 .feature-page .feature-page-section
-  :is(.product-demo, .homepage-email-surface, .booking-story-card, .workspace-feature-scene, .macro-preview-back, .macro-preview-front, .mds-card, .homepage-pipeline-demo)::after { content: none; }
+  :is(.product-demo, .homepage-email-surface, .macro-preview-back, .macro-preview-front, .mds-card)::after { content: none; }
 
 /* Split stories already have an outer frame; their email window needs no
    additional surround. Keep the surrounding conversation transparent. */
@@ -65,7 +65,7 @@
 
 /* Keep the shared rule stronger than individual graphic layout rules. */
 .feature-page .feature-page-section .feature-demo-art
-  :is(.product-demo, .mds-card, .homepage-pipeline-demo, .workspace-feature-scene, .booking-story-card) {
+  :is(.product-demo, .mds-card) {
   border: 0;
   box-shadow: inset 0 0 0 1px var(--graphic-edge);
 }

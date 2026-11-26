@@ -157,7 +157,8 @@ export class ImportNamespace {
    * Record that `item` was created in Macro from the external item, so it is
    * not imported again. The ledger stores each source's kind of item: a task
    * for Linear and Jira, a document for Notion and a channel for Slack, and
-   * any other handle is refused. An earlier mapping wins: the outcome is then
+   * any other handle is refused. HubSpot records are written only by the
+   * reviewed HubSpot import, so they are refused here. An earlier mapping wins: the outcome is then
    * `already_imported` and `entry.item()` is the item recorded first.
    *
    * @write
@@ -180,6 +181,11 @@ export class ImportNamespace {
         kind: 'channel',
         fits: item instanceof Channel,
       }))
+      .with('hubspot', () => {
+        throw new MacroError(
+          'A hubspot import is recorded only by the reviewed HubSpot import',
+        );
+      })
       .exhaustive();
     if (!expected.fits)
       throw new MacroError(

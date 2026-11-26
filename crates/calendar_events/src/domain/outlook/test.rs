@@ -298,3 +298,28 @@ fn only_the_mailboxs_own_read_only_calendars_are_system_calendars() {
     primary.calendar.is_primary = true;
     assert!(!primary.is_system(mailbox));
 }
+
+#[test]
+fn only_a_read_only_calendar_with_no_owner_is_a_web_subscription() {
+    let mailbox = "olivia@example.com";
+    assert!(
+        listed_calendar("reader", None, true).is_web_subscription(),
+        "Graph lists a calendar subscribed from the web as shared, with no owner"
+    );
+    assert!(listed_calendar("reader", None, false).is_web_subscription());
+    assert!(
+        !listed_calendar("reader", Some(mailbox), false).is_web_subscription(),
+        "the mailbox's own holidays and Birthdays are system calendars"
+    );
+    assert!(
+        !listed_calendar("reader", Some("ada@example.com"), true).is_web_subscription(),
+        "a colleague's calendar shared read-only names its sharer"
+    );
+    assert!(
+        !listed_calendar("writer", None, false).is_web_subscription(),
+        "a calendar the mailbox can edit is someone's work"
+    );
+    let mut primary = listed_calendar("reader", None, false);
+    primary.calendar.is_primary = true;
+    assert!(!primary.is_web_subscription());
+}

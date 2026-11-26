@@ -42,8 +42,8 @@ scenarios.
   stand-ins for the three things it asks outside the database
   (`src/focus.rs`): the model that answers the Focus questions, reached
   through `OVERRIDE_TYPESAFE_API_URL`; the agent harness route that reads
-  a thread's due date, through `OVERRIDE_AGENT_HARNESS_SERVICE_URL`; and
-  PostHog's flag definitions, through `POSTHOG_HOST`, from which it reads
+  the day a thread is due and the day of the meeting it is about, through
+  `OVERRIDE_AGENT_HARNESS_SERVICE_URL`; and PostHog's flag definitions, through `POSTHOG_HOST`, from which it reads
   whether an inbox's owner, or a user it is linked to, has the
   `enable-email-focus` flag. Its
   pushes go to the connection gateway stand-in like every other service's.
@@ -156,21 +156,36 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   no mail worth Focus until the scenario names text such mail holds,
   `stack.focus_classifier()?.put_in_focus_when_mail_contains("Contract
   renewal")`; `due_on_when_mail_contains` sets the day the harness reads
-  as due, and `times_asked_about(text)` tells whether mail reached the
-  model at all; `stack.focus_worker_log()` is what the worker logged. The questions and their order are the product's: the
+  as due and `event_on_when_mail_contains` the day of the meeting it is
+  about, and `times_asked_about(text)` tells whether mail reached the
+  model at all; `bill_tokens_per_call(tokens)` sets what each answer bills,
+  `rate_limit_for(period)` turns every question away with 429 for a while,
+  and `requests_about(text)` lists every question with when it came, what it
+  billed and whether it was turned away, for scenarios on the worker's token
+  budget; `stack.focus_worker_log()` is what the worker logged. The questions and their order are the product's: the
   stand-in answers yes only to the first, "would the owner want this in
-  Focus". The worker classifies an inbox only while its owner, or a user it
+  Focus", and, for text named with `ask_the_owner_when_mail_contains`, to
+  whether the latest message asks the owner something they haven't answered. The worker classifies an inbox only while its owner, or a user it
   is linked to, has the Focus flag: every user has it unless the scenario turns it off with
   `turn_off_focus_flag_for(address)` before linking any inbox, since the
   worker reads the flag on its first look at the inboxes and again only
-  five minutes later. `stack.focus_skipped_without_flag(thread_id)`
+  five minutes later. It also needs that person to use Macro: every user
+  the harness makes has Macro open (`User::create` records them as seen,
+  as the connection gateway does), `user.away_for(duration)` makes them
+  someone who stopped, and `user.opens_macro()` brings them back. The
+  worker keeps that answer for `FOCUS_ACTIVITY_CACHE_SECS` (300 s); a
+  scenario about leaving and coming back sets it to 0 through
+  `StackOptions.env`. `stack.focus_skipped_without_flag(thread_id)`
   tells that the worker is done with a thread and left it unclassified
-  because nobody whose tab shows it has the flag; it reads a debug line the
+  because nobody whose tab shows it is in the rollout; it reads a debug line the
   stack's `RUST_LOG` for the worker turns on, so a scenario that sets
   its own `RUST_LOG` loses it. Classifying follows
   the sync, so wait for the list or the thread's `focus`. Keep these
   scenarios in `tests/focus.rs`, whose tests nextest runs one at a time.
 - Mail that must be in the mailbox before it is linked: `stack.seed_mailbox`.
+- Mail written at a given time, for a wait or a day already past: `Mail::dated`;
+  mail the owner sent from another mail client (Gmail's `SENT` label, Outlook's
+  Sent Items): `Mail::sent_from_mailbox`.
 - The labels the owner made at the provider (Gmail labels, Outlook
   categories): `stack.provider_labels(&inbox)` reads them and
   `stack.make_provider_label(&inbox, name)` makes one, through the
@@ -432,7 +447,8 @@ shared with the web app's suite) and backend entry points second.
   `email-e2e-focus` test group runs `tests/focus.rs` serially. The harness
   gives the group an offset before its first worker starts, so mail that
   arrives while a worker joins is still read. The worker's later sweeps
-  are an hour apart and no scenario sees one, but it looks at every linked
+  are an hour apart unless a scenario sets `FOCUS_SWEEP_INTERVAL_SECS`
+  (60 at least) to see them, and it looks at every linked
   inbox once a minute and backfills those whose owner, or a user they are
   linked to, has the flag, so a
   scenario longer than a minute may see a thread classified by that too.

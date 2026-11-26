@@ -275,7 +275,7 @@ impl IntoResponse for EgressError {
             Self::UnknownServer(_) | Self::UnknownCustomServer(_) | Self::Unroutable(_) => {
                 StatusCode::NOT_FOUND
             }
-            Self::RepoUnavailable(_) => StatusCode::FORBIDDEN,
+            Self::RepoUnavailable(_) | Self::OutOfScope => StatusCode::FORBIDDEN,
             Self::MethodNotAllowed(_) => StatusCode::METHOD_NOT_ALLOWED,
             Self::RequestTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
             // The named upstream is unusable as configured. Someone has to
@@ -301,6 +301,7 @@ impl IntoResponse for EgressError {
             Self::UnknownServer(_) | Self::UnknownCustomServer(_) => {
                 "No such connected MCP server."
             }
+            Self::OutOfScope => "This agent was not given that MCP server.",
             Self::RepoUnavailable(_) => {
                 "This session's repository is not reachable with Macro's GitHub App."
             }

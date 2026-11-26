@@ -94,6 +94,9 @@ Outlook (Microsoft Graph) outbound adapters.
   the link for reauthorization. Contact listings use `retry_with_fresh_token`
   to keep their WARN-level logging. Writes use `call_with_token` and do not
   retry.
+- Outlook's `recent_inbox_messages` reads the requested well-known folder,
+  `inbox` or `sentitems`, newest first: the inbox by `receivedDateTime`, sent
+  items by `sentDateTime`, which is also what a window read filters on.
 - `SendRequest::build_mime` (Gmail sends) turns an inline `text/calendar`
   attachment with no Content-ID into the message's calendar body, the last
   alternative after the text and HTML, which is how an answerable invitation
@@ -191,6 +194,13 @@ Outlook (Microsoft Graph) outbound adapters.
   vendored tz data (`vendor/chrono-tz`) lacks: Outlook writes send local
   times computed with them, so stale rules move an event; update the tz
   data first.
+- A draft's `content_fingerprint` is stored (checkpoints, `base_content`)
+  and compared after a deploy, so a change to how it is computed reads as an
+  edit of every waiting draft; `a_fingerprint_keeps_its_value_across_releases`
+  pins it. `field_digests` only names the changed field in a log.
+  `DraftContent` (from `ProviderDraft::content` or the sync read's
+  `MailboxMessage::draft_content`) carries the version it was read at;
+  `crates/email` uses it as a baseline only for that version.
 - The Graph root is `macro_service_urls::MicrosoftGraphUrl`, so
   `OVERRIDE_MICROSOFT_GRAPH_URL` points every Outlook client in a process at
   `crates/outlook_emulator`; tests in other crates use

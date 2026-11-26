@@ -426,7 +426,7 @@ impl AgentLoop {
             self.agent_name
                 .clone()
                 .unwrap_or_else(|| usage_ctx.feature.to_string()),
-            ContentPolicy::from_env(),
+            ContentPolicy::current(),
             self.genai_telemetry,
         );
         telemetry.set_prompt(&system_prompt, &tool_search.catalog);

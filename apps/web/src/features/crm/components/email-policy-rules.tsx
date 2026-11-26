@@ -27,6 +27,7 @@ export function policyAction(action: EmailPolicyAudit['entry']['action']) {
     .with('withdrawn', () => t('crm.policyActionWithdraw'))
     .with('mailbox_revoked', () => t('crm.policyActionRevoke'))
     .with('live_targets_changed', () => t('crm.policyActionTargets'))
+    .with('records_merged', () => t('crm.policyActionMerged'))
     .exhaustive(() => t('crm.policyActionUnknown'));
 }
 

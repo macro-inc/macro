@@ -89,6 +89,8 @@ pub struct ProjectPropertyValues {
     pub priority: Option<Uuid>,
     /// Assigned users, independent from sharing membership.
     pub assignees: Vec<String>,
+    /// Start timestamp, or unset.
+    pub start_date: Option<DateTime<Utc>>,
     /// Due timestamp, or unset.
     pub due_date: Option<DateTime<Utc>>,
     /// Whether the status is completed.
@@ -101,6 +103,7 @@ impl From<InitiativePropertySnapshot> for ProjectPropertyValues {
             status: value.status,
             priority: value.priority,
             assignees: value.assignees,
+            start_date: value.start_date,
             due_date: value.due_date,
             completed: value.completed,
         }

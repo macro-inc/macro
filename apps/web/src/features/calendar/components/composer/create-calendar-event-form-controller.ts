@@ -172,6 +172,8 @@ export function createCalendarEventFormController(
     cloneValue(options.initialValue)
   );
   const [state, setState] = createSignal(cloneValue(options.initialValue));
+  // Invalidate per-edit picker intent when loaded details replace the draft.
+  const [detailsRevision, setDetailsRevision] = createSignal(0);
 
   const [initialGuests, setInitialGuests] = createSignal(
     initialGuestOptions(options.initialValue.guests, options.guestOptions())
@@ -425,16 +427,9 @@ export function createCalendarEventFormController(
     replaceState(value);
   };
 
-  // Until the end is picked in this edit it follows the start, keeping the
-  // event's length; once picked, it stays where the user put it.
-  let endChosen = false;
-
+  // Moving a start always preserves the current length, including an edited end.
   const setStart = (start: string) => {
     const current = state();
-    if (endChosen) {
-      replaceState({ ...current, start });
-      return;
-    }
     replaceState(
       current.allDay
         ? moveAllDayRange(current, start)
@@ -442,14 +437,19 @@ export function createCalendarEventFormController(
     );
   };
 
+  /** Apply a grid resize atomically without changing any other edited field. */
+  const setRange = (start: string, end: string) => {
+    const current = state();
+    if (current.start === start && current.end === end) return;
+    replaceState({ ...current, start, end });
+  };
+
   const setEnd = (end: string) => {
     if (end === state().end) return;
-    endChosen = true;
     setField('end', end);
   };
 
   const setAllDay = (allDay: boolean) => {
-    endChosen = false;
     replaceState(convertTimesForAllDay(state(), allDay));
   };
 
@@ -612,8 +612,8 @@ export function createCalendarEventFormController(
    */
   const resetDetails = () => {
     const initial = initialValue();
-    endChosen = false;
     batch(() => {
+      setDetailsRevision((revision) => revision + 1);
       setState({
         ...state(),
         title: initial.title,
@@ -635,8 +635,8 @@ export function createCalendarEventFormController(
   const replaceFromExternal = (next: EventEditorInitialValues) => {
     const cloned = cloneValue(next);
     const guests = initialGuestOptions(next.guests, options.guestOptions());
-    endChosen = false;
     batch(() => {
+      setDetailsRevision((revision) => revision + 1);
       setInitialValue(cloned);
       setState(cloned);
       setInitialGuests(guests);
@@ -648,6 +648,8 @@ export function createCalendarEventFormController(
 
   return {
     state,
+    initialValue,
+    detailsRevision,
     value,
     calendarOptions: availableCalendarOptions,
     guestOptions: options.guestOptions,
@@ -663,6 +665,7 @@ export function createCalendarEventFormController(
     setField,
     setStart,
     setEnd,
+    setRange,
     setAllDay,
     eventKind,
     isOutOfOffice,

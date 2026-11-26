@@ -12,16 +12,19 @@ use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
-use crate::{NameSearchError, NameSearchResult, PaginatedResult, SearchEntityType, escape_regex};
+use crate::{
+    NameSearchError, NameSearchResult, PaginatedResult, SearchEntityType, escape_like, escape_regex,
+};
 
 /// Searches chats by IDs only
 async fn ids_search(
     db: &Pool<Postgres>,
     chat_ids: &[Uuid],
     search_pattern: String,
+    excluded_patterns: &[String],
     highlight_pattern: String,
     tag_option_ids: &[String],
-    match_all_tags: bool,
+    tag_group_numbers: &[i32],
     limit: u32,
     cursor: Option<SearchMethodCursor>,
 ) -> Result<PaginatedResult<NameSearchResult>, NameSearchError> {
@@ -54,32 +57,23 @@ async fn ids_search(
             WHERE c.id = ANY($1)
                 AND c."deletedAt" IS NULL
                 AND c.name ILIKE $2
+                AND NOT (c.name ILIKE ANY($9::text[]))
                 AND (
                     $4::timestamptz IS NULL
                     OR (c."updatedAt", c.id) < ($4, $5)
                 )
-                AND (
-                    cardinality($7::text[]) = 0
-                    OR (
-                        NOT $8::bool
-                        AND EXISTS (
-                            SELECT 1 FROM entity_properties ep
-                            WHERE ep.entity_id = c.id
-                                AND ep.entity_type = 'CHAT'
-                                AND ep.values->'value' ?| $7::text[]
-                        )
-                    )
-                    OR (
-                        $8::bool
-                        AND NOT EXISTS (
-                            SELECT 1 FROM unnest($7::text[]) AS want(opt)
-                            WHERE NOT EXISTS (
-                                SELECT 1 FROM entity_properties ep
-                                WHERE ep.entity_id = c.id
-                                    AND ep.entity_type = 'CHAT'
-                                    AND ep.values->'value' ? want.opt
-                            )
-                        )
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM (
+                        SELECT array_agg(want.opt) AS opts
+                        FROM unnest($7::text[], $8::int[]) AS want(opt, tag_group)
+                        GROUP BY want.tag_group
+                    ) AS required
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM entity_properties ep
+                        WHERE ep.entity_id = c.id
+                            AND ep.entity_type = 'CHAT'
+                            AND ep.values->'value' ?| required.opts
                     )
                 )
             ORDER BY c."updatedAt" DESC, c.id DESC
@@ -95,7 +89,8 @@ async fn ids_search(
         cursor_entity_id,
         highlight_pattern,
         tag_option_ids,
-        match_all_tags,
+        tag_group_numbers,
+        excluded_patterns,
     )
     .fetch_all(db)
     .await
@@ -120,9 +115,10 @@ async fn owner_search<'a>(
     macro_user_id: &MacroUserId<Lowercase<'a>>,
     chat_ids: &[Uuid],
     search_pattern: String,
+    excluded_patterns: &[String],
     highlight_pattern: String,
     tag_option_ids: &[String],
-    match_all_tags: bool,
+    tag_group_numbers: &[i32],
     limit: u32,
     cursor: Option<SearchMethodCursor>,
 ) -> Result<PaginatedResult<NameSearchResult>, NameSearchError> {
@@ -151,32 +147,23 @@ async fn owner_search<'a>(
             WHERE (c."userId" = $1 OR c.id = ANY($2))
                 AND c."deletedAt" IS NULL
                 AND c.name ILIKE $3
+                AND NOT (c.name ILIKE ANY($10::text[]))
                 AND (
                     $5::timestamptz IS NULL
                     OR (c."updatedAt", c.id) < ($5, $6)
                 )
-                AND (
-                    cardinality($8::text[]) = 0
-                    OR (
-                        NOT $9::bool
-                        AND EXISTS (
-                            SELECT 1 FROM entity_properties ep
-                            WHERE ep.entity_id = c.id
-                                AND ep.entity_type = 'CHAT'
-                                AND ep.values->'value' ?| $8::text[]
-                        )
-                    )
-                    OR (
-                        $9::bool
-                        AND NOT EXISTS (
-                            SELECT 1 FROM unnest($8::text[]) AS want(opt)
-                            WHERE NOT EXISTS (
-                                SELECT 1 FROM entity_properties ep
-                                WHERE ep.entity_id = c.id
-                                    AND ep.entity_type = 'CHAT'
-                                    AND ep.values->'value' ? want.opt
-                            )
-                        )
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM (
+                        SELECT array_agg(want.opt) AS opts
+                        FROM unnest($8::text[], $9::int[]) AS want(opt, tag_group)
+                        GROUP BY want.tag_group
+                    ) AS required
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM entity_properties ep
+                        WHERE ep.entity_id = c.id
+                            AND ep.entity_type = 'CHAT'
+                            AND ep.values->'value' ?| required.opts
                     )
                 )
             ORDER BY c."updatedAt" DESC, c.id DESC
@@ -193,7 +180,8 @@ async fn owner_search<'a>(
         cursor_entity_id,
         highlight_pattern,
         tag_option_ids,
-        match_all_tags,
+        tag_group_numbers,
+        excluded_patterns,
     )
     .fetch_all(db)
     .await
@@ -212,17 +200,21 @@ async fn owner_search<'a>(
     Ok(SearchCursorOption::paginate(results, limit as usize))
 }
 
-/// Searches over the user's chats by name. A non-empty `tag_option_ids`
-/// restricts results to chats holding any of those property option ids, or
-/// every one of them when `match_all_tags` is set.
-#[tracing::instrument(skip(db, term), fields(term_len = term.len()), err)]
+/// Searches over the user's chats by name. A chat whose name holds one of
+/// `excluded_terms` is left out, and a chat must meet every group of
+/// `tag_groups` by holding any one of its property option ids.
+#[tracing::instrument(
+    skip(db, macro_user_id, term, excluded_terms),
+    fields(term_len = term.len(), excluded_terms = excluded_terms.len()),
+    err
+)]
 #[cfg_attr(
     not(test),
     cached(
         time = 30,
         result = true,
         key = "String",
-        convert = r#"{ format!("{}-{:?}-{}-{}-{:?}-{}-{}-{}", macro_user_id.as_ref(), chat_ids, term, ids_only, tag_option_ids, match_all_tags, limit, cursor.as_ref().and_then(|c| c.as_updated_at()).map(|(id, ts)| format!("{}-{}", id, ts)).unwrap_or_default()) }"#
+        convert = r#"{ format!("{}-{:?}-{}-{:?}-{}-{:?}-{}-{}", macro_user_id.as_ref(), chat_ids, term, excluded_terms, ids_only, tag_groups, limit, cursor.as_ref().and_then(|c| c.as_updated_at()).map(|(id, ts)| format!("{}-{}", id, ts)).unwrap_or_default()) }"#
     )
 )]
 pub async fn search_chat_names<'a>(
@@ -230,9 +222,9 @@ pub async fn search_chat_names<'a>(
     macro_user_id: &MacroUserId<Lowercase<'a>>,
     chat_ids: &[Uuid],
     term: String,
+    excluded_terms: &[String],
     ids_only: bool,
-    tag_option_ids: &[String],
-    match_all_tags: bool,
+    tag_groups: &[Vec<String>],
     limit: u32,
     cursor: Option<SearchMethodCursor>,
 ) -> Result<PaginatedResult<NameSearchResult>, NameSearchError> {
@@ -245,15 +237,28 @@ pub async fn search_chat_names<'a>(
 
     let search_pattern = format!("%{term}%");
     let highlight_pattern = format!("({})", escape_regex(&term));
+    let mut tag_option_ids: Vec<String> = Vec::new();
+    let mut tag_group_numbers: Vec<i32> = Vec::new();
+    for (number, group) in (0_i32..).zip(tag_groups) {
+        for option_id in group {
+            tag_option_ids.push(option_id.clone());
+            tag_group_numbers.push(number);
+        }
+    }
+    let excluded_patterns: Vec<String> = excluded_terms
+        .iter()
+        .map(|excluded| format!("%{}%", escape_like(excluded)))
+        .collect();
 
     if ids_only {
         ids_search(
             db,
             chat_ids,
             search_pattern,
+            &excluded_patterns,
             highlight_pattern,
-            tag_option_ids,
-            match_all_tags,
+            &tag_option_ids,
+            &tag_group_numbers,
             limit,
             cursor,
         )
@@ -264,9 +269,10 @@ pub async fn search_chat_names<'a>(
             macro_user_id,
             chat_ids,
             search_pattern,
+            &excluded_patterns,
             highlight_pattern,
-            tag_option_ids,
-            match_all_tags,
+            &tag_option_ids,
+            &tag_group_numbers,
             limit,
             cursor,
         )

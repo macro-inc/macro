@@ -11,7 +11,7 @@ use crate::meta::{FieldKind, TypeKind};
 use crate::value::EntityKey;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 use thiserror::Error;
 
 /// Largest explicit entity-key set accepted by one projection call.
@@ -21,7 +21,7 @@ pub const MAX_RECORD_SELECTION_KEYS: usize = 500;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecordSelection {
     type_names: Vec<String>,
-    selection_set: Vec<Selection>,
+    selection_set: crate::document::SelectionSet,
 }
 
 impl RecordSelection {
@@ -32,9 +32,15 @@ impl RecordSelection {
         fragment_name: &str,
     ) -> Result<Self, RecordSelectionError> {
         let document = Document::parse(document)?;
+        let mut validated = Validated::default();
         for fragment in &document.fragments {
             concrete_type_names(schema, &fragment.type_condition)?;
-            validate_selections(schema, &fragment.selection_set, &fragment.type_condition)?;
+            validate_selections(
+                schema,
+                &fragment.selection_set,
+                &fragment.type_condition,
+                &mut validated,
+            )?;
         }
         let fragment = document.fragment(fragment_name)?;
         let type_names = concrete_type_names(schema, &fragment.type_condition)?;
@@ -137,20 +143,34 @@ fn concrete_type_names(
     Ok(names)
 }
 
+/// Selection sets already validated under a parent type during one parse, by
+/// address: fragments share their converted selections, and validating one
+/// depends only on its contents and the parent type.
+type Validated = HashSet<(usize, usize, usize, usize)>;
+
 fn validate_selections(
     schema: &crate::meta::Schema,
     selections: &[Selection],
     parent_type: &str,
+    validated: &mut Validated,
 ) -> Result<(), RecordSelectionError> {
+    if !validated.insert((
+        selections.as_ptr() as usize,
+        selections.len(),
+        parent_type.as_ptr() as usize,
+        parent_type.len(),
+    )) {
+        return Ok(());
+    }
     for selection in selections {
         match selection {
-            Selection::Field(field) => validate_field(schema, field, parent_type)?,
+            Selection::Field(field) => validate_field(schema, field, parent_type, validated)?,
             Selection::Fragment {
                 type_condition,
                 selection_set,
                 ..
             } => match type_condition {
-                None => validate_selections(schema, selection_set, parent_type)?,
+                None => validate_selections(schema, selection_set, parent_type, validated)?,
                 Some(condition) => {
                     let parent_types: BTreeSet<_> = concrete_type_names(schema, parent_type)?
                         .into_iter()
@@ -165,7 +185,7 @@ fn validate_selections(
                             parent: parent_type.to_string(),
                         });
                     }
-                    validate_selections(schema, selection_set, condition)?;
+                    validate_selections(schema, selection_set, condition, validated)?;
                 }
             },
         }
@@ -177,6 +197,7 @@ fn validate_field(
     schema: &crate::meta::Schema,
     field: &FieldNode,
     parent_type: &str,
+    validated: &mut Validated,
 ) -> Result<(), RecordSelectionError> {
     for (_, value) in &field.arguments {
         if let Some(variable) = referenced_variable(value) {
@@ -206,7 +227,9 @@ fn validate_field(
                 field: field.name.clone(),
             })
         }
-        FieldKind::Composite => validate_selections(schema, &field.selection_set, metadata.ty.name),
+        FieldKind::Composite => {
+            validate_selections(schema, &field.selection_set, metadata.ty.name, validated)
+        }
         FieldKind::Leaf | FieldKind::OpaqueScalar if !field.selection_set.is_empty() => {
             Err(RecordSelectionError::InvalidFieldShape {
                 type_name: parent_type.to_string(),

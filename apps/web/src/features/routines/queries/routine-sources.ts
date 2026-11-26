@@ -1,8 +1,10 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { thrownResultErrorHasCode } from '@core/util/result';
+import { Telemetry } from '@macro-inc/observability';
 import type { ScheduledActionResponse } from '@service-scheduled-action/generated/schemas';
 import { ResultAsync } from 'neverthrow';
 import type { Accessor } from 'solid-js';
-import { createMemo, createSignal, onMount } from 'solid-js';
+import { createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { readEntityAppearance } from '../../entity-appearance/core/appearance';
 import type {
   RoutineCreatorSource,
@@ -16,7 +18,7 @@ import type { UnusableItem } from '../core/knobs';
 import type { RoutineSnapshot } from '../core/routine';
 import { withDraftSteps } from '../core/routine-draft';
 import { picksItems, programSteps } from '../core/routine-steps';
-import { scheduleToEntity } from './entities';
+import { isClaimActive, scheduleToEntity } from './entities';
 import {
   draftFromSchedule,
   draftToCreateBody,
@@ -37,6 +39,7 @@ import {
   useScheduleHistoryQuery,
   useSchedulesQuery,
   useSetScheduleEnabledMutation,
+  useStopRoutineRunMutation,
   useSubRoutinesQuery,
   useUnusableItemsQuery,
   useUpdateScheduleMutation,
@@ -77,6 +80,12 @@ function toRoutine(schedule: ScheduledActionResponse): RoutineSnapshot {
   };
 }
 
+/**
+ * How the server refuses a routine to anyone but its owner: 401 without a
+ * grant, 404 with a grant but no ownership.
+ */
+const REFUSED_READ_CODES = ['UNAUTHORIZED', 'FORBIDDEN', 'NOT_FOUND'];
+
 type DetailCallbacks = {
   onError(title: string, error: unknown): void;
   onDuplicated(id: string): void;
@@ -98,6 +107,19 @@ export function createRoutineDetailSource(
         ? list.data?.find((item) => item.id === id())
         : undefined)
   );
+  // A refetch with no data puts the query back to pending, so the refusal is
+  // kept for this routine until a read settles otherwise; the page doesn't
+  // swap views on every refocus.
+  const refusedId = createMemo<string | undefined>((previous) => {
+    if (detail.isSuccess) return undefined;
+    if (detail.isError) {
+      const refused = REFUSED_READ_CODES.some((code) =>
+        thrownResultErrorHasCode(detail.error, code)
+      );
+      return refused ? id() : undefined;
+    }
+    return previous === id() ? previous : undefined;
+  });
   const routine = createMemo(() => {
     const current = raw();
     return current?.id ? toRoutine(current) : undefined;
@@ -183,6 +205,8 @@ export function createRoutineDetailSource(
     },
     loading: () => detail.isPending,
     error: () => detail.isError,
+    // A refusal says nothing about a routine the viewer's own lists hold.
+    readRefused: () => !raw() && refusedId() === id(),
     update: save,
     run: () => run.mutate({ scheduleId: id() }),
     runPending: () => run.isPending,
@@ -273,12 +297,30 @@ export function createRoutineListSource(
 
 type RowOperationCallbacks = {
   /** Which operation failed, for the host to say so. */
-  onError(operation: 'run' | 'duplicate' | 'keep', error: unknown): void;
+  onError(
+    operation: 'run' | 'stop' | 'duplicate' | 'keep',
+    error: unknown
+  ): void;
   onRunStarted(): void;
   onDuplicated(id: string): void;
   /** The sub-routine became the owner's own routine. */
   onKept(): void;
 };
+
+/** How long a stopped run shows Stopping… at most, should its end not arrive. */
+const STOP_HOLD_MS = 15_000;
+
+/** A stop the server took, until the run it stopped ends. */
+type StopHold = { id: string; token: number; lastRun: string | undefined };
+/** The holds in force, and the newest stop already looked at. */
+type HoldState = { held: readonly number[]; seen: number };
+
+/** Which run finished last: it changes when the stopped run ends. */
+function lastRunKey(
+  schedule: ScheduledActionResponse | undefined
+): string | undefined {
+  return schedule?.last_run?.id ?? schedule?.last_run?.created_at;
+}
 
 /**
  * One request per routine at a time, for several routines at once: a mutation's
@@ -311,10 +353,8 @@ export function createRoutineRowOperations(
   const list = useSchedulesQuery(() => true);
   const children = useSubRoutinesQuery(() => true);
   const find = (id: string) =>
-    (list.isSuccess || list.isError ? list.data : undefined)?.find(
-      (item) => item.id === id
-    ) ??
-    (children.isSuccess || children.isError ? children.data : undefined)?.find(
+    (list.isPending ? undefined : list.data)?.find((item) => item.id === id) ??
+    (children.isPending ? undefined : children.data)?.find(
       (item) => item.id === id
     );
   const run = useRunScheduleNowMutation({
@@ -334,9 +374,77 @@ export function createRoutineRowOperations(
     onSuccess: () => callbacks.onKept(),
     onError: (error) => callbacks.onError('keep', error),
   });
+  const stop = useStopRoutineRunMutation({
+    onError: (error) => callbacks.onError('stop', error),
+  });
   const running = createPerRoutineMutation((id) =>
     run.mutateAsync({ scheduleId: id })
   );
+  // A stop the server took holds until that run ends, which the websocket
+  // sync (or the reread after the stop) reports a moment later: until the
+  // routine first shows no running claim or a newer last run (a refetch can
+  // bring the end and the next claim at once), and never back after that, so
+  // it doesn't reach a later run. Claims aren't compared: the sync stamps a
+  // start with the browser's clock, a refetch with the server's. After
+  // STOP_HOLD_MS Stop is offered again, in case the stop never reached the run.
+  const [stops, setStops] = createSignal<readonly StopHold[]>([]);
+  let lastToken = 0;
+  const timers: ReturnType<typeof setTimeout>[] = [];
+  onCleanup(() => {
+    for (const timer of timers) clearTimeout(timer);
+  });
+  const hold = (id: string, lastRun: string | undefined) => {
+    lastToken += 1;
+    const token = lastToken;
+    setStops((all) => [
+      ...all.filter((s) => s.id !== id),
+      { id, token, lastRun },
+    ]);
+    const timer = setTimeout(() => {
+      timers.splice(timers.indexOf(timer), 1);
+      setStops((all) => all.filter((s) => s.token !== token));
+    }, STOP_HOLD_MS);
+    timers.push(timer);
+  };
+  // One trace from the click to the server's stop; ids only.
+  const stopping = createPerRoutineMutation(async (id) => {
+    // Taken before the request: the list reconciles into the same row.
+    const schedule = find(id);
+    const lastRun = lastRunKey(schedule);
+    await Telemetry.span('routine.stop', async (span) => {
+      span.setAttr('routine.id', id);
+      // A routine not in the lists has no run to wait for.
+      span.setAttr('routine.stop.run_known', !!schedule);
+      await stop.mutateAsync({ scheduleId: id });
+    });
+    if (schedule) hold(id, lastRun);
+  });
+  const holds = createMemo(
+    (prev: HoldState): HoldState => {
+      const current = stops();
+      const held = current
+        .filter((s) => {
+          const kept = s.token > prev.seen || prev.held.includes(s.token);
+          const schedule = find(s.id);
+          // Out of the lists while they load: keep the hold as it was.
+          if (!schedule) return kept;
+          return (
+            kept &&
+            isClaimActive(schedule.claimed) &&
+            lastRunKey(schedule) === s.lastRun
+          );
+        })
+        .map((s) => s.token);
+      return {
+        held,
+        seen: Math.max(prev.seen, ...current.map((s) => s.token)),
+      };
+    },
+    { held: [], seen: 0 }
+  );
+  const stopPending = (id: string) =>
+    stopping.pending(id) ||
+    stops().some((s) => s.id === id && holds().held.includes(s.token));
   const duplicating = createPerRoutineMutation(async (id) => {
     const schedule = find(id);
     const body = schedule && scheduleToDuplicateBody(schedule);
@@ -352,6 +460,8 @@ export function createRoutineRowOperations(
     },
     run: running.start,
     runPending: running.pending,
+    stop: stopping.start,
+    stopPending,
     duplicate: duplicating.start,
     keepAsOwn: keeping.start,
     async createdCount(id) {

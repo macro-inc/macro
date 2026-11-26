@@ -15,6 +15,7 @@ use crate::domain::service::{DiscardOutcome, ImportNotionPageOutcome, StageOutco
 use import_notion::domain::model::{ImportScope, NotionId};
 
 const TEST_USER: &str = "macro|test@example.com";
+const TEST_FUSION_USER_ID: &str = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 
 #[derive(Clone)]
 struct FakeAuthorization;
@@ -29,7 +30,7 @@ impl MacroAuthorizationService for FakeAuthorization {
         }
         Ok(UserContext {
             user_id: TEST_USER.to_string(),
-            fusion_user_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb".to_string(),
+            fusion_user_id: TEST_FUSION_USER_ID.to_string(),
             permissions: None,
             organization_id: None,
         })
@@ -345,6 +346,27 @@ async fn cancelling_a_notion_import_cancels_it_for_the_caller_and_reports_where_
 }
 
 impl WorkspaceImporter for FakeImportService {
+    async fn approve_workspace_dependencies(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: ImportSource,
+        _: Uuid,
+        _: &[Uuid],
+    ) -> crate::domain::ports::Result<()> {
+        Ok(())
+    }
+
+    async fn review_workspace_dependencies(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: ImportSource,
+        _: Uuid,
+        _: &[Uuid],
+        _: bool,
+    ) -> Result<crate::domain::models::NotionDependencyReview> {
+        unreachable!("router does not save review drafts")
+    }
+
     async fn prepare_workspace_import(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -377,6 +399,14 @@ impl WorkspaceImporter for FakeImportService {
         _: Uuid,
         _: agent_session::domain::model::AgentSessionId,
     ) -> Result<u64> {
+        unreachable!()
+    }
+    async fn release_workspace_review(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: ImportSource,
+        _: Uuid,
+    ) -> Result<()> {
         unreachable!()
     }
     async fn start_workspace_write(
@@ -827,6 +857,28 @@ async fn planning_a_slack_import_is_a_bad_request() {
 }
 
 #[tokio::test]
+async fn planning_a_hubspot_import_is_a_bad_request() {
+    let (router, service) = discovery_router(Ok(true));
+    let response = send(
+        router,
+        "POST",
+        "/import/workspaces/hubspot/plan",
+        Some(serde_json::json!({"sharing": "team"})),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = axum::body::to_bytes(response.into_body(), 65536)
+        .await
+        .unwrap();
+    assert!(
+        String::from_utf8_lossy(&body).contains("ImportFromHubspot"),
+        "{body:?}"
+    );
+    assert!(service.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn planning_a_tracker_import_forwards_the_exact_source() {
     for source in [ImportSource::Linear, ImportSource::Jira] {
         let (router, service) = discovery_router(Ok(true));
@@ -880,4 +932,67 @@ async fn ledger_and_plan_routes_require_authentication() {
         assert!(service.calls.lock().unwrap().is_empty());
         assert!(service.notion_plans.lock().unwrap().is_empty());
     }
+}
+
+/// Every field any span recorded, as `(name, value)`.
+#[derive(Clone, Default)]
+struct SpanFields(Arc<Mutex<Vec<(String, String)>>>);
+
+impl tracing::field::Visit for SpanFields {
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        self.0
+            .lock()
+            .unwrap()
+            .push((field.name().to_string(), format!("{value:?}")));
+    }
+}
+
+impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for SpanFields {
+    fn on_new_span(
+        &self,
+        attrs: &tracing::span::Attributes<'_>,
+        _id: &tracing::span::Id,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        attrs.record(&mut self.clone());
+    }
+
+    fn on_record(
+        &self,
+        _id: &tracing::span::Id,
+        values: &tracing::span::Record<'_>,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        values.record(&mut self.clone());
+    }
+}
+
+#[tokio::test]
+async fn route_spans_record_the_opaque_user_id_not_the_email() {
+    use tracing_subscriber::layer::SubscriberExt;
+
+    let fields = SpanFields::default();
+    let _guard =
+        tracing::subscriber::set_default(tracing_subscriber::registry().with(fields.clone()));
+    let (router, _service) = discovery_router(Ok(true));
+    let response = router
+        .oneshot(discovery_request("slack", true))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+    let recorded = fields.0.lock().unwrap().clone();
+    assert!(
+        recorded.contains(&(
+            "fusionauth_user_id".to_string(),
+            TEST_FUSION_USER_ID.to_string()
+        )),
+        "{recorded:?}"
+    );
+    assert!(
+        recorded
+            .iter()
+            .all(|(_, value)| !value.contains("test@example.com")),
+        "{recorded:?}"
+    );
 }

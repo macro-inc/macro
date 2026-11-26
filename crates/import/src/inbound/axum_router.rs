@@ -127,7 +127,7 @@ where
     ),
     tag = "import"
 )]
-#[tracing::instrument(skip(service, user), fields(user_id = %user.authorization.user.macro_user_id))]
+#[tracing::instrument(skip(service, user), fields(fusionauth_user_id = %user.authorization.user.user_context.fusion_user_id))]
 pub async fn notion_report_handler<T: NotionWorkspaceImporter, Auth: MacroAuthorizationService>(
     State(service): State<Arc<T>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
@@ -152,7 +152,7 @@ pub async fn notion_report_handler<T: NotionWorkspaceImporter, Auth: MacroAuthor
     ),
     tag = "import"
 )]
-#[tracing::instrument(skip(service, user), fields(user_id = %user.authorization.user.macro_user_id))]
+#[tracing::instrument(skip(service, user), fields(fusionauth_user_id = %user.authorization.user.user_context.fusion_user_id))]
 pub async fn cancel_notion_handler<T: NotionWorkspaceImporter, Auth: MacroAuthorizationService>(
     State(service): State<Arc<T>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
@@ -169,7 +169,7 @@ pub async fn cancel_notion_handler<T: NotionWorkspaceImporter, Auth: MacroAuthor
 
 /// Report progress for one reviewed workspace source.
 #[utoipa::path(get, path = "/import/workspaces/{source}", params(("source" = ImportSource, Path)), responses((status = 200, body = NotionImportReport)), tag = "import")]
-#[tracing::instrument(skip(service, user), fields(user_id = %user.authorization.user.macro_user_id))]
+#[tracing::instrument(skip(service, user), fields(fusionauth_user_id = %user.authorization.user.user_context.fusion_user_id))]
 pub async fn workspace_report_handler<T: WorkspaceImporter, Auth: MacroAuthorizationService>(
     State(service): State<Arc<T>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
@@ -189,7 +189,7 @@ pub async fn workspace_report_handler<T: WorkspaceImporter, Auth: MacroAuthoriza
 
 /// Cancel this source's plan or write, keeping completed entities.
 #[utoipa::path(post, path = "/import/workspaces/{source}/cancel", params(("source" = ImportSource, Path)), responses((status = 200, body = NotionImportReport)), tag = "import")]
-#[tracing::instrument(skip(service, user), fields(user_id = %user.authorization.user.macro_user_id))]
+#[tracing::instrument(skip(service, user), fields(fusionauth_user_id = %user.authorization.user.user_context.fusion_user_id))]
 pub async fn cancel_workspace_handler<T: WorkspaceImporter, Auth: MacroAuthorizationService>(
     State(service): State<Arc<T>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
@@ -234,7 +234,7 @@ pub struct PlanWorkspaceImportRequest {
     request_body = PlanWorkspaceImportRequest,
     responses(
         (status = 200, body = NotionImportReport, description = "Where planning stands"),
-        (status = 400, description = "Not a workspace source (Slack), a root that is not a Notion id, or roots on a Linear or Jira import"),
+        (status = 400, description = "Not a source planned here (Slack, HubSpot), a root that is not a Notion id, or roots on a Linear or Jira import"),
         (status = 409, body = ImportErrorBody, description = "Sharing must be chosen, or the source is not connected"),
         (status = 500, description = "Internal server error"),
     ),
@@ -272,6 +272,13 @@ pub async fn plan_workspace_handler<T: WorkspaceImporter, Auth: MacroAuthorizati
             return (
                 StatusCode::BAD_REQUEST,
                 "Slack channels are discovered and imported from Settings, not planned",
+            )
+                .into_response();
+        }
+        ImportSource::Hubspot => {
+            return (
+                StatusCode::BAD_REQUEST,
+                "HubSpot imports are planned with ImportFromHubspot, not here",
             )
                 .into_response();
         }
@@ -361,7 +368,7 @@ fn unknown_source_response(source: &str) -> Response {
     ),
     tag = "import"
 )]
-#[tracing::instrument(skip(service, user), fields(user_id = %user.authorization.user.macro_user_id))]
+#[tracing::instrument(skip(service, user), fields(fusionauth_user_id = %user.authorization.user.user_context.fusion_user_id))]
 pub async fn get_state_handler<T: ImportService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<T>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
@@ -383,7 +390,7 @@ pub async fn get_state_handler<T: ImportService, Auth: MacroAuthorizationService
     ),
     tag = "import"
 )]
-#[tracing::instrument(skip(service, user, body), fields(user_id = %user.authorization.user.macro_user_id))]
+#[tracing::instrument(skip(service, user, body), fields(fusionauth_user_id = %user.authorization.user.user_context.fusion_user_id))]
 pub async fn run_import_handler<T: ImportService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<T>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
@@ -414,7 +421,7 @@ pub async fn run_import_handler<T: ImportService, Auth: MacroAuthorizationServic
     ),
     tag = "import"
 )]
-#[tracing::instrument(skip(service, user), fields(user_id = %user.authorization.user.macro_user_id))]
+#[tracing::instrument(skip(service, user), fields(fusionauth_user_id = %user.authorization.user.user_context.fusion_user_id))]
 pub async fn discover_handler<T: ImportService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<T>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,

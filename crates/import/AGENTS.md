@@ -20,17 +20,54 @@ Notion workspace imports go through a reviewed plan. Agent sessions run code
 mode, which plans with `macro.imports.notion.plan()` (`POST
 /import/workspaces/{source}/plan`); hosts with direct tools use
 `ImportFromNotion` (`plan`). Planning reads the workspace over Notion's REST
-API (`import_notion`, through the user's Pipedream grant), asks the decision
-model what to do with each page and data source (copy, tasks, skip, or by
-hand), and stages the plan as ledger rows. The agent presents it as an import
-review (`execution.reviews.create` in code mode, `PresentReview` with direct
-tools) and asks "Should I kick it off?"; the owner approves on the card or by
-saying yes, which has the agent submit it with `DecideReview` (the review
-route refuses every program run, so code mode has no start). `plan` returns after a short wait
+API (`import_notion`, through the user's Notion connection when it gives API
+access), asks the decision model what to do with each page and data source
+(copy, tasks, skip, or by hand), and stages the plan as ledger rows. The agent
+presents it as an import review (`execution.reviews.create` in code mode,
+`PresentReview` with direct tools, kind `import`) and asks "Should I kick it
+off?"; the owner approves on the card or by saying yes, which has the agent
+submit it with `DecideReview` (the review route refuses every program run, so
+code mode has no start). The plan route refuses Slack and HubSpot; HubSpot
+plans with `ImportFromHubspot`, which stays visible in code mode. `plan` returns after a short wait
 (`PLAN_WAIT`), usually while the run is still `running`, and the agent
 presents the review at once: the harness ties the staged rows and the
 `running` run (`import_run.review_id`) to the review, so rows staged later
-take it too. Planning stages the whole tree as soon as the inventory is read,
+take it too. Only a `running` or `ready` run takes a review: the harness checks
+the report before saving one, and `attach_review` refuses a run that is
+failed, being written, finished, cancelled or missing
+(`ImportError::RunNotReviewable`, a typed `UnreviewableRun` carrying the kind, never the raw error), so a failed plan never shows as an empty
+review. The first review presenting a plan, while it is planned or once it is
+ready, holds it (`import_run.review_id`); any other is refused
+(`PresentedElsewhere`) until the holder is dismissed (`release_review` frees
+the run and its staged rows). Writing starts only through
+`start_reviewed_write`: one statement moves the run from `ready` to
+`importing` while that review holds it (or, for plans presented before the
+run recorded reviews, its staged rows do). It records the review it admitted
+(`import_run.write_review_id`, cleared when a new plan starts), so a write
+that failed may be started again from `failed` by that same review once the
+earlier writer's lease has expired, with its adoptions reset; any other
+review of a failed run must replan. Otherwise it refuses typed
+(`StillPlanning`, `PresentedElsewhere`, `NothingLeft`, failed, finished)
+before anything about the plan changes, and returns the status it started
+from; the owner's sharing choices are written only once it has started. A
+failure before the write is held (or after `reopen_plan` put it back to that
+status) is `ImportError::NotStarted`, safe to
+approve again; once the write is spawned, the returned report is read
+without failing the call. `SETTLED` only
+says which runs a new plan may replace. A failed plan or write records its
+`RunErrorKind` (`import_run.error_kind`, from `failure_kind`; `Interrupted`
+when a run is given up on); the report and runs carry it, and the agent's
+messages (`explain_failure`, `UnreviewableRun::describe`) and the web
+copy are written from the kind. For workspace imports (Notion, Linear and
+Jira runs and their rows), a run's and a row's error text is `failure_text`
+(a sentence from the kind) and the import settlement carries `error_kind`;
+their raw error is only logged, and the report never serializes `error`. The
+single-page `ImportNotionPage` path and tracker inventory warnings still
+carry raw text (bead mac-il0j). A stored kind this build does not know reads as `Internal`.
+The imports tray lists a failed run until it is dismissed or a week has
+passed since it last changed, and one that finished with failures (it needs
+action) until it is dismissed; `/import/state` itself lists every run.
+Planning stages the whole tree as soon as the inventory is read,
 each row without a `decision` yet, then writes each decision-model batch's
 verdicts onto its rows as it lands (`update_plan_rows`); the report counts
 undecided rows as `deciding`, and the write cannot start until the run is
@@ -50,7 +87,9 @@ the decision model also answers `shared` per object), stored on the run so an
 adopted plan keeps it. A user on a team must choose it
 (`ImportError::SharingRequired` tells the agent to ask); a user without
 one plans `personal` without being asked, and the report's `onTeam` says
-which. Each
+which. A failed plan's tool answer (`failure_reason` and `FAILED_NEXT` in
+`inbound/toolset.rs`) explains the run's `error_kind` and tells the agent to
+say it once and not plan again until asked, since a replan fails the same way. Each
 plan item records `shared`, `sharedReason` and `shareable`
 (`notion_workspace/sharing.rs`). The owner can flip items on the review card;
 the draft's `shared`/`personal` lists are written onto the rows before the
@@ -90,13 +129,17 @@ from this import's other databases into it are not linked.
 - `src/domain/service.rs` + `src/domain/service/admission.rs`: Slack
   discovery, staging, and acceptance logic.
 - `src/outbound/mcp_slack_source.rs`: Slack discovery via MCP tool calls, with
-  `fixtures/*.json` backing its tests.
+  `fixtures/*.json` backing its tests. It and the single-page Notion import
+  load one app's tools with `service::source_tools`: the handle the
+  `connectors` `McpConnectionsService` gives for `ImportSource::connector`,
+  never a slug or server URL of its own. Tests use `connectors`'
+  `FakeConnectors`.
 - `src/domain/service/workspace.rs` (+ `run`, `events`, `scan`): shared source-scoped
   leases, adoption, reviews, notifications and the `Importer` plan/write contract.
 - `src/domain/service/tracker_workspace.rs` (+ `plan`, `values`): Linear/Jira
   group decisions, frozen source snapshots, task/project writes and relationships.
 - `src/domain/service/notion_workspace.rs` (+ `plan`, `triage`, `sharing`,
-  `object`, `write`, `values`, `report`): the Notion workspace import —
+  `object`, `databases`, `links`, `reserve`, `start`, `dependency_review`, `write`, `values`, `report`): the Notion workspace import —
   planning, the decision model, who sees what, writing one object (claim,
   link or write), cancel and the report. Database columns and cells come
   from `import_notion::domain::macro_cells`.
@@ -128,7 +171,7 @@ from this import's other databases into it are not linked.
 
 - Depends on: `agent_session` (system events for the session presenting a
   review), `ai_toolset`, `ai_usage`, `ai_billing`, `connection_gateway_client`,
-  `mcp_select`, `properties`, `import_notion` (Notion REST), `import_tracker` (tracker snapshots), `models_databases`
+  `connectors`, `properties`, `import_notion` (Notion REST), `import_tracker` (tracker snapshots), `models_databases`
   (database ops the workspace import writes).
 - Used by: `ai_tools`, `slack_integration`, `services/agent_harness_service`
   (cognition `/import/*` routes, the Notion sweeper, import reviews).
@@ -151,13 +194,16 @@ from this import's other databases into it are not linked.
   import service's `N` type parameter is the Notion connection factory, and
   hosts that never call `.with_notion_connections` report Notion as not
   connected.
-- Notion page bodies are never parsed here: they go to lexical-service
-  (`POST /snapshot/notion`) as Notion markdown with a `NotionLinks` map. The
-  workspace write knows every planned page's document id up front
-  (`write::notion_links`, derived from the ledger row) so pages mention each
-  other; only the import guards
-  (`check_notion_markdown`: tool-result wrappers, database-only pages) stay in
-  Rust.
+- Send Notion bodies to lexical-service (`POST /snapshot/notion`) for
+  conversion with user and database-card mappings. Keep original hyperlinks in
+  the initial workspace write. Once the reviewed writes finish, resolve exact
+  page, database and view references against live, imported ledger destinations
+  in the same personal or team audience. Verify ownership for a personal
+  target because an adopted ledger row can point to a teammate’s copy. This
+  handles earlier imports and forward or cyclic links. Apply only hyperlink changes to page and database-row
+  bodies with `LinkBodyRevision` receipts for that review and a matching sync
+  revision. Keep the original link for an unresolved target or a changed body.
+  Rust keeps the `check_notion_markdown` tool-wrapper and database-only guards.
 - Planning and writing run detached on the host's `TaskTracker`
   (`with_job_shutdown`) and survive their process (`workspace/run.rs`):
   the running process holds a lease on the run row (`lease_owner`,
@@ -169,16 +215,22 @@ from this import's other databases into it are not linked.
   restarts, writing continues with the rows still `importing`. After five
   adoptions the run fails. Stale-run and stale-row reapers skip Notion
   workspace imports for this reason.
-- A resumed write never creates anything twice: documents, row bodies and
-  tasks get UUIDv5 ids from their ledger row (`WorkspaceWriter` treats an id
-  in use as already written), database columns and options UUIDv5 ids from
-  their database, and folders, databases, inserted rows, the Page column and
-  relation columns are recorded in `import_entity_written` as they are made.
+- Resumed documents, row bodies and tasks use UUIDv5 ids from their ledger
+  generation. Databases, starter tables, title columns and saved views also
+  use deterministic ids, so replay after a lost create response reuses them.
+  Database columns and options derive ids from their database; written markers
+  record folders, inserted rows, the Page column and relation columns.
   Every import reuses the user's "Notion" folder (`import_run.root_folder_id`)
-  while it exists outside trash; a deleted root is replaced on the next write. Left open: a crash between creating a folder, a database
-  or a row batch and recording it duplicates that one object or batch, and a
-  crash between applying a schema op and recording it fails that database on
-  resume (Macro refuses the column id).
+  while it exists outside trash; a deleted root is replaced on the next write.
+  Remaining gaps: a crash between creating a folder or inserting a row batch
+  and recording it can duplicate that folder or batch; a crash between applying
+  a schema operation and recording it can fail that source on resume.
+- Stage new plan rows with UUIDv7 ids and list tied creation timestamps by id
+  ascending in SQL and after owner/team deduplication. A staging transaction
+  shares one creation timestamp, so monotonic ids preserve sibling input order
+  through writing and completion. Preserve existing ids: legacy random-id ties
+  become stable without reconstructing their original order. Keep the ledger
+  list inside its local 15-second statement timeout.
 - `team_id` on a Notion row means "the team's copy": only shared objects take
   it, at `claim_importing` (staged → importing) before anything is written, so
   `import_entity_team_object_key` makes a second teammate's claim fail. A
@@ -207,6 +259,8 @@ from this import's other databases into it are not linked.
   copy, and clears the review's obsolete `alreadyImported` target. Page, task
   and database-body writes read the run's shared destinations immediately before
   creation, so later writes use a replacement's id while live team ids stay put.
+  Read the live page-link map after awaiting body resolution, which can wait
+  while another write publishes a replacement id.
   A missing linked data source requires a fresh plan instead of guessing between
   a database and tasks folder without its original task mapping. Transient
   read errors preserve claims. A finished object deleted during a resumed write
@@ -315,3 +369,198 @@ contract; original source values remain in the task body.
 Jira ids include the cloud id. Epic groups have a separate identity from their
 issue task. Tracker imports never use the generic accept/finalize paths; those
 paths reject workspace-plan rows so approval cannot be bypassed.
+
+## Inline and linked Notion databases
+
+- Scan standalone page bodies before triage with at most four concurrent reads.
+  Reuse inventory's search row counts/titles; do not query source rows during
+  dependency discovery. Check cancellation and publish scan counters inside the
+  loops, and discard each markdown body after extracting its references. Permanent
+  read failures become named warnings; transient errors abort retryably
+  rather than freezing unavailable dependencies into the plan.
+  `plan.dependencyOf` names the pages referencing an external source; readable
+  external dependencies start unticked as Link. A saved draft first offers
+  each dependency as excluded; removing its id explicitly opts in. Review-scoped
+  `DependencyReviewed` / `DependencyIncluded` markers fail closed for missing,
+  legacy or different-review consent, including adopted writes. Approval atomically
+  replaces the current review’s inclusion facts under ordered source-row locks;
+  re-saving and approving a changed selection revokes its earlier inclusions.
+  Start and resume derive authority only from these facts. These markers
+  are prerequisites, not resumable output. In-scope inline sources retain their
+  default Copy suggestion. Unavailable dependencies are visible by-hand rows without sharing controls.
+  `plan.inlineOn` includes referenced sources already in selected roots; suggest
+  Copy for in-scope inline sources. Preserve approved Tasks or exclusion choices at
+  write time and report their `notImported` occurrence fallbacks.
+- Finish ancestor folder sharing, then reserve approved databases and saved
+  views with at most four sources in flight before converting any body. Drain
+  admitted reservations before returning a transient error; retry without
+  converting run-wide outages into permanent fallback links. Source validation,
+  missing destinations and explicit source permissions degrade only that source.
+  Incomplete view lists, source conflicts and unclassified source errors spend
+  durable consecutive-failure receipts, capped at three before a named link
+  fallback. Reset ordinary budget receipts only on successful reservation. Persist the terminal
+  link outcome before reporting it, and bypass reservation on later re-plans of
+  that generation. Retain at most three ordinary source attempts, one bounded
+  outage snapshot and one terminal receipt. Consent markers never retain a generation.
+  Unknown failures say
+  "An unexpected error stopped <title>" in the report. Trace only the safe
+  `error_type` and source UUID, never error text or titles.
+  Authentication, storage, folder-access failures and rate limits remain
+  run-wide without spending a source budget. A Notion 5xx/timeout spends only
+  when a fresh uncached, paced read of another successfully reserved source
+  succeeds after the failed pass. Count that single health probe in its child
+  span; cached earlier successes do not qualify. Without a healthy peer, record
+  a bounded outage snapshot under the existing failure-receipt kind. Require
+  three distinct review attempts spanning 24 hours, with each gap at most
+  12 hours; a longer gap restarts the chain and any successful reservation
+  resets it. Re-delivery of the same review advances neither count nor time.
+  Use the injected clock and record count/age in the child span. A 429 never
+  records an observation. Atomically compare-and-swap only that snapshot under
+  its owned current-review parent lock; preserve ordinary/output facts and write
+  an eligible snapshot with its terminal outcome in the same transaction.
+  Folder creation/existence and other untyped Macro service errors are
+  run-wide; only source-local errors spend the unexpected budget.
+  Folder access is rechecked next run instead of leaving permanent
+  links. Recheck persisted cancellation before bodies and preserve Dismissed
+  at settlement, with a typed cancellation checkpoint.
+  Every failed reservation names its source; a pending teammate copy fails the
+  attempt with a named wait message and remains safe to retry. Label claim
+  operation errors as team-object claim failures, never as database outages.
+  Use the source UUID as identity within the user/team ledger; globally unique Notion source UUIDs never dedupe by title.
+- File owner-only databases with their page when safe. Keep each database's
+  reviewed sharing separate. Before filing a Personal source, use the shared
+  `personal_item_folder` / `personal_mirror_folder` path: explicit grants on a
+  folder or ancestor relocate it to the persistent owner-only `Notion (personal)`
+  mirror, with a report note. Derive visibility from the reviewed verdict, never
+  the team claim. A folder's link-only setting does not grant database access.
+- `databases::body_links` builds a separate occurrence map for each page or row;
+  `?v` selects the saved view, otherwise the first container tab is assumed and
+  reported. Excluded sources retain `notImported` links and do not create folders;
+  retain skipped page ancestors for the folder layout of written children.
+  Persisted review rows are the writer’s canonical plan: retain discarded data
+  sources as Skip references so start and resume report them as not imported.
+  Hand dependencies cannot be included in the write. Keep their decision and
+  reason in the report and settlement even when approval discards their rows.
+  Keep permanently unreadable
+  tab slots in list order; a missing default never silently selects the next tab.
+  Retain other readable tabs and propagate transient detail failures.
+- Stream rows once, checking cancellation per page, to collect date-range
+  property ids and union timeline usage. Skip that scan when SchemaPlan exists;
+  resumed writes use its recorded shapes. Cache source/container/view metadata
+  per attempt, seed inventory schemas, and invalidate source schemas before
+  write-time drift detection. Do not cache transient failures. Then
+  retain schemas/ids/views only until writing. Re-read rows under the normal
+  write pacer and concurrency bound; report schema or date-shape drift and write
+  the values fitting the reserved schema. Record API row counts per pass. Persist
+  `SchemaPlan` and `DateRangeProperty` markers atomically before applying schema
+  operations, and reuse them on resume instead of changing Date/DateRange shapes.
+  `SchemaPlan` fingerprints sorted property ids and kinds only: on structural
+  mismatch fail that source and report unresolved card fallbacks. Names and option
+  metadata drift warn instead. `ColumnOption` facts preserve the reserved option
+  ids and labels; match row values by option id when present, otherwise by name.
+  Omit unmatched values with counted losses naming the column and matching
+  method, warning that wholly unmatched options leave empty cells and may be
+  hidden by views filtering that column. Do not rewrite saved filters on resume. Keep
+  other sources and pages running; never rebuild columns or store full snapshots.
+  An older interrupted database without planning facts stops with a typed warning
+  asking the user to re-import it; do not guess live schema through a new port.
+- Discover row-body references only when writing. Sources absent from the review
+  remain named Notion links with typed reasons and counted report losses; never
+  import an unreviewed dependency while writing. Page-level dependencies remain
+  in the review. Span page scans and dependency metadata as separate phases.
+  Approximate filters preserve a superset of source rows and visibly mark the
+  saved view name. Reserve readable, unique view names before creation; never
+  display a source UUID. A ready database with an unavailable selected view keeps
+  a default-view card and reports the approximation. Record typed occurrence and
+  option loss facts in the same ledger batch as their completed row/body/task.
+  Flush counted, human-readable warnings at most twice per source attempt
+  (reservation and after writing, including failures), before marking it imported.
+  Store new view/property/drift/body/placement warnings as typed metadata; keep
+  Text only for legacy reads. Decode warning entries independently in reports and
+  shared-database mappings, preserving known entries and rendering a counted typed
+  notice for unsupported entries without logging payloads. Deduplicate generic
+  malformed-reference notices separately from source-scoped people counts.
+  Render source/view/property titles at the report
+  boundary. Diagnostic paths may locate property context but never classify
+  settings or supply user-visible labels; use the translator’s ViewSetting enum. Use a short “ ≈” saved-view suffix for filter approximation.
+  Save native tabs first in canonical container order, then the source's linked
+  views. Record multi-tab first choices by containing page, container, and
+  selected tab, with the placement title in the report. A sole tab needs no
+  detail. Group typed report details and keep exact totals alongside bounded
+  samples. Use plain sentences for typed Notion failures, and omit redundant
+  completion summaries from reports with itemized failures. Count confirmed
+  copies and rows from the caller's durable markers,
+  including rows from unfinished sources in the partial totals. Teammate links
+  and planning estimates do not contribute.
+  Report unsupported property types, including buttons, in the plan and report.
+  Persist unmapped people counts with their row markers; keep mapped assignments
+  and merge cumulative counts on resume. Keep the text title column first and
+  put the row-body Page reference immediately after it so relations stay named.
+  Reports merge cumulative snapshots by maximum count across retries; settlement
+  events carry the same warning lines. Keep formulas and rollups labelled snapshots.
+- Database ids derive from the ledger row; view ids derive from database and
+  source-view ids. Record their written markers and reuse an existing caller id
+  after a lost create response. Reuse the privacy helpers and persisted mirror
+  ids used by pages and tasks; do not create a second personal root or guard.
+  Before inserting Personal rows, recheck the reserved database's actual folder
+  and ancestors for explicit grants. Stop that source with a typed sharing-change
+  warning if a grant appeared after reservation; do not relocate it implicitly.
+
+The inline writer adds `view`, `view_name`, `loss`, `schema_plan`,
+`schema_metadata`, `column_option`, `date_range_property`, `dependency_reviewed`,
+`dependency_included` and `database_reservation_failure` written kinds.
+The failure kind also stores validated typed outage/terminal payloads. Its at
+most five facts retain their generation; clear them atomically on success.
+Serialize success reset with outage replacement under the same owned parent-row
+lock, then delete using a fresh transaction statement snapshot.
+A terminal outcome stays a link until a new generation replaces it. Retrying a
+degraded source has no card action/API yet; report the link outcome without
+promising a retry control. Partial-run summaries direct users to the report,
+without telling them to retry terminal outcomes. Unknown future kinds stay
+readable as
+`Unsupported` prerequisites and stop only the affected source with a typed
+report warning. Deploy compatible readers before writers; drain affected import
+runs or keep compatible readers before rolling back to an older binary. Renewal
+clears generation-specific fidelity warnings as well as markers. Bound display
+labels in durable loss facts to 512 UTF-8 bytes before serializing marker keys.
+
+Keep `NotionPlanRepo::dependency_ids`' literal Notion/data_source/staged/non-null
+review predicates aligned with `import_entity_notion_review_sources_idx`.
+Reconcile only the exact owned review; never scan an owner's import history for
+review defaults on each edit.
+
+## HubSpot CRM imports
+
+`ImportFromHubspot` uses the same reviewed lifecycle with no decision model
+(`domain/service/hubspot_workspace.rs` + `plan`). The host registers an
+`import_hubspot::domain::HubspotConnections` reader and a `CrmImportWriter`
+(`ai_tools::HubspotCrmWriter`, over `crm::domain::record_import`) with
+`with_hubspot`; hosts without them answer "not available". A plan needs a team
+whose CRM the user may use (`ImportError::CrmAccessRequired`) and a HubSpot
+connection (`HubspotError::NotConnected`, which the tool turns into a connect
+prompt), both checked before the run starts, so neither leaves a failed import; every row is shared with the team and not shareable, so the card
+offers no sharing choice. Rows are keyed `{portal}:{type}:{id}` (pipeline ids
+are words, record ids numbers), so re-runs and teammates dedupe through the
+ledger and the `import_entity_hubspot_team_object_key` index.
+
+Plans are fully decided when staged: deals with no company or no live pipeline
+are `skip` with a reason; everything Macro CRM cannot hold is a typed
+`HubspotLoss` on the row, counted into the report's `hubspot` section with the
+owner match summary kept on the first row (`hubspotSummary`, not `summary`,
+which the shared report reads as text). Writes go pipelines, companies,
+contacts, deals. Each object is claimed for the team, then reuses a
+`WrittenKind::CrmRecord` marker from a stopped write, then a natural key
+(company domain, the contact's primary address, the deal's HubSpot URL in
+the `Source link` of its company's entries in that pipeline, matched by its
+path since the host follows the portal's region, read once per company and
+pipeline per write), and only then
+creates. Stage labels are shortened to fit a select option, suffix included,
+and told apart without case. A company a teammate links during the write is
+read again before its contacts and deals are refused. A shutdown leaves the
+object it cut short importing for the adopting process, and only a row the
+write marked imported becomes a link target.
+A contact or deal whose company is not imported yet fails and retries;
+only a company the owner left out leaves its contacts without one
+(`ContactWithoutCompany`, counted for this review only). Left open: a crash between creating a name-only company, an
+address-less contact or a pipeline and recording its marker duplicates that
+one record. Deleted CRM copies are not re-imported (their targets read as live).

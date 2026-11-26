@@ -9,15 +9,23 @@
 
 use std::collections::HashSet;
 
+use model_entity::EntityType;
 use shown_text::{is_invisible, line, personal_detail};
 
 use super::model::{Category, KindName, NewKind, NewSuggestion, SuggestionKind, Target};
+use super::topic::{NameTopic, TopicReason};
 
 #[cfg(test)]
 mod test;
 
 /// Longest dedup key, in characters.
 pub const MAX_DEDUP_KEY_CHARS: usize = 120;
+/// Longest topic key, in characters.
+pub const MAX_TOPIC_KEY_CHARS: usize = 80;
+/// Longest topic name, in characters.
+pub const MAX_TOPIC_NAME_CHARS: usize = 40;
+/// Longest topic reason, in characters.
+pub const MAX_TOPIC_REASON_CHARS: usize = 120;
 /// Longest title, in characters.
 pub const MAX_TITLE_CHARS: usize = 80;
 /// Longest summary, in characters.
@@ -28,6 +36,8 @@ pub const MAX_PROMPT_CHARS: usize = 2000;
 pub const MAX_REASON_CHARS: usize = 300;
 /// Most characters in what a background run posts or sends.
 pub const MAX_SENDS_CHARS: usize = 200;
+/// Longest report a background run writes, in characters.
+pub const MAX_RUN_REPORT_CHARS: usize = 120;
 /// Most items one suggestion is about.
 pub const MAX_TARGETS: usize = 5;
 /// Longest item or part id, in characters.
@@ -86,20 +96,90 @@ pub fn new_kind(request: &NewSuggestion, problems: &mut Vec<String>) -> Option<N
 
 /// A dedup key: one short line of lowercase letters, digits and `-_:./`.
 pub fn dedup_key(key: &str, problems: &mut Vec<String>) -> Option<String> {
+    self::key(
+        key,
+        "`dedupKey`",
+        "suggestion",
+        MAX_DEDUP_KEY_CHARS,
+        problems,
+    )
+}
+
+/// A topic key, shaped as a dedup key.
+pub fn topic_key(key: &str, problems: &mut Vec<String>) -> Option<String> {
+    self::key(key, "`key`", "topic", MAX_TOPIC_KEY_CHARS, problems)
+}
+
+/// A topic's key, name and reason.
+pub fn topic(request: NameTopic, problems: &mut Vec<String>) -> Option<NameTopic> {
+    let key = topic_key(&request.key, problems);
+    let name = text(&request.name, "`name`", MAX_TOPIC_NAME_CHARS, problems);
+    let reason = match request.reason {
+        Some(reason) => Some(topic_reason(reason, problems)?),
+        None => None,
+    };
+
+    Some(NameTopic {
+        key: key?,
+        name: name?,
+        reason,
+    })
+}
+
+/// A topic's reason: its line and the item, or the message, that states it.
+fn topic_reason(reason: TopicReason, problems: &mut Vec<String>) -> Option<TopicReason> {
+    let text = text(
+        &reason.text,
+        "the reason's `text`",
+        MAX_TOPIC_REASON_CHARS,
+        problems,
+    );
+    let source = targets(vec![reason.source], problems)?.pop();
+    // The message itself: the reason goes when it is deleted, while the rest
+    // of the conversation stays.
+    if source.as_ref().is_some_and(|source| {
+        source.part_id.is_none()
+            && matches!(
+                source.entity_type,
+                EntityType::Channel | EntityType::EmailThread
+            )
+    }) {
+        problems.push(
+            "a reason read in a channel or an email thread names the message that states it, as \
+             the source's `part`"
+                .to_owned(),
+        );
+        return None;
+    }
+
+    Some(TopicReason {
+        text: text?,
+        source: source?,
+    })
+}
+
+/// The key `field` of a `named`: at most `max` characters.
+fn key(
+    key: &str,
+    field: &str,
+    named: &str,
+    max: usize,
+    problems: &mut Vec<String>,
+) -> Option<String> {
     let key = key.trim();
     let shaped = !key.is_empty()
-        && key.chars().count() <= MAX_DEDUP_KEY_CHARS
+        && key.chars().count() <= max
         && key.chars().all(|c| {
             c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '-' | '_' | ':' | '.' | '/')
         });
     if !shaped {
         problems.push(format!(
-            "`dedupKey` is at most {MAX_DEDUP_KEY_CHARS} lowercase letters, digits and -_:./, \
-             the same every night for the same suggestion"
+            "{field} is at most {max} lowercase letters, digits and -_:./, the same every night \
+             for the same {named}"
         ));
         return None;
     }
-    shown(key, "`dedupKey`", problems)
+    shown(key, field, problems)
 }
 
 /// A title, summary or reason: one plain line of at most `max` characters.
