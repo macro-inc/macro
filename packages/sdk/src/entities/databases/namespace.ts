@@ -164,8 +164,8 @@ export class DatabaseNamespace {
   }
 
   /**
-   * Create a database with one table synced with `source`. The first sync
-   * runs at once.
+   * Create a database synced with `source`. It holds one table, and the
+   * first sync runs at once.
    *
    * The database is named after the source, and rows are upserted from it on
    * a schedule, acting as the caller. The sync's `database` is the new

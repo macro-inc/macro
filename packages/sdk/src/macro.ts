@@ -149,6 +149,7 @@ export {
   DatabaseSync,
   type DatabaseSyncColumn,
   type DatabaseSyncDetachedColumn,
+  type DatabaseSyncJSON,
   type DatabaseSyncSource,
   type DatabaseSyncSources,
   NotionDataSource,

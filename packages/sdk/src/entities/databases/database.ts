@@ -692,7 +692,7 @@ export class Database extends MacroEntity<DatabaseDetail> {
   }
 
   /**
-   * The database's synced tables, oldest first. Takes edit access.
+   * Its synced tables, oldest first. Takes edit access.
    *
    * @readonly
    */

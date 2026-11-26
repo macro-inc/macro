@@ -21,8 +21,8 @@ type NotionSyncSourceRecord = Extract<
 >;
 
 /**
- * A Notion data source (one table of a Notion database) that the caller's
- * Notion connection can read. Get one from
+ * A Notion data source the caller can read. It is one table of a Notion
+ * database their Notion connection reaches. Get one from
  * `macro.databases.syncSources()`.
  */
 export class NotionDataSource {
@@ -45,7 +45,7 @@ export class NotionDataSource {
       : new NotionDataSource(record.id, record.title);
   }
 
-  /** This data source as plain JSON. */
+  /** As plain JSON. */
   toJSON(): { id: string; title: string | undefined } {
     return { id: this.id, title: this.title };
   }
@@ -58,6 +58,16 @@ export class NotionDataSource {
 export type DatabaseSyncSource =
   | { kind: 'granola_meetings' }
   | { kind: 'notion_data_source'; dataSource: NotionDataSource };
+
+/** A {@link DatabaseSync} as plain JSON. */
+export type DatabaseSyncJSON = {
+  id: string;
+  databaseId: string;
+  tableId: string;
+  source: DatabaseSyncSource;
+  status: DatabaseSyncStatus;
+  lastSyncedAt: string | undefined;
+};
 
 /** What the caller can sync a table from. */
 export type DatabaseSyncSources = {
@@ -109,8 +119,8 @@ function sourceOf(record: DatabaseSyncSourceRecord): DatabaseSyncSource {
 }
 
 /**
- * A table of a {@link Database} kept in sync with an outside source. A
- * worker upserts the source's records into it as rows, acting with the
+ * A table kept in sync with an outside source. It belongs to a
+ * {@link Database}, and a worker upserts the source's records into it as rows, acting with the
  * access of the user who created the sync: Granola meetings every 15
  * minutes and on each import, Notion every 30 minutes. Rows mirror the
  * source, so a row deleted in Macro comes back on the next run.
@@ -185,8 +195,9 @@ export class DatabaseSync {
   }
 
   /**
-   * Run the sync as soon as a worker is free. Returns once it is queued, not
-   * when it finishes; read {@link Database.syncs} later for its status.
+   * Queue a run. A worker runs it as soon as one is free; this returns once
+   * it is queued, not when it finishes. Read {@link Database.syncs} later
+   * for its status.
    *
    * @write
    * @openworld
@@ -212,8 +223,8 @@ export class DatabaseSync {
     );
   }
 
-  /** This sync as plain JSON. */
-  toJSON() {
+  /** As plain JSON. */
+  toJSON(): DatabaseSyncJSON {
     return {
       id: this.id,
       databaseId: this.database.id,
