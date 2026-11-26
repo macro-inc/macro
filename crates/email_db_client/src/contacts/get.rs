@@ -640,12 +640,13 @@ pub async fn fetch_address_book_emails_by_link_id(
         .collect())
 }
 
-/// The non-automated addresses the link has sent the most messages to, most
-/// emailed first, at most `limit` of them.
+/// The non-automated addresses on `domain` the link has sent the most messages
+/// to, most emailed first, at most `limit` of them.
 #[tracing::instrument(skip(pool), err)]
 pub async fn fetch_top_sent_contact_emails_by_link_id(
     pool: &PgPool,
     link_id: Uuid,
+    domain: &str,
     limit: usize,
 ) -> anyhow::Result<Vec<String>> {
     // Automated addresses are dropped after the query, so read a wider window
@@ -665,14 +666,16 @@ pub async fn fetch_top_sent_contact_emails_by_link_id(
             m.link_id = $1
             AND m.is_sent = TRUE
             AND m.is_draft = FALSE
+            AND LOWER(SPLIT_PART(c.email_address, '@', 2)) = LOWER($2)
         GROUP BY
             LOWER(c.email_address)
         ORDER BY
             COUNT(DISTINCT m.id) DESC,
             LOWER(c.email_address)
-        LIMIT $2
+        LIMIT $3
         "#,
         link_id,
+        domain,
         window
     )
     .fetch_all(pool)

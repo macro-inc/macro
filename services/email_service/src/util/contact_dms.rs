@@ -2,8 +2,10 @@
 //!
 //! The contacts a user's Google account shares are the best signal for who they
 //! collaborate with, so a connected inbox starts with direct messages to
-//! colleagues at their work domain and to the people they email most. Creation
-//! is idempotent and best-effort: a failure never fails the sync that triggered it.
+//! colleagues at their work domain, including the ones they email most. People
+//! on other domains never get one: they may not be in the user's Macro team.
+//! Creation is idempotent and best-effort: a failure never fails the sync that
+//! triggered it.
 
 use channels::{
     domain::{
@@ -32,13 +34,15 @@ fn domain_of(email: &str) -> Option<String> {
         .map(|(_, domain)| domain.to_ascii_lowercase())
 }
 
-/// Addresses in `emails` on the work domain of `own_email`, excluding `own_email`.
-///
-/// Returns nothing when `own_email` is on a consumer domain such as gmail.com,
+/// The domain of `own_email`, or `None` on a consumer domain such as gmail.com,
 /// where sharing a domain says nothing about working together.
+fn work_domain(own_email: &str) -> Option<String> {
+    domain_of(own_email).filter(|domain| !is_generic_email_domain(domain))
+}
+
+/// Addresses in `emails` on the work domain of `own_email`, excluding `own_email`.
 pub(crate) fn colleague_emails(own_email: &str, emails: &[String]) -> Vec<String> {
-    let Some(own_domain) = domain_of(own_email).filter(|domain| !is_generic_email_domain(domain))
-    else {
+    let Some(own_domain) = work_domain(own_email) else {
         return Vec::new();
     };
     let own_email = own_email.to_ascii_lowercase();
@@ -108,16 +112,20 @@ pub async fn ensure_colleague_dms(db: &PgPool, link: &Link) {
     ensure_dms_with(db, link, colleagues).await;
 }
 
-/// Opens direct messages with the people the user emails most. It runs after
-/// the mailbox backfill, once there is sent mail to rank.
+/// Opens direct messages with the colleagues the user emails most. It runs
+/// after the mailbox backfill, once there is sent mail to rank.
 #[tracing::instrument(skip(db, link), fields(link_id = %link.id))]
 pub async fn ensure_top_contact_dms(db: &PgPool, link: &Link) {
     if !link.is_primary {
         return;
     }
+    let Some(own_domain) = work_domain(link.email_address.0.as_ref()) else {
+        return;
+    };
     let emails = match email_db_client::contacts::get::fetch_top_sent_contact_emails_by_link_id(
         db,
         link.id,
+        &own_domain,
         MAX_TOP_CONTACT_DMS,
     )
     .await
