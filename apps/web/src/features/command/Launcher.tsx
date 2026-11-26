@@ -511,7 +511,6 @@ export function runCreateAction(
 
 /** Ask for a Granola or Notion source, then open the database created from it. */
 function createSyncedDatabase(shouldInsert: boolean) {
-  if (!isFeatureEnabled(enableDatabases)) return;
   setCreateMenuOpen(false, false);
   openSyncedDatabaseDialog({
     createdFrom: 'create_menu',
@@ -631,7 +630,6 @@ const createBlocks = (
     },
     keywords: ['new', 'sync', 'granola', 'notion', 'database', 'meetings'],
     blockName: 'database',
-    enabled: () => isFeatureEnabled(enableDatabases),
     keyDownHandler: () => {
       createSyncedDatabase(pressedKeys().has('shift'));
       return true;
