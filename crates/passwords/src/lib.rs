@@ -3,3 +3,6 @@
 pub mod domain;
 pub mod inbound;
 pub mod outbound;
+
+#[cfg(all(test, unix))]
+mod signed_storage_test;
