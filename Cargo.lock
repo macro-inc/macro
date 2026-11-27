@@ -21334,6 +21334,7 @@ version = "0.1.0"
 dependencies = [
  "agent_credentials",
  "agent_git",
+ "async-stripe",
  "axum",
  "bot_id",
  "chrono",

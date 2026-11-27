@@ -54,6 +54,9 @@ uuid = { workspace = true, features = ["serde", "v7"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+async-stripe = { workspace = true, default-features = false }
+hosted_runtimes = { path = "../hosted_runtimes", default-features = false, features = ["outbound"] }
+teams = { path = "../teams", default-features = false, features = ["outbound"] }
 model_user = { path = "../model_user" }
 bot_id = { path = "../bot_id" }
 team_agents = { path = ".", features = ["inbound"] }
@@ -69,3 +72,7 @@ user_api_key = { path = "../user_api_key", features = ["postgres"] }
 # The crate depends on itself in tests to turn on `inbound`, which shear reads as unused.
 [package.metadata.cargo-shear]
 ignored = ["team_agents"]
+
+[[example]]
+name = "local_hire"
+required-features = ["outbound"]

@@ -115,4 +115,8 @@ agent runtime reports the same way.
 
 ## Related
 
+The local Hire review example exercises the normal invite, included-seat
+transaction, and comped computer reservation against a disposable database.
+See [local Hire review](examples/local_hire_support/README.md).
+
 - Rules: `.agents/rules/rust/architecture.md` · Docs: `docs/design/agent-teammates.md`
