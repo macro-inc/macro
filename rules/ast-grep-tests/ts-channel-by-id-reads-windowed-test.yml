@@ -1,0 +1,17 @@
+id: ts-channel-by-id-reads-windowed
+valid:
+  - |
+    import { channelIdWindow, useChannelWindow } from '@queries/channel/window';
+  - |
+    import { registerChannelListNotificationRefresh } from '@queries/channel/by-ids';
+  - |
+    import { useCachedChannelsByIds } from './somewhere-else';
+invalid:
+  - |
+    import { useCachedChannelsByIds } from '@queries/channel/by-ids';
+  - |
+    import { useChannelsByIdsQuery } from '@queries/channel/by-ids';
+  - |
+    import { channelsByIdsQueryArgs, registerChannelListNotificationRefresh } from '@queries/channel/by-ids';
+  - |
+    import { useCachedChannelsByIds as resolve } from '../../lib/queries/channel/by-ids';

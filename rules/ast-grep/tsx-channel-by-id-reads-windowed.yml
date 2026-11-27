@@ -1,0 +1,39 @@
+id: tsx-channel-by-id-reads-windowed
+language: tsx
+# Twin of ts-channel-by-id-reads-windowed — ast-grep rules are
+# single-language, and `typescript` only scans .ts files.
+severity: error
+message: Look up channels by ID through useChannelWindow (lib/queries/channel/window), never the exact-set hooks in lib/queries/channel/by-ids.
+note: |-
+  A by-ID list read resolves every ID it is given, so one fed a section's or a
+  search's whole membership fetches thousands of records in a large team.
+  `useChannelWindow` takes a `ChannelIdWindow`, which only `channelIdWindow`
+  builds: at most 200 IDs, in chunks of 25. Give it the rows on screen (a
+  slice with a `range`), or the first rows of a list, and show the rest from
+  the channel directory's records.
+  The exact-set hooks stay for the callers below, which are bounded another
+  way: per-channel notification settings (the viewer's own settings) and
+  the Threads tab (at most five pages of threads).
+files:
+  - apps/web/src/**
+ignores:
+  - apps/web/src/lib/queries/channel/**
+  - apps/web/src/features/notifications/primitives/create-channel-notification-settings.ts
+  - apps/web/src/features/channels-view/queries.ts
+  - '**/*.test.ts'
+  - '**/*.test.tsx'
+utils:
+  by-ids-source:
+    kind: string
+    regex: ^['"](@queries/channel|(\.{1,2}/)+(.+/)?(lib/)?queries/channel)/by-ids(\.ts)?['"]$
+rule:
+  kind: import_specifier
+  has:
+    field: name
+    regex: ^(useCachedChannelsByIds|useChannelsByIdsQuery|channelsByIdsQueryArgs)$
+  inside:
+    kind: import_statement
+    stopBy: end
+    has:
+      field: source
+      matches: by-ids-source
