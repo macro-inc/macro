@@ -344,6 +344,11 @@ pub trait CompaniesRepository:
     /// Claiming counts an attempt and stamps it now, so concurrent
     /// workers skip the claimed rows until `attempted_before` passes
     /// them. Returns the claimed domains.
+    ///
+    /// Entries the claim passes over because they have used `max_attempts`
+    /// or no team tracks their domain are marked so later claims skip them;
+    /// tracking the domain again makes an entry claimable. Raising
+    /// `max_attempts` does not revive entries already marked exhausted.
     fn claim_pending_domains(
         &self,
         limit: i64,
