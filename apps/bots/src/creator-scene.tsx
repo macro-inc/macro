@@ -1,4 +1,11 @@
-import { createEffect, createSignal, onCleanup, onMount, Show } from 'solid-js';
+import {
+  batch,
+  createEffect,
+  createSignal,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js';
 import { Portrait } from './portrait';
 import type { Look, PresetId } from './presets';
 
@@ -29,8 +36,10 @@ export function CreatorScene(props: {
 
       const instance = scene();
       if (!instance) return;
-      props.onCapture(undefined);
-      setScene(undefined);
+      batch(() => {
+        setScene(undefined);
+        props.onCapture(undefined);
+      });
       instance.dispose();
     }
 
@@ -66,8 +75,7 @@ export function CreatorScene(props: {
         if (life.signal.aborted) return;
 
         const instance = pending;
-        setScene(instance);
-        props.onCapture(() => {
+        function capture() {
           let source: string | undefined;
           try {
             source = instance.captureCanonical();
@@ -81,6 +89,10 @@ export function CreatorScene(props: {
             });
           }
           return source;
+        }
+        batch(() => {
+          setScene(instance);
+          props.onCapture(capture);
         });
         pending = undefined;
       } catch {
