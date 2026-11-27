@@ -1,6 +1,6 @@
-import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
-import { authServiceClient } from '@service-auth/client';
+import { fetchGithubPullRequestMergeability } from '@queries/storage/github-pull-requests';
+
 import type { GithubPullRequestMergeability } from '@service-auth/generated/schemas';
 import { queryOptions, skipToken, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
@@ -34,18 +34,7 @@ export function prMergeabilityQueryOptions(id: string, reference?: PrRef) {
           const invalidated = context.client.getQueryState(
             context.queryKey
           )?.isInvalidated;
-          const response = await throwOnErr(() =>
-            authServiceClient.getGithubPullRequestMergeability({
-              pullRequests: [
-                {
-                  owner: reference.owner,
-                  repo: reference.repo,
-                  number: reference.number,
-                },
-              ],
-            })
-          );
-          const state = response.pullRequests[0]?.mergeability ?? 'unknown';
+          const state = await fetchGithubPullRequestMergeability(reference);
           return {
             state,
             refetches:

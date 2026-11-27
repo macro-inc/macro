@@ -31,7 +31,10 @@ vi.mock('@entity/components/GithubLabelPill', () => ({
 vi.mock('@notifications', () => ({
   NotificationReadMarker: () => null,
 }));
-vi.mock('@queries/storage/github-pull-requests', () => ({
+vi.mock('@queries/storage/github-pull-requests', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@queries/storage/github-pull-requests')
+  >()),
   useRefreshGithubPullRequest: (
     _reference: unknown,
     refreshedKeys: () => readonly unknown[]

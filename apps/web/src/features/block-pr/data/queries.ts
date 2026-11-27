@@ -1,9 +1,10 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
-import type { GithubPullRequestWithDetails } from '@queries/storage/github-pull-requests';
+import {
+  fetchStoredGithubPullRequest,
+  type GithubPullRequestWithDetails,
+} from '@queries/storage/github-pull-requests';
 import { invalidateActivePrDetail } from '@queries/storage/pr-detail-sync';
-import { storageServiceClient } from '@service-storage/client';
 import type { GithubPullRequestReview } from '@service-storage/generated/schemas/githubPullRequestReview';
 import type { StoredGithubPullRequest } from '@service-storage/generated/schemas/storedGithubPullRequest';
 import { queryOptions, useQuery } from '@tanstack/solid-query';
@@ -153,11 +154,7 @@ export function prForeignEntityQueryOptions(id: string) {
   return queryOptions({
     queryKey: prForeignEntityQueryKey(id),
     queryFn: async (): Promise<PrForeignEntityData> =>
-      prForeignEntityDataFromStored(
-        await throwOnErr(() =>
-          storageServiceClient.getGithubPullRequest({ id })
-        )
-      ),
+      prForeignEntityDataFromStored(await fetchStoredGithubPullRequest(id)),
     staleTime: PR_STALE_TIME,
     retry: 1,
     reconcile: 'id',

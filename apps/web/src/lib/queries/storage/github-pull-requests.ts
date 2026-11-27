@@ -3,12 +3,15 @@ import type { GithubPullRequestLabel } from '@entity/types/entity';
 import { authServiceClient } from '@service-auth/client';
 import type {
   EnrichedGithubPullRequest,
+  GithubPullRequestMergeability,
+  GithubPullRequestNumber,
   GithubPullRequestRef,
 } from '@service-auth/generated/schemas';
 import { storageServiceClient } from '@service-storage/client';
 import type {
   GithubPullRequest,
   GithubPullRequestsResponse,
+  StoredGithubPullRequest,
 } from '@service-storage/generated/schemas';
 import {
   type QueryFunctionContext,
@@ -125,6 +128,23 @@ function hasStoredEnrichedGithubPullRequests(
 export type GithubPullRequestsWithDetailsResponse = {
   pullRequests: GithubPullRequestWithDetails[];
 };
+
+export async function fetchStoredGithubPullRequest(
+  id: string
+): Promise<StoredGithubPullRequest> {
+  return throwOnErr(() => storageServiceClient.getGithubPullRequest({ id }));
+}
+
+export async function fetchGithubPullRequestMergeability(
+  reference: GithubPullRequestNumber
+): Promise<GithubPullRequestMergeability> {
+  const response = await throwOnErr(() =>
+    authServiceClient.getGithubPullRequestMergeability({
+      pullRequests: [reference],
+    })
+  );
+  return response.pullRequests[0]?.mergeability ?? 'unknown';
+}
 
 export async function fetchDocumentGithubPullRequests(
   documentId: string,
