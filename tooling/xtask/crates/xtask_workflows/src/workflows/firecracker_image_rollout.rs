@@ -192,8 +192,10 @@ fn build() -> Job {
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
         .add_step(
             Step::new("Build the rollout CLI")
-                .run(include_str!("scripts/firecracker_image_rollout_cli.sh"))
+                .run(include_str!("scripts/build_rollout_cli.sh"))
                 .id(BUILD_CLI.id())
+                .add_env(("CLI_BIN", "image-upgrade"))
+                .add_env(("CLI_FEATURE", "image-upgrade-cli"))
                 .shell("bash"),
         )
         .add_step(steps::upload_artifact(CLI_ARTIFACT, CLI_PATH))

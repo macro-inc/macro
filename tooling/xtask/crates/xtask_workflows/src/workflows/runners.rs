@@ -10,8 +10,8 @@
 
 use std::fmt;
 
-/// The in-VPC self-hosted runner with network access to the databases. Stays
-/// off Namespace deliberately — migrations need to reach RDS.
+/// The in-VPC self-hosted runner with network access to RDS. Jobs here must not
+/// build anything. Build on Namespace and pass the runner prebuilt tools.
 pub const DB_MIGRATOR: &str = "db-migrator";
 
 /// The GitHub-hosted larger runner that builds the Rust CI custom image. Its
