@@ -505,9 +505,11 @@ export function Channel(props: ChannelProps) {
     }),
   });
 
-  const dragState = createChannelDragState({
-    channelId: props.channelId,
-  });
+  const dragState = createChannelDragState();
+  // Entities dropped on the channel become mentions in whichever composer is
+  // showing; call from a composer's onReady, which runs under its owner.
+  const takeEntityDrops = (handle: InputHandle) =>
+    onCleanup(dragState.setEntityMentionInputHandlers(handle));
 
   const channelName = useChannelName(props.channelId);
   const channelType = useChannelType(props.channelId);
@@ -1295,6 +1297,7 @@ export function Channel(props: ChannelProps) {
                               <UnifiedEditInput
                                 channelId={props.channelId}
                                 messageEditor={messageEditor}
+                                onReady={takeEntityDrops}
                                 onNavigateToMessage={(message) =>
                                   goToMessage(
                                     message.thread_id ?? message.id,
@@ -1352,6 +1355,7 @@ export function Channel(props: ChannelProps) {
                                   )
                                 }
                                 onExit={unifiedInput.closeReply}
+                                onReady={takeEntityDrops}
                               />
                             )}
                           </Match>
@@ -1382,9 +1386,7 @@ export function Channel(props: ChannelProps) {
                                   dragState.setAttachFilesToChannel(
                                     handle.attachFiles
                                   );
-                                  dragState.setEntityMentionInputHandlers(
-                                    handle
-                                  );
+                                  takeEntityDrops(handle);
                                   setChannelInputHandle(handle);
                                 }}
                                 onChange={(snapshot) => {

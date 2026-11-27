@@ -1,8 +1,9 @@
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { Telemetry } from '@macro-inc/observability';
-import type { ParentProps } from 'solid-js';
+import { createUniqueId, type ParentProps } from 'solid-js';
 import type { ChannelDragState } from './create-channel-drag-state';
+import { createEntityDropZone } from './create-entity-drop-zone';
 
 false && fileFolderDrop;
 
@@ -11,12 +12,22 @@ type ChannelDropZoneProps = ParentProps & {
 };
 
 export function ChannelDropZone(props: ChannelDropZoneProps) {
-  const droppable = props.dragState.entityDropZone.droppable;
+  // Created here, with the element it registers: solid-dnd adds a droppable
+  // when the owner that created it mounts. The id is per instance, because one
+  // channel can be open twice (beside its call panel, or in two splits).
+  const droppable = createEntityDropZone({
+    ...props.dragState.entityDrop,
+    droppableId: `channel-entity-drop-${createUniqueId()}`,
+  }).droppable;
   false && droppable;
 
+  // The droppable is the container itself: the pointer collision detector
+  // walks up from the element under the pointer, so any hit inside the
+  // channel resolves here unless a nearer droppable (a thread reply) wins.
   return (
     <div
       class="relative h-full flex flex-col mobile:px-0 mobile:pb-0"
+      use:droppable
       use:fileFolderDrop={{
         onDrop: (files, folders) => {
           handleFileFolderDrop(files, folders, (entries) =>
@@ -27,7 +38,6 @@ export function ChannelDropZone(props: ChannelDropZoneProps) {
         },
       }}
     >
-      <div class="absolute pointer-events-none inset-0" use:droppable />
       {props.children}
     </div>
   );
