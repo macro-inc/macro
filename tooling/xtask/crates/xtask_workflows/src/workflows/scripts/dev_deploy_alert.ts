@@ -6,6 +6,10 @@
 // other (one concurrency group), and a push that waits is replaced by the next
 // one: it ends cancelled before any of its jobs started, and the run that
 // replaced it deploys its commit too. Such a run is read past, never counted.
+// The runs count in the order they ran, by when they ended: a run started
+// again by hand runs after those created since, and deploys its older commit
+// over theirs. The job lists the runs back to the last that succeeded, so it
+// sees such a run when it was created on those pages.
 //
 // Dev is failing when one of these holds:
 //
@@ -36,11 +40,11 @@
 // records what the channel shows in its last step, "Macro Alerts shows Dev
 // failing" or "Macro Alerts shows Dev deploying", which runs only once a post
 // succeeded or none was needed, so a run of the workflow succeeds only once it
-// recorded. The newest record among its recent successful runs, read through
-// the jobs API, is what the channel shows, as of when its job started, before
-// it read Dev; with none, it shows Dev deploying. The workflow's runs go one at
-// a time (a concurrency group), so each reads what the one before it left, and
-// a run started again by hand comes first. A failed post records nothing, so
+// recorded. The newest record among its recent successful runs and this one's
+// earlier attempts, read through the jobs API, is what the channel shows, as
+// of when its job started, before it read Dev; with none, it shows Dev
+// deploying. The workflow's runs go one at a time (a concurrency group), so
+// each reads what the one before it left. A failed post records nothing, so
 // the next run posts again.
 //
 // The step writes the message to DEV_DEPLOY_ALERT_MESSAGE, `post=true` when
@@ -95,9 +99,8 @@ export type Run = {
   status: string;
   conclusion: string | null;
   created_at: string;
+  /** When it was last changed: for a run that ended, when it ended. */
   updated_at: string;
-  /** When its latest attempt started. */
-  run_started_at?: string;
   head_sha: string;
   html_url: string;
   head_commit?: { message?: string } | null;
@@ -190,9 +193,20 @@ const minutesBetween = (from: string | number, to: string | number) => (time(to)
 
 const sinceMinutes = (at: string, now: number) => minutesBetween(at, now);
 
-const newestFirst = (a: Run, b: Run) => b.run_number - a.run_number;
+/** When a run ended; a run still going ends after every run that has. */
+const endOf = (run: Run) => (run.status === 'completed' ? time(run.updated_at) : Infinity);
 
-/** The newest run that succeeded: `deployed`, or one in `runs` that succeeded after it. */
+/**
+ * The run that ended last first, after those still going. Runs go one at a
+ * time, so that is the order they ran in, also for a run started again by
+ * hand, which deploys its older commit over the newer ones.
+ */
+const newestFirst = (a: Run, b: Run) => endOf(b) - endOf(a) || b.run_number - a.run_number;
+
+/** Whether `run` ran after `than`, or there is no `than`. */
+const ranAfter = (run: Run, than: Run | null) => than === null || newestFirst(run, than) < 0;
+
+/** The run that deployed last: `deployed`, or one in `runs` that succeeded after it. */
 export function lastDeployed(deployed: Run | null, runs: Run[]): Run | null {
   return (
     [deployed, ...runs.filter((run) => run.status === 'completed' && run.conclusion === 'success')]
@@ -294,7 +308,7 @@ export async function assess({
 }): Promise<Health> {
   // The list can be newer than the query for the last success.
   const last = lastDeployed(deployed, runs);
-  const newer = runs.filter((run) => last === null || run.run_number > last.run_number).sort(newestFirst);
+  const newer = runs.filter((run) => ranAfter(run, last)).sort(newestFirst);
   const needsJobs = (run: Run) => run.status === 'completed' || STARTED.has(run.status);
 
   const problems: Problem[] = [];
@@ -343,20 +357,17 @@ export function records(jobs: Job[], names: Names): { failing: boolean; at: stri
   });
 }
 
-const latestStartFirst = (a: Run, b: Run) =>
-  (b.run_started_at ?? b.created_at).localeCompare(a.run_started_at ?? a.created_at);
-
 /**
  * What the channel shows, from the newest record among the alert workflow's
- * successful `runs`, read a few at a time with `jobsOf`, the latest started
- * first, until one holds a record; with none, Dev deploying.
+ * `runs`, read a few at a time with `jobsOf`, the one that ran last first,
+ * until one holds a record; with none, Dev deploying.
  */
 export async function readShown(
   runs: Run[],
   names: Names,
   jobsOf: (run: Run) => Promise<Job[]>,
 ): Promise<Shown> {
-  const sorted = [...runs].sort(latestStartFirst).slice(0, LOOK_BACK);
+  const sorted = [...runs].sort(newestFirst).slice(0, LOOK_BACK);
   for (let start = 0; start < sorted.length; start += BATCH) {
     const batch = sorted.slice(start, start + BATCH);
     const found = (await Promise.all(batch.map(jobsOf)))
@@ -598,7 +609,10 @@ async function findUndeployed(repo: string, runs: Run[], deployed: Run | null): 
   if (deployed?.head_sha === head.sha) {
     return null;
   }
-  const since = runs.filter((run) => deployed === null || run.run_number > deployed.run_number).sort(newestFirst);
+  // The pushes after the one Dev runs, oldest last.
+  const since = runs
+    .filter((run) => deployed === null || run.run_number > deployed.run_number)
+    .sort((a, b) => b.run_number - a.run_number);
   const oldest = since.at(-1);
   if (since.some((run) => run.head_sha === head.sha) && oldest) {
     return { ...pushOf(oldest), at: oldest.created_at, headHasRun: true };
@@ -648,7 +662,7 @@ export async function main() {
     for (const run of listed) {
       byId.set(run.id, run);
     }
-    if (listed.length < LISTED || queried === null || listed.some((run) => run.run_number <= queried.run_number)) {
+    if (listed.length < LISTED || (queried !== null && listed.some((run) => run.run_number <= queried.run_number))) {
       break;
     }
   }
@@ -662,7 +676,9 @@ export async function main() {
     now: context.now,
     jobsOf: read,
   });
-  const decision = decide(health, await readShown(alertRuns, names, read));
+  // This run, when it is started again by hand, holds what its first attempt recorded.
+  const shown = await readShown([own, ...alertRuns.filter((run) => run.id !== own.id)], names, read);
+  const decision = decide(health, shown);
 
   const outputs = [`shows=${decision.failing ? 'failing' : 'deploying'}`];
   let summary: string;

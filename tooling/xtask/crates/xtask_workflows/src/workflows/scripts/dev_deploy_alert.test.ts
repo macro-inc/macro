@@ -275,7 +275,7 @@ describe('assess', () => {
     );
     const result = await assess({
       runs: [...REPLACED.slice(0, 3), KILLED, ...older],
-      deployed: { ...DEPLOYED, run_number: 4700 },
+      deployed: { ...DEPLOYED, run_number: 4700, created_at: '2026-11-25T19:00:00Z', updated_at: '2026-11-25T19:30:00Z' },
       undeployed: null,
       now: at('2026-11-26T00:03:00Z'),
       jobsOf,
@@ -290,6 +290,38 @@ describe('assess', () => {
     assert.deepEqual(before.problems, []);
     const after = await health([REPLACED[0], DEPLOYED], new Map(), plus(since.at, UNDEPLOYED_MINUTES), since);
     assert.deepEqual(after.problems, [{ kind: 'undeployed', since, minutes: UNDEPLOYED_MINUTES, deploying: null }]);
+  });
+
+  test('a run started again after a newer one deployed fails Dev when it fails', async () => {
+    const older = deployRun(45700000000, 4816, 'a'.repeat(40), 'feat: older (#1)', '2026-11-25T21:00:00Z', {
+      conclusion: 'failure',
+      updated_at: '2026-11-25T22:20:00Z',
+    });
+    const failed = job(1, 'Build Web App / Build', { conclusion: 'failure', steps: [{ name: 'Build', conclusion: 'failure' }] });
+    const result = await health([older, DEPLOYED], new Map([[older.id, [failed]]]), '2026-11-25T22:21:00Z');
+    assert.deepEqual(result.problems, [{ kind: 'failed', run: older, jobs: [{ name: 'Build Web App / Build', step: 'Build' }] }]);
+    assert.equal(result.deployed, DEPLOYED);
+    const succeeded = { ...older, conclusion: 'success' };
+    assert.equal(lastDeployed(DEPLOYED, [succeeded]), succeeded);
+  });
+
+  test('a run started again by hand that ended before a newer run deployed is behind it, as runs 2930 and 2934 were', async () => {
+    const again = deployRun(41857436408, 2930, '1'.repeat(40), 'feat: started again (#1)', '2026-11-04T15:24:37Z', {
+      conclusion: 'cancelled',
+      updated_at: '2026-11-04T16:27:01Z',
+    });
+    const deployed = deployRun(41862567305, 2934, '2'.repeat(40), 'feat: deployed (#2)', '2026-11-04T15:55:02Z', {
+      updated_at: '2026-11-04T16:55:50Z',
+    });
+    const cancelled = job(1, 'Build Web App / Build', { conclusion: 'cancelled', steps: [{ name: 'Build', conclusion: 'cancelled' }] });
+    const result = await assess({
+      runs: [deployed, again],
+      deployed,
+      undeployed: null,
+      now: at('2026-11-04T16:56:50Z'),
+      jobsOf: jobsFrom(new Map([[again.id, [cancelled]]])).jobsOf,
+    });
+    assert.deepEqual(result, { problems: [], deployed });
   });
 
   test('a success the list holds newer than the last one queried is what Dev deployed', async () => {
@@ -387,7 +419,7 @@ describe('readShown', () => {
   });
 
   test('an older run started again by hand holds the newest record', async () => {
-    const again = { ...alertRun(1), run_started_at: '2026-11-25T23:30:00Z' };
+    const again = { ...alertRun(1), updated_at: '2026-11-25T23:31:00Z' };
     const jobs = new Map([
       [again.id, [alertJob('deploying', '2026-11-25T22:01:00Z'), alertJob('failing', '2026-11-25T23:30:00Z', true, { id: 2, run_attempt: 2 })]],
       [alertRun(9).id, [alertJob('deploying', '2026-11-25T23:22:00Z')]],
@@ -736,6 +768,7 @@ function api({
   head,
   jobs = new Map<number, Job[]>(),
   alertRuns = [],
+  own = { ...alertRun(100), id: 1, status: 'in_progress', conclusion: null },
 }: {
   deploys: Run[];
   /** What the query for the last successes answers. */
@@ -743,11 +776,13 @@ function api({
   head: Run;
   jobs?: Map<number, Job[]>;
   alertRuns?: Run[];
+  /** This run of the alert. */
+  own?: Run;
 }): Api {
   const repo = '/repos/macro-inc/macro';
   return (path, query) => {
     if (path === `${repo}/actions/runs/1`) {
-      return { workflow_id: 9 };
+      return { ...own, workflow_id: 9 };
     }
     if (path === `${repo}/actions/workflows/9/runs`) {
       return { workflow_runs: alertRuns };
@@ -806,10 +841,57 @@ describe('main', () => {
     );
   });
 
+  test('lists runs past a page of replaced ones when no run ever deployed Dev', async () => {
+    const failed = deployRun(9001, 1, 'f'.repeat(40), 'feat: the first deploy (#1)', ago(171), { conclusion: 'failure', updated_at: ago(170) });
+    const replaced = Array.from({ length: 100 }, (_, index) =>
+      deployRun(9002 + index, 2 + index, String(index).padStart(40, '0'), `feat: change ${index} (#${2 + index})`, ago(169 - index), {
+        conclusion: 'cancelled',
+      }),
+    ).reverse();
+    const { outputs, message } = await runMain(
+      api({ deploys: [...replaced, failed], succeeded: [], head: replaced[0], jobs: new Map([[failed.id, [failedJob]]]) }),
+    );
+    assert.deepEqual(outputs, ['shows=failing', 'post=true']);
+    assert.match(message, /^🚨 · \*\*Dev deploy failed\*\* · push of `fffffff` feat: the first deploy/);
+  });
+
+  test('this run, started again by hand, reads what its first attempt recorded', async () => {
+    const deployed = deployRun(9001, 1, 'd'.repeat(40), 'feat: deployed (#1)', ago(300), { updated_at: ago(280) });
+    const failed = deployRun(9002, 2, 'f'.repeat(40), 'feat: failed (#2)', ago(60), { conclusion: 'failure', updated_at: ago(30) });
+    const own = { ...alertRun(100), id: 1, status: 'in_progress', conclusion: null };
+    const earlier = { ...alertRun(99), updated_at: ago(39) };
+    const { outputs } = await runMain(
+      api({
+        deploys: [failed, deployed],
+        succeeded: [deployed],
+        head: failed,
+        jobs: new Map([
+          [failed.id, [failedJob]],
+          [own.id, [alertJob('failing', ago(29), true)]],
+          [earlier.id, [alertJob('deploying', ago(40))]],
+        ]),
+        alertRuns: [earlier],
+        own,
+      }),
+    );
+    assert.deepEqual(outputs, ['shows=failing', 'post=false']);
+  });
+
+  test('a run started again after a newer one deployed its older commit: the newer pushes are undeployed', async () => {
+    const newer = deployRun(9002, 2, 'b'.repeat(40), 'feat: newer (#2)', ago(300), { updated_at: ago(280) });
+    const again = deployRun(9001, 1, 'a'.repeat(40), 'feat: older (#1)', ago(400), { updated_at: ago(10) });
+    const { outputs, message } = await runMain(api({ deploys: [newer, again], succeeded: [newer, again], head: newer }));
+    assert.deepEqual(outputs, ['shows=failing', 'post=true']);
+    assert.deepEqual(message.split('\n').slice(0, 2), [
+      '🚨 · **Dev has not deployed for 5 h** · since the push of `bbbbbbb` feat: newer ([#2](https://github.com/macro-inc/macro/pull/2))',
+      'Dev last deployed `aaaaaaa` 10 min ago',
+    ]);
+  });
+
   test('a run that succeeded between its two reads is what Dev deployed, for every check', async () => {
     const before = deployRun(9001, 1, 'b'.repeat(40), 'feat: before (#1)', ago(600), { updated_at: ago(560) });
     const deployed = deployRun(9002, 2, 'd'.repeat(40), 'feat: deployed (#2)', ago(300), { updated_at: ago(1) });
-    const told = { ...alertRun(1), run_started_at: ago(10) };
+    const told = { ...alertRun(1), updated_at: ago(9) };
     const { outputs, message } = await runMain(
       api({
         deploys: [deployed, before],
