@@ -467,16 +467,18 @@ data:
     }
 
     // CloudWatch Logs through Amazon Data Firehose: AWS Lambda log groups, and any
-    // other log group, subscribe to a Firehose stream (../aws, modules/firehose.nix)
-    // that delivers here through the edge's /awsfirehose/api/v1/push. Firehose
-    // sends the ingest token as its access key. Each event becomes a log record of
-    // its log group: service.name is the group's name without `/aws/lambda/` (or
-    // a leading `/`; other slashes become dashes) and the stack suffix (`-prod`, `-dev`), which gives deployment.environment. The
+    // other log group, subscribe to the Firehose stream in ../aws
+    // (modules/firehose.nix), which delivers here through the edge's
+    // /awsfirehose/api/v1/push with the ingest token as its access key. Each event
+    // becomes a log record of its log group. service.name is the group's name
+    // without `/aws/lambda/` or a leading `/`, other slashes as dashes, and without
+    // the stack suffix (`-prod`, `-dev`), which gives deployment.environment. The
     // records then take the OTLP path (memory limiter, email hashing, Loki).
     //
-    // Firehose has its 200 once the events are read, so a batch the memory limiter
-    // refuses is lost, not retried or kept in Firehose's failed-records bucket:
-    // `otelcol_processor_refused_log_records` counts it.
+    // Firehose has its 200 once the events are handed on, so a batch the memory
+    // limiter refuses is lost, not retried or kept in Firehose's failed-records
+    // bucket. The limiter's incoming minus outgoing items count it, and this
+    // receiver logs "failed to consume log entries".
     loki.source.awsfirehose "cloudwatch" {
       http {
         listen_address = "0.0.0.0"

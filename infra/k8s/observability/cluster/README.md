@@ -247,8 +247,9 @@ record of its group (`service.name` is the group's name without
 to the OTLP log path, so emails are hashed as in every other log. The group,
 stream and function name are structured metadata (`aws_log_group_names`,
 `aws_log_stream_names`, `faas_name`). Firehose has its answer once the events
-are read: a batch the memory limiter then refuses is lost, not retried
-(`otelcol_processor_refused_log_records`).
+are handed on: a batch the memory limiter then refuses is lost, not retried
+(the limiter's `otelcol_processor_incoming_items_total` minus
+`outgoing_items_total`, and the error "failed to consume log entries").
 
 ### Trace sampling
 
