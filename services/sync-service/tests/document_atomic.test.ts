@@ -32,11 +32,7 @@ const auth = (
 });
 const url = (id: string, action: string) =>
 	`http://localhost/document/${id}/${action === "snapshot" ? "state" : action}`;
-async function seed() {
-	const doc = new LoroDoc();
-	doc.getMap("metadata").set("title", "Document");
-	const bytes = doc.export({ mode: "snapshot" });
-	doc.free();
+async function seed(bytes = titledSnapshot()) {
 	const id = crypto.randomUUID();
 	const response = await mf.dispatchFetch(
 		`http://localhost/document/${id}/initialize`,
@@ -50,6 +46,39 @@ async function seed() {
 	);
 	expect(response.status).toBe(200);
 	return id;
+}
+function titledSnapshot() {
+	const doc = new LoroDoc();
+	doc.getMap("metadata").set("title", "Document");
+	const bytes = doc.export({ mode: "snapshot" });
+	doc.free();
+	return bytes;
+}
+/** Two peers that took turns editing, then each made an edit the other has
+ * not seen, so the document has two heads over a long shared history. */
+function concurrentEditsAfterTakingTurns(rounds: number) {
+	const [left, right] = [1, 2].map((peer) => {
+		const doc = new LoroDoc();
+		doc.setPeerId(peer);
+		return doc;
+	});
+	const write = (doc: LoroDoc, step: number) => {
+		doc.getText("content").insert(0, `${step} `);
+		doc.commit();
+	};
+	const sync = (from: LoroDoc, to: LoroDoc) =>
+		to.import(from.export({ mode: "update", from: to.oplogVersion() }));
+	for (let round = 0; round < rounds; round++) {
+		write(left, round);
+		sync(left, right);
+		write(right, round);
+		sync(right, left);
+	}
+	write(left, rounds);
+	write(right, rounds);
+	sync(right, left);
+	right.free();
+	return left;
 }
 async function snapshot(id: string) {
 	const response = await mf.dispatchFetch(url(id, "snapshot"), {
@@ -129,6 +158,34 @@ describe("atomic document API", () => {
 		);
 		for (const document of [initial.doc, full.doc, compact, saved.doc])
 			document.free();
+	});
+	it("returns full state when a shallow export would keep concurrent turn-taking history", async () => {
+		const source = concurrentEditsAfterTakingTurns(600);
+		expect(source.oplogFrontiers()).toHaveLength(2);
+		const id = await seed(source.export({ mode: "snapshot" }));
+		const full = await snapshot(id);
+		const response = await mf.dispatchFetch(
+			`${url(id, "snapshot")}?shallow=true`,
+			{ headers: auth(id, "view") },
+		);
+		expect(response.status).toBe(200);
+		const body = (await response.json()) as {
+			snapshot: string;
+			revision: string;
+		};
+		const compact = new LoroDoc();
+		compact.import(Buffer.from(body.snapshot, "base64"));
+		expect(compact.isShallow()).toBe(false);
+		expect(compact.toJSON()).toEqual(source.toJSON());
+		expect(body.revision).toBe(full.revision);
+		const reader = await createTestUser(mf, id, {
+			userId: "reader",
+			permissionLevel: "view",
+		});
+		users.push(reader);
+		expect(reader.doc.isShallow()).toBe(false);
+		expect(reader.doc.toJSON()).toEqual(source.toJSON());
+		for (const document of [source, full.doc, compact]) document.free();
 	});
 	it("returns a coherent authorized snapshot and rejects viewers, wrong-document grants, missing and invalid tokens", async () => {
 		const id = await seed();

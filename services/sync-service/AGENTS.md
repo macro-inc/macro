@@ -28,6 +28,8 @@ updates over WebSocket.
   routing and worker proxy/copy orchestration.
 - `src/domain/permissions.rs` + `src/domain/document.rs`: session permission
   policy and content-agnostic atomic update use cases.
+- `src/domain/compact_snapshot.rs`: the snapshot peers and readers load
+  (shallow when cheap, otherwise full).
 
 ## Scope
 
@@ -81,6 +83,12 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
   proportional to the update; `LoroDoc::diff`, `fork`, and checkouts cost time
   that grows with document history. A backlog past `DEFAULT_TIMEOUT_MS` (4.5 s)
   makes the front worker fail connects, which clients see as close 1006.
+- Export snapshots for peers and readers with
+  `DocumentState::export_compact_snapshot` or `document::shallow_snapshot`,
+  never `ExportMode::ShallowSnapshot` directly. While the frontier has
+  concurrent heads, Loro's shallow root falls back to where peers began taking
+  turns, and the export checks the document out across all of that history,
+  which takes seconds on long-edited text.
 - Document history names each Loro peer from D1 `peer_user_map`, so every
   path that writes operations maps the peers it writes with: WebSocket and
   HTTP `/update` writes to their user and signed agent actor, `/initialize`
