@@ -69,6 +69,7 @@ mod desktop_check;
 mod desktop_qa_macos;
 mod desktop_release_watch;
 mod desktop_windows;
+mod dev_deploy_alert;
 mod email_e2e;
 mod email_e2e_alert;
 mod email_e2e_browser;
@@ -215,6 +216,11 @@ pub(crate) const WORKFLOWS: &[WorkflowFile] = &[
         render_yaml: || render_gh_workflow(desktop_windows::desktop_windows_smoke)(),
     },
     WorkflowFile {
+        slug: "dev_deploy_alert",
+        file_name: "dev-deploy-alert.yml",
+        render_yaml: || render_gh_workflow(dev_deploy_alert::dev_deploy_alert)(),
+    },
+    WorkflowFile {
         slug: "desktop_release_watch",
         file_name: "desktop-release-watch.yml",
         render_yaml: || render_gh_workflow(desktop_release_watch::desktop_release_watch)(),
@@ -322,7 +328,7 @@ pub(crate) const WORKFLOWS: &[WorkflowFile] = &[
     },
     WorkflowFile {
         slug: "deploy_on_push",
-        file_name: "deploy_on_push.yml",
+        file_name: deploy_on_push::FILE,
         render_yaml: || {
             let yaml = render_gh_workflow(deploy_on_push::deploy_on_push)()?;
             Ok(format!("{}{yaml}", deploy_on_push::NOTICE))

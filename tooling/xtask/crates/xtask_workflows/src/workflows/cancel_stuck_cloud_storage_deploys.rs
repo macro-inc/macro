@@ -11,7 +11,11 @@ use gh_workflow::{
     Event, Job, Level, Permissions, Schedule, Step, Workflow, WorkflowDispatch, WorkflowInput,
 };
 
-use crate::workflows::runners;
+use crate::workflows::{deploy_on_push, runners};
+
+/// How old a run may get, in minutes from its push, before the schedule
+/// cancels it. [`super::dev_deploy_alert`] names it when a deploy is cancelled.
+pub(crate) const MAX_AGE_MINUTES: &str = "90";
 
 /// Build the workflow.
 pub fn cancel_stuck_cloud_storage_deploys() -> Workflow {
@@ -25,7 +29,7 @@ pub fn cancel_stuck_cloud_storage_deploys() -> Workflow {
                         WorkflowInput::string()
                             .description("Cancel active runs older than this many minutes")
                             .required(false)
-                            .default("90"),
+                            .default(MAX_AGE_MINUTES),
                     )
                     .add_input(
                         "dry-run",
@@ -48,13 +52,11 @@ fn cancel_stuck() -> Job {
         .name("Cancel runs stuck queued or in_progress past threshold")
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .timeout_minutes(5u32)
-        // Keep in sync with the deploy trigger's generated filename
-        // (see deploy_on_push.rs).
-        .add_env(("WORKFLOW_FILE", "deploy_on_push.yml"))
+        .add_env(("WORKFLOW_FILE", deploy_on_push::FILE))
         // Both inputs are empty on the schedule, so each falls back to text.
         .add_env((
             "MAX_AGE_MINUTES",
-            input::<Str>("max-age-minutes").or_else("90"),
+            input::<Str>("max-age-minutes").or_else(MAX_AGE_MINUTES),
         ))
         .add_env(("DRY_RUN", input::<Str>("dry-run").or_else("false")))
         .add_env(("GH_TOKEN", github().token()))

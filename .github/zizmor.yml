@@ -33,6 +33,9 @@ rules:
       - ci-gate-label.yml
       # pull_request_target: the CLA check must run on fork PRs; checks out nothing.
       - cla.yml
+      # workflow_run after Deploy on Push: reads the deploy runs through the API
+      # and alerts; checks out nothing.
+      - dev-deploy-alert.yml
       # workflow_run: exports finished runs' timings; reads the API only.
       - export-ci-telemetry.yml
       # pull_request_target on `labeled`: announces the release a label starts,

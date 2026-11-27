@@ -21,9 +21,9 @@
 //! they compare with what is deployed, not with the previous push.
 //!
 //! Replaces the separate `deploy_cloud_storage_on_push` and
-//! `deploy_web_app_dev_push` workflows. Generated into `deploy_on_push.yml`
-//! (keep [`crate::workflows::cancel_stuck_cloud_storage_deploys`]'s
-//! `WORKFLOW_FILE` in sync with this filename).
+//! `deploy_web_app_dev_push` workflows. Generated into [`FILE`].
+//! [`super::dev_deploy_alert`] tells Macro Alerts when a run fails, is
+//! cancelled after it started, or Dev otherwise stops deploying.
 //!
 //! NOTE: the top-level concurrency group deliberately differs from the called
 //! workflows' literal groups (`deploy-all-services-dev`, `deploy-web-app-dev`,
@@ -44,6 +44,13 @@ use crate::workflows::vars;
 
 #[cfg(test)]
 mod test;
+
+/// The workflow's name, which [`super::dev_deploy_alert`] watches.
+pub(crate) const NAME: &str = "Deploy on Push";
+
+/// The workflow's file, which [`super::cancel_stuck_cloud_storage_deploys`] and
+/// [`super::dev_deploy_alert`] read the runs of.
+pub(crate) const FILE: &str = "deploy_on_push.yml";
 
 pub(crate) const DEPLOY_CLOUD_STORAGE: JobHandle<()> = JobHandle::new("deploy-cloud-storage", ());
 pub(crate) const DEPLOY_SYNC_SERVICE: JobHandle<()> = JobHandle::new("deploy-sync-service", ());
@@ -79,7 +86,7 @@ pub const NOTICE: &str = indoc::indoc! {"
 
 /// Build the workflow.
 pub fn deploy_on_push() -> Workflow {
-    Workflow::new("Deploy on Push")
+    Workflow::new(NAME)
         .on(Event::default().push(Push::default().add_branch("main")))
         .concurrency(
             // Never cancel an in-progress deployment — that could leave a

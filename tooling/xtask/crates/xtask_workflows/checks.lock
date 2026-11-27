@@ -122,6 +122,7 @@ check	desktop_qa_macos.yml	qa-macos	QA on macOS
 check	desktop_windows.yml	build-windows-frontend	Build Windows frontend
 check	desktop_windows.yml	build-windows	Build Windows installer
 check	desktop_windows.yml	launch-windows	Launch Windows installer
+check	dev-deploy-alert.yml	alert	Tell Macro Alerts
 check	email_e2e.yml	email-e2e	Email end-to-end (${{ matrix.partition }}/3)
 check	email_e2e.yml	email-e2e-search	Email end-to-end (search)
 check	email_e2e.yml	email-e2e-known-bugs	Email end-to-end (known bugs)
