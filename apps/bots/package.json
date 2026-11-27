@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:hire": "vite --config vite.local-hire.config.ts --mode local-hire",
     "dev:auth": "vite --config vite.local-auth.config.ts --mode local-auth",
     "preview": "vite preview --mode local-fixture",
     "build:preview": "bun run check:boundary && vite build --mode local-fixture",

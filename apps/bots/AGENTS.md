@@ -97,3 +97,6 @@ For a remote review over an existing SSH connection, preserve both the
 loopback address and the port in the local forward. For example, use
 `ssh -N -L 127.0.0.1:PORT:127.0.0.1:PORT <devbox>` with the port printed by Vite.
 Forward only the app. Auth and Mailpit remain on the devbox loopback.
+
+`dev:hire` adds the disposable Hire controller to a separate loopback
+listener with its own issuer and database. See [Hire checkout](HIRE.md).
