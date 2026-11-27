@@ -16,6 +16,8 @@ export { SWIPE_EDGE_THRESHOLD } from './createMobileEdgeSwipe';
 export function createMobileSplitMotion(options: {
   stack: MobilePaneStack;
   inPaneBack?: { canGoBack(): boolean; goBack(): void };
+  /** The stack's width, which the swipe's parallax and settle distances follow. */
+  width?: () => number;
 }) {
   const { stack } = options;
 
@@ -31,6 +33,7 @@ export function createMobileSplitMotion(options: {
       (stack.canGoBack() || (options.inPaneBack?.canGoBack() ?? false)),
     completeGoBack: stack.completeGoBack,
     inPaneBack: options.inPaneBack,
+    width: options.width,
   });
 
   const [outgoing, setOutgoing] = createSignal<SplitId>();

@@ -65,8 +65,12 @@ export function MobileSplitContainer(props: MobileSplitContainerProps) {
   });
   useAndroidBackNavigation(() => runSplitBack(back));
 
+  // The stack can be narrower than the window (a side dock, Split View);
+  // the swipe must move as far as the push's percentage transforms do.
+  const [frame, setFrame] = createSignal<HTMLDivElement>();
   const motion = createMobileSplitMotion({
     stack,
+    width: () => frame()?.clientWidth ?? 0,
     inPaneBack: {
       canGoBack: back.canGoBackInPane,
       goBack: () => {
@@ -91,6 +95,7 @@ export function MobileSplitContainer(props: MobileSplitContainerProps) {
 
   return (
     <div
+      ref={setFrame}
       class="relative size-full overflow-hidden"
       on:touchstart={motion.handleTouchStart}
       on:touchmove={motion.handleTouchMove}
