@@ -1,6 +1,6 @@
 //! PostgreSQL reads in a view's global order, with keyset pagination.
 
-mod query;
+pub(crate) mod query;
 
 use database_sql::{catalog::Table, resolve::SelectQuery};
 use models_databases::{RowId, TableVersion};
