@@ -1,6 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { holdAutomaticReload } from '@core/util/reloadForNewerBuild';
 import { Telemetry } from '@macro-inc/observability';
-import { createSignal, onCleanup } from 'solid-js';
+import { createEffect, createSignal, onCleanup } from 'solid-js';
 import type {
   MeetingCredentials,
   MeetingLocalTracks,
@@ -158,6 +159,7 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
         Boolean(localTracks?.camera)
       );
       const credentials = issued.credentials;
+      joinTrace.setAttr('call.media.path', capabilities.mediaPath());
       await joinTrace.span('meeting.join.connect', () =>
         capabilities.connect(
           credentials,
@@ -211,7 +213,8 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
     }
   }
 
-  async function leave() {
+  /** `nativeCallEnded`: the native call screen already ended the call. */
+  async function leave(options?: { nativeCallEnded?: boolean }) {
     generation += 1;
     activeAttempt?.abort();
     activeAttempt = undefined;
@@ -237,7 +240,11 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
         capabilities.activeCallId() === null ||
         capabilities.activeCallId() === session.credentials.callId
       ) {
-        await capabilities.disconnect();
+        // Ending the native call again could end the call that replaced it,
+        // such as one answered with End & Accept.
+        await capabilities.disconnect(
+          options?.nativeCallEnded ? { endNativeCall: false } : undefined
+        );
       }
     } catch (cause) {
       console.error('Failed to disconnect meeting', cause);
@@ -251,9 +258,28 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
     return result;
   }
 
+  // A reload would end the call, or, for native media, leave it running with
+  // no page that owns it.
+  createEffect(() => {
+    const callId = joinedCallId();
+    if (
+      callId &&
+      capabilities.isInCall() &&
+      capabilities.activeCallId() === callId
+    ) {
+      onCleanup(holdAutomaticReload());
+    }
+  });
+
   onCleanup(() => {
+    // A native call that is no longer the active one has already ended.
+    const callId = joinedCallId();
+    const nativeCallEnded =
+      capabilities.mediaPath() === 'native' &&
+      callId !== undefined &&
+      capabilities.activeCallId() !== callId;
     disposed = true;
-    fireAndForget(leave(), 'meetings');
+    fireAndForget(leave({ nativeCallEnded }), 'meetings');
   });
 
   return {

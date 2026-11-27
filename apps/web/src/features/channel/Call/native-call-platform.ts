@@ -20,3 +20,8 @@ export function isNativeCallEnabled(): boolean {
     Number.parseInt(version(), 10) >= 8
   );
 }
+
+/** Native CallKit media on iOS, which keeps a call alive in the background. */
+export function isNativeIosCallKitEnabled(): boolean {
+  return isNativeCallEnabled() && isPlatform('ios');
+}

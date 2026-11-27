@@ -119,6 +119,21 @@ describe('native snapshot events and call ownership', () => {
     vi.useRealTimers();
   });
 
+  it('leaves a native meeting call to its meeting session', () => {
+    const meeting: NativeCallSnapshot = {
+      ...first,
+      channelId: 'meeting:call-3',
+      callId: 'CALL-3',
+    };
+    const { native, lifecycle, ports } = setup(meeting);
+    expect(lifecycle.getState().t).toBe('idle');
+    native.setSnapshot(null);
+    native.setSnapshot(meeting);
+    expect(lifecycle.getState().t).toBe('idle');
+    expect(ports.watch).not.toHaveBeenCalled();
+    expect(ports.onJoined).not.toHaveBeenCalled();
+  });
+
   it('adopts an existing native call at setup and preserves its watcher through media updates', () => {
     const { native, lifecycle, ports } = setup();
     expect(lifecycle.getState()).toEqual({

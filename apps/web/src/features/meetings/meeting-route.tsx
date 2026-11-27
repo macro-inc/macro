@@ -4,11 +4,16 @@ import { getMeetingUrl } from '@channel/Call/call-link';
 import {
   type CallDiscussionAccess,
   CallDiscussionContent,
+  type CallPanelState,
 } from '@channel/Call/discussion/CallDiscussionContent';
 import {
   type CallDiscussion,
   callDiscussionOf,
 } from '@channel/Call/discussion/call-discussion';
+import {
+  isNativeIosCallKitEnabled,
+  watchNativeCallEnded,
+} from '@channel/Call/use-callkit';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useIsAuthenticated, useUserId } from '@core/context/user';
 import { readBackgroundImage } from '@core/media/read-background-image';
@@ -30,7 +35,12 @@ import { preloadMeetingRuntime } from './browser/meeting-runtime';
 import type { MeetingParticipantsState } from './components/meeting-participants';
 import type { MeetingPageState } from './context/meeting-session';
 import { useMeetingSessionLifecycle } from './context/meeting-session-lifecycle';
+import {
+  meetingConnectMetadata,
+  meetingMediaPath,
+} from './core/meeting-media-path';
 import { MeetingPage } from './views/meeting-page';
+import { NativeMeetingCall } from './views/native-meeting-call';
 
 const MeetingDiscussionHost = lazyNamed(
   () => import('./views/meeting-discussion-host'),
@@ -103,6 +113,32 @@ export function MeetingRouteContent(props: {
       ? { kind: 'guest', session }
       : { kind: 'member' };
   const [outsideCount, setOutsideCount] = createSignal(0);
+  const renderDiscussion = (
+    panel: CallPanelState,
+    session: { token: string; participantId: string } | undefined
+  ) => (
+    <CallDiscussionContent
+      discussion={discussion}
+      access={discussionAccess(session)}
+      panel={panel}
+      onViewChannel={(channelId) =>
+        navigate(
+          buildSimpleEntityUrl({
+            type: 'channel',
+            id: channelId,
+          })
+        )
+      }
+      onOutsideCountChange={setOutsideCount}
+      host={(panel) => <MeetingDiscussionHost>{panel()}</MeetingDiscussionHost>}
+    />
+  );
+  const mediaPath = () =>
+    meetingMediaPath({
+      member: authenticated() === true,
+      channelId: meeting.isSuccess ? meeting.data.channelId : null,
+      nativeIosCalls: isNativeIosCallKitEnabled(),
+    });
 
   const source = (): MeetingPageState => {
     if (meeting.isError) return { kind: 'unavailable' };
@@ -157,53 +193,51 @@ export function MeetingRouteContent(props: {
         connect: (credentials, preferences) =>
           call.meetingSession.connectWithToken(credentials, {
             ...preferences,
-            useBrowserSession: true,
+            ...meetingConnectMetadata(mediaPath(), {
+              callId: credentials.callId,
+              title: meeting.isSuccess ? meeting.data.title : '',
+            }),
           }),
         disconnect: call.meetingSession.disconnect,
+        mediaPath,
+        watchNativeCallEnded: (onEnded) =>
+          mediaPath() === 'native' ? watchNativeCallEnded(onEnded) : () => {},
       }}
       renderCall={(onLeave, name, credentials, copyButton) => (
-        <CallOverlay
-          onLeave={onLeave}
-          localName={name()}
-          accessMode={authenticated() === true ? 'member' : 'guest'}
-          footerLeading={copyButton}
-          showChat={
-            authenticated() === true ||
-            (authenticated() === false && !!credentials())
+        <Show
+          when={mediaPath() === 'browser'}
+          fallback={
+            <NativeMeetingCall
+              onLeave={onLeave}
+              discussion={(panel) => renderDiscussion(panel, credentials())}
+            />
           }
-          showTeamSharing={canShareWithTeam()}
-          sharedWithTeam={
-            record.isSuccess ? record.data.shareWithTeam : undefined
-          }
-          discussion={{
-            label: () =>
-              discussion()?.kind === 'channel_thread' && record.isSuccess
-                ? (record.data.channelName ?? undefined)
-                : undefined,
-            opensByDefault: () =>
-              !isMobile() && discussion()?.kind === 'channel_thread',
-            hasUpdates: () => outsideCount() > 0,
-            render: (panel) => (
-              <CallDiscussionContent
-                discussion={discussion}
-                access={discussionAccess(credentials())}
-                panel={panel}
-                onViewChannel={(channelId) =>
-                  navigate(
-                    buildSimpleEntityUrl({
-                      type: 'channel',
-                      id: channelId,
-                    })
-                  )
-                }
-                onOutsideCountChange={setOutsideCount}
-                host={(panel) => (
-                  <MeetingDiscussionHost>{panel()}</MeetingDiscussionHost>
-                )}
-              />
-            ),
-          }}
-        />
+        >
+          <CallOverlay
+            onLeave={onLeave}
+            localName={name()}
+            accessMode={authenticated() === true ? 'member' : 'guest'}
+            footerLeading={copyButton}
+            showChat={
+              authenticated() === true ||
+              (authenticated() === false && !!credentials())
+            }
+            showTeamSharing={canShareWithTeam()}
+            sharedWithTeam={
+              record.isSuccess ? record.data.shareWithTeam : undefined
+            }
+            discussion={{
+              label: () =>
+                discussion()?.kind === 'channel_thread' && record.isSuccess
+                  ? (record.data.channelName ?? undefined)
+                  : undefined,
+              opensByDefault: () =>
+                !isMobile() && discussion()?.kind === 'channel_thread',
+              hasUpdates: () => outsideCount() > 0,
+              render: (panel) => renderDiscussion(panel, credentials()),
+            }}
+          />
+        </Show>
       )}
     />
   );
