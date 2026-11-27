@@ -15,6 +15,7 @@
         "@macro-inc/sdk": "workspace:*",
         "@solidjs/router": "^0.15.3",
         "solid-js": "^1.9.7",
+        "uuid": "^11.1.1",
       },
       "devDependencies": {
         "@biomejs/biome": "2.5.6",

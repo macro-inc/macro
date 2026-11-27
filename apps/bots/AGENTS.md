@@ -31,7 +31,8 @@ generated SDK storage schemas.
   the viewer, team, and agent. `src/brain-access-fixture.ts` provides the local
   simulation for an explicitly selected viewer role.
 - `src/passwords/` owns the Tower vault, local role and setup fixtures, and
-  storage projections. The default build excludes this fixture route module.
+  storage projections. The default build excludes both the fixture and
+  separately enabled signed vault route modules.
 - `src/billing/` owns the read-only Tower Billing route and its typed,
   team-scoped reader. The default reader is unavailable. The local fixture
   supplies the sample cycle and can exercise pending, denied, empty, and zero
@@ -92,6 +93,11 @@ roster denial separately from an empty authorized roster. It exposes no
 payment terms and always disables purchasing. The static preview keeps its
 existing fixtures. Sign-in accepts only exact destinations for Creator, Fleet,
 Passwords, Billing, and same-tab Hire draft return.
+
+The isolated Team Passwords review uses a separate local server composition
+that sets the signed vault flag and forwards only the team's list, detail,
+create, replace, and metadata patch operations. Saved values remain masked.
+Replacing values requires explicit entry of the full replacement.
 
 For a remote review over an existing SSH connection, preserve both the
 loopback address and the port in the local forward. For example, use

@@ -22,7 +22,11 @@ const SignIn = lazy(() => import('./sign-in'));
 const Fleet = lazy(() => import('./fleet'));
 const Passwords = __BOTS_FIXTURES__
   ? lazy(() => import('./passwords/view'))
-  : () => <TowerUnavailable heading={towerViews.passwords} />;
+  : __BOTS_LOCAL_AUTH__ &&
+      typeof __BOTS_SIGNED_VAULT__ !== 'undefined' &&
+      __BOTS_SIGNED_VAULT__
+    ? lazy(() => import('./passwords/signed-view'))
+    : () => <TowerUnavailable heading={towerViews.passwords} />;
 const Billing = lazy(() => import('./billing'));
 
 function Shell(props: ParentProps) {

@@ -51,6 +51,11 @@ after saving. Changes reset when the route is reopened or reloaded. Optional
 card guidance is local fixture text. The vault shows read-only agent access
 counts. Management belongs to the separate Brain Access integration.
 
+In the separate signed Passwords review, open the Passwords route after
+sign-in. Edit changes metadata. Select **Replace saved values** to enter a
+complete replacement. Existing values stay masked and verification-code
+enrollment is unavailable in this review.
+
 ## Billing
 
 Open Billing at `/billing` to see the sample team's estimated started-hour

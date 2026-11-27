@@ -266,3 +266,10 @@
     gap: 2px;
   }
 }
+
+.signed-password-fields {
+  padding: 0;
+  margin: 0;
+  border: 0;
+  min-inline-size: 0;
+}
