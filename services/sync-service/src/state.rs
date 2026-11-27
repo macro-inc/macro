@@ -1,4 +1,8 @@
-use std::{borrow::Cow, collections::HashSet, sync::Mutex};
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, HashSet},
+    sync::Mutex,
+};
 
 use loro::{
     Container, ContainerID, ExportMode, Frontiers, ID, IdSpan, JsonMapOp, JsonMovableListOp,
@@ -272,6 +276,59 @@ impl DocumentState {
             return Some(id.to_string());
         }
         None
+    }
+
+    /// Frontier at `id` plus concurrent heads whose timestamp is not later.
+    ///
+    /// History fork/copy sends a single peer id. `StateOnly` on that id alone is
+    /// the causal past of one head, so concurrent spreadsheet (and any
+    /// multi-peer) edits from the same moment are dropped. The requested peer
+    /// stays capped at `id` so sequential copy-at-version is unchanged. Other
+    /// peers are included only when their head is concurrent with `id` — a
+    /// same-second descendant that already merged a later op on this peer is
+    /// not. Scan starts at each peer's shallow boundary so compacted history
+    /// is not skipped. None if `id` is not in the oplog.
+    pub fn frontiers_at_change(&self, id: ID) -> Option<Frontiers> {
+        let target = self.loro_doc.get_change(id)?;
+        let requested = Frontiers::ID(id);
+        let mut frontier: BTreeMap<u64, i32> = BTreeMap::new();
+        frontier.insert(id.peer, id.counter);
+        let shallow = self.loro_doc.shallow_since_vv();
+        for (peer, &end) in self.loro_doc.oplog_vv().iter() {
+            if *peer == id.peer {
+                continue;
+            }
+            let mut counter = shallow.get(peer).copied().unwrap_or(0);
+            while counter < end {
+                let Some(change) = self.loro_doc.get_change(ID::new(*peer, counter)) else {
+                    break;
+                };
+                let next = change.id.counter + change.len as i32;
+                if change.timestamp <= target.timestamp {
+                    let head = Frontiers::ID(ID::new(change.id.peer, next - 1));
+                    if self.loro_doc.cmp_frontiers(&head, &requested).ok() == Some(None) {
+                        for dep in change.deps.iter() {
+                            if frontier
+                                .get(&dep.peer)
+                                .is_some_and(|cur| *cur <= dep.counter)
+                            {
+                                frontier.remove(&dep.peer);
+                            }
+                        }
+                        let end_counter = next - 1;
+                        if end_counter > frontier.get(&change.id.peer).copied().unwrap_or(-1) {
+                            frontier.insert(change.id.peer, end_counter);
+                        }
+                    }
+                }
+                counter = next;
+            }
+        }
+        let mut frontiers = Frontiers::default();
+        for (peer, counter) in frontier {
+            frontiers.push(ID::new(peer, counter));
+        }
+        Some(frontiers)
     }
 
     /// Export the document state as a snapshot
