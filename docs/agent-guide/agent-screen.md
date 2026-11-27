@@ -17,14 +17,27 @@ agent harness's screen socket.
 
 ## Entry points
 
-Each appears only when the harness list gives the viewer access other than
-`none` to an agent teammate's computer:
+The buttons below appear only when the harness list gives the viewer access
+other than `none` to an agent teammate's computer:
 
 - **Agent DM header:** a **Screen** button, grouped with Call in the
   "Conversation actions" group on desktop, and its own header island on touch.
 - **Member card:** **View screen** on the agent teammate's user card.
 - **Settings → Computers:** the computer's row and its actions menu open the
   screen (in place when already in a split).
+
+A screen link in an agent's chat message is different: it doesn't depend on
+the harness list.
+
+- **A screen link in an agent's chat message** (`/app/screen/<harnessId>`)
+  reads as a chip, "Dee's screen", or "A computer's screen" when the harness
+  isn't in the viewer's list (the viewer then shows what the person may see).
+  It opens the screen to watch beside the current split; its query (such as
+  `mode=drive`) is dropped, so Take over stays the viewer's own action.
+- **Which links count:** those the app opens as its own
+  (`parseInternalAppLink`): this origin, and the native app's own Macro hosts
+  when running inside it. A link on any other site, or a malformed id, stays a
+  plain link (`screen-reference.ts`, `screen-chip.tsx`).
 
 ## Watching
 
@@ -106,7 +119,8 @@ noVNC against a scripted RFB server. The layouts have a backend-free browser
 regression over a stand-in transport (desktop split at 600 and 380 px, phone,
 light and dark), plus the real agent DM top bar (`ChannelDetailTopBar`) over
 stubbed channel and team queries, where the Offline chip drops to its dot
-before the agent's name truncates: `just test-agent-screen-browser` from
+before the agent's name truncates, and an agent's chat reply whose screen
+links read as chips (`chat.html`): `just test-agent-screen-browser` from
 `apps/web`; `AGENT_SCREEN_SHOTS_DIR=<dir>` keeps a PNG of each state. CI's
 Browser Tests job runs it when the viewer, that top bar, or a module the
 fixture stubs changes. The telemetry fixture runs the sandboxed viewer

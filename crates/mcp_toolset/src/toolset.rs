@@ -280,7 +280,19 @@ impl RemoteMcpToolSet {
             .peer
             .call_tool(params)
             .await
-            .map_err(|e| Error::ToolCall(e.to_string()))
+            .map_err(|e| Error::ToolCall(call_error(&e)))
+    }
+}
+
+/// What a failed call says to the model and the transcript. rmcp names a
+/// failed send by its transport's Rust type, kilobytes of generics that say
+/// nothing; the error under it says what went wrong.
+fn call_error(error: &rmcp::ServiceError) -> String {
+    match error {
+        rmcp::ServiceError::TransportSend(send) => {
+            format!("the MCP server call failed: {}", send.error)
+        }
+        other => other.to_string(),
     }
 }
 

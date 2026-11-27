@@ -98,13 +98,8 @@ type BlockCombinationRules = {
 };
 
 export type PreviewState = {
-  canvas?: {
-    onLocationChange?: (location: {
-      x: number;
-      y: number;
-      scale: number;
-    }) => void;
-  };
+  onChangePreviewHeight?: (height: string) => void;
+  showDraftSelectorButton?: boolean;
 };
 
 export type NestedState<Name extends BlockName> = {

@@ -5,6 +5,7 @@ import {
   $isDocumentCardNode,
   type DocumentCardDecoratorProps,
 } from '@macro-inc/lexical-core';
+import { Card } from '@ui';
 import { $getNodeByKey, SKIP_DOM_SELECTION_TAG } from 'lexical';
 import { createSignal, onCleanup, Show, Suspense, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
@@ -57,9 +58,9 @@ export function DatabaseCard(props: DocumentCardDecoratorProps) {
     });
   };
   const placeholder = () => (
-    <div class="my-2 rounded-lg border border-edge-muted px-3 py-2 text-sm text-ink-muted">
+    <Card variant="raised" class="my-2 px-3 py-2 text-sm text-ink-muted">
       {props.documentName || 'Database'}
-    </div>
+    </Card>
   );
   return (
     <Show when={!wrapper?.skipPreviewFetch} fallback={placeholder()}>

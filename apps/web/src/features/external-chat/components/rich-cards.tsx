@@ -4,7 +4,7 @@ import CalendarIcon from '@phosphor/calendar-blank.svg';
 import ChartBarIcon from '@phosphor/chart-bar-horizontal.svg';
 import CheckIcon from '@phosphor/check.svg';
 import MapPinIcon from '@phosphor/map-pin.svg';
-import { cn } from '@ui';
+import { Card, cn } from '@ui';
 import { For, type JSX, Match, Show, Switch } from 'solid-js';
 import {
   type ChatEvent,
@@ -18,15 +18,16 @@ import {
   type RichContent,
 } from '../core/rich';
 
-function Card(props: {
+function RichCardFrame(props: {
   kind: string;
   icon: JSX.Element;
   label: string;
   children: JSX.Element;
 }) {
   return (
-    <div
-      class="mt-1 flex w-80 max-w-full flex-col gap-2 rounded-xl border border-edge-muted bg-surface p-3 text-sm"
+    <Card
+      variant="raised"
+      class="mt-1 w-80 max-w-full gap-2 p-3 text-sm"
       data-whatsapp-card={props.kind}
     >
       <div class="flex items-center gap-1.5 text-xs text-ink-muted">
@@ -36,7 +37,7 @@ function Card(props: {
         {props.label}
       </div>
       {props.children}
-    </div>
+    </Card>
   );
 }
 
@@ -67,7 +68,7 @@ function PollCard(props: { poll: Poll }) {
   const total = () =>
     props.poll.options.reduce((sum, option) => sum + option.votes, 0);
   return (
-    <Card
+    <RichCardFrame
       kind="poll"
       icon={<ChartBarIcon class="size-3.5" />}
       label={
@@ -118,13 +119,13 @@ function PollCard(props: { poll: Poll }) {
           ` from ${props.poll.voters === 1 ? '1 person' : `${props.poll.voters} people`}`}{' '}
         · Vote in WhatsApp
       </p>
-    </Card>
+    </RichCardFrame>
   );
 }
 
 function LocationCard(props: { location: Location }) {
   return (
-    <Card
+    <RichCardFrame
       kind="location"
       icon={<MapPinIcon class="size-3.5" />}
       label={props.location.live ? 'Live location' : 'Location'}
@@ -149,13 +150,13 @@ function LocationCard(props: { location: Location }) {
           {(url) => <ExternalLink href={url()}>Open link</ExternalLink>}
         </Show>
       </div>
-    </Card>
+    </RichCardFrame>
   );
 }
 
 function ContactsCard(props: { contacts: Contacts }) {
   return (
-    <Card
+    <RichCardFrame
       kind="contacts"
       icon={<AddressBookIcon class="size-3.5" />}
       label={props.contacts.contacts.length === 1 ? 'Contact' : 'Contacts'}
@@ -179,13 +180,13 @@ function ContactsCard(props: { contacts: Contacts }) {
           )}
         </For>
       </ul>
-    </Card>
+    </RichCardFrame>
   );
 }
 
 function EventCard(props: { event: ChatEvent }) {
   return (
-    <Card
+    <RichCardFrame
       kind="event"
       icon={<CalendarIcon class="size-3.5" />}
       label={props.event.canceled ? 'Event · Canceled' : 'Event'}
@@ -218,7 +219,7 @@ function EventCard(props: { event: ChatEvent }) {
           </div>
         )}
       </Show>
-    </Card>
+    </RichCardFrame>
   );
 }
 

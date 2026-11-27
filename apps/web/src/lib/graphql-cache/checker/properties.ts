@@ -168,7 +168,8 @@ function untold(world: World): Violation[] {
 
 /** Faults after which a page joins a coordinator anew. It cannot know what
  * became of the queue meanwhile, so it says that some may be gone. */
-const REJOINS = /^(bfcache|crash-process|late-message|restart-coordinator)/;
+const REJOINS =
+  /^(bfcache|crash-process|hang-coordinator|late-message|lose-coordinator|restart-coordinator)/;
 
 function needlesslyTold(world: World): Violation[] {
   const excused = (fault: string) =>

@@ -613,6 +613,16 @@ describe('coordinator runtime protocol', () => {
     },
     {
       ...version,
+      kind: 'register-tab',
+      scope: 'scope',
+      tabId: 'tab',
+      livenessLockName: 'graphql-cache-tab:scope:tab',
+      visible: true,
+      buildTime: 1_790_000_000_000,
+      generation: 1_790_000_100_000,
+    },
+    {
+      ...version,
       kind: 'cache-request',
       tabId: 'tab',
       request: { id: 1, kind: 'clear' },
@@ -946,6 +956,18 @@ describe('coordinator runtime protocol', () => {
         livenessLockName: 'lock',
         visible: true,
         buildTime: 0,
+      }).ok
+    ).toBe(false);
+    expect(
+      validateTabToCoordinatorEnvelope({
+        ...version,
+        kind: 'register-tab',
+        scope: 'scope',
+        tabId: 'tab',
+        livenessLockName: 'lock',
+        visible: true,
+        buildTime: 0,
+        generation: -1,
       }).ok
     ).toBe(false);
     // Every page reports its build, which decides database takeovers.

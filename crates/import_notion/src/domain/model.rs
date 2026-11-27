@@ -444,5 +444,16 @@ pub struct InventoryProgress {
     pub data_sources: usize,
 }
 
+/// The planning stage a span covers, so a failed request can be traced to
+/// the part of planning that made it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::IntoStaticStr, strum::Display)]
+#[strum(serialize_all = "snake_case")]
+pub enum PlanStage {
+    /// Searching the workspace and counting rows.
+    Inventory,
+    /// Reading page bodies and database metadata for the plan's databases.
+    DatabaseDiscovery,
+}
+
 #[cfg(test)]
 mod test;

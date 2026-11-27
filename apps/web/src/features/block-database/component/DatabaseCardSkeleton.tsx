@@ -1,10 +1,11 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { Card } from '@ui';
 import { TableSkeleton } from '../../database/components/database-load-state';
 
 /** The records area of an embedded database, at the height it loads into. */
 export function DatabaseGridSkeleton() {
   return (
-    <div class="flex h-96 min-h-0 flex-col border-t border-edge-muted">
+    <div class="flex h-96 min-h-0 flex-col border-t border-edge-divider">
       <TableSkeleton />
     </div>
   );
@@ -16,9 +17,11 @@ export function DatabaseGridSkeleton() {
  */
 export function DatabaseCardSkeleton(props: { name: string }) {
   return (
-    <section
+    <Card
+      variant="raised"
+      role="region"
       aria-label={`Database: ${props.name}`}
-      class="my-2 flex min-w-0 flex-col overflow-hidden rounded-lg border border-edge-muted bg-panel text-ink"
+      class="my-2 overflow-hidden"
     >
       <div class="flex min-w-0 items-center gap-2 px-3 py-2">
         <ListSkeleton.Bar class="size-4 shrink-0 rounded" />
@@ -29,6 +32,6 @@ export function DatabaseCardSkeleton(props: { name: string }) {
         <ListSkeleton.Bar class="h-7 w-20 rounded-md" />
       </div>
       <DatabaseGridSkeleton />
-    </section>
+    </Card>
   );
 }

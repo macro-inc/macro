@@ -100,6 +100,70 @@ impl Gen<'_> {
         self.push(Op::Filter { request, pages: 1 });
     }
 
+    /// A filter on a list of ids, as the channel list sends one: some of the
+    /// ids cached, some not, sometimes one twice, from two to the 500 a batch
+    /// holds. Storage reads a short list from its keys rather than walking the
+    /// sort index, so both reads must agree on rows, ties, order and limit.
+    pub(super) fn id_list(&mut self) {
+        // Half of them channels, which is what sends these lists.
+        let (partition, field, lane) = if self.rng.chance(0.5) {
+            ("channelFilter", "channelId", "channels")
+        } else {
+            *pick(
+                &mut self.rng,
+                &[
+                    ("documentFilter", "id", "core-entities"),
+                    ("chatFilter", "chatId", "core-entities"),
+                ],
+            )
+        };
+        let typename = match partition {
+            "channelFilter" => "GraphqlSoupChannel",
+            "documentFilter" => "GraphqlSoupDocument",
+            _ => "GraphqlSoupChat",
+        };
+        let pool: Vec<String> = self
+            .lane_pool(lane)
+            .iter()
+            .filter(|spec| spec.typename == typename)
+            .map(|spec| spec.id.clone())
+            .collect();
+        if self.rng.chance(0.6) {
+            for page in 0..self.lane_pool(lane).len().div_ceil(100) {
+                self.hydrate_lane(lane, page);
+            }
+        }
+        let count = *pick(&mut self.rng, &[2usize, 3, 8, 40, 120, ID_LIST_BATCH]);
+        let mut ids: Vec<String> = Vec::with_capacity(count);
+        for _ in 0..count {
+            let id = if pool.is_empty() || self.rng.chance(0.15) {
+                self.rng.uuid()
+            } else if !ids.is_empty() && self.rng.chance(0.03) {
+                pick(&mut self.rng, &ids).clone()
+            } else {
+                pick(&mut self.rng, &pool).clone()
+            };
+            ids.push(id);
+        }
+        let mut filters = excluded(&[partition]);
+        filters[partition] = any_literal(field, &ids);
+        let sort = *pick(&mut self.rng, &["CREATED_AT", "UPDATED_AT"]);
+        let direction = if self.rng.chance(0.7) { "DESC" } else { "ASC" };
+        let limit = if self.rng.chance(0.5) {
+            u16::try_from(count).unwrap_or(u16::MAX)
+        } else {
+            *pick(&mut self.rng, LIMITS)
+        };
+        let request = json!({
+            "filters": filters,
+            "sortMethod": sort,
+            "sortDirection": direction,
+            "limit": limit,
+        });
+        // Only Mail filters follow cursors, so one page.
+        self.push(Op::Filter { request, pages: 1 });
+    }
+
     /// A live view op on one slot; reads mostly keep the slot's filter, so
     /// they test deltas, and sometimes replace it.
     pub(super) fn live(&mut self) {
@@ -396,5 +460,21 @@ fn split_shared(tree: Value) -> (Value, Option<Value>) {
         (and["right"].clone(), Some(and["left"].clone()))
     } else {
         (tree, None)
+    }
+}
+
+/// The most ids the channel list sends in one filter.
+const ID_LIST_BATCH: usize = 500;
+
+/// `field` equal to any of `ids`, as a balanced OR: the app's filter
+/// compilers balance theirs, and a chain of 500 would pass the parser's depth.
+fn any_literal(field: &str, ids: &[String]) -> Value {
+    match ids {
+        [] => Value::Null,
+        [id] => json!({ "literal": { field: id } }),
+        _ => {
+            let (left, right) = ids.split_at(ids.len() / 2);
+            json!({ "or": { "left": any_literal(field, left), "right": any_literal(field, right) } })
+        }
     }
 }

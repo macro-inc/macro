@@ -268,11 +268,15 @@ impl<S: FocusStore> FocusStore for TimedStore<S> {
         &self,
         link_id: Uuid,
         since: DateTime<Utc>,
+        mail_since: Option<DateTime<Utc>>,
         after: Option<StaleThread>,
         limit: i64,
     ) -> Result<Vec<StaleThread>, Report> {
         let started = Instant::now();
-        let threads = self.inner.stale_threads(link_id, since, after, limit).await;
+        let threads = self
+            .inner
+            .stale_threads(link_id, since, mail_since, after, limit)
+            .await;
         if threads.is_ok() {
             self.metrics
                 .observe(Metric::StaleThreadsSeconds, started.elapsed().as_secs_f64());

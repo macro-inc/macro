@@ -1220,7 +1220,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   uncertain enqueues. Space failed coordinator registrations with bounded,
   cancelable waits; a missing startup frame is not proof of untouched storage.
   A coordinator that ends without a word is noticed through the Web Lock it
-  holds, or an unanswered `ping`, and handled the same way.
+  holds, or an unanswered `ping`, and handled the same way. One that never
+  answers is replaced under a new name (`CoordinatorGenerations`).
 - Nothing but a newer build ends a browser cache for the page: bound retries in
   rate, never in number, and never quarantine a scope over a handoff, drain,
   timeout or transport failure. While nothing can open the database the host is
@@ -1561,7 +1562,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Animate section reorder with the shared layout animation engine; preserve unanimated measurement wrappers, reduced-motion preferences, and cancellation on scrolling. Show a card preview and subdued source while dragging.
   Name the team-channel section after the current team, falling back to Team channels while its name is unavailable.
   Keep every joined team channel in the team section regardless of custom-section assignments; use the same complete membership for bulk notification actions.
-  Keep available channel rows visible on desktop and phone during section hydration and refetches; retain each by-ID batch's resolved rows while pending, discard snapshots when its account or membership changes, and key virtualized rows by stable IDs so updates cannot interrupt a click. Pass server-returned member IDs to `queries/channel/by-ids`, whose single Soup owner selects cached rows and fetches missing records. Keep entity-ID hydration generic in Soup, with channel identities, batching, and unread refreshes in the channel query layer; append per-section skeletons only while unresolved members load.
+  Keep available channel rows visible on desktop and phone during section hydration and refetches; retain each by-ID batch's resolved rows while pending, discard batch snapshots on account resets, drop removed IDs immediately while keeping untouched 500-ID batches mounted on membership churn, and key virtualized rows by stable IDs so updates cannot interrupt a click. Pass server-returned member IDs to `queries/channel/by-ids`, whose single Soup owner selects cached rows and fetches missing records. Keep entity-ID hydration generic in Soup, with channel identities, batching, and unread refreshes in the channel query layer; append per-section skeletons only while unresolved members load.
   Compile each by-ID batch's filter once per membership change and reuse it through loading and notification updates.
   Keep legacy `/channel-labels` and flagged `/channel-sections` queries in separate account-scoped caches; invalidate both after shared-storage writes and refetch authoritative memberships rather than patching explicit picks as effective membership.
   Show lock icons for private conversations and visible per-section options; keep empty sections usable as drop targets without an all-sections management menu.
@@ -2003,7 +2004,10 @@ below it (`transcript.browser.e2e.ts`): the press must land and the group must
 stay put, which `ThreadList`'s `holdOnDisclosure` provides.
 
 Reuse the responsive import review for Notion, Linear and Jira; scope report
-queries and cancellation to the saved draft source. Issue tracker handoffs
+queries and cancellation to the saved draft source. Compare edits with the latest
+queued draft, including a reversion to the saved value while a save is in flight.
+Approval flushes those edits before submitting their acknowledged revision; keep
+server conflicts fail-closed. Issue tracker handoffs
 call the reviewed workspace tools, and show separate task/project totals.
 Import review metadata decodes `plan.dependencyOf` into **Linked from** and
 `plan.inlineOn` into **Linked from** labels on existing rows. Readable sources

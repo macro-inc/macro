@@ -610,23 +610,28 @@ pub async fn graphql_cache_write<R: Runtime>(
     variables: Option<Variables>,
     data: serde_json::Value,
     identity: Option<String>,
+    background: Option<bool>,
     traceparent: Option<String>,
 ) -> Result<WriteResultWire, String> {
-    let result = engine_handle(&state)?
-        .with_generation(generation)
-        .write(WriteRequest {
-            origin_op_id,
-            registration: registration.map(|registration| WriteRegistration {
-                op_id: registration.op_id,
-                entity_resolvers: registration.entity_resolvers,
-            }),
-            query,
-            operation_name,
-            variables: variables.unwrap_or_default(),
-            data,
-            identity,
-        })
-        .await?;
+    let handle = engine_handle(&state)?.with_generation(generation);
+    let request = WriteRequest {
+        origin_op_id,
+        registration: registration.map(|registration| WriteRegistration {
+            op_id: registration.op_id,
+            entity_resolvers: registration.entity_resolvers,
+        }),
+        query,
+        operation_name,
+        variables: variables.unwrap_or_default(),
+        data,
+        identity,
+    };
+    // Older bundles leave it out and keep today's order.
+    let result = if background.unwrap_or(false) {
+        handle.write_in_background(request).await?
+    } else {
+        handle.write(request).await?
+    };
     emit_ops_affected(
         &app,
         &result.affected_ops,

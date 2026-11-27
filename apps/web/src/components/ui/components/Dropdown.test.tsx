@@ -97,3 +97,47 @@ it('does not call disabled copy items', () => {
   fireEvent.click(screen.getByRole('menuitem', { name: 'Copy link' }));
   expect(copy).not.toHaveBeenCalled();
 });
+
+it.each([
+  ['Item', undefined],
+  ['Item', 'unless-shift'],
+  ['CheckboxItem', undefined],
+  ['CheckboxItem', 'unless-shift'],
+] as const)(
+  'selects a %s (closeOnSelect %s) without creating unowned computations',
+  (kind, closeOnSelect) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const select = vi.fn();
+    render(() => (
+      <Dropdown open>
+        <Dropdown.Trigger>New</Dropdown.Trigger>
+        <Dropdown.Content>
+          {kind === 'Item' ? (
+            <Dropdown.Item closeOnSelect={closeOnSelect} onSelect={select}>
+              Task
+            </Dropdown.Item>
+          ) : (
+            <Dropdown.CheckboxItem
+              closeOnSelect={closeOnSelect}
+              onChange={select}
+            >
+              Task
+            </Dropdown.CheckboxItem>
+          )}
+        </Dropdown.Content>
+      </Dropdown>
+    ));
+    const item = screen.getByRole(
+      kind === 'Item' ? 'menuitem' : 'menuitemcheckbox',
+      { name: 'Task' }
+    );
+    item.focus();
+    fireEvent.keyDown(item, { key: 'Enter' });
+    expect(select).toHaveBeenCalledOnce();
+    const unowned = warn.mock.calls.filter((args) =>
+      String(args[0]).includes('computations created outside a `createRoot`')
+    );
+    warn.mockRestore();
+    expect(unowned).toEqual([]);
+  }
+);

@@ -297,8 +297,9 @@ fn classify_repository_rejection(
 
 /// Whether a 4xx body is Cursor refusing for want of budget.
 ///
-/// Keyed on the envelope's `error.code` alone. The message names a dollar
-/// figure and a dashboard, both Cursor's to reword; the code is the contract.
+/// Keyed on the envelope's `error.code` alone. The message differs by the
+/// account's kind of Cursor plan and is Cursor's to reword; the code is the
+/// contract.
 /// Reached for a create and for a follow-up run alike - a budget runs out
 /// mid-conversation as readily as before it.
 fn classify_usage_limit(body: &str) -> Option<crate::domain::error::UsageLimitExceeded> {

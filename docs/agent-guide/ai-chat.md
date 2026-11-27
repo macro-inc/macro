@@ -2811,7 +2811,12 @@ Multiple drafts appear as a deck with subtle card edges behind the active compos
 The position button opens a searchable list of recipients/subjects or event
 titles/times. Only the active composer is mounted. A single email or event has no
 deck header, position counter, navigation, or batch action.
-Navigation and batch submission save the visible editor first. Completed and
+Navigation and batch submission save the visible editor first. In an import plan,
+untick every source, tick them back, then approve immediately: the imported set
+must match the restored selections. Repeat while the exclusion save is still in
+flight. Approval waits for the latest edit and submits its saved revision; a
+conflicting revision must offer **Reload saved review** without starting a write.
+Completed and
 dismissed items stay in the stack, with their saved state. Calendar cards reuse
 the existing event composer and offer **Create all** for a batch. Once an item's
 event is created (from the card or by the agent after approval), its preview

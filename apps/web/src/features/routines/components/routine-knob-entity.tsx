@@ -8,7 +8,8 @@ import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEnti
 import { usePropertyEntityDisplay } from '@property/hooks';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { Button, InputGroup, RadioGroup } from '@ui';
-import { createSignal, For, Show, Suspense } from 'solid-js';
+import { createMemo, createSignal, Show, Suspense } from 'solid-js';
+import { Virtualizer } from 'virtua/solid';
 import {
   aEntityKnob,
   type Knob,
@@ -154,6 +155,9 @@ function EntityList(props: {
   );
 }
 
+const DATABASE_ROW_HEIGHT = 28;
+const TOUCH_DATABASE_ROW_HEIGHT = 52;
+
 function databaseName(database: { data: { name?: string | null } }) {
   return database.data.name || 'Untitled database';
 }
@@ -165,10 +169,22 @@ function DatabaseList(props: {
 }) {
   const all = useQuickAccess().useList('database').items;
   const [query, setQuery] = createSignal('');
-  const databases = () => {
+  const databases = createMemo(() => {
     const words = query().trim().toLowerCase();
     return all().filter(
       (item) => !words || databaseName(item).toLowerCase().includes(words)
+    );
+  });
+  // Arrow keys move between mounted radios: from the picked one to those on
+  // either side, and around the ends.
+  const arrowTargets = () => {
+    const last = databases().length - 1;
+    const picked = Math.max(
+      0,
+      databases().findIndex((item) => item.id === props.value?.id)
+    );
+    return [0, picked - 1, picked, picked + 1, last].filter(
+      (index) => index >= 0 && index <= last
     );
   };
   // On touch the search field keeps the keyboard while a row is picked.
@@ -195,7 +211,7 @@ function DatabaseList(props: {
         fallback={<p class="px-1 text-sm text-ink-muted">No databases found</p>}
       >
         <RadioGroup
-          class="min-h-0 overflow-y-auto text-sm text-ink"
+          class="min-h-0 overflow-y-auto touch:overscroll-none text-sm text-ink not-touch:max-h-48"
           // Cleared, no database is picked.
           value={props.value?.id ?? ''}
           onChange={(id) => props.onInput({ type: 'database', id })}
@@ -205,21 +221,33 @@ function DatabaseList(props: {
           <RadioGroup.Label class="sr-only">
             {props.knob.label}
           </RadioGroup.Label>
-          <For each={databases()}>
+          <Virtualizer
+            data={databases()}
+            itemSize={
+              isTouchDevice() ? TOUCH_DATABASE_ROW_HEIGHT : DATABASE_ROW_HEIGHT
+            }
+            keepMounted={arrowTargets()}
+          >
             {(database) => (
-              <RadioGroup.Item value={database.id} class="touch:min-h-11">
-                <RadioGroup.ItemControl />
-                <RadioGroup.ItemLabel class="flex min-w-0 flex-1 items-center gap-1.5 self-stretch">
-                  <EntityIcon
-                    targetType="database"
-                    size="xs"
-                    class="shrink-0"
-                  />
-                  <span class="truncate">{databaseName(database)}</span>
-                </RadioGroup.ItemLabel>
-              </RadioGroup.Item>
+              <div class="flex pb-2">
+                <RadioGroup.Item
+                  value={database.id}
+                  // The virtualizer takes pointer events off its rows while it scrolls.
+                  class="pointer-events-auto min-w-0 flex-1 touch:min-h-11"
+                >
+                  <RadioGroup.ItemControl />
+                  <RadioGroup.ItemLabel class="flex min-w-0 flex-1 items-center gap-1.5 self-stretch">
+                    <EntityIcon
+                      targetType="database"
+                      size="xs"
+                      class="shrink-0"
+                    />
+                    <span class="truncate">{databaseName(database)}</span>
+                  </RadioGroup.ItemLabel>
+                </RadioGroup.Item>
+              </div>
             )}
-          </For>
+          </Virtualizer>
         </RadioGroup>
       </Show>
     </div>

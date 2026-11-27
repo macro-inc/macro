@@ -38,7 +38,7 @@ export function ParentMessage(props: ParentMessageProps) {
                 <div class="flex items-baseline gap-1.5 min-w-0">
                   <Message.SenderName />
                   <Message.AgentBadge />
-                  <Message.Timestamp class="shrink-0" format="dateAndTime" />
+                  <Message.Timestamp class="shrink-0" />
                   <Message.EditedIndicator class="shrink-0" />
                 </div>
                 <Message.FromPill />
