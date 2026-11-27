@@ -117,3 +117,41 @@ fn driver_times_reused_statements_and_failures_without_bound_values() {
     set_query_telemetry(None);
     assert!(QueryTimer::start().is_none());
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn driver_counts_every_execution_and_stepped_row_without_a_sink() {
+    use std::sync::Arc;
+    use turso_core::{Database, MemoryIO, OpenOptions, SqliteDialect, Value};
+
+    let database = Database::open(
+        Arc::new(MemoryIO::new()),
+        "sql-counts.db",
+        OpenOptions::new(Arc::new(SqliteDialect)),
+    )
+    .unwrap();
+    let connection = crate::driver::Db::cached(database.connect().unwrap());
+    let before = sql_counts();
+    let mut statement = crate::driver::prepare(
+        &connection,
+        "SELECT value FROM (SELECT 1 AS value UNION ALL SELECT 2 UNION ALL SELECT 3) WHERE value >= ?",
+    )
+    .unwrap();
+    let rows = crate::driver::query_prepared(&mut statement, vec![Value::from_i64(2)]).unwrap();
+    assert_eq!(rows.len(), 2);
+    let rows = crate::driver::query_prepared(&mut statement, vec![Value::from_i64(1)]).unwrap();
+    assert_eq!(rows.len(), 3);
+    let mut seen = 0;
+    crate::driver::query_each(&connection, "SELECT 1 UNION ALL SELECT 2", vec![], |_| {
+        seen += 1;
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(seen, 2);
+    // A refused bind counts as an execution that stepped no row.
+    assert!(crate::driver::query_prepared(&mut statement, vec![]).is_err());
+
+    let after = sql_counts();
+    assert_eq!(after.statements - before.statements, 4);
+    assert_eq!(after.rows - before.rows, 2 + 3 + 2);
+}

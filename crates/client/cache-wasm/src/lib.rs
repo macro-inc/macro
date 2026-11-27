@@ -21,7 +21,7 @@ mod query_telemetry;
 mod shell;
 
 #[cfg(target_arch = "wasm32")]
-pub use query_telemetry::set_slow_query_callback;
+pub use query_telemetry::{set_slow_query_callback, sql_counters};
 
 #[cfg(target_arch = "wasm32")]
 pub use shell::*;

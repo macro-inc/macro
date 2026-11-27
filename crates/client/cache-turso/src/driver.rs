@@ -605,6 +605,7 @@ fn visit_statement(
     // Time binding, stepping/I/O, row processing, and cleanup, not worker queue
     // wait or statement preparation. Reused statements are timed per execution.
     let timer = crate::query_telemetry::QueryTimer::start();
+    crate::query_telemetry::count_statement();
     let execution = (|| {
         if statement.parameters_count() != values.len() {
             return Err(TursoStorageError::Database);
@@ -634,6 +635,7 @@ fn visit_statement(
             match step {
                 StepResult::Done => break,
                 StepResult::Row => {
+                    crate::query_telemetry::count_row();
                     let row = statement
                         .row()
                         .ok_or_else(|| TursoStorageError::reset(PhysicalResetReason::Corruption))?;
