@@ -10,8 +10,9 @@ import { FreeTierModel } from '@service-cognition/generated/schemas/freeTierMode
  * exposed to the frontend. Reference these constants instead of hardcoding
  * strings.
  *
- * Sonnet 5.5, Opus 5.5 and Haiku 5.5 are the current Anthropic generation, and
- * GPT-6 Astra, GPT-6.2 Sol and GPT-6 Luna the current OpenAI one. A persisted
+ * Sonnet 5.5, Opus 5.5 and Haiku 5.5 are the current Anthropic generation,
+ * GPT-6 Astra, GPT-6.2 Sol and GPT-6 Luna the current OpenAI one, and Gemini 4
+ * Hydrogen the current Google one. A persisted
  * chat on a retired model opens on its replacement ({@link RETIRED_MODELS});
  * other ids that are absent here fall back to the default.
  */
@@ -22,7 +23,7 @@ export const Model = {
   gpt6Astra: 'openai/gpt-6-astra',
   gpt62Sol: 'openai/gpt-6.2-sol',
   gpt6Luna: 'openai/gpt-6-luna',
-  gemini38Flash: 'google/gemini-3.8-flash',
+  gemini4Hydrogen: 'google/gemini-4-hydrogen',
 } as const;
 
 // `Model` is both a value (the const above) and a type (the union of api ids).
@@ -43,6 +44,7 @@ export const RETIRED_MODELS: Readonly<Record<string, TModel>> = {
   'openai/gpt-5.5': Model.gpt62Sol,
   'openai/gpt-5.6-mini': Model.gpt6Luna,
   'openai/gpt-5-mini': Model.gpt6Luna,
+  'google/gemini-3.8-flash': Model.gemini4Hydrogen,
 };
 
 type ExhaustiveMap = {
@@ -56,7 +58,7 @@ export const MODEL_PRETTYNAME: ExhaustiveMap = {
   'openai/gpt-6-astra': 'GPT-6 Astra',
   'openai/gpt-6.2-sol': 'GPT-6.2 Sol',
   'openai/gpt-6-luna': 'GPT-6 Luna',
-  'google/gemini-3.8-flash': 'Gemini 3.8 Flash',
+  'google/gemini-4-hydrogen': 'Gemini 4 Hydrogen',
 } as const;
 
 export const MODEL_PROVIDER_ICON: ExhaustiveMap = {
@@ -66,7 +68,7 @@ export const MODEL_PROVIDER_ICON: ExhaustiveMap = {
   'openai/gpt-6-astra': OpenAiIcon,
   'openai/gpt-6.2-sol': OpenAiIcon,
   'openai/gpt-6-luna': OpenAiIcon,
-  'google/gemini-3.8-flash': GoogleIcon,
+  'google/gemini-4-hydrogen': GoogleIcon,
 };
 
 /** Default model for paid users. */
@@ -120,7 +122,7 @@ export const MODEL_PROVIDER: ExhaustiveMap = {
   'openai/gpt-6-astra': 'openai',
   'openai/gpt-6.2-sol': 'openai',
   'openai/gpt-6-luna': 'openai',
-  'google/gemini-3.8-flash': 'google',
+  'google/gemini-4-hydrogen': 'google',
 } as const;
 
 /** Options for {@link alternateProviderModel}. */

@@ -8,8 +8,8 @@
 import type { TopicReasonProperty } from './topicReasonProperty';
 
 /**
- * One thing in the person's work that several suggestions may belong to,
-such as a customer, an event or a hire, as generation sessions named it.
+ * One result in the person's work that several suggestions end at, such as
+a renewal, an event or a filled role, as generation sessions named it.
  */
 export interface Topic {
   /** Names the topic across nights. */

@@ -672,7 +672,7 @@ async fn new_session_advertises_the_engine_supported_models() {
         vec![
             ("anthropic/claude-sonnet-5-5", "anthropic/claude-sonnet-5-5"),
             ("other-model", "other-model"),
-            (chat::domain::models::FREE_MODEL, "Gemini 3.8 Flash")
+            (chat::domain::models::FREE_MODEL, "Gemini 4 Hydrogen")
         ]
     );
 

@@ -31,7 +31,7 @@ use crate::domain::session::{PendingSummary, SUMMARY_PREAMBLE, end_of_turn, spli
 /// The model summaries run on: fast, cheap, reads images, and has a
 /// million-token window. It is the free plan's model, so every owner may
 /// use it.
-pub(crate) const SUMMARY_MODEL: &str = "google/gemini-3.8-flash";
+pub(crate) const SUMMARY_MODEL: &str = "google/gemini-4-hydrogen";
 
 /// The share of the session model's context window, in percent, at which a
 /// summary starts.

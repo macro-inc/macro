@@ -47,7 +47,7 @@ time what the model says and which tools it calls. No model is ever called.
 - Owns: the two GenerateContent calls the agent's Gemini client makes.
 - Not here: the other providers the router knows (Anthropic, OpenAI,
   Fireworks, Cerebras). A new local user is on the free plan, whose only model is
-  Gemini Flash, so that is the model a local session calls.
+  Gemini 4 Hydrogen, so that is the model a local session calls.
 - Not emulated: token counting, safety blocks, errors and rate limits,
   replies streamed in several chunks, and requests over 2 MB (refused).
 

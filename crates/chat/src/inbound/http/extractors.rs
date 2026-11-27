@@ -33,7 +33,7 @@ impl<P> Clone for UserPermissionsState<P> {
 /// Axum extractor resolving the requesting user's model entitlement from their
 /// permissions.
 ///
-/// Free users may use only [`FREE_MODEL`] (Gemini Flash); professional (paid)
+/// Free users may use only [`FREE_MODEL`] (Gemini 4 Hydrogen); professional (paid)
 /// users may use every chat model. Backed by [`ModelAccessServiceImpl`].
 ///
 /// Type parameter `Auth` is the authorization service implementation and `P`

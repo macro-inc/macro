@@ -11,7 +11,7 @@ export const PLAN_COMPARISON = [
     guest: '“Sent with Macro” footer',
     pro: 'No watermark',
   },
-  { feature: 'AI models', guest: 'Gemini Flash', pro: 'All models' },
+  { feature: 'AI models', guest: 'Gemini 4 Hydrogen', pro: 'All models' },
   { feature: 'Active routines', guest: '10', pro: '1,000' },
   { feature: 'Storage', guest: '5 GB', pro: '100 GB' },
   {
