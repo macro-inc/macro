@@ -559,10 +559,10 @@ it('keeps nobody listed below a first page read again in a new cache generation'
   client.clear();
 });
 
-it('keeps the people still matching typed text when a first page read again fills the bound', async () => {
+it('keeps the people still matching typed text when a server page read again fills the bound', async () => {
   vi.useFakeTimers();
   const client = new QueryClient();
-  const [search, setSearch] = createSignal('');
+  const [search, setSearch] = createSignal('sam');
   let changeGeneration = () => {};
   let changed = false;
   const host = {
@@ -575,45 +575,49 @@ it('keeps the people still matching typed text when a first page read again fill
   } as unknown as NonNullable<
     ReturnType<Parameters<typeof createContactRecipientSource>[0]>['host']
   >;
-  // Page one lists First, page two Old Sam. After the generation changes,
-  // page one alone lists 500 people, so Old Sam falls below the bound.
+  const person = (name: string) => {
+    const email = `${name.toLowerCase().replace(' ', '')}@example.com`;
+    return { id: `macro|${email}`, email, name };
+  };
+  // `sam` lists First Sam, then Old Sam on page two. After the generation
+  // changes, the server answers page one naming 500 people, so Old Sam is
+  // kept below the bound but not listed. The read for `sam 1` is slow.
+  const named = Array.from({ length: 500 }, (_, index) =>
+    person(`Sam ${index}`)
+  );
   const reader = vi
     .fn<typeof readContactDirectory>()
     .mockImplementation(async (viewer, _host, request) => {
       const after = request.cursor?.after;
-      if (changed) await new Promise((resolve) => setTimeout(resolve, 50));
-      let users: { id: string; email: string; name: string }[] = [];
-      if (request.query) users = [];
-      else if (changed)
-        users = Array.from({ length: 500 }, (_, index) => ({
-          id: `macro|sam${index}@example.com`,
-          email: `sam${index}@example.com`,
-          name: `Sam ${index}`,
-        }));
-      else if (after === 'second')
-        users = [
-          {
-            id: 'macro|old@example.com',
-            email: 'old@example.com',
-            name: 'Old Sam',
-          },
-        ];
-      else
-        users = [
-          {
-            id: 'macro|first@example.com',
-            email: 'first@example.com',
-            name: 'First',
-          },
-        ];
+      if (request.query !== 'sam') {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        return {
+          query: request.query,
+          source: 'cache',
+          sync: 'snapshot',
+          offline: false,
+          users: [],
+          nextCursor: null,
+        };
+      }
+      if (changed)
+        return {
+          query: request.query,
+          source: 'server',
+          sync: 'unavailable',
+          offline: false,
+          users: named,
+          named: { exact: [], wordStart: named.map((user) => user.id) },
+          nextCursor: null,
+        };
       return {
         query: request.query,
         source: 'cache',
         sync: 'snapshot',
         offline: false,
-        users,
+        users: [person(after === 'second' ? 'Old Sam' : 'First Sam')],
         nextCursor:
-          changed || after === 'second'
+          after === 'second'
             ? null
             : {
                 source: 'people',
@@ -647,22 +651,23 @@ it('keeps the people still matching typed text when a first page read again fill
     </QueryClientProvider>
   ));
   const listed = () => source!.items().map((item) => item.data.name);
-  await vi.advanceTimersByTimeAsync(0);
+  await vi.advanceTimersByTimeAsync(300);
   await source!.next();
   await vi.advanceTimersByTimeAsync(0);
-  expect(listed()).toEqual(['First', 'Old Sam']);
+  expect(listed()).toEqual(['First Sam', 'Old Sam']);
 
   // Every listed row was read in the new generation, so typing keeps the
   // ones that still match while the read for the text is pending.
   changed = true;
   changeGeneration();
-  await vi.advanceTimersByTimeAsync(60);
+  await vi.advanceTimersByTimeAsync(0);
   expect(listed()).toHaveLength(500);
   expect(listed()).not.toContain('Old Sam');
   setSearch('sam 1');
   expect(listed()).toContain('Sam 1');
   expect(listed()).toContain('Sam 21');
   expect(listed()).not.toContain('Sam 0');
+  await vi.advanceTimersByTimeAsync(1500);
   client.clear();
 });
 

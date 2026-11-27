@@ -26,18 +26,21 @@ const NO_TEAMMATES: ReadonlySet<string> = new Set();
 
 type WindowParameters = Parameters<typeof createContactDirectoryWindow>;
 
-/** The rows listed for one input. `readIn` is the generation of the oldest. */
+/** The rows read for one input, and the cache generations they were read in. */
 type ListedPages = {
   key: string;
   first: IUser[];
+  firstReadIn: number;
+  /** Rows below the first page, in the order they were read, so the oldest
+   * is the first: `laterReadIn` is its generation. */
   later: IUser[];
+  laterReadIn: number;
   /** Who the first page's text names, when the server answered it. */
   named: ContactDirectoryPage['named'];
-  readIn: number;
 };
 
-/** A re-read of the first page keeps the pages already listed below it, up
- * to the bound, and with them the generation they were read in. */
+/** A re-read of the first page keeps the pages already listed below it, and
+ * with them the generation they were read in. */
 function rereadFirstPage(
   listed: ListedPages,
   page: ContactDirectoryPage,
@@ -45,16 +48,14 @@ function rereadFirstPage(
   generation: number
 ): ListedPages {
   const first = new Set(fresh.map((user) => user.id));
-  // Rows past the bound are never listed, so they can't hold an old generation.
-  const later = listed.later
-    .filter((user) => !first.has(user.id))
-    .slice(0, Math.max(MAX_LISTED_CONTACTS - fresh.length, 0));
+  const later = listed.later.filter((user) => !first.has(user.id));
   return {
     key: listed.key,
     first: fresh,
+    firstReadIn: generation,
     later,
+    laterReadIn: later.length ? listed.laterReadIn : generation,
     named: page.named,
-    readIn: later.length ? listed.readIn : generation,
   };
 }
 
@@ -185,9 +186,10 @@ export function createContactDirectoryList(
       listed = {
         key,
         first: fresh,
+        firstReadIn: generation,
         later: [],
+        laterReadIn: generation,
         named: page.named,
-        readIn: generation,
       };
     } else if (window.continued()) {
       const known = new Set(
@@ -200,6 +202,7 @@ export function createContactDirectoryList(
           ...listed.later,
           ...fresh.filter((user) => !known.has(user.id)),
         ].slice(0, Math.max(room, 0)),
+        laterReadIn: listed.later.length ? listed.laterReadIn : generation,
       };
     } else {
       listed = rereadFirstPage(listed, page, fresh, generation);
@@ -247,7 +250,17 @@ export function createContactDirectoryList(
     windowKey: () => (data() ? listKey() : undefined),
     /** Whether every row listed was read in the current generation. Read
      * after `data`, which it describes. */
-    readNow: () => !!listed && listed.readIn === window.generation(),
+    readNow: () => {
+      if (!listed) return false;
+      const generation = window.generation();
+      // Rows below a first page that fills the bound are kept but not listed.
+      const laterListed =
+        listed.later.length > 0 && listed.first.length < MAX_LISTED_CONTACTS;
+      return (
+        listed.firstReadIn === generation &&
+        (!laterListed || listed.laterReadIn === generation)
+      );
+    },
     loadingMore,
     loadNext,
     next: () => fireAndForget(loadNext(), 'contacts'),

@@ -477,6 +477,62 @@ it('keeps the bound when a server page names more people than it', async () => {
   client.clear();
 });
 
+it('lists again the rows a longer first page pushed past the bound when page one shrinks', async () => {
+  vi.useFakeTimers();
+  // Page one names 50 people, page two the next 450. One re-read names one
+  // more person, pushing the last row past the bound; the next names the 50.
+  let extra = false;
+  const reader = vi
+    .fn<typeof readContactDirectory>()
+    .mockImplementation(async (viewer, _host, request) => {
+      if (request.cursor)
+        return {
+          query: request.query,
+          source: 'server',
+          sync: 'unavailable',
+          offline: false,
+          users: Array.from({ length: 450 }, (_, index) => person(50 + index)),
+          nextCursor: null,
+        };
+      const users = Array.from({ length: 50 }, (_, index) => person(index));
+      if (extra) users.push(person(600));
+      return {
+        query: request.query,
+        source: 'server',
+        sync: 'unavailable',
+        offline: false,
+        users,
+        named: { exact: [], wordStart: users.map((user) => user.id) },
+        nextCursor: {
+          source: 'server',
+          after: 'next',
+          userId: viewer,
+          query: request.query,
+          policyKey: hashKey([request.policy]),
+        },
+      };
+    });
+  const { client, list, setSearch } = mountList(reader);
+  setSearch('person');
+  await vi.advanceTimersByTimeAsync(0);
+  await list().loadNext();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(ids(list())).toHaveLength(500);
+
+  extra = true;
+  list().restart();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(ids(list())).toHaveLength(500);
+  expect(ids(list())).not.toContain(person(499).id);
+
+  extra = false;
+  list().restart();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(ids(list())).toHaveLength(500);
+  expect(ids(list())).toContain(person(499).id);
+  client.clear();
+});
+
 it('reads the roster only for a typed search, so browsing keeps its pages when it loads', async () => {
   vi.useFakeTimers();
   const reader = vi
