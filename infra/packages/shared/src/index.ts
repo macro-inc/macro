@@ -56,6 +56,23 @@ export const DATADOG_KINESIS_FIREHOSE_STREAM_ARN =
 export const CLOUDWATCH_KINESIS_STREAM_ROLE_ARN =
   'arn:aws:iam::569036502058:role/cloudwatch-kinesis-stream-role';
 
+// Grafana's copy of CloudWatch Logs: the observability layer's Firehose stream
+// (infra/k8s/observability/aws, modules/firehose.nix), which posts to Loki, and
+// the role a subscription filter to it passes. A log group takes two filters;
+// the other is Datadog's.
+export const GRAFANA_CLOUDWATCH_LOGS_STREAM_ARN =
+  'arn:aws:firehose:us-east-1:569036502058:deliverystream/observability-cloudwatch-logs';
+
+export const GRAFANA_CLOUDWATCH_LOGS_ROLE_ARN =
+  'arn:aws:iam::569036502058:role/observability-k8s-cloudwatch-logs';
+
+// Stacks whose log groups also send to Grafana. Remove a stack and deploy it to
+// stop; the Datadog filters stay either way.
+export const GRAFANA_CLOUDWATCH_LOGS_STACKS: readonly string[] = [
+  'dev',
+  'prod',
+];
+
 export { getMacroApiToken } from './macro_api_token';
 export { getMacroNotify } from './macro_notify';
 export { getSearchEventQueue } from './search_event_queue';

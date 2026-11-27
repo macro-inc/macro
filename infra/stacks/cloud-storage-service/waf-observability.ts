@@ -1,6 +1,12 @@
 import * as aws from '@pulumi/aws';
 import * as datadog from '@pulumi/datadog';
 import * as pulumi from '@pulumi/pulumi';
+import {
+  GRAFANA_CLOUDWATCH_LOGS_ROLE_ARN,
+  GRAFANA_CLOUDWATCH_LOGS_STACKS,
+  GRAFANA_CLOUDWATCH_LOGS_STREAM_ARN,
+  stack,
+} from '../../packages/shared';
 
 const SENSITIVE_HEADERS = [
   'authorization',
@@ -261,12 +267,14 @@ export class WafObservability extends pulumi.ComponentResource {
       childOptions
     );
 
+    const filterPattern =
+      '{ ($.action = "BLOCK") || ($.action = "CHALLENGE") }';
     new aws.cloudwatch.LogSubscriptionFilter(
       `${name}-forwarder-subscription`,
       {
         name: 'datadog-forwarder',
         destinationArn: datadogForwarderArn,
-        filterPattern: '{ ($.action = "BLOCK") || ($.action = "CHALLENGE") }',
+        filterPattern,
         logGroup: logGroup.name,
       },
       {
@@ -274,6 +282,23 @@ export class WafObservability extends pulumi.ComponentResource {
         dependsOn: [forwarderPermission, loggingConfiguration],
       }
     );
+
+    // The same events to Grafana's Loki: the log group's second filter.
+    // Unprotected (a child inherits its parent's `protect` otherwise), so
+    // leaving the stack out of GRAFANA_CLOUDWATCH_LOGS_STACKS removes it.
+    if (GRAFANA_CLOUDWATCH_LOGS_STACKS.includes(stack)) {
+      new aws.cloudwatch.LogSubscriptionFilter(
+        `${name}-grafana-subscription`,
+        {
+          name: 'grafana',
+          destinationArn: GRAFANA_CLOUDWATCH_LOGS_STREAM_ARN,
+          roleArn: GRAFANA_CLOUDWATCH_LOGS_ROLE_ARN,
+          filterPattern,
+          logGroup: logGroup.name,
+        },
+        { parent: this, protect: false, dependsOn: [loggingConfiguration] }
+      );
+    }
 
     const datadogPipeline = new datadog.LogsCustomPipeline(
       `${name}-datadog-pipeline`,

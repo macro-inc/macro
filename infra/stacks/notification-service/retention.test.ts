@@ -36,6 +36,11 @@ beforeAll(async () => {
     CLOUDWATCH_KINESIS_STREAM_ROLE_ARN: 'arn:aws:iam::123456789012:role/logs',
     DATADOG_KINESIS_FIREHOSE_STREAM_ARN:
       'arn:aws:firehose:us-east-1:123456789012:logs',
+    GRAFANA_CLOUDWATCH_LOGS_ROLE_ARN:
+      'arn:aws:iam::123456789012:role/grafana-logs',
+    GRAFANA_CLOUDWATCH_LOGS_STACKS: ['dev'],
+    GRAFANA_CLOUDWATCH_LOGS_STREAM_ARN:
+      'arn:aws:firehose:us-east-1:123456789012:grafana-logs',
   }));
   mock.module('../../packages/resources', () => ({
     DATADOG_API_KEY_SECRET_ARN: pulumi.output(secretArn),
@@ -202,4 +207,31 @@ test('telemetry does not enable cleanup or duplicate the existing log path', () 
     resource('aws:cloudwatch/logSubscriptionFilter:LogSubscriptionFilter')
       .inputs.destinationArn
   ).toBe('arn:aws:firehose:us-east-1:123456789012:logs');
+});
+
+test('Lambda logs go to Datadog and Grafana with the same filter', () => {
+  // The mocks can register a resource more than once; key by name.
+  const filters = [
+    ...new Map(
+      resources
+        .filter(
+          (r) =>
+            r.type ===
+            'aws:cloudwatch/logSubscriptionFilter:LogSubscriptionFilter'
+        )
+        .map((r) => [r.name, r.inputs])
+    ).values(),
+  ];
+  expect(filters.map((f) => [f.destinationArn, f.roleArn]).sort()).toEqual([
+    [
+      'arn:aws:firehose:us-east-1:123456789012:grafana-logs',
+      'arn:aws:iam::123456789012:role/grafana-logs',
+    ],
+    [
+      'arn:aws:firehose:us-east-1:123456789012:logs',
+      'arn:aws:iam::123456789012:role/logs',
+    ],
+  ]);
+  expect(new Set(filters.map((f) => f.filterPattern)).size).toBe(1);
+  expect(new Set(filters.map((f) => f.name)).size).toBe(2);
 });
