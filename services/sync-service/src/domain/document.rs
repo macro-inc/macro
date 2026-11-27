@@ -162,8 +162,8 @@ pub fn snapshot(
 }
 
 /// Current state at the same editable revision, without prior history when
-/// that is cheap to export ([`compact_snapshot::export`]). This bounds readers'
-/// work by live content rather than the document's age.
+/// that is cheap to export ([`compact_snapshot::export`]). Otherwise it is the
+/// full snapshot, which carries the document's history.
 pub fn shallow_snapshot(
     _access: &DocumentAccess,
     document_id: &str,

@@ -20,7 +20,11 @@ export class TestServer {
     this.doc.import(update);
   }
 
-  /** Current state as a shallow snapshot — what `RemoteInitialSync` would carry. */
+  /**
+   * Current state as a shallow snapshot — what `RemoteInitialSync` usually
+   * carries. sync-service sends a full snapshot instead when a shallow one
+   * would be slow to export.
+   */
   shallowSnapshot(): Uint8Array {
     return this.doc.export({
       mode: 'shallow-snapshot',
