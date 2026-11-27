@@ -84,7 +84,7 @@ ignore = [
   { id = "RUSTSEC-2026-0251", reason = "sized-chunks is unmaintained; transitive via im <- loro, pending loro moving off im" },
   { id = "RUSTSEC-2026-0253", reason = "lru 0.16.4 pinned by async-graphql; no patched release compatible yet, and the unsound path needs a panicking key Drop during pop()" },
   { id = "RUSTSEC-2026-0258", reason = "h2 0.3 (via Stripe 0.41's hyper-0.14 client) has no patched release; the hyper 1.x line is bumped to the patched 0.4.16" },
-  { id = "RUSTSEC-2026-0387", reason = "crypto-bigint 0.5.5 has no patched release; it is reached only through aws-sigv4's optional SigV4a (ECDSA) signing. 0.7 is updated to the patched 0.7.11" },
+  { id = "RUSTSEC-2026-0387", reason = "crypto-bigint 0.5.5 has no patched release. It comes in through elliptic-curve 0.13 (p256 and p384, for jsonwebtoken and aws-sigv4) and aws-sigv4's SigV4a signing. We never sign JWTs with EC keys, so jsonwebtoken only verifies ECDSA signatures, which involves no secret; SigV4a signs only for S3 multi-region access points and SES global endpoints, which we don't use. 0.7 is updated to the patched 0.7.11" },
   { id = "RUSTSEC-2026-0441", reason = "pin-utils is unmaintained; reached only through the aws-smithy-http, aws-smithy-runtime and aws-smithy-types versions we lock. Their latest releases drop it, so remove this after the next AWS SDK upgrade" },
   { id = "RUSTSEC-2026-0543", reason = "chrono is unmaintained, with no vulnerability reported against it and no release to move to; about half the workspace crates and sqlx, async-graphql, oauth2 and schemars use it, so moving to jiff or time is a separate migration" },
   #{ id = "RUSTSEC-0000-0000", reason = "you can specify a reason the advisory is ignored" },
