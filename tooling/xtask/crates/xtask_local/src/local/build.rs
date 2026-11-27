@@ -10,6 +10,9 @@ mod cargo_build;
 mod dep_cache;
 mod runtime_image;
 
+#[cfg(test)]
+mod test;
+
 pub use binaries_dir::{Adoption, BinariesDir};
 pub use runtime_image::{ensure_runtime_image, runtime_image_tag};
 
@@ -32,7 +35,46 @@ pub struct BuildOptions {
 /// Resolve a [`BinariesDir`] for the run: from `--binaries-dir`, from the
 /// existing target dir (`--no-build`), or by building with cargo.
 pub fn resolve(stage: &Stage, target: Target, opts: &BuildOptions) -> Result<BinariesDir> {
-    let dir = match &opts.binaries_dir {
+    let dir = source(stage, target, opts)?;
+    dir.validate(&super::inventory::local_binaries())?;
+    Ok(dir)
+}
+
+/// [`resolve`] for a bring-up that runs only `services` from `/app/out`, such
+/// as an infra-only stack's emulators: builds and checks just those.
+pub fn resolve_services(
+    stage: &Stage,
+    target: Target,
+    no_build: bool,
+    binaries_dir: Option<std::path::PathBuf>,
+    services: Vec<&'static RustService>,
+) -> Result<BinariesDir> {
+    if binaries_dir.is_none() && (services.is_empty() || stage.is_dry_run()) {
+        if stage.is_dry_run() && !no_build && !services.is_empty() {
+            cargo_build::run(stage, target, Some(&services))?;
+        }
+        // Compose still mounts `/app/out` when nothing runs there. A preview
+        // also needs only its path, since it skipped creating the binaries.
+        return Ok(BinariesDir::TargetDir(
+            super::workspace_root().join(target.debug_dir()),
+        ));
+    }
+    let binaries: Vec<&str> = services.iter().map(|service| service.cargo_bin).collect();
+    let dir = source(
+        stage,
+        target,
+        &BuildOptions {
+            no_build,
+            binaries_dir,
+            only: Some(services),
+        },
+    )?;
+    dir.validate(&binaries)?;
+    Ok(dir)
+}
+
+fn source(stage: &Stage, target: Target, opts: &BuildOptions) -> Result<BinariesDir> {
+    Ok(match &opts.binaries_dir {
         Some(dir) => BinariesDir::classify(dir)?,
         None if opts.no_build => {
             super::arch::ensure_linux_host()?;
@@ -43,7 +85,5 @@ pub fn resolve(stage: &Stage, target: Target, opts: &BuildOptions) -> Result<Bin
             cargo_build::run(stage, target, opts.only.as_deref())?;
             BinariesDir::classify(&super::workspace_root().join(target.debug_dir()))?
         }
-    };
-    dir.validate(&super::inventory::local_binaries())?;
-    Ok(dir)
+    })
 }
