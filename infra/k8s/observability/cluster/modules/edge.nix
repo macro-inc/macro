@@ -2,8 +2,9 @@
 # (infra/stacks/observability/nixos/proxy.nix before it served only GoAlert):
 #
 # - `edge`: the only target of the existing ALB (TargetGroupBinding, IP
-#   targets). Grafana and Argo CD by hostname, POST-only OTLP to Alloy ingest, and
-#   basic-auth Prometheus remote write and Loki push, rate limited. The
+#   targets). Grafana and Argo CD by hostname, POST-only OTLP and Amazon Data
+#   Firehose to Alloy ingest, and basic-auth Prometheus remote write and Loki
+#   push, rate limited. The
 #   ALB is enabled in only two zones and sends nothing to a target outside
 #   them, so the edge runs only there.
 # - `query-gateway`: Grafana's datasources go through it. Grafana users can
@@ -11,8 +12,8 @@
 #   endpoints of Mimir, Loki and Tempo pass, and only with the methods
 #   queries use; maintenance and write APIs answer 404 or 403.
 #
-# Rate limits are per replica: two edge replicas allow twice the host's
-# 100 requests/s.
+# Rate limits are per replica: each edge replica allows 400 ingest requests/s
+# with a burst of 800.
 {
   config,
   lib,
@@ -47,7 +48,8 @@ let
     ++ map (host: "    ${host} otlp;\n") cfg.otlpHosts
   );
 
-  # Unauthenticated (bearer token checked by Alloy) or basic-auth ingest.
+  # Unauthenticated (bearer token or Firehose access key checked by Alloy) or
+  # basic-auth ingest.
   ingest = upstream: auth: ''
     if ($observability_host != otlp) { return 404; }
     limit_except POST { deny all; }
@@ -103,6 +105,10 @@ let
       }
       location = /loki/api/v1/push {
         ${ingest endpoints.loki.push true}
+      }
+      # CloudWatch Logs from Amazon Data Firehose; Alloy checks its access key.
+      location = /awsfirehose/api/v1/push {
+        ${ingest (svc "alloy-ingest" 4319) false}
       }
     }
     ${lib.optionalString (cfg.argocdHosts != [ ]) ''
@@ -307,7 +313,11 @@ in
               }
               {
                 to = [ (workload.pods ingestPods) ];
-                ports = workload.tcpPorts [ 4318 ];
+                # OTLP, Firehose.
+                ports = workload.tcpPorts [
+                  4318
+                  4319
+                ];
               }
               {
                 to = [ argocdServer ];

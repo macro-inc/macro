@@ -4,6 +4,9 @@
 # sends logs to Loki, traces to the sampler (./sampler) and metrics to Mimir.
 # Two replicas in different zones; the edge reaches them through their Service.
 #
+# The cluster adds CloudWatch Logs from Amazon Data Firehose on port 4319
+# (./ingest-firehose.alloy), which join the OTLP logs at the memory limiter.
+#
 # It also forwards the spans and log records that metrics are derived from to the
 # `derived-metrics` application (`macro.derivedMetrics.ingestTap`).
 {
@@ -74,7 +77,10 @@ let
     assert lib.assertMsg (
       !lib.hasInfix "127.0.0.1" result
     ) "ingest.alloy has a loopback address modules/ingest.nix doesn't replace";
-    result + "\n" + config.macro.derivedMetrics.ingestTap;
+    result + "\n" + firehoseConfig + "\n" + config.macro.derivedMetrics.ingestTap;
+  # The port is also in ingest-firehose.alloy and the edge's route (./edge.nix).
+  firehoseConfig = builtins.readFile ./ingest-firehose.alloy;
+  firehosePort = 4319;
 in
 {
   applications.alloy-ingest = {
@@ -132,6 +138,12 @@ in
               targetPort = 4318;
               protocol = "TCP";
             }
+            {
+              name = "firehose";
+              port = firehosePort;
+              targetPort = firehosePort;
+              protocol = "TCP";
+            }
           ];
           mounts.extra = [
             {
@@ -178,7 +190,10 @@ in
       ingress = [
         {
           from = [ (workload.pods { "app.kubernetes.io/name" = "edge"; }) ];
-          ports = workload.tcpPorts [ 4318 ];
+          ports = workload.tcpPorts [
+            4318
+            firehosePort
+          ];
         }
         workload.scrapedByNodeAlloy
       ];

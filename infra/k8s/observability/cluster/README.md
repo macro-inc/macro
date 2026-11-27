@@ -233,8 +233,20 @@ alloy-ingest ── tap: spans and logs some metric reads, before sampling ─�
 ALB ─▶ edge ─┬─ grafana.* ──▶ grafana ──▶ query-gateway ──▶ Loki, Mimir, Tempo
              ├─ /v1/{traces,logs,metrics} ──▶ alloy-ingest ─┬─ logs, metrics ──▶ Loki, Mimir
              │                                             └─ traces ──▶ alloy-sampler ──▶ Tempo
+             ├─ /awsfirehose/api/v1/push ──▶ alloy-ingest ──▶ Loki
              └─ /api/v1/write, /loki/api/v1/push (basic auth) ──▶ Mimir, Loki
 ```
+
+CloudWatch Logs reach Loki through Amazon Data Firehose (`../aws`,
+`modules/firehose.nix`): a log group's subscription filter sends to a Firehose
+stream in its region, which posts batches to the edge with the OTLP token as
+its access key. `modules/ingest-firehose.alloy` turns each event into a log
+record of its group (`service.name` is the group's name without
+`/aws/lambda/` and the `-prod` or `-dev` suffix, which becomes
+`deployment.environment`) and hands it to the OTLP log path, so emails are
+hashed as in every other log. The group, stream and function name are
+structured metadata (`aws_log_group_names`, `aws_log_stream_names`,
+`faas_name`).
 
 ### Trace sampling
 
