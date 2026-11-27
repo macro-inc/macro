@@ -1,5 +1,6 @@
 export type {
   Attribute,
+  AttributedError,
   Attributes,
   LogAttributes,
   ResourceAttributes,

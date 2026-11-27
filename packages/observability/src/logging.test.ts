@@ -49,3 +49,39 @@ test('the production log provider suppresses identity only in anonymous contexts
   expect(records[1].attributes).not.toHaveProperty('usr.id');
   await logging.shutdown();
 });
+
+test('an error adds the attributes it carries beneath the reporter’s own', async () => {
+  const logging = new Logging();
+  logging.init(
+    {
+      serviceName: 'test',
+      environment: 'test',
+      enabled: async () => true,
+      logsUrl: 'http://localhost/v1/logs',
+    },
+    resourceFromAttributes({}),
+    () => undefined
+  );
+  const attributed = Object.assign(new Error('input missing'), {
+    telemetryAttributes: { reason: 'cache-reset', surface: 'from-error' },
+  });
+
+  logging.error(attributed, { surface: 'channels-by-id' });
+  logging.error(
+    Object.assign(new Error('plain'), { telemetryAttributes: 'ignored' }),
+    { surface: 'other' }
+  );
+  await logging.flush();
+
+  const [carried, plain] = exporters.at(-1)?.getFinishedLogRecords() ?? [];
+  expect(carried.body).toBe('input missing');
+  expect(carried.attributes).toMatchObject({
+    reason: 'cache-reset',
+    surface: 'channels-by-id',
+    'exception.message': 'input missing',
+  });
+  expect(plain.attributes).toMatchObject({ surface: 'other' });
+  expect(plain.attributes).not.toHaveProperty('reason');
+  expect(plain.attributes).not.toHaveProperty('0');
+  await logging.shutdown();
+});

@@ -65,6 +65,7 @@ import {
 } from './entity-input';
 import { crmExternalWriteTypes } from './external-write-scope';
 import { isCachedMailView } from './mail-view';
+import { missingSoupInputReason, SoupMissingInputError } from './missing-input';
 import {
   recordSoupNetworkAnswer,
   soupNetworkAnswerFresh,
@@ -190,6 +191,22 @@ export function createSoupLiveQuery(
       },
     };
   };
+  let missingInputs = 0;
+  // The input is gone; the last by-ID resolution still says which scope and
+  // generation it belonged to, which tells a reset from an unresolved scope.
+  const missingInputError = (cursor: string | null) =>
+    untrack(() => {
+      missingInputs += 1;
+      return new SoupMissingInputError(
+        missingSoupInputReason({
+          scope: firstPageInput(),
+          generation: cacheGeneration,
+          resolved: cacheFirstEntities() ? entityHydration() : undefined,
+        }),
+        cursor === null ? 'first' : 'continuation',
+        missingInputs
+      );
+    });
   const isSupported = () => firstPageInput() !== undefined;
   const inputKey = createMemo(() =>
     JSON.stringify([options().projection, firstPageInput()])
@@ -505,9 +522,7 @@ export function createSoupLiveQuery(
       },
       variables: (cursor) => {
         const input = inputForCursor(cursor);
-        if (!input) {
-          throw new Error('GraphQL Soup input became unsupported');
-        }
+        if (!input) throw missingInputError(cursor);
         return { input };
       },
       getNextPageParam: (lastPage) =>

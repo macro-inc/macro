@@ -85,6 +85,8 @@ export class Logging {
         ? normalized
         : normalized.message || normalized.name,
       {
+        ...(normalized instanceof Error &&
+          Logging.#carriedAttributes(normalized)),
         ...attributes,
         ...(normalized instanceof Error && {
           [ATTR_EXCEPTION_TYPE]: normalized.name,
@@ -119,6 +121,14 @@ export class Logging {
     });
     const consoleMethod = level === 'info' ? 'log' : level;
     console[consoleMethod](CONSOLE_PREFIX, message, attributes ?? {});
+  }
+
+  /** An `AttributedError`'s own attributes; any other error carries none. */
+  static #carriedAttributes(error: Error): LogAttributes | undefined {
+    const carried: unknown = Reflect.get(error, 'telemetryAttributes');
+    return typeof carried === 'object' && carried !== null
+      ? (carried as LogAttributes)
+      : undefined;
   }
 
   static #normalizeError(error: unknown): Error | string {

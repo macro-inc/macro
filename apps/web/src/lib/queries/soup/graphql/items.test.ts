@@ -976,6 +976,78 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }
   });
 
+  it('names a cache reset when the next page is asked for after the cache generation changes', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    const cached = {
+      __typename: 'GraphqlSoupChannel' as const,
+      id: 'cached',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    };
+    const generations = new Set<() => void>();
+    entityFilterMock.mockResolvedValue({
+      kind: 'live-query',
+      revision: parseCacheRevision(REVISION_0),
+      reset: true,
+      keys: ['GraphqlSoupChannel:cached'],
+      upserts: [{ recordKey: 'GraphqlSoupChannel:cached', record: cached }],
+      patches: [],
+      removed: [],
+      retainedKeys: [],
+      optimistic: false,
+    });
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      liveQueries: true,
+      currentRevision: async () => REVISION_0,
+      entityFilter: entityFilterMock,
+      onCacheChanged: () => () => {},
+      onCacheGenerationChanged: (callback: () => void) => {
+        generations.add(callback);
+        return () => generations.delete(callback);
+      },
+    });
+    const { query, dispose } = createRoot((dispose) => ({
+      query: createSoupLiveQuery(
+        () => ({ sortMethod: 'CREATED_AT', limit: 2 }),
+        () => ({
+          projection: 'channel-list',
+          cacheFirstEntities: [
+            { entityType: 'CHANNEL', entityId: 'cached' },
+            { entityType: 'CHANNEL', entityId: 'first' },
+            { entityType: 'CHANNEL', entityId: 'second' },
+          ],
+        })
+      ),
+      dispose,
+    }));
+    try {
+      await vi.waitFor(() => expect(fake.executions).toHaveLength(1));
+      fake.executions[0].next(
+        graphqlSoupPage({
+          items: [{ ...cached, id: 'first' }],
+          next_cursor: 'page-2',
+        })
+      );
+      expect(query.hasNextPage()).toBe(true);
+
+      for (const changed of generations) changed();
+
+      await expect(query.fetchNextPage()).rejects.toMatchObject({
+        name: 'SoupMissingInputError',
+        message: 'GraphQL Soup by-ID input was reset with the cache',
+        telemetryAttributes: {
+          reason: 'cache-reset',
+          'soup.page': 'continuation',
+          'soup.missing_input_count': 1,
+        },
+      });
+      expect(fake.executions).toHaveLength(1);
+    } finally {
+      dispose();
+    }
+  });
+
   it('fetches uncached channels without repeating a successful omission', async () => {
     const fake = makeFakeClient();
     getGraphqlSoupClientMock.mockReturnValue(fake.client);
