@@ -52,11 +52,22 @@ fn raw_webhook_message_retains_transport_fields() {
         message_id: Some("message-id".to_string()),
         body: Some("message-body".to_string()),
         receipt_handle: Some("receipt-handle".to_string()),
+        receive_count: Some(3),
+        string_attributes: HashMap::from([
+            ("traceparent".to_owned(), "00-trace".to_owned()),
+            ("tracestate".to_owned(), "vendor=1".to_owned()),
+            ("unrelated".to_owned(), "kept out".to_owned()),
+        ]),
     });
 
+    assert_eq!(
+        serde_json::Value::Object(raw.trace_context.clone()),
+        json!({"traceparent": "00-trace", "tracestate": "vendor=1"})
+    );
     assert_eq!(raw.message_id.as_deref(), Some("message-id"));
     assert_eq!(raw.body.as_deref(), Some("message-body"));
     assert_eq!(raw.receipt_handle.as_deref(), Some("receipt-handle"));
+    assert_eq!(raw.receive_count, Some(3));
 }
 
 #[test]
@@ -71,4 +82,20 @@ fn visibility_timeout_rejects_values_above_the_sqs_limit() {
             .to_string(),
         "webhook message visibility delay cannot exceed 43200 seconds",
     );
+}
+
+#[test]
+fn mcp_message_groups_by_subscription_and_dedupes_per_event() {
+    let subscription = uuid::Uuid::now_v7();
+    let message = McpEventQueueMessage::new(subscription, sample_message().event);
+    let prepared = prepare_mcp_message(&message).unwrap();
+
+    assert_eq!(prepared.group_id, format!("mcp:{subscription}"));
+    assert_eq!(
+        prepared.deduplication_id,
+        format!("mcp:{subscription}:event_456")
+    );
+    assert!(prepared.deduplication_id.len() <= 128);
+    let deserialized: McpEventQueueMessage = serde_json::from_str(&prepared.body).unwrap();
+    assert_eq!(deserialized, message);
 }

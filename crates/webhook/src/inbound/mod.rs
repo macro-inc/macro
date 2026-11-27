@@ -3,6 +3,9 @@
 #[cfg(feature = "inbound")]
 pub mod axum_router;
 
+#[cfg(feature = "inbound")]
+pub mod mcp_router;
+
 #[cfg(feature = "consumer")]
 pub mod kafka_consumer;
 

@@ -6,6 +6,8 @@ mod api;
 mod config;
 mod db_pools;
 mod external_chat;
+mod mcp_live_subscribers;
+mod mcp_subscription_sweep;
 pub mod model;
 mod outbound;
 mod passwords_cleanup;

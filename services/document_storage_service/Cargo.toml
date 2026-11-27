@@ -65,6 +65,7 @@ anyhow = { workspace = true }
 async-graphql = { workspace = true }
 async-graphql-axum = "7.0.17"
 aws-sdk-dynamodb = { workspace = true }
+aws-sdk-kms = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sns = { workspace = true }
@@ -108,6 +109,7 @@ connection = { path = "../../crates/connection", default-features = false, featu
 ] }
 connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 contacts = { path = "../../crates/contacts", features = ["directory-names", "picture-fanout"] }
+cursor_api_key = { path = "../../crates/cursor_api_key" }
 channel_labels = { path = "../../crates/channel_labels", features = [
   "inbound",
   "postgres",

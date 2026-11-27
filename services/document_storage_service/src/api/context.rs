@@ -1007,6 +1007,20 @@ pub(crate) type DssWebhookRateLimiter =
 pub(crate) type DssWebhookState =
     MacroWebhookRouterState<DssWebhookService, DssWebhookRateLimiter, AuthorizationService>;
 
+/// Type alias for the internal MCP Events subscription service.
+pub(crate) type DssMcpSubscriptionService =
+    webhook::domain::mcp::service::McpEventSubscriptionServiceImpl<
+        webhook::outbound::PgMcpSubscriptionRepository,
+        ReqwestWebhookValidationClient,
+        webhook::outbound::RateLimitedMcpVerifications<DssWebhookRateLimiter>,
+    >;
+
+/// Type alias for the internal MCP Events subscription router state.
+pub(crate) type DssMcpSubscriptionState = webhook::inbound::mcp_router::McpSubscriptionRouterState<
+    DssMcpSubscriptionService,
+    AuthorizationService,
+>;
+
 /// Type alias for the service backing the webhook-event SSE endpoint.
 pub(crate) type DssSseStreamService = WebhookEventStreamServiceImpl<
     EntityAccessService,
@@ -1147,6 +1161,7 @@ pub(crate) struct ApiContext {
     pub call_public_rate_limiter: DssWebhookRateLimiter,
     pub webhook_state: DssWebhookState,
     pub sse_stream_state: DssSseStreamState,
+    pub mcp_subscription_state: DssMcpSubscriptionState,
     pub call_internal_state: DssCallInternalState,
     pub cal_webhook_state: DssCalWebhookState,
     pub entity_access_management_service: EntityAccessManagementService,

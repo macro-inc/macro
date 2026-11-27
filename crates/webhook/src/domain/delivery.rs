@@ -14,7 +14,8 @@ use super::{
 use chrono::Utc;
 use std::time::Duration;
 
-const MAX_HTTP_ATTEMPTS: u32 = 5;
+/// Most HTTP attempts at one delivery, webhooks and MCP subscriptions alike.
+pub(crate) const MAX_HTTP_ATTEMPTS: u32 = 5;
 const RETRY_DELAYS: [Duration; 4] = [
     Duration::from_secs(30),
     Duration::from_secs(60),
@@ -258,7 +259,8 @@ fn webhook_is_eligible(prepared: &PreparedWebhookDelivery) -> bool {
         && prepared.webhook.deleted_at.is_none()
 }
 
-fn retry_delay(attempt_number: u32) -> Option<Duration> {
+/// The wait before retrying after the `attempt_number`th attempt failed.
+pub(crate) fn retry_delay(attempt_number: u32) -> Option<Duration> {
     let delay_index = usize::try_from(attempt_number.checked_sub(1)?).ok()?;
     RETRY_DELAYS.get(delay_index).copied()
 }

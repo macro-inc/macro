@@ -1,0 +1,82 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, user_id, subscription_id, event_type, arguments, filter,\n                endpoint_url, secret_ciphertext, secret_kms_key_id,\n                secret_encryption_version, expires_at\n            FROM mcp_event_subscription\n            WHERE id = $1 AND expires_at > now()\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "subscription_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "event_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "arguments",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "filter",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "endpoint_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "secret_ciphertext",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 8,
+        "name": "secret_kms_key_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "secret_encryption_version",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 10,
+        "name": "expires_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "6bedabe3c22589a45fee6e0e46cbe0b9017a713f996db03ad3d58d6e310f9b78"
+}
