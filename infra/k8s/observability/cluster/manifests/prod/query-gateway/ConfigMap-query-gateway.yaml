@@ -76,6 +76,22 @@ data:
 
 
       }
+      # Grafana's alert state history (`unified_alerting.state_history`).
+      # `$request_uri` is the path as sent: a datasource proxy path that
+      # climbs out of its prefix with `..` normalizes to this location but
+      # fails the check. Grafana users can point a datasource at this prefix,
+      # so the push also needs the historian's basic auth (grafana.nix).
+      location = /state-history/loki/api/v1/push {
+        if ($request_uri != "/state-history/loki/api/v1/push") { return 403; }
+        auth_basic "state-history";
+        auth_basic_user_file /etc/nginx/auth/state-history.htpasswd;
+        limit_except POST { deny all; }
+    set $backend http://loki.observability.svc.cluster.local:3100;
+    rewrite ^/[^/]+(/.*)$ $1 break;
+    proxy_pass $backend;
+    proxy_set_header Authorization "";
+
+      }
       location ~ ^/tempo/api/(echo|search|search/tags|search/tag/[^/]+/values|traces/[a-fA-F0-9]+|v2/traces/[a-fA-F0-9]+|v2/search/tags|v2/search/tag/[^/]+/values|metrics/query|metrics/query_range|status/buildinfo)$ {
         limit_except GET { deny all; }
     set $backend http://tempo-query-frontend.observability.svc.cluster.local:3200;

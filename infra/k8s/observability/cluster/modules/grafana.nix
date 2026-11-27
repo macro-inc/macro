@@ -184,31 +184,13 @@ let
       }
     ];
   };
-  muteAlways = "always";
+  inherit (provisioning.alerting) muteAlways;
   rootPolicy = builtins.head provisioning.alerting.policies.policies;
   alerting = {
     "contact-points.yaml" = provisioning.alerting.contactPoints // {
       contactPoints = provisioning.alerting.contactPoints.contactPoints ++ [ watchdog.contactPoint ];
     };
-    "mute-timings.yaml" = {
-      apiVersion = 1;
-      muteTimes = [
-        {
-          orgId = 1;
-          name = muteAlways;
-          time_intervals = [
-            {
-              times = [
-                {
-                  start_time = "00:00";
-                  end_time = "24:00";
-                }
-              ];
-            }
-          ];
-        }
-      ];
-    };
+    "mute-timings.yaml" = provisioning.alerting.muteTimings;
     "policies.yaml" = provisioning.alerting.policies // {
       policies = [
         (
@@ -364,6 +346,22 @@ let
       ha_advertise_address = "$__env{POD_IP}:9094";
       # A replaced pod's address never comes back.
       ha_reconnect_timeout = "2m";
+    };
+    # Rule state history: Grafana's database (annotations) for its own views,
+    # and Loki, where queries can compare rules' firing with Datadog's
+    # (grafana-provisioning/datadog/). Writes go through the query gateway's
+    # one push path, reads through its Loki query endpoints.
+    "unified_alerting.state_history" = {
+      enabled = true;
+      backend = "multiple";
+      primary = "annotations";
+      secondaries = "loki";
+      loki_remote_read_url = config.macro.edge.datasourceUrls.loki;
+      loki_remote_write_url = config.macro.edge.stateHistoryUrl;
+      # The gateway's push path checks it (edge.nix); Grafana sends it on
+      # reads too, which the query endpoints ignore.
+      loki_basic_auth_username = "state-history";
+      loki_basic_auth_password = secretFile "grafana" "otlp_token";
     };
   };
 
@@ -594,6 +592,8 @@ in
           "google_client_id"
           "google_client_secret"
           "grafana_secret_key"
+          # State history's basic auth on the query gateway.
+          "otlp_token"
         ];
       })
       (workload.externalSecret cluster {
