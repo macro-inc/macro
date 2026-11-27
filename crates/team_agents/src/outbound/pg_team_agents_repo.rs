@@ -42,6 +42,51 @@ impl PgTeamAgentsRepo {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
+
+    /// Resolve an opaque account key only if it identifies exactly one profile.
+    /// The caller must check the profile's current team and agent facts.
+    pub async fn account_for_opaque_key(
+        &self,
+        key: Uuid,
+    ) -> Result<Option<MacroUserIdStr<'static>>, PgTeamAgentsError> {
+        if key.is_nil() {
+            return Ok(None);
+        }
+
+        // Historical profiles can share one account UUID. Bound the
+        // reverse lookup to the rows needed to detect ambiguity.
+        let accounts = sqlx::query_scalar!(
+            r#"SELECT id FROM "User" WHERE macro_user_id = $1 LIMIT 2"#,
+            key,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let [account] = accounts.as_slice() else {
+            return Ok(None);
+        };
+        user_id(account.clone()).map(Some)
+    }
+
+    /// Return the account's opaque key only if it resolves back to this
+    /// exact profile. The key is independent of any computer assignment.
+    pub async fn opaque_key_for_account(
+        &self,
+        account: &MacroUserIdStr<'_>,
+    ) -> Result<Option<Uuid>, PgTeamAgentsError> {
+        let key = sqlx::query_scalar!(
+            r#"SELECT macro_user_id FROM "User" WHERE id = $1"#,
+            account.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let Some(key) = key else {
+            return Ok(None);
+        };
+        let confirmed = self.account_for_opaque_key(key).await?;
+        Ok((confirmed.as_ref() == Some(account)).then_some(key))
+    }
 }
 
 fn user_id(raw: String) -> Result<MacroUserIdStr<'static>, PgTeamAgentsError> {
