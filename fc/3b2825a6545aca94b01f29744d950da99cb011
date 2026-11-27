@@ -1,0 +1,22 @@
+apps/web/src/lib/core/hotkey/dom-scope-reattach.test.tsx
+  s_87905d70629467::t_7deeb12caa18c8 1,20-24,26,28,35-37,42-43
+  s_87905d70629467::t_4f88e0b0895797 2-19,25,27,29-34,38-41,44-69
+apps/web/src/lib/core/hotkey/hotkeys.ts
+  s_87905d70629467::t_9c536bfd4f737b 508-523,525-533
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "fc3b2825a6545aca94b01f29744d950da99cb011",
+  "prompts": {},
+  "sessions": {
+    "s_87905d70629467": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6cc03ed5-d349-407c-8a2d-9fa8a52644c4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
