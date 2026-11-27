@@ -128,6 +128,7 @@ pub struct ThreadMessage {
 }
 
 /// In-process continuation, usable only by the same viewer and query.
+#[derive(Clone)]
 pub struct InboxCursor {
     viewer: MacroUserIdStr<'static>,
     mailbox: MailboxIdentity,

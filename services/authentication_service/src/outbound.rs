@@ -1,6 +1,7 @@
 //! Adapters for authentication service use cases.
 
 pub mod agent_addresses;
+pub(crate) mod brain_mailbox_fixture;
 pub mod computer_billing;
 pub mod crm_member_access;
 pub mod email_code_signup;

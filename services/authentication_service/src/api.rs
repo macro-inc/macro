@@ -8,7 +8,6 @@ use native_app_service::inbound::RouterState;
 use std::net::SocketAddr;
 use std::time::Duration;
 use tower_http::compression::CompressionLayer;
-use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 // Utilities
@@ -70,6 +69,7 @@ pub(crate) async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::R
     let correlation =
         agent_correlation::inbound::CorrelationState::new(state.db.clone(), state.jwt_args.clone());
 
+    let brain_mailbox_enabled = state.brain_mailbox.is_some();
     let app = api_router(state.clone())
         .with_state(state)
         .layer(axum::middleware::from_fn_with_state(
@@ -83,9 +83,14 @@ pub(crate) async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::R
         .layer(CompressionLayer::new());
     // Swagger sits outside the dual-mount. Nested under `/auth`, the absolute
     // `/api-doc/openapi.json` URL in the UI would 404 on the gateway.
-    let app = mount_at_root_and_prefix(app).merge(swagger_ui());
+    let app = mount_at_root_and_prefix(app).merge(swagger_ui(brain_mailbox_enabled));
 
-    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
+    let host = if brain_mailbox_enabled {
+        "127.0.0.1"
+    } else {
+        "0.0.0.0"
+    };
+    let listener = tokio::net::TcpListener::bind(format!("{host}:{port}"))
         .await
         .unwrap();
     tracing::info!(
@@ -108,13 +113,11 @@ fn mount_at_root_and_prefix(inner: Router) -> Router {
         .nest(GATEWAY_PATH_PREFIX, inner)
 }
 
-fn swagger_ui() -> Router {
+fn swagger_ui(brain_mailbox_enabled: bool) -> Router {
+    let spec = swagger::runtime_openapi(brain_mailbox_enabled);
     Router::new()
-        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
-        .merge(
-            SwaggerUi::new("/auth/docs")
-                .url("/auth/api-doc/openapi.json", swagger::ApiDoc::openapi()),
-        )
+        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", spec.clone()))
+        .merge(SwaggerUi::new("/auth/docs").url("/auth/api-doc/openapi.json", spec))
 }
 
 fn computer_router_state(
@@ -135,6 +138,19 @@ fn computer_router_state(
 }
 
 fn api_router(state: ApiContext) -> Router<ApiContext> {
+    let team_agents = team_agents::inbound::axum_router::team_agents_router(
+        team_agents::inbound::axum_router::TeamAgentsRouterState {
+            service: state.team_agents_service.clone(),
+            entity_access_service: state.entity_access_service.clone(),
+            authorization_state: state.authorization_state.clone(),
+        },
+    );
+    let team_agents = match state.brain_mailbox.clone() {
+        Some(reader) => team_agents.merge(
+            team_agents::inbound::brain_mailbox::brain_mailbox_router(reader),
+        ),
+        None => team_agents,
+    };
     Router::new()
         .merge(native_app_service::inbound::native_app_router(
             RouterState {
@@ -184,16 +200,7 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
         .merge(hosted_runtimes::inbound::axum_router::team_router(
             computer_router_state(&state),
         ))
-        .nest(
-            "/team_agents",
-            team_agents::inbound::axum_router::team_agents_router(
-                team_agents::inbound::axum_router::TeamAgentsRouterState {
-                    service: state.team_agents_service.clone(),
-                    entity_access_service: state.entity_access_service.clone(),
-                    authorization_state: state.authorization_state.clone(),
-                },
-            ),
-        )
+        .nest("/team_agents", team_agents)
         .merge(
             teams::inbound::axum_router::domain_notice::domain_notice_router(
                 teams::inbound::axum_router::domain_notice::DomainNoticeRouterState {

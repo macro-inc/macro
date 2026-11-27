@@ -2509,6 +2509,7 @@
       "crates/workspace-hack"
     ],
     "authentication_service": [
+      "crates/account_manager",
       "crates/activity",
       "crates/agent",
       "crates/agent_api_keys",

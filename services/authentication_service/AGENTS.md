@@ -51,6 +51,18 @@ key issuance, and account merge/link flows.
 - Set `COMPUTERS_AGENT_EFFECTS=true` wherever the computers rollout is on: it runs the computers agents worker, the only consumer of `UndoAgentInvite`. Absent means off, and those effects wait in the outbox until it is on.
 - Store computer and seat prices as `stripe::PriceId` and reject malformed configured IDs during configuration loading with `config::configured_price_id` (async-stripe's parse accepts any string), including when no fleet is attached. `Config::computer_prices` returns a validation result.
 
+## Signed local Brain Email
+
+`outbound/brain_mailbox_fixture.rs` mounts the human mailbox GET routes only
+with the `local` Cargo feature, local environment, and the dedicated loopback
+database. The seed and route contract are in
+[`docs/design/agent-mailboxes.md`](../../docs/design/agent-mailboxes.md#human-mailbox-reads).
+Set `TEST_DATABASE_URL` to the migrated loopback fixture for the signed test.
+
+```sh
+cargo test -p authentication_service --features local --lib brain_mailbox -- --include-ignored --test-threads=1
+```
+
 ## Checks
 
 - `cargo test -p authentication_service` (`SQLX_OFFLINE` unset).

@@ -97,7 +97,10 @@ the account, or changes its managers.
   cookie beside another credential is not a conflict (browsers and native
   apps send it everywhere), and the scope check still reads its token.
 - Locally (`local_auth`), a configured user stands in for an ambient cookie
-  or none; an explicit user token is always the one used.
+  or none; an explicit user token is always the one used. Set
+  `MacroAuthorizationState::require_verified_user` on a router that must
+  verify a cookie or bearer JWT and skip other credential families, including
+  the local override.
 - A valid principal not admitted by the chosen policy is a 403, not a 401.
 - Every credential the Axum layer verifies records on the current span (the
   request's): `auth.credential` (the `CredentialOrigin` kind), and

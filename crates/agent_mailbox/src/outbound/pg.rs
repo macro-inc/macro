@@ -34,10 +34,62 @@ pub struct PgAgentMailboxRepository {
     pool: PgPool,
 }
 
+/// Exact identity and address of a provisioned mailbox, without credential material.
+pub struct ActiveMailboxAddress {
+    /// Macro mailbox ID.
+    pub id: AgentMailboxId,
+    /// Team under which it was provisioned.
+    pub team: TeamId,
+    /// Owner account of the mailbox.
+    pub agent: MacroUserIdStr<'static>,
+    /// The provisioned address.
+    pub address: String,
+}
+
 impl PgAgentMailboxRepository {
     /// Use this pool.
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
+    }
+
+    /// Read the active binding by primary key without selecting the stored grant.
+    #[tracing::instrument(skip_all, err, fields(agent_mailbox.id = %id.0))]
+    pub async fn active_address(
+        &self,
+        id: AgentMailboxId,
+    ) -> Result<Option<ActiveMailboxAddress>, PgAgentMailboxError> {
+        // Resolve the one primary-key row before testing its lifecycle. A
+        // sparse partial provider index is otherwise eligible for a scan.
+        let row = sqlx::query!(
+            r#"
+            SELECT team_id, user_id, address AS "address!"
+            FROM (
+                SELECT team_id, user_id, address, state,
+                       provider_mailbox_id IS NOT NULL AS provisioned,
+                       grant_id IS NOT NULL AS has_grant
+                FROM agent_mailboxes
+                WHERE id = $1
+                OFFSET 0
+            ) AS mailbox
+            WHERE state = 'active' AND provisioned AND has_grant AND address IS NOT NULL
+            "#,
+            id.0,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(|row| {
+            let agent = MacroUserIdStr::parse_from_str(&row.user_id)
+                .map_err(|_| PgAgentMailboxError::Corrupt("user_id"))?
+                .into_owned();
+            Ok(ActiveMailboxAddress {
+                id,
+                team: TeamId(row.team_id),
+                agent,
+                address: row.address,
+            })
+        })
+        .transpose()
     }
 }
 

@@ -41,7 +41,7 @@ async fn unprefixed_unknown_path_is_not_rewritten_onto_the_prefix() {
 
 #[tokio::test]
 async fn openapi_is_served_at_root_and_gateway_prefix() {
-    let api = swagger_ui();
+    let api = swagger_ui(false);
 
     for uri in ["/api-doc/openapi.json", "/auth/api-doc/openapi.json"] {
         let response = api

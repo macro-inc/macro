@@ -49,7 +49,9 @@ where
     }
 
     #[cfg(feature = "local_auth")]
-    if let Some(user_context) = local_user_context() {
+    if !MacroAuthorizationState::<Svc>::from_ref(state).verified_user_only
+        && let Some(user_context) = local_user_context()
+    {
         return authenticated_user(user_context, crate::CredentialOrigin::Session).map(Some);
     }
 

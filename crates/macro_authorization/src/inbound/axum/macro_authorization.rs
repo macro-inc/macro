@@ -77,6 +77,16 @@ where
     // scope check, so the two can't pick different ones.
     let credential = macro_auth::credential::request_credential(parts)
         .map_err(|error| status_rejection(StatusCode::BAD_REQUEST, error.code()))?;
+    if !matches!(
+        &credential.kind,
+        CredentialKind::UserToken {
+            source: TokenSource::Cookie | TokenSource::Bearer,
+            ..
+        }
+    ) && MacroAuthorizationState::<Svc>::from_ref(state).verified_user_only
+    {
+        return Err(rejection("unauthorized"));
+    }
     let user_token = match credential.kind {
         CredentialKind::Internal => {
             let Some(convention) = internal_header_convention(&parts.headers) else {

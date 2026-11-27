@@ -58,6 +58,42 @@ fn state() -> MacroAuthorizationState<AuthorizationService> {
     )))
 }
 
+#[cfg(feature = "local_auth")]
+#[tokio::test]
+async fn verified_user_state_requires_a_valid_cookie_even_with_local_auth() {
+    let state = state().require_verified_user();
+    for (token, expected) in [
+        (None, false),
+        (Some("invalid"), false),
+        (Some("user"), true),
+    ] {
+        let mut request = axum::http::Request::builder().uri("/read");
+        if let Some(token) = token {
+            let cookie = macro_auth::credential::access_token_cookie_name();
+            request = request.header(header::COOKIE, format!("{cookie}={token}"));
+        }
+        let (mut parts, _) = request.body(()).unwrap().into_parts();
+        let caller =
+            MacroAuthorizationExtractor::<AuthorizationService, UserOnly>::from_request_parts(
+                &mut parts, &state,
+            )
+            .await;
+        assert_eq!(caller.is_ok(), expected);
+    }
+    let (mut parts, _) = axum::http::Request::builder()
+        .uri("/read?macro-api-token=user")
+        .body(())
+        .unwrap()
+        .into_parts();
+    assert!(
+        MacroAuthorizationExtractor::<AuthorizationService, UserOnly>::from_request_parts(
+            &mut parts, &state
+        )
+        .await
+        .is_err()
+    );
+}
+
 /// How a request carrying `token` as `?macro-api-token=` or as the
 /// access-token cookie, with no `Authorization` header and no code-execution
 /// marker, reads by `check`.

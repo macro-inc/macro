@@ -76,6 +76,10 @@ export const authExcluded = [
   'getAgentApiKey',
   'getAiBillingPlans',
   'getAiBillingSummary',
+  // The signed Brain Email fixture is mounted only for isolated local review.
+  'getBrainMailboxAddress',
+  'getBrainMailboxInbox',
+  'getBrainMailboxThread',
   'getCodexConnection',
   'getCursorApiKey',
   'getGithubPullRequestMergeability',

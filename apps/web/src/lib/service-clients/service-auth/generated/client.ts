@@ -11,6 +11,10 @@ import type {
   AgentVoice,
   AiBillingErrorBody,
   AppleLoginRequest,
+  BrainMailboxAddress,
+  BrainMailboxErrorBody,
+  BrainMailboxPage,
+  BrainMailboxThread,
   ChangePlanRequest,
   ChangePlanResponse,
   CheckoutSessionV2Response,
@@ -46,6 +50,9 @@ import type {
   ErrorResponse,
   GenerateEmailLinkRequest,
   GenericSuccessResponse,
+  GetBrainMailboxAddressParams,
+  GetBrainMailboxInboxParams,
+  GetBrainMailboxThreadParams,
   GetLegacyUserPermissionsResponse,
   GetNamesWithEmailRequestBody,
   GetProfilePicturesRequestBody,
@@ -7296,6 +7303,251 @@ export const setTeamAgentVoice = async (
     status: res.status,
     headers: res.headers,
   } as setTeamAgentVoiceResponse;
+};
+
+/**
+ * @summary Read the configured address under the viewer's current human authorization.
+ */
+export type getBrainMailboxAddressResponse200 = {
+  data: BrainMailboxAddress;
+  status: 200;
+};
+
+export type getBrainMailboxAddressResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getBrainMailboxAddressResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type getBrainMailboxAddressResponse404 = {
+  data: BrainMailboxErrorBody;
+  status: 404;
+};
+
+export type getBrainMailboxAddressResponseSuccess =
+  getBrainMailboxAddressResponse200 & {
+    headers: Headers;
+  };
+export type getBrainMailboxAddressResponseError = (
+  | getBrainMailboxAddressResponse401
+  | getBrainMailboxAddressResponse403
+  | getBrainMailboxAddressResponse404
+) & {
+  headers: Headers;
+};
+
+export type getBrainMailboxAddressResponse =
+  | getBrainMailboxAddressResponseSuccess
+  | getBrainMailboxAddressResponseError;
+
+export const getGetBrainMailboxAddressUrl = (
+  userId: string,
+  params: GetBrainMailboxAddressParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/team_agents/${userId}/email/address?${stringifiedParams}`
+    : `/team_agents/${userId}/email/address`;
+};
+
+export const getBrainMailboxAddress = async (
+  userId: string,
+  params: GetBrainMailboxAddressParams,
+  options?: RequestInit
+): Promise<getBrainMailboxAddressResponse> => {
+  const res = await fetch(getGetBrainMailboxAddressUrl(userId, params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getBrainMailboxAddressResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getBrainMailboxAddressResponse;
+};
+
+/**
+ * @summary List authorized inbound messages in the selected teammate's mailbox.
+ */
+export type getBrainMailboxInboxResponse200 = {
+  data: BrainMailboxPage;
+  status: 200;
+};
+
+export type getBrainMailboxInboxResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getBrainMailboxInboxResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type getBrainMailboxInboxResponse404 = {
+  data: BrainMailboxErrorBody;
+  status: 404;
+};
+
+export type getBrainMailboxInboxResponseSuccess =
+  getBrainMailboxInboxResponse200 & {
+    headers: Headers;
+  };
+export type getBrainMailboxInboxResponseError = (
+  | getBrainMailboxInboxResponse401
+  | getBrainMailboxInboxResponse403
+  | getBrainMailboxInboxResponse404
+) & {
+  headers: Headers;
+};
+
+export type getBrainMailboxInboxResponse =
+  | getBrainMailboxInboxResponseSuccess
+  | getBrainMailboxInboxResponseError;
+
+export const getGetBrainMailboxInboxUrl = (
+  userId: string,
+  params: GetBrainMailboxInboxParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/team_agents/${userId}/email/inbox?${stringifiedParams}`
+    : `/team_agents/${userId}/email/inbox`;
+};
+
+export const getBrainMailboxInbox = async (
+  userId: string,
+  params: GetBrainMailboxInboxParams,
+  options?: RequestInit
+): Promise<getBrainMailboxInboxResponse> => {
+  const res = await fetch(getGetBrainMailboxInboxUrl(userId, params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getBrainMailboxInboxResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getBrainMailboxInboxResponse;
+};
+
+/**
+ * @summary Open one independently authorized thread in the selected mailbox.
+ */
+export type getBrainMailboxThreadResponse200 = {
+  data: BrainMailboxThread;
+  status: 200;
+};
+
+export type getBrainMailboxThreadResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getBrainMailboxThreadResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type getBrainMailboxThreadResponse404 = {
+  data: BrainMailboxErrorBody;
+  status: 404;
+};
+
+export type getBrainMailboxThreadResponseSuccess =
+  getBrainMailboxThreadResponse200 & {
+    headers: Headers;
+  };
+export type getBrainMailboxThreadResponseError = (
+  | getBrainMailboxThreadResponse401
+  | getBrainMailboxThreadResponse403
+  | getBrainMailboxThreadResponse404
+) & {
+  headers: Headers;
+};
+
+export type getBrainMailboxThreadResponse =
+  | getBrainMailboxThreadResponseSuccess
+  | getBrainMailboxThreadResponseError;
+
+export const getGetBrainMailboxThreadUrl = (
+  userId: string,
+  threadId: string,
+  params: GetBrainMailboxThreadParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/team_agents/${userId}/email/threads/${threadId}?${stringifiedParams}`
+    : `/team_agents/${userId}/email/threads/${threadId}`;
+};
+
+export const getBrainMailboxThread = async (
+  userId: string,
+  threadId: string,
+  params: GetBrainMailboxThreadParams,
+  options?: RequestInit
+): Promise<getBrainMailboxThreadResponse> => {
+  const res = await fetch(
+    getGetBrainMailboxThreadUrl(userId, threadId, params),
+    {
+      ...options,
+      method: 'GET',
+    }
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getBrainMailboxThreadResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getBrainMailboxThreadResponse;
 };
 
 /**
