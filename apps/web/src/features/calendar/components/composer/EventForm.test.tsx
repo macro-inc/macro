@@ -736,6 +736,8 @@ it('holds the composer’s Save while Teams is off on an Outlook event, until Un
   const { onSubmit, form } = showComposerMeetingEdit(OUTLOOK_CALENDAR);
   const save = screen.getByRole<HTMLButtonElement>('button', { name: 'Save' });
   expect(save.disabled).toBe(false);
+  // Before Teams is off, the note names the action that removes it.
+  expect(screen.getByText(/use “Replace without meeting”/)).toBeTruthy();
 
   await user.click(screen.getByRole('button', { name: 'Video conferencing' }));
   expect(
