@@ -25,6 +25,12 @@ calls, gaps and failures, for finding out why a session was slow or wrong.
   largest prompt's parts, and flags (`no-sdk-index`, `guessed-sdk-methods`,
   `repeated-failure`, `failing-code`, ...). The viewer and the markdown both
   show it.
+- `token_usage.py`: tokens and cost. The session's `ai_usage` rows (in the
+  export as `usage`) reconciled with its `chat_streaming` spans: each span as
+  uncached / cache read / cache write / output, rows matched to spans,
+  per-model, per-turn and coverage totals, and which model call each
+  thought, message and tool call streamed in (`frame_rounds`). The viewer
+  and the markdown both show it.
 - `reconstruct.py` and `asv_reconstruct.rs`: `--reconstruct`, the literal
   text of each turn's reproducible prompt parts (the `<macro_sdk>` docs, the
   preamble, the Macro prompt with its area guides, the identity and the
@@ -35,6 +41,8 @@ calls, gaps and failures, for finding out why a session was slow or wrong.
 
 - Prod session: `tooling/agent-session-view/agent-session-view <session-id>`;
   dev: add `--env dev`. Output lands in `~/.cache/agent-session-view/<id>.html`.
+  The export includes the session's `ai_usage` rows; an export saved before
+  that shows span tokens only, with "cost unknown".
 - Re-render without a database: `--save-json` once, then `--from-json`.
 - Open it from another machine: `--serve PORT` serves that one page on
   127.0.0.1 and prints the `tailscale serve` lines that put it on the tailnet
@@ -108,6 +116,25 @@ calls, gaps and failures, for finding out why a session was slow or wrong.
   harness process. `asv_reconstruct.rs` must compile at old commits: use only
   long-lived public items, and when one moves, the run fails loudly at that
   commit rather than guessing.
+- Tokens: `ai_usage` is the authority for totals and cost; span tokens are
+  never added to them. Anthropic spans report input without cached tokens,
+  Gemini and OpenAI spans include them (uncached = input − cache read).
+  Billed output includes reasoning; Gemini spans' output does not, so a row
+  matches its spans on the input counters with output at least theirs. Some
+  calls are billed one row per model call (Opus), others one row per turn
+  summing its rounds (Gemini, Sonnet), so those turns' cost is not split
+  per call; matching handles both. Side
+  rows (`feature` other than `agent_session`: activity summaries, renames)
+  are listed apart. The opener is recognised by `OPENER_MODEL` with no tools
+  and few output tokens: when `crates/agent_inmem/src/outbound/rig_engine/opener.rs`
+  changes its `MODEL` or `MAX_TOKENS`, update `token_usage.py`
+  (`OPENER_MODEL` is the name without its `openai/` prefix, as spans and
+  `ai_usage` carry it). `ai_usage.model` is the price key, which can carry
+  `:fast`, `:priority`, `:ultrafast` or `:long` suffixes
+  (`crates/agent/src/model/metering/per_call.rs`); rows match spans on the
+  bare model. A model's first call in a session is a cold cache write, not a
+  miss. Matching
+  windows are the named constants at the top of `token_usage.py`.
 - `invoke_agent`'s `gen_ai.tool.definitions` is cut at about 25 KB, so the
   deferred list can be partial. Only names, counts and sizes are read from
   spans, never their prompt or message text.
