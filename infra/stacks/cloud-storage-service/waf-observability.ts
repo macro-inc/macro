@@ -284,8 +284,8 @@ export class WafObservability extends pulumi.ComponentResource {
     );
 
     // The same events to Grafana's Loki: the log group's second filter.
-    // Unprotected, so leaving the stack out of GRAFANA_CLOUDWATCH_LOGS_STACKS
-    // removes it.
+    // Unprotected (a child inherits its parent's `protect` otherwise), so
+    // leaving the stack out of GRAFANA_CLOUDWATCH_LOGS_STACKS removes it.
     if (GRAFANA_CLOUDWATCH_LOGS_STACKS.includes(stack)) {
       new aws.cloudwatch.LogSubscriptionFilter(
         `${name}-grafana-subscription`,
@@ -296,7 +296,7 @@ export class WafObservability extends pulumi.ComponentResource {
           filterPattern,
           logGroup: logGroup.name,
         },
-        { parent: this, dependsOn: [loggingConfiguration] }
+        { parent: this, protect: false, dependsOn: [loggingConfiguration] }
       );
     }
 
