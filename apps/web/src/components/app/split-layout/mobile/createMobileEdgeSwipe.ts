@@ -3,6 +3,26 @@ export const SWIPE_EDGE_THRESHOLD = 40;
 const DIRECTION_SLOP = 8;
 const VELOCITY_THRESHOLD = 0.3; // px/ms
 const DISTANCE_THRESHOLD = 0.5; // fraction of the pane width
+/** How far back from the release the finger's velocity is measured. */
+const VELOCITY_WINDOW_MS = 100;
+
+type TouchSample = { x: number; time: number };
+
+/**
+ * The finger's horizontal velocity at release, in px/ms, from the samples in
+ * the last `VELOCITY_WINDOW_MS`. A finger that rested before lifting has no
+ * recent samples and so no velocity.
+ */
+function releaseVelocity(samples: readonly TouchSample[], endTime: number) {
+  const recent = samples.filter(
+    (sample) => endTime - sample.time <= VELOCITY_WINDOW_MS
+  );
+  const first = recent.at(0);
+  const last = recent.at(-1);
+  if (!first || !last || last.time <= first.time) return 0;
+
+  return (last.x - first.x) / (last.time - first.time);
+}
 
 /** Recognizes a rightward edge swipe and leaves presentation to its host. */
 export function createMobileEdgeSwipe(options: {
@@ -11,14 +31,14 @@ export function createMobileEdgeSwipe(options: {
   onMove?: (offset: number) => void;
   onEnd: (completed: boolean) => void;
 }) {
-  let tracking:
-    | { id: number; x: number; y: number; time: number; width: number }
-    | undefined;
+  let tracking: { id: number; x: number; y: number; width: number } | undefined;
+  let samples: TouchSample[] = [];
   let dragging = false;
   let offset = 0;
 
   function reset() {
     tracking = undefined;
+    samples = [];
     dragging = false;
     offset = 0;
   }
@@ -56,9 +76,9 @@ export function createMobileEdgeSwipe(options: {
       id: touch.identifier,
       x: touch.clientX,
       y: touch.clientY,
-      time: event.timeStamp,
       width: frame.width,
     };
+    samples = [{ x: touch.clientX, time: event.timeStamp }];
     return true;
   }
 
@@ -85,23 +105,40 @@ export function createMobileEdgeSwipe(options: {
       options.onStart?.();
     }
     if (event.cancelable) event.preventDefault();
+
+    // Keep only the samples the release velocity can still use.
+    samples = samples.filter(
+      (sample) => event.timeStamp - sample.time <= VELOCITY_WINDOW_MS
+    );
+    samples.push({ x: touch.clientX, time: event.timeStamp });
+
     offset = Math.max(0, dx);
     options.onMove?.(offset);
   }
 
+  /**
+   * Like UIKit's back swipe, a flick decides by its direction: toward the
+   * right completes and toward the left cancels, however far the pane has
+   * moved. A slow release completes past half the width.
+   */
   function handleTouchEnd(event: TouchEvent) {
     if (!tracking) return;
     if (event.touches.length > 0) {
       finish(false);
       return;
     }
-    const elapsed = event.timeStamp - tracking.time;
-    const velocity = elapsed > 0 ? offset / elapsed : 0;
-    finish(
-      options.enabled() &&
-        (offset > tracking.width * DISTANCE_THRESHOLD ||
-          velocity > VELOCITY_THRESHOLD)
-    );
+    const velocity = releaseVelocity(samples, event.timeStamp);
+
+    let completed: boolean;
+    if (velocity > VELOCITY_THRESHOLD) {
+      completed = true;
+    } else if (velocity < -VELOCITY_THRESHOLD) {
+      completed = false;
+    } else {
+      completed = offset > tracking.width * DISTANCE_THRESHOLD;
+    }
+
+    finish(options.enabled() && completed);
   }
 
   return {
