@@ -541,7 +541,7 @@ data:
           `replace_pattern(attributes["service.name"], "^/aws/(lambda|vendedlogs)/", "")`,
           `replace_pattern(attributes["service.name"], "^/+", "")`,
           `replace_pattern(attributes["service.name"], "/", "-")`,
-          `replace_pattern(attributes["service.name"], "-(prod|dev)$", "")`,
+          `replace_pattern(attributes["service.name"], "-(prod|dev)$", "") where IsMatch(attributes["log_group"], "-(prod|dev)$")`,
           `set(attributes["deployment.environment"], "prod") where IsMatch(attributes["log_group"], "-prod$")`,
           `set(attributes["deployment.environment"], "dev") where IsMatch(attributes["log_group"], "-dev$")`,
           `set(attributes["faas.name"], attributes["log_group"]) where IsMatch(attributes["log_group"], "^/aws/lambda/")`,

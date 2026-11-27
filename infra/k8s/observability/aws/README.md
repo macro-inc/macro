@@ -112,8 +112,12 @@ doppler secrets get OTLP_TOKEN --project observability --config prd --plain |
 nix run .#tofu -- main apply
 ```
 
-When the OTLP token changes, put the new one here too: until then Firehose's
-posts are refused (401) and land in the failed-records bucket.
+Alloy accepts one token at a time, and Firehose rereads this secret only now
+and then. When the OTLP token changes, put the new one here first, wait several
+minutes, then change the cluster's `otlp_token`. Posts in between are refused
+(401) and retried for `retrySeconds`; those still refused after that land in
+the failed-records bucket, which keeps them `failedDays` for inspection. There
+is no replay: those events reach only Datadog.
 
 ## Working on it
 
