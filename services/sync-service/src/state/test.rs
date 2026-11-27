@@ -2,6 +2,8 @@ use loro::{LoroList, LoroMap, LoroMovableList, LoroText};
 
 use super::*;
 
+const TEST_DOCUMENT_ID: &str = "test-document";
+
 #[test]
 fn imported_updates_report_the_lexical_nodes_they_touch() {
     let state = DocumentState::new();
@@ -276,7 +278,7 @@ fn concurrent_branches_survive_session_snapshot_roundtrip() {
                 .unwrap();
         }
 
-        let snapshot = state.export_compact_snapshot().unwrap();
+        let snapshot = state.export_compact_snapshot(TEST_DOCUMENT_ID).unwrap();
         let restored = LoroDoc::new();
         restored.import(&snapshot).unwrap();
         assert_eq!(restored.get_deep_value(), state.loro_doc.get_deep_value());
@@ -345,7 +347,7 @@ fn shared_history_still_compacts_with_concurrent_heads() {
         assert_eq!(state.loro_doc.oplog_frontiers().len(), heads as usize);
 
         let full = state.export_snapshot(None).unwrap();
-        let compact = state.export_compact_snapshot().unwrap();
+        let compact = state.export_compact_snapshot(TEST_DOCUMENT_ID).unwrap();
         let restored = LoroDoc::from_snapshot(&compact).unwrap();
         assert!(restored.is_shallow());
         assert_eq!(restored.shallow_since_frontiers(), root);

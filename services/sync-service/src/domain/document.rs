@@ -166,9 +166,10 @@ pub fn snapshot(
 /// work by live content rather than the document's age.
 pub fn shallow_snapshot(
     _access: &DocumentAccess,
+    document_id: &str,
     doc: &LoroDoc,
 ) -> Result<(Vec<u8>, Vec<u8>), DocumentError> {
-    let (snapshot, _) = compact_snapshot::export(doc).map_err(|_| EXPORT_FAILED)?;
+    let (snapshot, _) = compact_snapshot::export(doc, document_id).map_err(|_| EXPORT_FAILED)?;
     bounded_state(doc, snapshot)
 }
 

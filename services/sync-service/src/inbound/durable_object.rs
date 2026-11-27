@@ -419,7 +419,7 @@ impl SyncSession {
 
         // Broadcast initial sync to any sockets that connected before init landed.
         if let Ok(state) = self.document_state().await
-            && let Ok(snapshot) = state.export_compact_snapshot()
+            && let Ok(snapshot) = state.export_compact_snapshot(document_id)
         {
             let awareness = self.awareness.encode_all();
             for ws in &self.state.get_websockets() {
@@ -669,7 +669,7 @@ impl SyncSession {
             let snapshot = self
                 .document_state()
                 .await
-                .and_then(|state| state.export_compact_snapshot());
+                .and_then(|state| state.export_compact_snapshot(document_id));
 
             if let Ok(snapshot) = snapshot {
                 // Size of the initial sync this connect sent — the server end

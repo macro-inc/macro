@@ -77,7 +77,7 @@ impl SyncSession {
                 .query_pairs()
                 .any(|(key, value)| key == "shallow" && value == "true");
             let snapshot = if compact {
-                document::shallow_snapshot(&access, &state.loro_doc)
+                document::shallow_snapshot(&access, document_id, &state.loro_doc)
             } else {
                 document::snapshot(&access, &state.loro_doc)
             };

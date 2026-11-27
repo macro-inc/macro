@@ -284,8 +284,8 @@ impl DocumentState {
 
     /// The current state for a peer or reader to load: shallow when that is
     /// cheap to export, otherwise full ([`compact_snapshot::export`]).
-    pub fn export_compact_snapshot(&self) -> Result<Vec<u8>> {
-        compact_snapshot::export(&self.loro_doc)
+    pub fn export_compact_snapshot(&self, document_id: &str) -> Result<Vec<u8>> {
+        compact_snapshot::export(&self.loro_doc, document_id)
             .map(|(snapshot, _)| snapshot)
             .context("failed to export snapshot")
     }

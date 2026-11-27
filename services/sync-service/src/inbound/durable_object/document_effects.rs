@@ -78,7 +78,7 @@ impl DocumentUpdateEffects for WorkerDocumentEffects<'_> {
         self.session.record_editor(self.attribution);
         let snapshot = self
             .document_state
-            .export_compact_snapshot()
+            .export_compact_snapshot(self.document_id)
             .map_err(notification_error)?;
         let editors = take_editors(&self.session.pending_editors);
         let env = self.session.env.clone();

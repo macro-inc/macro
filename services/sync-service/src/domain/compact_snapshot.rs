@@ -11,6 +11,9 @@
 //! seconds on long-edited documents. A full snapshot is cached and exports in
 //! milliseconds, so this module walks the same root search with a budget first
 //! and uses a full snapshot when the shallow one would keep more than that.
+//! A full snapshot can be much larger than a shallow one when history below the
+//! root overwrote a lot of content, so a full snapshot too large for readers
+//! gives way to a shallow one that keeps more history, up to a larger budget.
 use std::{cmp::Ordering, collections::BinaryHeap};
 
 use loro::{Counter, ExportMode, Frontiers, ID, Lamport, LoroDoc, LoroEncodeError, PeerID};
@@ -18,43 +21,33 @@ use loro::{Counter, ExportMode, Frontiers, ID, Lamport, LoroDoc, LoroEncodeError
 #[cfg(test)]
 mod test;
 
-/// Most operations a shallow export may keep above its root. Exporting this
-/// many text edits costs tens of milliseconds natively; the checkout's cost
-/// grows faster than linearly past it (tens of thousands take seconds).
+/// Most operations a shallow export may keep above its root while a full
+/// snapshot would do instead. Exporting this many text edits costs tens of
+/// milliseconds natively; the checkout's cost grows faster than linearly past
+/// it (tens of thousands take seconds).
 pub const MAX_SHALLOW_RETAINED_OPS: u32 = 1_000;
+
+/// Largest full snapshot exported in place of a shallow one. Larger bodies
+/// stop fitting readers: DSS takes snapshot uploads up to Axum's default 2 MiB
+/// body limit, and `/state` answers 413 above 4 MB.
+pub const MAX_FULL_SNAPSHOT_BYTES: usize = 2 * 1024 * 1024;
+
+/// Most operations a shallow export may keep above its root when the full
+/// snapshot is larger than [`MAX_FULL_SNAPSHOT_BYTES`]. Exporting this many
+/// text edits costs about a third of a second natively.
+pub const MAX_SHALLOW_RETAINED_OPS_FOR_LARGE_DOCUMENTS: u32 = 4_000;
 
 /// Which snapshot [`export`] wrote.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompactExport {
     /// A shallow snapshot that keeps `retained_ops` operations above its root.
     Shallow { retained_ops: u32 },
-    /// A full snapshot: a shallow one would keep more than
-    /// [`MAX_SHALLOW_RETAINED_OPS`] operations, so it would be about as large
-    /// and far slower to export.
+    /// A full snapshot: a shallow one would keep so much history that it would
+    /// be slow to export, and usually about as large.
     Full,
 }
 
 impl CompactExport {
-    /// Choose the snapshot for `doc` by walking Loro's shallow root search
-    /// until it finds the root or passes `budget` operations.
-    fn choose(doc: &LoroDoc, budget: u32) -> Self {
-        let state = doc.state_frontiers();
-        let oplog = doc.oplog_frontiers();
-        match retained_ops_above_root(doc, &state, &oplog, budget) {
-            Ok(Search::Root { retained_ops }) => Self::Shallow { retained_ops },
-            Ok(Search::NoRoot) => {
-                // Loro then keeps every operation since the document's own
-                // start (or its shallow root, if it has one).
-                let retained = history_len(doc);
-                match u32::try_from(retained) {
-                    Ok(retained_ops) if retained_ops <= budget => Self::Shallow { retained_ops },
-                    _ => Self::Full,
-                }
-            }
-            Ok(Search::OverBudget) | Err(WalkFailed) => Self::Full,
-        }
-    }
-
     fn as_str(self) -> &'static str {
         match self {
             Self::Shallow { .. } => "shallow",
@@ -66,9 +59,13 @@ impl CompactExport {
 /// Export `doc` as a shallow snapshot when that is cheap, otherwise as a full
 /// one. Both import to the same state and version; readers must not rely on
 /// the result being shallow.
-pub fn export(doc: &LoroDoc) -> Result<(Vec<u8>, CompactExport), LoroEncodeError> {
+pub fn export(
+    doc: &LoroDoc,
+    document_id: &str,
+) -> Result<(Vec<u8>, CompactExport), LoroEncodeError> {
     let span = tracing::info_span!(
         "document.compact_snapshot",
+        document.id = document_id,
         snapshot.mode = tracing::field::Empty,
         snapshot.retained_ops = tracing::field::Empty,
         snapshot.bytes = tracing::field::Empty,
@@ -76,18 +73,50 @@ pub fn export(doc: &LoroDoc) -> Result<(Vec<u8>, CompactExport), LoroEncodeError
         loro.heads = doc.oplog_frontiers().len(),
     );
     let _entered = span.enter();
-    let choice = CompactExport::choose(doc, MAX_SHALLOW_RETAINED_OPS);
+    let exported = export_within(doc).inspect_err(|error| {
+        tracing::error!(error = ?error, "failed to export compact snapshot");
+    })?;
+    let (snapshot, choice) = &exported;
     span.record("snapshot.mode", choice.as_str());
-    let mode = match choice {
-        CompactExport::Shallow { retained_ops } => {
-            span.record("snapshot.retained_ops", retained_ops);
-            ExportMode::shallow_snapshot_owned(doc.state_frontiers())
-        }
-        CompactExport::Full => ExportMode::Snapshot,
-    };
-    let snapshot = doc.export(mode)?;
+    if let CompactExport::Shallow { retained_ops } = choice {
+        span.record("snapshot.retained_ops", retained_ops);
+    }
     span.record("snapshot.bytes", snapshot.len());
-    Ok((snapshot, choice))
+    Ok(exported)
+}
+
+fn export_within(doc: &LoroDoc) -> Result<(Vec<u8>, CompactExport), LoroEncodeError> {
+    let retained = retained_ops(doc, MAX_SHALLOW_RETAINED_OPS_FOR_LARGE_DOCUMENTS);
+    if let Some(retained_ops) = retained.filter(|ops| *ops <= MAX_SHALLOW_RETAINED_OPS) {
+        return Ok((shallow(doc)?, CompactExport::Shallow { retained_ops }));
+    }
+    let full = doc.export(ExportMode::Snapshot)?;
+    match retained {
+        Some(retained_ops) if full.len() > MAX_FULL_SNAPSHOT_BYTES => {
+            Ok((shallow(doc)?, CompactExport::Shallow { retained_ops }))
+        }
+        _ => Ok((full, CompactExport::Full)),
+    }
+}
+
+fn shallow(doc: &LoroDoc) -> Result<Vec<u8>, LoroEncodeError> {
+    doc.export(ExportMode::shallow_snapshot_owned(doc.state_frontiers()))
+}
+
+/// Operations a shallow export of `doc` would keep, or `None` when that is
+/// more than `budget` or unknown.
+fn retained_ops(doc: &LoroDoc, budget: u32) -> Option<u32> {
+    let state = doc.state_frontiers();
+    let oplog = doc.oplog_frontiers();
+    match retained_ops_above_root(doc, &state, &oplog, budget) {
+        Ok(Search::Root { retained_ops }) => Some(retained_ops),
+        // Loro then keeps every operation since the document's own start (or
+        // its shallow root, if it has one).
+        Ok(Search::NoRoot) => u32::try_from(history_len(doc))
+            .ok()
+            .filter(|ops| *ops <= budget),
+        Ok(Search::OverBudget) | Err(WalkFailed) => None,
+    }
 }
 
 /// Operations in the document's history, from its start or its shallow root.
@@ -282,7 +311,6 @@ fn retained_ops_above_root(
         }
         queue.extend(deps);
     }
-    Ok(Search::Root {
-        retained_ops: passed,
-    })
+    // Both frontiers are empty: Loro finds no root and keeps all history.
+    Ok(Search::NoRoot)
 }
