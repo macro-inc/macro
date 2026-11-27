@@ -14,6 +14,16 @@ import { githubAvatarUrl, githubDisplayLogin } from '../util/githubMarkdown';
 /** Collapsed preview height for long comments (px). */
 const PREVIEW_MAX_HEIGHT = 180;
 
+const REVIEW_LABELS: Record<
+  NonNullable<GithubPullRequestComment['reviewState']>,
+  string
+> = {
+  approved: 'approved these changes',
+  changes_requested: 'requested changes',
+  commented: 'commented on these changes',
+  dismissed: 'review dismissed',
+};
+
 function GithubAvatarFallback() {
   return (
     <div class="size-full rounded-full bg-surface flex items-center justify-center">
@@ -59,6 +69,9 @@ function sourceLabel(source: string): string | null {
 function commentBadge(
   comment: GithubPullRequestComment
 ): { label: string; isAnchor: boolean } | null {
+  if (comment.source === 'review' && comment.reviewState) {
+    return { label: REVIEW_LABELS[comment.reviewState], isAnchor: false };
+  }
   if (comment.source === 'review_comment' && comment.path) {
     const line = comment.line ?? comment.originalLine;
     return {
@@ -78,7 +91,7 @@ function commentBadge(
 function toMessageData(comment: GithubPullRequestComment): MessageData {
   const login = comment.authorLogin ?? 'github';
   return {
-    id: `github-${comment.id}`,
+    id: `github-${comment.source}-${comment.id}`,
     content: comment.body,
     sender_id: `bot|github:${login}`,
     sender: {
@@ -185,36 +198,38 @@ function GithubCommentMessage(props: {
             <Message.Timestamp class="ml-auto shrink-0" />
           </div>
         </Message.Slot>
-        <Message.Slot placement="content" class="ph-no-capture">
-          <div
-            ref={contentRef}
-            class={cn('relative', truncated() && 'overflow-hidden')}
-            style={
-              truncated()
-                ? {
-                    'max-height': `${PREVIEW_MAX_HEIGHT}px`,
-                    'mask-image':
-                      'linear-gradient(to bottom, black calc(100% - 32px), transparent 100%)',
-                    '-webkit-mask-image':
-                      'linear-gradient(to bottom, black calc(100% - 32px), transparent 100%)',
-                  }
-                : undefined
-            }
-          >
-            <Message.Content class="overflow-x-auto" />
-          </div>
-          <Show when={overflowing()}>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              class="mt-2"
-              onClick={() => setExpanded(!expanded())}
+        <Show when={props.comment.body}>
+          <Message.Slot placement="content" class="ph-no-capture">
+            <div
+              ref={contentRef}
+              class={cn('relative', truncated() && 'overflow-hidden')}
+              style={
+                truncated()
+                  ? {
+                      'max-height': `${PREVIEW_MAX_HEIGHT}px`,
+                      'mask-image':
+                        'linear-gradient(to bottom, black calc(100% - 32px), transparent 100%)',
+                      '-webkit-mask-image':
+                        'linear-gradient(to bottom, black calc(100% - 32px), transparent 100%)',
+                    }
+                  : undefined
+              }
             >
-              {expanded() ? 'Show less' : 'Show more'}
-            </Button>
-          </Show>
-        </Message.Slot>
+              <Message.Content class="overflow-x-auto" />
+            </div>
+            <Show when={overflowing()}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="mt-2"
+                onClick={() => setExpanded(!expanded())}
+              >
+                {expanded() ? 'Show less' : 'Show more'}
+              </Button>
+            </Show>
+          </Message.Slot>
+        </Show>
       </Message.Layout>
     </Message.Root>
   );

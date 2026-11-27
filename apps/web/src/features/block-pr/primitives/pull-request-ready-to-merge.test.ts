@@ -61,4 +61,23 @@ describe('pullRequestReadyToMerge', () => {
       })
     ).toBe(false);
   });
+
+  it('blocks conflicts but permits unknown or unavailable mergeability', () => {
+    for (const mergeability of ['mergeable', 'unknown', undefined] as const) {
+      expect(
+        pullRequestReadyToMerge({
+          status: 'open',
+          checks: [success],
+          mergeability,
+        })
+      ).toBe(true);
+    }
+    expect(
+      pullRequestReadyToMerge({
+        status: 'open',
+        checks: [success],
+        mergeability: 'conflicting',
+      })
+    ).toBe(false);
+  });
 });

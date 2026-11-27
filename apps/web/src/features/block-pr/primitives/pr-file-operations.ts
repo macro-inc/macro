@@ -18,8 +18,8 @@ async function copyToClipboard(text: string, confirmation: string) {
 
 /**
  * A pull request's "…" menu: the state changes it offers now (Merge only
- * once its checks pass, as on the header button), its GitHub link, and its
- * branch.
+ * once checks pass and no conflict is known, as on the header button), its
+ * GitHub link, and its branch.
  */
 export function usePrFileOperations(
   detail: Accessor<PrForeignEntityData | undefined>,

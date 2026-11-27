@@ -1,5 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import GitMerge from '@icon/system/regular/git-merge.svg';
+import type { GithubPullRequestMergeability } from '@service-auth/generated/schemas';
 import { Button, ButtonGroup, type ButtonSize, cn, confirmDialog } from '@ui';
 import { getOwner, type Owner, Show } from 'solid-js';
 import {
@@ -7,6 +8,7 @@ import {
   type MergePullRequestTarget,
 } from '../primitives/create-merge-pull-request-action';
 import {
+  PULL_REQUEST_CONFLICT_REASON,
   type PullRequestCheck,
   pullRequestReadyToMerge,
 } from '../primitives/pull-request-ready-to-merge';
@@ -62,6 +64,7 @@ export function MergePullRequestButton(props: {
   status: string | null | undefined;
   draft?: boolean | null;
   checks?: readonly PullRequestCheck[] | null;
+  mergeability?: GithubPullRequestMergeability | null;
   size?: ButtonSize;
   class?: string;
   /** Hide the label and show the icon alone, with the label as its name. */
@@ -89,7 +92,25 @@ export function MergePullRequestButton(props: {
         size={props.size ?? 'sm'}
         class={cn('shrink-0', props.class)}
         aria-label={`${label()} pull request #${props.target.number}`}
-        disabled={action.pending()}
+        disabled={
+          action.pending() ||
+          !pullRequestReadyToMerge({
+            status: props.status,
+            draft: props.draft,
+            checks: props.checks,
+            mergeability: props.mergeability,
+          })
+        }
+        tooltip={
+          props.mergeability === 'conflicting'
+            ? PULL_REQUEST_CONFLICT_REASON
+            : undefined
+        }
+        aria-description={
+          props.mergeability === 'conflicting'
+            ? PULL_REQUEST_CONFLICT_REASON
+            : undefined
+        }
         data-merge-pull-request={props.target.number}
         on:click={(event) => {
           event.stopPropagation();
