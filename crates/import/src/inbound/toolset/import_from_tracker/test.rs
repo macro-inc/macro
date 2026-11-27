@@ -25,6 +25,17 @@ fn each_source_presents_its_own_review_before_writing() {
         let text = message(source, NotionImportAction::Plan, &running);
         assert!(text.contains("Present the review now"));
         assert!(text.contains("Do not wait or poll"));
+        // A yes before the plan exists cannot approve it, and nothing acts on
+        // it once the plan is ready: never offer to start it later.
+        assert!(!text.contains("once it's ready?"), "{text}");
+        assert!(
+            text.contains("approve it on the card once it is ready"),
+            "{text}"
+        );
+        assert!(
+            text.contains("do not call DecideReview while it is still being planned"),
+            "{text}"
+        );
     }
 }
 

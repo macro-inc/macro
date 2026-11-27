@@ -1,4 +1,4 @@
-use super::{attach_error, refused, start_error};
+use super::{attach_error, plan_approvable, refused, start_error};
 use agent_code_mode::domain::CodeModeError;
 use import::domain::models::{ImportSource, RunErrorKind};
 use import::domain::ports::{ImportError, UnreviewableRun};
@@ -89,4 +89,37 @@ fn only_a_start_that_changed_nothing_is_approvable_again() {
     };
     assert!(!message.contains("pool timed out"), "{message}");
     assert!(!message.contains("Approve it again"), "{message}");
+}
+
+#[test]
+fn only_a_ready_plan_the_review_holds_can_be_approved() {
+    use import::domain::models::{NotionImportReport, RunStatus};
+
+    let review = uuid::Uuid::now_v7();
+    let report = |status, review_id| NotionImportReport {
+        status: Some(status),
+        review_id,
+        ..NotionImportReport::default()
+    };
+
+    assert!(plan_approvable(
+        &report(RunStatus::Ready, Some(review)),
+        review
+    ));
+    // Still being planned: a yes now approves nothing.
+    assert!(!plan_approvable(
+        &report(RunStatus::Running, Some(review)),
+        review
+    ));
+    // Planned again under another review, or no longer held by one.
+    assert!(!plan_approvable(
+        &report(RunStatus::Ready, Some(uuid::Uuid::now_v7())),
+        review
+    ));
+    assert!(!plan_approvable(&report(RunStatus::Ready, None), review));
+    assert!(!plan_approvable(
+        &report(RunStatus::Failed, Some(review)),
+        review
+    ));
+    assert!(!plan_approvable(&NotionImportReport::default(), review));
 }

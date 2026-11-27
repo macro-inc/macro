@@ -20,7 +20,8 @@ produces one `review.settled` per review, carrying the final report
 (`ImportSettlement`: outcome, counts, failures, by-hand items, root folder),
 in the transaction that ends the write, including a resumed write and one
 given up on. A plan presented while planning also produces `import.planned`
-once it is ready to approve. Both name the workspace they read (`source`:
+once it is ready to approve; its prompt tells the agent to say so in one
+sentence with the plan's numbers and never to approve it in that turn. Both name the workspace they read (`source`:
 `notion`, `linear` or `jira`; absent on events stored before trackers, which
 are Notion's). Both wake the session. A settled payload is
 either an import report or the review service's own outcome; the enum is

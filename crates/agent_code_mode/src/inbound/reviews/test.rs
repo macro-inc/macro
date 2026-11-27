@@ -58,4 +58,25 @@ fn present_review_skips_the_offer_when_the_user_held_the_send() {
     assert!(description.contains(
         "If they said not to send, create or import it yet, do not ask; say it is waiting on the card for them."
     ));
+    // A yes before an import plan is ready cannot approve it later.
+    assert!(description.contains(
+        "For an import plan still being made, do not ask: say they approve it on the card once it is ready, and never offer to start it later."
+    ));
+}
+
+#[test]
+fn decide_review_tells_the_agent_an_early_yes_approved_nothing() {
+    let refused = super::review_error(crate::domain::CodeModeError::NotApprovable(
+        "This plan isn't ready to approve yet, so nothing was started. Approve it once it's ready."
+            .into(),
+    ));
+    assert_eq!(
+        refused.description,
+        "This plan isn't ready to approve yet, so nothing was started. Approve it once it's ready. Nothing was approved or queued. Do not promise to start it later: the user approves it on the card once it is ready, or asks you again then."
+    );
+    // Other refusals are passed on as they are.
+    assert_eq!(
+        super::review_error(crate::domain::CodeModeError::Conflict).description,
+        crate::domain::CodeModeError::Conflict.to_string()
+    );
 }
