@@ -74,5 +74,6 @@ user_api_key = { path = "../user_api_key", features = ["postgres"] }
 ignored = ["team_agents"]
 
 [[example]]
-name = "local_hire"
+name = "local_hire_scoped"
+path = "examples/local_hire.rs"
 required-features = ["outbound"]

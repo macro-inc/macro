@@ -10,10 +10,9 @@ use std::{
 use hosted_runtimes::{
     domain::{
         lifecycle::BillingPolicy,
-        models::FleetAttachment,
         operator::ComputerOperator,
         overcommit::MemoryReport,
-        ports::{ComputerRepo, Fleet, OvercommitRepo, StaticFleetAttachment},
+        ports::{ComputerRepo, Fleet, OvercommitRepo},
         rollout::ComputerRollout,
         service::{ComputerService, SystemClock},
     },
@@ -98,14 +97,45 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Arc::new(Unwired),
     )
     .await?;
-    let computer_service = ComputerService::new(
-        repo.clone(),
-        DisabledBilling,
-        SystemClock,
-        StaticFleetAttachment(FleetAttachment::Attached),
-    )
-    .with_comp_policy(LocalComp(team))
-    .with_rollout(ComputerRollout::new(LocalOnly(actor.clone())));
+    let admission_memory = MemoryReport {
+        // Admission telemetry for this isolated process-backed host.
+        resident_memory_mib: 64,
+        reported_at: chrono::Utc::now(),
+    };
+    repo.record_memory_report(host.id, admission_memory).await?;
+    let worker_repo = repo.clone();
+    let worker = tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            interval.tick().await;
+            let now = chrono::Utc::now();
+            let pass = async {
+                worker_repo.heartbeat_host(host.id, now).await?;
+                worker_repo
+                    .record_memory_report(
+                        host.id,
+                        MemoryReport {
+                            reported_at: now,
+                            ..admission_memory
+                        },
+                    )
+                    .await?;
+                // Normal owned-host polling. A request cannot start a pass
+                // or select which computer the operator processes.
+                operator.run_fleet_effects().await?;
+                Ok::<(), Box<dyn std::error::Error + Send + Sync>>(())
+            }
+            .await;
+            if let Err(error) = pass {
+                break Err::<(), _>(error);
+            }
+        }
+    });
+    let computer_service =
+        ComputerService::new(repo.clone(), DisabledBilling, SystemClock, repo.clone())
+            .with_comp_policy(LocalComp(team))
+            .with_rollout(ComputerRollout::new(LocalOnly(actor.clone())));
     let agents = TeamAgentServiceImpl::new(
         PgTeamAgentsRepo::new(pool.clone()),
         IncludedMembership(TeamRepositoryImpl::new(pool)),
@@ -122,33 +152,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut out = stdout.lock();
     for line in io::stdin().lock().lines() {
         let line = line?;
-        let request = serde_json::from_str::<ReviewRequest>(&line);
-        if request
-            .as_ref()
-            .is_ok_and(ReviewRequest::is_offer_or_confirm)
-            && let Ok(request) = &request
-            && review.authorized(request).await
-        {
-            repo.record_memory_report(
-                host.id,
-                MemoryReport {
-                    // Admission telemetry for this isolated process-backed host.
-                    resident_memory_mib: 64,
-                    reported_at: chrono::Utc::now(),
-                },
-            )
-            .await?;
-        }
-        let reply = match request {
-            Ok(request) if request.is_fleet_pass() => {
-                if review.authorized(&request).await {
-                    match operator.run_fleet_effects().await {
-                        Ok(count) => serde_json::json!({"status":"ran","count":count}),
-                        Err(_) => serde_json::json!({"status":"unavailable"}),
-                    }
-                } else {
-                    serde_json::json!({"status":"denied"})
-                }
+        let reply = match serde_json::from_str::<ReviewRequest>(&line) {
+            Ok(request) if request.is_purchase() && worker.is_finished() => {
+                serde_json::json!({"status":"unavailable"})
             }
             Ok(request) => review.handle(&agents, &repo, request).await,
             Err(_) => serde_json::json!({"status":"invalid"}),
@@ -157,5 +163,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         writeln!(out)?;
         out.flush()?;
     }
+    worker.abort();
+    let _ = worker.await;
     Ok(())
 }

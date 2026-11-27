@@ -118,15 +118,10 @@ enum Command {
         size: ComputerSize,
     },
     Roster,
-    FleetPass,
 }
 
 impl ReviewRequest {
-    pub fn is_fleet_pass(&self) -> bool {
-        matches!(self.command, Command::FleetPass)
-    }
-
-    pub fn is_offer_or_confirm(&self) -> bool {
+    pub fn is_purchase(&self) -> bool {
         matches!(self.command, Command::Offers | Command::Confirm { .. })
     }
 }
@@ -174,12 +169,6 @@ impl Review {
             offers: HashMap::new(),
             journal,
         }
-    }
-
-    pub async fn authorized(&self, request: &ReviewRequest) -> bool {
-        request.actor == self.actor.as_ref()
-            && request.team == self.team
-            && self.is_admin().await.unwrap_or(false)
     }
 
     pub async fn verify_seed(&self) -> Result<(), io::Error> {
@@ -258,7 +247,6 @@ impl Review {
                 )
                 .await
             }
-            Command::FleetPass => json!({"status":"invalid"}),
             Command::Roster => self.roster(agents, computers).await,
         }
     }
