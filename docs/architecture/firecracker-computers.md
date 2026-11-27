@@ -154,5 +154,8 @@ KSM) and each computer's CPU, memory and disk IO from its VM's cgroup
 Macro's Mimir in the observability cluster (`infra/k8s/observability`), where the **Macro
 computers fleet** dashboard shows capacity, noisy neighbours and overcommit
 in use, and **Firecracker hosts: capacity** shows how full each host is and
-its running VMs. Nothing runs in guests. The Datadog agent stays for the agent's
-spans, its `firecracker_host.*` metrics and the monitors.
+its running VMs. Alloy also receives a copy of the agent's spans
+(`GRAFANA_OTLP_ENDPOINT`, `127.0.0.1:14317`) and reads the journal of its three
+units, and sends both to the observability stack's OTLP ingest with the same
+token. Nothing runs in guests. The Datadog agent stays for its own copy of the
+spans and journal, the `firecracker_host.*` metrics and the monitors.

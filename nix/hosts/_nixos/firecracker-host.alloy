@@ -1,9 +1,10 @@
 // Host and per-computer metrics of a Firecracker host, written to Macro's
-// Prometheus. Nothing here runs in a guest: a computer's numbers are its
-// VM's cgroup under the host agent's unit, read on the host.
+// Prometheus, and the host agent's spans and journal, sent to its OTLP
+// ingest. Nothing here runs in a guest: a computer's numbers are its VM's
+// cgroup under the host agent's unit, read on the host.
 //
-// @HOST@, @ENVIRONMENT@ and @REMOTE_WRITE_URL@ are filled in by
-// firecracker-host.nix.
+// @HOST@, @ENVIRONMENT@, @REMOTE_WRITE_URL@, @OTLP_URL@ and @OTLP_ADDRESS@
+// are filled in by firecracker-host.nix.
 
 prometheus.exporter.unix "host" {
 	// ksmd: memory KSM shares. pressure (PSI) and meminfo (swap, zram) are on
@@ -110,5 +111,95 @@ prometheus.remote_write "macro" {
 	wal {
 		min_keepalive_time = "5m"
 		max_keepalive_time = "1h"
+	}
+}
+
+// The host agent's spans: the entrypoint sends a copy here
+// (GRAFANA_OTLP_ENDPOINT) besides the Datadog agent's.
+otelcol.receiver.otlp "agent" {
+	grpc {
+		endpoint = "@OTLP_ADDRESS@"
+	}
+
+	output {
+		traces = [otelcol.processor.batch.macro.input]
+	}
+}
+
+// The units the Datadog agent ships from the journal: the agent, its storage
+// check and its health check. Matches on one field are alternatives.
+loki.source.journal "agent" {
+	matches       = "_SYSTEMD_UNIT=firecracker-host.service _SYSTEMD_UNIT=firecracker-host-storage.service _SYSTEMD_UNIT=firecracker-host-health.service"
+	relabel_rules = loki.relabel.journal.rules
+	forward_to    = [otelcol.receiver.loki.journal.receiver]
+}
+
+// Only these labels leave the source; they become the records' attributes.
+loki.relabel "journal" {
+	forward_to = []
+
+	rule {
+		source_labels = ["__journal__systemd_unit"]
+		target_label  = "unit"
+	}
+
+	rule {
+		source_labels = ["__journal_priority_keyword"]
+		target_label  = "level"
+	}
+}
+
+otelcol.receiver.loki "journal" {
+	output {
+		logs = [otelcol.processor.transform.journal.input]
+	}
+}
+
+// The same service, host and environment as the agent's spans and the host's
+// metrics.
+otelcol.processor.transform "journal" {
+	error_mode = "ignore"
+
+	log_statements {
+		context    = "resource"
+		statements = [
+			`set(attributes["service.name"], "firecracker-host")`,
+			`set(attributes["host.name"], "@HOST@")`,
+			`set(attributes["deployment.environment"], "@ENVIRONMENT@")`,
+		]
+	}
+
+	output {
+		logs = [otelcol.processor.batch.macro.input]
+	}
+}
+
+otelcol.processor.batch "macro" {
+	output {
+		traces = [otelcol.exporter.otlphttp.macro.input]
+		logs   = [otelcol.exporter.otlphttp.macro.input]
+	}
+}
+
+// The ingest takes the same token as remote write's password, as a bearer
+// token; a file's trailing newline would make it an invalid header.
+local.file "token" {
+	filename  = sys.env("CREDENTIALS_DIRECTORY") + "/remote-write-password"
+	is_secret = true
+}
+
+otelcol.auth.bearer "macro" {
+	token = string.trim_space(convert.nonsensitive(local.file.token.content))
+}
+
+otelcol.exporter.otlphttp "macro" {
+	client {
+		endpoint = "@OTLP_URL@"
+		auth     = otelcol.auth.bearer.macro.handler
+	}
+
+	// A host cut off from the ingest drops its oldest batches, not memory.
+	sending_queue {
+		queue_size = 256
 	}
 }

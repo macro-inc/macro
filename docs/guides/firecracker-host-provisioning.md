@@ -35,7 +35,8 @@ each time ([Rules](../../CLAUDE.md)).
 - **Secrets outside the Nix store**, root 0600, copied with `--extra-files` at
   install: `/var/lib/macro/wg.key` (WireGuard),
   `/var/lib/macro/datadog-api-key` and, with `alloy.enable`,
-  `/var/lib/macro/metrics-remote-write-password` (Alloy does not start
+  `/var/lib/macro/metrics-remote-write-password`, the observability stack's
+  ingest token, which Alloy uses for remote write and OTLP (it does not start
   without it). The agent's TLS keys are made on the host
   at first boot and reach the agent as systemd credentials.
 
