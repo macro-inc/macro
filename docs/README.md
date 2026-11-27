@@ -42,3 +42,5 @@ Agent screens: [watch and take over an agent teammate's desktop](design/agent-sc
 CAPTCHA vision lab: [Kimi vision smoke test on loopback challenge families](design/kimi-vision-captcha-lab.md) (lab only).
 
 CRM: [selective email contribution design](design/crm-selective-email-contribution.md).
+
+Native iOS: [proposal for a native app rendered from the web bundle](design/native-ios-app.md).
