@@ -3,7 +3,7 @@
 use chrono::{DateTime, Utc};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use sqlx::PgPool;
+use sqlx::{PgExecutor, PgPool};
 use uuid::Uuid;
 
 use crate::domain::admission::AgentAccountFacts;
@@ -49,23 +49,30 @@ impl PgTeamAgentsRepo {
         &self,
         key: Uuid,
     ) -> Result<Option<MacroUserIdStr<'static>>, PgTeamAgentsError> {
+        account_for_opaque_key(&self.pool, key).await
+    }
+
+    /// Resolve the opaque key and read account facts in one database snapshot.
+    /// The caller decides if the facts meet its current team policy.
+    pub async fn facts_for_opaque_key(
+        &self,
+        key: Uuid,
+    ) -> Result<Option<(MacroUserIdStr<'static>, AgentAccountFacts)>, PgTeamAgentsError> {
         if key.is_nil() {
             return Ok(None);
         }
-
-        // Historical profiles can share one account UUID. Bound the
-        // reverse lookup to the rows needed to detect ambiguity.
-        let accounts = sqlx::query_scalar!(
-            r#"SELECT id FROM "User" WHERE macro_user_id = $1 LIMIT 2"#,
-            key,
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        let [account] = accounts.as_slice() else {
-            return Ok(None);
+        let mut transaction = self
+            .pool
+            .begin_with("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY")
+            .await?;
+        let result = match account_for_opaque_key(&mut *transaction, key).await? {
+            Some(account) => account_facts(&mut *transaction, &account)
+                .await?
+                .map(|facts| (account, facts)),
+            None => None,
         };
-        user_id(account.clone()).map(Some)
+        transaction.commit().await?;
+        Ok(result)
     }
 
     /// Return the account's opaque key only if it resolves back to this
@@ -227,8 +234,39 @@ impl AgentAccounts for PgTeamAgentsRepo {
         &self,
         agent: &MacroUserIdStr<'_>,
     ) -> Result<Option<AgentAccountFacts>, Self::Err> {
-        let row = sqlx::query!(
-            r#"
+        account_facts(&self.pool, agent).await
+    }
+}
+
+async fn account_for_opaque_key<'e>(
+    executor: impl PgExecutor<'e>,
+    key: Uuid,
+) -> Result<Option<MacroUserIdStr<'static>>, PgTeamAgentsError> {
+    if key.is_nil() {
+        return Ok(None);
+    }
+
+    // Historical profiles can share one account UUID. Bound the
+    // reverse lookup to the rows needed to detect ambiguity.
+    let accounts = sqlx::query_scalar!(
+        r#"SELECT id FROM "User" WHERE macro_user_id = $1 LIMIT 2"#,
+        key,
+    )
+    .fetch_all(executor)
+    .await?;
+
+    let [account] = accounts.as_slice() else {
+        return Ok(None);
+    };
+    user_id(account.clone()).map(Some)
+}
+
+async fn account_facts<'e>(
+    executor: impl PgExecutor<'e>,
+    agent: &MacroUserIdStr<'_>,
+) -> Result<Option<AgentAccountFacts>, PgTeamAgentsError> {
+    let row = sqlx::query!(
+        r#"
             SELECT ta.team_id,
                    agent."isAgent" AS is_agent,
                    EXISTS (
@@ -242,22 +280,21 @@ impl AgentAccounts for PgTeamAgentsRepo {
             LEFT JOIN "User" creator ON creator.id = ta.created_by
             WHERE ta.user_id = $1
             "#,
-            agent.as_ref(),
-        )
-        .fetch_optional(&self.pool)
-        .await?;
+        agent.as_ref(),
+    )
+    .fetch_optional(executor)
+    .await?;
 
-        row.map(|row| {
-            Ok(AgentAccountFacts {
-                team_id: row.team_id,
-                is_agent: row.is_agent,
-                member: row.member,
-                created_by: row.created_by.map(user_id).transpose()?,
-                created_by_is_agent: row.created_by_is_agent,
-            })
+    row.map(|row| {
+        Ok(AgentAccountFacts {
+            team_id: row.team_id,
+            is_agent: row.is_agent,
+            member: row.member,
+            created_by: row.created_by.map(user_id).transpose()?,
+            created_by_is_agent: row.created_by_is_agent,
         })
-        .transpose()
-    }
+    })
+    .transpose()
 }
 
 impl PgTeamAgentsRepo {

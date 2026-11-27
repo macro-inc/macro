@@ -1,166 +1,16 @@
-use std::{net::Ipv4Addr, sync::Arc};
+use std::net::Ipv4Addr;
 
-use axum::{
-    Json, Router,
-    extract::{FromRef, OriginalUri, Path, RawQuery, State, rejection::PathRejection},
-    response::{IntoResponse, Response},
-    routing::get,
-};
 use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use macro_auth::middleware::decode_jwt::{JwtValidationArgs, MacroAccessToken};
-use macro_authorization::{
-    InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationExtractor,
-    MacroAuthorizationRejection, MacroAuthorizationServiceImpl, MacroAuthorizationState,
-    NoBotAuthorizer, NoUserApiKeyAuthorizer, UserOnly,
-};
 use tokio::{net::TcpListener, sync::oneshot};
 
-use super::*;
-
-type Authorization = MacroAuthorizationServiceImpl<MacroAuthJwtValidator>;
-
-#[derive(Clone)]
-struct SignedState {
-    service: Arc<SignedRead>,
-    authorization: MacroAuthorizationState<Authorization>,
-}
-
-impl FromRef<SignedState> for MacroAuthorizationState<Authorization> {
-    fn from_ref(state: &SignedState) -> Self {
-        state.authorization.clone()
-    }
-}
-
-struct SignedRead {
-    authority: PgAuthority,
-    journal: Journal,
-}
-
-#[derive(Debug, Deserialize, PartialEq, Eq, Serialize)]
-#[serde(deny_unknown_fields)]
-struct SignedScope {
-    viewer: Uuid,
-    team: Uuid,
-    agent: Uuid,
-}
-
-#[derive(Debug, Deserialize, PartialEq, Eq, Serialize)]
-#[serde(deny_unknown_fields)]
-struct SignedJournal {
-    scope: SignedScope,
-    completed: Vec<JournalEntry>,
-}
-
-fn canonical_key(raw: &str) -> Option<Uuid> {
-    let key = raw.parse::<Uuid>().ok()?;
-    (!key.is_nil() && key.hyphenated().to_string() == raw).then_some(key)
-}
-
-impl SignedRead {
-    async fn account_for_key(
-        &self,
-        key: Uuid,
-    ) -> Result<Option<MacroUserIdStr<'static>>, ReadError> {
-        // The existing lookup index permits multiple historical profiles.
-        let accounts = sqlx::query_scalar!(
-            r#"SELECT id FROM "User" WHERE macro_user_id = $1 LIMIT 2"#,
-            key,
-        )
-        .fetch_all(&self.authority.pool)
-        .await
-        .map_err(|_| ReadError::AuthorityFailed)?;
-        let [account] = accounts.as_slice() else {
-            return Ok(None);
-        };
-        Ok(MacroUserIdStr::try_from(account.to_owned()).ok())
-    }
-
-    async fn read(
-        &self,
-        viewer: &MacroUserIdStr<'static>,
-        team: Uuid,
-        agent_key: Uuid,
-    ) -> Result<SignedJournal, ReadError> {
-        let membership = self
-            .authority
-            .access
-            .get_user_team(&viewer.0)
-            .await
-            .map_err(|_| ReadError::AuthorityFailed)?;
-        if !membership
-            .is_some_and(|current| current.team_id == team && current.role >= TeamRole::Admin)
-        {
-            return Err(ReadError::Unavailable);
-        }
-
-        let viewer_key = sqlx::query_scalar!(
-            r#"SELECT macro_user_id FROM "User" WHERE id = $1 AND NOT "isAgent""#,
-            viewer.as_ref(),
-        )
-        .fetch_optional(&self.authority.pool)
-        .await
-        .map_err(|_| ReadError::AuthorityFailed)?
-        .ok_or(ReadError::Unavailable)?;
-
-        if self.account_for_key(viewer_key).await?.as_ref() != Some(viewer) {
-            return Err(ReadError::Unavailable);
-        }
-        let agent = self
-            .account_for_key(agent_key)
-            .await?
-            .ok_or(ReadError::Unavailable)?;
-
-        // The journal rechecks exact teammate membership and current document View permissions.
-        let result = self
-            .journal
-            .read(&self.authority, viewer, &Scope { team, agent })
-            .await?;
-
-        Ok(SignedJournal {
-            scope: SignedScope {
-                viewer: viewer_key,
-                team,
-                agent: agent_key,
-            },
-            completed: result.completed,
-        })
-    }
-}
-
-async fn signed_read(
-    State(state): State<SignedState>,
-    path: Result<Path<(String, String)>, PathRejection>,
-    OriginalUri(uri): OriginalUri,
-    RawQuery(query): RawQuery,
-    auth: Result<MacroAuthorizationExtractor<Authorization, UserOnly>, MacroAuthorizationRejection>,
-) -> Response {
-    let Ok(auth) = auth else {
-        return ([(CACHE_CONTROL, "no-store")], StatusCode::UNAUTHORIZED).into_response();
-    };
-    let keys = path
-        .ok()
-        .and_then(|Path((team, agent))| Some((canonical_key(&team)?, canonical_key(&agent)?)));
-    let result = match keys {
-        Some((team, agent))
-            if query.is_none()
-                && uri.path() == format!("/teams/{team}/agents/{agent}/journal")
-                && auth.authorization.is_human_session() =>
-        {
-            state
-                .service
-                .read(&auth.authorization.macro_user_id, team, agent)
-                .await
-        }
-        _ => Err(ReadError::Unavailable),
-    };
-
-    let response = match result {
-        Ok(view) => Json(view).into_response(),
-        Err(ReadError::Unavailable) => StatusCode::NOT_FOUND.into_response(),
-        Err(ReadError::AuthorityFailed) => StatusCode::SERVICE_UNAVAILABLE.into_response(),
-    };
-    ([(CACHE_CONTROL, "no-store")], response).into_response()
-}
+use super::{
+    super::{
+        signed::{Activity, BrainRead, SignedScope},
+        signed_inbound,
+    },
+    *,
+};
 
 fn session_token(user: &str, secret: &[u8]) -> String {
     let mut header = Header::new(Algorithm::HS256);
@@ -200,7 +50,7 @@ impl LoopbackClient {
         let mut request = self
             .client
             .get(format!(
-                "http://{}/teams/{team}/agents/{agent}/journal",
+                "http://{}/teams/{team}/agents/{agent}/brain/read",
                 self.address
             ))
             .header("x-viewer-id", OWNER);
@@ -269,28 +119,12 @@ async fn signed_loopback_reads_opaque_agent_and_live_document_scope(pool: PgPool
             .unwrap();
     }
 
-    let authorization = MacroAuthorizationServiceImpl::new(
-        MacroAuthJwtValidator::new(JwtValidationArgs::new_testing()),
-        InternalAuthConfig {
-            api_key: "unused-test-only".into(),
-            default_user_id: None,
-        },
-        NoBotAuthorizer,
-        NoUserApiKeyAuthorizer,
+    let app = signed_inbound::router(
+        PgAuthority::new(pool.clone()),
+        team,
+        JwtValidationArgs::new_testing(),
+        Some((scope(team, AGENT), journal)),
     );
-    let app = Router::new()
-        .route("/teams/{team}/agents/{agent}/journal", get(signed_read))
-        .with_state(SignedState {
-            service: Arc::new(SignedRead {
-                authority: PgAuthority {
-                    pool: pool.clone(),
-                    access: EntityAccessServiceImpl::new(PgAccessRepository::new(pool.clone())),
-                    agents,
-                },
-                journal,
-            }),
-            authorization: MacroAuthorizationState::new(Arc::new(authorization)),
-        });
 
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await.unwrap();
     let http = LoopbackClient {
@@ -320,14 +154,19 @@ async fn signed_loopback_reads_opaque_agent_and_live_document_scope(pool: PgPool
 
     let (status, body) = http.read(team, &agent_path, Some(&owner)).await;
     assert_eq!(status, StatusCode::OK);
+    let read: BrainRead = serde_json::from_slice(&body).unwrap();
     assert_eq!(
-        serde_json::from_slice::<SignedJournal>(&body).unwrap(),
-        SignedJournal {
-            scope: SignedScope {
-                viewer,
-                team,
-                agent
-            },
+        read.scope,
+        SignedScope {
+            viewer,
+            team,
+            agent
+        }
+    );
+    assert_eq!(read.profile.name, "Journal fixture");
+    assert_eq!(
+        read.journal,
+        Activity::Ready {
             completed: vec![JournalEntry {
                 id: event,
                 source: Source::Document { id: visible_doc },
@@ -338,11 +177,9 @@ async fn signed_loopback_reads_opaque_agent_and_live_document_scope(pool: PgPool
 
     let (status, body) = http.read(team, &empty_agent, Some(&owner)).await;
     assert_eq!(status, StatusCode::OK);
-    assert!(
-        serde_json::from_slice::<SignedJournal>(&body)
-            .unwrap()
-            .completed
-            .is_empty()
+    assert_eq!(
+        serde_json::from_slice::<BrainRead>(&body).unwrap().journal,
+        Activity::Unavailable,
     );
 
     let missing = Uuid::now_v7().to_string();
@@ -364,6 +201,23 @@ async fn signed_loopback_reads_opaque_agent_and_live_document_scope(pool: PgPool
             (StatusCode::NOT_FOUND, Vec::new())
         );
     }
+
+    let unconfigured = signed_inbound::router(
+        PgAuthority::new(pool.clone()),
+        team,
+        JwtValidationArgs::new_testing(),
+        None,
+    );
+    let request = Request::builder()
+        .uri(format!("/teams/{team}/agents/{agent_path}/brain/read"))
+        .header("authorization", format!("Bearer {owner}"))
+        .body(Body::empty())
+        .unwrap();
+    let response = unconfigured.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), 1024).await.unwrap();
+    let read: BrainRead = serde_json::from_slice(&body).unwrap();
+    assert_eq!(read.journal, Activity::Unavailable);
 
     let member_key = account_key(&pool, MEMBER).await;
     for (key, expected) in [(agent, StatusCode::NOT_FOUND), (member_key, StatusCode::OK)] {
@@ -388,11 +242,11 @@ async fn signed_loopback_reads_opaque_agent_and_live_document_scope(pool: PgPool
     .unwrap();
     let (status, body) = http.read(team, &agent_path, Some(&owner)).await;
     assert_eq!(status, StatusCode::OK);
-    assert!(
-        serde_json::from_slice::<SignedJournal>(&body)
-            .unwrap()
-            .completed
-            .is_empty()
+    assert_eq!(
+        serde_json::from_slice::<BrainRead>(&body).unwrap().journal,
+        Activity::Ready {
+            completed: Vec::new()
+        },
     );
 
     sqlx::query!(

@@ -1,4 +1,4 @@
-//! Unmounted proof of the per-agent journal read and observation contracts.
+//! Per-agent journal read and observation contracts for the local signed reader.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -10,8 +10,18 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+#[cfg(test)]
 mod inbound;
+#[cfg(feature = "local-signed-brain-read")]
+mod local;
+mod pg;
+mod signed;
+mod signed_inbound;
+#[cfg(test)]
 mod test;
+
+#[cfg(feature = "local-signed-brain-read")]
+pub use local::run_local_signed_brain_read;
 
 const MAX_OBSERVATIONS_PER_AGENT: usize = 100;
 

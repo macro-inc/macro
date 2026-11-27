@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT macro_user_id FROM \"User\" WHERE id = $1 AND NOT \"isAgent\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "macro_user_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "62af05afe53a3e3de740888cb8a8bd28e217220c7f811060451f1719b2f4382c"
+}

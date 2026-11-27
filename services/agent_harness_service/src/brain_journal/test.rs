@@ -7,19 +7,15 @@ use sqlx::PgPool;
 use team_agents::{
     domain::{
         models::{AgentName, NewAgentAccount, PersonaSeed, PurchaseKey},
-        ports::{AgentAccounts, TeamAgentRepository},
+        ports::TeamAgentRepository,
     },
     outbound::pg_team_agents_repo::PgTeamAgentsRepo,
 };
 use tower::ServiceExt;
 
-use entity_access::{
-    domain::{models::TeamRole, ports::EntityAccessService, service::EntityAccessServiceImpl},
-    outbound::PgAccessRepository,
-};
-
 use super::{
     inbound::{Viewer, router},
+    pg::PgAuthority,
     *,
 };
 
@@ -29,64 +25,6 @@ const FOREIGN_OWNER: &str = "macro|foreign-owner@example.com";
 const AGENT: &str = "macro|journal-agent@example.com";
 const OTHER_AGENT: &str = "macro|other-agent@example.com";
 const FOREIGN_AGENT: &str = "macro|foreign-agent@example.com";
-
-struct PgAuthority {
-    pool: PgPool,
-    access: EntityAccessServiceImpl<PgAccessRepository>,
-    agents: PgTeamAgentsRepo,
-}
-
-impl Authority for PgAuthority {
-    async fn can_read(
-        &self,
-        viewer: &MacroUserIdStr<'static>,
-        scope: &Scope,
-    ) -> Result<bool, ReadError> {
-        let membership = self
-            .access
-            .get_user_team(&viewer.0)
-            .await
-            .map_err(|_| ReadError::AuthorityFailed)?;
-        if !membership
-            .is_some_and(|team| team.team_id == scope.team && team.role >= TeamRole::Admin)
-        {
-            return Ok(false);
-        }
-        Ok(self
-            .agents
-            .account_facts(&scope.agent)
-            .await
-            .map_err(|_| ReadError::AuthorityFailed)?
-            .is_some_and(|agent| agent.team_id == scope.team && agent.is_agent && agent.member))
-    }
-
-    async fn visible_documents(
-        &self,
-        viewer: &MacroUserIdStr<'static>,
-        ids: &[Uuid],
-    ) -> Result<HashSet<Uuid>, ReadError> {
-        let requested: Vec<_> = ids.iter().map(ToString::to_string).collect();
-        // A retained access grant cannot establish that its source still exists.
-        let live = sqlx::query_scalar!(
-            r#"SELECT id FROM "Document" WHERE id = ANY($1) AND "deletedAt" IS NULL"#,
-            &requested,
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(|_| ReadError::AuthorityFailed)?;
-        let authorized = self
-            .access
-            .generate_document_view_access_receipts(&viewer.0, &live)
-            .await
-            .map_err(|_| ReadError::AuthorityFailed)?;
-        Ok(ids
-            .iter()
-            .copied()
-            .zip(requested)
-            .filter_map(|(id, key)| authorized.contains_key(&key).then_some(id))
-            .collect())
-    }
-}
 
 async fn seed_user(pool: &PgPool, user: &str) {
     let id = Uuid::now_v7();
@@ -270,14 +208,7 @@ async fn router_reads_current_team_agent_and_source_authority(pool: PgPool) {
             .unwrap();
     }
 
-    let app = router(
-        PgAuthority {
-            pool: pool.clone(),
-            access: EntityAccessServiceImpl::new(PgAccessRepository::new(pool.clone())),
-            agents,
-        },
-        journal,
-    );
+    let app = router(PgAuthority::new(pool.clone()), journal);
 
     let (status, body) = request(&app, team, AGENT, "", Some(OWNER)).await;
     assert_eq!(status, StatusCode::OK);

@@ -792,6 +792,7 @@ dependencies = [
  "rdkafka",
  "readonly_pool",
  "redis",
+ "remote_env_var",
  "reqwest 0.13.4",
  "rmcp",
  "roles_and_permissions",
