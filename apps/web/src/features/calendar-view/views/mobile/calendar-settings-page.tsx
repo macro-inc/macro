@@ -3,6 +3,7 @@ import { AVAILABILITY_TIME_BOUNDS } from '@app/features/calendar/availability/av
 import { useAvailabilitySettings } from '@app/features/calendar/availability/settings';
 import { availabilityTimeOptions } from '@app/features/calendar/availability/time-options';
 import { createCalendarSettingsControls } from '@app/features/calendar/components/CalendarSettingsDropdown';
+import { SubscriptionMark } from '@app/features/calendar/components/SourceControls';
 import { TurnOffCalendarDialog } from '@app/features/calendar/components/TurnOffCalendarDialog';
 import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
 import { useCalendarTeamSettings } from '@app/features/calendar-team/calendar-team';
@@ -139,8 +140,11 @@ export function MobileCalendarSettingsPage(props: { onBack: () => void }) {
                             }}
                           >
                             <Checkbox.Control />
-                            <Checkbox.Label class="min-w-0 flex-1">
-                              {source.name}
+                            <Checkbox.Label class="flex min-w-0 flex-1 items-center gap-2">
+                              <span class="min-w-0 flex-1">{source.name}</span>
+                              <Show when={source.isSubscription}>
+                                <SubscriptionMark />
+                              </Show>
                             </Checkbox.Label>
                           </Checkbox>
                         </CalendarSettingsRow>
