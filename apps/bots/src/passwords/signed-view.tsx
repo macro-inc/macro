@@ -117,9 +117,9 @@ export default function SignedPasswords() {
           <h1 id="signed-passwords-title">Passwords</h1>
           <Show when={ready() && !signedOut()}>
             <label>
-              <span class="sr-only">Add item type</span>
               <select
                 aria-label="Add item"
+                class="primary signed-password-kind"
                 value=""
                 disabled={pending()}
                 onChange={(event) => {

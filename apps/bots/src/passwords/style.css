@@ -273,3 +273,14 @@
   border: 0;
   min-inline-size: 0;
 }
+
+.signed-password-kind {
+  max-inline-size: min(50vw, 236px);
+  min-block-size: 36px;
+}
+
+@media (max-width: 700px) {
+  .signed-password-kind {
+    min-block-size: 44px;
+  }
+}
