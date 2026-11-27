@@ -1,0 +1,23 @@
+{
+  "include": ["src", "scripts", "vite.config.ts"],
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "target": "ESNext",
+    "jsx": "preserve",
+    "jsxImportSource": "solid-js",
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "skipLibCheck": true,
+    "types": ["vite/client", "bun"],
+    "paths": {
+      "@macro-inc/sdk/generated/auth": [
+        "../../packages/sdk/generated/auth/types.gen.ts"
+      ],
+      "@macro-inc/sdk/generated/storage": [
+        "../../packages/sdk/generated/storage/types.gen.ts"
+      ]
+    }
+  }
+}
