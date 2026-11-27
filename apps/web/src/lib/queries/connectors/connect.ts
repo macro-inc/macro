@@ -50,6 +50,9 @@ function currentUserId() {
   return queryClient.getQueryData<UserInfoData>(authKeys.userInfo.queryKey)?.id;
 }
 
+/** A catalog app's key, as opposed to a server added by URL. */
+const isAppKey = (key: string) => key.startsWith('app/');
+
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -72,12 +75,16 @@ export async function connectConnector(
 ): Promise<ConnectOutcome> {
   // The server may answer with a page to open, which Safari only allows from
   // a tab opened inside the click: reserve one now (none in the native apps),
-  // and close it again unless the answer needs it.
-  const popup = reserveOauthPopup();
+  // and close it again unless the answer needs it. An app's page (Connect's
+  // consent, the vendor it sends to, the app's own GitHub link page) keeps
+  // the link to this tab, so `finishTab` can still retire it from another
+  // origin; a server added by URL picks its own authorization page, which
+  // must not be able to navigate Macro.
+  const popup = reserveOauthPopup({ keepOpener: isAppKey(args.key) });
   return await Telemetry.span('connector.connect', async (span) => {
     // An app's slug is public catalog data; a server's key holds its URL.
     span.setAttr('connector.kind', args.key.split('/')[0] ?? '');
-    if (args.key.startsWith('app/'))
+    if (isAppKey(args.key))
       span.setAttr('connector.app_slug', args.key.slice('app/'.length));
     span.setAttr('connector.native', isTauri());
     try {
@@ -123,7 +130,7 @@ async function followStep(
       assignOauthUrl(popup, page.url);
       return await span.span(
         'connector.consent',
-        async () => await pollCompletion(args.key, popup, userId)
+        async () => await pollCompletion(args.key, popup, userId, span)
       );
     })
     .with({ type: 'embeddedDialog' }, async (dialog) => {
@@ -145,7 +152,8 @@ async function followStep(
 async function pollCompletion(
   key: string,
   tab: Window | null,
-  userId: string | undefined
+  userId: string | undefined,
+  span: Span
 ): Promise<ConnectOutcome> {
   const deadline = Date.now() + COMPLETE_TIMEOUT_MS;
   let closedRetries = CLOSED_RETRIES;
@@ -157,7 +165,7 @@ async function pollCompletion(
     });
     if (result.isOk()) {
       if (currentUserId() !== userId) return 'closed';
-      finishTab(tab, 'connected');
+      finishTab(tab, 'connected', span);
       return await recordConnected(result.value);
     }
     failure = result.error.some((error) => error.code === 'NOT_FOUND')
@@ -166,22 +174,38 @@ async function pollCompletion(
     if (closed && (!failure || closedRetries-- <= 0)) break;
     await sleep(COMPLETE_POLL_MS);
   }
-  finishTab(tab, 'error');
+  finishTab(tab, 'error', span);
   if (failure && currentUserId() === userId)
     throw new ThrownResultError(failure);
   return 'closed';
 }
 
 /**
- * Take the consent tab off the vendor's page. `close()` does nothing once a
- * tab with a severed opener has navigated, so send it to the page that closes
- * itself or tells the user to.
+ * Take the consent tab off the vendor's page: send it to the page that closes
+ * itself or tells the user to. The browser allows this from another origin
+ * only while this tab is the consent tab's opener, so a server's tab, whose
+ * opener was cut, stays where it is once it has left Macro's origins.
  */
-function finishTab(tab: Window | null, status: 'connected' | 'error') {
-  if (tab && !tab.closed) {
-    tab.location.href = `${SERVER_HOSTS['cognition-service']}/pipedream/mcp/connect/callback?status=${status}`;
-  }
+function finishTab(
+  tab: Window | null,
+  status: 'connected' | 'error',
+  span: Span
+) {
+  if (!tab || tab.closed) return;
+  // A refusal throws a SecurityError, which must not fail the connect.
+  const retired = navigateTab(
+    tab,
+    `${SERVER_HOSTS['cognition-service']}/pipedream/mcp/connect/callback?status=${status}`
+  );
+  span.setAttr('connector.tab_retired', retired.isOk());
 }
+
+const navigateTab = Result.fromThrowable(
+  (tab: Window, url: string) => {
+    tab.location.href = url;
+  },
+  () => ({ kind: 'navigation-refused' as const })
+);
 
 /** The recorded connector, or none while the server has nothing to record. */
 async function completeOnce(key: string): Promise<Connector | undefined> {
