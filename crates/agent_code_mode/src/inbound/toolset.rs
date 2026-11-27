@@ -101,7 +101,7 @@ pub fn unseen_execute_code_description() -> String {
 #[schemars(
     title = "ExecuteCode",
     description = format!(
-        "{SESSION_EXECUTE_CODE}\n{NEVER_GUESS}\n{} {SESSION_CHECK_BACK}\n{PROGRAM}\n{RUNTIME}\nPresentView schema; execution.views.present(view) takes its view property:\n{}\n",
+        "{SESSION_EXECUTE_CODE}\n{NEVER_GUESS}\n{} {SESSION_CHECK_BACK}\n{PROGRAM}\n{RUNTIME}\nPresentView schema; execution.views.present(view) takes this view object itself, not wrapped in a `view` property:\n{}\n",
         SESSION_PRESENT.trim_end(),
         dynamic_ui::present_view_schema(),
     )

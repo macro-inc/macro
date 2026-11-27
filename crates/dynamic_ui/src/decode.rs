@@ -10,6 +10,15 @@ use serde_json::Value;
 /// view.
 pub fn decode_view(view: &Value) -> Result<View, String> {
     serde_path_to_error::deserialize(view).map_err(|error| {
+        // The view's own fields at the top, not a view in a `view` property:
+        // the mistake the PresentView schema once invited.
+        if error.path().to_string() == "."
+            && view.get("widgets").is_none()
+            && view.get("view").is_some_and(Value::is_object)
+        {
+            return "view is missing \"widgets\": pass the view itself, not wrapped in {view: ...}"
+                .to_owned();
+        }
         let place = match error.path().to_string().as_str() {
             "." => "view".to_owned(),
             path => format!("view.{path}"),
