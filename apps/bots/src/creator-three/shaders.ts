@@ -191,7 +191,14 @@ export const postFragment = /* glsl */ `
 uniform sampler2D tScene; uniform vec2 uGrid; uniform float uCell; uniform float uCoarse;
 uniform vec3 uGlowCol; uniform vec2 uOrigin; uniform float uYaw; uniform float uBackdrop;
 float rhash(float n) { return fract(sin(n * 91.345) * 47453.5453); }
-float skyline(float x) { float i = floor(x); float split = 0.25 + 0.5 * rhash(i + 7.0); return fract(x) < split ? rhash(i) : rhash(i + 0.5) * 0.7 + 0.15; }
+// Terraced mesas with occasional thin towers.
+float skyline(float x) {
+  float i = floor(x), f = fract(x);
+  float mesa = 0.25 + 0.5 * rhash(i);
+  float terrace = f < 0.2 || f > 0.8 ? mesa * 0.6 : mesa;
+  float tower = step(0.72, rhash(i + 3.0)) * step(abs(f - 0.5), 0.045) * 0.42;
+  return terrace + tower;
+}
 float bayer(vec2 p) {
   int x = int(mod(p.x, 4.0)), y = int(mod(p.y, 4.0));
   int i = x + y * 4;
@@ -215,8 +222,8 @@ void main() {
     float glow = uBackdrop * exp(-(q.x * q.x * 3.0 + q.y * q.y * 11.0));
     c = vec3(0.012, 0.013, 0.02) * (1.0 - uv.y * 0.6) + uGlowCol * glow;
     // Skylines are flat-topped blocks, like the page terrain, snapped to the pixel grid.
-    float far = 0.34 + 0.16 * skyline((uv.x + uYaw * 0.1) * 13.0 + 3.0);
-    float near = 0.16 + 0.2 * skyline((uv.x + uYaw * 0.22) * 6.0 + 11.0);
+    float far = 0.34 + 0.16 * skyline((uv.x + uYaw * 0.1) * 5.0 + 3.0);
+    float near = 0.16 + 0.2 * skyline((uv.x + uYaw * 0.22) * 2.6 + 11.0);
     far = floor(far * uGrid.y / 2.0) * 2.0 / uGrid.y;
     near = floor(near * uGrid.y / 2.0) * 2.0 / uGrid.y;
     float line = 1.01 / uGrid.y;
