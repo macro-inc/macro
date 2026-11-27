@@ -35,7 +35,12 @@ generated SDK storage schemas.
 - `src/billing/` owns the read-only Tower Billing route and its typed,
   team-scoped reader. The default reader is unavailable. The local fixture
   supplies the sample cycle and can exercise pending, denied, empty, and zero
-  observations without contacting any service.
+  observations without contacting any service. `src/billing/signed-sections.tsx`
+  accepts a verified team ID and an injected read of the Auth SDK's team
+  computer usage response. Enforce current-team access in the signed bridge
+  and remount the panel when viewer authorization changes. Keep utilization
+  separate from settled billing and invoke only the team computer usage read
+  for this panel.
 - `src/motion.css` owns the shell's motion and the fixed terrain scene from
   `src/assets/terrain.svg`. Animate only opacity and the transform family
   (`transform`, `translate`, `scale`), and give every new rule a
@@ -92,6 +97,15 @@ roster denial separately from an empty authorized roster. It exposes no
 payment terms and always disables purchasing. The static preview keeps its
 existing fixtures. Sign-in accepts only exact destinations for Creator, Fleet,
 Passwords, Billing, and same-tab Hire draft return.
+
+For signed Billing, run `bun run --filter @macro-inc/bots dev:billing` only
+against the dedicated seeded review issuer. The bridge pins the current team,
+revalidates its signed session around the SDK's compute usage read, and
+serves a single fixed read path. Keep this bridge in the dedicated
+single-team issuer because the upstream usage response has no team field.
+A broader signed deployment needs an upstream response bound to the
+authorized team. Billing renders CPU and memory observations without
+computing charges. The local fixture stays separate.
 
 For a remote review over an existing SSH connection, preserve both the
 loopback address and the port in the local forward. For example, use

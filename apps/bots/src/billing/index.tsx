@@ -1,5 +1,5 @@
 import { useLocation } from '@solidjs/router';
-import { createResource, Match, Switch } from 'solid-js';
+import { createResource, lazy, Match, Switch } from 'solid-js';
 import { session } from '../session';
 import type {
   BillingReader,
@@ -35,7 +35,13 @@ const billingMessages = {
   unavailable: 'Team billing is unavailable in this build.',
 };
 
+const LocalBilling = __BOTS_LOCAL_BILLING__
+  ? lazy(() => import('./local-view'))
+  : undefined;
+
 export default function Billing() {
+  if (LocalBilling) return <LocalBilling />;
+
   const location = useLocation();
   const [page] = createResource(
     () => (__BOTS_FIXTURES__ ? location.search : ''),
