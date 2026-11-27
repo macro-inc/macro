@@ -50,7 +50,15 @@ export function holdPersistedDraftText(
   return holdDraftText(name, () => {
     const [text, setText] = makePersisted(
       createSignal<string | undefined>(initialValue),
-      { name }
+      {
+        name,
+        // Something stored there that is not text is no draft, like stored
+        // data that does not parse.
+        deserialize: (data) => {
+          const value: unknown = JSON.parse(data);
+          return typeof value === 'string' ? value : initialValue;
+        },
+      }
     );
     return [text, setText];
   });

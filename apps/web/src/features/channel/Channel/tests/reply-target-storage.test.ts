@@ -111,6 +111,35 @@ describe('replyTargetStorage', () => {
     again.dispose();
   });
 
+  it('forgets a reply closed here that is open elsewhere too, since it is the same reply', () => {
+    const here = mount([]);
+    here.manager.bindReply(root);
+    const elsewhere = mount([]);
+    elsewhere.manager.bindReply(root);
+    here.manager.closeReply();
+    here.dispose();
+    elsewhere.dispose();
+
+    const again = mount(['root-1']);
+    expect(again.manager.replyTarget()).toBeUndefined();
+    again.dispose();
+  });
+
+  it('forgets a reply the history snapshot brought back once it is closed', () => {
+    const first = mount([]);
+    first.manager.bindReply(root);
+    first.dispose();
+    const fromHistory = mount(['root-1'], {
+      initialReplyTarget: { threadId: 'root-1' },
+    });
+    fromHistory.manager.closeReply();
+    fromHistory.dispose();
+
+    const again = mount(['root-1']);
+    expect(again.manager.replyTarget()).toBeUndefined();
+    again.dispose();
+  });
+
   it('ignores a stored binding it cannot read', () => {
     localStorage.setItem('channel-reply-target:channel-1', '{"threadId":');
     const second = mount(['root-1']);

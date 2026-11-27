@@ -16,40 +16,46 @@ const storedTargetSchema = z.object({
  * conversation, another view, the list) brings the reply back with its
  * draft. It restores only while that thread still has an unsent reply
  * (`hasReplyDraft`), and never over a binding the history snapshot restored.
- * Closing or sending a reply forgets only the binding this mount stored, so
- * the same channel open elsewhere keeps its own.
+ * Closing or sending a reply forgets the stored binding only while it is the
+ * reply this mount was on, so the same channel open elsewhere on another
+ * reply keeps its own.
  */
 export function replyTargetStorage(
   channelId: string,
   hasReplyDraft: (threadId: string) => boolean
 ): PersistenceStorage<UnifiedReplyTarget | undefined> {
   const key = `${REPLY_TARGET_STORAGE_PREFIX}${channelId}`;
-  let stored: string | null = null;
+  // The reply this mount is on, in its stored form.
+  let bound: string | null = null;
   return {
     restore: (current) => {
-      if (current) return undefined;
+      if (current) {
+        bound = storedForm(current);
+        return undefined;
+      }
       const raw = localStorage.getItem(key);
       if (!raw) return undefined;
       const parsed = storedTargetSchema.safeParse(JSON.parse(raw));
       if (!parsed.success || !hasReplyDraft(parsed.data.threadId)) {
         return undefined;
       }
-      stored = raw;
+      bound = storedForm(parsed.data);
       return parsed.data;
     },
     write: (target) => {
       if (!target) {
-        if (stored !== null && localStorage.getItem(key) === stored) {
+        if (bound !== null && localStorage.getItem(key) === bound) {
           localStorage.removeItem(key);
         }
-        stored = null;
+        bound = null;
         return;
       }
-      stored = JSON.stringify({
-        threadId: target.threadId,
-        replyId: target.replyId,
-      });
-      localStorage.setItem(key, stored);
+      bound = storedForm(target);
+      localStorage.setItem(key, bound);
     },
   };
+}
+
+function storedForm(target: { threadId: string; replyId?: string }): string {
+  return JSON.stringify({ threadId: target.threadId, replyId: target.replyId });
 }
