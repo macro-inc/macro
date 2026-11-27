@@ -9,6 +9,12 @@ const HirePanel = __BOTS_FIXTURES__
   ? lazy(() => import('./hire-panel'))
   : () => null;
 
+const LocalHire = __BOTS_LOCAL_HIRE__
+  ? lazy(async () => ({
+      default: (await import('./local-hire-review')).LocalHire,
+    }))
+  : () => null;
+
 export default function Creator() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -171,6 +177,8 @@ export default function Creator() {
               portrait={preset().portrait}
               width={width()}
             />
+          ) : __BOTS_LOCAL_HIRE__ ? (
+            <LocalHire name={name()} signIn={startHire} />
           ) : (
             <>
               <button type="button" class="primary" onClick={startHire}>

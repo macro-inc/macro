@@ -21,3 +21,25 @@ Bind the idempotency record to the authenticated actor and immutable request fin
 - Team resolution in `crates/entity_access/src/inbound/axum_extractors/team.rs:59–90,247–257`.
 - Invite authority and side effects in `crates/team_agents/src/inbound/axum_router.rs:182–223` and `crates/team_agents/src/domain/service.rs:413–424,481–535`.
 - Team/key dedupe in `crates/team_agents/src/outbound/pg_team_agents_repo.rs:290–328`.
+
+## Disposable signed review
+
+`bun run --filter @macro-inc/bots dev:hire` starts an ephemeral loopback
+listener for the isolated review. Set `BOTS_HIRE_REVIEW_AUTH` to the
+dedicated issuer on port 23211 and `BOTS_HIRE_REVIEW_TEAM` to its seeded
+team UUID. Set `BOTS_HIRE_REVIEW_BINARY` to the absolute path of the Rust
+review example, and `BOTS_HIRE_REVIEW_SOCKET` and
+`BOTS_HIRE_REVIEW_DB_ROLE` to the same disposable database.
+
+The app checks the signed reviewer and current team before sending a
+command to the helper in a network namespace. The helper offers only
+zero-charge local compute. Fleet and Brain read the persisted roster using
+the same team scope and opaque account UUID. The verified computer
+assignment is separate. The owned-host operator runs independently, and
+refresh only reads current state. Booting reflects the local process
+exercising the lifecycle. The product and signed read-only builds keep
+their usual gates.
+
+For the signed member denial probe set `BOTS_HIRE_REVIEW_SIGNIN=member`.
+This selects the separately seeded member for sign-in and starts no Hire
+helper. Use the owner review configuration for persistence checks.

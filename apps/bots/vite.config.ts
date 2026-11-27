@@ -7,6 +7,7 @@ export const botsConfig = ({ command, mode, isPreview }: ConfigEnv) => ({
   plugins: [botsBoundary(mode === 'local-fixture'), solid()],
   define: {
     __BOTS_LOCAL_AUTH__: JSON.stringify(''),
+    __BOTS_LOCAL_HIRE__: false,
     __BOTS_FIXTURES__:
       (command === 'serve' && !isPreview) || mode === 'local-fixture',
   },
@@ -28,8 +29,8 @@ export const botsConfig = ({ command, mode, isPreview }: ConfigEnv) => ({
 });
 
 export default defineConfig((env) => {
-  if (env.mode === 'local-auth') {
-    throw new Error('Bots local auth requires the dedicated dev:auth command');
+  if (env.mode === 'local-auth' || env.mode === 'local-hire') {
+    throw new Error('Bots signed reviews require their dedicated dev command');
   }
   return botsConfig(env);
 });

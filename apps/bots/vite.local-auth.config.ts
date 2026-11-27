@@ -20,6 +20,7 @@ export default defineConfig((env) => {
     define: {
       __BOTS_LOCAL_AUTH__: JSON.stringify(path),
       __BOTS_FIXTURES__: false,
+      __BOTS_LOCAL_HIRE__: false,
     },
     server: {
       host: '127.0.0.1',

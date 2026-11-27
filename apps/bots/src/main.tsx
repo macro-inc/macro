@@ -17,9 +17,17 @@ import './style.css';
 import './motion.css';
 
 const Creator = lazy(() => import('./creator'));
-const Brain = lazy(() => import('./brain'));
+const Brain = __BOTS_LOCAL_HIRE__
+  ? lazy(async () => ({
+      default: (await import('./local-hire-review')).LocalBrain,
+    }))
+  : lazy(() => import('./brain'));
 const SignIn = lazy(() => import('./sign-in'));
-const Fleet = lazy(() => import('./fleet'));
+const Fleet = __BOTS_LOCAL_HIRE__
+  ? lazy(async () => ({
+      default: (await import('./local-hire-review')).LocalFleet,
+    }))
+  : lazy(() => import('./fleet'));
 const Passwords = __BOTS_FIXTURES__
   ? lazy(() => import('./passwords/view'))
   : () => <TowerUnavailable heading={towerViews.passwords} />;

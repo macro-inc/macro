@@ -1,5 +1,11 @@
 {
-  "include": ["src", "scripts", "vite.config.ts", "vite.local-auth.config.ts"],
+  "include": [
+    "src",
+    "scripts",
+    "vite.config.ts",
+    "vite.local-auth.config.ts",
+    "vite.local-hire.config.ts"
+  ],
   "compilerOptions": {
     "module": "ESNext",
     "moduleResolution": "bundler",

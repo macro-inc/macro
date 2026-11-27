@@ -2,10 +2,11 @@ import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { Sdk } from '@macro-inc/sdk/generated/auth';
 import type { Plugin } from 'vite';
-import type { HireAccess } from '../src/hire-access';
+import type { HireAccess } from '../src/hire-access.ts';
+import { type LocalHireReview, readConfirm } from './localHire.ts';
 
-const upstream = 'http://127.0.0.1:23011/auth';
-const reviewer = 'macrobots-reviewer@example.test';
+const defaultUpstream = 'http://127.0.0.1:23011/auth';
+const defaultReviewer = 'macrobots-reviewer@example.test';
 const fixtureTeam = 'Macro Bots Local Review';
 const cookieName = 'bots-local-session';
 const lifetime = 10 * 60 * 1000;
@@ -17,7 +18,18 @@ type Viewer = Pick<
 >;
 type Identity = Viewer | Exclude<HireAccess, { status: 'signed-in' }>;
 
-export function localAuth(path: string): Plugin {
+export function localAuth(
+  path: string,
+  review?: {
+    upstream: string;
+    hire: LocalHireReview;
+    reviewer:
+      | 'macrobots-reviewer@example.test'
+      | 'macrobots-hire-member@example.test';
+  }
+): Plugin {
+  const upstream = review?.upstream ?? defaultUpstream;
+  const reviewer = review?.reviewer ?? defaultReviewer;
   const sdk = new Sdk();
   const sessions = new Map<string, Session>();
   let exchanging = false;
@@ -38,6 +50,7 @@ export function localAuth(path: string): Plugin {
       }
     },
     configureServer(server) {
+      if (review) server.httpServer?.once('close', review.hire.close);
       server.middlewares.use((req, res, next) => {
         const address = server.httpServer?.address();
         const host =
@@ -53,9 +66,13 @@ export function localAuth(path: string): Plugin {
           if (
             req.method === 'GET' &&
             req.headers.accept?.includes('text/html') &&
-            ['/', '/sign-in', '/fleet', '/passwords', '/billing'].some(
+            (['/', '/sign-in', '/fleet', '/passwords', '/billing'].some(
               (route) => route === page
-            )
+            ) ||
+              (review &&
+                /^\/teams\/[0-9a-f-]+\/bots\/[0-9a-f-]+\/overview$/.test(
+                  page ?? ''
+                )))
           ) {
             req.url = '/index.html';
           }
@@ -111,6 +128,57 @@ export function localAuth(path: string): Plugin {
             }
           : { status: viewer?.status ?? 'signed-out' }
       );
+      return;
+    }
+
+    const reviewRoutes = [
+      `${path}/review/offers`,
+      `${path}/review/confirm`,
+      `${path}/review/roster`,
+    ];
+    if (review && reviewRoutes.some((route) => route === req.url)) {
+      if (!id || !session?.token) {
+        send(res, 401, { status: 'signed-out' });
+        return;
+      }
+      const viewer = await identity(session.token);
+      if (
+        viewer.status !== 'signed-in' ||
+        viewer.teamId !== review.hire.team ||
+        (viewer.role !== 'owner' && viewer.role !== 'admin') ||
+        sessions.get(id) !== session ||
+        session.expires <= Date.now()
+      ) {
+        send(res, 403, { status: 'denied' });
+        return;
+      }
+      const seat = { actor: `macro|${reviewer}`, team: viewer.teamId };
+      const reply = (result: unknown) => {
+        if (sessions.get(id) !== session || session.expires <= Date.now()) {
+          send(res, 401, { status: 'signed-out' });
+        } else {
+          send(res, 200, result);
+        }
+      };
+      if (req.method === 'GET' && req.url === reviewRoutes[0]) {
+        reply(await review.hire.request(seat, { kind: 'offers' }));
+      } else if (req.method === 'GET' && req.url === reviewRoutes[2]) {
+        reply(await review.hire.request(seat, { kind: 'roster' }));
+      } else if (req.method === 'POST' && req.url === reviewRoutes[1]) {
+        const command = await readConfirm(req).catch(() => undefined);
+        if (sessions.get(id) !== session || session.expires <= Date.now()) {
+          send(res, 401, { status: 'signed-out' });
+          return;
+        }
+        if (!command || command.expectedTeam !== viewer.teamId) {
+          send(res, 400, { status: 'bad-request' });
+          return;
+        }
+        const { expectedTeam: _team, ...intent } = command;
+        reply(await review.hire.request(seat, intent));
+      } else {
+        send(res, 404, { status: 'unavailable' });
+      }
       return;
     }
 
@@ -247,7 +315,11 @@ export function localAuth(path: string): Plugin {
         member.user_id === user.data?.user_id &&
         member.team_id === team.data?.team.id
     );
-    if (!member || team.data.team.name !== fixtureTeam) {
+    if (
+      !member ||
+      team.data.team.name !== fixtureTeam ||
+      (review && team.data.team.id !== review.hire.team)
+    ) {
       return { status: 'team-unresolved' };
     }
     return {
@@ -335,7 +407,7 @@ async function readCode(req: IncomingMessage) {
   if (/^\d{6}$/.test(code)) return code;
 }
 
-function send(res: ServerResponse, status: number, data: object) {
+function send(res: ServerResponse, status: number, data: unknown) {
   res.writeHead(status, {
     'Content-Type': 'application/json',
     'Cache-Control': 'no-store',
