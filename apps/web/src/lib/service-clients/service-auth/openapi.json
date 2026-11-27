@@ -8652,6 +8652,10 @@
             },
             "description": "Comments collected from the pull request, when enrichment includes them."
           },
+          "defaultBranch": {
+            "type": ["string", "null"],
+            "description": "The base repository's default branch, when known."
+          },
           "deletions": {
             "type": ["integer", "null"],
             "format": "int64",
@@ -8665,6 +8669,11 @@
           "displayName": {
             "type": "string",
             "description": "A compact label suitable for display in the UI."
+          },
+          "githubCreatedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When GitHub opened the pull request, when known."
           },
           "githubKey": {
             "type": "string",
@@ -8701,6 +8710,13 @@
           "repo": {
             "type": "string",
             "description": "The GitHub repository name."
+          },
+          "requestedReviewers": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/GithubPullRequestUser"
+            },
+            "description": "The users asked to review, when known."
           },
           "reviews": {
             "type": ["array", "null"],
@@ -9010,6 +9026,17 @@
             "format": "int64",
             "description": "The id of the pull request review this comment was submitted with.\nOnly ever present on `review_comment` sources.",
             "minimum": 0
+          },
+          "reviewState": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GithubPullRequestReviewState",
+                "description": "The submitted review's state; absent on ordinary comments."
+              }
+            ]
           },
           "source": {
             "type": "string",

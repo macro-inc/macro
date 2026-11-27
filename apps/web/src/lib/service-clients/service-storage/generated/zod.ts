@@ -29748,6 +29748,21 @@ export const getDocumentGithubPullRequestsResponse = zod
                       .describe(
                         'The id of the pull request review this comment was submitted with.\nOnly ever present on `review_comment` sources.'
                       ),
+                    reviewState: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'approved',
+                            'changes_requested',
+                            'commented',
+                            'dismissed',
+                          ])
+                          .describe(
+                            "What a reviewer's latest review on a pull request said."
+                          ),
+                      ])
+                      .optional(),
                     source: zod
                       .string()
                       .describe(
@@ -49744,6 +49759,21 @@ export const getGithubPullRequestResponse = zod
               .describe(
                 'The id of the pull request review this comment was submitted with.\nOnly ever present on `review_comment` sources.'
               ),
+            reviewState: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum([
+                    'approved',
+                    'changes_requested',
+                    'commented',
+                    'dismissed',
+                  ])
+                  .describe(
+                    "What a reviewer's latest review on a pull request said."
+                  ),
+              ])
+              .optional(),
             source: zod
               .string()
               .describe(
@@ -49765,6 +49795,10 @@ export const getGithubPullRequestResponse = zod
       .describe(
         "Comments from the pull request's conversation, reviews, and review threads.\nComment `authorId` intentionally retains the shared numeric GitHub comment contract;\nconvert it to a decimal string before comparing it with `authorGithubUserId`."
       ),
+    defaultBranch: zod
+      .string()
+      .nullish()
+      .describe("The base repository's default branch, when known."),
     deletions: zod
       .number()
       .min(getGithubPullRequestResponseDeletionsMin)
@@ -49775,6 +49809,12 @@ export const getGithubPullRequestResponse = zod
       .nullish()
       .describe('The pull request body, as GitHub markdown.'),
     draft: zod.boolean().describe('Whether the pull request is a draft.'),
+    githubCreatedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'When GitHub opened the pull request; unknown until the next sync for older rows.'
+      ),
     githubKey: zod
       .string()
       .describe("The pull request's `owner\/repo\/pull\/number` key."),
@@ -49816,6 +49856,12 @@ export const getGithubPullRequestResponse = zod
           .describe('A label on a GitHub pull request.')
       )
       .describe("The pull request's labels."),
+    linkedMacroUsers: zod
+      .record(zod.string(), zod.string())
+      .optional()
+      .describe(
+        "GitHub user ids linked to Macro users within the record's source, resolved at read time."
+      ),
     number: zod
       .number()
       .describe('The pull request number within its repository.'),
@@ -49828,6 +49874,24 @@ export const getGithubPullRequestResponse = zod
     requestedReviewerGithubUserIds: zod
       .array(zod.string())
       .describe('Stable numeric GitHub user ids of the users asked to review.'),
+    requestedReviewers: zod
+      .array(
+        zod
+          .object({
+            githubUserId: zod
+              .string()
+              .describe('The stable numeric GitHub user id, as a string.'),
+            login: zod
+              .string()
+              .nullish()
+              .describe("The user's GitHub login, when known."),
+          })
+          .describe(
+            'A GitHub user named on a pull request, such as an assignee.'
+          )
+      )
+      .optional()
+      .describe('The users asked to review.'),
     reviewDecision: zod
       .union([
         zod.null(),

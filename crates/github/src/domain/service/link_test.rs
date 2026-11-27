@@ -353,6 +353,9 @@ fn default_pull_request_details() -> GithubPullRequestDetails {
         draft: None,
         requested_reviewer_github_user_ids: None,
         github_updated_at: None,
+        github_created_at: None,
+        requested_reviewers: None,
+        default_branch: None,
         assignees: None,
         labels: None,
         reviews: None,
@@ -886,6 +889,15 @@ struct NoPullRequestRows;
 
 impl GithubPullRequestRepository for NoPullRequestRows {
     type Err = std::convert::Infallible;
+
+    async fn linked_macro_users(
+        &self,
+        _github_user_ids: &[String],
+        _source: &foreign_entity::domain::models::SourceId,
+        _viewer: &macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> Result<std::collections::BTreeMap<String, String>, Self::Err> {
+        Ok(std::collections::BTreeMap::new())
+    }
 
     async fn github_key_for(
         &self,

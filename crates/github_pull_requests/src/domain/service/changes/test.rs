@@ -272,6 +272,10 @@ fn stored_pull_request(github_key: &str, head_sha: Option<&str>) -> StoredGithub
         comments: Vec::new(),
         checks: Vec::new(),
         github_updated_at: None,
+        github_created_at: None,
+        requested_reviewers: Vec::new(),
+        default_branch: None,
+        linked_macro_users: std::collections::BTreeMap::new(),
         base: Some(GitRefDto {
             name: Some("main".to_string()),
             sha: Some("base-sha".to_string()),

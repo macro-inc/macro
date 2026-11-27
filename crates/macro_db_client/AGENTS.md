@@ -60,6 +60,10 @@ foreign key: the contacts worker removes them on account deletion.
 Firecracker teammate. Unfinished rows hold the computer and keep the
 presigned download URL, which is cleared when an outcome is written.
 
+`github_pull_request` stores nullable `github_created_at` and `default_branch`,
+plus `requested_reviewers` JSONB defaulting to an empty array. These additive
+columns fill on sync, without a backfill; indexed reviewer ids remain separate.
+
 ## Boundaries
 
 - Depends on: `entity_access_db_utils`, `entity_registry_db_utils`,

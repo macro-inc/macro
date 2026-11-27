@@ -43,6 +43,9 @@ fn row(github_key: &str, repository_id: Option<i64>) -> GithubPullRequestRow {
         requested_reviewer_github_user_ids: vec!["8".to_string()],
         participant_github_user_ids: vec!["42".to_string(), "8".to_string()],
         github_updated_at: None,
+        github_created_at: None,
+        requested_reviewers: Vec::new(),
+        default_branch: None,
         assignees: Vec::new(),
         labels: Vec::new(),
         reviews: Vec::new(),
@@ -300,6 +303,12 @@ async fn lookup_reads_back_the_stored_row(pool: PgPool) {
     let repo = PgGithubPullRequestRepo::new(pool);
     let stored = GithubPullRequestRow {
         draft: true,
+        github_created_at: Some("2026-11-01T10:00:00Z".parse().unwrap()),
+        requested_reviewers: vec![GithubPullRequestUser {
+            github_user_id: "8".to_string(),
+            login: Some("reviewer".to_string()),
+        }],
+        default_branch: Some("main".to_string()),
         assignees: vec![GithubPullRequestUser {
             github_user_id: "7".to_string(),
             login: Some("hubot".to_string()),
@@ -329,6 +338,16 @@ async fn lookup_reads_back_the_stored_row(pool: PgPool) {
         .await
         .expect("upsert should succeed");
 
+    assert_eq!(
+        repo.pull_request_row("macro/app/pull/7").await.unwrap(),
+        Some(stored.clone())
+    );
+    let sparse = crate::domain::models::GithubPullRequestWrite::from_metadata(&serde_json::json!({
+        "githubKey":"macro/app/pull/7", "owner":"macro", "repo":"app", "number":7,
+        "url":"https://github.com/macro/app/pull/7", "displayName":"PR"
+    }))
+    .unwrap();
+    repo.upsert_row(&sparse).await.unwrap();
     assert_eq!(
         repo.pull_request_row("macro/app/pull/7").await.unwrap(),
         Some(stored)
@@ -396,4 +415,131 @@ async fn partial_git_refs_replace_name_and_sha_together(pool: PgPool) {
             );
         }
     }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn linked_people_stay_source_scoped_and_resolve_current_links(pool: PgPool) {
+    use foreign_entity::domain::models::SourceId;
+    use macro_user_id::user_id::MacroUserIdStr;
+    use std::collections::BTreeMap;
+
+    let team_id = uuid::Uuid::now_v7();
+    let other_team = uuid::Uuid::now_v7();
+    for email in [
+        "a@example.com",
+        "b@example.com",
+        "viewer@example.com",
+        "outside@example.com",
+    ] {
+        let id = uuid::Uuid::now_v7();
+        sqlx::query!("INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, $2)", id, email)
+            .execute(&pool).await.unwrap();
+        let user_id = format!("macro|{email}");
+        sqlx::query!(
+            r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ($1, $2, $3)"#,
+            user_id,
+            email,
+            id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!("INSERT INTO github_links (id, macro_id, fusionauth_user_id, github_username, github_user_id) VALUES ($1, $2, $3, 'reviewer', '42')", uuid::Uuid::now_v7(), user_id, id)
+            .execute(&pool).await.unwrap();
+    }
+    for (id, slug, owner) in [
+        (team_id, "REVIEW", "macro|viewer@example.com"),
+        (other_team, "OTHER", "macro|outside@example.com"),
+    ] {
+        sqlx::query!(
+            "INSERT INTO team (id, name, owner_id, slug) VALUES ($1, 'Review team', $2, $3)",
+            id,
+            owner,
+            slug
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    for user_id in [
+        "macro|a@example.com",
+        "macro|b@example.com",
+        "macro|viewer@example.com",
+    ] {
+        sqlx::query!(
+            "INSERT INTO team_user (team_id, user_id, team_role) VALUES ($1, $2, 'member')",
+            team_id,
+            user_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    sqlx::query!("INSERT INTO team_user (team_id, user_id, team_role) VALUES ($1, 'macro|outside@example.com', 'member')", other_team)
+        .execute(&pool).await.unwrap();
+    sqlx::query!("INSERT INTO github_links (id, macro_id, fusionauth_user_id, github_username, github_user_id) VALUES ($1, 'macro|outside@example.com', $2, 'outside-only', '43')", uuid::Uuid::now_v7(), uuid::Uuid::now_v7())
+        .execute(&pool).await.unwrap();
+
+    let repo = PgGithubPullRequestRepo::new(pool.clone());
+    let viewer = MacroUserIdStr::try_from("macro|viewer@example.com".to_string()).unwrap();
+    let outside = MacroUserIdStr::try_from("macro|outside@example.com".to_string()).unwrap();
+    let source = SourceId::team(team_id);
+    let ids = vec!["42".to_string(), "43".to_string(), "999".to_string()];
+    assert_eq!(
+        repo.linked_macro_users(&ids, &source, &viewer)
+            .await
+            .unwrap(),
+        BTreeMap::from([("42".to_string(), viewer.to_string())])
+    );
+    assert!(
+        repo.linked_macro_users(&ids, &source, &outside)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        repo.linked_macro_users(&ids, &SourceId::user(outside.to_string()), &outside)
+            .await
+            .unwrap(),
+        BTreeMap::from([
+            ("42".to_string(), outside.to_string()),
+            ("43".to_string(), outside.to_string()),
+        ])
+    );
+    assert!(
+        repo.linked_macro_users(&ids, &SourceId::user(outside.to_string()), &viewer)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        repo.linked_macro_users(&[], &source, &viewer)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+
+    sqlx::query!("DELETE FROM github_links WHERE macro_id = 'macro|viewer@example.com'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.linked_macro_users(&ids, &source, &viewer)
+            .await
+            .unwrap(),
+        BTreeMap::from([("42".to_string(), "macro|a@example.com".to_string())])
+    );
+    sqlx::query!(
+        "DELETE FROM team_user WHERE team_id = $1 AND user_id = 'macro|viewer@example.com'",
+        team_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        repo.linked_macro_users(&ids, &source, &viewer)
+            .await
+            .unwrap()
+            .is_empty()
+    );
 }

@@ -14,10 +14,13 @@ import type { StoredGithubPullRequestAdditions } from './storedGithubPullRequest
 import type { StoredGithubPullRequestAuthorGithubUserId } from './storedGithubPullRequestAuthorGithubUserId';
 import type { StoredGithubPullRequestAuthorLogin } from './storedGithubPullRequestAuthorLogin';
 import type { StoredGithubPullRequestBase } from './storedGithubPullRequestBase';
+import type { StoredGithubPullRequestDefaultBranch } from './storedGithubPullRequestDefaultBranch';
 import type { StoredGithubPullRequestDeletions } from './storedGithubPullRequestDeletions';
 import type { StoredGithubPullRequestDescription } from './storedGithubPullRequestDescription';
+import type { StoredGithubPullRequestGithubCreatedAt } from './storedGithubPullRequestGithubCreatedAt';
 import type { StoredGithubPullRequestGithubUpdatedAt } from './storedGithubPullRequestGithubUpdatedAt';
 import type { StoredGithubPullRequestHead } from './storedGithubPullRequestHead';
+import type { StoredGithubPullRequestLinkedMacroUsers } from './storedGithubPullRequestLinkedMacroUsers';
 import type { StoredGithubPullRequestReviewDecision } from './storedGithubPullRequestReviewDecision';
 import type { StoredGithubPullRequestStatus } from './storedGithubPullRequestStatus';
 import type { StoredGithubPullRequestTitle } from './storedGithubPullRequestTitle';
@@ -44,6 +47,8 @@ export interface StoredGithubPullRequest {
 Comment `authorId` intentionally retains the shared numeric GitHub comment contract;
 convert it to a decimal string before comparing it with `authorGithubUserId`. */
   comments: GithubPullRequestComment[];
+  /** The base repository's default branch, when known. */
+  defaultBranch?: StoredGithubPullRequestDefaultBranch;
   /**
    * Lines deleted across the pull request's changes.
    * @minimum 0
@@ -53,6 +58,8 @@ convert it to a decimal string before comparing it with `authorGithubUserId`. */
   description?: StoredGithubPullRequestDescription;
   /** Whether the pull request is a draft. */
   draft: boolean;
+  /** When GitHub opened the pull request; unknown until the next sync for older rows. */
+  githubCreatedAt?: StoredGithubPullRequestGithubCreatedAt;
   /** The pull request's `owner/repo/pull/number` key. */
   githubKey: string;
   /** When GitHub last updated the pull request. */
@@ -62,6 +69,8 @@ convert it to a decimal string before comparing it with `authorGithubUserId`. */
   id: string;
   /** The pull request's labels. */
   labels: GithubPullRequestLabel[];
+  /** GitHub user ids linked to Macro users within the record's source, resolved at read time. */
+  linkedMacroUsers?: StoredGithubPullRequestLinkedMacroUsers;
   /** The pull request number within its repository. */
   number: number;
   /** The repository owner the pull request was last synced under. */
@@ -70,6 +79,8 @@ convert it to a decimal string before comparing it with `authorGithubUserId`. */
   repo: string;
   /** Stable numeric GitHub user ids of the users asked to review. */
   requestedReviewerGithubUserIds: string[];
+  /** The users asked to review. */
+  requestedReviewers?: GithubPullRequestUser[];
   reviewDecision?: StoredGithubPullRequestReviewDecision;
   /** Each reviewer's latest submitted review. */
   reviews: GithubPullRequestReview[];

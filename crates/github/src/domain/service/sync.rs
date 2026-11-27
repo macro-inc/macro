@@ -314,6 +314,25 @@ impl<
                 .and_then(|value| value.as_str())
                 .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
                 .map(|updated_at| updated_at.with_timezone(&chrono::Utc)),
+            github_created_at: pull_request
+                .and_then(|pr| pr.get("created_at"))
+                .and_then(|value| value.as_str())
+                .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+                .map(|created_at| created_at.with_timezone(&chrono::Utc)),
+            requested_reviewers: pull_request
+                .and_then(|pr| pr.get("requested_reviewers"))
+                .and_then(|value| value.as_array())
+                .map(|users| users.iter().filter_map(Self::user_from_payload).collect()),
+            default_branch: pull_request
+                .and_then(|pr| pr.pointer("/base/repo/default_branch"))
+                .and_then(|value| value.as_str())
+                .or_else(|| {
+                    event
+                        .payload
+                        .pointer("/repository/default_branch")
+                        .and_then(|value| value.as_str())
+                })
+                .map(str::to_string),
             assignees: pull_request
                 .and_then(|pr| pr.get("assignees"))
                 .and_then(|value| value.as_array())
@@ -484,6 +503,9 @@ impl<
                 .requested_reviewer_github_user_ids
                 .or(fallback.requested_reviewer_github_user_ids),
             github_updated_at: details.github_updated_at.or(fallback.github_updated_at),
+            github_created_at: details.github_created_at.or(fallback.github_created_at),
+            requested_reviewers: details.requested_reviewers.or(fallback.requested_reviewers),
+            default_branch: details.default_branch.or(fallback.default_branch),
             assignees: details.assignees.or(fallback.assignees),
             labels: details.labels.or(fallback.labels),
             reviews: match (details.reviews, fallback.reviews) {

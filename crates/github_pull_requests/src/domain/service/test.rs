@@ -179,6 +179,7 @@ struct StubPullRequestRows {
     listing_calls: Arc<Mutex<Vec<ListingCall>>>,
     fail_listings: Arc<Mutex<bool>>,
     facet_requests: Arc<Mutex<Vec<Vec<SourceId>>>>,
+    people_requests: Arc<Mutex<Vec<(Vec<String>, SourceId)>>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -239,6 +240,19 @@ impl GithubPullRequestRepository for StubPullRequestRows {
             row.github_key = to.to_owned();
         }
         Ok(())
+    }
+
+    async fn linked_macro_users(
+        &self,
+        github_user_ids: &[String],
+        source: &SourceId,
+        _viewer: &MacroUserIdStr<'static>,
+    ) -> Result<std::collections::BTreeMap<String, String>, Self::Err> {
+        self.people_requests
+            .lock()
+            .unwrap()
+            .push((github_user_ids.to_vec(), source.clone()));
+        Ok(std::collections::BTreeMap::new())
     }
 
     async fn pull_request_row(
@@ -383,6 +397,9 @@ fn pull_request(status: GithubPullRequestStatus) -> EnrichedGithubPullRequest {
         draft: None,
         requested_reviewer_github_user_ids: None,
         github_updated_at: None,
+        github_created_at: None,
+        requested_reviewers: None,
+        default_branch: None,
         assignees: None,
         labels: None,
         reviews: None,
@@ -661,6 +678,9 @@ async fn upsert_writes_the_row_from_the_merged_metadata() {
             requested_reviewer_github_user_ids: vec!["8".to_string()],
             participant_github_user_ids: vec!["42".to_string()],
             github_updated_at: None,
+            github_created_at: None,
+            requested_reviewers: Vec::new(),
+            default_branch: None,
             assignees: Vec::new(),
             labels: Vec::new(),
             reviews: Vec::new(),

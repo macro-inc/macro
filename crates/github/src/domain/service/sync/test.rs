@@ -1283,6 +1283,15 @@ struct NoPullRequestRows;
 impl GithubPullRequestRepository for NoPullRequestRows {
     type Err = std::convert::Infallible;
 
+    async fn linked_macro_users(
+        &self,
+        _github_user_ids: &[String],
+        _source: &foreign_entity::domain::models::SourceId,
+        _viewer: &macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> Result<std::collections::BTreeMap<String, String>, Self::Err> {
+        Ok(std::collections::BTreeMap::new())
+    }
+
     async fn github_key_for(
         &self,
         _repository_id: i64,
@@ -1430,6 +1439,9 @@ fn expected_pull_request_metadata(
         draft: None,
         requested_reviewer_github_user_ids: None,
         github_updated_at: None,
+        github_created_at: None,
+        requested_reviewers: None,
+        default_branch: None,
         assignees: None,
         labels: None,
         reviews: None,
@@ -1619,6 +1631,9 @@ fn backfilled_pull_request(title: &str) -> EnrichedGithubPullRequest {
         draft: None,
         requested_reviewer_github_user_ids: None,
         github_updated_at: None,
+        github_created_at: None,
+        requested_reviewers: None,
+        default_branch: None,
         assignees: None,
         labels: None,
         reviews: None,
@@ -1651,6 +1666,9 @@ fn expected_pull_request_metadata_from_details(
         draft: None,
         requested_reviewer_github_user_ids: None,
         github_updated_at: None,
+        github_created_at: None,
+        requested_reviewers: None,
+        default_branch: None,
         assignees: None,
         labels: None,
         reviews: None,
@@ -1677,6 +1695,7 @@ fn pull_request_comment(id: u64, body: &str, source: &str) -> GithubPullRequestC
         created_at: None,
         updated_at: None,
         source: source.to_string(),
+        review_state: None,
         in_reply_to_id: None,
         pull_request_review_id: None,
         path: None,
@@ -1720,6 +1739,9 @@ fn pull_request_details(
         draft: None,
         requested_reviewer_github_user_ids: None,
         github_updated_at: None,
+        github_created_at: None,
+        requested_reviewers: None,
+        default_branch: None,
         assignees: None,
         labels: None,
         reviews: None,
@@ -6216,6 +6238,48 @@ async fn realtime_delivery_failure_keeps_the_saved_mapping() {
         .await;
     assert_eq!(upserts.len(), 1);
     assert_eq!(service.foreign_entity_service.foreign_entities().len(), 1);
+}
+
+#[test]
+fn webhook_detail_metadata_uses_base_repository_default_before_payload_fallback() {
+    for (base_default, expected) in [(Some("main"), "main"), (None, "trunk")] {
+        let event = ValidatedGithubWebhookEvent::new(
+            "pull_request".to_string(),
+            serde_json::json!({
+                "pull_request": {
+                    "number":7, "created_at":"2026-11-01T10:00:00Z",
+                    "requested_reviewers":[{"id":42,"login":"reviewer"}],
+                    "base":{"ref":"release", "repo":{"default_branch":base_default}}
+                },
+                "repository":{"name":"repo", "owner":{"login":"example"}, "default_branch":"trunk"}
+            }),
+        );
+        let enriched = TestSyncServiceImpl::enriched_pull_request_from_event(&event).unwrap();
+        assert_eq!(enriched.default_branch.as_deref(), Some(expected));
+        assert_eq!(
+            enriched.github_created_at,
+            Some("2026-11-01T10:00:00Z".parse().unwrap())
+        );
+        assert_eq!(
+            enriched
+                .requested_reviewer_github_user_ids
+                .as_ref()
+                .unwrap(),
+            &vec!["42"]
+        );
+        assert_eq!(
+            enriched.requested_reviewers.as_ref().unwrap()[0]
+                .login
+                .as_deref(),
+            Some("reviewer")
+        );
+        let details = pull_request_details("Title", 1, 0, None, None);
+        let merged =
+            TestSyncServiceImpl::enriched_pull_request_from_details(enriched.clone(), details);
+        assert_eq!(merged.default_branch, enriched.default_branch);
+        assert_eq!(merged.github_created_at, enriched.github_created_at);
+        assert_eq!(merged.requested_reviewers, enriched.requested_reviewers);
+    }
 }
 
 mod webhooks;

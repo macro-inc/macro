@@ -95,6 +95,16 @@ pub trait GithubPullRequestRepository: Send + Sync + 'static {
         &self,
         github_key: &str,
     ) -> impl Future<Output = Result<Option<GithubPullRequestRow>, Self::Err>> + Send;
+
+    /// Resolve the requested GitHub ids inside `source`, with viewer-first deterministic ties.
+    /// Team sources return links only when `viewer` is also a member; personal sources link
+    /// only that source user. The service rejects unsupported or mismatched personal sources.
+    fn linked_macro_users(
+        &self,
+        github_user_ids: &[String],
+        source: &SourceId,
+        viewer: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<std::collections::BTreeMap<String, String>, Self::Err>> + Send;
 }
 
 /// Reads the stored pull request records the indexer writes rows from.

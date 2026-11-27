@@ -10,11 +10,14 @@ import type { EnrichedGithubPullRequestAuthorId } from './enrichedGithubPullRequ
 import type { EnrichedGithubPullRequestAuthorLogin } from './enrichedGithubPullRequestAuthorLogin';
 import type { EnrichedGithubPullRequestChecks } from './enrichedGithubPullRequestChecks';
 import type { EnrichedGithubPullRequestComments } from './enrichedGithubPullRequestComments';
+import type { EnrichedGithubPullRequestDefaultBranch } from './enrichedGithubPullRequestDefaultBranch';
 import type { EnrichedGithubPullRequestDeletions } from './enrichedGithubPullRequestDeletions';
 import type { EnrichedGithubPullRequestDescription } from './enrichedGithubPullRequestDescription';
+import type { EnrichedGithubPullRequestGithubCreatedAt } from './enrichedGithubPullRequestGithubCreatedAt';
 import type { EnrichedGithubPullRequestLabels } from './enrichedGithubPullRequestLabels';
 import type { EnrichedGithubPullRequestName } from './enrichedGithubPullRequestName';
 import type { EnrichedGithubPullRequestParticipantGithubUserIds } from './enrichedGithubPullRequestParticipantGithubUserIds';
+import type { EnrichedGithubPullRequestRequestedReviewers } from './enrichedGithubPullRequestRequestedReviewers';
 import type { EnrichedGithubPullRequestReviews } from './enrichedGithubPullRequestReviews';
 import type { EnrichedGithubPullRequestStatus } from './enrichedGithubPullRequestStatus';
 
@@ -40,6 +43,8 @@ export interface EnrichedGithubPullRequest {
   checks?: EnrichedGithubPullRequestChecks;
   /** Comments collected from the pull request, when enrichment includes them. */
   comments?: EnrichedGithubPullRequestComments;
+  /** The base repository's default branch, when known. */
+  defaultBranch?: EnrichedGithubPullRequestDefaultBranch;
   /**
    * The number of deleted lines reported by GitHub, when enrichment succeeds.
    * @minimum 0
@@ -49,6 +54,8 @@ export interface EnrichedGithubPullRequest {
   description?: EnrichedGithubPullRequestDescription;
   /** A compact label suitable for display in the UI. */
   displayName: string;
+  /** When GitHub opened the pull request, when known. */
+  githubCreatedAt?: EnrichedGithubPullRequestGithubCreatedAt;
   /** The stored GitHub association key, in `owner/repo/pull/number` format. */
   githubKey: string;
   /** The pull request's labels, when known. */
@@ -68,6 +75,8 @@ union rather than replacing it (partial write paths must not drop known particip
   participantGithubUserIds?: EnrichedGithubPullRequestParticipantGithubUserIds;
   /** The GitHub repository name. */
   repo: string;
+  /** The users asked to review, when known. */
+  requestedReviewers?: EnrichedGithubPullRequestRequestedReviewers;
   /** Each reviewer's latest submitted review, when known. Stored metadata merges this per
 reviewer, so a write that knows one review keeps the others. */
   reviews?: EnrichedGithubPullRequestReviews;

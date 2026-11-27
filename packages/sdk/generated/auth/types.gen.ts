@@ -829,6 +829,10 @@ export type EnrichedGithubPullRequest = {
      */
     comments?: Array<GithubPullRequestComment> | null;
     /**
+     * The base repository's default branch, when known.
+     */
+    defaultBranch?: string | null;
+    /**
      * The number of deleted lines reported by GitHub, when enrichment succeeds.
      */
     deletions?: number | null;
@@ -840,6 +844,10 @@ export type EnrichedGithubPullRequest = {
      * A compact label suitable for display in the UI.
      */
     displayName: string;
+    /**
+     * When GitHub opened the pull request, when known.
+     */
+    githubCreatedAt?: string | null;
     /**
      * The stored GitHub association key, in `owner/repo/pull/number` format.
      */
@@ -870,6 +878,10 @@ export type EnrichedGithubPullRequest = {
      * The GitHub repository name.
      */
     repo: string;
+    /**
+     * The users asked to review, when known.
+     */
+    requestedReviewers?: Array<GithubPullRequestUser> | null;
     /**
      * Each reviewer's latest submitted review, when known. Stored metadata merges this per
      * reviewer, so a write that knows one review keeps the others.
@@ -1090,6 +1102,7 @@ export type GithubPullRequestComment = {
      * Only ever present on `review_comment` sources.
      */
     pullRequestReviewId?: number | null;
+    reviewState?: null | GithubPullRequestReviewState;
     /**
      * The GitHub source for the comment, such as `issue_comment` or `review_comment`.
      */

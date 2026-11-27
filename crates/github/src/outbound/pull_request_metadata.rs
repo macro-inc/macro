@@ -73,6 +73,13 @@ pub(crate) async fn fetch_pull_request_metadata(
         draft: pull_request.draft,
         requested_reviewer_github_user_ids: Some(requested_reviewer_github_user_ids),
         github_updated_at: pull_request.updated_at,
+        github_created_at: pull_request.created_at,
+        requested_reviewers: Some(pull_request_users(&pull_request.requested_reviewers)),
+        default_branch: pull_request
+            .base
+            .repo
+            .as_ref()
+            .and_then(|repo| repo.default_branch.clone()),
         assignees: Some(pull_request_users(&pull_request.assignees)),
         labels: Some(pull_request_labels(&pull_request.labels)),
         reviews,
@@ -195,7 +202,7 @@ struct GithubRepositoryOwnerResponse {
 }
 
 #[derive(Debug, serde::Deserialize)]
-struct GithubOpenPullRequestResponse {
+pub(super) struct GithubOpenPullRequestResponse {
     number: u64,
     title: String,
     html_url: String,
@@ -208,6 +215,8 @@ struct GithubOpenPullRequestResponse {
     draft: Option<bool>,
     #[serde(default)]
     updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    #[serde(default)]
+    created_at: Option<chrono::DateTime<chrono::Utc>>,
     user: Option<GithubUserResponse>,
     #[serde(default)]
     requested_reviewers: Vec<GithubUserResponse>,
@@ -232,6 +241,8 @@ struct GithubPullRequestResponse {
     draft: Option<bool>,
     #[serde(default)]
     updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    #[serde(default)]
+    created_at: Option<chrono::DateTime<chrono::Utc>>,
     user: Option<GithubUserResponse>,
     #[serde(default)]
     requested_reviewers: Vec<GithubUserResponse>,
@@ -306,6 +317,8 @@ impl GithubPullRequestBaseResponse {
 #[derive(Debug, serde::Deserialize)]
 struct GithubRepositoryIdResponse {
     id: u64,
+    #[serde(default)]
+    default_branch: Option<String>,
 }
 
 /// The users that have a stable numeric id, with their logins.
@@ -371,7 +384,7 @@ struct GithubCommentResponse {
 }
 
 #[derive(Debug, serde::Deserialize)]
-struct GithubReviewResponse {
+pub(super) struct GithubReviewResponse {
     id: u64,
     body: Option<String>,
     state: Option<String>,
@@ -702,7 +715,11 @@ fn github_get(
 }
 
 impl GithubOpenPullRequestResponse {
-    fn into_enriched_pull_request(self, owner: &str, repo: &str) -> EnrichedGithubPullRequest {
+    pub(super) fn into_enriched_pull_request(
+        self,
+        owner: &str,
+        repo: &str,
+    ) -> EnrichedGithubPullRequest {
         // The list endpoint does not include comments, so this is the partial structural
         // participant set; stored metadata merges participants as a union.
         let participant_ids = structural_participant_ids(
@@ -733,6 +750,13 @@ impl GithubOpenPullRequestResponse {
             draft: self.draft,
             requested_reviewer_github_user_ids: Some(user_ids(&self.requested_reviewers)),
             github_updated_at: self.updated_at,
+            github_created_at: self.created_at,
+            requested_reviewers: Some(pull_request_users(&self.requested_reviewers)),
+            default_branch: self
+                .base
+                .repo
+                .as_ref()
+                .and_then(|repo| repo.default_branch.clone()),
             assignees: Some(pull_request_users(&self.assignees)),
             labels: Some(pull_request_labels(&self.labels)),
             reviews: None,
@@ -757,6 +781,7 @@ impl GithubCommentResponse {
             created_at: self.created_at,
             updated_at: self.updated_at,
             source: source.to_string(),
+            review_state: None,
             in_reply_to_id: self.in_reply_to_id,
             pull_request_review_id: self.pull_request_review_id,
             path: self.path,
@@ -778,12 +803,9 @@ impl GithubReviewResponse {
         })
     }
 
-    fn into_pull_request_comment(self) -> Option<GithubPullRequestComment> {
+    pub(super) fn into_pull_request_comment(self) -> Option<GithubPullRequestComment> {
+        let review_state = GithubPullRequestReviewState::from_github(self.state.as_deref()?)?;
         let body = self.body.unwrap_or_default();
-
-        if body.trim().is_empty() {
-            return None;
-        }
 
         Some(GithubPullRequestComment {
             id: self.id,
@@ -795,6 +817,7 @@ impl GithubReviewResponse {
             created_at: self.submitted_at,
             updated_at: None,
             source: "review".to_string(),
+            review_state: Some(review_state),
             in_reply_to_id: None,
             pull_request_review_id: None,
             path: None,

@@ -52,6 +52,11 @@ link flow, following the hexagonal architecture pattern.
   behavior needs domain handlers or persistence changes.
 - Add a new GitHub API call: `src/outbound/github_sync_client.rs` or
   `github_auth_client.rs` → the domain service that needs it.
+- PR enrichment reads GitHub opening time, requested reviewer users, and the base
+  repository's default branch without extra API calls. Webhook fallback uses the
+  payload repository's default branch only when the base repository omits it.
+- Submitted reviews remain timeline comments even with empty bodies and carry
+  their review state; pending reviews remain excluded. Comment author ids stay numeric.
 
 ## Checks
 

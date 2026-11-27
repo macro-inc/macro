@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT github_key, repository_id, number, owner, repo, title, status,\n                      draft, author_github_user_id, author_login,\n                      requested_reviewer_github_user_ids, participant_github_user_ids,\n                      github_updated_at, assignees, labels, reviews,\n                      base_ref, base_sha, head_ref, head_sha\n               FROM github_pull_request\n               WHERE github_key = $1\n                  OR (lower(github_key) = lower($1) AND repository_id = $2 AND number = $3)\n               ORDER BY github_key\n               FOR UPDATE",
+  "query": "SELECT github_key, repository_id, number, owner, repo, title, status,\n                      draft, author_github_user_id, author_login,\n                      requested_reviewer_github_user_ids, participant_github_user_ids,\n                      github_updated_at, github_created_at, requested_reviewers, default_branch,\n                      assignees, labels, reviews,\n                      base_ref, base_sha, head_ref, head_sha\n               FROM github_pull_request\n               WHERE github_key = $1\n                  OR (lower(github_key) = lower($1) AND repository_id = $2 AND number = $3)\n               ORDER BY github_key\n               FOR UPDATE",
   "describe": {
     "columns": [
       {
@@ -70,36 +70,51 @@
       },
       {
         "ordinal": 13,
-        "name": "assignees",
-        "type_info": "Jsonb"
+        "name": "github_created_at",
+        "type_info": "Timestamptz"
       },
       {
         "ordinal": 14,
-        "name": "labels",
+        "name": "requested_reviewers",
         "type_info": "Jsonb"
       },
       {
         "ordinal": 15,
+        "name": "default_branch",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
+        "name": "assignees",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 17,
+        "name": "labels",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 18,
         "name": "reviews",
         "type_info": "Jsonb"
       },
       {
-        "ordinal": 16,
+        "ordinal": 19,
         "name": "base_ref",
         "type_info": "Text"
       },
       {
-        "ordinal": 17,
+        "ordinal": 20,
         "name": "base_sha",
         "type_info": "Text"
       },
       {
-        "ordinal": 18,
+        "ordinal": 21,
         "name": "head_ref",
         "type_info": "Text"
       },
       {
-        "ordinal": 19,
+        "ordinal": 22,
         "name": "head_sha",
         "type_info": "Text"
       }
@@ -125,6 +140,9 @@
       false,
       false,
       true,
+      true,
+      false,
+      true,
       false,
       false,
       false,
@@ -134,5 +152,5 @@
       true
     ]
   },
-  "hash": "a74cb158102fb166fe5c32127188fac0f39c57cacf43c677e513996f06be6f85"
+  "hash": "d7933e5e046ed22d195a9dcc16f62d71320c4771bfe5a960e15260ac72f26a79"
 }
