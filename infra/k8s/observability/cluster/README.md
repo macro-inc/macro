@@ -45,7 +45,7 @@ Run from this directory.
 | `nix run .#render` | Renders the modules into `manifests/prod/`, the derived metrics' `MAPPING.md` and the Datadog monitors' `MAPPING.md` (host stack, `grafana-provisioning/datadog/`). Commit the result with the change. |
 | `nix run .#check` | Fails when either differs from a fresh render, then validates. CI runs this (`observability_cluster.yml`). |
 | `nix run .#validate` | Validates the manifests strictly with kubeconform: core kinds against the Kubernetes schemas for the cluster's version, custom resources against the CRDs being installed. |
-| `nix run .#kind-smoke` | Bootstraps the pushed branch onto a throwaway kind cluster and waits for the applications. Every application must sync and be healthy except those that need AWS: `aws-load-balancer-controller` (VPC lookup), `external-secrets` (the ClusterSecretStore), `loki`, `tempo` and `mimir` (gp3 volumes and S3), and `grafana`, `edge` and `alloy-ingest` (their secrets); `edge` may also stay unsynced (its TargetGroupBindings need the controller's webhook). Pass `--delete` to remove the cluster afterwards. |
+| `nix run .#kind-smoke` | Bootstraps the pushed branch onto a throwaway kind cluster and waits for the applications. Every application must sync and be healthy except those that need AWS: `aws-load-balancer-controller` (VPC lookup), `external-secrets` (the ClusterSecretStore), `loki`, `tempo` and `mimir` (gp3 volumes and S3), and `grafana`, `edge`, `alloy-ingest` and `query-gateway` (their secrets); `edge` may also stay unsynced (its TargetGroupBindings need the controller's webhook). Pass `--delete` to remove the cluster afterwards. |
 | `nix run .#bootstrap -- --context <ctx>` | The one-time bootstrap below. |
 
 ## Bootstrap (once, after the cluster exists)
