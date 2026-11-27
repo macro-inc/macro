@@ -58,3 +58,60 @@ at startup. Rotate in this order:
 It prints only the namespace it provisioned. The roles disable JWT clock
 leeway, so the document storage service and the vault must keep synchronized
 clocks (both run on Fargate with Amazon Time Sync).
+
+## Copying to the OpenBao account vault
+
+`copy_secrets.py` copies every team's `passwords` values from the legacy vault
+to its replacement in the OpenBao account. It is one step of the move in the
+[stack README](../stacks/openbao/README.md#moving-the-vault-to-the-openbao-account-once).
+
+- **Version numbers stay the same,** because the document storage service's
+  metadata points at them. Unreadable versions are filled with synthetic
+  placeholders and then soft-deleted or destroyed, depending on source state.
+  A destroyed destination version matches a pruned source version, so a rerun
+  can continue appending after the placeholder has been destroyed.
+- **It only moves the destination forward.**
+  - It compares readable versions. For an unreadable source version, it can
+    change the state of an existing destination version only if the entire
+    destination value is the exact synthetic placeholder.
+  - Any other live destination value makes the item diverge when the source
+    version is deleted, destroyed, or pruned, even if an earlier copy run may
+    have written that value. An unreadable destination with a different
+    erasure state also diverges unless both versions are permanently erased.
+    The script skips all changes to diverged items.
+  - It reports destination-ahead and destination-only items separately. These
+    counts must both be zero for the final cutover check.
+- **It is idempotent.** A repeat run copies only what changed, and also cleans
+  up after a run that stopped partway.
+- **It checks its work.** After copying, it compares each team's items, current
+  versions and values.
+- **All-team runs require matching root team namespace inventories.** Before
+  any writes, both vaults must successfully return a well-formed root namespace
+  list. A verified empty list is valid. A listing error, including HTTP 404,
+  or an invalid response aborts the run. The script checks both inventories
+  again after copy and verification. Every destination-only team blocks the
+  run, even an empty one. Comparing names alone catches teams that might still
+  have Passwords or TOTP data, without inspecting or deleting their contents.
+- **It refuses** one vault on both tunnels, and teams the destination hasn't
+  provisioned yet.
+- **It prints** counts and ids only.
+- **It can't copy TOTP seeds,** because OpenBao never returns one. It reports
+  how many keys each team has.
+
+With the legacy tunnel on 18443 and the replacement's on 28443:
+
+```sh
+doppler run -p openbao -c dev --only-secrets OPENBAO_ROOT_TOKEN OPENBAO_ACCOUNT_ROOT_TOKEN -- \
+  sh -c 'BAO_SOURCE_TOKEN="$OPENBAO_ROOT_TOKEN" BAO_DESTINATION_TOKEN="$OPENBAO_ACCOUNT_ROOT_TOKEN" \
+    exec python3 infra/openbao/copy_secrets.py \
+      --source-connect 127.0.0.1:18443 --destination-connect 127.0.0.1:28443 --dry-run'
+```
+
+Drop `--dry-run` to copy. The run exits 2 on a namespace mismatch or change,
+item divergence, or item verification failure. An inventory request or response
+error exits 1. `--team-id` limits a run to named teams and skips the root
+inventory comparison. For the final copy, omit `--team-id` and follow the
+stack README's write fence and verification steps.
+Any divergence blocks cutover until it is independently reconciled and the
+fenced verification passes. A reverse copy for a separately approved
+rollback swaps both tunnels and tokens and uses the same checks.

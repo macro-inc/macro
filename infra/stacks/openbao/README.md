@@ -4,6 +4,16 @@ Passwords keeps its secret values in OpenBao; Postgres holds only metadata. The
 Passwords change adds a local OpenBao to the local stack; this stack is the
 hosted dev vault that QA uses.
 
+The vault is moving from the main account to `macro-openbao` (169344408001).
+Until that finishes, the stack runs two vaults:
+
+- **Legacy** (`index.ts`, the table below): the main account's shared VPC. It
+  still serves DSS through `openbao-dev.macro-internal.com`.
+- **Replacement** (`vault.ts`, "OpenBao account vault"): its own VPC, cluster,
+  EFS and seal key in the OpenBao account, reached through PrivateLink. It
+  starts empty and gets the data by copy ("Moving the vault to the OpenBao
+  account").
+
 | Piece | Choice |
 | --- | --- |
 | Server | Our ECR image `openbao-dev`: `quay.io/openbao/openbao:2.7.2` plus the seal plugin, both digest-pinned (`image/Dockerfile`); one Fargate task on the shared cluster |
@@ -54,6 +64,98 @@ KMS for the seal, and `ssmmessages` for ECS Exec. The HTTPS egress rule is still
 `0.0.0.0/0`, because private-DNS interface endpoints in the shared VPC would
 reroute every dev and prod service there. Moving OpenBao into its own VPC with
 no NAT or internet gateway removes that rule.
+
+## OpenBao account vault
+
+| Piece | Choice |
+| --- | --- |
+| Account | `macro-openbao`. Pulumi keeps the operator's main-account credentials and assumes `openbao:deployRoleArn` (`openbao-deploy-dev`) for this side; that provider tags everything `openbao:env=dev`. Roles live under `/openbao/dev/` with the `openbao-boundary-dev` permissions boundary, as the account bootstrap requires |
+| Network | VPC `10.89.0.0/16` (`network.ts`), two private subnets placed by zone ID (`use1-az6`, `use1-az1`) so they match DSS's subnets across accounts. No internet or NAT gateway; the account's SCPs deny both. Private-DNS endpoints for `ecr.api`, `ecr.dkr`, `logs`, `kms`, `ssmmessages` that admit only this account's principals, and an S3 gateway endpoint that only reads ECR's layer bucket. The KMS and Logs endpoints also reach only this account's resources. A Route 53 Resolver DNS Firewall answers only `amazonaws.com` names, so data can't leave as DNS queries |
+| Egress | Task egress only to those endpoints, the S3 prefix list, its EFS and its NLB; no `0.0.0.0/0` |
+| Server | The same image, pushed to this account's ECR `openbao-dev`; service `openbao-dev` on its own cluster `openbao-dev` |
+| Storage, seal, backup | A fresh EFS volume, a seal key (`alias/openbao-dev`), and an AWS Backup vault, all in this account and all `protect` + `retainOnDelete` |
+| TLS and access | Internal NLB with a TLS listener (an ACM certificate for the same name, validated in the main account's zone). It is a VPC endpoint service that only the main account may connect to, with acceptance required. The one accepted endpoint is in the shared VPC, and its security group admits only the document storage service |
+| Logs | Log group `openbao-dev`, subscribed to a CloudWatch Logs destination in the main account that writes into the same Datadog Firehose. Datadog names it `service:openbao-dev` |
+| Alarms | ECS deployment failure and no healthy target, to the SNS topic `openbao-alarms-dev` in this account. CloudWatch can't notify a topic in another account, and nothing subscribes to this one yet |
+
+Operators reach it the same way as the legacy vault ("Operator tunnel"),
+signed in to `macro-openbao` with the `OpenBaoOperator` permission set. It
+may start ECS Exec and SSM sessions only on the `openbao-dev` cluster and its
+tasks, so keep that cluster name. Take the values from
+`pulumi stack output account --json`:
+`clusterName`, and `loadBalancerDnsName` as the tunnel's remote host. Use local
+port 28443 for this vault, so both tunnels can be open at once.
+
+## Moving the vault to the OpenBao account (once)
+
+Raft data can't move accounts: the EFS volume stays in its account, and the
+seal key wrapping the vault's root key is the main account's. OpenBao can't
+migrate from one AWS KMS seal to another, so a Raft snapshot couldn't be
+restored under the new key either. The replacement therefore starts empty, and
+the values are copied over the API. The two vaults never share a volume.
+Every step needs explicit permission.
+
+1. **Deploy** this stack (`pulumi up --stack macro-inc/dev`). It creates the
+   replacement and keeps the legacy service, storage and DNS record in place.
+   A new legacy image digest changes the task definition. On a task definition
+   update, ECS stops the old task before starting its successor on the existing
+   Raft volume. Allow for a brief Passwords outage and confirm the legacy
+   target is healthy before copying.
+2. **Initialize** the replacement through a port-forward to its port 8200, as
+   in "First deploy and init" below. Upload the values to Doppler `openbao/dev`
+   as `OPENBAO_ACCOUNT_ROOT_TOKEN` and `OPENBAO_ACCOUNT_RECOVERY_KEY`, next to
+   the legacy ones.
+3. **Open both operator tunnels:** legacy on 18443, replacement on 28443.
+4. **Provision** every team on the replacement with
+   `infra/openbao/provision.py --connect 127.0.0.1:28443` and its root token
+   ([procedure](../../openbao/README.md)). `copy_secrets.py --dry-run` names any
+   team still missing.
+5. **Pre-copy**, first with `--dry-run`, then for real
+   ([procedure](../../openbao/README.md#copying-to-the-openbao-account-vault)).
+   Keep application writes to the replacement fenced from the start. The legacy
+   vault keeps serving during this pass.
+6. **Fence and drain writers before the final copy.** In an approved
+   maintenance window, stop accepting new Passwords writes, including creates,
+   edits, deletes, and TOTP changes.
+   Inventory all writers and pause background and lifecycle jobs (including
+   DSS's item and TOTP cleanup), queued work and retries, provisioning, and
+   direct operator writes to both vaults. Pause automatic DSS deploys and
+   scaling that could restart a writer. Drain in-flight requests, then stop
+   all DSS tasks and close remaining legacy client connections, including
+   operator sessions other than the copy tunnels. Keep ingress from DSS to the
+   legacy ALB blocked through the transition. Confirm that the old DSS tasks
+   are stopped, work has drained, and legacy audit logs show no write requests
+   after the fence. Keep destination writes blocked for all clients except the
+   copy operator. Stop the procedure if any part of the fence cannot be verified.
+7. **Reconcile under the fence.** Run a dry run, then the final copy and its
+   built-in verification for all teams without `--team-id`. A failed or
+   invalid root namespace listing or any namespace mismatch blocks cutover,
+   even for an empty destination-only team. Any reported divergence,
+   verification failure, nonzero exit, destination-ahead item, or
+   destination-only item also blocks cutover. Keep writes fenced and resolve
+   discrepancies under a separately approved procedure. Rerun the final copy
+   and require matching namespace inventories, exit 0, no mismatches, and zero
+   ahead or destination-only items before continuing.
+8. **Switch traffic with explicit approval.** In a follow-up change, make
+   `openbao-dev.macro-internal.com` an alias of `consumerEndpointDnsName`.
+   Keep DSS stopped while verifying from its network that the name resolves
+   to the replacement and that fresh read-only probes reach it. Check the
+   replacement audit logs for those reads and confirm client traffic is still
+   fenced off from the legacy vault. DNS TTL alone cannot prove that cached
+   routes or existing connections have drained. Start fresh DSS tasks only
+   after these checks pass, because DSS runs cleanup on startup. Confirm they
+   connect to the replacement before resuming client traffic and other writers.
+   Every user with a TOTP enrollment must enroll again because OpenBao never
+   returns the seed.
+9. **Keep the legacy vault for rollback.** Retain its service, storage, seal
+   key, and backups, and keep it fenced from writers. Before a rollback, fence
+   and drain writers again, reconcile and verify changes made on the replacement,
+   and explicitly approve the traffic switch. Reversing DNS alone would leave
+   post-cutover writes behind. A reverse copy has the same divergence gates.
+10. **Remove the legacy vault** after the rollback window, in a follow-up change.
+    Its seal key, EFS volume and backup vault are `protect` + `retainOnDelete`.
+    Unprotect them in state, drop them from the code, and delete them by hand
+    once no backup is needed.
 
 ## First deploy and init (once)
 
@@ -173,7 +275,10 @@ aws ecs update-service --cluster "$cluster" --service openbao --desired-count 1
 
 ## Prod later
 
-Not built. A separate design decides:
+Not built. A separate design decides the rest, but one thing is fixed: prod is
+created in the OpenBao account and never migrated. The dev move above has to
+copy values and loses TOTP enrollments, because a vault's data can't move
+between accounts or seal keys. A prod migration would lose the same.
 
 - **Cluster:** 3-node HA Raft on EC2 with EBS across three AZs (`retry_join`
   by tag); Raft on network storage is not recommended beyond dev.
