@@ -24,6 +24,11 @@ path = "src/cognition_openapi.rs"
 name = "scheduled_action_openapi"
 path = "src/scheduling_openapi.rs"
 
+[[bin]]
+name = "local_signed_brain_read"
+path = "src/local_signed_brain_read.rs"
+required-features = ["local-signed-brain-read"]
+
 # A dev server for the brain CAPTCHA and Fireworks routes; never deployed.
 [[bin]]
 name = "brain_bench"
@@ -179,6 +184,7 @@ rdkafka = { workspace = true }
 readonly_pool = { path = "../../crates/readonly_pool" }
 rate_limit = { path = "../../crates/rate_limit" }
 redis = { workspace = true, features = ["aio", "streams", "tokio-comp", "tokio-rustls-comp"] }
+remote_env_var = { path = "../../crates/remote_env_var", optional = true }
 reqwest = { workspace = true }
 rmcp = { workspace = true, features = ["transport-streamable-http-server"] }
 roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false, features = ["outbound"] }
@@ -251,4 +257,5 @@ wiremock = { workspace = true }
 brain-bench = []
 local = []
 local_auth = ["macro_authorization/local_auth"]
+local-signed-brain-read = ["dep:remote_env_var"]
 local_queue = []

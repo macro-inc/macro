@@ -37,12 +37,22 @@ const DOCUMENTS_PER_ACCESS_STATEMENT: usize = 1_000;
 #[derive(Clone)]
 pub struct PgAccessRepository {
     pool: PgPool,
+    fresh_document_sources: bool,
 }
 
 impl PgAccessRepository {
     /// Create a new PostgreSQL access repository.
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        Self {
+            pool,
+            fresh_document_sources: false,
+        }
+    }
+
+    /// Bypass the membership source cache for batched document access checks.
+    pub fn with_fresh_document_sources(mut self) -> Self {
+        self.fresh_document_sources = true;
+        self
     }
 }
 
@@ -138,7 +148,13 @@ impl AccessRepository for PgAccessRepository {
         if document_ids.is_empty() {
             return Ok(levels);
         }
-        let source_ids = user_source_ids(&self.pool, Some(user_id)).await?;
+        let source_ids = if self.fresh_document_sources {
+            let source_ids = queries::query_user_source_ids(&self.pool, user_id.as_ref()).await?;
+            record_source_ids(source_ids.0.len());
+            source_ids
+        } else {
+            user_source_ids(&self.pool, Some(user_id)).await?
+        };
         // The ids `get_document_access` would parse as UUIDs share one
         // statement per batch; the rest take its legacy path, one at a time.
         let mut by_uuid: HashMap<Uuid, Vec<&String>> = HashMap::new();

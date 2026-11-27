@@ -69,6 +69,8 @@ the entity-access domain service.
   (`queries/document_access/documents_access.sql`) and must answer each one as
   `get_document_access` does: change their sources together, and extend
   `test/documents_access.rs` and its fixture, which compare the two.
+  `PgAccessRepository::with_fresh_document_sources` opts a repository's
+  batched document checks into a fresh membership lookup.
 - Spans here never record a user id (a `MacroUserId` is an email): skip it.
   Checks record how many source ids they bound as `source_id_count`, through
   `user_source_ids` in the Postgres adapter and `domain::telemetry`; a caller

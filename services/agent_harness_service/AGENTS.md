@@ -207,8 +207,8 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   retention handling that preserves the no-replay fence. The writer must still
   check current permissions and the job fence at the effect boundary after the
   database lock is released.
-- `src/brain_journal.rs` is an unmounted journal proof under `cfg(test)`.
-  A trusted test extension injects the signed-in viewer and Axum exercises the
+- `src/brain_journal.rs` implements the opt-in local journal read.
+  Its legacy test-only route injects a viewer via a trusted extension and exercises the
   read against real disposable Postgres team membership, exact teammate lookup
   and document View receipts. The proof policy admits team admins and owners
   and filters live sources by current View access before projection. Observations
@@ -216,7 +216,24 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   completion timestamps only. Before service exposure, agree on the human viewer
   policy and authorization consistency, compose auth and rollout, review durable
   storage and a trusted producer, and generate the OpenAPI and SDK read contract.
-  Mail address comes from the separate authorized mailbox surface.
+  The separate signed loopback test uses the shared Macro JWT validator and
+  resolves the selected opaque account UUID before applying the same team,
+  agent, and source policy. Missing or ambiguous mappings are unavailable.
+  The opt-in `local_signed_brain_read` binary
+  (`--features local-signed-brain-read`) exposes
+  `GET /teams/{team}/agents/{agent}/brain/read` on an ephemeral IPv4 loopback
+  address. It accepts the configured local issuer's human session and
+  requires the current owner/admin team and exact active agent. Configure the
+  existing Macro JWT environment with nonempty issuer, audience, and signing
+  key, and set `BOTS_BRAIN_TEAM_ID` and
+  `BOTS_BRAIN_DATABASE_URL` for the isolated local team and read-only
+  database connection. Set `BOTS_BRAIN_SYNTHETIC_JOURNAL` to an explicit
+  one-agent JSON file with an opaque `agent` UUID and `completed` entries
+  containing `sourceEvent`, `document`, and `completedAt`. Each result
+  rechecks current document View access with fresh membership sources. With
+  no source for an agent, Activity
+  is unavailable. Fleet owns runtime status. Mail address comes from the
+  separate authorized mailbox surface.
 - `src/voice_gateway.rs`: `GET /voices` and `GET /voices/{model}/sample` for
   team admins behind `enable-agent-teammates` (`team_agents::domain::voice`).
   The Deepgram catalog (Aura-2 only) is cached for a day, and each voice's

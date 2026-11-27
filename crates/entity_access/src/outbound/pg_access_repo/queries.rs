@@ -127,7 +127,10 @@ async fn shared_user_source_ids(
     Ok(Box::pin(RUNNING_SOURCE_ID_LOOKUPS.run(key, lookup)).await?)
 }
 
-async fn query_user_source_ids(pool: &Pool<Postgres>, user_id: &str) -> sqlx::Result<SourceIds> {
+pub(super) async fn query_user_source_ids(
+    pool: &Pool<Postgres>,
+    user_id: &str,
+) -> sqlx::Result<SourceIds> {
     let mut tx = Box::pin(pool.begin()).await?;
     sqlx::query!("SET LOCAL statement_timeout = '15s'")
         .execute(&mut *tx)
