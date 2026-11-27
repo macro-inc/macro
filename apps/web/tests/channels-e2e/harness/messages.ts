@@ -171,6 +171,38 @@ export class Conversation extends ChannelView {
     return this.replyComposer(rootId);
   }
 
+  /**
+   * Opens the box for a reply to the message on a touch screen: a long press
+   * on it, then Reply in the sheet of actions that opens.
+   */
+  async startReplyByTouch(rootId: string): Promise<Locator> {
+    const row = this.messageById(rootId).first();
+    await row.evaluate((element) => {
+      const touch = new Touch({
+        identifier: 1,
+        target: element,
+        clientX: 20,
+        clientY: 20,
+      });
+      element.dispatchEvent(
+        new TouchEvent('touchstart', {
+          bubbles: true,
+          touches: [touch],
+          targetTouches: [touch],
+          changedTouches: [touch],
+        })
+      );
+    });
+    const sheet = this.page.getByRole('dialog', { name: 'Message actions' });
+    await sheet.getByRole('button', { name: 'Reply', exact: true }).click();
+    await row.dispatchEvent('touchend', {
+      bubbles: true,
+      touches: [],
+      changedTouches: [],
+    });
+    return this.replyComposer(rootId);
+  }
+
   /** Writes a reply to the message and sends it with Enter. */
   async reply(rootId: string, text: string): Promise<void> {
     const composer = await this.startReply(rootId);

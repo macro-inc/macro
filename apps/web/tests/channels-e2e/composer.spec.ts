@@ -1,5 +1,9 @@
 import { writeFileSync } from 'node:fs';
-import { ChannelView, conversationRow } from './harness/channel';
+import {
+  ChannelView,
+  conversationRow,
+  phoneConversationRow,
+} from './harness/channel';
 import {
   attach,
   attachmentsOf,
@@ -20,6 +24,7 @@ import {
   missedLive,
   test,
 } from './harness/fixtures';
+import { Conversation } from './harness/messages';
 import { findConversations } from './harness/sidebar';
 
 // If this fails, a person who starts writing, looks at another channel and
@@ -125,6 +130,77 @@ test('CMP-13 a message shown as sent is still sent when the page is reloaded at 
   // also back in the composer as a draft.
   await failsSometimes(async () => {
     await expect(view.composerText).toHaveText('');
+  });
+});
+
+// If this fails, a person who starts a reply to a message, looks at another
+// channel and comes back finds the reply closed, and what they wrote shows
+// only if they think to press Reply on that message again.
+test('CMP-14 a reply I was writing is still open with its text after I look at another channel and come back', async ({
+  page,
+  ada,
+  ben,
+  people,
+}) => {
+  const first = await ada.createChannel({ members: [people.ben] });
+  const second = await ada.createChannel({ members: [people.ben] });
+  const root = await ben.post(first.id, 'a question');
+  const firstView = new Conversation(page, first.id);
+  const secondView = new ChannelView(page, second.id);
+  await firstView.open();
+
+  const reply = await firstView.startReply(root.id);
+  await reply.click();
+  await page.keyboard.type('half a reply');
+  await findConversations(page, second.name);
+  await conversationRow(page, second.name).click();
+  await secondView.shown();
+
+  await findConversations(page, first.name);
+  await conversationRow(page, first.name).click();
+  await firstView.shown();
+  await expect(firstView.replyComposer(root.id)).toBeVisible();
+  await expect(firstView.replyComposer(root.id)).toHaveText('half a reply');
+  await expect(firstView.composerText).toHaveText('');
+});
+
+test.describe('on a phone', () => {
+  test.use({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+  });
+
+  // If this fails, a person on a phone who starts a reply to a message, goes
+  // to another part of the app and comes back to the channel finds the
+  // composer no longer replying, and what they wrote is out of sight.
+  test('CMP-15 on a phone, a reply I was writing is still open with its text after I look at another view and come back', async ({
+    page,
+    ada,
+    ben,
+    people,
+  }) => {
+    const channel = await ada.createChannel({ members: [people.ben] });
+    const root = await ben.post(channel.id, 'a question');
+    const view = new Conversation(page, channel.id);
+    await view.open();
+
+    const reply = await view.startReplyByTouch(root.id);
+    await reply.click();
+    await page.keyboard.type('half a reply');
+    await page.getByRole('button', { name: 'Calendar' }).click();
+    await page.getByRole('button', { name: 'Chat' }).click();
+    await phoneConversationRow(page, channel.name).click();
+
+    await expect(view.messageById(root.id)).toBeVisible();
+    await expect(
+      page.getByText(`Replying to ${people.ben.name}`, { exact: true })
+    ).toBeVisible();
+    // The composer comes back folded, showing the draft; a tap opens it.
+    await page
+      .getByRole('button', { name: 'half a reply', exact: true })
+      .click();
+    await expect(view.replyComposer(root.id)).toHaveText('half a reply');
   });
 });
 
