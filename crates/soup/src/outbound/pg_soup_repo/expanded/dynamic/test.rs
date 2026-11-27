@@ -62,9 +62,16 @@ fn a_nil_parent_keeps_its_arm_beside_a_live_one() {
     assert!(DynamicArms::can_match(&filter));
     let sort = SimpleSortMethod::UpdatedAt.into();
     let mut arrays = DocumentIdArrays::starting_at(first_document_id_slot(sort, false));
-    let sql = build_query(&filter, false, sort, DocumentGrants::Estimated, &mut arrays)
-        .sql()
-        .to_owned();
+    let sql = build_query(
+        &filter,
+        false,
+        sort,
+        DocumentGrants::Estimated,
+        &mut arrays,
+        None,
+    )
+    .sql()
+    .to_owned();
     // The project hydration is the second read of `TopItems`, which keeps
     // Postgres from inlining it into the document hydration.
     assert!(sql.contains(r#"FROM "Project" p"#));
@@ -182,6 +189,7 @@ fn flat_timestamp_top_clauses_remain_lightweight() {
             sort.into(),
             DocumentGrants::Estimated,
             &mut arrays,
+            None,
         );
         let top = query.sql().split("Combined AS").next().unwrap();
         assert!(!top.contains("JOIN document_sub_type"));
@@ -201,6 +209,7 @@ fn flat_timestamp_top_clauses_remain_lightweight() {
         property,
         DocumentGrants::Estimated,
         &mut arrays,
+        None,
     );
     let top = query.sql().split("Combined AS").next().unwrap();
     assert!(top.contains("LEFT JOIN document_sub_type"));
@@ -280,7 +289,14 @@ fn option_sorts_build_one_uncorrelated_option_map() {
             )
             .0
         } else {
-            build_query(&filter, false, sort, DocumentGrants::Estimated, &mut arrays)
+            build_query(
+                &filter,
+                false,
+                sort,
+                DocumentGrants::Estimated,
+                &mut arrays,
+                None,
+            )
         };
         let parameter = if grouped { 11 } else { 9 };
         let sql = query.sql();
@@ -342,6 +358,7 @@ fn task_only_filters_omit_redundant_namespace_joins() {
             sort,
             DocumentGrants::Estimated,
             &mut DocumentIdArrays::starting_at(first_document_id_slot(sort, false)),
+            None,
         );
         let (grouped, _) = build_grouped_query(
             &filter,
@@ -510,6 +527,7 @@ fn initiatives_are_opt_in_and_share_the_existing_sql_pagination() {
             SimpleSortMethod::UpdatedAt.into(),
             DocumentGrants::Estimated,
             &mut DocumentIdArrays::starting_at(9),
+            None
         )
         .sql()
         .contains("FROM initiative")
@@ -524,6 +542,7 @@ fn initiatives_are_opt_in_and_share_the_existing_sql_pagination() {
             SimpleSortMethod::UpdatedAt.into(),
             DocumentGrants::Estimated,
             &mut DocumentIdArrays::starting_at(9),
+            None
         )
         .sql()
         .contains("FROM initiative")
@@ -535,6 +554,7 @@ fn initiatives_are_opt_in_and_share_the_existing_sql_pagination() {
         SimpleSortMethod::UpdatedAt.into(),
         DocumentGrants::Estimated,
         &mut DocumentIdArrays::starting_at(9),
+        None,
     );
     let (candidates, details) = query.sql().split_once("Combined AS").unwrap();
     assert!(candidates.contains("FROM initiative i"));
@@ -560,6 +580,7 @@ fn initiatives_are_opt_in_and_share_the_existing_sql_pagination() {
         SimpleSortMethod::UpdatedAt.into(),
         DocumentGrants::Estimated,
         &mut DocumentIdArrays::starting_at(9),
+        None,
     );
     assert!(!named.sql().contains("i.id = ANY(ARRAY("));
     assert!(named.sql().contains("WHERE ea.entity_id = i.id"));
@@ -574,6 +595,7 @@ fn initiatives_are_opt_in_and_share_the_existing_sql_pagination() {
         SimpleSortMethod::UpdatedAt.into(),
         DocumentGrants::Estimated,
         &mut DocumentIdArrays::starting_at(9),
+        None,
     );
     assert!(open.sql().contains("i.id = ANY(ARRAY("));
 }
@@ -671,6 +693,7 @@ async fn explain_first_page(
         sort,
         DocumentGrants::Estimated,
         &mut document_ids,
+        None,
     );
     let sql = format!("EXPLAIN (ANALYZE, FORMAT JSON) {}", builder.sql());
 

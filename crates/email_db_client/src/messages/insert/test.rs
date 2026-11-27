@@ -6,6 +6,8 @@ use models_email::email::service::attachment::Attachment;
 use models_email::email::service::label::Label;
 use sqlx::{Pool, Postgres};
 
+mod document_participants;
+
 const LINK_ID: &str = "00000000-0000-0000-0000-000000000001";
 const THREAD_ID: &str = "10000000-0000-0000-0000-000000000001";
 

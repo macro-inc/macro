@@ -3,17 +3,17 @@ use crate::domain::scheduled_delivery::identity::{reconcile_message, reconcile_s
 use email_db_client::messages::update::mark_message_as_sent;
 use email_db_client::threads::provider_identity::lock_provider_thread;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use sqlx::{PgPool, types::Uuid};
+use sqlx::{PgConnection, PgPool, types::Uuid};
 
-const LINK: Uuid = Uuid::from_u128(0x019a0000_0000_7000_8000_000000000001);
+pub(super) const LINK: Uuid = Uuid::from_u128(0x019a0000_0000_7000_8000_000000000001);
 const THREAD: Uuid = Uuid::from_u128(0x019a0000_0000_7000_8000_000000000101);
 const PROVIDER_THREAD: Uuid = Uuid::from_u128(0x019a0000_0000_7000_8000_000000000102);
-const MESSAGE: Uuid = Uuid::from_u128(0x019a0000_0000_7000_8000_000000000201);
-const IMPORTED: Uuid = Uuid::from_u128(0x019a0000_0000_7000_8000_000000000202);
-const ATTACHMENT: Uuid = Uuid::from_u128(0x019a0000_0000_7000_8000_000000000401);
-const CONTACT: Uuid = Uuid::from_u128(0x019a0000_0000_7000_8000_000000000301);
+pub(super) const MESSAGE: Uuid = Uuid::from_u128(0x019a0000_0000_7000_8000_000000000201);
+pub(super) const IMPORTED: Uuid = Uuid::from_u128(0x019a0000_0000_7000_8000_000000000202);
+pub(super) const ATTACHMENT: Uuid = Uuid::from_u128(0x019a0000_0000_7000_8000_000000000401);
+pub(super) const CONTACT: Uuid = Uuid::from_u128(0x019a0000_0000_7000_8000_000000000301);
 
-async fn imported_delivery(pool: &PgPool) -> anyhow::Result<delivery::DeliveryClaim> {
+pub(super) async fn imported_delivery(pool: &PgPool) -> anyhow::Result<delivery::DeliveryClaim> {
     sqlx::query!(
         "INSERT INTO email_scheduled_messages (link_id, message_id, send_time) VALUES ($1, $2, NOW() - INTERVAL '1 second')",
         LINK, MESSAGE,
@@ -69,26 +69,56 @@ async fn imported_delivery(pool: &PgPool) -> anyhow::Result<delivery::DeliveryCl
     Ok(claim)
 }
 
-async fn complete(pool: &PgPool, claim: &delivery::DeliveryClaim) -> anyhow::Result<bool> {
+pub(super) async fn complete(
+    pool: &PgPool,
+    claim: &delivery::DeliveryClaim,
+) -> anyhow::Result<bool> {
     let mut tx = pool.begin().await?;
-    lock_provider_thread(&mut tx, LINK, "sent-provider-thread").await?;
-    if !delivery::complete_delivery(&mut tx, claim).await? {
+    if !finish(&mut tx, claim).await? {
         return Ok(false);
     }
-    reconcile_message(&mut *tx, LINK, MESSAGE, "sent-provider-message").await?;
-    let thread = reconcile_sent_thread(&mut *tx, LINK, MESSAGE, "sent-provider-thread").await?;
+    tx.commit().await?;
+    Ok(true)
+}
+
+/// The completion transaction's statements, up to its commit.
+pub(super) async fn finish(
+    tx: &mut PgConnection,
+    claim: &delivery::DeliveryClaim,
+) -> anyhow::Result<bool> {
+    if !fence(tx, claim).await? {
+        return Ok(false);
+    }
+    adopt(tx).await?;
+    Ok(true)
+}
+
+/// The completion's fence: the provider thread, then the local message
+/// (`FOR UPDATE`) and its schedule. False when the claim is stale.
+pub(super) async fn fence(
+    tx: &mut PgConnection,
+    claim: &delivery::DeliveryClaim,
+) -> anyhow::Result<bool> {
+    lock_provider_thread(tx, LINK, "sent-provider-thread").await?;
+    delivery::complete_delivery(tx, claim).await
+}
+
+/// The completion's writes after its fence: adoption of the imported copy,
+/// the thread, the sent flag and the thread's projections.
+pub(super) async fn adopt(tx: &mut PgConnection) -> anyhow::Result<()> {
+    reconcile_message(tx, LINK, MESSAGE, "sent-provider-message").await?;
+    let thread = reconcile_sent_thread(tx, LINK, MESSAGE, "sent-provider-thread").await?;
     mark_message_as_sent(
-        &mut tx,
+        tx,
         "sent-provider-message",
         "sent-provider-thread",
         LINK,
         MESSAGE,
     )
     .await?;
-    email_db_client::threads::update::update_thread_metadata(&mut tx, thread, LINK).await?;
-    email_db_client::threads::update::sync_thread_attachment_flags(&mut tx, thread).await?;
-    tx.commit().await?;
-    Ok(true)
+    email_db_client::threads::update::update_thread_metadata(tx, thread, LINK).await?;
+    email_db_client::threads::update::sync_thread_attachment_flags(tx, thread).await?;
+    Ok(())
 }
 
 #[sqlx::test(

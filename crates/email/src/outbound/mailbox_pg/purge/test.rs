@@ -569,3 +569,117 @@ async fn purge_message_batch(
     .purge_message_batch(link_id, cursor, limit)
     .await
 }
+
+const FOREIGN_KEY_VIOLATION: &str = "23503";
+
+async fn backend_pid(conn: &mut sqlx::PgConnection) -> anyhow::Result<i32> {
+    Ok(sqlx::query_scalar!(r#"SELECT pg_backend_pid() AS "pid!""#)
+        .fetch_one(conn)
+        .await?)
+}
+
+/// Returns once `waiter` waits on a lock `holder` holds; fails if `waiting`
+/// finishes first or ten seconds pass. Postgres has no event to wait on for
+/// a lock wait, so this polls `pg_blocking_pids`.
+async fn blocked_by<T>(
+    pool: &Pool<Postgres>,
+    waiter: i32,
+    holder: i32,
+    waiting: &tokio::task::JoinHandle<T>,
+) -> anyhow::Result<()> {
+    use anyhow::Context as _;
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let blocked = sqlx::query_scalar!(
+                r#"SELECT $2::int = ANY(pg_blocking_pids($1)) AS "blocked!""#,
+                waiter,
+                holder,
+            )
+            .fetch_one(pool)
+            .await?;
+            if blocked {
+                return Ok(());
+            }
+            anyhow::ensure!(!waiting.is_finished(), "finished without waiting");
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .context("never waited")?
+}
+
+/// A batch locks its messages before it deletes their attachments, as every
+/// writer takes a message before its attachments. A document link in flight
+/// on one of them waits for the batch and then fails its foreign key check.
+/// Had the link taken the message first, the batch's message delete would
+/// have waited for it while it waited for the deleted attachment.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../email_db_client/fixtures",
+        scripts("purge_link")
+    )
+)]
+async fn a_link_in_flight_waits_for_the_batch_and_fails(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use anyhow::Context as _;
+    mark_link_deleting(&pool, PURGED).await?;
+    let attachment = sqlx::query_scalar!(
+        "SELECT a.id FROM email_attachments a JOIN email_messages m ON m.id = a.message_id
+         WHERE m.link_id = $1 ORDER BY a.id LIMIT 1",
+        PURGED
+    )
+    .fetch_one(&pool)
+    .await?;
+    let document = Uuid::now_v7().to_string();
+    let mut seeding = pool.begin().await?;
+    // No owner behind the foreign key.
+    sqlx::query!("SET LOCAL session_replication_role = 'replica'")
+        .execute(&mut *seeding)
+        .await?;
+    sqlx::query!(
+        r#"INSERT INTO "Document" (id, name, owner) VALUES ($1, 'attached.pdf', 'macro|nobody@example.com')"#,
+        document,
+    )
+    .execute(&mut *seeding)
+    .await?;
+    seeding.commit().await?;
+
+    let mut batch = PgMailboxSync::new(pool.clone()).begin_batch(PURGED).await?;
+    let purger = backend_pid(&mut batch.0).await?;
+    let limit = NonZeroU32::new(30).context("non-zero")?;
+    let ids: Vec<Uuid> = batch
+        .messages(PURGED, Uuid::nil(), limit)
+        .await?
+        .into_iter()
+        .map(|message| message.id)
+        .collect();
+    batch.delete_message_labels(&ids).await?;
+    batch.delete_message_recipients(&ids).await?;
+    batch.detach_message_files(&ids).await?;
+    batch.delete_message_attachments(&ids).await?;
+    let mut linker = pool.acquire().await?;
+    let linker_pid = backend_pid(&mut linker).await?;
+    let linking = tokio::spawn(async move {
+        sqlx::query!(
+            "INSERT INTO document_email (document_id, email_attachment_id) VALUES ($1, $2)",
+            document,
+            attachment,
+        )
+        .execute(&mut *linker)
+        .await
+    });
+    blocked_by(&pool, linker_pid, purger, &linking).await?;
+    batch.delete_scheduled_messages(&ids).await?;
+    assert_eq!(batch.delete_message_rows(&ids).await?, 30);
+    batch.commit().await?;
+
+    match linking.await? {
+        Err(sqlx::Error::Database(e)) => {
+            assert_eq!(e.code().as_deref(), Some(FOREIGN_KEY_VIOLATION), "{e}");
+        }
+        result => anyhow::bail!("the link outlived its attachment: {result:?}"),
+    }
+    Ok(())
+}

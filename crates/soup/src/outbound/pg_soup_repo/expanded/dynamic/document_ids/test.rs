@@ -208,6 +208,7 @@ fn arrays_follow_fixed_binds(item_source: ItemSource) {
                 item_source,
                 "macro|viewer@example.com",
                 &mut flat_ids,
+                None,
             )
             .0
             .sql()

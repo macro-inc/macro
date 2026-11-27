@@ -585,6 +585,7 @@ fn shapes_reach_every_driver_and_phase() {
                     ItemSource::SourceItems,
                     USER,
                     &mut DocumentIdArrays::starting_at(10),
+                    None,
                 );
                 let (candidates, _) = query.sql().split_once("Combined AS").unwrap();
                 candidates.to_owned()
@@ -679,6 +680,7 @@ fn only_ordered_scans_need_the_bound() {
             ItemSource::SourceItems,
             USER,
             &mut DocumentIdArrays::starting_at(10),
+            None,
         )
         .1
         .map(|reads| reads.ordered)
@@ -720,6 +722,7 @@ fn disabled_projection_builds_main_query_and_asks_nothing() {
                 ItemSource::ItemTables,
                 USER,
                 &mut DocumentIdArrays::starting_at(10),
+                None,
             );
             assert_eq!(reads, None, "{name} {sort:?}");
             assert!(!query.sql().contains("source_items"), "{name} {sort:?}");

@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COUNT(*) AS \"count!\" FROM (\n                SELECT 1 FROM document_email_participants p\n                WHERE split_part(p.address, '@', 2) = ANY($1::text[])\n                UNION ALL\n                SELECT 1 FROM unnest($2::text[]) a(address)\n                JOIN document_email_participants p\n                    ON split_part(p.address, '@', 2) = split_part(a.address, '@', 2)\n                    AND p.address = a.address\n                LIMIT $3\n            ) bounded\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "TextArray",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "0f9b4d8eef8799e880d4554721363e2faea60812c933eab0aaa42d4f809fe066"
+}

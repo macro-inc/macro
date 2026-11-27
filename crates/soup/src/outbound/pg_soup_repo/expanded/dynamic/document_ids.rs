@@ -8,6 +8,10 @@
 //! SQL keeps a fixed size and the indexed column stays uncast.
 //! Document ids are never NULL and neither are the bound elements, so `= ANY`
 //! and its negation agree with the equalities they replace.
+//!
+//! The candidate arm (`document_candidates`) binds its ids, domains, and
+//! addresses through the same arrays, so every query numbers its slots in
+//! one place.
 
 use filter_ast::{Expr, ExprFrame};
 use item_filters::ast::document::DocumentLiteral;
@@ -39,10 +43,19 @@ impl DocumentIdArrays {
         self.arrays
     }
 
-    fn bind(&mut self, ids: &[Uuid]) -> String {
+    /// Binds `values` as the next array and returns its placeholder.
+    pub(in crate::outbound::pg_soup_repo) fn bind_text_array(
+        &mut self,
+        values: Vec<String>,
+    ) -> String {
         let slot = self.first_slot + self.arrays.len();
-        self.arrays.push(ids.iter().map(Uuid::to_string).collect());
-        format!("d.id = ANY(${slot}::text[])")
+        self.arrays.push(values);
+        format!("${slot}::text[]")
+    }
+
+    fn bind(&mut self, ids: &[Uuid]) -> String {
+        let array = self.bind_text_array(ids.iter().map(Uuid::to_string).collect());
+        format!("d.id = ANY({array})")
     }
 }
 

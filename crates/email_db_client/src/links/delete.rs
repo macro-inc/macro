@@ -136,11 +136,22 @@ pub async fn detach_message_files(
     .rows_affected())
 }
 
-/// Delete attachment rows belonging to the selected messages.
+/// Delete attachment rows belonging to the selected messages, after locking
+/// the messages in id order. Every writer takes a message before its
+/// attachments (a document link locks its attachment's message before its
+/// foreign key check takes the attachment), so a link in flight on one of
+/// these attachments waits for the batch. Holding the message while the
+/// batch held the attachment, it would deadlock with the message delete.
 pub async fn delete_message_attachments(
     tx: &mut Transaction<'static, Postgres>,
     message_ids: &[Uuid],
 ) -> anyhow::Result<u64> {
+    sqlx::query!(
+        "SELECT id FROM email_messages WHERE id = ANY($1) ORDER BY id FOR UPDATE",
+        &message_ids
+    )
+    .fetch_all(&mut **tx)
+    .await?;
     Ok(sqlx::query!(
         "DELETE FROM email_attachments WHERE message_id = ANY($1)",
         &message_ids
