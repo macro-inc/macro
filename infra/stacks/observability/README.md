@@ -1008,25 +1008,51 @@ For a lost volume, restore the latest dump with
 `pg_restore --clean -d goalert` before starting `goalert`, using the same
 `goalert_encryption_key`.
 
-## Dev dual export
+## ECS dual export
 
-Every dev ECS service using the shared Datadog sidecars automatically also runs
-Alloy; there is no per-service opt-in flag. Task definitions call the shared
-`withTelemetry(serviceName, containers)` helper, which supplies the Datadog agent,
-FireLens router, dev Alloy sidecar, and dev Grafana environment variable together.
-Production keeps its existing Datadog configuration
-until its rollout. The earlier `image-proxy-service` canary verified Ohio
-ingestion; it used the superseded collector-in-front-of-Datadog design. The
-current design keeps applications exporting directly to the Datadog agent. The execution role can read the ingestion-only
-`observability/dev-ingest` secret in Virginia.
+Every dev ECS service using the shared Datadog sidecars also runs Alloy, and so
+do the prod services of the Pulumi projects set to `true` in
+`PROD_GRAFANA_PROJECTS` (`infra/packages/shared/src/grafana_telemetry.ts`). Task
+definitions call the shared `withTelemetry(serviceName, containers)` helper, which supplies the Datadog agent,
+FireLens router, Alloy sidecar, and Grafana environment variable together. Alloy
+labels everything it sends with the Pulumi stack (`deployment.environment` `dev`
+or `prod`).
+
+Other prod projects keep their Datadog-only configuration until they join the
+list. Prod emits about 37 times dev's spans, more than half of them from the
+`email-service` project and a quarter from `cloud-storage-service`. Add projects
+smallest first, and check before each one:
+
+- the cluster's ingest, Tempo and Loki have headroom for the project's spans and
+  logs (Datadog's `datadog.estimated_usage.apm.ingested_spans` and
+  `datadog.estimated_usage.logs.ingested_bytes` by `service`);
+- the task has memory for Alloy, which reserves 128 MiB but has used up to
+  402 MiB. Fargate sizes the task from the reservation alone, so `unfurl-service`,
+  `static-file-service` and `lexical-service` need a larger task first.
+
+A merged list change reaches prod with the next published release that contains
+it, or for one project with *Deploy Service (Generic)* with `prod` selected. The
+job finishes before ECS does: wait for the service's new revision to reach steady
+state (a failed one rolls back on its own), then check that Datadog and Grafana
+both receive the service before adding another.
+
+To stop a project's copy, set its entry to `false` and deploy it the same way; its
+Datadog export never changes. Delete the entry, which revokes the task execution
+role's access to the token, only once the revision without Alloy is steady: ECS
+can't start a replacement task of the Alloy revision without it.
+
+The earlier `image-proxy-service` canary verified Ohio ingestion; it used the
+superseded collector-in-front-of-Datadog design. The current design keeps
+applications exporting directly to the Datadog agent. Their execution roles
+can read the ingestion-only `observability/dev-ingest` secret in Virginia.
 The application task role does not receive access to the Grafana OAuth bundle.
 
-Applications keep their original Datadog trace exporter at loopback 4317. In dev
-ECS tasks, `GRAFANA_OTLP_ENDPOINT` is injected automatically as
+Applications keep their original Datadog trace exporter at loopback 4317. In ECS
+tasks with Alloy, `GRAFANA_OTLP_ENDPOINT` is injected automatically as
 `http://127.0.0.1:14317` (registered in Doppler `observability/dev`). The shared
 Rust entrypoint adds a second batch processor with its own bounded queue, copying
 the same finished spans and trace IDs to Alloy. It does not change Datadog's
-exporter, filtering, sampling or agent configuration. Local and production runs
+exporter, filtering, sampling or agent configuration. Tasks without the variable
 do not add this exporter. This requires rebuilding the application images.
 
 Alloy listens on loopback OTLP 14317/14318 and exports only to Ohio. FireLens

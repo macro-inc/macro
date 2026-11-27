@@ -146,7 +146,7 @@ export class SearchFreshnessProbe extends pulumi.ComponentResource {
         },
         taskDefinitionArgs: {
           cpu: '256',
-          // Dev adds the Alloy sidecar, whose limit alone is 512 MB.
+          // Grafana telemetry adds the Alloy sidecar, whose limit alone is 512 MB.
           memory: grafanaTelemetryEnabled ? '1024' : '512',
           taskRole: { roleArn: this.role.arn },
           executionRole: { roleArn: dopplerEcsEnvironment.executionRole.arn },
