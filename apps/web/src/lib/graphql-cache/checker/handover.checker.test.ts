@@ -78,7 +78,7 @@ describe('handover checker', () => {
     );
   }
 
-  for (const { name, pages, script } of SCRIPTS) {
+  for (const { name, pages, script, unwritten } of SCRIPTS) {
     it(`finds nothing new: ${name}`, async () => {
       const result = await runScript(pages, script);
       report.push({
@@ -88,16 +88,15 @@ describe('handover checker', () => {
       });
       expect(unknown(result.violations)).toEqual([]);
       expect(result.cutShort, 'the run hit a step cap').toBe(false);
-      // A head the script sent was answered, and written by an engine.
+      // Each head the script sent was answered and written by an engine, or,
+      // answered too late, refused rather than said to be written.
       const sends = script.filter((step) => 'send' in step).length;
+      const outcome = unwritten
+        ? { settled: undefined, written: undefined }
+        : { settled: 'committed', written: true };
       expect(
         result.deliveries?.map(({ settled, written }) => ({ settled, written }))
-      ).toEqual(
-        Array.from({ length: sends }, () => ({
-          settled: 'committed',
-          written: true,
-        }))
-      );
+      ).toEqual(Array.from({ length: sends }, () => outcome));
     }, 60_000);
   }
 

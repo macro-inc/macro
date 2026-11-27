@@ -78,7 +78,7 @@ export type Delivery = {
 /** `QUEUE_LEASE_MS`: how long a claim keeps a head from the next sender. */
 const LEASE_MS = 5 * 60_000;
 
-/** How long the server takes to answer a sent head. */
+/** How long the server takes to answer a sent head, unless a script says. */
 export const SERVER_MS = 10_000;
 
 /** Each time a page dropped its host and went to the network. */
@@ -485,7 +485,7 @@ export class Page {
    * through the host it claimed it from, as `settle` does however long the
    * server took.
    */
-  send(): void {
+  send(serverMs: number): void {
     const host = this.host;
     if (!host || host.disabled) return;
     const call: CallOutcome = {
@@ -495,10 +495,10 @@ export class Page {
       issuedTick: this.world.sim.nextTick(),
     };
     this.world.calls.push(call);
-    this.track(call, () => this.sendHead(host));
+    this.track(call, () => this.sendHead(host, serverMs));
   }
 
-  private async sendHead(host: CacheHost): Promise<void> {
+  private async sendHead(host: CacheHost, serverMs: number): Promise<void> {
     const owner = `exchange-live:${this.id}`;
     const now = this.world.sim.now;
     const head = await host.claimNextMutation(owner, now, now + LEASE_MS);
@@ -510,7 +510,7 @@ export class Page {
     };
     this.world.deliveries.push(delivery);
     await new Promise<void>((answered) => {
-      this.world.sim.setTimeout(answered, SERVER_MS);
+      this.world.sim.setTimeout(answered, serverMs);
     });
     const settled = await host.commitOptimisticWrite(
       head.transactionId,
@@ -1151,10 +1151,10 @@ export class World {
   }
 
   /** A page sends the head of the queue (a scripted step). */
-  async send(id: string): Promise<void> {
+  async send(id: string, serverMs = SERVER_MS): Promise<void> {
     this.steps.push({ kind: 'fault', fault: `send:${id}` });
     const page = this.pages.find((candidate) => candidate.id === id);
-    if (page) this.sim.runIn(page.context, () => page.send());
+    if (page) this.sim.runIn(page.context, () => page.send(serverMs));
     await this.sim.settle();
   }
 

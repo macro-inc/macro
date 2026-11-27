@@ -367,7 +367,10 @@ export async function explore(
 
 /** One step of a scripted run: a fault, a page sending the head of the queue,
  * or time passing on the default schedule. */
-export type ScriptStep = Fault | { waitMs: number } | { send: string };
+export type ScriptStep =
+  | Fault
+  | { waitMs: number }
+  | { send: string; serverMs?: number };
 
 /**
  * Runs a fixed fault sequence on the default schedule, for defects that need
@@ -385,7 +388,7 @@ export async function runScript(
     for (const step of script) {
       if ('waitMs' in step)
         settled = (await quiesce(world, step.waitMs)) && settled;
-      else if ('send' in step) await world.send(step.send);
+      else if ('send' in step) await world.send(step.send, step.serverMs);
       else await world.apply(step);
     }
     settled = (await quiet(world)) && settled;

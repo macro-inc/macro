@@ -156,6 +156,8 @@ export type ScriptedScenario = {
   name: string;
   pages: number[];
   script: ScriptStep[];
+  /** Its sends are not written: the server's answer comes too late. */
+  unwritten?: true;
 };
 
 const repeat = (times: number, steps: ScriptStep[]): ScriptStep[] =>
@@ -183,6 +185,33 @@ export const SCRIPTS: ScriptedScenario[] = [
       { kind: 'open-newer' },
       { waitMs: 120_000 },
     ],
+  },
+  // Just inside `SETTLEMENT_WAIT_MS`, and the newer build still gets its cache.
+  {
+    name: 'a write sent as a newer build opens is answered a minute later',
+    pages: [1, 1],
+    script: [
+      { waitMs: 5_000 },
+      { send: 'tab2', serverMs: 65_000 },
+      { kind: 'open-newer' },
+      { waitMs: 180_000 },
+    ],
+  },
+  // Past it: the newer build goes ahead, and the answer finds nothing to settle.
+  {
+    name: 'a tab is frozen while it sends a write and a newer build opens',
+    pages: [1, 1],
+    script: [
+      { waitMs: 5_000 },
+      { send: 'tab2' },
+      { kind: 'hide', page: 'tab2' },
+      { kind: 'freeze', page: 'tab2' },
+      { kind: 'open-newer' },
+      { waitMs: 120_000 },
+      { kind: 'thaw', page: 'tab2' },
+      { waitMs: 20_000 },
+    ],
+    unwritten: true,
   },
   {
     name: "a database that cannot be read, when its owner's engine dies",
