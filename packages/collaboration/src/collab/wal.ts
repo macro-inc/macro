@@ -252,6 +252,17 @@ export class WALSyncer<T> {
       }
     | undefined;
 
+  /** When this syncer started; see {@link pendingSince}. */
+  private readonly startedAt = Date.now();
+  private pending: number | undefined;
+  /** Bumped by every append, so a store read that started before an append
+   *  cannot clear the pending state that append set. */
+  private appends = 0;
+  private refreshes = 0;
+  private readonly pendingListeners = new Set<
+    (since: number | undefined) => void
+  >();
+
   /**
    * Exists so that we can not "do stuff" until we have pruned expired entries
    * (like when snapshot loading occurs right after construction for example).
@@ -291,6 +302,8 @@ export class WALSyncer<T> {
     try {
       await setup;
       this.reportedFailures.delete('initialization');
+      // Not part of setup: appends don't wait for this read.
+      await this.refreshPending();
     } catch (error) {
       // Retry only on the next caller's request, sharing any in-flight setup.
       if (this.readyPromise === setup) this.readyPromise = undefined;
@@ -317,6 +330,8 @@ export class WALSyncer<T> {
   private async appendEntry(item: T): Promise<void> {
     await this.ready();
     await this.store.append(item);
+    this.appends++;
+    if (this.pending === undefined) this.setPending(Date.now());
     if (this.label)
       logSyncService({
         documentId: this.label,
@@ -378,6 +393,54 @@ export class WALSyncer<T> {
     return this.store.pruneDelivered();
   }
 
+  /**
+   * When the oldest edit still waiting for the server was written, or
+   * undefined when every edit has been delivered. Edits left by an earlier
+   * session count from this syncer's start, so reopening a document with old
+   * pending edits doesn't report them as long overdue before a first try.
+   */
+  public pendingSince(): number | undefined {
+    return this.pending;
+  }
+
+  /** Calls `listener` whenever {@link pendingSince} changes. */
+  public onPendingChange(
+    listener: (since: number | undefined) => void
+  ): () => void {
+    this.pendingListeners.add(listener);
+    return () => this.pendingListeners.delete(listener);
+  }
+
+  private setPending(since: number | undefined): void {
+    if (since === this.pending) return;
+    this.pending = since;
+    for (const listener of this.pendingListeners) listener(since);
+  }
+
+  /** Rereads the store. Only the latest read applies, and a read that finds
+   *  nothing pending doesn't clear an append that landed after it started. A
+   *  failed read keeps the last answer; the next flush or append retries. */
+  private async refreshPending(): Promise<void> {
+    const refresh = ++this.refreshes;
+    const appends = this.appends;
+    let entries: WALEntry<T>[];
+    try {
+      entries = await this.store.getAll();
+    } catch {
+      return;
+    }
+    if (refresh !== this.refreshes) return;
+    let oldest: number | undefined;
+    for (const entry of entries) {
+      if (!entry.delivered && (oldest === undefined || entry.createdAt < oldest))
+        oldest = entry.createdAt;
+    }
+    if (oldest === undefined && appends !== this.appends) return;
+    this.setPending(
+      oldest === undefined ? undefined : Math.max(oldest, this.startedAt)
+    );
+  }
+
   public async summary(): Promise<WalContext> {
     const entries = await this.store.getAll();
     const undelivered = entries.filter((e) => !e.delivered);
@@ -395,6 +458,7 @@ export class WALSyncer<T> {
     }
     for (const fn of this.cleanupFns) fn();
     this.cleanupFns = [];
+    this.pendingListeners.clear();
   }
 
   public addCleanup(fn: () => void): void {
@@ -429,6 +493,7 @@ export class WALSyncer<T> {
 
       if (delivered) {
         await this.store.markDelivered(undelivered.map((e) => e.id));
+        await this.refreshPending();
         this.recordDeliveryRecovery(undelivered.length);
         if (this.label)
           logSyncService({

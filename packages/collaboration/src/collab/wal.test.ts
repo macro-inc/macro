@@ -400,6 +400,67 @@ describe('WALSyncer', () => {
     expect(remaining.map((e) => e.update)).toContainEqual(new Uint8Array([3])); // fresh survives
   });
 
+  it('reports when undelivered edits started waiting and clears once they are acked', async () => {
+    vi.useFakeTimers({ now: 1_000_000, toFake: ['Date'] });
+    try {
+      const live = new MockLiveSyncSource();
+      live.setPushResult(false);
+      const { wal } = makeWAL(live);
+      const changes: (number | undefined)[] = [];
+      wal.onPendingChange((since) => changes.push(since));
+      await wal.ready();
+      expect(wal.pendingSince()).toBeUndefined();
+
+      await wal.append(new Uint8Array([1]));
+      await wal.pendingFlush;
+      expect(wal.pendingSince()).toBe(1_000_000);
+
+      // A later edit doesn't move the start: the first one is still waiting.
+      vi.setSystemTime(1_030_000);
+      await wal.append(new Uint8Array([2]));
+      await wal.pendingFlush;
+      expect(wal.pendingSince()).toBe(1_000_000);
+
+      live.setPushResult(true);
+      await wal.flush();
+      expect(wal.pendingSince()).toBeUndefined();
+      expect(changes).toEqual([1_000_000, undefined]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('counts edits left by an earlier session from when this one started', async () => {
+    vi.useFakeTimers({ now: 5_000_000, toFake: ['Date'] });
+    try {
+      const live = new MockLiveSyncSource();
+      live.setPushResult(false);
+      const walStore = new MockWALStore<RawUpdate>();
+      walStore.seedEntry(new Uint8Array([1]), 5_000_000 - 3_600_000);
+      const { wal } = makeTestWAL(live, walStore);
+      await vi.waitFor(() => expect(wal.pendingSince()).toBe(5_000_000));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps reporting an edit appended while a delivered flush reads the store', async () => {
+    const live = new MockLiveSyncSource();
+    const { wal, walStore } = makeWAL(live);
+    await wal.ready();
+    const held = live.holdNextPush();
+    await wal.append(new Uint8Array([1]));
+    live.setPushResult(false);
+    const second = wal.append(new Uint8Array([2]));
+    held.resolve(true);
+    await second;
+    await wal.pendingFlush;
+    await vi.waitFor(async () => {
+      expect(await undeliveredCount(walStore)).toBe(1);
+      expect(wal.pendingSince()).toBeDefined();
+    });
+  });
+
   it('prunes expired entries on construction so cold-start replay skips them', async () => {
     const live = new MockLiveSyncSource();
     const walStore = new MockWALStore<RawUpdate>();
