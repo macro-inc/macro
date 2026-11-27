@@ -172,6 +172,10 @@ fn the_watchdog_starts_with_the_migration_and_watches_its_job() {
         env["WAIT_MINUTES"],
         MIGRATION_RUNNER_WAIT_MINUTES.to_string()
     );
+    assert_eq!(
+        env["DRAIN_MINUTES"],
+        MIGRATION_RUNNER_DRAIN_MINUTES.to_string()
+    );
 }
 
 #[test]

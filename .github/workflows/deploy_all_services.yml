@@ -369,17 +369,18 @@ jobs:
           // and the deploy waits with it: on 2026-11-25 the runner hung and every dev
           // deploy since queued behind it. The script reads the run's jobs each minute.
           // Once the migration job has started (or ended), it exits 0. When the job is
-          // still queued after WAIT_MINUTES, it reports the runner as unavailable with an
-          // error annotation and the job summary, then cancels the run and fails, so the
-          // deploy ends in minutes rather than when the hourly canceller of stuck deploys
+          // still queued after WAIT_MINUTES, it cancels the run and fails with an error
+          // annotation and a job summary saying the runner is unavailable, so the deploy
+          // ends in minutes rather than when the hourly canceller of stuck deploys
           // reaches it, and the run's failed job says why.
           //
-          // A job of the run that is still in progress (a website deploy beside a prod
-          // migration, a build) is never cut short: the script waits for those to end
-          // before it cancels. Nothing deploys a service before the migration has run,
-          // so the cancelled run has changed nothing. If the migration job is missing
-          // from the run, its name or label no longer match the workflow's: the script
-          // fails without cancelling anything.
+          // Another job of the run that has started or is about to (a prod release's
+          // website deploy, a build) is never cut short: the script waits up to
+          // DRAIN_MINUTES more for those to end before it cancels, and fails without
+          // cancelling if they are still running then. No service deploys before the
+          // migration has run, so a cancelled run has deployed no service. If the
+          // migration job is missing from the run, its name or label no longer match
+          // the workflow's: the script fails without cancelling anything.
 
           import { appendFileSync } from 'node:fs';
 
@@ -418,6 +419,17 @@ jobs:
           const started = (job: Job) => job.status === 'in_progress' || job.status === 'completed';
 
           /**
+           * Another job of the run that a runner has taken or is about to take, and that
+           * cancelling would cut short. A job on the migration's label waits for the
+           * same missing runner, and a job waiting for an approval starts only when
+           * someone approves it, so neither is waited for.
+           */
+          const active = (job: Job, names: Names) =>
+            (job.status === 'in_progress' || job.status === 'queued') &&
+            !job.labels.includes(names.label) &&
+            !named(job, names.watchdog);
+
+          /**
            * How many reads of the jobs in a row may fail before the script gives up and
            * passes: a watchdog that fails a deploy because GitHub's API did is worse
            * than none, and the hourly canceller still ends a stuck deploy.
@@ -436,9 +448,7 @@ jobs:
             if (!migration) {
               return { kind: 'missing' };
             }
-            const running = jobs.filter(
-              (job) => job.status === 'in_progress' && job.id !== migration.id && !named(job, names.watchdog),
-            );
+            const running = jobs.filter((job) => active(job, names));
             return running.length > 0 ? { kind: 'drain', running } : { kind: 'cancel' };
           }
 
@@ -459,15 +469,29 @@ jobs:
             summary: (markdown: string) => void;
           };
 
+          /** Reports the runner as unavailable, with what was done about the run. */
+          function report(world: World, names: Names, minutes: number, outcome: string) {
+            const message = `${unavailable(names, minutes)} ${outcome}`;
+            world.log(`::error title=Migration runner unavailable::${message}`);
+            world.summary(`### Migration runner unavailable\n\n${message}\n`);
+          }
+
           /**
            * Waits for the migration job to start. Resolves to the exit code: 0 once it
-           * has started (or the jobs could not be read), 1 when the run was cancelled or
-           * the job could not be found.
+           * has started (or the jobs could not be read), 1 when the runner was reported
+           * unavailable or the job could not be found.
            */
-          export async function watch(world: World, names: Names, minutes: number, pollMs: number): Promise<number> {
+          export async function watch(
+            world: World,
+            names: Names,
+            minutes: number,
+            drainMinutes: number,
+            pollMs: number,
+          ): Promise<number> {
             const deadline = world.now() + minutes * 60_000;
-            let reported = false;
+            const drainDeadline = deadline + drainMinutes * 60_000;
             let failures = 0;
+            let draining = '';
             for (;;) {
               let jobs: Job[];
               try {
@@ -493,21 +517,28 @@ jobs:
                   return 1;
                 case 'wait':
                   break;
-                case 'drain':
                 case 'cancel':
-                  if (!reported) {
-                    const message = unavailable(names, minutes);
-                    world.log(`::error title=Migration runner unavailable::${message}`);
-                    world.summary(`### Migration runner unavailable\n\n${message} The deploy was cancelled; nothing was deployed.\n`);
-                    reported = true;
-                  }
-                  if (decision.kind === 'cancel') {
-                    await world.cancel();
-                    world.log('Cancelled the run.');
+                  report(world, names, minutes, 'The run was cancelled before the migration and the service deploys.');
+                  await world.cancel();
+                  world.log('Cancelled the run.');
+                  return 1;
+                case 'drain': {
+                  const running = decision.running.map((job) => job.name).join(', ');
+                  if (world.now() >= drainDeadline) {
+                    report(
+                      world,
+                      names,
+                      minutes,
+                      `The run was not cancelled: ${running} did not end within ${drainMinutes} more minutes.`,
+                    );
                     return 1;
                   }
-                  world.log(`Cancelling once these end: ${decision.running.map((job) => job.name).join(', ')}`);
+                  if (running !== draining) {
+                    world.log(`"${names.migration}" is still queued. Cancelling the run once these end: ${running}`);
+                    draining = running;
+                  }
                   break;
+                }
               }
               await world.sleep(pollMs);
             }
@@ -546,10 +577,12 @@ jobs:
               watchdog: env('WATCHDOG_JOB'),
             };
             const world: World = {
+              // An attempt lists every job of the run, including those a re-run of
+              // failed jobs carried over from an earlier attempt.
               jobs: async () => {
                 const jobs: Job[] = [];
                 for (let page = 1; ; page++) {
-                  const listing = await github('GET', `${run}/attempts/${attempt}/jobs?per_page=100&page=${page}`);
+                  const listing = await github('GET', `${run}/attempts/${attempt}/jobs?per_page=50&page=${page}`);
                   jobs.push(...listing.jobs);
                   if (listing.jobs.length === 0 || jobs.length >= listing.total_count) {
                     return jobs;
@@ -564,7 +597,7 @@ jobs:
               log: (line) => console.log(line),
               summary: (markdown) => appendFileSync(env('GITHUB_STEP_SUMMARY'), markdown),
             };
-            process.exitCode = await watch(world, names, Number(env('WAIT_MINUTES')), 60_000);
+            process.exitCode = await watch(world, names, Number(env('WAIT_MINUTES')), Number(env('DRAIN_MINUTES')), 60_000);
           }
 
           await main();
@@ -575,6 +608,7 @@ jobs:
           MIGRATION_RUNNER_LABEL: db-migrator
           WATCHDOG_JOB: Wait for the migration runner
           WAIT_MINUTES: '20'
+          DRAIN_MINUTES: '30'
   deploy-services:
     needs:
       - setup

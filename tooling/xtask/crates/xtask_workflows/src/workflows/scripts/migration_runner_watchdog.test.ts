@@ -11,6 +11,9 @@ const NAMES: Names = {
   watchdog: 'Wait for the migration runner',
 };
 
+const WAIT = 20;
+const DRAIN = 30;
+
 const PREFIX = 'Deploy Cloud Storage Services / ';
 
 const migration = (status: string, runner: string | null = null): Job => ({
@@ -28,9 +31,9 @@ const watchdog: Job = {
   labels: ['namespace-profile-linux-tiny-no-cache'],
 };
 
-const build = (status: string): Job => ({
+const website = (status: string): Job => ({
   id: 3,
-  name: 'Build Web App / Build',
+  name: 'Deploy Website / Build and Deploy Website (prod)',
   status,
   labels: ['namespace-profile-linux-mid'],
 });
@@ -43,15 +46,23 @@ test('a started or finished migration lets the deploy go on', () => {
 
 test('a queued migration waits until time is up, then cancels', () => {
   for (const status of ['queued', 'waiting', 'pending']) {
-    const jobs = [watchdog, migration(status), build('completed')];
+    const jobs = [watchdog, migration(status), website('completed')];
     assert.equal(decide(jobs, NAMES, false).kind, 'wait');
     assert.equal(decide(jobs, NAMES, true).kind, 'cancel');
   }
 });
 
-test('a job still in progress is left to end before the run is cancelled', () => {
-  const decision = decide([watchdog, migration('queued'), build('in_progress')], NAMES, true);
-  assert.deepEqual(decision, { kind: 'drain', running: [build('in_progress')] });
+test('a job that has started or is about to is left to end before the run is cancelled', () => {
+  for (const status of ['in_progress', 'queued']) {
+    const decision = decide([watchdog, migration('queued'), website(status)], NAMES, true);
+    assert.deepEqual(decision, { kind: 'drain', running: [website(status)] });
+  }
+});
+
+test('a job awaiting approval or the same runner is not waited for', () => {
+  const approval = website('waiting');
+  const sameRunner = { ...website('queued'), id: 4, labels: ['db-migrator'] };
+  assert.equal(decide([watchdog, migration('queued'), approval, sameRunner], NAMES, true).kind, 'cancel');
 });
 
 test('a migration job on another label is not the one watched', () => {
@@ -94,65 +105,87 @@ function world(listings: (Job[] | Error)[]) {
   return {
     fake,
     lines,
+    errors: () => lines.filter((line) => line.startsWith('::error')),
     summaries,
     cancelled: () => cancelled,
     minute: () => minute,
   };
 }
 
+const run = (listings: (Job[] | Error)[]) => {
+  const w = world(listings);
+  return { ...w, code: watch(w.fake, NAMES, WAIT, DRAIN, 60_000) };
+};
+
 test('a migration a runner takes passes without cancelling', async () => {
-  const run = world([[watchdog, migration('queued')], [watchdog, migration('in_progress', 'db-migrator-runner')]]);
-  assert.equal(await watch(run.fake, NAMES, 20, 60_000), 0);
-  assert.equal(run.cancelled(), 0);
-  assert.match(run.lines.at(-1) ?? '', /in_progress on db-migrator-runner/);
+  const r = run([[watchdog, migration('queued')], [watchdog, migration('in_progress', 'db-migrator-runner')]]);
+  assert.equal(await r.code, 0);
+  assert.equal(r.cancelled(), 0);
+  assert.match(r.lines.at(-1) ?? '', /in_progress on db-migrator-runner/);
 });
 
 test('a migration no runner takes is reported once and cancelled when the time is up', async () => {
-  const run = world([[watchdog, migration('queued')]]);
-  assert.equal(await watch(run.fake, NAMES, 20, 60_000), 1);
-  assert.equal(run.cancelled(), 1);
-  assert.equal(run.minute(), 20);
-  const errors = run.lines.filter((line) => line.startsWith('::error'));
+  const r = run([[watchdog, migration('queued')]]);
+  assert.equal(await r.code, 1);
+  assert.equal(r.cancelled(), 1);
+  assert.equal(r.minute(), WAIT);
+  const errors = r.errors();
   assert.equal(errors.length, 1);
   assert.match(errors[0], /Migration runner unavailable.*No db-migrator runner picked up "Run Database Migrations" within 20 minutes/);
+  assert.match(errors[0], /The run was cancelled/);
   assert.ok(errors[0].includes(RUNBOOK));
-  assert.equal(run.summaries.length, 1);
+  assert.equal(r.summaries.length, 1);
 });
 
-test('the run is cancelled only after the jobs in progress end, and reported once', async () => {
+test('the run is cancelled only after the other jobs end, and reported once', async () => {
   const waiting = [watchdog, migration('queued')];
-  const listings = [...Array.from({ length: 21 }, () => [...waiting, build('in_progress')]), [...waiting, build('completed')]];
-  const run = world(listings);
-  assert.equal(await watch(run.fake, NAMES, 20, 60_000), 1);
-  assert.equal(run.minute(), 21);
-  assert.equal(run.cancelled(), 1);
-  assert.equal(run.lines.filter((line) => line.startsWith('::error')).length, 1);
+  const r = run([
+    ...Array.from({ length: WAIT + 1 }, () => [...waiting, website('in_progress')]),
+    [...waiting, website('completed')],
+  ]);
+  assert.equal(await r.code, 1);
+  assert.equal(r.minute(), WAIT + 1);
+  assert.equal(r.cancelled(), 1);
+  assert.equal(r.errors().length, 1);
+  assert.equal(r.summaries.length, 1);
 });
 
-test('a migration that starts while other jobs drain still passes', async () => {
-  const listings = [
-    ...Array.from({ length: 21 }, () => [watchdog, migration('queued'), build('in_progress')]),
-    [watchdog, migration('in_progress', 'db-migrator-runner-2'), build('in_progress')],
-  ];
-  const run = world(listings);
-  assert.equal(await watch(run.fake, NAMES, 20, 60_000), 0);
-  assert.equal(run.cancelled(), 0);
+test('a migration that starts while other jobs drain passes and reports nothing', async () => {
+  const r = run([
+    ...Array.from({ length: WAIT + 1 }, () => [watchdog, migration('queued'), website('in_progress')]),
+    [watchdog, migration('in_progress', 'db-migrator-runner-2'), website('in_progress')],
+  ]);
+  assert.equal(await r.code, 0);
+  assert.equal(r.cancelled(), 0);
+  assert.deepEqual(r.errors(), []);
+  assert.deepEqual(r.summaries, []);
+});
+
+test('jobs still running when the drain time is up fail the watchdog without cancelling', async () => {
+  const r = run([[watchdog, migration('queued'), website('in_progress')]]);
+  assert.equal(await r.code, 1);
+  assert.equal(r.cancelled(), 0);
+  assert.equal(r.minute(), WAIT + DRAIN);
+  const errors = r.errors();
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /Migration runner unavailable.*The run was not cancelled: Deploy Website/);
+  assert.equal(r.summaries.length, 1);
 });
 
 test('a missing migration job fails without cancelling the run', async () => {
-  const run = world([[watchdog, build('completed')]]);
-  assert.equal(await watch(run.fake, NAMES, 20, 60_000), 1);
-  assert.equal(run.cancelled(), 0);
-  assert.match(run.lines.at(-1) ?? '', /::error title=Migration job not found::/);
+  const r = run([[watchdog, website('completed')]]);
+  assert.equal(await r.code, 1);
+  assert.equal(r.cancelled(), 0);
+  assert.match(r.lines.at(-1) ?? '', /::error title=Migration job not found::/);
 });
 
 test('a failed read is retried, and repeated failures pass instead of failing the deploy', async () => {
-  const flaky = world([new Error('HTTP 502'), [watchdog, migration('in_progress')]]);
-  assert.equal(await watch(flaky.fake, NAMES, 20, 60_000), 0);
+  const flaky = run([new Error('HTTP 502'), [watchdog, migration('in_progress')]]);
+  assert.equal(await flaky.code, 0);
   assert.equal(flaky.cancelled(), 0);
 
-  const down = world([new Error('HTTP 502')]);
-  assert.equal(await watch(down.fake, NAMES, 20, 60_000), 0);
+  const down = run([new Error('HTTP 502')]);
+  assert.equal(await down.code, 0);
   assert.equal(down.cancelled(), 0);
   assert.equal(down.minute(), READ_FAILURES - 1);
   assert.match(down.lines.at(-1) ?? '', /::warning title=Migration runner not watched::/);

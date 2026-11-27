@@ -30,9 +30,11 @@ rebooted on 2026-11-27. The instance now:
 - has 4 GiB (`t3.medium`), and runs both runners in `github-runner.slice`,
   capped at all memory but 768 MiB. A job that outgrows it is killed and its
   step fails; the machine keeps answering.
-- compiles nothing. It has no cargo, rustup or Nix: jobs use `sqlx`, `aws`,
-  `jq` and `git`. A job that needs a Rust tool builds it on Namespace and hands
-  the binary over as an artifact, as the Firecracker image rollout does.
+- compiles nothing. It has no Rust toolchain or Nix: jobs use `sqlx`, `aws`,
+  `jq` and `git`. Its `cargo` forwards only `cargo sqlx`, which deploys of
+  commits from before the switch to `sqlx` call, and fails anything else with
+  a pointer here. A job that needs a Rust tool builds it on Namespace and
+  hands the binary over as an artifact, as the Firecracker image rollout does.
 - restarts a runner process that exits (`Restart=always`).
 - is rebooted by EC2 after 3 minutes of failed instance status checks, and
   recovered onto new hardware after 2 minutes of failed system status checks
@@ -43,9 +45,12 @@ rebooted on 2026-11-27. The instance now:
 
 Every deploy also runs "Wait for the migration runner" beside the migration
 (`scripts/migration_runner_watchdog.ts`). When no runner has taken the
-migration after 20 minutes, it fails with the error **Migration runner
-unavailable**, lets any job still in progress end, and cancels the run.
-Nothing has deployed by then: services deploy only after the migration.
+migration after 20 minutes, it lets any other job of the run that has started
+or is about to start end (a prod release's website deploy, say), then cancels
+the run and fails with the error **Migration runner unavailable**. No service
+has deployed by then: services deploy only after the migration. If those jobs
+are still running 30 minutes later, it fails with the same error without
+cancelling anything.
 
 ## When a deploy says "Migration runner unavailable"
 

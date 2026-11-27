@@ -378,6 +378,9 @@ pub(crate) const MIGRATION_RUNNER_WATCHDOG_NAME: &str = "Wait for the migration 
 /// How long the migration may wait for a `db-migrator` runner before the
 /// watchdog cancels the deploy.
 pub(crate) const MIGRATION_RUNNER_WAIT_MINUTES: u32 = 20;
+/// How much longer the watchdog lets the run's other jobs end before it
+/// gives up on cancelling and only fails.
+pub(crate) const MIGRATION_RUNNER_DRAIN_MINUTES: u32 = 30;
 
 /// The jobs the migration waits for; its watchdog waits for the same.
 fn migrate_db_needs() -> Vec<String> {
@@ -414,14 +417,14 @@ fn migrate_db() -> Job {
 /// with it. Runs beside [`migrate_db`] on Namespace and cancels the run, with
 /// an error saying why, when no `db-migrator` runner has taken the migration
 /// after [`MIGRATION_RUNNER_WAIT_MINUTES`] (`scripts/migration_runner_watchdog.ts`).
-/// The time limit covers that wait and the jobs it lets finish first.
+/// The time limit covers that wait and the jobs it lets end first.
 fn migration_runner_watchdog() -> Job {
     Job::default()
         .name(MIGRATION_RUNNER_WATCHDOG_NAME)
         .needs(migrate_db_needs())
         .cond(migrate_db_cond())
         .runs_on(runners::Runner::TinyNoCache.to_string())
-        .timeout_minutes(MIGRATION_RUNNER_WAIT_MINUTES + 40)
+        .timeout_minutes(MIGRATION_RUNNER_WAIT_MINUTES + MIGRATION_RUNNER_DRAIN_MINUTES + 10)
         .permissions(Permissions {
             actions: Some(Level::Write),
             ..Default::default()
@@ -435,7 +438,8 @@ fn migration_runner_watchdog() -> Job {
                 .add_env(("MIGRATION_JOB", MIGRATE_DB_NAME))
                 .add_env(("MIGRATION_RUNNER_LABEL", runners::DB_MIGRATOR))
                 .add_env(("WATCHDOG_JOB", MIGRATION_RUNNER_WATCHDOG_NAME))
-                .add_env(("WAIT_MINUTES", MIGRATION_RUNNER_WAIT_MINUTES.to_string())),
+                .add_env(("WAIT_MINUTES", MIGRATION_RUNNER_WAIT_MINUTES.to_string()))
+                .add_env(("DRAIN_MINUTES", MIGRATION_RUNNER_DRAIN_MINUTES.to_string())),
         )
 }
 
