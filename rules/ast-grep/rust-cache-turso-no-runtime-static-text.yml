@@ -7,8 +7,9 @@ note: |-
   `Template`s are built only from `&'static str` fragments, which the
   compiler then treats as text written in this crate's source (see
   `crates/client/cache-turso/src/sql.rs`). Leaking a `String`, or keeping text
-  in a `static` that can be set at run time (`static mut`, or a lock or cell
-  such as `OnceLock` or `LazyLock`), makes run-time text, such as a record field or a search
+  in a `static` that can be set at run time (`static mut`, or a static whose
+  type is anything but a number, an atomic or `&'static str` text, such as
+  `OnceLock`, `LazyLock` or an alias or struct around one), makes run-time text, such as a record field or a search
   term, look like source text and lets it reach telemetry. Bind the value as
   a parameter instead, or run a statement that must embed outside text as an
   `UnreportedSql`. Tests are exempt.
@@ -22,13 +23,14 @@ rule:
     - pattern: $VALUE.leak()
     - pattern: Box::leak($$$ARGS)
     - pattern: String::leak($$$ARGS)
-    # A plain static is initialized at compile time; only a mutable one, or one
-    # with interior mutability, can hold text made while the program runs.
+    # A static is fixed at compile time only when it cannot be written and its
+    # type holds no cell or lock. Allow only plain types by name, so an alias
+    # or a wrapper struct around a cell fails closed.
     - kind: static_item
       has:
         kind: mutable_specifier
     - kind: static_item
-      has:
-        stopBy: end
-        kind: type_identifier
-        regex: ^(OnceLock|LazyLock|OnceCell|Lazy|LazyCell|Mutex|RwLock|Cell|RefCell|UnsafeCell|ArcSwap|ArcSwapOption)$
+      not:
+        has:
+          field: type
+          regex: "^((std::sync::atomic::)?Atomic[A-Za-z0-9]+|bool|char|[ui](8|16|32|64|128|size)|f(32|64)|&('static )?str|&('static )?\\[&('static )?str\\]|\\[&('static )?str; *[A-Z0-9_]+\\])$"

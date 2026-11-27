@@ -7,6 +7,10 @@ valid:
   - |
     static NEXT: AtomicU64 = AtomicU64::new(1);
   - |
+    static TABLES: &[&str] = &["records", "meta"];
+  - |
+    static LIMIT: usize = 4_096;
+  - |
     fn f(sql: &mut Sql) { sql.push("SELECT 1"); }
   - |
     fn f(text: String) -> UnreportedSql { UnreportedSql::new(text) }
@@ -29,3 +33,9 @@ invalid:
     static TEXT: Mutex<Option<Cow<'static, str>>> = Mutex::new(None);
   - |
     static mut TEXT: &str = "";
+  - |
+    type Slot = OnceLock<Box<str>>;
+    static SQL: Slot = Slot::new();
+  - |
+    struct Holder(OnceLock<String>);
+    static SQL: Holder = Holder(OnceLock::new());

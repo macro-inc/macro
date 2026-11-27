@@ -117,6 +117,7 @@ impl Ordinals {
     }
 
     /// The next position: 0 first, then 1, and so on.
+    #[must_use = "an ordinal only counts names that use it"]
     pub fn take(&mut self) -> Ordinal {
         let ordinal = Ordinal(self.next);
         self.next += 1;
