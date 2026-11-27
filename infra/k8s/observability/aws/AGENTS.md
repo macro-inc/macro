@@ -4,7 +4,8 @@
 
 The AWS side of the observability EKS cluster (us-east-2): subnets, EKS, nodes,
 add-ons, Pod Identity roles, buckets, Grafana's RDS, ALB target groups, and the listener rules and alarms that the
-switch adds. OpenTofu written in Nix with terranix, in its own
+switch adds. In us-east-1 (provider `aws.production`), the Firehose stream that
+production's CloudWatch Logs subscribe to. OpenTofu written in Nix with terranix, in its own
 flake. `README.md` has what each module creates and the apply steps.
 
 ## Start here
@@ -56,6 +57,8 @@ From this directory:
   don't disable session tags on an association.
 - Buckets and RDS have `prevent_destroy`; a plan that replaces one is an error
   by design.
+- A resource in us-east-1 needs `provider = "aws.production"`; without it it
+  lands in us-east-2. IAM is global and takes no provider.
 
 ## Related
 
