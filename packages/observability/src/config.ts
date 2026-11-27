@@ -9,6 +9,16 @@ import type { SamplingClass, TraceSampling } from './sampling';
 export type Attribute = OtelAttributeValue;
 export type Attributes = Record<string, Attribute | undefined>;
 export type LogAttributes = Attributes;
+
+/**
+ * An error that knows why it happened better than the code that reports it.
+ * `Telemetry.error` adds these attributes to the log, under the reporter's own
+ * (a fire-and-forget `surface` still names where). Opaque values only: no
+ * content, identifiers of people, or secrets.
+ */
+export interface AttributedError extends Error {
+  readonly telemetryAttributes: LogAttributes;
+}
 export type ResourceAttributes = DetectedResourceAttributes;
 
 /** Native diagnostic settings discovered after the tracing provider registers. */

@@ -73,7 +73,10 @@ through them and the per-runtime APIs.
 ## Logs
 
 - Logs are events inside spans with structured fields, not a parallel narrative:
-  one `warn!` with fields beats several formatted `debug!`s. Rust specifics are
+  one `warn!` with fields beats several formatted `debug!`s. A web error whose
+  cause is known where it is thrown carries it as an attribute
+  (`AttributedError` from `@macro-inc/observability`), not only in its
+  message, so whoever reports it keeps it. Rust specifics are
   CS-22 in [`rust/code.md`](rust/code.md); GenAI spans follow CS-55.
 
 Check: run the changed flow locally and find its trace in Tempo (see the

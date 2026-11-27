@@ -35,6 +35,12 @@ Callers provide identity-free attributes and bound their sampling.
 Observations before the browser exporter is ready or without provider support
 are dropped.
 
+An error that knows its own cause implements `AttributedError`: its
+`telemetryAttributes` (a reason, a code) go on the log `Telemetry.error` writes
+for it, under the reporter's attributes, so a fire-and-forget `surface` still
+says where it was reported. They follow the same rule as any log attribute:
+opaque values, never content, personal data or secrets.
+
 Node and Bun processes, such as agent teammates, use `createNodeTracingProvider`
 from `@macro-inc/observability/node` as their `tracingProvider`. It registers an
 async context manager, so a span's context follows its awaits, and exports to
