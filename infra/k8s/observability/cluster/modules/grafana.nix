@@ -184,31 +184,13 @@ let
       }
     ];
   };
-  muteAlways = "always";
+  inherit (provisioning.alerting) muteAlways;
   rootPolicy = builtins.head provisioning.alerting.policies.policies;
   alerting = {
     "contact-points.yaml" = provisioning.alerting.contactPoints // {
       contactPoints = provisioning.alerting.contactPoints.contactPoints ++ [ watchdog.contactPoint ];
     };
-    "mute-timings.yaml" = {
-      apiVersion = 1;
-      muteTimes = [
-        {
-          orgId = 1;
-          name = muteAlways;
-          time_intervals = [
-            {
-              times = [
-                {
-                  start_time = "00:00";
-                  end_time = "24:00";
-                }
-              ];
-            }
-          ];
-        }
-      ];
-    };
+    "mute-timings.yaml" = provisioning.alerting.muteTimings;
     "policies.yaml" = provisioning.alerting.policies // {
       policies = [
         (

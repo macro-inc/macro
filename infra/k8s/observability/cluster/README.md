@@ -42,7 +42,7 @@ Run from this directory.
 
 | Command | What it does |
 | --- | --- |
-| `nix run .#render` | Renders the modules into `manifests/prod/` and the derived metrics' `MAPPING.md`. Commit the result with the change. |
+| `nix run .#render` | Renders the modules into `manifests/prod/`, the derived metrics' `MAPPING.md` and the Datadog monitors' `MAPPING.md` (host stack, `grafana-provisioning/datadog/`). Commit the result with the change. |
 | `nix run .#check` | Fails when either differs from a fresh render, then validates. CI runs this (`observability_cluster.yml`). |
 | `nix run .#validate` | Validates the manifests strictly with kubeconform: core kinds against the Kubernetes schemas for the cluster's version, custom resources against the CRDs being installed. |
 | `nix run .#kind-smoke` | Bootstraps the pushed branch onto a throwaway kind cluster and waits for the applications. Every application must sync and be healthy except those that need AWS: `aws-load-balancer-controller` (VPC lookup), `external-secrets` (the ClusterSecretStore), `loki`, `tempo` and `mimir` (gp3 volumes and S3), and `grafana`, `edge` and `alloy-ingest` (their secrets); `edge` may also stay unsynced (its TargetGroupBindings need the controller's webhook). Pass `--delete` to remove the cluster afterwards. |
@@ -320,7 +320,10 @@ rule that pings a GoAlert heartbeat monitor every two minutes, so GoAlert pages 
 this Grafana, its alerting or its path to GoAlert stops. The switch sets
 `notify = true`. The cluster's own rules are the "Observability cluster"
 group in `modules/grafana.nix` (today: Tempo compaction stalled), routed to
-GoAlert notify. Muting covers notification policies only: a contact point's
+GoAlert notify. Datadog's monitors run beside Datadog as shadow rules (folder
+`Datadog shadow`, label `shadow=datadog`, the host stack's
+`grafana-provisioning/datadog/MAPPING.md`): they route to GoAlert notify and
+never page, even critical ones, until the paging moves over group by group. Muting covers notification policies only: a contact point's
 **Test** button in the UI sends for real even while muted; don't press it
 before the switch.
 
