@@ -7,6 +7,7 @@ import {
   type EditorThemeClasses,
   type LexicalEditor,
   type LexicalNode,
+  type LexicalUpdateJSON,
   type NodeKey,
   type SerializedLexicalNode,
   type Spread,
@@ -58,6 +59,15 @@ export type BookingLinkMentionDecoratorProps = BookingLinkMentionInfo & {
   theme: EditorThemeClasses;
 };
 
+function resolveBookingUrl(profileId: string, slug?: string, url?: string) {
+  // Saved state can hold any URL; one a link may not open is rebuilt.
+  return (
+    (url && isAllowedLinkUrl(url) ? url : undefined) ||
+    buildBookingUrl(profileId, slug) ||
+    `https://macro.com/app/book/${profileId}`
+  );
+}
+
 export class BookingLinkMentionNode extends DecoratorNode<
   DecoratorComponent<BookingLinkMentionDecoratorProps> | undefined
 > {
@@ -99,11 +109,7 @@ export class BookingLinkMentionNode extends DecoratorNode<
     this.__profileId = profileId;
     this.__slug = slug;
     this.__label = label;
-    // Saved state can hold any URL; one a link may not open is rebuilt.
-    this.__url =
-      (url && isAllowedLinkUrl(url) ? url : undefined) ||
-      buildBookingUrl(profileId, slug) ||
-      `https://macro.com/app/book/${profileId}`;
+    this.__url = resolveBookingUrl(profileId, slug, url);
   }
 
   static importJSON(serializedNode: SerializedBookingLinkMentionNode) {
@@ -115,6 +121,18 @@ export class BookingLinkMentionNode extends DecoratorNode<
     });
     $applyIdFromSerialized(node, serializedNode);
     return node;
+  }
+
+  updateFromJSON(
+    serializedNode: LexicalUpdateJSON<SerializedBookingLinkMentionNode>
+  ): this {
+    const self = super.updateFromJSON(serializedNode);
+    const { profileId, slug, url } = serializedNode;
+    self.__profileId = profileId;
+    self.__slug = slug ?? undefined;
+    self.__label = serializedNode.label ?? undefined;
+    self.__url = resolveBookingUrl(profileId, slug, url);
+    return self;
   }
 
   exportJSON(): SerializedBookingLinkMentionNode {

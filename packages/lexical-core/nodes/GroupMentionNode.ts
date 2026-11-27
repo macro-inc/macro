@@ -6,6 +6,7 @@ import {
   type EditorThemeClasses,
   type LexicalEditor,
   type LexicalNode,
+  type LexicalUpdateJSON,
   type NodeKey,
   type SerializedLexicalNode,
   type Spread,
@@ -60,6 +61,14 @@ export class GroupMentionNode extends DecoratorNode<
     });
     $applyIdFromSerialized(node, serializedNode);
     return node;
+  }
+
+  updateFromJSON(
+    serializedNode: LexicalUpdateJSON<SerializedGroupMentionNode>
+  ): this {
+    const self = super.updateFromJSON(serializedNode);
+    self.__groupAlias = serializedNode.groupAlias;
+    return self;
   }
 
   exportJSON(): SerializedGroupMentionNode {

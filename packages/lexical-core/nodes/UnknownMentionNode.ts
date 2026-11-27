@@ -8,6 +8,7 @@ import {
   type EditorThemeClasses,
   type LexicalEditor,
   type LexicalNode,
+  type LexicalUpdateJSON,
   type NodeKey,
   type SerializedLexicalNode,
   type Spread,
@@ -62,6 +63,14 @@ export class UnknownMentionNode extends DecoratorNode<
     });
     $applyIdFromSerialized(node, serializedNode);
     return node;
+  }
+
+  updateFromJSON(
+    serializedNode: LexicalUpdateJSON<SerializedUnknownMentionNode>
+  ): this {
+    const self = super.updateFromJSON(serializedNode);
+    self.__name = serializedNode.name;
+    return self;
   }
 
   exportJSON(): SerializedUnknownMentionNode {

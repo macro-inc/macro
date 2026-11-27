@@ -6,6 +6,7 @@ import {
   type EditorThemeClasses,
   type LexicalEditor,
   type LexicalNode,
+  type LexicalUpdateJSON,
   type NodeKey,
   type SerializedLexicalNode,
   type Spread,
@@ -97,6 +98,19 @@ export class SnapshotNode extends DecoratorNode<
     });
     $applyIdFromSerialized(node, serializedNode);
     return node;
+  }
+
+  updateFromJSON(
+    serializedNode: LexicalUpdateJSON<SerializedSnapshotNode>
+  ): this {
+    const self = super.updateFromJSON(serializedNode);
+    self.__documentId = serializedNode.documentId;
+    self.__documentName = serializedNode.documentName;
+    self.__blockName = serializedNode.blockName;
+    self.__content = serializedNode.content;
+    self.__snapshotDate = serializedNode.snapshotDate || self.__snapshotDate;
+    self.__mentionUuid = serializedNode.mentionUuid ?? undefined;
+    return self;
   }
 
   exportJSON(): SerializedSnapshotNode {

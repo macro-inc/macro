@@ -10,6 +10,7 @@ import {
   type EditorThemeClasses,
   type LexicalEditor,
   type LexicalNode,
+  type LexicalUpdateJSON,
   type NodeKey,
   type SerializedLexicalNode,
   type Spread,
@@ -89,6 +90,13 @@ export class PasteNode extends DecoratorBlockNode<
     });
     $applyIdFromSerialized(node, serializedNode);
     return node;
+  }
+
+  updateFromJSON(serializedNode: LexicalUpdateJSON<SerializedPasteNode>): this {
+    const self = super.updateFromJSON(serializedNode);
+    self.__content = serializedNode.content;
+    self.__origin = normalizePasteOrigin(serializedNode.origin);
+    return self;
   }
 
   exportJSON(): SerializedPasteNode {

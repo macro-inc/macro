@@ -8,6 +8,7 @@ import {
   ElementNode,
   type LexicalEditor,
   type LexicalNode,
+  type LexicalUpdateJSON,
   type NodeKey,
   type SerializedElementNode,
   type Spread,
@@ -67,14 +68,23 @@ export class DiffNode extends ElementNode {
     });
   }
 
-  updateDOM() {
-    return false;
+  updateDOM(previous: DiffNode) {
+    return (
+      previous.__userId !== this.__userId || previous.__label !== this.__label
+    );
   }
 
   static importJSON(serializedNode: SerializedDiffNode): DiffNode {
     const diffNode = new DiffNode(serializedNode.userId, serializedNode.label);
     $applyIdFromSerialized(diffNode, serializedNode);
     return diffNode;
+  }
+
+  updateFromJSON(serializedNode: LexicalUpdateJSON<SerializedDiffNode>): this {
+    const self = super.updateFromJSON(serializedNode);
+    self.__userId = serializedNode.userId;
+    self.__label = serializedNode.label ?? 'AI Suggestion';
+    return self;
   }
 
   exportJSON(): SerializedDiffNode {

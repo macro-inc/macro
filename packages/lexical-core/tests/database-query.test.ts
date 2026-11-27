@@ -6,6 +6,7 @@ import { $getRoot, $isParagraphNode, createEditor } from 'lexical';
 import { describe, expect, it } from 'vitest';
 import { SupportedNodeTypes } from '../node-list';
 import {
+  $createDatabaseQueryNode,
   $isDatabaseQueryNode,
   databaseQueryMarkdown,
   parseDatabaseQueryJson,
@@ -86,6 +87,25 @@ describe('database query node', () => {
     );
     expect(markdownToPlainText(exported(restored))).toBe('Project count');
     expect(exported(restored)).toContain(source.prompt);
+  });
+  it('preserves literal entity spellings when loading Lexical JSON', () => {
+    const editor = createEditor({ nodes: SupportedNodeTypes });
+    editor.update(
+      () => {
+        $getRoot().append(
+          $createDatabaseQueryNode({
+            ...source,
+            displayMode: 'table',
+            title: 'Literal &lt;',
+            prompt: 'Count literal &amp; values',
+          })
+        );
+      },
+      { discrete: true }
+    );
+
+    const saved = editor.getEditorState().toJSON();
+    expect(editor.parseEditorState(saved).toJSON()).toEqual(saved);
   });
   it.each(['bar', 'line', 'pie'] as const)(
     'round-trips a live %s chart as a source-only block',

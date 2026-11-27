@@ -13,7 +13,10 @@ import {
 } from '@macro-inc/collaboration/collab/wal';
 import { createSyncSocket } from '@macro-inc/collaboration/sync-service/socket';
 import { SyncServiceSource } from '@macro-inc/collaboration/sync-service/source';
-import { createPeerIdValidator } from '@macro-inc/lexical-core';
+import {
+  $isEquationNode,
+  createPeerIdValidator,
+} from '@macro-inc/lexical-core';
 import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
 import { markdownToLoroSnapshot } from '@macro-inc/lexical-core/markdown-loro-snapshot';
 import { authKeys } from '@queries/auth/keys';
@@ -41,6 +44,10 @@ import {
 import { MarkdownHostContext } from '../../context/MarkdownHostContext';
 import { registerMarkdownEditing } from '../../editing/registerMarkdownEditing';
 import { initializeLexical } from '../../init';
+import {
+  katexPlugin,
+  UPDATE_EQUATION_COMMAND,
+} from '../../plugins/katex/katexPlugin';
 import { editorFocusSignal } from '../../utils';
 import { CollabProvider } from '../CollabProvider';
 import { flushCollaboration } from '../flush';
@@ -53,6 +60,7 @@ declare global {
       flush: () => Promise<boolean>;
       pendingWrites: () => Promise<number>;
       writeLegacyView: (view: CanvasView) => Promise<boolean>;
+      editEquation: (equation: string) => boolean;
     };
   }
 }
@@ -90,8 +98,10 @@ function Fixture() {
   onCleanup(() => socket?.cleanup());
 
   const [liveSource] = createResource(async () => {
+    const markdown =
+      '<m-document-card>{"documentId":"00000000-0000-4000-8000-000000000002","blockName":"canvas","documentName":"Synthetic canvas","previewData":{"view":{"x":24,"y":48,"scale":125}}}</m-document-card>\n\nShared paragraph';
     const seed = await markdownToLoroSnapshot(
-      '<m-document-card>{"documentId":"00000000-0000-4000-8000-000000000002","blockName":"canvas","documentName":"Synthetic canvas","previewData":{"view":{"x":24,"y":48,"scale":125}}}</m-document-card>\n\nShared paragraph'
+      params.has('equation') ? `${markdown} ($x+1$)` : markdown
     );
     if (!seed) throw new Error('Missing fixture snapshot');
     const seeded = await fetch(`http://127.0.0.1:${port}/seed`, {
@@ -132,6 +142,18 @@ function Fixture() {
     },
     pendingWrites: async () =>
       (await wal.getAll()).filter((entry) => !entry.delivered).length,
+    editEquation(equation) {
+      const nodeKey = editor?.read(() => {
+        const paragraph = $getRoot().getLastChild();
+        if ($isElementNode(paragraph))
+          return paragraph.getChildren().find($isEquationNode)?.getKey();
+      });
+      if (!editor || !nodeKey) throw new Error('Missing fixture equation');
+      return editor.dispatchCommand(UPDATE_EQUATION_COMMAND, {
+        nodeKey,
+        equation,
+      });
+    },
     async writeLegacyView(view) {
       // The old writer mirrored its Lexical state without preserving the
       // stored viewport. Run that same Mirror write against a separate fork.
@@ -217,6 +239,7 @@ function Editor(props: {
     onVersionError: setEditorError,
     peerId,
   });
+  onCleanup(katexPlugin({})(editor));
   createEffect(() => editor.setEditable(isContentEditable()));
   createEffect(() => {
     if (editorReady()) props.onReady();

@@ -4,6 +4,7 @@ import {
   type EditorThemeClasses,
   type LexicalEditor,
   type LexicalNode,
+  type LexicalUpdateJSON,
   type NodeKey,
   type SerializedLexicalNode,
   type Spread,
@@ -71,6 +72,14 @@ export class DiffInsertNode extends DecoratorNode<
     const diffInsertNode = new DiffInsertNode(serialized.markdown);
     $applyIdFromSerialized(diffInsertNode, serialized);
     return diffInsertNode;
+  }
+
+  updateFromJSON(
+    serializedNode: LexicalUpdateJSON<SerializedDiffInsertNode>
+  ): this {
+    const self = super.updateFromJSON(serializedNode);
+    self.__markdown = serializedNode.markdown;
+    return self;
   }
 
   exportJSON(): SerializedDiffInsertNode {

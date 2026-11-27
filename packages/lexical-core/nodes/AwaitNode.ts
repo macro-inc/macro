@@ -6,6 +6,7 @@ import {
   type EditorThemeClasses,
   type LexicalEditor,
   type LexicalNode,
+  type LexicalUpdateJSON,
   type NodeKey,
   type SerializedLexicalNode,
   type Spread,
@@ -95,6 +96,14 @@ export class AwaitNode extends DecoratorNode<
     return node;
   }
 
+  updateFromJSON(serializedNode: LexicalUpdateJSON<SerializedAwaitNode>): this {
+    const self = super.updateFromJSON(serializedNode);
+    self.__awaitId = serializedNode.awaitId ?? self.__awaitId;
+    self.__text = serializedNode.text ?? undefined;
+    self.__inline = serializedNode.inline ?? true;
+    return self;
+  }
+
   exportJSON(): SerializedAwaitNode {
     return {
       ...super.exportJSON(),
@@ -122,7 +131,12 @@ export class AwaitNode extends DecoratorNode<
     return elem;
   }
 
-  updateDOM(_prevNode: this, element: HTMLElement): boolean {
+  updateDOM(previous: this, element: HTMLElement): boolean {
+    if (
+      previous.__inline !== this.__inline ||
+      previous.__awaitId !== this.__awaitId
+    )
+      return true;
     element.classList.toggle('local', this.isLocal());
     return false;
   }

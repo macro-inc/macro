@@ -6,6 +6,7 @@ import {
   type EditorThemeClasses,
   type LexicalEditor,
   type LexicalNode,
+  type LexicalUpdateJSON,
   type NodeKey,
   type SerializedLexicalNode,
   type Spread,
@@ -93,6 +94,18 @@ export class ContactMentionNode extends DecoratorNode<
     });
     $applyIdFromSerialized(node, serializedNode);
     return node;
+  }
+
+  updateFromJSON(
+    serializedNode: LexicalUpdateJSON<SerializedContactMentionNode>
+  ): this {
+    const self = super.updateFromJSON(serializedNode);
+    self.__contactId = serializedNode.contactId;
+    self.__name = serializedNode.name;
+    self.__emailOrDomain = serializedNode.emailOrDomain;
+    self.__isCompany = serializedNode.isCompany;
+    self.__mentionUuid = serializedNode.mentionUuid ?? undefined;
+    return self;
   }
 
   exportJSON(): SerializedContactMentionNode {

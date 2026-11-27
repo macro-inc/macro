@@ -44,6 +44,11 @@ name, and agents routinely omit it. A date mention body is the JSON object or,
 as models sometimes write it, a bare ISO date or timestamp;
 `parseDateMentionBody` in `nodes/DateMentionNode.ts` reads both.
 
+Collaboration applies in-place edits through `updateFromJSON`. Restore the
+node's editable serialized fields there and keep viewer-resolved label caches
+local, since clients with different access or cached data can otherwise keep
+replacing one another's values.
+
 Keep URLs protected from inline formatting during import; matching rendered
 text is too late. Preserve code, mention payloads, existing links, and escaped
 literal URLs; escapes of `*`, `_`, `` ` `` and `~` alone don't make a URL

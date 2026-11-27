@@ -3262,6 +3262,11 @@ from `apps/web`. In traces, `editor.undo` / `editor.redo` carry
 Loro's undo and the mirror read, and `editor.history.apply` lasts until the
 reconciled editor update commits.
 
+For in-place collaborative edits, open a disposable Markdown document in two
+editors. Change an existing equation in one, then type alongside it in the
+other. Verify both editors show the new equation and the added text, and
+reload one editor to confirm the two edits persisted.
+
 ### Task mention status
 
 Task @mention pills and @mention menu rows display the same circular

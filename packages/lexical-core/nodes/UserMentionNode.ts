@@ -6,6 +6,7 @@ import {
   type EditorThemeClasses,
   type LexicalEditor,
   type LexicalNode,
+  type LexicalUpdateJSON,
   type NodeKey,
   type SerializedLexicalNode,
   type Spread,
@@ -114,6 +115,17 @@ export class UserMentionNode extends DecoratorNode<
     });
     $applyIdFromSerialized(node, serializedNode);
     return node;
+  }
+
+  updateFromJSON(
+    serializedNode: LexicalUpdateJSON<SerializedUserMentionNode>
+  ): this {
+    const self = super.updateFromJSON(serializedNode);
+    // The viewer's directory lookup writes its own display name.
+    self.__userId = serializedNode.userId;
+    self.__email = serializedNode.email;
+    self.__mentionUuid = serializedNode.mentionUuid ?? undefined;
+    return self;
   }
 
   exportJSON(): SerializedUserMentionNode {
