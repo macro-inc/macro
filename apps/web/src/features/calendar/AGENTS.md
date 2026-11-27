@@ -10,7 +10,9 @@ Shared calendar rendering, event editing, preferences, and occurrence presentati
 | Entry | Responsibility |
 | --- | --- |
 | `context/calendar-navigation-context.tsx` | Host-neutral dates, ranges, and navigation. |
-| `components/CalendarPagerContext.tsx` | Live page/date mapping, FullCalendar slot retargeting, and bounded preloads. |
+| `components/CalendarPagerContext.tsx` | Live page/date metadata, shared clock/scroll, and bounded preloads. |
+| `components/CalendarPageRenderer.tsx` | Settled-page promotion and read-only projection handoff. |
+| `components/LightCalendarGrid.tsx` / `core/light-grid.ts` | Query-free static date/event layout and overlap packing. |
 | `../../components/ui/components/SnapPager/SnapPager.tsx` | Native virtual track, continuous recycling, and period commands. |
 | `components/CalendarViewContext.tsx` | Selection, source visibility, and preferences. |
 | `core/page-range.ts` | Exact date windows shared by grid rendering and adjacent preloads. |
@@ -54,8 +56,12 @@ Shared calendar rendering, event editing, preferences, and occurrence presentati
 - Finish the previous target and advance immediately on rapid period presses; use native smooth scrolling for a single press.
 - Navigate from known locator dates before loading occurrences, refine Agenda to the resolved occurrence day, and keep skeletons/errors inside the destination page.
 - Disable wheel snapping during controlled alignment until the virtual destination rows are mounted.
-- Reassign seven stable slots during scrolling, keep the header on the viewport centre, and prefetch only three ranges ahead of the pool; never gate assignment on data.
+- Reassign seven stable lightweight slots during scrolling, keep the header on the viewport centre, and prefetch only three ranges ahead of the pool; never gate assignment on data.
+- Mount FullCalendar only on the active settled page; restore measured scroll before revealing it, and keep range/data ownership outside its lifetime.
+- Render phone Month directly with MonthGrid, with no hidden FullCalendar; reuse date/event nodes by index while lightweight slots recycle.
+- Keep decorative projections inert throughout momentum; do not propagate page-position custom properties into their subtrees.
 - Reserve the full two-row all-day envelope in phone Week; use 64px hours only in phone three-day view, leaving Day/Week spacing unchanged.
+- Preserve continuous all-day span lanes unless overflow or the row limit requires compaction.
 - Keep phone Month pills title-only and its day-sheet date noninteractive; use semantic readable text and full-strength calendar colors for event dots.
 - Share one cache startup head start across concurrent ranges; never restart its deadline per reader.
 

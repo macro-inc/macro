@@ -223,6 +223,10 @@ response and a failed write followed by another click.
 Grid views mount seven stable slots on a wide virtual track. Slots leaving the
 three-page buffer are assigned new dates during scrolling, without changing
 scrollLeft. No finite-ring edge or settlement-only mount queue gates a swipe.
+Noninteractive pages use query-free date/event projections; FullCalendar mounts
+only for the active settled page. Phone Month always uses MonthGrid without a
+hidden FullCalendar. Promotion preserves event geometry and vertical scroll while
+the lightweight page stays visible until the interactive grid is ready.
 Ten exact data ranges stay warm: seven mounted periods and three ahead of the pool.
 The pool already retains three periods behind the viewport for a reversal. Reversing direction swaps the lookahead; obsolete observers
 release reads unless another consumer needs them. Only idle movement near the
@@ -231,16 +235,21 @@ event reads leave the grid and its loading state navigable. On the iOS and Andro
 apps, recently seen periods and the calendar
 list remain on the device for a week; fresh reads replace those restored results.
 
-Period headings follow the live viewport position. Each recycled slot retargets
-its grid immediately, independently of occurrence readiness. Calendar grids
-stay mounted and undimmed while occurrences load. An uncached range never shows events
+Period headings follow the live viewport position. Each recycled slot updates
+its lightweight grid immediately, independently of occurrence readiness. Page
+owners remain mounted and undimmed while occurrences load. An uncached range never shows events
 from the previous range. The existing representative event skeletons appear immediately,
 without synthetic FullCalendar events. Week/Day use sparse blocks with varied start times
 and durations, plus separate all-day bars. Month mixes bars and subtle text lines without
 placeholder dots or time chips. Phone Month places these skeletons on its visible card,
-not the covered FullCalendar grid. Patterns stay stable for each date and clear date headers.
+with no backing FullCalendar. Patterns stay stable for each date and clear date headers.
 There is no minimum hold: incoming events replace the skeletons as soon as they are ready,
 with the existing short fade. Changing period carries feedback into the new cells.
+Check Day, Week and three-day views after a partial swipe and after settling:
+all-day lanes, event columns, time labels and scroll position must not jump.
+Dragging, range selection and event editing belong only to the settled active
+grid. Long touch/trackpad sequences must keep adjacent projections visible;
+recycled inactive pages must not take keyboard focus.
 Background refreshes retain current events without skeletons or a transient loading
 pill. On a cold reload, the first event paint waits for calendar metadata so events
 appear in their configured colors. A REST/GraphQL handoff for the same user and

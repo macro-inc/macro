@@ -45,7 +45,6 @@
 
 .snap-pager-page {
   contain: layout paint style;
-  left: calc((1000 + var(--snap-page-position) - var(--snap-origin)) * 100% / 2001);
 }
 
 @media (pointer: coarse) {
@@ -57,6 +56,6 @@
   }
 }
 
-.snap-pager-page[aria-hidden='true'] {
+.snap-pager-page[inert] {
   pointer-events: none;
 }

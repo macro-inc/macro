@@ -15,10 +15,17 @@ import {
   type CalendarGridHandle,
 } from '../calendar/components/CalendarGrid';
 import {
+  CalendarPageRenderer,
+  type CalendarPageRenderHandle,
+} from '../calendar/components/CalendarPageRenderer';
+import {
   CalendarPagerContextProvider,
   useCalendarPager,
 } from '../calendar/components/CalendarPagerContext';
-import { calendarPageRange } from '../calendar/core/page-range';
+import {
+  calendarPageDateInfo,
+  calendarPageRange,
+} from '../calendar/core/page-range';
 import { type CalendarEvent, DEFAULT_CALENDAR_SOURCE } from '../calendar/types';
 import { MonthDaySheet } from './components/month/MonthDaySheet';
 import { MonthGrid } from './components/month/MonthGrid';
@@ -754,5 +761,125 @@ describe('the URL of details that followed a moved event', () => {
     mocks.focusEvent('event', FROM);
 
     expect(mocks.setSearch).not.toHaveBeenCalled();
+  });
+});
+
+describe('lightweight calendar page lifecycle', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+    );
+  });
+
+  it('keeps moving pages query-free and cancels a transient promotion', async () => {
+    const rendered = vi.spyOn(Calendar.prototype, 'render');
+    const [interactive, setInteractive] = createSignal(false);
+    const [date, setDate] = createSignal(new Date(2026, 10, 1));
+    let handle: CalendarPageRenderHandle | undefined;
+    const { container } = render(() => (
+      <CalendarPageRenderer
+        date={date()}
+        now={new Date()}
+        dateInfo={calendarPageDateInfo(date(), 'timeGridDay', {
+          weekStartsOn: 0,
+          showWeekends: true,
+          phone: false,
+        })}
+        interactive={interactive()}
+        initialScrollTop={240}
+        events={[]}
+        eventsById={new Map()}
+        settings={{
+          initialView: 'timeGridDay',
+          showWeekends: true,
+          weekStartsOn: 0,
+          timeFormat: '24-hour',
+          useNarrowDayHeaders: false,
+          useNarrowEventContent: false,
+        }}
+        selection={{ color: 'blue' }}
+      >
+        {(value) => {
+          handle = value;
+          return null;
+        }}
+      </CalendarPageRenderer>
+    ));
+    for (let day = 1; day <= 30; day++) {
+      setDate(new Date(2026, 10, day));
+      expect(handle?.dateInfo().start.getDate()).toBe(day);
+    }
+    setInteractive(true);
+    setInteractive(false);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(rendered).not.toHaveBeenCalled();
+    expect(handle?.api()).toBeUndefined();
+    expect(container.querySelectorAll('.calendar-light-grid')).toHaveLength(1);
+    rendered.mockRestore();
+  });
+
+  it('promotes only the settled current date and preserves scroll through demotion', async () => {
+    const [interactive, setInteractive] = createSignal(true);
+    const [date, setDate] = createSignal(new Date(2026, 10, 1));
+    let handle: CalendarPageRenderHandle | undefined;
+    const { container } = render(() => (
+      <CalendarPageRenderer
+        date={date()}
+        now={new Date()}
+        dateInfo={calendarPageDateInfo(date(), 'timeGridDay', {
+          weekStartsOn: 0,
+          showWeekends: true,
+          phone: false,
+        })}
+        interactive={interactive()}
+        initialScrollTop={240}
+        events={[]}
+        eventsById={new Map()}
+        settings={{
+          initialView: 'timeGridDay',
+          showWeekends: true,
+          weekStartsOn: 0,
+          timeFormat: '24-hour',
+          useNarrowDayHeaders: false,
+          useNarrowEventContent: false,
+        }}
+        selection={{ color: 'blue' }}
+      >
+        {(value) => {
+          handle = value;
+          return null;
+        }}
+      </CalendarPageRenderer>
+    ));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(handle?.api()?.getDate()).toEqual(new Date(2026, 10, 1));
+    expect(container.querySelectorAll('.calendar-light-grid')).toHaveLength(0);
+    const interactiveRoot = handle?.element();
+    expect(interactiveRoot?.classList.contains('calendar-view-host')).toBe(
+      true
+    );
+    setInteractive(false);
+    expect(handle?.element()).not.toBe(interactiveRoot);
+    expect(handle?.element()?.classList.contains('calendar-light-grid')).toBe(
+      true
+    );
+    setDate(new Date(2026, 11, 5));
+    expect(handle?.api()).toBeUndefined();
+    expect(container.querySelector('.calendar-light-scroller')?.scrollTop).toBe(
+      240
+    );
+    setInteractive(true);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(handle?.api()?.getDate()).toEqual(new Date(2026, 11, 5));
+    expect(
+      container.querySelector('.fc-scroller-harness-liquid > .fc-scroller')
+        ?.scrollTop
+    ).toBe(240);
   });
 });

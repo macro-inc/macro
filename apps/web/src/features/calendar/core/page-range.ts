@@ -8,6 +8,13 @@ import {
 } from 'date-fns';
 import type { CalendarGridPeriodView } from '../types';
 
+/** Logical display metadata remains available before an interactive grid mounts. */
+export interface CalendarPageDateInfo {
+  start: Date;
+  end: Date;
+  view: { type: string; currentStart: Date; currentEnd: Date };
+}
+
 /** The phone face always starts on Sunday and uses five or six complete weeks. */
 export function phoneMonthRange(month: Date) {
   const first = startOfMonth(month);
@@ -25,7 +32,7 @@ export function phoneMonthRange(month: Date) {
   };
 }
 
-/** Plan exactly the range FullCalendar will query, before its hidden page mounts. */
+/** Plan the displayed range without mounting a calendar renderer. */
 export function calendarPageRange(
   date: Date,
   view: CalendarGridPeriodView,
@@ -59,4 +66,25 @@ export function calendarPageRange(
     while (isWeekend(addDays(end, -1))) end = addDays(end, -1);
   }
   return { start, end };
+}
+
+export function calendarPageDateInfo(
+  date: Date,
+  view: CalendarGridPeriodView,
+  options: Parameters<typeof calendarPageRange>[2]
+): CalendarPageDateInfo {
+  const range = calendarPageRange(date, view, options);
+  const currentStart =
+    view === 'dayGridMonth' ? startOfMonth(date) : range.start;
+  return {
+    ...range,
+    view: {
+      type: view,
+      currentStart,
+      currentEnd:
+        view === 'dayGridMonth'
+          ? startOfDay(addDays(endOfMonth(date), 1))
+          : range.end,
+    },
+  };
 }

@@ -137,6 +137,7 @@ export default {
   replyNo: 'No',
   retry: 'Retry',
   allDay: 'All day',
+  moreEvents: { one: '+{{count}} more', other: '+{{count}} more' },
   startTime: 'event start time',
   endTime: 'event end time',
   wheelHour: 'Hour',

@@ -3,7 +3,7 @@ import {
   type FullCalendarContextValue,
   useFullCalendar,
 } from '@app/lib/fullcalendar-solid';
-import { formatLocale } from '@app/lib/i18n';
+import { formatLocale, t } from '@app/lib/i18n';
 import type {
   CalendarOptions,
   DateSelectArg,
@@ -312,7 +312,7 @@ export function CalendarGrid(props: CalendarGridProps) {
       eventClassNames={({ view }) =>
         view.type === 'dayGridMonth' ? ['calendar-month-event'] : []
       }
-      allDayText={props.settings.compactAllDaySlot ? '' : 'All day'}
+      allDayText={props.settings.compactAllDaySlot ? '' : t('calendar.allDay')}
       nowIndicator
       headerToolbar={false}
       scrollTime={TIME_GRID_OPENING_SCROLL_TIME}

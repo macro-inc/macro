@@ -21,7 +21,7 @@
 	--fc-now-indicator-color: var(--color-accent);
 }
 
-.calendar-view .fc .fc-popover {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-popover {
 	@apply menu-surface;
 	position: absolute;
 	width: max-content;
@@ -29,10 +29,10 @@
 }
 
 /* Month overflow sits one surface step above the normal menu, not a new list. */
-html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.calendar-month-event) {
+html:not([data-touch-device="true"]) .calendar-view :is(.fc, .calendar-light-grid) .fc-more-popover:has(.calendar-month-event) {
   --color-menu: var(--color-surface-3);
 }
-.calendar-view .fc .fc-more-popover:has(.calendar-month-event) .fc-popover-header {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-more-popover:has(.calendar-month-event) .fc-popover-header {
   padding: 0.75rem;
 }
 
@@ -41,7 +41,7 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 	padding: 0.5rem;
 }
 
-.calendar-view .fc .fc-daygrid-day:has([data-calendar-loading-skeleton]) {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-daygrid-day:has([data-calendar-loading-skeleton]) {
 	position: relative;
 }
 
@@ -84,14 +84,14 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 	}
 }
 
-.calendar-view .fc {
+.calendar-view :is(.fc, .calendar-light-grid) {
 	color: var(--color-ink);
 	font-family: inherit;
 	font-size: var(--text-xs);
 	line-height: var(--text-xs--line-height);
 }
 
-.calendar-view .fc .fc-view-harness {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-view-harness {
 	overflow: hidden;
 }
 
@@ -99,34 +99,34 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 	border-width: 0;
 }
 
-.calendar-view .fc .fc-scrollgrid-section-header > * {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-scrollgrid-section-header > * {
 	border-left-width: 0;
 	border-right-width: 0;
 	border-top-width: 0;
 }
 
-.calendar-view .fc .fc-scrollgrid tr > :first-child {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-scrollgrid tr > :first-child {
 	border-left-width: 0;
 }
 
-.calendar-view .fc .fc-scrollgrid tr > :last-child {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-scrollgrid tr > :last-child {
 	border-right-width: 0;
 }
 
-.calendar-view .fc .fc-scrollgrid thead > tr:first-child > * {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-scrollgrid thead > tr:first-child > * {
 	border-top-width: 0;
 }
 
-.calendar-view .fc .fc-scrollgrid tbody > tr:last-child > * {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-scrollgrid tbody > tr:last-child > * {
 	border-bottom-width: 0;
 }
 
-.calendar-view .fc .fc-col-header-cell {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-col-header-cell {
 	background: transparent;
 	border-width: 0;
 }
 
-.calendar-view .fc .fc-col-header-cell-cushion {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-col-header-cell-cushion {
 	color: var(--color-ink-extra-muted);
 	font-size: var(--text-sm);
 	line-height: var(--text-sm--line-height);
@@ -134,11 +134,11 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 	padding: 0.375rem 0.25rem;
 }
 
-.calendar-view .fc .fc-timegrid .fc-col-header-cell {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid .fc-col-header-cell {
 	text-align: center;
 }
 
-.calendar-view .fc .fc-timegrid .fc-col-header-cell-cushion {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid .fc-col-header-cell-cushion {
 	display: inline-flex;
 	flex-direction: column;
 	align-items: center;
@@ -146,13 +146,13 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 	padding: 0.375rem 0;
 }
 
-.calendar-view .fc .fc-timegrid .calendar-day-header-weekday {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid .calendar-day-header-weekday {
 	font-size: var(--text-sm);
 	line-height: var(--text-sm--line-height);
 	font-weight: 400;
 }
 
-.calendar-view .fc .fc-timegrid .calendar-day-header-date {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid .calendar-day-header-date {
 	display: inline-flex;
 	width: clamp(1.5rem, 6cqi, 2.25rem);
 	min-width: max-content;
@@ -165,14 +165,14 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 	line-height: var(--text-2xl--line-height);
 }
 
-.calendar-view .fc .fc-daygrid-day-number {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-daygrid-day-number {
 	color: var(--color-ink-muted);
 	padding: 0.5rem 0.625rem;
 }
 
-.calendar-view .fc .fc-dayGridMonth-view .fc-day-today .fc-daygrid-day-number,
+.calendar-view :is(.fc, .calendar-light-grid) .fc-dayGridMonth-view .fc-day-today .fc-daygrid-day-number,
 .calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.fc-dayGridMonth-view
 	.calendar-day-selected
 	.fc-daygrid-day-number {
@@ -186,12 +186,12 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 }
 
 .calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.fc-dayGridMonth-view
 	.fc-day-today
 	.fc-daygrid-day-number::before,
 .calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.fc-dayGridMonth-view
 	.calendar-day-selected
 	.fc-daygrid-day-number::before {
@@ -210,7 +210,7 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 
 
 .calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.fc-timegrid
 	.fc-col-header-cell.fc-day-today
 	.calendar-day-header-weekday {
@@ -218,7 +218,7 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 }
 
 .calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.fc-timegrid
 	.fc-col-header-cell.fc-day-today
 	.calendar-day-header-date {
@@ -229,7 +229,7 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 	font-weight: 600;
 }
 
-.calendar-view .fc .fc-timegrid .calendar-day-header-date-selected {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid .calendar-day-header-date-selected {
 	border: 1px solid var(--color-accent);
 	border-radius: 9999px;
 	background: var(--color-accent);
@@ -238,23 +238,23 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 }
 
 .calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.fc-timegrid
 	.fc-col-header-cell.fc-day-today
 	.calendar-day-header-date-selected {
 	border-color: var(--color-accent);
 }
 
-.calendar-view .fc .fc-day-other .fc-daygrid-day-number {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-day-other .fc-daygrid-day-number {
 	color: var(--color-ink-disabled);
 }
 
 /* Mute the number, not the entire header or its selected/today accent. */
-.calendar-view .fc .fc-dayGridMonth-view .fc-day-other .fc-daygrid-day-top {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-dayGridMonth-view .fc-day-other .fc-daygrid-day-top {
 	opacity: 1;
 }
 
-.calendar-view .fc .fc-daygrid-event {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-daygrid-event {
 	margin-right: 1px;
 	margin-left: 1px;
 }
@@ -271,14 +271,14 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 	border-bottom-left-radius: 0.375rem;
 }
 
-.calendar-view .fc .fc-timegrid-col-events {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid-col-events {
 	margin-right: 0.375rem;
 	margin-left: 0.375rem;
 }
 
 /* Rich, opaque blocks keep busy schedules readable. Bound lightness for
    dark-text contrast and boost chroma without turning neutral calendars colorful. */
-.calendar-view .fc .fc-event,
+.calendar-view :is(.fc, .calendar-light-grid) .fc-event,
 .calendar-agenda-event,
 .phone-month-bar {
 	--calendar-event-fill: oklch(from var(--event-calendar-color, var(--color-calendar)) clamp(0.67, l, 0.72) min(calc(c * 1.65), 0.2) h);
@@ -295,22 +295,22 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 	transition: filter 120ms ease-out, opacity 120ms ease-out;
 }
 
-.calendar-view .fc .fc-event.fc-event-draggable {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-event.fc-event-draggable {
 	cursor: grab;
 }
 
-.calendar-view .fc .fc-event.fc-event-dragging {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-event.fc-event-dragging {
 	cursor: grabbing;
 }
 
 .calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.fc-event:has(.calendar-event-content-selected)
 	.fc-event-resizer {
 	display: block;
 }
 
-.calendar-view .fc .fc-event-resizer::after {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-event-resizer::after {
 	position: absolute;
 	top: 50%;
 	left: 50%;
@@ -321,18 +321,18 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 	transform: translate(-50%, -50%);
 }
 
-.calendar-view .fc .fc-h-event .fc-event-resizer::after {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-h-event .fc-event-resizer::after {
 	width: 2px;
 	height: 0.625rem;
 }
 
-.calendar-view .fc .fc-v-event .fc-event-resizer::after {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-v-event .fc-event-resizer::after {
 	width: 1rem;
 	height: 2px;
 }
 
 /* The phone Day draft is a distinct, unsaved event with native resize ends. */
-.calendar-view .fc .calendar-day-draft {
+.calendar-view :is(.fc, .calendar-light-grid) .calendar-day-draft {
 	--fc-event-border-color: var(--calendar-selection-color, var(--color-accent));
 	border: 1px dashed var(--fc-event-border-color);
 	border-radius: 0.375rem;
@@ -340,11 +340,11 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 	color: var(--calendar-selection-color, var(--color-accent));
 }
 
-.calendar-view .fc .calendar-day-draft .fc-event-main {
+.calendar-view :is(.fc, .calendar-light-grid) .calendar-day-draft .fc-event-main {
 	color: inherit;
 }
 
-.calendar-view .fc .calendar-day-draft .fc-event-resizer {
+.calendar-view :is(.fc, .calendar-light-grid) .calendar-day-draft .fc-event-resizer {
 	display: block;
 	opacity: 1;
 	min-height: 0.75rem;
@@ -352,152 +352,152 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 	touch-action: none;
 }
 
-.calendar-view .fc .fc-event-mirror,
-.calendar-view .fc .fc-highlight,
-.calendar-view .fc .calendar-multi-day-selection-preview-event {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-event-mirror,
+.calendar-view :is(.fc, .calendar-light-grid) .fc-highlight,
+.calendar-view :is(.fc, .calendar-light-grid) .calendar-multi-day-selection-preview-event {
 	border: 1px solid var(--calendar-selection-color, var(--color-accent));
 	border-radius: 0.375rem;
 	background: var(--calendar-selection-color, var(--color-accent));
 	box-shadow: none;
 }
 
-.calendar-view .fc .fc-event-mirror:has(.calendar-event-selection-preview),
-.calendar-view .fc .calendar-multi-day-selection-preview-event {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-event-mirror:has(.calendar-event-selection-preview),
+.calendar-view :is(.fc, .calendar-light-grid) .calendar-multi-day-selection-preview-event {
 	border-style: dashed;
 }
 
-.calendar-view .fc .calendar-multi-day-selection-preview-event {
+.calendar-view :is(.fc, .calendar-light-grid) .calendar-multi-day-selection-preview-event {
 	color: var(--calendar-selection-color, var(--color-accent));
 	pointer-events: none;
 }
 
 .calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.fc-timegrid-col-events
 	.calendar-multi-day-selection-preview-event,
 .calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.fc-timegrid-bg
 	.calendar-multi-day-selection-preview-event,
 .calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.fc-timegrid-col-bg
 	.calendar-multi-day-selection-preview-event {
 	display: none;
 }
 
-.calendar-view .fc .fc-highlight {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-highlight {
 	inset: 2px;
 }
 
 /* All-day and month selections render as a stacked preview chip. */
-.calendar-view .fc .fc-daygrid-body .fc-highlight {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-daygrid-body .fc-highlight {
 	display: none;
 }
 
 /* Timed selections already render an event mirror; hide its backing fill. */
-.calendar-view .fc .fc-timegrid-col-bg .fc-highlight {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid-col-bg .fc-highlight {
 	inset: 0;
 	border: 0;
 	background: transparent;
 	box-shadow: none;
 }
 
-.calendar-view .fc .fc-event-mirror {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-event-mirror {
 	color: var(--calendar-selection-color, var(--color-accent));
 }
 
-.calendar-view .fc .fc-event-mirror .fc-event-main,
-.calendar-view .fc .calendar-multi-day-selection-preview-event .fc-event-main {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-event-mirror .fc-event-main,
+.calendar-view :is(.fc, .calendar-light-grid) .calendar-multi-day-selection-preview-event .fc-event-main {
 	color: inherit;
 }
 
 /* Drag and resize mirrors use a filled accent background. */
-.calendar-view .fc .fc-event-mirror .calendar-event-content {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-event-mirror .calendar-event-content {
 	color: var(--color-surface);
 }
 
-.calendar-view .fc .fc-event-mirror .calendar-event-selection-preview,
+.calendar-view :is(.fc, .calendar-light-grid) .fc-event-mirror .calendar-event-selection-preview,
 .calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.calendar-multi-day-selection-preview-event
 	.calendar-event-selection-preview {
 	filter: invert(1) grayscale(1) contrast(100);
 }
 
 /* Keep the resize mirror legible over the same dashed draft treatment. */
-.calendar-view .fc .fc-event-mirror.calendar-day-draft {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-event-mirror.calendar-day-draft {
 	background: var(--color-panel);
 	color: var(--calendar-selection-color, var(--color-accent));
 	border-style: dashed;
 }
 
-.calendar-view .fc .fc-timegrid-event .fc-event-main {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid-event .fc-event-main {
 	padding: 0;
 }
 
-.calendar-view .fc .fc-event .calendar-event-content {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-event .calendar-event-content {
 	position: relative;
 	container-type: inline-size;
 	border-radius: inherit;
 	transition: background-color 120ms ease-out;
 }
 
-.calendar-view .fc .fc-timegrid-event .calendar-event-content {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid-event .calendar-event-content {
 	container-type: size;
 }
 
-.calendar-view .fc .calendar-event-content-compact {
+.calendar-view :is(.fc, .calendar-light-grid) .calendar-event-content-compact {
 	font-size: var(--text-xs);
 	line-height: var(--text-xs--line-height);
 }
 
-.calendar-view .fc .calendar-event-title {
+.calendar-view :is(.fc, .calendar-light-grid) .calendar-event-title {
 	font-size: var(--text-xs);
 	line-height: var(--text-xs--line-height);
 }
 
-.calendar-view .fc .calendar-event-everyone-declined-indicator {
+.calendar-view :is(.fc, .calendar-light-grid) .calendar-event-everyone-declined-indicator {
 	background-color: currentColor;
 }
 
-.calendar-view .fc .calendar-event-everyone-declined-indicator svg {
+.calendar-view :is(.fc, .calendar-light-grid) .calendar-event-everyone-declined-indicator svg {
 	color: var(--color-surface);
 }
 
 .calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.calendar-event-content-selected
 	.calendar-event-everyone-declined-indicator {
 	background-color: var(--color-surface);
 }
 
 .calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.calendar-event-content-selected
 	.calendar-event-everyone-declined-indicator
 	svg {
 	color: var(--color-accent);
 }
 
-.calendar-view .fc .calendar-event-content-compact .calendar-event-title {
+.calendar-view :is(.fc, .calendar-light-grid) .calendar-event-content-compact .calendar-event-title {
 	font-size: inherit;
 }
 
-.calendar-view .fc .calendar-event-metadata {
+.calendar-view :is(.fc, .calendar-light-grid) .calendar-event-metadata {
 	font-size: var(--text-xxs);
 	line-height: var(--leading-normal);
 }
 
-.calendar-view .fc .calendar-event-time {
+.calendar-view :is(.fc, .calendar-light-grid) .calendar-event-time {
 	font-size: var(--text-xxs);
 }
 
-.calendar-view .fc .calendar-event-content-layout {
+.calendar-view :is(.fc, .calendar-light-grid) .calendar-event-content-layout {
 	padding: 2px 6px;
 }
 
-.calendar-view .fc .calendar-event-content-layout-single-line {
+.calendar-view :is(.fc, .calendar-light-grid) .calendar-event-content-layout-single-line {
 	flex-direction: row;
 	align-items: center;
 	gap: 0.25rem;
@@ -505,35 +505,35 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 }
 
 .calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.calendar-event-content-layout-single-line
 	.calendar-event-time {
 	margin-top: 0;
 }
 
 .calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.calendar-event-content-layout-single-line
 	.calendar-event-location {
 	display: none;
 }
 
 /* The same compact Month treatment applies inside the native more popover. */
-.calendar-view .fc .calendar-month-event:has(.calendar-event-response-dot):not(.calendar-event-out-of-office):not(:has(.calendar-event-content-selected)) {
+.calendar-view :is(.fc, .calendar-light-grid) .calendar-month-event:has(.calendar-event-response-dot):not(.calendar-event-out-of-office):not(:has(.calendar-event-content-selected)) {
 	border: 0;
 	background-color: transparent;
 	color: var(--color-ink-muted);
 }
 
 .calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.calendar-month-event
 	.calendar-event-title {
 	min-width: 0;
 	flex-shrink: 1;
 }
 
-.calendar-view .fc .calendar-event-response-dot,
+.calendar-view :is(.fc, .calendar-light-grid) .calendar-event-response-dot,
 .phone-month-bar .calendar-event-response-dot {
 	width: 0.375rem;
 	height: 0.375rem;
@@ -544,7 +544,7 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 }
 
 .calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.calendar-event-content[data-response-status="tentative"]
 	.calendar-event-response-dot,
 .phone-month-bar[data-response-status="tentative"] .calendar-event-response-dot {
@@ -553,7 +553,7 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 }
 
 .calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.calendar-event-content[data-response-status="needs_action"]
 	.calendar-event-response-dot,
 .phone-month-bar[data-response-status="needs_action"] .calendar-event-response-dot {
@@ -561,14 +561,14 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 }
 
 /* Unanswered and tentative invitations stay filled, with a softer tint. */
-.calendar-view .fc .fc-event:not(.fc-event-mirror):not(:has(.calendar-event-content-selected)):has(.calendar-event-content:is([data-response-status="tentative"], [data-response-status="needs_action"])),
+.calendar-view :is(.fc, .calendar-light-grid) .fc-event:not(.fc-event-mirror):not(:has(.calendar-event-content-selected)):has(.calendar-event-content:is([data-response-status="tentative"], [data-response-status="needs_action"])),
 .calendar-agenda-event:not([data-selected="true"]):is([data-response-status="tentative"], [data-response-status="needs_action"]),
 .phone-month-bar:is([data-response-status="tentative"], [data-response-status="needs_action"]) {
 	--fc-event-bg-color: color-mix(in oklch, var(--calendar-event-fill) 85%, white);
 }
 
 .calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.fc-event:not(.fc-event-mirror):not(:has(.calendar-event-content-selected)):has(.calendar-event-content[data-response-status="declined"]),
 .calendar-agenda-event:not([data-selected="true"])[data-response-status="declined"],
 .phone-month-bar[data-response-status="declined"] {
@@ -576,7 +576,7 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 }
 
 .calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.calendar-event-content[data-response-status="declined"]
 	.calendar-event-title,
 .phone-month-bar[data-response-status="declined"] .calendar-event-title {
@@ -587,7 +587,7 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
    through the event variables, so the solid fill must too. A selected chip
    keeps its usual accent rendering. */
 .calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.fc-dayGridMonth-view
 	.fc-daygrid-dot-event.calendar-event-out-of-office:not(
 		:has(.calendar-event-content-selected)
@@ -596,15 +596,15 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 	color: var(--fc-event-text-color);
 }
 
-.calendar-view .fc .calendar-event-out-of-office .calendar-event-response-dot {
+.calendar-view :is(.fc, .calendar-light-grid) .calendar-event-out-of-office .calendar-event-response-dot {
 	display: none;
 }
 
-.calendar-view .fc .fc-event:hover {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-event:hover {
 	z-index: 4;
 }
 
-.calendar-view .fc .fc-event:focus-visible,
+.calendar-view :is(.fc, .calendar-light-grid) .fc-event:focus-visible,
 .calendar-agenda-event:focus-within {
 	z-index: 4;
 	outline: none;
@@ -612,16 +612,16 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 }
 
 @media (hover: hover) {
-	.calendar-view .fc .fc-event:hover:not(.fc-event-mirror):not(.calendar-multi-day-selection-preview-event):not(:has(.calendar-event-content-selected)) {
+	.calendar-view :is(.fc, .calendar-light-grid) .fc-event:hover:not(.fc-event-mirror):not(.calendar-multi-day-selection-preview-event):not(:has(.calendar-event-content-selected)) {
 		filter: brightness(0.94);
 	}
 
-	.calendar-view .fc .calendar-month-event:has(.calendar-event-response-dot):hover:not(.calendar-event-out-of-office):not(:has(.calendar-event-content-selected)) {
+	.calendar-view :is(.fc, .calendar-light-grid) .calendar-month-event:has(.calendar-event-response-dot):hover:not(.calendar-event-out-of-office):not(:has(.calendar-event-content-selected)) {
 		background-color: var(--color-hover);
 	}
 }
 
-.calendar-view .fc .fc-event:has(.calendar-event-content-selected),
+.calendar-view :is(.fc, .calendar-light-grid) .fc-event:has(.calendar-event-content-selected),
 .calendar-agenda-event[data-selected="true"] {
 	z-index: 3;
 	--fc-event-border-color: var(--color-accent);
@@ -631,36 +631,36 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 }
 
 .calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.fc-event:has(.calendar-event-content-selected)
 	.calendar-event-content-selected {
 	background-color: var(--color-accent);
 	color: var(--button-accent-ink);
 }
 
-.calendar-view .fc .calendar-event-content-selected .calendar-event-time {
+.calendar-view :is(.fc, .calendar-light-grid) .calendar-event-content-selected .calendar-event-time {
 	color: var(--button-accent-ink);
 	opacity: 1;
 }
 
 .calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.calendar-event-content.calendar-event-content-selected
 	.calendar-event-response-dot {
 	border-color: currentColor;
 	background: currentColor;
 }
 
-.calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-day-frame {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-dayGridMonth-view .fc-daygrid-day-frame {
 	min-height: 4rem;
 }
 
-.calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-day-top {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-dayGridMonth-view .fc-daygrid-day-top {
 	flex-direction: row;
 	justify-content: flex-start;
 }
 
-.calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-day-number {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-dayGridMonth-view .fc-daygrid-day-number {
 	display: inline-flex;
 	width: 1.75rem;
 	height: 1.75rem;
@@ -671,16 +671,16 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 	line-height: 1;
 }
 
-.calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-day-top:has(.fc-daygrid-day-number) {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-dayGridMonth-view .fc-daygrid-day-top:has(.fc-daygrid-day-number) {
 	min-height: 2rem;
 }
 
-.calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-day-events {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-dayGridMonth-view .fc-daygrid-day-events {
 	margin-inline: 0;
 	margin-top: 6px;
 }
 
-.calendar-view .fc .calendar-month-event {
+.calendar-view :is(.fc, .calendar-light-grid) .calendar-month-event {
 	padding-inline: 0.375rem;
 	display: flex;
 	align-items: center;
@@ -689,7 +689,7 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 	padding-block: 0;
 }
 
-.calendar-view .fc .calendar-month-event .calendar-event-content-layout {
+.calendar-view :is(.fc, .calendar-light-grid) .calendar-month-event .calendar-event-content-layout {
 	flex-direction: row;
 	align-items: center;
 	gap: 0.25rem;
@@ -697,51 +697,47 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 	padding-inline: clamp(calc(var(--spacing) / 2), 6.25cqi, calc(var(--spacing) * 1.5));
 }
 
-.calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-more-link {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-dayGridMonth-view .fc-daygrid-more-link {
 	margin-left: 0.375rem;
 	font-size: var(--text-xs);
 	line-height: var(--text-xs--line-height);
 	font-weight: 600;
 }
 
-.phone-month-page > .calendar-view {
-	visibility: hidden;
-}
-
-.calendar-view .fc .calendar-month-event:has(.calendar-event-time) {
+.calendar-view :is(.fc, .calendar-light-grid) .calendar-month-event:has(.calendar-event-time) {
 	height: 24px;
 	min-height: 24px;
 }
 
-.calendar-view .fc .calendar-month-event > .fc-event-main {
+.calendar-view :is(.fc, .calendar-light-grid) .calendar-month-event > .fc-event-main {
 	width: 100%;
 	min-width: 0;
 }
 
-.calendar-view .fc .calendar-month-event .calendar-event-title {
+.calendar-view :is(.fc, .calendar-light-grid) .calendar-month-event .calendar-event-title {
 	font-size: inherit;
 }
 
-.calendar-view .fc .fc-timegrid .fc-daygrid-day-frame,
-.calendar-view .fc .fc-timegrid .fc-daygrid-day-events {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid .fc-daygrid-day-frame,
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid .fc-daygrid-day-events {
 	min-height: var(--calendar-all-day-min-height);
 }
 
-.calendar-view .fc .fc-timegrid .fc-daygrid-day-events {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid .fc-daygrid-day-events {
 	margin-bottom: 0;
 }
 
 /* FullCalendar allocates up to the shared cap, without an empty creation strip. */
-.calendar-view .fc .fc-timegrid .fc-daygrid-event {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid .fc-daygrid-event {
 	height: var(--calendar-all-day-event-height);
 	min-height: var(--calendar-all-day-event-height);
 }
 
-.calendar-view .fc .fc-timegrid .fc-daygrid-day-bottom {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid .fc-daygrid-day-bottom {
 	min-height: 0;
 }
 .calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.fc-timegrid
 	.fc-scrollgrid-section-body:not(.fc-scrollgrid-section-liquid):has(
 		.fc-daygrid-body
@@ -757,7 +753,7 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 }
 
 .calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.fc-timegrid
 	.fc-scrollgrid-section-body:not(.fc-scrollgrid-section-liquid):has(
 		.fc-daygrid-body
@@ -772,14 +768,14 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 }
 
 .calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.fc-timegrid
 	.fc-scrollgrid-section-body:not(.fc-scrollgrid-section-liquid):has(
 		.fc-daygrid-body
 	)
 	.fc-daygrid-body,
 .calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.fc-timegrid
 	.fc-scrollgrid-section-body:not(.fc-scrollgrid-section-liquid):has(
 		.fc-daygrid-body
@@ -790,85 +786,85 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 }
 
 /* The all-day lane ends before the timed card; only the timed grid has lines. */
-.calendar-view .fc .fc-timegrid .fc-daygrid-day,
-.calendar-view .fc .fc-timegrid .fc-daygrid-body {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid .fc-daygrid-day,
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid .fc-daygrid-body {
 	border-width: 0;
 }
 
-.calendar-view .fc .fc-timegrid .fc-scrollgrid-section-liquid > td {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid .fc-scrollgrid-section-liquid > td {
 	border-top-width: 0;
 }
 
-.calendar-view .fc .fc-timegrid-divider {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid-divider {
 	height: 0;
 	padding: 0;
 	border-width: 0;
 	background: transparent;
 }
 
-.calendar-view .fc .fc-timeGridWeek-view .fc-timegrid-slot,
-.calendar-view .fc .fc-timeGridDay-view .fc-timegrid-slot {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timeGridWeek-view .fc-timegrid-slot,
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timeGridDay-view .fc-timegrid-slot {
 	height: 2rem;
 }
 
-.calendar-view .fc .fc-timegrid-slot-minor {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid-slot-minor {
 	border-top-width: 0;
 }
 
-.calendar-view .fc .fc-timegrid-axis-cushion,
-.calendar-view .fc .fc-timegrid-slot-label-cushion {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid-axis-cushion,
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid-slot-label-cushion {
 	color: var(--color-ink-extra-muted);
 	font-size: var(--text-xxs);
 }
 
-.calendar-view .fc .fc-timegrid-axis-cushion {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid-axis-cushion {
 	opacity: 0;
 }
 
-.calendar-view .fc .fc-timegrid-axis,
-.calendar-view .fc .fc-timegrid-slot-label {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid-axis,
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid-slot-label {
 	border-width: 0;
 }
 
-.calendar-view .fc .fc-timegrid-slot-label {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid-slot-label {
 	vertical-align: top;
 }
 
-.calendar-view .fc .fc-timegrid-slot-label-cushion {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid-slot-label-cushion {
 	padding-right: 0.5rem;
 	transform: translateY(-50%);
 }
 
-.calendar-view .fc.fc-direction-ltr .fc-timegrid-slot-lane,
-.calendar-view .fc.fc-direction-ltr .fc-timegrid-axis + .fc-timegrid-col {
+.calendar-view :is(.fc, .calendar-light-grid).fc-direction-ltr .fc-timegrid-slot-lane,
+.calendar-view :is(.fc, .calendar-light-grid).fc-direction-ltr .fc-timegrid-axis + .fc-timegrid-col {
 	border-left-width: 0;
 }
 
-.calendar-view .fc.fc-direction-rtl .fc-timegrid-slot-lane,
-.calendar-view .fc.fc-direction-rtl .fc-timegrid-axis + .fc-timegrid-col {
+.calendar-view :is(.fc, .calendar-light-grid).fc-direction-rtl .fc-timegrid-slot-lane,
+.calendar-view :is(.fc, .calendar-light-grid).fc-direction-rtl .fc-timegrid-axis + .fc-timegrid-col {
 	border-right-width: 0;
 }
 
 .calendar-embed
 	.calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.fc-timegrid-slot-label:not(.fc-timegrid-slot-minor) {
 	border-top: 1px solid var(--fc-border-color);
 }
 
-.calendar-embed .calendar-view .fc .fc-timegrid-slot-label-cushion {
+.calendar-embed .calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid-slot-label-cushion {
 	padding-top: 0.25rem;
 	transform: none;
 }
 
 /* The midnight label starts on the first line, rather than straddling the scroller edge. */
-.calendar-view .fc .fc-timegrid-slots tbody tr:first-child .fc-timegrid-slot-label-cushion {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid-slots tbody tr:first-child .fc-timegrid-slot-label-cushion {
 	transform: none;
 }
 
 .calendar-embed
 	.calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.fc-timegrid-slots
 	tbody
 	tr:first-child
@@ -878,7 +874,7 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 
 .calendar-embed
 	.calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.fc-timegrid-slots
 	tbody
 	tr:first-child
@@ -886,7 +882,7 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 	visibility: visible;
 }
 
-.calendar-view .fc .fc-timegrid-now-indicator-line {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid-now-indicator-line {
 	--calendar-now-arrow-bottom: 50%;
 	--calendar-now-arrow-top: 50%;
 	--calendar-now-axis-height: 0.75rem;
@@ -899,7 +895,7 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 	pointer-events: auto;
 }
 
-.calendar-view .fc .fc-timegrid-now-indicator-line:hover {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid-now-indicator-line:hover {
 	--calendar-now-arrow-bottom: 100%;
 	--calendar-now-arrow-top: 0%;
 	--calendar-now-axis-height: 1.375rem;
@@ -908,7 +904,7 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 	--calendar-now-expanded: 1;
 }
 
-.calendar-view .fc .fc-timegrid-now-indicator-line::before {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid-now-indicator-line::before {
 	position: absolute;
 	top: 0;
 	right: 0;
@@ -920,7 +916,7 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 	content: "";
 }
 
-.calendar-view .fc .fc-timegrid-now-indicator-line::after {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid-now-indicator-line::after {
 	position: absolute;
 	top: -0.25rem;
 	right: 0;
@@ -931,19 +927,19 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 }
 
 /* FullCalendar clips the indicator and its accent stroke at this container's edge. */
-.calendar-view .fc .fc-timegrid-col .fc-timegrid-now-indicator-container {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid-col .fc-timegrid-now-indicator-container {
 	overflow: visible;
 }
 
-.calendar-view .fc .fc-timegrid-now-indicator-arrow {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid-now-indicator-arrow {
 	display: none;
 }
 
-.calendar-view .fc .fc-timeGridWeek-view .fc-timegrid-axis {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timeGridWeek-view .fc-timegrid-axis {
 	width: 4.5rem;
 }
 
-.calendar-view .fc .calendar-now-axis-indicator {
+.calendar-view :is(.fc, .calendar-light-grid) .calendar-now-axis-indicator {
 	z-index: 7;
 	display: inline-flex;
 	width: var(--calendar-now-axis-width, 0.625rem);
@@ -968,7 +964,7 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 }
 
 .calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.fc-timegrid-now-indicator-line
 	> .calendar-now-axis-indicator {
 	position: absolute;
@@ -978,7 +974,7 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 }
 
 .calendar-view
-	.fc
+	:is(.fc, .calendar-light-grid)
 	.fc-timeGridDay-view
 	.fc-timegrid-now-indicator-line
 	> .calendar-now-axis-indicator {
@@ -986,7 +982,7 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 	left: 0;
 }
 
-.calendar-view .fc .calendar-now-time {
+.calendar-view :is(.fc, .calendar-light-grid) .calendar-now-time {
 	display: inline-flex;
 	height: 100%;
 	align-items: center;
@@ -1003,12 +999,12 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 		visibility 0s linear 300ms;
 }
 
-.calendar-view .fc .fc-timegrid-now-indicator-line:hover .calendar-now-time {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid-now-indicator-line:hover .calendar-now-time {
 	visibility: visible;
 	transition-delay: 0s;
 }
 
-.calendar-view .fc .fc-timegrid-col-frame[data-time-grid-hover]::after {
+.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid-col-frame[data-time-grid-hover]::after {
 	position: absolute;
 	top: var(--calendar-time-grid-hover-top);
 	right: 0;
@@ -1022,14 +1018,14 @@ html:not([data-touch-device="true"]) .calendar-view .fc .fc-more-popover:has(.ca
 /* The wide 24px face needs more than the narrow header's 24px date box.
    Keep both digits inside that box when a split reduces the calendar width. */
 @container calendar-view (max-width: 520px) {
-	.calendar-view .fc .fc-timegrid .calendar-day-header-date {
+	.calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid .calendar-day-header-date {
 		font-size: var(--text-base);
 		line-height: var(--text-base--line-height);
 	}
 }
 
 @container calendar-view (max-width: 700px) {
-	.calendar-view .fc .fc-daygrid-day-number {
+	.calendar-view :is(.fc, .calendar-light-grid) .fc-daygrid-day-number {
 		padding: 0.375rem;
 	}
 }

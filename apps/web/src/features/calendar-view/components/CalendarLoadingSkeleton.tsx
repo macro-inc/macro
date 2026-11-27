@@ -1,7 +1,7 @@
-import type { DatesSetArg } from '@fullcalendar/core';
 import { createEffect, createMemo, For, on, onCleanup, Show } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
+import type { CalendarPageDateInfo } from '../../calendar/core/page-range';
 import { createCalendarLoadingTransition } from '../../calendar/primitives/create-calendar-loading-transition';
 
 const SKELETON_VARIANT_COUNT = 3;
@@ -241,7 +241,7 @@ function EventSkeleton(props: { placement: SkeletonPlacement }) {
 
 export function CalendarLoadingSkeleton(props: {
   element: HTMLElement | undefined;
-  dateInfo: DatesSetArg | undefined;
+  dateInfo: CalendarPageDateInfo | undefined;
   loading: boolean;
   disabled: boolean;
   onBlockingChange?: (blocking: boolean) => void;

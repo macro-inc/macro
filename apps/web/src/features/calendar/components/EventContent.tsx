@@ -1,4 +1,3 @@
-import type { EventContentArg } from '@fullcalendar/core';
 import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
@@ -11,7 +10,11 @@ import {
 
 interface EventContentProps {
   event: CalendarEvent;
-  renderProps: EventContentArg;
+  renderProps: {
+    event: { allDay: boolean };
+    view: { type: string };
+    timeText: string;
+  };
   isSelected: boolean;
   timeFormat: CalendarTimeFormat;
   isNarrow?: boolean;
