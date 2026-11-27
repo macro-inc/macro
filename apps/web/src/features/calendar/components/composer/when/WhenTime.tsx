@@ -189,6 +189,13 @@ export function WhenTime(props: {
             class="menu-surface z-action-menu min-w-48 p-1 outline-none"
             onOpenAutoFocus={(event) => event.preventDefault()}
             onCloseAutoFocus={(event) => event.preventDefault()}
+            // Focusing the field opens its list, and that focus reaches the
+            // list as focus outside it: it must not close the list again.
+            onFocusOutside={(event) => {
+              const target = event.detail.originalEvent.target;
+              if (target instanceof Node && anchor?.contains(target))
+                event.preventDefault();
+            }}
             onEscapeKeyDown={(event) => {
               event.preventDefault();
               event.stopPropagation();
