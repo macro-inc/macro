@@ -597,6 +597,15 @@ attachment, delete-reply, and send controls have their own space.
 A channel or thread open in two desktop tabs keeps one unsent draft: text typed
 and files attached or removed in one tab show in the other, sending from either
 clears both, and after a reload the draft appears once.
+A reply's unsent draft (text or files) is stored by thread, and the reply comes
+back open with it whenever the channel opens again: after another
+conversation, another view, Back and Forward, or a reload. On desktop every
+thread with a reply draft opens its reply box, including one closed with Esc,
+which keeps the draft (the close-reply control discards it). On touch the
+composer comes back replying to the message it last replied to in that channel,
+if that reply still has a draft; closing the reply or sending forgets it, and a
+call's panel never restores one. Check it by starting a reply, opening another
+conversation and coming back.
 Shift+Enter adds a line to the draft; Enter sends. The composer spaces its
 paragraphs the way the sent message does, so a multi-line draft reads as what
 it will send. Check a multi-line message against the draft that wrote it: the
