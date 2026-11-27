@@ -4,9 +4,11 @@ import type { SplitId } from '../layoutManager';
 import { createMobileForwardAnimation } from './createMobileForwardAnimation';
 import type { MobilePaneStack } from './createMobilePaneStack';
 import {
-  BG_PEEK_OFFSET,
+  BACKGROUND_PARALLAX,
   createMobileSwipeBackGesture,
-  SWIPE_ANIMATION_MS,
+  MOVING_PANE_SHADOW,
+  PANE_TRANSITION_EASING,
+  PANE_TRANSITION_MS,
 } from './createMobileSwipeBackGesture';
 
 export { SWIPE_EDGE_THRESHOLD } from './createMobileEdgeSwipe';
@@ -18,8 +20,10 @@ export function createMobileSplitMotion(options: {
   const { stack } = options;
 
   const forwardAnimation = createMobileForwardAnimation({
-    animationMs: SWIPE_ANIMATION_MS,
-    bgPeekOffset: BG_PEEK_OFFSET,
+    animationMs: PANE_TRANSITION_MS,
+    easing: PANE_TRANSITION_EASING,
+    backgroundParallax: BACKGROUND_PARALLAX,
+    movingShadow: MOVING_PANE_SHADOW,
   });
   const swipeBackGesture = createMobileSwipeBackGesture({
     canGoBack: () =>

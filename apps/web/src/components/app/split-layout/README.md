@@ -74,6 +74,14 @@ Route swipes keep the current pane still
 until completion because there is no second pane to reveal. Clear the swipe
 transform before route Back, even when the route changes during a pane drag.
 
+Pane pushes, pops and swipes follow UIKit's motion (`createMobileSwipeBackGesture`):
+`PANE_TRANSITION_MS` on `PANE_TRANSITION_EASING`, the pane behind moving
+`BACKGROUND_PARALLAX` of the width, and an edge shadow on the moving pane. A
+released swipe plays only the share of the transition still ahead of it.
+`createMobileEdgeSwipe` decides a release by the finger's velocity over its last
+100ms: a flick right completes and a flick left cancels at any distance;
+otherwise the swipe completes past half the width. `CollectionPanes` shares both.
+
 ## Opt-in view restoration
 
 `SplitLayoutProvider` owns a memory-only, account-scoped view-state store.

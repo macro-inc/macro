@@ -6,11 +6,16 @@ type SplitTransformStyle = {
   transform: string;
   transition: string;
   'will-change': string;
+  'box-shadow': string;
 };
 
 type MobileForwardAnimationOptions = {
   animationMs: number;
-  bgPeekOffset: number;
+  easing: string;
+  /** How far the covered pane travels, as a fraction of its width. */
+  backgroundParallax: number;
+  /** Shadow on the incoming pane's edge while it slides. */
+  movingShadow: string;
 };
 
 /** Slides a pane that just landed in front over the one now behind it. */
@@ -82,32 +87,34 @@ export function createMobileForwardAnimation(
     complete();
   }
 
+  function transition() {
+    if (phase() !== 'animating') return 'none';
+    return `transform ${options.animationMs}ms ${options.easing}`;
+  }
+
   function incomingStyle(): SplitTransformStyle {
     return {
       transform: phase() === 'animating' ? 'translateX(0)' : 'translateX(100%)',
-      transition:
-        phase() === 'animating'
-          ? `transform ${options.animationMs}ms ease-out`
-          : 'none',
+      transition: transition(),
       'will-change': 'transform',
+      'box-shadow': phase() === 'idle' ? 'none' : options.movingShadow,
     };
   }
 
   function outgoingStyle(): SplitTransformStyle {
+    // A percentage translate is of the pane's own width, which is the stack's.
+    const offset = `${-options.backgroundParallax * 100}%`;
+
     return {
       transform:
-        phase() === 'animating'
-          ? `translateX(${-options.bgPeekOffset}px)`
-          : 'translateX(0)',
-      transition:
-        phase() === 'animating'
-          ? `transform ${options.animationMs}ms ease-out`
-          : 'none',
+        phase() === 'animating' ? `translateX(${offset})` : 'translateX(0)',
+      transition: transition(),
       'will-change': 'transform',
+      'box-shadow': 'none',
     };
   }
 
-  /** The front pane slides in; the pane behind it slides back to its peek offset. */
+  /** The front pane slides in; the pane behind it slides part of the way left. */
   function styleFor(isFront: boolean) {
     return isFront ? incomingStyle() : outgoingStyle();
   }
