@@ -53,20 +53,26 @@ fn request(record: &Record, agent: &MacroUserIdStr<'static>, limits: RequestLimi
     }
 }
 
+async fn add_member(pool: &PgPool, team: TeamId, member: &MacroUserIdStr<'_>) {
+    sqlx::query!(
+        "INSERT INTO team_user(user_id,team_id,team_role) VALUES($1,$2,'member')",
+        member.as_ref(),
+        team.0
+    )
+    .execute(pool)
+    .await
+    .expect("teammate");
+}
+
+mod signed_vault;
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn requests_dedupe_rate_limit_and_notify_only_current_reviewers(pool: PgPool) {
     let (repository, owner, record) = folder_fixture(pool.clone()).await;
     let team = record.metadata.team_id;
     let agent = account(&pool, "macro|agent@example.test", true).await;
     let teammate = account(&pool, "macro|teammate@example.test", false).await;
-    sqlx::query!(
-        "INSERT INTO team_user(user_id,team_id,team_role) VALUES($1,$2,'member')",
-        teammate.as_ref(),
-        team.0
-    )
-    .execute(&pool)
-    .await
-    .expect("teammate");
+    add_member(&pool, team, &teammate).await;
 
     let RequestOutcome::Created(created) = repository
         .request(request(&record, &agent, LIMITS))
