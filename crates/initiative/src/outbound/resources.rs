@@ -158,7 +158,7 @@ impl<P: PropertiesService, S: SystemPropertiesService, A: EntityAccessService> I
     fn project_tasks(&self, id: InitiativeId) -> ResourceFuture<'_, Vec<String>> {
         Box::pin(async move {
             self.system_properties
-                .project_task_ids(id.as_uuid(), None)
+                .live_project_task_ids(id.as_uuid())
                 .await
                 .map_err(|error| InitiativeError::Internal(rootcause::report!(error).into()))
         })

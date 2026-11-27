@@ -165,3 +165,94 @@ async fn reading_a_project_checks_its_tasks_together(pool: PgPool) -> anyhow::Re
     );
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn project_progress_excludes_trashed_tasks_and_includes_restored_tasks(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    use crate::domain::reads::InitiativePageRequest;
+    use entity_access::domain::models::OwnerAccessLevel;
+    use system_properties::{
+        PgSystemPropertiesRepository, StatusOption, SystemPropertiesService,
+        SystemPropertiesServiceImpl,
+    };
+
+    let (project, ids) = project_with_tasks(&pool, OWNER, 27).await?;
+    let properties =
+        SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(pool.clone()));
+    properties.attach_task_properties(ids.clone()).await?;
+    for id in &ids {
+        set_project(&pool, id, project).await?;
+    }
+    for id in &ids[..9] {
+        properties
+            .update_task_status(id, StatusOption::Completed)
+            .await?;
+    }
+    let harness = harness(&pool);
+    let mut surfaces = MockInitiativeDescriptionSurfaces::new();
+    surfaces
+        .expect_delete()
+        .return_once(|_| Box::pin(async { Ok(()) }));
+    let service =
+        InitiativeServiceImpl::new(repo(pool.clone()), surfaces, harness.resources.clone());
+    let receipt = harness
+        .access
+        .generate_entity_access_receipt::<ViewAccessLevel>(
+            &user(OWNER),
+            None,
+            &project.to_string(),
+            EntityType::Initiative,
+        )
+        .await?;
+
+    for (changed, trashed, total, completed) in [
+        (&ids[..0], false, 27, 9),
+        (&ids[11..], true, 11, 9),
+        (&ids[..1], true, 10, 8),
+        (&ids[..1], false, 11, 9),
+        (&ids[..], true, 0, 0),
+    ] {
+        sqlx::query!(
+            r#"UPDATE "Document" SET "deletedAt" = CASE WHEN $2 THEN now() ELSE NULL END
+               WHERE id = ANY($1)"#,
+            changed,
+            trashed,
+        )
+        .execute(&pool)
+        .await?;
+
+        let read = service.read(receipt.clone()).await?;
+        let summary = service.summarize(&read).await?;
+        assert_eq!(summary.task_count, total);
+        assert_eq!(summary.completed_task_count, completed);
+        assert_eq!(read.detail().task_ids.len(), total as usize);
+
+        let page = service
+            .page(&user(OWNER), InitiativePageRequest::default())
+            .await?;
+        assert_eq!(page.initiatives.len(), 1);
+        assert_eq!(page.initiatives[0].task_count, total);
+        assert_eq!(page.initiatives[0].completed_task_count, completed);
+    }
+
+    // Deleting the project still detaches its trashed tasks, so restoring one
+    // cannot bring back a reference to a project that no longer exists.
+    let owner = harness
+        .access
+        .generate_entity_access_receipt::<OwnerAccessLevel>(
+            &user(OWNER),
+            None,
+            &project.to_string(),
+            EntityType::Initiative,
+        )
+        .await?;
+    service.delete(owner).await?;
+    assert!(
+        properties
+            .project_task_ids(project.as_uuid(), None)
+            .await?
+            .is_empty()
+    );
+    Ok(())
+}

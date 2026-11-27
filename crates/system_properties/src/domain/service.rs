@@ -85,6 +85,14 @@ pub trait SystemPropertiesService: Clone + Send + Sync + 'static {
         limit: Option<u32>,
     ) -> impl Future<Output = Result<Vec<String>, SystemPropertyError>> + Send;
 
+    /// Existing, non-trashed tasks in a project, in id order. Callers still
+    /// authorize each task before showing it. Cleanup uses `project_task_ids`
+    /// so it can also detach trashed tasks.
+    fn live_project_task_ids(
+        &self,
+        project_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<String>, SystemPropertyError>> + Send;
+
     /// The project each listed task belongs to, from its Project property.
     /// Tasks without a project are absent. Callers authorize both ends before
     /// showing it.
@@ -190,6 +198,14 @@ where
         limit: Option<u32>,
     ) -> Result<Vec<String>, SystemPropertyError> {
         self.repository.project_task_ids(project_id, limit).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn live_project_task_ids(
+        &self,
+        project_id: Uuid,
+    ) -> Result<Vec<String>, SystemPropertyError> {
+        self.repository.live_project_task_ids(project_id).await
     }
 
     #[tracing::instrument(err, skip(self, task_ids))]
