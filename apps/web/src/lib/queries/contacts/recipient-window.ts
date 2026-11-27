@@ -8,6 +8,7 @@ import type {
   RecipientSourceInput,
 } from '@core/user/recipient-source';
 import type { IUser } from '@core/user/types';
+import { isCharacterSubsequence } from '@core/util/string';
 import { type Accessor, createMemo } from 'solid-js';
 import { readContactDirectory } from './directory';
 import { createContactDirectoryList } from './directory-list';
@@ -15,16 +16,6 @@ import type { createContactDirectoryWindow } from './directory-query';
 import { createContactExclusions } from './exclusions';
 
 const WHITE_SPACE = /\p{White_Space}+/u;
-
-const isSubsequence = (word: string, text: string) => {
-  let position = 0;
-  for (const character of word) {
-    const next = text.indexOf(character, position);
-    if (next < 0) return false;
-    position = next + character.length;
-  }
-  return true;
-};
 
 /** Whether a listed person can still match text typed since, as the contact
  * cache matches recipients (`cache-core` people ranking): every word of the
@@ -40,7 +31,7 @@ const stillMatches = (search: string) => {
       .join(' ')
       .toLowerCase();
     const text = `${label} | ${email.toLowerCase()}`;
-    return words.every((word) => isSubsequence(word, text));
+    return words.every((word) => isCharacterSubsequence(word, text));
   };
 };
 
