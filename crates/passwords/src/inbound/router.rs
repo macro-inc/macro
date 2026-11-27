@@ -100,6 +100,22 @@ pub fn router<A: MacroAuthorizationService, T: Send + Sync + 'static>(
         .layer(map_response(no_store))
         .with_state(state)
 }
+#[cfg(all(test, unix))]
+pub(crate) fn local_signed_item_router<A: MacroAuthorizationService>(
+    state: PasswordRouterState<A>,
+) -> Router {
+    Router::new()
+        .route("/teams/{team}/items", get(list::<A>).post(create::<A>))
+        .route(
+            "/teams/{team}/items/{item}",
+            get(detail::<A>).put(update::<A>).patch(patch::<A>),
+        )
+        .layer(DefaultBodyLimit::max(256 * 1024))
+        .layer(from_fn(csrf))
+        .layer(map_response(no_store))
+        .with_state(state)
+}
+
 /// Internal lifecycle routes accept only authenticated service identities.
 /// They deliberately remain outside the public Swagger and human CSRF routes.
 pub fn internal_router<A: MacroAuthorizationService, T: Send + Sync + 'static>(
