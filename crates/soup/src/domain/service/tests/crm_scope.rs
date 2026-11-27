@@ -1,6 +1,6 @@
-//! CRM-scoped email (`crm_domains`) through the Soup service: which email
-//! authorization failures leave the email source out of the page and which
-//! still fail the request.
+//! CRM-scoped email (`crm_domains` / `crm_addresses`) through the Soup
+//! service: which email authorization failures leave the email source out of
+//! the page and which still fail the request.
 use super::*;
 
 const USER: &str = "macro|test@example.com";
@@ -8,12 +8,12 @@ const TEAM: Uuid = Uuid::from_u128(0x7e);
 const DOCUMENT: Uuid = Uuid::from_u128(0xd0c);
 
 /// Builds the error a stubbed email service fails with.
-type MakeEmailErr = fn() -> EmailErr;
+pub(crate) type MakeEmailErr = fn() -> EmailErr;
 
 /// Fails every email preview request with the error `make` builds.
-struct FailingEmailPreviewService {
-    make: MakeEmailErr,
-    calls: Arc<Mutex<usize>>,
+pub(crate) struct FailingEmailPreviewService {
+    pub(crate) make: MakeEmailErr,
+    pub(crate) calls: Arc<Mutex<usize>>,
 }
 
 impl EmailPreviewServiceReadOnly for FailingEmailPreviewService {
@@ -28,7 +28,24 @@ impl EmailPreviewServiceReadOnly for FailingEmailPreviewService {
     }
 }
 
-async fn crm_domain_soup(make: MakeEmailErr) -> (Result<Vec<String>, SoupErr>, usize) {
+fn domain_scope() -> item_filters::EmailFilters {
+    item_filters::EmailFilters {
+        crm_domains: vec!["example.com".to_string()],
+        ..item_filters::EmailFilters::default()
+    }
+}
+
+fn address_scope() -> item_filters::EmailFilters {
+    item_filters::EmailFilters {
+        crm_addresses: vec!["contact@example.com".to_string()],
+        ..item_filters::EmailFilters::default()
+    }
+}
+
+async fn crm_scoped_soup(
+    email_filters: item_filters::EmailFilters,
+    make: MakeEmailErr,
+) -> (Result<Vec<String>, SoupErr>, usize) {
     let user = MacroUserIdStr::parse_from_str(USER).unwrap();
     let mut soup_mock = MockSoupRepo::new();
     soup_mock
@@ -72,10 +89,7 @@ async fn crm_domain_soup(make: MakeEmailErr) -> (Result<Vec<String>, SoupErr>, u
             cursor: SoupQuery::new_sort_simple(
                 SimpleSortMethod::UpdatedAt,
                 EntityFilters {
-                    email_filters: item_filters::EmailFilters {
-                        crm_domains: vec!["example.com".to_string()],
-                        ..item_filters::EmailFilters::default()
-                    },
+                    email_filters,
                     ..EntityFilters::default()
                 },
             ),
@@ -96,58 +110,80 @@ async fn crm_domain_soup(make: MakeEmailErr) -> (Result<Vec<String>, SoupErr>, u
     (result, calls)
 }
 
-#[tokio::test]
-async fn unknown_crm_domain_omits_email_threads() {
-    let (result, calls) =
-        crm_domain_soup(|| EmailErr::CrmDomainNotFound("example.com".to_string())).await;
+async fn assert_omits_email_threads(
+    email_filters: item_filters::EmailFilters,
+    make: MakeEmailErr,
+    name: &str,
+) {
+    let (result, calls) = crm_scoped_soup(email_filters, make).await;
 
-    let ids = result.expect("an unknown CRM domain is not a server error");
-    assert_eq!(calls, 1);
+    let ids = result.unwrap_or_else(|err| panic!("{name} is not a server error, got {err:?}"));
+    assert_eq!(calls, 1, "{name}");
     assert_eq!(
         ids,
         vec![DOCUMENT.to_string()],
-        "other sources keep their items"
+        "{name}: other sources keep their items"
     );
+}
+
+#[tokio::test]
+async fn unknown_crm_domain_omits_email_threads() {
+    assert_omits_email_threads(
+        domain_scope(),
+        || EmailErr::CrmDomainNotFound("example.com".to_string()),
+        "CrmDomainNotFound",
+    )
+    .await;
 }
 
 #[tokio::test]
 async fn not_permitted_crm_domain_omits_email_threads() {
-    let (result, calls) =
-        crm_domain_soup(|| EmailErr::CrmDomainNotPermitted("example.com".to_string())).await;
+    assert_omits_email_threads(
+        domain_scope(),
+        || EmailErr::CrmDomainNotPermitted("example.com".to_string()),
+        "CrmDomainNotPermitted",
+    )
+    .await;
+}
 
-    let ids = result.expect("an archived company's domain is not a server error");
-    assert_eq!(calls, 1);
-    assert_eq!(
-        ids,
-        vec![DOCUMENT.to_string()],
-        "other sources keep their items"
-    );
+#[tokio::test]
+async fn unknown_crm_address_omits_email_threads() {
+    assert_omits_email_threads(
+        address_scope(),
+        || EmailErr::CrmAddressNotFound("contact@example.com".to_string()),
+        "CrmAddressNotFound",
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn not_permitted_crm_address_omits_email_threads() {
+    assert_omits_email_threads(
+        address_scope(),
+        || EmailErr::CrmAddressNotPermitted("contact@example.com".to_string()),
+        "CrmAddressNotPermitted",
+    )
+    .await;
 }
 
 #[tokio::test]
 async fn other_email_errors_still_fail_the_request() {
-    let cases: [(MakeEmailErr, &str); 5] = [
+    let cases: [(MakeEmailErr, &str); 3] = [
         (|| EmailErr::CrmDisabledForTeam, "CrmDisabledForTeam"),
         (|| EmailErr::Unauthorized, "Unauthorized"),
-        (
-            || EmailErr::CrmAddressNotFound("contact@example.com".to_string()),
-            "CrmAddressNotFound",
-        ),
-        (
-            || EmailErr::CrmAddressNotPermitted("contact@example.com".to_string()),
-            "CrmAddressNotPermitted",
-        ),
         (
             || EmailErr::RepoErr(anyhow::anyhow!("database unavailable")),
             "RepoErr",
         ),
     ];
-    for (make, name) in cases {
-        let (result, _) = crm_domain_soup(make).await;
-        let err = result.expect_err(name);
-        assert!(
-            matches!(err, SoupErr::EmailErr(_)),
-            "{name} should stay an email error, got {err:?}"
-        );
+    for scope in [domain_scope(), address_scope()] {
+        for (make, name) in cases {
+            let (result, _) = crm_scoped_soup(scope.clone(), make).await;
+            let err = result.expect_err(name);
+            assert!(
+                matches!(err, SoupErr::EmailErr(_)),
+                "{name} should stay an email error, got {err:?}"
+            );
+        }
     }
 }
