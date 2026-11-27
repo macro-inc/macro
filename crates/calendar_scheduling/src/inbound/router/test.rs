@@ -12,6 +12,29 @@ use std::sync::atomic::{AtomicBool, Ordering};
 /// start from an empty `public` schema.
 const EMPTY_PUBLIC_SCHEMA: &str = "DROP SCHEMA public CASCADE; CREATE SCHEMA public;";
 
+mod hang_up;
+
+/// The scheduling tables, and the host user and team tables they reference.
+async fn scheduling_schema(pool: &sqlx::PgPool) {
+    sqlx::raw_sql(EMPTY_PUBLIC_SCHEMA)
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::raw_sql("CREATE TABLE \"User\" (id text PRIMARY KEY); CREATE TABLE team (id uuid PRIMARY KEY); INSERT INTO \"User\" VALUES ('macro|host@example.test');").execute(pool).await.unwrap();
+    sqlx::raw_sql(include_str!(
+        "../../../../macro_db_client/migrations/20260918164303_calendar_scheduling.sql"
+    ))
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::raw_sql(include_str!(
+        "../../../../macro_db_client/migrations/20260918175703_scheduling_recovery.sql"
+    ))
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
 #[derive(Clone)]
 struct Identity;
 impl MacroAuthorizationService for Identity {
@@ -99,23 +122,7 @@ impl BookingAccounts for Calendar {
 
 #[sqlx::test(migrations = false)]
 async fn http_booking_receipt_recovery_reschedule_cancel_and_team_auth(pool: sqlx::PgPool) {
-    sqlx::raw_sql(EMPTY_PUBLIC_SCHEMA)
-        .execute(&pool)
-        .await
-        .unwrap();
-    sqlx::raw_sql("CREATE TABLE \"User\" (id text PRIMARY KEY); CREATE TABLE team (id uuid PRIMARY KEY); INSERT INTO \"User\" VALUES ('macro|host@example.test');").execute(&pool).await.unwrap();
-    sqlx::raw_sql(include_str!(
-        "../../../../macro_db_client/migrations/20260918164303_calendar_scheduling.sql"
-    ))
-    .execute(&pool)
-    .await
-    .unwrap();
-    sqlx::raw_sql(include_str!(
-        "../../../../macro_db_client/migrations/20260918175703_scheduling_recovery.sql"
-    ))
-    .execute(&pool)
-    .await
-    .unwrap();
+    scheduling_schema(&pool).await;
     let service = Arc::new(Service::new(
         PostgresRepository::new(pool.clone()),
         Calendar(AtomicBool::new(true)),
@@ -309,23 +316,7 @@ async fn http_booking_receipt_recovery_reschedule_cancel_and_team_auth(pool: sql
 
 #[sqlx::test(migrations = false)]
 async fn http_booking_links_require_confirmation_and_revision(pool: sqlx::PgPool) {
-    sqlx::raw_sql(EMPTY_PUBLIC_SCHEMA)
-        .execute(&pool)
-        .await
-        .unwrap();
-    sqlx::raw_sql("CREATE TABLE \"User\" (id text PRIMARY KEY); CREATE TABLE team (id uuid PRIMARY KEY); INSERT INTO \"User\" VALUES ('macro|host@example.test');").execute(&pool).await.unwrap();
-    sqlx::raw_sql(include_str!(
-        "../../../../macro_db_client/migrations/20260918164303_calendar_scheduling.sql"
-    ))
-    .execute(&pool)
-    .await
-    .unwrap();
-    sqlx::raw_sql(include_str!(
-        "../../../../macro_db_client/migrations/20260918175703_scheduling_recovery.sql"
-    ))
-    .execute(&pool)
-    .await
-    .unwrap();
+    scheduling_schema(&pool).await;
     let app: Router = router(RouterState::new(
         Arc::new(Service::new(
             PostgresRepository::new(pool.clone()),

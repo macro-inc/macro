@@ -474,15 +474,8 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         event_id: Uuid,
         request: BookingRequest,
     ) -> Result<BookingRecord, Error> {
-        if let Some(existing) = self.repository.booking_request(request.request_id).await? {
-            if existing.profile_id == profile_id
-                && existing.booking.event_type_id == event_id
-                && existing.booking.email == request.email.trim().to_lowercase()
-                && existing.booking.starts_at == request.starts_at
-            {
-                return Ok(existing);
-            }
-            return Err(Error::Conflict);
+        if let Some(existing) = self.requested(profile_id, event_id, &request).await? {
+            return Ok(existing);
         }
         let owner = self
             .repository
@@ -543,12 +536,19 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
             .starts_at
             .with_timezone(&schedule.time_zone)
             .date_naive();
-        let mut slot = self
+        let Some(mut slot) = self
             .slots_for_owner(&owner, event_id, date)
             .await?
             .into_iter()
             .find(|s| s.starts_at == request.starts_at)
-            .ok_or(Error::Conflict)?;
+        else {
+            // A resend can miss its own first attempt above and then find the
+            // time taken by it.
+            return self
+                .requested(profile_id, event_id, &request)
+                .await?
+                .ok_or(Error::Conflict);
+        };
         if event.mode == SchedulingMode::RoundRobin {
             let counts = self
                 .repository
@@ -638,6 +638,26 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         span.record("booking_id", tracing::field::display(booked.booking.id));
         span.record("status", tracing::field::debug(booked.booking.status));
         Ok(booked)
+    }
+    /// The booking an earlier send of this request made, if any; another
+    /// booking under the same request id conflicts.
+    async fn requested(
+        &self,
+        profile_id: Uuid,
+        event_id: Uuid,
+        request: &BookingRequest,
+    ) -> Result<Option<BookingRecord>, Error> {
+        let Some(existing) = self.repository.booking_request(request.request_id).await? else {
+            return Ok(None);
+        };
+        if existing.profile_id == profile_id
+            && existing.booking.event_type_id == event_id
+            && existing.booking.email == request.email.trim().to_lowercase()
+            && existing.booking.starts_at == request.starts_at
+        {
+            return Ok(Some(existing));
+        }
+        Err(Error::Conflict)
     }
     /// Read bookings for a profile, with authorization and a bounded range.
     pub async fn bookings(&self, user: &str, team: Option<Uuid>) -> Result<Vec<Booking>, Error> {

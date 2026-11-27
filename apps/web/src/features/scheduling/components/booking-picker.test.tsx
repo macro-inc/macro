@@ -275,7 +275,7 @@ describe('BookingPicker', () => {
     ).toBeTruthy();
   });
 
-  it('retries the same request after an uncertain response', async () => {
+  it('finishes a booking whose answer was lost by resending the same request', async () => {
     const user = userEvent.setup();
     const source: BookingSource = {
       slots: vi.fn().mockResolvedValue([nineAm]),
@@ -297,12 +297,15 @@ describe('BookingPicker', () => {
     await fillDetails(user);
     await user.click(screen.getByRole('button', { name: 'Confirm booking' }));
 
-    const check = await screen.findByRole('button', {
-      name: 'Check booking status',
-    });
-    expect(screen.getByRole('alert').textContent).toContain(
-      'do not make another booking'
-    );
+    expect(await screen.findByText('Finishing your booking')).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(
+      (
+        screen.getByRole('button', {
+          name: 'Finishing booking…',
+        }) as HTMLButtonElement
+      ).disabled
+    ).toBe(true);
     expect(
       (
         screen.getByRole('button', {
@@ -310,11 +313,13 @@ describe('BookingPicker', () => {
         }) as HTMLButtonElement
       ).disabled
     ).toBe(true);
-    await user.click(check);
 
-    await waitFor(() => expect(onReceipt).toHaveBeenCalledWith(receipt));
+    await waitFor(() => expect(onReceipt).toHaveBeenCalledWith(receipt), {
+      timeout: 3000,
+    });
     const [first, second] = vi.mocked(source.book).mock.calls;
     expect(second).toEqual(first);
+    expect(screen.queryByText('Finishing your booking')).toBeNull();
   });
 
   it('starts over when the event changes, booking only the event on screen', async () => {
@@ -362,7 +367,7 @@ describe('BookingPicker', () => {
     );
   });
 
-  it('keeps an uncertain booking on its own event until it is resolved', async () => {
+  it('keeps a finishing booking on its own event until it is resolved', async () => {
     const user = userEvent.setup();
     const source: BookingSource = {
       slots: vi.fn().mockResolvedValue([nineAm]),
@@ -384,16 +389,15 @@ describe('BookingPicker', () => {
     await chooseNineAm(user);
     await fillDetails(user);
     await user.click(screen.getByRole('button', { name: 'Confirm booking' }));
-    await screen.findByRole('button', { name: 'Check booking status' });
+    await screen.findByText('Finishing your booking');
 
     setEvent(review);
     expect(screen.getByText('Intro call')).toBeTruthy();
     expect(screen.queryByText('Design review')).toBeNull();
-    await user.click(
-      screen.getByRole('button', { name: 'Check booking status' })
-    );
 
-    await waitFor(() => expect(onReceipt).toHaveBeenCalledWith(receipt));
+    await waitFor(() => expect(onReceipt).toHaveBeenCalledWith(receipt), {
+      timeout: 3000,
+    });
     const [first, second] = vi.mocked(source.book).mock.calls;
     expect(second).toEqual(first);
     expect(second?.[1]).toBe('event-intro');

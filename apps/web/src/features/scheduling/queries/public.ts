@@ -65,6 +65,19 @@ function slotsQueryOptions(
   });
 }
 
+/**
+ * A processing booking is finishing its calendar write and settles in
+ * seconds; a failed one waits on recovery's backoff.
+ */
+function receiptRefetchInterval(query: {
+  state: { data?: BookingReceipt };
+}): number | false {
+  const booking = query.state.data?.booking;
+  if (booking?.status === 'processing') return 2000;
+  if (booking?.status === 'failed' && !booking.abandonedAt) return 5000;
+  return false;
+}
+
 function receiptQueryOptions(id: string, token: string) {
   return queryOptions({
     queryKey: schedulingKeys.receipt(id, token).queryKey,
@@ -74,12 +87,7 @@ function receiptQueryOptions(id: string, token: string) {
       ),
     retry: false,
     gcTime: 0,
-    refetchInterval: (q) =>
-      q.state.data?.booking.status === 'processing' ||
-      (q.state.data?.booking.status === 'failed' &&
-        !q.state.data.booking.abandonedAt)
-        ? 5000
-        : false,
+    refetchInterval: receiptRefetchInterval,
   });
 }
 

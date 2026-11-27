@@ -19,6 +19,7 @@ use macro_authorization::{
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use tracing::Instrument;
 use uuid::Uuid;
 
 /// Scheduling service and authentication state.
@@ -321,11 +322,9 @@ async fn approve<R: Repository, C: Calendars, D: Directory, A: MacroAuthorizatio
     user: MacroAuthorizationExtractor<A, UserOrInternal>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<BookingResponse>, ApiError> {
+    let user = user.authorization.user.macro_user_id.as_ref().to_owned();
     Ok(Json(BookingResponse {
-        booking: s
-            .service
-            .approve(user.authorization.user.macro_user_id.as_ref(), id)
-            .await?,
+        booking: to_completion(async move { s.service.approve(&user, id).await }).await?,
     }))
 }
 async fn cancel<R: Repository, C: Calendars, D: Directory, A: MacroAuthorizationService>(
@@ -333,14 +332,9 @@ async fn cancel<R: Repository, C: Calendars, D: Directory, A: MacroAuthorization
     user: MacroAuthorizationExtractor<A, UserOrInternal>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<BookingResponse>, ApiError> {
+    let user = user.authorization.user.macro_user_id.as_ref().to_owned();
     Ok(Json(BookingResponse {
-        booking: s
-            .service
-            .cancel(
-                id,
-                None,
-                Some(user.authorization.user.macro_user_id.as_ref()),
-            )
+        booking: to_completion(async move { s.service.cancel(id, None, Some(&user)).await })
             .await?,
     }))
 }
@@ -374,7 +368,7 @@ async fn book<R: Repository, C: Calendars, D: Directory, A: MacroAuthorizationSe
     Path((profile, event)): Path<(Uuid, Uuid)>,
     Json(request): Json<BookingRequest>,
 ) -> Result<Json<ReceiptResponse>, ApiError> {
-    let r = s.service.book(profile, event, request).await?;
+    let r = to_completion(async move { s.service.book(profile, event, request).await }).await?;
     Ok(Json(ReceiptResponse {
         booking: for_booker(r.booking),
         token: r.token,
@@ -398,8 +392,10 @@ async fn cancel_public<R: Repository, C: Calendars, D: Directory, A: MacroAuthor
     Path(id): Path<Uuid>,
     Json(q): Json<Token>,
 ) -> Result<Json<BookingResponse>, ApiError> {
+    let booking =
+        to_completion(async move { s.service.cancel(id, Some(q.token), None).await }).await?;
     Ok(Json(BookingResponse {
-        booking: for_booker(s.service.cancel(id, Some(q.token), None).await?),
+        booking: for_booker(booking),
     }))
 }
 
@@ -436,7 +432,8 @@ async fn reschedule<R: Repository, C: Calendars, D: Directory, A: MacroAuthoriza
     Path(id): Path<Uuid>,
     Json(q): Json<RescheduleRequest>,
 ) -> Result<Json<ReceiptResponse>, ApiError> {
-    let r = s.service.reschedule(id, q.token, q.starts_at).await?;
+    let r =
+        to_completion(async move { s.service.reschedule(id, q.token, q.starts_at).await }).await?;
     Ok(Json(ReceiptResponse {
         booking: for_booker(r.booking),
         token: r.token,
@@ -488,10 +485,9 @@ pub async fn change<R: Repository, C: Calendars, D: Directory, A: MacroAuthoriza
     Path(id): Path<Uuid>,
     Json(change): Json<BookingChange>,
 ) -> Result<Json<BookingResponse>, ApiError> {
+    let user = user.authorization.user.macro_user_id.as_ref().to_owned();
     Ok(Json(BookingResponse {
-        booking: s
-            .service
-            .change_booking(user.authorization.user.macro_user_id.as_ref(), id, change)
+        booking: to_completion(async move { s.service.change_booking(&user, id, change).await })
             .await?,
     }))
 }
@@ -599,6 +595,26 @@ fn require_confirmation(confirmation: &str) -> Result<(), ApiError> {
         )));
     }
     Ok(())
+}
+
+/// Run a booking change on its own task and wait for it. A change reserves
+/// the time or records its intent, then writes the host's calendar; if the
+/// caller hangs up between the two (a dropped connection, a closed tab), the
+/// server would drop the request and leave the booking processing until
+/// recovery picks it up minutes later. On its own task the change finishes
+/// and is saved whatever happens to the request, so a retry of the same
+/// request, or the receipt, finds it done.
+async fn to_completion<T: Send + 'static>(
+    change: impl Future<Output = Result<T, Error>> + Send + 'static,
+) -> Result<T, ApiError> {
+    let task = agent_correlation::context::capture(change).in_current_span();
+    match tokio::spawn(task).await {
+        Ok(result) => Ok(result?),
+        Err(error) => {
+            tracing::error!(error = ?error, "scheduling booking change task did not finish");
+            Err(ApiError(Error::Unavailable))
+        }
+    }
 }
 
 fn booking_token(headers: &HeaderMap) -> Result<Uuid, ApiError> {

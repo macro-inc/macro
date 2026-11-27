@@ -1,4 +1,5 @@
-import { createSignal } from 'solid-js';
+import { sleep } from '@core/util/sleep';
+import { createSignal, onCleanup } from 'solid-js';
 import { BookingRejectedError } from '../core/booking-error';
 import type { BookingReceipt, BookingRequest } from '../core/types';
 
@@ -16,14 +17,40 @@ export type BookingSource = {
   ) => Promise<BookingReceipt>;
 };
 
+type PendingBooking = { eventId: string; request: BookingRequest };
+
+/**
+ * How a booking sent without a definite answer is being finished: resent
+ * automatically, resent for long enough to say so, or out of automatic
+ * resends and waiting for the visitor to try again.
+ */
+export type FinishState = 'resending' | 'slow' | 'paused';
+
+/**
+ * Waits before each automatic resend. Every resend that reaches the server
+ * before a booking exists spends the link's shared public booking budget, so
+ * the resends stop after these and wait for the visitor.
+ */
+const RESEND_DELAYS_MS = [1000, 2000, 4000, 8000, 15000, 15000];
+/** Unanswered resends before the visitor is told it is taking longer. */
+const SLOW_AFTER_RESENDS = 4;
+
 export function createBookingFlow(source: BookingSource, profileId: string) {
   const [slots, setSlots] = createSignal<
     { startsAt: string; endsAt: string }[]
   >([]);
   const [loading, setLoading] = createSignal(false);
   const [submitting, setSubmitting] = createSignal(false);
-  const [uncertain, setUncertain] = createSignal(false);
-  let attempted: { eventId: string; request: BookingRequest } | undefined;
+  // A booking sent without a definite answer (the connection dropped, or the
+  // server failed) may already be reserved, so only that same request is sent
+  // again until the server answers it.
+  const [finishState, setFinishState] = createSignal<FinishState>();
+  const finishing = () => finishState() !== undefined;
+  let pending: PendingBooking | undefined;
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
   const [error, setError] = createSignal('');
   const [selected, setSelected] = createSignal<string>();
   const [receipt, setReceipt] = createSignal<BookingReceipt>();
@@ -34,7 +61,7 @@ export function createBookingFlow(source: BookingSource, profileId: string) {
     date: string,
     timeZone: string
   ) => {
-    if (submitting() || uncertain()) return;
+    if (submitting() || finishing()) return;
     const current = ++generation;
     setSelected(undefined);
     setSlots([]);
@@ -53,40 +80,60 @@ export function createBookingFlow(source: BookingSource, profileId: string) {
       if (current === generation) setLoading(false);
     }
   };
+  /**
+   * Send the held request once. `settled` when the answer is final, `held`
+   * when an automatic resend was refused: an earlier send of the request may
+   * still be reserving, so only the visitor's own Try again settles a refusal.
+   * `unanswered` otherwise.
+   */
+  const send = async (
+    held: PendingBooking,
+    automatic: boolean
+  ): Promise<'settled' | 'held' | 'unanswered'> => {
+    try {
+      const answer = await source.book(profileId, held.eventId, held.request);
+      // A page already closed takes no visitor anywhere; the booking stands.
+      if (!disposed) setReceipt(answer);
+    } catch (error) {
+      if (!(error instanceof BookingRejectedError)) return 'unanswered';
+      if (automatic) return 'held';
+      setError(error.message);
+    }
+    pending = undefined;
+    setFinishState(undefined);
+    return 'settled';
+  };
+  const finish = async (held: PendingBooking) => {
+    setFinishState('resending');
+    for (const [resend, delay] of RESEND_DELAYS_MS.entries()) {
+      await sleep(delay);
+      if (disposed) return;
+      const answer = await send(held, true);
+      if (answer === 'settled') return;
+      if (answer === 'held') break;
+      if (resend + 1 >= SLOW_AFTER_RESENDS) setFinishState('slow');
+    }
+    setFinishState('paused');
+  };
   const submit = async (
     eventId: string,
     details: Omit<BookingRequest, 'startsAt' | 'requestId'>
   ) => {
     const startsAt = selected();
     if (!startsAt || submitting()) return;
+    if (finishing() && finishState() !== 'paused') return;
+    pending ??= { eventId, request: { ...details, startsAt, requestId } };
+    const held = pending;
+    if (finishing()) setFinishState('resending');
     setSubmitting(true);
     setError('');
-    try {
-      attempted ??= { eventId, request: { ...details, startsAt, requestId } };
-      setReceipt(
-        await source.book(profileId, attempted.eventId, attempted.request)
-      );
-      setUncertain(false);
-      attempted = undefined;
-    } catch (error) {
-      if (error instanceof BookingRejectedError) {
-        attempted = undefined;
-        setUncertain(false);
-        setError(error.message);
-      } else {
-        setUncertain(true);
-        setError(
-          'We could not verify the response. Your time may already be reserved. Retry this same request to check it; do not make another booking.'
-        );
-      }
-    } finally {
-      setSubmitting(false);
-    }
+    const answer = await send(held, false);
+    setSubmitting(false);
+    if (answer === 'unanswered') await finish(held);
   };
   return {
     reset: () => {
-      if (submitting() || uncertain()) return;
-      attempted = undefined;
+      if (submitting() || finishing()) return;
       generation++;
       setSlots([]);
       setSelected(undefined);
@@ -98,19 +145,20 @@ export function createBookingFlow(source: BookingSource, profileId: string) {
     slots,
     loading,
     submitting,
-    uncertain,
+    finishing,
+    finishState,
     error,
     selected,
     receipt,
     chooseDate,
     submit,
     select: (start: string) => {
-      if (submitting() || uncertain()) return;
+      if (submitting() || finishing()) return;
       setSelected(start);
       requestId = crypto.randomUUID();
     },
     back: () => {
-      if (!submitting() && !uncertain()) setSelected(undefined);
+      if (!submitting() && !finishing()) setSelected(undefined);
     },
   };
 }

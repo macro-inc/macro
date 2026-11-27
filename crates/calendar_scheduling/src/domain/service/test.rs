@@ -9,6 +9,9 @@ use std::{
 #[derive(Default)]
 struct Memory {
     fail_completion: AtomicBool,
+    /// Request lookups that miss, as a resend's does when it reads before its
+    /// first attempt has reserved.
+    missed_request_lookups: AtomicUsize,
     reserve_barrier: Option<tokio::sync::Barrier>,
     reserve_calls: AtomicUsize,
     profiles: Mutex<HashMap<Uuid, OwnedProfile>>,
@@ -182,6 +185,13 @@ impl Repository for Arc<Memory> {
         Ok(self.bookings.lock().unwrap().get(&id).cloned())
     }
     async fn booking_request(&self, id: Uuid) -> Result<Option<BookingRecord>, Error> {
+        if self
+            .missed_request_lookups
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1))
+            .is_ok()
+        {
+            return Ok(None);
+        }
         Ok(self
             .bookings
             .lock()
@@ -464,6 +474,39 @@ async fn booking_retry_is_idempotent_and_another_request_conflicts() {
             .await
             .is_ok()
     );
+}
+#[tokio::test]
+async fn a_resend_that_finds_its_time_taken_by_its_first_attempt_gets_that_booking() {
+    let cal = Arc::new(Calendar::default());
+    let repo = Arc::new(Memory::default());
+    let service = TestService::new(repo.clone(), cal.clone(), Members);
+    let p = service.save("admin", None, profile(None)).await.unwrap();
+    let r = request();
+    let first = service
+        .book(p.id, p.event_types[0].id, r.clone())
+        .await
+        .unwrap();
+    repo.missed_request_lookups.store(1, Ordering::SeqCst);
+    let resent = service
+        .book(p.id, p.event_types[0].id, r.clone())
+        .await
+        .unwrap();
+    assert_eq!(resent.booking.id, first.booking.id);
+    assert_eq!(cal.creates.load(Ordering::SeqCst), 1);
+    repo.missed_request_lookups.store(1, Ordering::SeqCst);
+    assert!(matches!(
+        service
+            .book(
+                p.id,
+                p.event_types[0].id,
+                BookingRequest {
+                    email: "another@example.com".into(),
+                    ..r
+                }
+            )
+            .await,
+        Err(Error::Conflict)
+    ));
 }
 #[tokio::test]
 async fn concurrent_round_robin_bookings_use_distinct_hosts_and_calendars() {

@@ -1,5 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import { Button } from '@ui';
+import { Button, Spinner } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -8,6 +8,7 @@ import {
   on,
   Show,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import {
   type BookingReceipt,
   meetingPlaceLabel,
@@ -17,8 +18,33 @@ import {
 import {
   type BookingSource,
   createBookingFlow,
+  type FinishState,
 } from '../primitives/booking-flow';
 import { Field, TextArea, TextInput, TimeZoneInput } from './fields';
+
+function finishTitle(state: FinishState) {
+  return match(state)
+    .with('resending', () => 'Finishing your booking')
+    .with('slow', () => 'Still finishing your booking')
+    .with('paused', () => 'We couldn’t finish your booking yet')
+    .exhaustive();
+}
+
+function finishHint(state: FinishState) {
+  return match(state)
+    .with('resending', () => 'This takes a moment. Keep this page open.')
+    .with(
+      'slow',
+      () =>
+        'This is taking longer than usual. Keep this page open and check your connection.'
+    )
+    .with(
+      'paused',
+      () =>
+        'Your time may already be held. Check your connection, then try again. Trying again never books twice.'
+    )
+    .exhaustive();
+}
 
 function dateKey(date: Date) {
   return date.toISOString().slice(0, 10);
@@ -37,13 +63,13 @@ export function BookingPicker(props: {
   preview?: boolean;
 }) {
   const flow = createBookingFlow(props.source, props.profile.id);
-  // An in-flight or uncertain request stays on its own event until resolved,
+  // An in-flight or finishing request stays on its own event until resolved,
   // so a retry never books an event other than the one on screen.
   const [held, setHeld] = createSignal<PublicEvent>();
   const event = () => held() ?? props.event;
   // Memoized so a refetched copy of the same event keeps the selection.
   const eventId = createMemo(() => event().id);
-  const locked = () => flow.submitting() || flow.uncertain();
+  const locked = () => flow.submitting() || flow.finishing();
   const [date, setDate] = createSignal('');
   const [zone, setZone] = createSignal(
     Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -110,7 +136,7 @@ export function BookingPicker(props: {
     });
     const receipt = flow.receipt();
     if (receipt) props.onReceipt(receipt);
-    if (!flow.uncertain()) setHeld(undefined);
+    if (!flow.finishing()) setHeld(undefined);
   };
   return (
     <section class="@container overflow-hidden rounded-2xl border border-edge-muted bg-surface-1 text-ink">
@@ -197,6 +223,22 @@ export function BookingPicker(props: {
                 {flow.error()}
               </p>
             </Show>
+            <Show when={flow.finishState()}>
+              {(state) => (
+                <div
+                  role="status"
+                  class="mb-5 flex items-start gap-3 rounded-lg bg-surface-0 p-3 text-sm"
+                >
+                  <Show when={state() !== 'paused'}>
+                    <Spinner decorative size="sm" class="mt-0.5" />
+                  </Show>
+                  <div>
+                    <p class="font-medium">{finishTitle(state())}</p>
+                    <p class="mt-1 text-ink-muted">{finishHint(state())}</p>
+                  </div>
+                </div>
+              )}
+            </Show>
             <Show
               when={!flow.selected()}
               fallback={
@@ -258,17 +300,22 @@ export function BookingPicker(props: {
                   <Button
                     type="submit"
                     variant="primary"
-                    disabled={flow.submitting() || props.preview}
+                    disabled={
+                      (locked() && flow.finishState() !== 'paused') ||
+                      props.preview
+                    }
                   >
                     {props.preview
                       ? 'Booking is off in preview'
-                      : flow.submitting()
-                        ? 'Booking…'
-                        : flow.uncertain()
-                          ? 'Check booking status'
-                          : event().requiresConfirmation
-                            ? 'Request booking'
-                            : 'Confirm booking'}
+                      : flow.finishState() === 'paused'
+                        ? 'Try again'
+                        : flow.finishing()
+                          ? 'Finishing booking…'
+                          : flow.submitting()
+                            ? 'Booking…'
+                            : event().requiresConfirmation
+                              ? 'Request booking'
+                              : 'Confirm booking'}
                   </Button>
                   <p class="text-xs leading-relaxed text-ink-muted">
                     Your details are shared with the meeting hosts.
