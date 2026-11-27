@@ -1,9 +1,9 @@
 import { useLocation, useNavigate } from '@solidjs/router';
 import {
-  createEffect,
   createSignal,
   For,
   lazy,
+  onCleanup,
   onMount,
   Show,
   Suspense,
@@ -57,6 +57,7 @@ export default function Creator() {
   const [pose, setPose] = createSignal(0);
   let dialog: HTMLDialogElement | undefined;
   let hireButton: HTMLButtonElement | undefined;
+  let hireStrip: HTMLDivElement | undefined;
   let drag: { id: number; start: number } | undefined;
 
   const name = () => draftName(draft());
@@ -69,6 +70,24 @@ export default function Creator() {
     'Right',
   ];
   const angleLabel = () => angleLabels[pose() + 2];
+
+  onMount(() => {
+    const strip = hireStrip;
+    if (!strip) return;
+
+    const root = document.documentElement;
+    const resize = new ResizeObserver(() => {
+      root.style.setProperty(
+        '--creator-hire-height',
+        `${Math.ceil(strip.getBoundingClientRect().height)}px`
+      );
+    });
+    resize.observe(strip);
+    onCleanup(() => {
+      resize.disconnect();
+      root.style.removeProperty('--creator-hire-height');
+    });
+  });
 
   onMount(() => {
     const params = new URLSearchParams(location.search);
@@ -94,7 +113,7 @@ export default function Creator() {
         setRestored(result);
         if (__BOTS_FIXTURES__ && result.sampleSignedIn) {
           setSampleSignedIn(true);
-          if (returning) setReviewOpen(true);
+          if (returning) openReview();
         }
       }
     } catch {
@@ -105,9 +124,17 @@ export default function Creator() {
     if (returning) navigate('/', { replace: true, scroll: false });
   });
 
-  createEffect(() => {
-    if (reviewOpen() && dialog && !dialog.open) dialog.showModal();
-  });
+  function openReview() {
+    if (!dialog || dialog.open) return;
+
+    setReviewOpen(true);
+    dialog.showModal();
+  }
+
+  function closeReview() {
+    setReviewOpen(false);
+    hireButton?.focus();
+  }
 
   function updateDraft(change: Partial<Draft>) {
     const updated = setDraft((previous) => ({ ...previous, ...change }));
@@ -139,7 +166,7 @@ export default function Creator() {
 
   function startHire() {
     if (sampleSignedIn()) {
-      setReviewOpen(true);
+      openReview();
       return;
     }
 
@@ -184,12 +211,6 @@ export default function Creator() {
   return (
     <div class="creator">
       <section class="stage" aria-label="Portrait preview">
-        <div class="creator-examples">
-          <h2 class="eyebrow">Examples</h2>
-          <div role="group" aria-label="Examples">
-            <PresetCards ids={stageExamples} />
-          </div>
-        </div>
         <div class="creator-stage-portrait">
           <div class="portrait-frame">
             <div
@@ -204,12 +225,25 @@ export default function Creator() {
               aria-valuetext={angleLabel()}
               onKeyDown={(event) => {
                 const key = event.key;
-                if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key))
+                if (
+                  ![
+                    'ArrowLeft',
+                    'ArrowRight',
+                    'ArrowDown',
+                    'ArrowUp',
+                    'Home',
+                    'End',
+                  ].includes(key)
+                )
                   return;
                 event.preventDefault();
                 if (key === 'Home') setAngle(-2);
                 else if (key === 'End') setAngle(2);
-                else setAngle(pose() + (key === 'ArrowLeft' ? -1 : 1));
+                else
+                  setAngle(
+                    pose() +
+                      (key === 'ArrowLeft' || key === 'ArrowDown' ? -1 : 1)
+                  );
               }}
               onPointerDown={(event) => {
                 if (!event.isPrimary || event.button !== 0) return;
@@ -260,6 +294,12 @@ export default function Creator() {
             >
               <span aria-hidden="true">→</span>
             </button>
+          </div>
+        </div>
+        <div class="creator-examples">
+          <h2 class="eyebrow">Examples</h2>
+          <div role="group" aria-label="Examples">
+            <PresetCards ids={stageExamples} />
           </div>
         </div>
       </section>
@@ -340,7 +380,12 @@ export default function Creator() {
           </div>
         </div>
         <OperatingProfile draft={draft()} onChange={updateDraft} />
-        <div class="hire">
+        <div
+          class="hire"
+          ref={(element) => {
+            hireStrip = element;
+          }}
+        >
           <div class="creator-mobile-hire-summary">
             {sizeNames[draft().size]} ·{' '}
             {intelligenceStops[draft().intelligence].label}
@@ -379,12 +424,15 @@ export default function Creator() {
           }}
           class="panel creator-hire-dialog"
           aria-labelledby="creator-hire-title"
-          onClose={() => {
-            setReviewOpen(false);
-            hireButton?.focus();
+          onClose={(event) => {
+            if (!event.currentTarget.open) closeReview();
           }}
           onCancel={(event) => {
-            if (reviewPending()) event.preventDefault();
+            event.preventDefault();
+            if (!reviewPending()) {
+              event.currentTarget.close();
+              closeReview();
+            }
           }}
         >
           <header class="creator-review-heading">

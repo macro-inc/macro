@@ -136,6 +136,21 @@ nav {
   .top-identity {
     grid-column: 2;
     grid-row: 1;
+    block-size: 33px;
+  }
+}
+@media (max-width: 360px) {
+  .top .brand {
+    gap: 6px;
+  }
+  .top .brand img:last-child {
+    max-inline-size: 132px;
+  }
+  .top-identity {
+    inline-size: 132px;
+  }
+  .top-identity a {
+    padding-inline: 5px;
   }
 }
 .fixture,
@@ -276,6 +291,6 @@ footer {
 
 @media (max-width: 540px) {
   :root {
-    scroll-padding-bottom: 76px;
+    scroll-padding-bottom: calc(var(--creator-hire-height, 76px) + 6px);
   }
 }

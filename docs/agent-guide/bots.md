@@ -1,7 +1,8 @@
 # Macro Bots
 
 The standalone Bots app starts at `/` in Character Creator. Creator, Fleet,
-Passwords, and Billing stay in the same order in the shared header. On narrow
+Passwords, and Billing stay in the same order in the shared header. The
+standalone editor mounts after JavaScript loads. On narrow
 screens the links move below the brand and account action.
 
 Choose from ten presets or three stage examples. Face, Skin, Eyes, Nose, Hair,

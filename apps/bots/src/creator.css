@@ -9,6 +9,9 @@
   min-height: calc(100svh - 76px);
   padding: 12px;
 }
+.creator button {
+  touch-action: manipulation;
+}
 .creator .controls {
   grid-area: controls;
 }
@@ -290,20 +293,20 @@
   justify-content: center;
   gap: clamp(14px, 2.2vw, 32px);
   align-self: center;
-  padding: 12px 16px 0 0;
+  padding: 30px 16px 0 0;
   text-align: center;
   min-width: 0;
 }
 .creator-examples {
+  order: -1;
   width: clamp(66px, 7vw, 98px);
   flex-shrink: 0;
   margin-bottom: 12px;
 }
-.creator-examples button {
-  padding: 5px;
-  background: var(--panel);
+.creator-examples .creator-portrait {
+  border-radius: 2px;
 }
-.creator-examples .creator-shelf {
+.creator-shelf {
   padding: 8px 9px;
   background: #10141a;
 }
@@ -329,6 +332,10 @@
   font-size: 11px;
   color: #c2cad6;
   overflow: hidden;
+}
+.creator-examples button {
+  padding: 5px;
+  background: var(--panel);
 }
 .presets button {
   background: transparent;
@@ -528,13 +535,14 @@
       );
   }
   .creator .stage {
-    flex-direction: column-reverse;
+    flex-direction: column;
     padding: 0;
   }
   .creator-stage-portrait {
     width: min(100%, 380px);
   }
   .creator-examples {
+    order: 0;
     width: min(100%, 330px);
     text-align: start;
   }
@@ -573,7 +581,7 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
-    padding: 12px 10px 72px;
+    padding: 12px 10px calc(var(--creator-hire-height, 76px) + 6px);
   }
   .creator .stage {
     order: -1;
