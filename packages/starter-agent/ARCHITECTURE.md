@@ -21,6 +21,7 @@ behavior/
   index.ts                     the whole behavior, composed from the areas
   context/                     the one place IO happens: disk, clock, shell, credentials, Macro, the relay
   agent/                       the agent as Claude Code (Agent SDK), its limits per event, its guards
+  brain/                       Brain job contracts and offline lifecycle fixtures
   events/sources/<area>.ts     where events come from
   events/handlers/<area>.ts    what happens when one fires
   capabilities/<area>/     what the agent can do, and all of the area's logic
