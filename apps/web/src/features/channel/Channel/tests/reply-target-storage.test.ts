@@ -8,8 +8,8 @@ import type { MessageData } from '../../Message';
 import { replyTargetStorage } from '../reply-target-storage';
 import { createUnifiedInputManager } from '../unified-input-manager';
 
-const root = { id: 'root-1', thread_id: null } as MessageData;
-const reply = { id: 'reply-1', thread_id: 'root-1' } as MessageData;
+const ROOT = { id: 'root-1', thread_id: null } as MessageData;
+const REPLY = { id: 'reply-1', thread_id: 'root-1' } as MessageData;
 
 /** One mount of the channel's unified input, with the drafts given. */
 function mount(
@@ -34,7 +34,7 @@ describe('replyTargetStorage', () => {
 
   it('brings a reply with a draft back when the channel opens again', () => {
     const first = mount([]);
-    first.manager.bindReply(reply);
+    first.manager.bindReply(REPLY);
     first.dispose();
 
     const second = mount(['root-1']);
@@ -47,7 +47,7 @@ describe('replyTargetStorage', () => {
 
   it('does not bring back a reply with nothing written', () => {
     const first = mount([]);
-    first.manager.bindReply(root);
+    first.manager.bindReply(ROOT);
     first.dispose();
 
     const second = mount([]);
@@ -57,7 +57,7 @@ describe('replyTargetStorage', () => {
 
   it('forgets a reply once it is closed or sent', () => {
     const first = mount([]);
-    first.manager.bindReply(root);
+    first.manager.bindReply(ROOT);
     first.manager.closeReply();
     first.dispose();
 
@@ -68,7 +68,7 @@ describe('replyTargetStorage', () => {
 
   it('keeps each channel to its own reply', () => {
     const first = mount([]);
-    first.manager.bindReply(root);
+    first.manager.bindReply(ROOT);
     first.dispose();
 
     const other = createRoot((dispose) => {
@@ -84,7 +84,7 @@ describe('replyTargetStorage', () => {
 
   it('leaves a binding from the history snapshot in place', () => {
     const first = mount([]);
-    first.manager.bindReply(root);
+    first.manager.bindReply(ROOT);
     first.dispose();
 
     const second = mount(['root-1', 'root-2'], {
@@ -96,7 +96,7 @@ describe('replyTargetStorage', () => {
 
   it('keeps the reply the same channel open elsewhere stored when this one closes', () => {
     const here = mount([]);
-    here.manager.bindReply(root);
+    here.manager.bindReply(ROOT);
     const elsewhere = mount([]);
     elsewhere.manager.bindReply({
       id: 'root-2',
@@ -113,9 +113,9 @@ describe('replyTargetStorage', () => {
 
   it('forgets a reply closed here that is open elsewhere too, since it is the same reply', () => {
     const here = mount([]);
-    here.manager.bindReply(root);
+    here.manager.bindReply(ROOT);
     const elsewhere = mount([]);
-    elsewhere.manager.bindReply(root);
+    elsewhere.manager.bindReply(ROOT);
     here.manager.closeReply();
     here.dispose();
     elsewhere.dispose();
@@ -127,7 +127,7 @@ describe('replyTargetStorage', () => {
 
   it('forgets a reply the history snapshot brought back once it is closed', () => {
     const first = mount([]);
-    first.manager.bindReply(root);
+    first.manager.bindReply(ROOT);
     first.dispose();
     const fromHistory = mount(['root-1'], {
       initialReplyTarget: { threadId: 'root-1' },

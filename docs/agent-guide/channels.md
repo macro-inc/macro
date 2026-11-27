@@ -604,8 +604,9 @@ thread with a reply draft opens its reply box, including one closed with Esc,
 which keeps the draft (the close-reply control discards it). On touch the
 composer comes back replying to the message it last replied to in that channel,
 if that reply still has a draft; closing the reply or sending forgets it, and a
-call's panel never restores one. Check it by starting a reply, opening another
-conversation and coming back.
+call's panel never restores one. Back and Forward within a split restore the
+reply state saved in that history entry instead, with or without a draft.
+Check it by starting a reply, opening another conversation and coming back.
 Shift+Enter adds a line to the draft; Enter sends. The composer spaces its
 paragraphs the way the sent message does, so a multi-line draft reads as what
 it will send. Check a multi-line message against the draft that wrote it: the
