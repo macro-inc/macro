@@ -25,7 +25,7 @@ const API_TIMEOUT: Duration = Duration::from_secs(30);
 /// Configuration for Macro Connect.
 #[derive(Clone)]
 pub struct ConnectConfig {
-    /// Connect API base URL, e.g. `https://connect-dev.macro.com`.
+    /// Connect API base URL, e.g. `https://connect.dev.macro.com`.
     pub api_url: String,
     /// Macro's customer key for the Connect API.
     pub customer_key: String,
