@@ -1,0 +1,24 @@
+apps/web/src/features/calendar-view/components/CalendarSearch.tsx
+  s_7bdb00f24dc689::t_4adfaf0a337be8 804-808,810-811,813,871
+  s_7bdb00f24dc689::t_f567d30a2cb537 814-821,823-824,826-827,829-856,859-870
+docs/agent-guide/calendar.md
+  s_7bdb00f24dc689::t_80709ff4355546 601-602,615-617
+apps/web/src/components/ui/components/Tooltip.tsx
+  s_7bdb00f24dc689::t_b6566c8b36871e 121-136
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "570a2f88fc03d83ddaa32840f6a32837f2096596",
+  "prompts": {},
+  "sessions": {
+    "s_7bdb00f24dc689": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b6ddd6d6-a8ba-4fd2-a92d-b53efc193656",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
