@@ -39,3 +39,7 @@ assignment is separate. The owned-host operator runs independently, and
 refresh only reads current state. Booting reflects the local process
 exercising the lifecycle. The product and signed read-only builds keep
 their usual gates.
+
+For the signed member denial probe set `BOTS_HIRE_REVIEW_SIGNIN=member`.
+This selects the separately seeded member for sign-in and starts no Hire
+helper. Use the owner review configuration for persistence checks.

@@ -2,11 +2,11 @@ import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { Sdk } from '@macro-inc/sdk/generated/auth';
 import type { Plugin } from 'vite';
-import type { HireAccess } from '../src/hire-access';
-import { type LocalHireReview, readConfirm } from './localHire';
+import type { HireAccess } from '../src/hire-access.ts';
+import { type LocalHireReview, readConfirm } from './localHire.ts';
 
 const defaultUpstream = 'http://127.0.0.1:23011/auth';
-const reviewer = 'macrobots-reviewer@example.test';
+const defaultReviewer = 'macrobots-reviewer@example.test';
 const fixtureTeam = 'Macro Bots Local Review';
 const cookieName = 'bots-local-session';
 const lifetime = 10 * 60 * 1000;
@@ -20,9 +20,16 @@ type Identity = Viewer | Exclude<HireAccess, { status: 'signed-in' }>;
 
 export function localAuth(
   path: string,
-  review?: { upstream: string; hire: LocalHireReview }
+  review?: {
+    upstream: string;
+    hire: LocalHireReview;
+    reviewer:
+      | 'macrobots-reviewer@example.test'
+      | 'macrobots-hire-member@example.test';
+  }
 ): Plugin {
   const upstream = review?.upstream ?? defaultUpstream;
+  const reviewer = review?.reviewer ?? defaultReviewer;
   const sdk = new Sdk();
   const sessions = new Map<string, Session>();
   let exchanging = false;
