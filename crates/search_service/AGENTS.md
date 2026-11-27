@@ -240,9 +240,10 @@ per-entity-type search plus a unified search across them — mounted into
   a word. A `tag:` or `in:#` value needs a letter, a digit or another
   non-ASCII character such as an emoji (`tag:🔥`); ASCII punctuation alone
   (`tag:-`) stays a word. `terms::names_something` is that rule, and Mail's
-  reader applies it to every value, so `label:🔥` and `in:🔥` name a tag or label,
-  while its text operators (`subject:`, `from:` and the rest) still need a
-  letter or digit, since text is matched by its words. Tag and channel names match with their phrase
+  reader applies it to every value, so `label:🔥` and `in:🔥` name a tag or
+  label, while its text operators (`subject:`, `from:` and the rest) still
+  need a letter or digit, since text is matched by its words. Tag and
+  channel names match with their phrase
   quotes left out (`domain/operator_names.rs` `as_typed`, and
   `outbound/operator_names.rs` for channels), since a typed term drops them. `search_operators/typed_operators.json` lists typed queries
   and how many operators each holds; change it with the parser.

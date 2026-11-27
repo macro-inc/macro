@@ -953,7 +953,8 @@ async fn a_label_name_matches_with_its_quotes_left_out() {
     };
     let service = EmailSearchService(source);
     let filters = EmailFilters {
-        label_names: ["q3 plan", "🔥", "waiting"]
+        // As typed, then by the exact name an API caller can send.
+        label_names: ["q3 plan", "🔥", "waiting", "Q3 \"Plan\""]
             .into_iter()
             .map(|name| EmailLabelMatch {
                 name: name.to_string(),
@@ -986,6 +987,11 @@ async fn a_label_name_matches_with_its_quotes_left_out() {
             LabelCondition {
                 labels: vec!["“Waiting”".to_string()],
                 tag_option_ids: Vec::new(),
+                exclude: false,
+            },
+            LabelCondition {
+                labels: Vec::new(),
+                tag_option_ids: vec![plan],
                 exclude: false,
             },
         ]

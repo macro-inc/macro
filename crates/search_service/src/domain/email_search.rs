@@ -382,7 +382,9 @@ impl<S: EmailSearchSource> EmailSearchService<S> {
 
         let mut conditions = Vec::new();
         for wanted in &filters.label_names {
-            let name = wanted.name.to_lowercase();
+            // A caller can name a label exactly, quotes and all, as well as
+            // type it.
+            let name = as_typed(&wanted.name).to_lowercase();
             let mut condition = LabelCondition {
                 exclude: wanted.exclude,
                 ..LabelCondition::default()
