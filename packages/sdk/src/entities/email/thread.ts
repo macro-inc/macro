@@ -525,6 +525,8 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
   /** Search email threads by subject and content, most relevant first, auto-paginated; `maxItems` caps the total. */
   static search = entitySearch({
     filters: { email_filters: {} },
+    method: 'email.search',
+    listing: 'macro.email.inbox()',
     type: 'email',
     make: (client, hit) => new EmailThread(client, hit.thread_id),
   });

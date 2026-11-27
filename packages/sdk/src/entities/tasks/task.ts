@@ -330,6 +330,9 @@ export class Task extends Document {
   /** Search tasks by name and content, most relevant first, auto-paginated; `maxItems` caps the total. */
   static search = entitySearch({
     filters: { document_filters: { sub_types: ['task'], task_filters: {} } },
+    method: 'tasks.search',
+    listing:
+      "macro.workspace.list({ includeTypes: ['document'], df: { l: { dst: 'task' } } })",
     type: 'document',
     make: (client, hit) => new Task(client, hit.document_id),
   });

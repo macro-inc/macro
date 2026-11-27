@@ -305,7 +305,8 @@ export class EmailNamespace {
   }
 
   /**
-   * Search email threads by subject and content. To find a person's emails,
+   * Search email threads by words in their subject and content; a blank query
+   * throws, so list recent mail with `macro.email.inbox()`. To find a person's emails,
    * search for their quoted email address, not their name: a name only
    * matches where that display name appears. Resolve the address first, for
    * example with `macro.users.search(name)`.

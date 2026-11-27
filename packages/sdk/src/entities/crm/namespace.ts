@@ -288,7 +288,7 @@ export class CrmNamespace {
   }
 
   /**
-   * Search CRM companies by name/domain, most relevant first, auto-paginated; `maxItems` caps the total.
+   * Search CRM companies by name/domain, most relevant first, auto-paginated; `maxItems` caps the total; a blank query throws.
    *
    * @readonly
    */

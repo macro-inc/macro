@@ -41,7 +41,8 @@ export class ProjectNamespace {
   }
 
   /**
-   * Search projects by name and content, most relevant first, auto-paginated; `maxItems` caps the total.
+   * Search projects by words in their name and content, most relevant first, auto-paginated; `maxItems` caps the total; a blank query throws.
+   * List projects without a query with `macro.workspace.list({ includeTypes: ['project'] })`.
    *
    * @readonly
    */

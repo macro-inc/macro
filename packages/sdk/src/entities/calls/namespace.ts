@@ -27,7 +27,8 @@ export class CallRecordNamespace {
   }
 
   /**
-   * Search archived calls by name and transcript, not the live room roster.
+   * Search archived calls by words in their name and transcript, not the live room roster; a blank query throws.
+   * List calls without a query with `macro.workspace.list({ includeTypes: ['call'] })`.
    *
    * @readonly
    */

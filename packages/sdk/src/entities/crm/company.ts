@@ -139,6 +139,7 @@ export class Company extends PropertiedEntity<CompanyDetail> {
   /** Search CRM companies by name/domain, most relevant first, auto-paginated; `maxItems` caps the total. */
   static search = entitySearch({
     filters: { crm_company_filters: {} },
+    method: 'crm.searchCompanies',
     type: 'company',
     includeCrm: true,
     make: (client, hit) => new Company(client, hit.id),
