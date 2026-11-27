@@ -105,7 +105,7 @@ function Schedule() {
 function FleetTower(props: {
   agent: TeamAgent;
   computer?: ComputerStatus;
-  portrait?: { src: string; width: number };
+  portrait?: string;
   selected: boolean;
   open: (event: MouseEvent) => void;
 }) {
@@ -142,13 +142,7 @@ function FleetTower(props: {
           when={props.portrait}
           fallback={<span aria-hidden="true">{agent().name[0]}</span>}
         >
-          {(portrait) => (
-            <img
-              src={portrait().src}
-              style={{ transform: `scaleX(${1 + portrait().width / 100})` }}
-              alt=""
-            />
-          )}
+          {(portrait) => <img src={portrait()} alt="" />}
         </Show>
         <span class="fleet-lifecycle" data-status={agent().status}>
           {lifecycleLabel[agent().status]}
@@ -194,7 +188,9 @@ function FleetTower(props: {
             </dd>
           </div>
         </dl>
-        <Schedule />
+        <Show when={agent().status !== 'provisioning'}>
+          <Schedule />
+        </Show>
         <div class="fleet-usage">
           <span>Usage over time · 24h</span>
           <Show when={exampleBars()} fallback={<p>Unavailable</p>}>

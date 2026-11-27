@@ -1,16 +1,30 @@
 import { describe, expect, test } from 'bun:test';
-import { storeHireDraft, takeHireDraft } from './draft';
 import {
+  defaultDraft,
+  markFixtureHireSignIn,
+  readRestoredHireDraft,
+  saveRestoredHireDraft,
+  storeHireDraft,
+  takeHireDraft,
+} from './draft';
+import {
+  billingIntent,
   buildSignInUrl,
   fleetIntent,
   hireIntent,
   parseReturnIntent,
+  passwordsIntent,
   returnPath,
 } from './return-intent';
 
 describe('return intents', () => {
   test('round-trips only the local Creator Hire and Fleet destinations', () => {
-    for (const intent of [hireIntent, fleetIntent]) {
+    for (const intent of [
+      hireIntent,
+      fleetIntent,
+      passwordsIntent,
+      billingIntent,
+    ]) {
       const link = new URL(buildSignInUrl(intent), 'http://localhost');
       expect(link.pathname).toBe('/sign-in');
       expect(parseReturnIntent(link.search)).toEqual(intent);
@@ -26,7 +40,8 @@ describe('return intents', () => {
     '/%2e%2e/fleet',
     '/fleet#private',
     '/fleet?team=another-team',
-    '/passwords',
+    '/passwords?actor=owner',
+    '/billing?team=another-team',
   ])('rejects %s as a return destination', (target) => {
     expect(
       parseReturnIntent(new URLSearchParams({ return: target }).toString())
@@ -50,13 +65,46 @@ test('a Hire draft stays in its own tab, expires, and can only be consumed once'
       values.delete(key);
     },
   };
-  const draft = { first: 'Example', last: 'Bot', portrait: 2, width: -5 };
+  const defaultProfile = defaultDraft();
+  const draft = {
+    ...defaultProfile,
+    first: 'Example',
+    last: 'Bot',
+    firstEdited: true,
+    lastEdited: true,
+    look: { ...defaultProfile.look, faceWidth: -0.25 },
+  };
   const handoff = storeHireDraft(storage, draft, 10);
   const otherTab = { ...storage, getItem: () => null };
 
   expect(takeHireDraft(otherTab, handoff, 11)).toBeUndefined();
   expect(takeHireDraft(storage, crypto.randomUUID(), 11)).toBeUndefined();
-  expect(takeHireDraft(storage, handoff, 12)).toEqual(draft);
+  expect(markFixtureHireSignIn(otherTab, handoff, 11)).toBe(false);
+  expect(markFixtureHireSignIn(storage, handoff, 11)).toBe(true);
+  const failedTransition = {
+    ...storage,
+    setItem() {
+      throw new Error('storage write failed');
+    },
+  };
+  expect(() => takeHireDraft(failedTransition, handoff, 12)).toThrow(
+    'storage write failed'
+  );
+  expect(readRestoredHireDraft(storage, 12)).toBeUndefined();
+
+  const result = takeHireDraft(storage, handoff, 12);
+  expect(result).toEqual({
+    handoff: null,
+    draft,
+    sampleSignedIn: true,
+    expiresAt: 600_010,
+  });
+  if (!result) throw new Error('Expected to restore the draft');
+  expect(readRestoredHireDraft(storage, 12)).toEqual(result);
+  const updated = { ...result, draft: { ...result.draft, first: 'Updated' } };
+  saveRestoredHireDraft(storage, updated);
+  expect(readRestoredHireDraft(storage, 13)).toEqual(updated);
+  expect(readRestoredHireDraft(storage, 600_010)).toBeUndefined();
   expect(takeHireDraft(storage, handoff, 13)).toBeUndefined();
 
   const expired = storeHireDraft(storage, draft, 20);

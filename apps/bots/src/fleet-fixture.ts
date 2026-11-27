@@ -10,12 +10,13 @@ import {
   type FleetViewer,
   sameFleetScope,
 } from './fleet-data';
-import { hireReceipt, selectedHireReceipt } from './hire-fixture';
+import { hireReceipts, selectedHireReceipt } from './hire-fixture';
+import { fixtureTeam, fixtureTeamName } from './routes';
 
 export const fleetViewer: FleetViewer = {
   viewerId: 'hire-fixture-account',
-  teamId: 'sample-team',
-  teamName: 'Northstar Design',
+  teamId: fixtureTeam,
+  teamName: fixtureTeamName,
   role: 'owner',
   teammateRollout: 'on',
   computerRollout: 'on',
@@ -80,9 +81,9 @@ export function fleetFixture(search: string) {
   if (selectingHire && selectedHire?.agent.teamId !== fleetViewer.teamId)
     return null;
 
-  const currentHire = hireReceipt();
-  const teammate =
-    currentHire?.agent.teamId === fleetViewer.teamId ? currentHire : undefined;
+  const teammates = hireReceipts().filter(
+    ({ agent }) => agent.teamId === fleetViewer.teamId
+  );
   const agents = (example === 'empty' ? [] : fleetBots).map(
     (bot): TeamAgent => ({
       userId: bot.id,
@@ -95,7 +96,7 @@ export function fleetFixture(search: string) {
       status: bot.status,
     })
   );
-  if (teammate) {
+  for (const teammate of teammates) {
     if (agents.some((agent) => agent.userId === teammate.agent.userId))
       return null;
     agents.push(teammate.agent);
@@ -135,14 +136,11 @@ export function fleetFixture(search: string) {
     },
   };
 
-  const portraits = new Map<string, { src: string; width: number }>(
-    fleetBots.map((bot) => [bot.id, { src: bot.portrait, width: 0 }])
+  const portraits = new Map(
+    fleetBots.map(({ id, portrait }) => [id, portrait])
   );
-  if (teammate) {
-    portraits.set(teammate.agent.userId, {
-      src: teammate.portrait,
-      width: teammate.width,
-    });
+  for (const { agent, portrait } of teammates) {
+    portraits.set(agent.userId, portrait);
   }
 
   return {

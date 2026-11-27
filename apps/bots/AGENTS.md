@@ -3,16 +3,20 @@
 ## Scope
 
 The standalone Vite entry for the public Character Creator, Fleet, and the Brain shell.
-The auth seam uses checked-in SDK auth response types. Its current adapter is
-offline and exposes a disabled sign-in flow with a same-tab, expiring draft
-handoff. Real Hire is disabled. The local preview can rehearse Hire with
-synthetic team and offer responses. See [Hire checkout](HIRE.md).
+The auth seam uses checked-in SDK auth response types. The local preview can
+rehearse an expiring same-tab draft handoff, sample sign-in, review, and Hire
+with synthetic team and offer responses. The default adapter is offline and
+real Hire is disabled. See [Hire checkout](HIRE.md).
 Tower Passwords uses in-memory fixtures and a storage seam typed from the
 generated SDK storage schemas.
 
 ## Start here
 
-- `src/main.tsx` registers routes and renders the shell.
+- `src/main.tsx` registers routes and renders the shared Creator, Fleet,
+  Passwords, and Billing navigation.
+- `src/creator.tsx` owns the editable profile and portrait. `src/presets.ts`
+  defines canonical controls and preset seeds. `src/portrait.tsx` renders the
+  same configuration for the stage, thumbnails, and fixture Hire.
 - `src/fleet-data.ts` defines the scoped, read-only Fleet ports over generated
   auth DTOs. `src/fleet.tsx` joins the fixture roster and optional computer
   details into one horizontal rail. The ordinary build leaves Fleet reads

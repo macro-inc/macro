@@ -1,6 +1,8 @@
 import type { ComputerSize, Quote } from '@macro-inc/sdk/generated/auth';
 import { A } from '@solidjs/router';
-import { createSignal, For, Show } from 'solid-js';
+import { createSignal, For, onMount, Show } from 'solid-js';
+import { autonomyStops, intelligenceStops, sizeNames } from './creator-profile';
+import { type Draft, draftName } from './draft';
 import { type CheckoutState, createCheckout } from './hire';
 import {
   fixtureCheckout,
@@ -8,6 +10,7 @@ import {
   hireReceiptFor,
   saveHireReceipt,
 } from './hire-fixture';
+import { Portrait, snapshotPortrait } from './portrait';
 
 const messages = {
   loading: 'Checking the team and available computers…',
@@ -32,12 +35,6 @@ const notices = {
     'Enter a name up to 64 characters and profile fields up to 4,000 characters.',
 };
 
-const sizeNames: Record<ComputerSize, string> = {
-  standard: 'Standard',
-  large: 'Large',
-  xl: 'XL',
-};
-
 function money(amount: number, currency: string) {
   const format = new Intl.NumberFormat(undefined, {
     style: 'currency',
@@ -53,30 +50,29 @@ function recurring(quote: Quote) {
 }
 
 export default function HirePanel(props: {
-  name: string;
-  portrait: string;
-  width: number;
+  draft: Draft;
+  onAccepted: () => void;
+  onPending: (pending: boolean) => void;
 }) {
   const [state, setState] = createSignal<CheckoutState>({ status: 'idle' });
-  const [size, setSize] = createSignal<ComputerSize>();
+  const [size, setSize] = createSignal<ComputerSize>(props.draft.size);
   const [job, setJob] = createSignal('');
   const [personality, setPersonality] = createSignal('');
-  let confirmedPortrait = { portrait: props.portrait, width: props.width };
+  let confirmed: { draft: Draft; portrait: string } | undefined;
   const checkout = createCheckout(fixtureCheckout, (next) => {
     setState(next);
-    if (next.status === 'accepted') {
-      saveHireReceipt({ agent: next.agent, ...confirmedPortrait });
-    }
-    if (next.status === 'review') {
-      if (
-        !next.offers.sizes.some(
-          (offer) => offer.size === size() && !offer.soldOut
-        )
-      ) {
-        setSize(undefined);
-      }
+    props.onPending(next.status === 'submitting');
+    if (next.status === 'accepted' && confirmed) {
+      saveHireReceipt({
+        agent: next.agent,
+        ...confirmed,
+      });
+      props.onAccepted();
     }
   });
+
+  onMount(() => void checkout.load());
+
   const accepted = () => {
     const current = state();
     if (current.status === 'accepted') {
@@ -88,7 +84,9 @@ export default function HirePanel(props: {
     if (current.status === 'review') return current;
   };
   const selected = () =>
-    review()?.offers.sizes.find((offer) => offer.size === size());
+    review()?.offers.sizes.find(
+      (offer) => offer.size === size() && !offer.soldOut
+    );
   const message = () => {
     const current = state();
     if (
@@ -102,29 +100,39 @@ export default function HirePanel(props: {
 
   return (
     <div class="hire-checkout">
-      <Show when={state().status === 'idle'}>
-        <button
-          type="button"
-          class="primary"
-          onClick={() => void checkout.load()}
-        >
-          Review Hire preview
-        </button>
-      </Show>
+      <div class="profile-summary">
+        <Portrait preset={props.draft.preset} look={props.draft.look} />
+        <div>
+          <strong>{draftName(props.draft)}</strong>
+          <p>
+            {sizeNames[size()]} ·{' '}
+            {intelligenceStops[props.draft.intelligence].label} ·{' '}
+            {autonomyStops[props.draft.autonomy].label}
+          </p>
+        </div>
+      </div>
+      <p class="creator-sample-note">Sample data. No service purchases.</p>
       <Show when={review()}>
         {(current) => (
           <form
             onSubmit={(event) => {
               event.preventDefault();
-              const choice = size();
+              const choice = selected()?.size;
               if (choice && state().status === 'review') {
-                confirmedPortrait = {
-                  portrait: props.portrait,
-                  width: props.width,
+                confirmed = {
+                  draft: {
+                    ...props.draft,
+                    size: choice,
+                    look: { ...props.draft.look },
+                  },
+                  portrait: snapshotPortrait(
+                    props.draft.preset,
+                    props.draft.look
+                  ),
                 };
                 void checkout.confirm(
                   {
-                    name: props.name,
+                    name: draftName(props.draft),
                     jobDescription: job(),
                     personality: personality(),
                   },
@@ -134,24 +142,27 @@ export default function HirePanel(props: {
             }}
           >
             <h3>Hire for {current().team}</h3>
-            <label>
-              Responsibilities
-              <textarea
-                value={job()}
-                maxLength={4000}
-                rows={2}
-                onInput={(event) => setJob(event.currentTarget.value)}
-              />
-            </label>
-            <label>
-              Personality
-              <textarea
-                value={personality()}
-                maxLength={4000}
-                rows={2}
-                onInput={(event) => setPersonality(event.currentTarget.value)}
-              />
-            </label>
+            <details class="creator-disclosure">
+              <summary>Profile details</summary>
+              <label>
+                Responsibilities
+                <textarea
+                  value={job()}
+                  maxLength={4000}
+                  rows={2}
+                  onInput={(event) => setJob(event.currentTarget.value)}
+                />
+              </label>
+              <label>
+                Personality
+                <textarea
+                  value={personality()}
+                  maxLength={4000}
+                  rows={2}
+                  onInput={(event) => setPersonality(event.currentTarget.value)}
+                />
+              </label>
+            </details>
             <fieldset>
               <legend>Computer size</legend>
               <For

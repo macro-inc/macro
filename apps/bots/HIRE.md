@@ -1,6 +1,18 @@
 # Hire checkout
 
-The local fixture previews a signed-in owner, team-scoped offers and an accepted hire in setup. It uses synthetic offers injected into the checkout controller. The default app cannot submit a purchase. The production build excludes the Hire fixture.
+The local fixture uses a sample account and team. Choose **Hire**, continue with
+the sample account, and review the draft and computer offers. Confirming creates
+a same-tab sample receipt. The default build excludes sample checkout and
+leaves service purchases disabled.
+
+The opaque return URL carries a one-use handoff ID. The same tab restores the
+full draft for up to ten minutes, including the preset, appearance, names, tab,
+and operating choices. The artist preview angle is temporary. Sample
+Intelligence, Autonomy, and hourly estimates illustrate the profile.
+Computer size maps to the generated request type and the review uses the
+adapter's verified offers. Responsibilities and Personality map to the
+corresponding prose fields. The fixture keeps the confirmed appearance and
+operating choices in its receipt.
 
 Identity must come from the authenticated PR 7 session seam. The existing generated auth methods `getUserInfo` and `getTeam` return caller identity and current team membership. HTTP 204 for the team is a known signed-in account without a team. An owner or admin needs both teammate and computer rollout. The production identity or eligibility state stays unavailable when the adapter cannot establish it.
 
@@ -9,7 +21,8 @@ The admin `listTeamComputerPurchaseOffers` contract supplies resources, money in
 Fleet selects the accepted teammate only when its requested team and agent match
 the receipt created by this tab's mock checkout. The Brain link uses the receipt's
 team and agent IDs. Brain resolves the same fixture receipt and shows Setting up.
-A fresh tab or reload has no Hire receipt, and an unmatched deep link is unavailable.
+The receipt keeps the confirmed portrait and exact selection. A fresh tab or
+reload has no Hire receipt, and an unmatched deep link is unavailable.
 
 ## Backend follow-on
 

@@ -41,7 +41,7 @@ test('the scoped Fleet roster links to the Finch mailbox identity', async () => 
       scope,
       name: finch.name,
       role: finch.jobDescription,
-      portrait: portrait.src,
+      portrait,
     },
   });
   expect(

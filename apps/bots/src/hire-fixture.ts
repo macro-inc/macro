@@ -1,26 +1,71 @@
-import type { TeamAgent } from '@macro-inc/sdk/generated/auth';
+import type { CreateTeamAgent, TeamAgent } from '@macro-inc/sdk/generated/auth';
 import { createSignal } from 'solid-js';
-import type { CheckoutAdapter } from './hire';
+import { sampleResources } from './creator-profile';
+import { type Draft, draftName } from './draft';
+import type { CheckoutAdapter, HireScope } from './hire';
+import { fixtureTeam, fixtureTeamName } from './routes';
 
-const team = 'sample-team';
-type HireReceipt = {
-  agent: Readonly<TeamAgent>;
-  portrait: string;
-  width: number;
+const scope: Extract<HireScope, { status: 'signed-in' }> = {
+  status: 'signed-in',
+  account: 'hire-fixture-account',
+  session: 'hire-fixture-session',
+  team: fixtureTeam,
+  teamName: fixtureTeamName,
+  role: 'owner',
+  teammatesEnabled: true,
+  computersEnabled: true,
 };
 
-const accepted = new Map<string, TeamAgent>();
+function admits(buyer: typeof scope) {
+  return (
+    buyer.team === scope.team &&
+    buyer.account === scope.account &&
+    buyer.session === scope.session &&
+    buyer.role === scope.role &&
+    buyer.teammatesEnabled &&
+    buyer.computersEnabled
+  );
+}
 
-const [receipt, setReceipt] = createSignal<HireReceipt>();
-export const hireReceipt = receipt;
+type HireReceipt = {
+  agent: Readonly<TeamAgent>;
+  draft: Draft;
+  portrait: string;
+};
+
+const accepted = new Map<
+  string,
+  { agent: TeamAgent; request: Readonly<CreateTeamAgent> }
+>();
+
+const [receipts, setReceipts] = createSignal<readonly HireReceipt[]>([]);
+export const hireReceipts = receipts;
 
 export function saveHireReceipt(value: HireReceipt) {
-  if (value.agent.teamId !== team || value.agent.status !== 'provisioning') {
+  if (
+    value.agent.teamId !== fixtureTeam ||
+    value.agent.status !== 'provisioning'
+  ) {
     return;
   }
-  for (const agent of accepted.values()) {
-    if (agent === value.agent) {
-      setReceipt({ ...value, agent: Object.freeze({ ...agent }) });
+  for (const { agent, request } of accepted.values()) {
+    if (
+      agent === value.agent &&
+      request.name === draftName(value.draft) &&
+      request.size === value.draft.size
+    ) {
+      if (hireReceiptFor(agent.teamId, agent.userId)) return;
+
+      const draft = Object.freeze({
+        ...value.draft,
+        look: Object.freeze({ ...value.draft.look }),
+      });
+      const receipt = Object.freeze({
+        ...value,
+        draft,
+        agent: Object.freeze({ ...agent }),
+      });
+      setReceipts((previous) => [...previous, receipt]);
       return;
     }
   }
@@ -31,10 +76,9 @@ export function hireFleetPath(agent: Pick<TeamAgent, 'teamId' | 'userId'>) {
 }
 
 export function hireReceiptFor(teamId: string, userId: string) {
-  const current = hireReceipt();
-  if (current?.agent.teamId === teamId && current.agent.userId === userId) {
-    return current;
-  }
+  return hireReceipts().find(
+    ({ agent }) => agent.teamId === teamId && agent.userId === userId
+  );
 }
 
 export function selectedHireReceipt(search: string) {
@@ -48,18 +92,11 @@ export function selectedHireReceipt(search: string) {
 
 export const fixtureCheckout: CheckoutAdapter = {
   async readScope() {
-    return {
-      status: 'signed-in',
-      account: 'hire-fixture-account',
-      session: 'hire-fixture-session',
-      team,
-      teamName: 'Sample Team',
-      role: 'owner',
-      teammatesEnabled: true,
-      computersEnabled: true,
-    };
+    return { ...scope };
   },
-  async readOffers() {
+  async readOffers(buyer) {
+    if (!admits(buyer)) return { status: 'denied' };
+
     return {
       status: 'quoted',
       offers: {
@@ -67,9 +104,7 @@ export const fixtureCheckout: CheckoutAdapter = {
         sizes: [
           {
             size: 'standard',
-            vcpus: 2,
-            memoryGb: 4,
-            diskGb: 32,
+            ...sampleResources.standard,
             dueToday: 700,
             soldOut: false,
             quote: {
@@ -82,9 +117,7 @@ export const fixtureCheckout: CheckoutAdapter = {
           },
           {
             size: 'large',
-            vcpus: 4,
-            memoryGb: 8,
-            diskGb: 64,
+            ...sampleResources.large,
             dueToday: 1400,
             soldOut: false,
             quote: {
@@ -97,9 +130,7 @@ export const fixtureCheckout: CheckoutAdapter = {
           },
           {
             size: 'xl',
-            vcpus: 8,
-            memoryGb: 16,
-            diskGb: 128,
+            ...sampleResources.xl,
             dueToday: 2800,
             soldOut: true,
             quote: {
@@ -114,12 +145,14 @@ export const fixtureCheckout: CheckoutAdapter = {
       },
     };
   },
-  async submit({ request }) {
+  async submit({ scope: buyer, request }) {
+    if (!admits(buyer)) return { status: 'declined' };
+
     const existing = accepted.get(request.purchaseKey);
-    if (existing) return { status: 'accepted', agent: existing };
+    if (existing) return { status: 'accepted', agent: existing.agent };
 
     const agent: TeamAgent = {
-      teamId: team,
+      teamId: fixtureTeam,
       userId: `fixture-${crypto.randomUUID()}`,
       computerId: crypto.randomUUID(),
       name: request.name,
@@ -128,7 +161,10 @@ export const fixtureCheckout: CheckoutAdapter = {
       status: 'provisioning',
       createdAt: '2026-12-01T00:00:00Z',
     };
-    accepted.set(request.purchaseKey, agent);
+    accepted.set(request.purchaseKey, {
+      agent,
+      request: Object.freeze({ ...request }),
+    });
     return { status: 'accepted', agent };
   },
 };
