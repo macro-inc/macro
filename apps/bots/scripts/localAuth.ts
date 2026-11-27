@@ -145,7 +145,7 @@ export function localAuth(
       if (
         viewer.status !== 'signed-in' ||
         viewer.teamId !== review.hire.team ||
-        viewer.role === 'member' ||
+        (viewer.role !== 'owner' && viewer.role !== 'admin') ||
         sessions.get(id) !== session ||
         session.expires <= Date.now()
       ) {

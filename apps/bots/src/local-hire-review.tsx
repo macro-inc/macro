@@ -14,7 +14,7 @@ type Agent = {
   id: string;
   teamId: string;
   name: string;
-  status: TeamAgentStatus;
+  status: TeamAgentStatus | 'unavailable';
   computerId?: string;
   phase?: string;
 };
@@ -49,8 +49,15 @@ function isSize(value: unknown): value is ComputerSize {
   return value === 'standard' || value === 'large' || value === 'xl';
 }
 
-function isStatus(value: unknown): value is TeamAgentStatus {
-  return typeof value === 'string' && Object.hasOwn(lifecycleLabel, value);
+function isStatus(value: unknown): value is Agent['status'] {
+  return (
+    typeof value === 'string' &&
+    (value === 'unavailable' || Object.hasOwn(lifecycleLabel, value))
+  );
+}
+
+function statusLabel(status: Agent['status']) {
+  return status === 'unavailable' ? 'Unavailable' : lifecycleLabel[status];
 }
 
 function agentFrom(value: unknown, team: string): Agent | undefined {
@@ -350,7 +357,7 @@ export function LocalFleet() {
                 >
                   <h2>{agent.name}</h2>
                   <p>
-                    {lifecycleLabel[agent.status]}
+                    {statusLabel(agent.status)}
                     <Show when={agent.phase}> · {agent.phase}</Show>
                   </p>
                   <A href={scopedBrainPath(agent.teamId, agent.id)}>
@@ -398,7 +405,7 @@ export function LocalBrain() {
           <>
             <h1>{current().name}</h1>
             <p>
-              {lifecycleLabel[current().status]}
+              {statusLabel(current().status)}
               <Show when={current().phase}> · {current().phase}</Show>
             </p>
             <button type="button" onClick={() => void refetch()}>
