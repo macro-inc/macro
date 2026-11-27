@@ -15,9 +15,7 @@ type Confirm = {
   name: string;
   size: string;
 };
-type Command =
-  | Omit<Confirm, 'expectedTeam'>
-  | { kind: 'offers' | 'roster' | 'fleet_pass' };
+type Command = Omit<Confirm, 'expectedTeam'> | { kind: 'offers' | 'roster' };
 type Pending = (reply: unknown) => void;
 
 export function localHire(
@@ -143,8 +141,8 @@ export async function readConfirm(
     uuid.test(value.key) &&
     'name' in value &&
     typeof value.name === 'string' &&
-    [...value.name.trim()].length >= 1 &&
-    [...value.name.trim()].length <= 64 &&
+    value.name.trim() !== '' &&
+    Array.from(value.name.trim()).length <= 64 &&
     'size' in value &&
     typeof value.size === 'string' &&
     ['standard', 'large', 'xl'].includes(value.size)

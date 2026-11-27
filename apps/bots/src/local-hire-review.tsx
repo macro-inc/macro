@@ -15,7 +15,8 @@ type Agent = {
   teamId: string;
   name: string;
   status: TeamAgentStatus;
-  phase: string;
+  computerId?: string;
+  phase?: string;
 };
 type Offer = {
   id: string;
@@ -60,13 +61,15 @@ function agentFrom(value: unknown, team: string): Agent | undefined {
     isId(agent.id) &&
     typeof agent.name === 'string' &&
     isStatus(agent.status) &&
-    typeof agent.phase === 'string'
+    (agent.computerId === undefined || isId(agent.computerId)) &&
+    (agent.phase === undefined || typeof agent.phase === 'string')
   ) {
     return {
       id: agent.id,
       teamId: team,
       name: agent.name,
       status: agent.status,
+      computerId: agent.computerId,
       phase: agent.phase,
     };
   }
@@ -181,7 +184,7 @@ export function LocalHire(props: { name: string; signIn: () => void }) {
     if (!active && offer) {
       if (
         !name() ||
-        [...name()].length > 64 ||
+        Array.from(name()).length > 64 ||
         Date.parse(offer.expiresAt) <= Date.now()
       ) {
         setStatus('Enter a valid name and request fresh offers.');
@@ -206,9 +209,13 @@ export function LocalHire(props: { name: string; signIn: () => void }) {
 
     setBusy(true);
     const reply = await request('confirm', active);
-    const agent =
+    const accepted =
       reply?.status === 'accepted'
         ? agentFrom(reply.agent, current.team.id)
+        : undefined;
+    const agent =
+      accepted?.computerId && accepted.id !== accepted.computerId
+        ? accepted
         : undefined;
     if (
       agent ||
@@ -343,7 +350,8 @@ export function LocalFleet() {
                 >
                   <h2>{agent.name}</h2>
                   <p>
-                    {lifecycleLabel[agent.status]} · {agent.phase}
+                    {lifecycleLabel[agent.status]}
+                    <Show when={agent.phase}> · {agent.phase}</Show>
                   </p>
                   <A href={scopedBrainPath(agent.teamId, agent.id)}>
                     Open {agent.name} Brain
@@ -390,7 +398,8 @@ export function LocalBrain() {
           <>
             <h1>{current().name}</h1>
             <p>
-              {lifecycleLabel[current().status]} · {current().phase}
+              {lifecycleLabel[current().status]}
+              <Show when={current().phase}> · {current().phase}</Show>
             </p>
             <button type="button" onClick={() => void refetch()}>
               Refresh setup status

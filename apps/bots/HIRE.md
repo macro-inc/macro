@@ -34,6 +34,8 @@ review example, and `BOTS_HIRE_REVIEW_SOCKET` and
 The app checks the signed reviewer and current team before sending a
 command to the helper in a network namespace. The helper offers only
 zero-charge local compute. Fleet and Brain read the persisted roster using
-the same team scope and opaque computer UUID. Booting reflects the local
-process exercising the lifecycle. The product and signed read-only builds
-keep their usual gates.
+the same team scope and opaque account UUID. The verified computer
+assignment is separate. The owned-host operator runs independently, and
+refresh only reads current state. Booting reflects the local process
+exercising the lifecycle. The product and signed read-only builds keep
+their usual gates.

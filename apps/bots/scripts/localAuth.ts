@@ -168,15 +168,7 @@ export function localAuth(
           return;
         }
         const { expectedTeam: _team, ...intent } = command;
-        const result = await review.hire.request(seat, intent);
-        reply(result);
-        if (
-          result &&
-          typeof result === 'object' &&
-          'status' in result &&
-          result.status === 'accepted'
-        )
-          void review.hire.request(seat, { kind: 'fleet_pass' });
+        reply(await review.hire.request(seat, intent));
       } else {
         send(res, 404, { status: 'unavailable' });
       }
