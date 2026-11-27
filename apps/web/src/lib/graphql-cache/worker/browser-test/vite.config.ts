@@ -36,6 +36,19 @@ export default defineConfig(({ command }) => ({
           return resolve(directory, 'calendar-create-adapters.ts');
       },
     },
+    {
+      // The document check's default reader loads the app's GraphQL client,
+      // which the deleted document harness replaces with a stand-in.
+      name: 'deleted-documents-adapters',
+      enforce: 'pre',
+      resolveId(source, importer) {
+        if (
+          importer?.endsWith('/queries/soup/graphql/document-reconcile.ts') &&
+          source === '@service-storage/graphql-soup'
+        )
+          return resolve(directory, 'deleted-documents-adapters.ts');
+      },
+    },
     tsconfigPaths({
       projects: [resolve(directory, '../../../../../tsconfig.json')],
     }),
@@ -90,6 +103,7 @@ export default defineConfig(({ command }) => ({
           'search-buckets.html',
           'people-references.html',
           'people-list-order.html',
+          'deleted-documents.html',
         ].map((name) => [name.replace('.html', ''), resolve(directory, name)])
       ),
     },

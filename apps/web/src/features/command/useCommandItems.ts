@@ -15,7 +15,9 @@ import type { HotkeyCommand, ValidHotkey } from '@core/hotkey/types';
 import type { TimestampedItem } from '@core/util/freshSort';
 import { mergeSortedArrays } from '@core/util/list';
 import type { CrmContactEntity } from '@entity';
+import { useVerifiedDocuments } from '@queries/soup/graphql/verify-documents';
 import { type Accessor, createMemo } from 'solid-js';
+import { featuredCommandDocumentIds } from './core/featured-documents';
 import {
   type CreateProjectCommandItem,
   newProjectCommand,
@@ -448,6 +450,10 @@ export function useCommandItems(
 
     return ranked;
   });
+
+  useVerifiedDocuments(() =>
+    featuredCommandDocumentIds(filteredItems(), query())
+  );
 
   return {
     items: filteredItems,

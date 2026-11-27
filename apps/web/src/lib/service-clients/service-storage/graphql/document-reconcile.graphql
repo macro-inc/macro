@@ -1,0 +1,32 @@
+# One document read from the primary, to confirm a cached document is gone
+# before it is deleted from the cache. Null when the document is in the Trash
+# or the viewer can no longer read it; a readable document's name fields are
+# written back. Only the fields local name search reads, so the read skips the
+# property and notification edges.
+query DocumentReconcileEntity($input: SoupEntityInput!) {
+	user {
+		id
+		soupEntity(input: $input) {
+			__typename
+			id
+			... on GraphqlSoupDocument {
+				...GraphqlDocumentQuickAccessName
+			}
+		}
+	}
+}
+
+# The same read with every Soup item field, made only after a delete: if the
+# document was restored meanwhile, this writes back the whole record the
+# lists it belongs to read, not just its name. A gone document costs nothing
+# more, since the edges resolve only for a readable one.
+query DocumentReconcileEntityFull($input: SoupEntityInput!) {
+	user {
+		id
+		soupEntity(input: $input) {
+			__typename
+			id
+			...SoupItemFields
+		}
+	}
+}
