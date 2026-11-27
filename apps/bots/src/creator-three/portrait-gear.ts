@@ -161,7 +161,7 @@ export function createPortraitGear(
         if (eyewear === 'rimless')
           gearMesh(
             new BoxGeometry(0.3, 0.03, 0.01),
-            propMaterial([0.6, 0.7, 0.8], 0, { glow: 0.5, weight: 0 }),
+            propMaterial([0.6, 0.7, 0.8], 0, { glow: 0.5, weight: 0.02 }),
             [x - 0.08, eyeY + 0.14, lensZ],
             (mesh) => {
               mesh.rotation.z = 0.5;
@@ -217,7 +217,7 @@ export function createPortraitGear(
       });
       const lamp = propMaterial([0.89, 0.65, 0.23], 0, {
         glow: 1.6,
-        weight: 0,
+        weight: 0.02,
       });
       const vertex = head.earVertex(-1, 1.2, 1.5);
       pinned(new BoxGeometry(0.2, 0.7, 0.42), shell, vertex, [-0.1, 0, 0.35]);

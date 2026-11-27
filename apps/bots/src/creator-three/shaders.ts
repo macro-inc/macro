@@ -9,8 +9,9 @@ vec3 shade(vec3 albedo, vec3 N, vec3 V, float spec, float gloss, float ao, float
     + uKeyCol * key * mix(0.55, 1.0, ao)
     + uFillCol * max(dot(N, uFillDir) * 0.5 + 0.5, 0.0) * ao);
   // A warm band where the key light falls off, standing in for light scattered under the surface.
-  c += albedo * uKeyCol * vec3(0.5, 0.16, 0.08) * wrap * exp(-pow((dot(N, uKeyDir) + 0.05) * 3.2, 2.0)) * ao;
-  float edge = pow(1.0 - max(dot(N, V), 0.0), 3.0) * max(dot(N, uRimDir) * 0.5 + 0.5, 0.0);
+  float band = (dot(N, uKeyDir) + 0.05) * 3.2;
+  c += albedo * uKeyCol * vec3(0.5, 0.16, 0.08) * wrap * exp(-band * band) * ao;
+  float edge = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 3.0) * max(dot(N, uRimDir) * 0.5 + 0.5, 0.0);
   c += uRimCol * edge * (0.04 + albedo);
   c += uKeyCol * spec * pow(max(dot(N, normalize(uKeyDir + V)), 0.0), gloss) * key;
   return c;
@@ -64,11 +65,11 @@ vec4 eye(vec2 centre, float inner) {
   float r = length(d - c) / (hw * 0.6);
   vec3 sclera = vec3(0.4, 0.36, 0.33) * (0.55 + 0.45 * span) * mix(0.8, 1.2, clamp(uEyeBright - 0.75, 0.0, 0.6) / 0.6);
   sclera *= 0.5 + 0.5 * smoothstep(0.02, 0.35, dot(uTone, vec3(0.3, 0.6, 0.1)));
-  vec3 iris = uIris * uEyeBright * (0.6 + 0.9 * smoothstep(1.0, 0.35, r));
-  iris = mix(iris, vec3(0.012), smoothstep(0.46, 0.36, r));
+  vec3 iris = uIris * uEyeBright * (0.6 + 0.9 * (1.0 - smoothstep(0.35, 1.0, r)));
+  iris = mix(iris, vec3(0.012), 1.0 - smoothstep(0.36, 0.46, r));
   vec3 ball = mix(iris, sclera, smoothstep(0.9, 1.02, r));
   ball += vec3(0.6) * uEyeBright * step(length(d - c - vec2(0.045, 0.05)), hw * 0.085);
-  ball *= mix(0.35, 1.0, smoothstep(up, up - hw * 0.2, d.y));
+  ball *= mix(0.35, 1.0, 1.0 - smoothstep(up - hw * 0.2, up, d.y));
   gLash = max(gLash, step(abs(d.x), hw * 1.05) * step(up, d.y) * step(d.y, up + hw * 0.1) * step(1.3, vBase.z) * step(0.05, uOpen));
   return vec4(ball, inside);
 }
@@ -86,7 +87,7 @@ void main() {
   col = mix(col, uHair * 0.6, vScalp * uScalp);
   // Brows: the scan's own, recoloured, heavier or lighter, with an optional gap.
   float browArea = max(ell(px, vec2(440.0, 266.0), vec2(86.0, 30.0)), ell(px, vec2(588.0, 266.0), vec2(86.0, 30.0)));
-  float dark = smoothstep(0.82 + 0.1 * (uBrow - 1.0), 0.5, lum) * browArea;
+  float dark = (1.0 - smoothstep(0.5, 0.82 + 0.1 * (uBrow - 1.0), lum)) * browArea;
   dark *= 1.0 - uBrowCut * (1.0 - smoothstep(2.5, 5.0, abs(px.x - 606.0 + (px.y - 266.0) * 0.4)));
   col = mix(col, mix(uTone * lum, uHair * 0.5, clamp(uBrow, 0.0, 1.0)), dark * min(uBrow + 0.2, 1.0));
 

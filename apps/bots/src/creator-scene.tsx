@@ -18,15 +18,6 @@ export function CreatorScene(props: {
   const [scene, setScene] = createSignal<PortraitScene>();
   let canvas: HTMLCanvasElement | undefined;
 
-  function release() {
-    const instance = scene();
-    if (!instance) return;
-
-    props.onCapture(undefined);
-    setScene(undefined);
-    instance.dispose();
-  }
-
   onMount(() => {
     const target = canvas;
     if (!target) return;
@@ -34,7 +25,13 @@ export function CreatorScene(props: {
     const life = new AbortController();
     function fallBack() {
       life.abort();
-      release();
+      resize.disconnect();
+
+      const instance = scene();
+      if (!instance) return;
+      props.onCapture(undefined);
+      setScene(undefined);
+      instance.dispose();
     }
 
     const resize = new ResizeObserver(([entry]) => {
@@ -93,20 +90,16 @@ export function CreatorScene(props: {
       }
     }
 
-    void load(target);
-    onCleanup(() => {
-      life.abort();
-      resize.disconnect();
-      release();
+    createEffect(() => {
+      try {
+        scene()?.update(props.preset, props.look, props.pose);
+      } catch {
+        fallBack();
+      }
     });
-  });
 
-  createEffect(() => {
-    try {
-      scene()?.update(props.preset, props.look, props.pose);
-    } catch {
-      release();
-    }
+    void load(target);
+    onCleanup(fallBack);
   });
 
   return (
