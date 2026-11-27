@@ -19,7 +19,10 @@ CREATE TABLE document_email_participants (
     PRIMARY KEY (document_id, address)
 );
 
--- Records the participants of every document linked to these attachments.
+-- Records the participants of every document linked to these attachments,
+-- in key order: two transactions recording rows for one document (it can be
+-- linked to several attachments) would otherwise each wait on a key the
+-- other inserted first.
 CREATE FUNCTION record_document_email_participants(attachment_ids uuid[]) RETURNS void
 LANGUAGE sql AS $$
     INSERT INTO document_email_participants (document_id, address)
@@ -34,6 +37,7 @@ LANGUAGE sql AS $$
     ) participant
     JOIN email_contacts c ON c.id = participant.contact_id
     WHERE de.email_attachment_id = ANY(attachment_ids)
+    ORDER BY 1, 2
     ON CONFLICT DO NOTHING
 $$;
 

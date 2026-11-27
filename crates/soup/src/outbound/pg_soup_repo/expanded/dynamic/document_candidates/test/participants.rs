@@ -717,6 +717,59 @@ async fn a_link_locks_the_message_its_attachment_moved_to(db: PgPool) -> anyhow:
     Ok(())
 }
 
+/// Two transactions that link one document to attachments sharing
+/// participants record them in the same order, so the second waits for the
+/// first instead of deadlocking. The second link's message lists `b` (its
+/// sender) before `a`, which the first transaction holds; the first then
+/// records `b` itself.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn links_of_one_document_record_shared_participants_without_deadlock(
+    db: PgPool,
+) -> anyhow::Result<()> {
+    let document = "reused-doc";
+    let (only_a, b_then_a, only_b) = {
+        let conn = &mut *db.acquire().await?;
+        set_replication_role(conn, "replica").await?;
+        let a = insert_contact(conn, "a@acme.test").await?;
+        let b = insert_contact(conn, "b@acme.test").await?;
+        let from_a = insert_message(conn, a).await?;
+        let from_b_to_a = insert_message(conn, b).await?;
+        insert_recipient(conn, from_b_to_a, a).await?;
+        let from_b = insert_message(conn, b).await?;
+        insert_document(conn, document).await?;
+        let attachments = (
+            insert_attachment(conn, from_a).await?,
+            insert_attachment(conn, from_b_to_a).await?,
+            insert_attachment(conn, from_b).await?,
+        );
+        set_replication_role(conn, "origin").await?;
+        attachments
+    };
+
+    let mut holder = db.acquire().await?;
+    let holder_pid = backend_pid(&mut holder).await?;
+    let mut holding = holder.begin().await?;
+    link(&mut holding, document, only_a).await?;
+    let mut linker = db.acquire().await?;
+    let linker_pid = backend_pid(&mut linker).await?;
+    let linking = tokio::spawn(async move { link(&mut linker, document, b_then_a).await });
+    blocked_by(&db, linker_pid, holder_pid, &linking)
+        .await
+        .context("the second link waits for the first")?;
+    tokio::time::timeout(Duration::from_secs(10), link(&mut holding, document, only_b))
+        .await
+        .context("the first transaction's next link waits for the second")??;
+    holding.commit().await?;
+    linking.await??;
+
+    let conn = &mut *db.acquire().await?;
+    assert_eq!(
+        participants_of(conn, document).await?,
+        set(&["a@acme.test", "b@acme.test"])
+    );
+    Ok(())
+}
+
 /// One statement that deletes several documents deletes all their rows.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn deleting_documents_deletes_their_participants(db: PgPool) -> anyhow::Result<()> {
