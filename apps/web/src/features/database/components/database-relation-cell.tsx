@@ -34,6 +34,15 @@ type DatabaseRelationCellProps = GridCellEditorOptions & {
   onOpen: (rowId: string) => void;
 };
 
+const CHIP_LIMIT = 2;
+/** An expanded field wraps its chips; past this many it still counts the rest. */
+const EXPANDED_CHIP_LIMIT = 20;
+/**
+ * A narrow record panel (its `record-fields` container under 24rem, as on a
+ * phone) shows this many expanded chips until asked for the rest.
+ */
+const PHONE_CHIP_LIMIT = 5;
+
 /** The projection stays a set of row identities; names are presentation only. */
 export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
   const [open, setOpen] = createSignal(false);
@@ -56,9 +65,34 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
   const name = (id: string) =>
     props.source.rows().find((row) => row.id === id)?.name ??
     (props.source.loading() ? 'Loading…' : 'Unavailable record');
+  const [showingAll, setShowingAll] = createSignal(false);
   /** Chips shown in the cell; each carries an arrow to its record. */
-  const shown = () => ids().slice(0, 2);
+  const shown = () =>
+    props.expanded && showingAll()
+      ? ids()
+      : ids().slice(0, props.expanded ? EXPANDED_CHIP_LIMIT : CHIP_LIMIT);
+  /** Past the cap a wide panel keeps, even after a narrow one showed them all. */
+  const overflow = () =>
+    Math.max(
+      0,
+      ids().length - (props.expanded ? EXPANDED_CHIP_LIMIT : CHIP_LIMIT)
+    );
+  /** Expanded chips a narrow record panel keeps behind "+N more". */
+  const narrowHidden = () =>
+    props.expanded && !showingAll()
+      ? Math.max(0, ids().length - PHONE_CHIP_LIMIT)
+      : 0;
   const openable = () => shown().filter(available);
+  /** The "+N more" / "Show less" row, laid out only on a narrow panel. */
+  let moreToggle: HTMLButtonElement | undefined;
+  const toggleShown = () =>
+    !!moreToggle && moreToggle.getClientRects().length > 0;
+  /** The cell's last tab stop hands Tab on to the next field. */
+  function tabOut(event: KeyboardEvent) {
+    if (event.key !== 'Tab' || event.shiftKey || !props.onNavigate?.(1)) return;
+    event.preventDefault();
+    event.stopPropagation();
+  }
   const candidates = () =>
     props.source
       .rows()
@@ -190,7 +224,11 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
               event.altKey
             )
               return;
-            if (event.key === 'Tab' && !event.shiftKey && openable().length)
+            if (
+              event.key === 'Tab' &&
+              !event.shiftKey &&
+              (openable().length || toggleShown())
+            )
               return;
             if (
               event.key === 'Tab' &&
@@ -221,21 +259,46 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
             when={ids().length}
             fallback={<span class="text-ink-placeholder opacity-40">—</span>}
           >
-            <span class="flex min-w-0 items-center gap-1 overflow-hidden">
+            <span
+              class="flex min-w-0 items-center gap-1"
+              classList={{
+                'overflow-hidden': !props.expanded,
+                'w-full flex-wrap': props.expanded,
+              }}
+            >
               <For each={shown()}>
-                {(id) => (
+                {(id, index) => (
                   <span
-                    class="inline-flex min-w-0 max-w-44 items-center gap-1 rounded border border-edge-muted/60 bg-hover/60 py-0.5 pl-1.5 text-xs text-ink"
+                    class="inline-flex min-w-0 items-center gap-1 rounded border border-edge-muted/60 bg-hover/60 py-0.5 pl-1.5 text-xs text-ink"
+                    classList={{
+                      'max-w-44': !props.expanded,
+                      // A narrow panel gives each chip the row, so the arrows line up.
+                      'max-w-full @max-[24rem]/record-fields:w-full':
+                        props.expanded,
+                      '@max-[24rem]/record-fields:hidden':
+                        narrowHidden() > 0 && index() >= PHONE_CHIP_LIMIT,
+                      '@min-[24rem]/record-fields:hidden':
+                        index() >= EXPANDED_CHIP_LIMIT,
+                    }}
                     title={name(id)}
                   >
                     <LinkIcon class="size-3 shrink-0 text-ink-muted" />
-                    <span class="truncate">{name(id)}</span>
+                    <span
+                      classList={{
+                        truncate: !props.expanded,
+                        'min-w-0 flex-1 wrap-break-word': props.expanded,
+                      }}
+                      data-relation-chip-name
+                    >
+                      {name(id)}
+                    </span>
                     {/* A native title: a styled tooltip per chip is a Kobalte root each. */}
                     <button
                       type="button"
                       aria-label={`Open ${name(id)}`}
                       title={`Open ${name(id)}`}
                       class={buttonClasses({
+                        variant: 'ghost',
                         size: 'icon-xs',
                         class: 'pointer-events-auto shrink-0',
                       })}
@@ -243,15 +306,8 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
                       disabled={!available(id)}
                       onClick={() => openRecord(id)}
                       onKeyDown={(event) => {
-                        if (
-                          event.key === 'Tab' &&
-                          !event.shiftKey &&
-                          openable().at(-1) === id &&
-                          props.onNavigate?.(1)
-                        ) {
-                          event.preventDefault();
-                          event.stopPropagation();
-                        }
+                        if (openable().at(-1) === id && !toggleShown())
+                          tabOut(event);
                       }}
                     >
                       <ArrowRightIcon class="size-3" />
@@ -259,10 +315,39 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
                   </span>
                 )}
               </For>
-              <Show when={ids().length > 2}>
-                <span class="shrink-0 text-xs text-ink-muted">
-                  +{ids().length - 2}
+              <Show when={overflow()}>
+                <span
+                  class="shrink-0 text-xs text-ink-muted"
+                  classList={{
+                    // A narrow panel counts with "+N more" or shows them all.
+                    '@max-[24rem]/record-fields:hidden': props.expanded,
+                  }}
+                >
+                  +{overflow()}
                 </span>
+              </Show>
+              {/* One button for both, so focus stays on it as it turns. */}
+              <Show when={props.expanded && ids().length > PHONE_CHIP_LIMIT}>
+                <button
+                  ref={moreToggle}
+                  type="button"
+                  aria-expanded={showingAll()}
+                  aria-label={
+                    showingAll()
+                      ? `Show less ${props.source.name()}`
+                      : `+${narrowHidden()} more ${props.source.name()}`
+                  }
+                  class={buttonClasses({
+                    variant: 'ghost',
+                    size: 'xs',
+                    class:
+                      'pointer-events-auto hidden basis-full justify-start @max-[24rem]/record-fields:inline-flex',
+                  })}
+                  onClick={() => setShowingAll(!showingAll())}
+                  onKeyDown={tabOut}
+                >
+                  {showingAll() ? 'Show less' : `+${narrowHidden()} more`}
+                </button>
               </Show>
             </span>
           </Show>

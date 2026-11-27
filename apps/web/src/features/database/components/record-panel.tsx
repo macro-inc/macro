@@ -205,6 +205,7 @@ function RecordFields(
       get popupMount() {
         return props.popupMount;
       },
+      expanded: true,
       get initialEdit() {
         return column().id === initialEditColumnId;
       },
@@ -265,24 +266,35 @@ function RecordFields(
           <span>{props.outsideViewReason}</span>
         </div>
       </Show>
-      <div class="flex flex-col gap-0.5">
+      {/* Names stack above their values when the panel is too narrow for both. */}
+      <div class="@container/record-fields flex flex-col gap-0.5">
         <Key each={fields()} by="id">
           {(column) => (
-            <div class="grid min-h-9 grid-cols-[minmax(5rem,0.75fr)_minmax(0,1.5fr)] items-start gap-2">
+            <div
+              class="grid min-h-9 grid-cols-1 items-start gap-x-2 @min-[24rem]/record-fields:grid-cols-[minmax(5rem,0.75fr)_minmax(0,1.5fr)]"
+              data-record-field
+            >
               <div
-                class="flex min-w-0 items-center gap-2 pt-2.5 text-xs text-ink-muted"
+                class="flex min-w-0 items-start gap-2 pt-2.5 text-xs text-ink-muted @min-[24rem]/record-fields:pb-2.5"
                 title={column().name}
               >
-                <PropertyIcon
-                  type={column().dataType}
-                  relation={!!column().relation}
-                  formula={!!column().formula}
-                  percentage={!!column().percentage}
-                  entityType={column().specificEntityType}
-                />
-                <span class="truncate">{column().name}</span>
+                <span class="flex h-4 shrink-0 items-center">
+                  <PropertyIcon
+                    type={column().dataType}
+                    relation={!!column().relation}
+                    formula={!!column().formula}
+                    percentage={!!column().percentage}
+                    entityType={column().specificEntityType}
+                  />
+                </span>
+                <span class="min-w-0 wrap-break-word" data-record-field-name>
+                  {column().name}
+                </span>
               </div>
-              <div class="min-w-0">
+              <div
+                class="min-w-0 @max-[24rem]/record-fields:-mx-2.5"
+                data-record-field-value
+              >
                 {props.renderCell(() => props.row, column, options(column))}
               </div>
             </div>

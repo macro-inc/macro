@@ -830,6 +830,18 @@ controls. CI runs it when
 cut `Gantt.BarTitle` (or the label itself overflowing) counts as a cramped bar,
 so wrap a bar's title in it.
 
+The record panel has a desktop/phone regression in the same suite,
+`record.browser.e2e.ts`: every related record's chip and every property name
+shows in full. The panel passes `expanded` to its fields, so a relation field
+wraps its chips instead of showing two: up to 20, then "+N". In a panel
+under 24rem, as on a phone, it shows five, then a "+N more" row that opens the
+rest and a "Show less" that closes it, and each chip takes the full row so the
+open arrows line up. Grids and board cards keep two. The narrow case is a
+container query on the panel's `record-fields` container, not a device check
+(FE-70).
+Property names wrap under their icon, and stack above their values when the
+panel is under 24rem. `?tasks=many|long|unavailable` picks the related records.
+
 The database page's toolbar (the real `DatabasePageToolbar` and
 `DatabasePageNoTables` over tables and views kept in memory, drawn again per
 table as the page does) has a phone/desktop regression in the same suite,
