@@ -2,47 +2,78 @@ import { describe, expect, it } from 'vitest';
 import { missingSoupInputReason, SoupMissingInputError } from './missing-input';
 
 const scope = { initial: { limit: 2 } };
+const earlierScope = { initial: { limit: 1 } };
 
 describe('missingSoupInputReason', () => {
-  it('names a request without a GraphQL translation', () => {
-    expect(
-      missingSoupInputReason({
-        scope: undefined,
-        generation: 2,
-        resolved: { scope, generation: 2 },
-      })
-    ).toBe('untranslatable');
-  });
+  it.each(['first', 'continuation'] as const)(
+    'names a request without a GraphQL translation (%s page)',
+    (page) => {
+      expect(
+        missingSoupInputReason({
+          scope: undefined,
+          generation: 2,
+          page,
+          resolved: { scope, generation: 1 },
+        })
+      ).toBe('untranslatable');
+    }
+  );
 
   it.each([
-    { name: 'never resolved', resolved: undefined },
+    { name: 'never resolved', page: 'first', resolved: undefined },
     {
       name: 'resolved for an earlier ID set',
-      resolved: { scope: { initial: { limit: 1 } }, generation: 2 },
+      page: 'first',
+      resolved: { scope: earlierScope, generation: 2 },
     },
     {
       name: 'resolved for an earlier ID set before a reset',
-      resolved: { scope: { initial: { limit: 1 } }, generation: 1 },
+      page: 'first',
+      resolved: { scope: earlierScope, generation: 1 },
     },
     {
       name: 'resolved to nothing to fetch',
+      page: 'first',
       resolved: { scope, generation: 2 },
     },
-  ])('names a by-ID input that is not resolved ($name)', ({ resolved }) => {
-    expect(missingSoupInputReason({ scope, generation: 2, resolved })).toBe(
-      'by-id-unresolved'
-    );
-  });
+    {
+      name: 'next page of a chain whose ID set changed',
+      page: 'continuation',
+      resolved: { scope: earlierScope, generation: 2 },
+    },
+  ] as const)(
+    'names a by-ID input that is not resolved ($name)',
+    ({ page, resolved }) => {
+      expect(
+        missingSoupInputReason({ scope, generation: 2, page, resolved })
+      ).toBe('by-id-unresolved');
+    }
+  );
 
-  it('names a by-ID input resolved before the cache generation changed', () => {
-    expect(
-      missingSoupInputReason({
-        scope,
-        generation: 3,
-        resolved: { scope, generation: 2 },
-      })
-    ).toBe('cache-reset');
-  });
+  it.each([
+    {
+      name: 'first page of the same ID set',
+      page: 'first',
+      resolved: { scope, generation: 2 },
+    },
+    {
+      name: 'next page of the same ID set',
+      page: 'continuation',
+      resolved: { scope, generation: 2 },
+    },
+    {
+      name: 'next page of a chain whose ID set also changed',
+      page: 'continuation',
+      resolved: { scope: earlierScope, generation: 2 },
+    },
+  ] as const)(
+    'names a by-ID input resolved before the cache generation changed ($name)',
+    ({ page, resolved }) => {
+      expect(
+        missingSoupInputReason({ scope, generation: 3, page, resolved })
+      ).toBe('cache-reset');
+    }
+  );
 });
 
 describe('SoupMissingInputError', () => {

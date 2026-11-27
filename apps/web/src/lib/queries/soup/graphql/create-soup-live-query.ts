@@ -197,13 +197,15 @@ export function createSoupLiveQuery(
   const missingInputError = (cursor: string | null) =>
     untrack(() => {
       missingInputs += 1;
+      const page = cursor === null ? 'first' : 'continuation';
       return new SoupMissingInputError(
         missingSoupInputReason({
           scope: firstPageInput(),
           generation: cacheGeneration,
+          page,
           resolved: cacheFirstEntities() ? entityHydration() : undefined,
         }),
-        cursor === null ? 'first' : 'continuation',
+        page,
         missingInputs
       );
     });

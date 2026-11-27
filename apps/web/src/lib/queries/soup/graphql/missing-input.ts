@@ -15,27 +15,34 @@ export type SoupMissingInputReason =
   | 'by-id-unresolved'
   | 'cache-reset';
 
+/** Whether the missing input was for a list's first page or a next page. */
+export type SoupMissingInputPage = 'first' | 'continuation';
+
 /** The scope a by-ID input was resolved for, and the cache generation it was resolved in. */
 type ResolvedInput = { scope: object; generation: number };
 
 /**
- * Classifies a missing input from the scope and generation its last by-ID
- * resolution was made for. Scopes compare by identity, as the live query's
- * own input check does.
+ * Classifies a missing input from the last by-ID resolution. For a first
+ * page, a reset counts only when that resolution was for the scope asked for
+ * now; otherwise the new scope is simply not resolved yet. A next page belongs
+ * to the page chain started from that resolution, so a reset since then ends
+ * it whatever the scope is now. Scopes compare by identity, as the live
+ * query's own input check does.
  */
 export function missingSoupInputReason(current: {
   scope: object | undefined;
   generation: number;
+  page: SoupMissingInputPage;
   /** The last by-ID resolution; absent for a list that is not by ID. */
   resolved: ResolvedInput | undefined;
 }): SoupMissingInputReason {
   if (current.scope === undefined) return 'untranslatable';
-  if (
-    current.resolved?.scope === current.scope &&
-    current.resolved.generation !== current.generation
-  )
-    return 'cache-reset';
-  return 'by-id-unresolved';
+  const { resolved } = current;
+  if (resolved === undefined || resolved.generation === current.generation)
+    return 'by-id-unresolved';
+  return current.page === 'continuation' || resolved.scope === current.scope
+    ? 'cache-reset'
+    : 'by-id-unresolved';
 }
 
 const MESSAGES = {
@@ -49,14 +56,14 @@ export class SoupMissingInputError extends Error implements AttributedError {
   override readonly name = 'SoupMissingInputError';
   readonly telemetryAttributes: {
     reason: SoupMissingInputReason;
-    'soup.page': 'first' | 'continuation';
+    'soup.page': SoupMissingInputPage;
     /** This list's count of missing inputs so far: above 1 means it retried. */
     'soup.missing_input_count': number;
   };
 
   constructor(
     readonly reason: SoupMissingInputReason,
-    page: 'first' | 'continuation',
+    page: SoupMissingInputPage,
     count: number
   ) {
     super(MESSAGES[reason]);

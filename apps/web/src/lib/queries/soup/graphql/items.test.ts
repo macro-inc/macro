@@ -1,3 +1,5 @@
+import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 import type {
   Client,
   GraphQLRequest,
@@ -7,7 +9,7 @@ import type {
 } from '@urql/core';
 import { CombinedError } from '@urql/core';
 import { type DocumentNode, print } from 'graphql';
-import { createComputed, createRoot, createSignal } from 'solid-js';
+import { batch, createComputed, createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeSubject } from 'wonka';
 import {
@@ -976,76 +978,137 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }
   });
 
-  it('names a cache reset when the next page is asked for after the cache generation changes', async () => {
-    const fake = makeFakeClient();
-    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+  describe('a next page asked for without an input', () => {
     const cached = {
       __typename: 'GraphqlSoupChannel' as const,
       id: 'cached',
       createdAt: '2026-01-01T00:00:00Z',
       updatedAt: '2026-01-01T00:00:00Z',
     };
-    const generations = new Set<() => void>();
-    entityFilterMock.mockResolvedValue({
-      kind: 'live-query',
-      revision: parseCacheRevision(REVISION_0),
-      reset: true,
-      keys: ['GraphqlSoupChannel:cached'],
-      upserts: [{ recordKey: 'GraphqlSoupChannel:cached', record: cached }],
-      patches: [],
-      removed: [],
-      retainedKeys: [],
-      optimistic: false,
-    });
-    getGraphqlSoupCacheHostMock.mockReturnValue({
-      liveQueries: true,
-      currentRevision: async () => REVISION_0,
-      entityFilter: entityFilterMock,
-      onCacheChanged: () => () => {},
-      onCacheGenerationChanged: (callback: () => void) => {
-        generations.add(callback);
-        return () => generations.delete(callback);
+    type PagedList = {
+      resetCache: () => void;
+      setLimit: (limit: number | undefined) => void;
+    };
+
+    it.each([
+      {
+        name: 'the cache was reset',
+        reason: 'cache-reset',
+        change: (list: PagedList) => list.resetCache(),
       },
-    });
-    const { query, dispose } = createRoot((dispose) => ({
-      query: createSoupLiveQuery(
-        () => ({ sortMethod: 'CREATED_AT', limit: 2 }),
-        () => ({
-          projection: 'channel-list',
-          cacheFirstEntities: [
-            { entityType: 'CHANNEL', entityId: 'cached' },
-            { entityType: 'CHANNEL', entityId: 'first' },
-            { entityType: 'CHANNEL', entityId: 'second' },
-          ],
-        })
-      ),
-      dispose,
-    }));
-    try {
-      await vi.waitFor(() => expect(fake.executions).toHaveLength(1));
-      fake.executions[0].next(
-        graphqlSoupPage({
-          items: [{ ...cached, id: 'first' }],
-          next_cursor: 'page-2',
-        })
-      );
-      expect(query.hasNextPage()).toBe(true);
-
-      for (const changed of generations) changed();
-
-      await expect(query.fetchNextPage()).rejects.toMatchObject({
-        name: 'SoupMissingInputError',
-        message: 'GraphQL Soup by-ID input was reset with the cache',
-        telemetryAttributes: {
-          reason: 'cache-reset',
-          'soup.page': 'continuation',
-          'soup.missing_input_count': 1,
+      {
+        name: 'the cache was reset as the request changed',
+        reason: 'cache-reset',
+        change: (list: PagedList) => {
+          list.resetCache();
+          list.setLimit(3);
         },
-      });
-      expect(fake.executions).toHaveLength(1);
-    } finally {
-      dispose();
-    }
+      },
+      {
+        name: 'the request changed',
+        reason: 'by-id-unresolved',
+        change: (list: PagedList) => list.setLimit(3),
+      },
+      {
+        name: 'the request lost its GraphQL translation',
+        reason: 'untranslatable',
+        change: (list: PagedList) => list.setLimit(undefined),
+      },
+    ])(
+      'is reported with its reason and surface when $name',
+      async ({ reason, change }) => {
+        const reported = vi
+          .spyOn(Telemetry, 'error')
+          .mockImplementation(() => {});
+        const fake = makeFakeClient();
+        getGraphqlSoupClientMock.mockReturnValue(fake.client);
+        const generations = new Set<() => void>();
+        entityFilterMock.mockResolvedValue({
+          kind: 'live-query',
+          revision: parseCacheRevision(REVISION_0),
+          reset: true,
+          keys: ['GraphqlSoupChannel:cached'],
+          upserts: [{ recordKey: 'GraphqlSoupChannel:cached', record: cached }],
+          patches: [],
+          removed: [],
+          retainedKeys: [],
+          optimistic: false,
+        });
+        getGraphqlSoupCacheHostMock.mockReturnValue({
+          liveQueries: true,
+          currentRevision: async () => REVISION_0,
+          entityFilter: entityFilterMock,
+          onCacheChanged: () => () => {},
+          onCacheGenerationChanged: (callback: () => void) => {
+            generations.add(callback);
+            return () => generations.delete(callback);
+          },
+        });
+        const [limit, setLimit] = createSignal<number | undefined>(2);
+        const { query, dispose } = createRoot((dispose) => ({
+          query: createSoupLiveQuery(
+            () => {
+              const pageLimit = limit();
+              return pageLimit === undefined
+                ? undefined
+                : { sortMethod: 'CREATED_AT', limit: pageLimit };
+            },
+            () => ({
+              projection: 'channel-list',
+              cacheFirstEntities: [
+                { entityType: 'CHANNEL', entityId: 'cached' },
+                { entityType: 'CHANNEL', entityId: 'first' },
+                { entityType: 'CHANNEL', entityId: 'second' },
+              ],
+            })
+          ),
+          dispose,
+        }));
+        try {
+          await vi.waitFor(() => expect(fake.executions).toHaveLength(1));
+          fake.executions[0].next(
+            graphqlSoupPage({
+              items: [{ ...cached, id: 'first' }],
+              next_cursor: 'page-2',
+            })
+          );
+          expect(query.hasNextPage()).toBe(true);
+
+          // One batch, so the list asks for the next page before the change
+          // can start a new page chain.
+          batch(() => {
+            change({
+              resetCache: () => {
+                for (const changed of generations) changed();
+              },
+              setLimit,
+            });
+            fireAndForget(query.fetchNextPage(), 'channels-by-id');
+          });
+
+          await vi.waitFor(() => expect(reported).toHaveBeenCalledOnce());
+          expect(reported).toHaveBeenCalledWith(
+            expect.objectContaining({
+              name: 'SoupMissingInputError',
+              telemetryAttributes: {
+                reason,
+                'soup.page': 'continuation',
+                'soup.missing_input_count': 1,
+              },
+            }),
+            { surface: 'channels-by-id' }
+          );
+          // No next page went out; a changed request starts its own first page.
+          for (const { variables } of fake.executions)
+            expect(variables).toEqual({
+              input: { initial: expect.anything() },
+            });
+        } finally {
+          dispose();
+          reported.mockRestore();
+        }
+      }
+    );
   });
 
   it('fetches uncached channels without repeating a successful omission', async () => {
