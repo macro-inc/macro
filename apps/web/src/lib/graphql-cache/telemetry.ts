@@ -405,6 +405,22 @@ function slowQueryTemplate(value: unknown): string | undefined {
     : undefined;
 }
 
+/** A slow query's fingerprint, and its template only beside a valid one. */
+function slowQueryFields(
+  input: CacheTelemetryObservation
+): Pick<CacheTelemetryObservation, 'queryFingerprint' | 'queryTemplate'> {
+  if (
+    input.name !== 'graphql_cache.slow_query' ||
+    typeof input.queryFingerprint !== 'string' ||
+    !/^[0-9a-f]{16}$/.test(input.queryFingerprint)
+  )
+    return {};
+  const queryTemplate = slowQueryTemplate(input.queryTemplate);
+  return queryTemplate === undefined
+    ? { queryFingerprint: input.queryFingerprint }
+    : { queryFingerprint: input.queryFingerprint, queryTemplate };
+}
+
 const HIGH_VOLUME_NAMES = new Set<CacheTelemetryEventName>([
   'graphql_cache.host_request',
   'graphql_cache.coordinator_request',
@@ -527,17 +543,7 @@ function sanitizeObservation(
     ...(boundedNumber(input.durationMs, 3_600_000) !== undefined
       ? { durationMs: boundedNumber(input.durationMs, 3_600_000) }
       : {}),
-    ...(input.name === 'graphql_cache.slow_query' &&
-    typeof input.queryFingerprint === 'string' &&
-    /^[0-9a-f]{16}$/.test(input.queryFingerprint)
-      ? { queryFingerprint: input.queryFingerprint }
-      : {}),
-    ...(input.name === 'graphql_cache.slow_query' &&
-    typeof input.queryFingerprint === 'string' &&
-    /^[0-9a-f]{16}$/.test(input.queryFingerprint) &&
-    slowQueryTemplate(input.queryTemplate) !== undefined
-      ? { queryTemplate: slowQueryTemplate(input.queryTemplate) }
-      : {}),
+    ...slowQueryFields(input),
     ...(boundedNumber(input.bytes) !== undefined
       ? { bytes: boundedNumber(input.bytes) }
       : {}),
