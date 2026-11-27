@@ -3,7 +3,8 @@
 # CloudWatch Logs uses to write to it. Log groups opt in with a subscription
 # filter whose destination is `firehose_stream_arn` and role
 # `cloudwatch_logs_role_arn` (outputs.nix); a log group takes two filters, and
-# today's take one (Datadog's).
+# today's take one (Datadog's). Pulumi's Lambda component adds them for the
+# groups a stack owns; ./log-subscriptions.nix for the ones no stack owns.
 #
 # Nothing flows until a log group subscribes and the access key secret has a
 # value (README "Secrets"). Without one, every post is refused and lands in

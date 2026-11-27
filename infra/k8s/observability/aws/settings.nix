@@ -226,14 +226,16 @@ rec {
     errorLogDays = 14;
     # Production log groups no Pulumi stack owns: Lambdas deployed outside
     # this repository, each with Datadog's subscription filter as its only
-    # one. modules/log-subscriptions.nix gives each a second, to the stream,
-    # with the same pattern as Datadog's. Log groups a stack owns get their
-    # filter from that stack (infra/packages/lambda,
-    # GRAFANA_CLOUDWATCH_LOGS_STREAM_ARN).
+    # one (checked 2026-11-27). modules/log-subscriptions.nix gives each a
+    # second, to the stream, with the same pattern as Datadog's. Log groups a
+    # stack owns get theirs from the Lambda component in infra/packages/lambda.
+    # A group recreated outside this repository loses its filter until the
+    # next apply.
     unownedLogGroups =
       let
         # Datadog's patterns on these groups: JSON events only, or every event
-        # but the runtime's per-invocation lines.
+        # but the runtime's per-invocation lines. JSON-only drops plain-text
+        # runtime lines (timeouts, init errors) in both places.
         json = ''{ $.* = "*" }'';
         runtimeLinesOut = ''- "START RequestId:" - "REPORT RequestId:" - "END RequestId:" - "INIT_START"'';
         patterns = {

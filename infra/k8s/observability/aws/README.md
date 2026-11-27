@@ -113,6 +113,9 @@ doppler secrets get OTLP_TOKEN --project observability --config prd --plain |
 nix run .#tofu -- main apply
 ```
 
+The second apply also creates the subscription filters
+(`modules/log-subscriptions.nix`), so they send only once the secret is set.
+
 Alloy accepts one token at a time, and Firehose rereads this secret only now
 and then. When the OTLP token changes, put the new one here first, wait several
 minutes, then change the cluster's `otlp_token`. Posts in between are refused

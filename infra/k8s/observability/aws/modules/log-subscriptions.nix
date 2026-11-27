@@ -8,6 +8,10 @@ let
   fh = settings.firehose;
   key = group: lib.replaceStrings [ "/" "." ] [ "_" "_" ] (lib.removePrefix "/aws/lambda/" group);
 in
+assert lib.assertMsg (
+  lib.length (lib.unique (map key (lib.attrNames fh.unownedLogGroups)))
+  == lib.length (lib.attrNames fh.unownedLogGroups)
+) "two unownedLogGroups map to one resource name; change `key` in modules/log-subscriptions.nix";
 {
   resource.aws_cloudwatch_log_subscription_filter = lib.mapAttrs' (
     group: pattern:
