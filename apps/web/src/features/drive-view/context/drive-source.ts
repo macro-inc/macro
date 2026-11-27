@@ -21,7 +21,11 @@ export type DriveSelection = Pick<
   'location' | 'scope' | 'sort' | 'search' | 'facets'
 >;
 
-export type DriveFolderMetadata = DriveFolder & { userId: string };
+export type DriveFolderMetadata = DriveFolder & {
+  userId: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
 
 export type DriveSidebarSource = {
   folders: Accessor<DriveFolderMetadata[]>;

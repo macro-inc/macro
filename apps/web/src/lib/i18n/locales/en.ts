@@ -21,6 +21,7 @@ import create from './en/create';
 import crm from './en/crm';
 import databaseAnswers from './en/database-answers';
 import dictation from './en/dictation';
+import drive from './en/drive';
 import emailThread from './en/email-thread';
 import emailViews from './en/email-views';
 import entityActions from './en/entity-actions';
@@ -86,6 +87,7 @@ export default {
   crm,
   databaseAnswers,
   dictation,
+  drive,
   emailThread,
   emailViews,
   entityActions,

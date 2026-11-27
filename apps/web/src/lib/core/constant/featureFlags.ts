@@ -194,6 +194,18 @@ export const enableGantt = defineFlag({
   default: LOCAL_ONLY || undefined,
 });
 
+/**
+ * Redesigned Drive workspace (unified My Drive hierarchy, List/Grid/Columns
+ * views, inline rename and folder creation, Quick Look inspector, Trash, and
+ * undoable moves/deletes). Visible in local previews; deployed apps defer to
+ * PostHog. Override with VITE_ENABLE_DRIVE_REDESIGN.
+ */
+export const enableDriveRedesign = defineFlag({
+  key: 'enable-drive-redesign',
+  env: 'ENABLE_DRIVE_REDESIGN',
+  default: LOCAL_ONLY || undefined,
+});
+
 export const ENABLE_PDF_MODIFICATION_DATA_AUTOSAVE = defineFlag({
   env: 'ENABLE_PDF_MODIFICATION_DATA_AUTOSAVE',
   default: true,

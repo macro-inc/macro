@@ -3,23 +3,66 @@ import { itemToSafeName } from '@core/constant/allBlocks';
 
 import { storageServiceClient } from '@service-storage/client';
 import type { Item } from '@service-storage/generated/schemas/item';
-import { keepPreviousData, useQuery } from '@tanstack/solid-query';
+import {
+  infiniteQueryOptions,
+  keepPreviousData,
+  useInfiniteQuery,
+  useQuery,
+} from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { storageKeys } from './keys';
 
 const DELETED_STALE_TIME = 5 * 60 * 1000;
 const DELETED_GC_TIME = 10 * 60 * 1000;
+const DELETED_PAGE_SIZE = 100;
+
+export type DeletedItemsPage = {
+  items: Item[];
+  nextCursor: string | null;
+};
 
 type DeletedItemsQueryResponse = {
   items: Item[];
 };
 
 async function fetchDeletedItems(): Promise<DeletedItemsQueryResponse> {
-  const result = await storageServiceClient.getDeletedItems();
+  const result = await storageServiceClient.getDeletedItems({});
   if (result.isOk()) {
     return result.value;
   }
   return { items: [] };
+}
+
+async function fetchDeletedItemsPage(
+  cursor: string | undefined
+): Promise<DeletedItemsPage> {
+  const result = await storageServiceClient.getDeletedItems({
+    limit: DELETED_PAGE_SIZE,
+    cursor,
+  });
+  if (result.isErr()) {
+    throw new Error('Failed to fetch deleted items');
+  }
+  return {
+    items: transformItems(result.value.items),
+    nextCursor: result.value.next_cursor ?? null,
+  };
+}
+
+export function deletedItemsInfiniteQueryOptions(enabled: boolean) {
+  return infiniteQueryOptions({
+    queryKey: [...storageKeys.deleted.list.queryKey, 'pages'] as const,
+    queryFn: ({ pageParam }) => fetchDeletedItemsPage(pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    staleTime: DELETED_STALE_TIME,
+    gcTime: DELETED_GC_TIME,
+    enabled,
+  });
+}
+
+export function useDeletedItemsInfiniteQuery(enabled: () => boolean) {
+  return useInfiniteQuery(() => deletedItemsInfiniteQueryOptions(enabled()));
 }
 
 function deletedItemsQueryOptions() {
