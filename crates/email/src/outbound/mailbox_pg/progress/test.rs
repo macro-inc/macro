@@ -2,7 +2,8 @@ use super::*;
 use crate::domain::mailbox::progress::MailboxProgressService;
 use crate::telemetry_capture::Telemetry;
 use email_api_client::domain::models::{
-    EmailApiError, GateLimit, MailboxMessage, RateLimitOrigin, RoundStart, StreamPosition,
+    EmailApiError, GateLimit, MailFolderCatalog, MailboxMessage, RateLimitOrigin, RoundStart,
+    StreamPosition,
 };
 use email_api_client::domain::request_count;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -30,8 +31,8 @@ impl Provider {
 }
 
 impl MailboxGateway for Arc<Provider> {
-    async fn folders(&self, _: MailboxKey) -> Result<Vec<MailFolder>, EmailApiError> {
-        Ok(Vec::new())
+    async fn folders(&self, _: MailboxKey) -> Result<MailFolderCatalog, EmailApiError> {
+        Ok(MailFolderCatalog::Folders(Vec::new()))
     }
     async fn changes(
         &self,
@@ -290,6 +291,12 @@ async fn enumeration_reports_the_page_it_committed(db: PgPool) {
     assert_eq!(span["outlook.rows_queued"], "3");
     assert_eq!(span["outlook.delta_advanced"], "true");
     assert_eq!(span["outlook.folder_initial_complete"], "true");
+    assert_eq!(span["outlook.import_round"], "true");
+    assert!(span["outlook.due_ms"].parse::<i64>().unwrap() >= 0);
+    assert_eq!(
+        span["outlook.poll_interval_seconds"], "120",
+        "the mailbox has no subscription"
+    );
     assert!(matches!(
         super::super::test::page().position,
         StreamPosition::Checkpoint(_)
@@ -500,6 +507,20 @@ async fn health_snapshot_counts_the_current_queue_streams_and_recent_imports(db:
     .execute(&db)
     .await
     .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO email_sync_streams (id,link_id,generation,kind,scope_id,next_run_at,initial_complete,lease_id,lease_until) VALUES
+            ($2,$1,1,'mail_folder','waiting round',now() - interval '400 seconds',false,NULL,NULL),
+            ($3,$1,1,'mail_folder','leased round',now() - interval '900 seconds',false,$5,now() + interval '60 seconds'),
+            ($4,$1,1,'mail_folder','finished folder',now() - interval '1200 seconds',true,NULL,NULL)"#,
+        active,
+        macro_uuid::generate_uuid_v7(),
+        macro_uuid::generate_uuid_v7(),
+        macro_uuid::generate_uuid_v7(),
+        macro_uuid::generate_uuid_v7()
+    )
+    .execute(&db)
+    .await
+    .unwrap();
     let paused = outlook_link(&db, "paused@example.com", false, true).await;
     queue(&db, paused, "waiting", true, 0).await;
     outlook_link(&db, "idle@example.com", false, false).await;
@@ -525,7 +546,11 @@ async fn health_snapshot_counts_the_current_queue_streams_and_recent_imports(db:
             active_backlog.sync_active,
             active_backlog.needs_reauth,
         ),
-        (3, 1, 1, 1, 5, true, false)
+        (3, 1, 1, 3, 5, true, false)
+    );
+    assert!(
+        (400..=402).contains(&active_backlog.import_round_wait_seconds),
+        "the longest-due unclaimed round: {active_backlog:?}"
     );
     assert!((90..=92).contains(&active_backlog.oldest_waiting_seconds));
     assert!((598..=600).contains(&active_backlog.parked_until_max_seconds));
@@ -555,6 +580,45 @@ async fn health_snapshot_counts_the_current_queue_streams_and_recent_imports(db:
     .await
     .unwrap();
     assert_eq!(retained, 2, "counts older than a day are dropped");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_folder_line_counts_what_a_claim_could_take_with_the_longest_wait(db: PgPool) {
+    let repo = PgMailboxSync::new(db.clone());
+    let active = outlook_link(&db, "active@example.com", true, false).await;
+    let paused = outlook_link(&db, "paused@example.com", true, true).await;
+    sqlx::query!(
+        r#"INSERT INTO email_sync_streams (id,link_id,generation,kind,scope_id,initial_complete,next_run_at,lease_id,lease_until)
+        SELECT gen_random_uuid(), link_id, generation, kind, scope_id, initial_complete, now() - make_interval(secs => due_seconds_ago), lease_id, lease_until
+        FROM (VALUES
+            ($1::uuid, 1::bigint, 'mail_folder', 'polled long ago', true, 300.0::float8, NULL::uuid, NULL::timestamptz),
+            ($1, 1, 'mail_folder', 'polled lately', true, 60.0, NULL, NULL),
+            ($1, 1, 'mail_folder', 'not due', true, -60.0, NULL, NULL),
+            ($1, 1, 'mail_folder', 'claimed', true, 900.0, $3, now() + interval '1 minute'),
+            ($1, 1, 'mail_folder', 'importing', false, 30.0, NULL, NULL),
+            ($1, 0, 'mail_folder', 'older generation', true, 3600.0, NULL, NULL),
+            ($1, 1, 'contacts', 'contacts', true, 3600.0, NULL, NULL),
+            ($2, 1, 'mail_folder', 'needs reauthorization', false, 3600.0, NULL, NULL)
+        ) AS streams(link_id, generation, kind, scope_id, initial_complete, due_seconds_ago, lease_id, lease_until)"#,
+        active,
+        paused,
+        macro_uuid::generate_uuid_v7()
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+
+    let line = repo.folder_line().await.unwrap();
+
+    assert_eq!((line.polls_due, line.import_rounds_due), (2, 1), "{line:?}");
+    assert!(
+        (300..=302).contains(&line.oldest_poll_due_seconds),
+        "{line:?}"
+    );
+    assert!(
+        (30..=32).contains(&line.oldest_import_round_due_seconds),
+        "{line:?}"
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -597,6 +661,7 @@ async fn import_counts_from_several_workers_add_up_in_the_snapshot(db: PgPool) {
     assert_eq!(fields["imported_5m"], "4");
     assert_eq!(fields["queued"], "0");
     assert_eq!(fields["oldest_waiting_seconds"], "0");
+    assert!(fields.contains_key("import_round_wait_seconds"));
     assert_eq!(fields["sync_active"], "true");
     assert!(fields.contains_key("seconds_since_last_import"));
 }
@@ -655,13 +720,14 @@ async fn notify(repo: &PgMailboxSync, attempt: Uuid) {
         MailboxWatchNotifications, WatchHint, WatchNotification,
     };
 
-    MailboxWatchNotifications(repo.clone())
+    MailboxWatchNotifications::new(repo.clone())
         .receive(
             attempt,
             vec![WatchNotification {
                 subscription_id: "sub".into(),
                 client_state: "secret".into(),
                 hint: WatchHint::Changed,
+                message: None,
             }],
         )
         .await

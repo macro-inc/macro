@@ -132,6 +132,27 @@ function ValueDemo() {
 }
 // #endregion
 
+// #region demo:full-width-icons
+function FullWidthIconsDemo() {
+  const [value, setValue] = createSignal<'chat' | 'code'>('chat');
+  return (
+    <div class="w-48">
+      <Tabs
+        aria-label="Conversation mode"
+        fullWidth
+        iconOnly
+        options={[
+          { value: 'chat', label: 'Chat', icon: ChatIcon, dot: true },
+          { value: 'code', label: 'Code', icon: CodeIcon },
+        ]}
+        value={value()}
+        onChange={setValue}
+      />
+    </div>
+  );
+}
+// #endregion
+
 // #region demo:track
 function TrackDemo() {
   const [value, setValue] = createSignal<'chat' | 'code'>('chat');
@@ -152,6 +173,43 @@ function TrackDemo() {
 }
 // #endregion
 
+// #region demo:choices
+function ChoicesDemo() {
+  const [value, setValue] = createSignal<'event' | 'away'>('event');
+  return (
+    // Choice faces are 24px on desktop and 28px inside 44px touch targets.
+    <Tabs
+      aria-label="Event type"
+      variant="choices"
+      wrap
+      options={[
+        { value: 'event', label: 'Event' },
+        { value: 'away', label: 'Out of office' },
+      ]}
+      value={value()}
+      onChange={setValue}
+    />
+  );
+}
+// #endregion
+
+// #region demo:filled-choices
+function FilledChoicesDemo() {
+  const [value, setValue] = createSignal<'event' | 'away'>('event');
+  return (
+    <Tabs
+      aria-label="Filled event type"
+      variant="choices-filled"
+      options={[
+        { value: 'event', label: 'Event' },
+        { value: 'away', label: 'Out of office' },
+      ]}
+      value={value()}
+      onChange={setValue}
+    />
+  );
+}
+// #endregion
 export default defineDoc({
   name: 'Tabs',
   category: 'Navigation',
@@ -170,6 +228,20 @@ export default defineDoc({
       render: ViewDemo,
     },
     {
+      id: 'choices',
+      title: 'Form choices',
+      description:
+        'Separate 24px choice faces use 12px text; touch keeps 28px faces inside 44px targets.',
+      render: ChoicesDemo,
+    },
+    {
+      id: 'filled-choices',
+      title: 'Filled form choices',
+      description:
+        'Separate 28px choices pair solid accent selection with its foreground token. Radio and keyboard behavior stays shared.',
+      render: FilledChoicesDemo,
+    },
+    {
       id: 'counts',
       title: 'Counts',
       description: 'Counts follow the label in muted figures.',
@@ -186,7 +258,7 @@ export default defineDoc({
       id: 'sizes',
       title: 'Sizes',
       description:
-        'Tabs share Button minimum heights and square icon sizes. Medium labels use 14px text and 12px horizontal padding; large labels use 15px text. Touch treatments retain their minimum targets.',
+        'Tabs share Button minimum heights and square icon sizes. Medium labels use 14px text and 12px horizontal padding; large labels use 15px text. Touch treatments retain their minimum targets. `size="composer"` with the inset treatment matches repository controls: 38px frame, 36px items, 14px text with the adjacent control’s inherited line height, 8px label padding, and full rounding.',
       render: SizesDemo,
     },
     {
@@ -197,10 +269,17 @@ export default defineDoc({
       render: ValueDemo,
     },
     {
-      id: 'track',
-      title: 'Composer mode switch',
+      id: 'full-width-icons',
+      title: 'Full width, icon only',
       description:
-        '`variant="track"` slides one flat pill along a filled track on every device. It is only for the agent composer\'s Chat/Code switch in the composer tray.',
+        'With `fullWidth`, icon-only options still share the row equally, and a dot sits on its glyph’s corner.',
+      render: FullWidthIconsDemo,
+    },
+    {
+      id: 'track',
+      title: 'Legacy track reference',
+      description:
+        '`variant="track"` preserves Home’s existing composer tabs. Other production Auto/Chat/Code switches use the shared grouped Tabs pill.',
       render: TrackDemo,
     },
   ],

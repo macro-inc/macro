@@ -78,6 +78,10 @@ pub enum MessageLabelError<E> {
     /// its transaction rolled back.
     #[error("unable to queue the category change: {0}")]
     Command(E),
+    /// The inbox stayed locked past the lock timeout; the category command
+    /// rolled back and the same change can be retried.
+    #[error("{}", super::models::EmailErr::Contended)]
+    Contended,
 }
 
 /// The transaction step that failed, after its original error has been logged.
@@ -144,10 +148,37 @@ pub struct StagedLabelWrite {
     pub write_id: Uuid,
 }
 
+/// What staging a label write changed.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct StagedMessageLabels {
+    /// Changed messages Gmail knows about, which the queued write sends.
+    pub provider_messages: Vec<(Uuid, String)>,
+    /// Threads that gained a label someone made: none of their messages,
+    /// drafts aside, carried it before.
+    pub gaining: Vec<GainingThread>,
+}
+
+/// A thread that gained a label, and the message it was put on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GainingThread {
+    /// Database identifier of the thread.
+    pub thread_id: Uuid,
+    /// Database identifier of the message.
+    pub message_id: Uuid,
+    /// Database identifier of the label.
+    pub label_id: Uuid,
+}
+
 /// Caller-scoped reads, atomic staging, and compensation for message labels.
 pub trait MessageLabelRepository: Send + Sync + 'static {
     /// Persistence failure, retaining its cause for callers.
     type Err: std::error::Error + Send + Sync + 'static;
+
+    /// Whether a failed `enqueue_mailbox_action` found the inbox locked past
+    /// the lock timeout, so the same change can be retried.
+    fn is_contended(&self, _error: &Self::Err) -> bool {
+        false
+    }
 
     /// Resolve the first message through the caller's own and delegated inboxes.
     fn inbox_for_message(
@@ -170,11 +201,11 @@ pub trait MessageLabelRepository: Send + Sync + 'static {
         caller_fusionauth_user_id: &str,
     ) -> impl Future<Output = Result<Vec<MessageLabelTarget>, Self::Err>> + Send;
 
-    /// Lock, mark, apply, and commit a label write, returning changed provider messages.
+    /// Lock, mark, apply, and commit a label write, returning what it changed.
     fn stage(
         &self,
         write: StagedLabelWrite,
-    ) -> impl Future<Output = Result<Vec<(Uuid, String)>, StageFailure>> + Send;
+    ) -> impl Future<Output = Result<StagedMessageLabels, StageFailure>> + Send;
 
     /// Restore an unqueued write under the threads' label-write locks.
     fn revert_unsent(
@@ -275,7 +306,10 @@ where
         let pending_write_id = macro_uuid::generate_uuid_v7();
         let provider_label_id = label.provider_label_id.clone();
         let is_adding = request.add;
-        let provider_messages = self
+        let StagedMessageLabels {
+            provider_messages,
+            gaining,
+        } = self
             .repository
             .stage(StagedLabelWrite {
                 link_id: link.id,
@@ -288,7 +322,9 @@ where
             .await?;
 
         let actor = Some(link.macro_id.clone());
+        let automated = agent_correlation::context::by_program();
         for thread_id in &thread_ids {
+            let gained = gaining.iter().find(|gained| gained.thread_id == *thread_id);
             let event = EmailMacroEvent::thread_label_change(
                 link.id,
                 link.macro_id.clone(),
@@ -301,12 +337,15 @@ where
                 },
                 is_adding,
                 EmailEventOrigin::UserAction,
+            )
+            .with_labels_gained(
+                gained.map(|gained| gained.message_id),
+                gained.map(|gained| gained.label_id).into_iter().collect(),
+                automated,
             );
-            if let Some(event) = event {
-                let _ = self.broker.send_event(&event).inspect_err(|e| {
-                    tracing::error!(error=?e, "failed to publish email macro event");
-                });
-            }
+            let _ = self.broker.send_event(&event).inspect_err(|e| {
+                tracing::error!(error=?e, "failed to publish email macro event");
+            });
         }
 
         let (labels_to_add, labels_to_remove) = if is_adding {
@@ -342,6 +381,19 @@ where
                 )
                 .await
                 .map_err(MessageLabelError::Unqueued)?;
+
+            // The change is published above, so a reader may have seen the
+            // labels this undid.
+            for thread_id in &thread_ids {
+                let event = EmailMacroEvent::thread_reindex_requested(
+                    link.id,
+                    link.macro_id.clone(),
+                    *thread_id,
+                );
+                let _ = self.broker.send_event(&event).inspect_err(|e| {
+                    tracing::error!(error=?e, "failed to publish email macro event");
+                });
+            }
         }
 
         Ok(MessageLabelOutcome {
@@ -395,7 +447,13 @@ where
                         "Failed to queue the Outlook category change"
                     );
                 })
-                .map_err(MessageLabelError::Command)?;
+                .map_err(|error| {
+                    if self.repository.is_contended(&error) {
+                        MessageLabelError::Contended
+                    } else {
+                        MessageLabelError::Command(error)
+                    }
+                })?;
         }
         let (successful_ids, failed_ids) = messages
             .iter()

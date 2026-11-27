@@ -7,17 +7,24 @@ import { enableChannelTags } from '@core/constant/featureFlags';
 import type { ChannelEntity } from '@entity';
 import FunnelIcon from '@icon/system/regular/funnel.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
+import { createChannelNotificationSettings } from '@notifications/primitives/create-channel-notification-settings';
 import { useCachedChannelsByIds } from '@queries/channel/by-ids';
 import { useChannelLabelsQuery } from '@queries/channel-labels/channel-labels';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import { queryReadyGate } from '@queries/gate';
 import { useCurrentTeamQuery } from '@queries/team/teams';
-import { createMemo, createSignal, Show } from 'solid-js';
+import {
+  type Accessor,
+  createMemo,
+  createSignal,
+  getOwner,
+  Show,
+} from 'solid-js';
 import { useChannelsView } from '../../../../channels-view-context';
 import type { ChannelsDataSource, ChannelsSources } from '../../../../queries';
 import { deduplicateChannels } from '../../../../queries';
-import { useChannelListSearchPool } from '../../../../queries/channel-list-search-pool';
 import { ChannelsMobileView } from '../../../ChannelsMobileView';
+import { sectionNotificationMenus } from '../../hooks/section-notification-menus';
 import { SectionChannelsPicker } from '../SectionChannelsDialog';
 import { MobileSectionOptions } from './MobileSectionOptions';
 import {
@@ -32,6 +39,7 @@ import { useMobileSectionActions } from './use-mobile-section-actions';
 export function MobileSectionsView(props: {
   sources: ChannelsSources;
   pinned: readonly ChannelEntity[];
+  localChannels: Accessor<ChannelEntity[]>;
   openPreview?: (channel: ChannelEntity) => boolean;
 }) {
   const { state, sectionsEnabled, setSectionPreferences, setSectionOrder } =
@@ -61,7 +69,7 @@ export function MobileSectionsView(props: {
       ...state.sectionPreferences[`label:${label.id}`],
     };
   };
-  const localChannels = useChannelListSearchPool();
+  const localChannels = props.localChannels;
   const members = useCachedChannelsByIds(
     () => selectedLabel()?.channelIds ?? [],
     sectionsEnabled
@@ -137,6 +145,31 @@ export function MobileSectionsView(props: {
     labels().find((label) => label.id === optionsFor());
   const team = useCurrentTeamQuery();
   const favorites = useFavoritesData({ entityType: ['channel'] });
+  const channelsById = createMemo(
+    () =>
+      new Map(
+        deduplicateChannels([
+          members.channels(),
+          props.sources.recents.items(),
+          localChannels(),
+        ]).map((channel) => [channel.id, channel])
+      )
+  );
+  const channelNotifications = createChannelNotificationSettings({
+    labels,
+    resolveConflictChannels: true,
+    favoriteChannelIds: () =>
+      new Set(
+        (favorites()?.favorites ?? [])
+          .filter((favorite) => favorite.entityType === 'channel')
+          .map((favorite) => favorite.entityId)
+      ),
+  });
+  // Dialogs from the section's options sheet replace it, under this view.
+  const sectionNotifications = sectionNotificationMenus(channelNotifications, {
+    dialogOwner: getOwner(),
+    closeSheet: () => setOptionsFor(undefined),
+  });
   const actions = useMobileSectionActions({
     enabled: () => sectionsEnabled() && channelTags().enabled,
     labels,
@@ -144,14 +177,7 @@ export function MobileSectionsView(props: {
     canShare: () => queryReadyGate(shared) && Boolean(shared.data?.teamId),
     teamId: () =>
       queryReadyGate(shared) ? (shared.data?.teamId ?? undefined) : undefined,
-    channelsById: () =>
-      new Map(
-        deduplicateChannels([
-          members.channels(),
-          props.sources.recents.items(),
-          localChannels(),
-        ]).map((channel) => [channel.id, channel])
-      ),
+    channelsById,
     favorites: () => favorites()?.favorites ?? [],
     onSectionCreated: (id) => {
       const key = `label:${id}` as const;
@@ -227,6 +253,10 @@ export function MobileSectionsView(props: {
         {(label) => (
           <MobileSectionOptions
             label={label()}
+            notifications={sectionNotifications(
+              `label:${label().id}`,
+              label().name
+            )}
             teamName={queryReadyGate(team) ? team.data?.team.name : undefined}
             canShare={queryReadyGate(shared) && Boolean(shared.data?.teamId)}
             canEdit={actions.canEditSection(label())}

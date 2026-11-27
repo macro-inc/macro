@@ -9,12 +9,12 @@ export function DriveMobileControls() {
 
   return (
     <div class="flex h-10 min-w-0 flex-1 items-center">
-      <div class="pointer-events-auto flex items-center gap-2">
-        <ViewSidebar.Toggle action="expand" presentation="pill" />
-        <Show when={!folderHierarchy()}>
+      <ViewSidebar.Toggle action="expand" presentation="pill" />
+      <Show when={!folderHierarchy()}>
+        <div class="pointer-events-auto ml-auto shrink-0">
           <DriveFilterDrawer />
-        </Show>
-      </div>
+        </div>
+      </Show>
     </div>
   );
 }

@@ -22,6 +22,12 @@ export type AcceptSuggestionRequest = {
  */
 export type ActionConfiguration = {
     /**
+     * An icon and colour an agent picked for what the routine does. Saved
+     * unless the owner chose the routine's appearance, which only the
+     * appearance endpoint does; absent leaves the stored one.
+     */
+    appearance?: EntityAppearance;
+    /**
      * What the routine is for, in the owner's words; empty when unset.
      */
     description?: string;
@@ -42,6 +48,11 @@ export type ActionConfiguration = {
  * `description` keeps them too, so clients that predate them do not reset them.
  */
 export type ActionConfigurationUpdate = {
+    /**
+     * An icon and colour an agent picked, as on create. Saved only when the
+     * update is made for the routine's owner; skipped for anyone else.
+     */
+    appearance?: EntityAppearance;
     /**
      * An empty string clears it.
      */
@@ -622,6 +633,11 @@ export type DraftUpdateState = 'drafting' | 'ready' | 'failed' | 'removed';
  */
 export type DraftedRoutine = {
     /**
+     * The icon and colour AI picked for it from Macro's icons; absent when
+     * it picked none, or one Macro doesn't have.
+     */
+    appearance?: EntityAppearance;
+    /**
      * Apps outside Macro its Ask AI step uses that its owner connected,
      * which the routine requires (its task's `mcp_servers`).
      */
@@ -717,6 +733,17 @@ export type EventFilter = {
     github?: null | GithubSelector;
     ids?: Array<string> | null;
     /**
+     * The inboxes (email link ids) whose new or labeled mail starts the
+     * routine. Absent: every inbox the owner reads, their own and those
+     * delegated to them.
+     */
+    inboxes?: Array<string> | null;
+    /**
+     * Email labels, one of which the thread must gain: their row ids. Any
+     * label when absent. Only for `email.labeled`.
+     */
+    labels?: Array<string> | null;
+    /**
      * Exact tests on the payload, all of which must pass.
      */
     match?: Array<PayloadCondition> | null;
@@ -732,7 +759,7 @@ export type EventFilters = Array<EventFilter>;
  * Closed allowlist: unknown names, deletions and ambiguous attribution are not
  * selectors. Adding a broker variant does not automatically enable routines.
  */
-export type EventName = 'document.created' | 'document.updated' | 'document.deleted' | 'task.created' | 'task.status_changed' | 'task.priority_changed' | 'task.property_changed' | 'email.message_received' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created' | 'call.started' | 'call.ended' | 'github';
+export type EventName = 'document.created' | 'document.updated' | 'document.deleted' | 'task.created' | 'task.status_changed' | 'task.priority_changed' | 'task.property_changed' | 'email.message_received' | 'email.labeled' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created' | 'call.started' | 'call.ended' | 'github';
 
 /**
  * A finished run, with the routines it created.
@@ -777,6 +804,11 @@ export type ExecutionResult = {
     steps?: Array<{
         [key: string]: unknown;
     }>;
+    /**
+     * The owner stopped the run before it finished. Older records, and
+     * replicas built before it, leave it out.
+     */
+    stopped?: boolean;
     version: number;
 };
 
@@ -944,6 +976,22 @@ export type LeftName = {
 };
 
 /**
+ * A topic a generation session names, or names again, through
+ * `macro.suggestions.nameTopic`.
+ */
+export type NameTopic = {
+    /**
+     * Names the topic across nights; the same key updates the same topic.
+     */
+    key: string;
+    /**
+     * What it is, in a few words.
+     */
+    name: string;
+    reason?: null | TopicReason;
+};
+
+/**
  * What a text knob's value names: one of its owner's items, which a client
  * matches by name or lets them pick.
  */
@@ -997,6 +1045,12 @@ export type NewSuggestion = {
      * What to do, in a few words.
      */
     title: string;
+    /**
+     * The key of the topic it belongs to, named with
+     * `macro.suggestions.nameTopic` first, or null for none; left out, a
+     * suggestion that exists keeps the one it has.
+     */
+    topic?: string | null;
 };
 
 /**
@@ -1032,6 +1086,11 @@ export type PayloadCondition = {
  * A JSON text, number, boolean or null that payload values are compared with.
  */
 export type PayloadScalar = null | boolean | number | string;
+
+/**
+ * The plans a user can be on, cheapest first.
+ */
+export type PlanTier = 'free' | 'premium' | 'business' | 'max';
 
 /**
  * Narrows a task property change filter to one property and, optionally, the
@@ -1155,6 +1214,10 @@ export type RewriteSuggestion = {
      * A new title.
      */
     title?: string | null;
+    /**
+     * The key of the topic it now belongs to, or null for none.
+     */
+    topic?: string | null;
 };
 
 /**
@@ -1321,6 +1384,30 @@ export type RoutineKnobEntityId = string;
  * task.
  */
 export type RoutineKnobEntityType = 'channel' | 'document' | 'project' | 'database' | 'user' | 'task' | 'email_thread' | 'chat' | 'crm_company' | 'crm_contact' | 'initiative';
+
+/**
+ * Stable code clients match on, distinct from AI allowance codes.
+ */
+export type RoutineLimitCode = 'routine_limit_reached';
+
+/**
+ * A write that would activate more routines than the owner's plan allows.
+ */
+export type RoutineLimitErrorBody = {
+    code: RoutineLimitCode;
+    /**
+     * Human-readable explanation.
+     */
+    error: string;
+    /**
+     * How many routines the plan allows to be active at once.
+     */
+    limit: number;
+    /**
+     * The plan the limit comes from.
+     */
+    plan: PlanTier;
+};
 
 /**
  * A nonblank model identifier. Runtime catalogs, not the scheduler, own availability.
@@ -1557,6 +1644,19 @@ export type RunInfo = {
  * How a prompt suggestion runs.
  */
 export type RunMode = 'composer' | 'background';
+
+/**
+ * What a background run did, in one line for the person, written by the
+ * run before its last message.
+ */
+export type RunReport = {
+    /**
+     * What it did and what it sent, as the card shows it, such as "12 seats
+     * added · Nothing was sent". One plain line; it names no email address,
+     * phone number or street address.
+     */
+    report: string;
+};
 
 /**
  * What started a run, for its page.
@@ -1929,6 +2029,7 @@ export type Suggestion = SuggestionKind & {
      * What to do, in a few words.
      */
     title: string;
+    topic?: null | TopicName;
     /**
      * When it last changed.
      */
@@ -1980,6 +2081,11 @@ export type SuggestionFeed = {
      * The open suggestions, at most `limit` of them.
      */
     suggestions: Array<Suggestion>;
+    /**
+     * The topics the open suggestions belong to, in the order they first
+     * appear among them; left out when the feed was read with a `limit`.
+     */
+    topics?: Array<Topic> | null;
 };
 
 /**
@@ -2054,6 +2160,11 @@ export type SuggestionReview = {
  */
 export type SuggestionRun = {
     /**
+     * The one line the run wrote for the person before it ended, saying
+     * what it did and what it sent; none until it writes one.
+     */
+    report?: string | null;
+    /**
      * The agent session: open it to see the result.
      */
     sessionId: string;
@@ -2118,6 +2229,12 @@ export type SuggestionsReview = {
      * dismissed suggestion's `stateChangedAt` is when the person dismissed it.
      */
     suggestions: Array<Suggestion>;
+    /**
+     * The topics those suggestions belong to, in the order they first
+     * appear, each with how many of its suggestions are open. Absent from a
+     * server that has none.
+     */
+    topics?: Array<Topic>;
 };
 
 /**
@@ -2164,6 +2281,54 @@ export type TemplateVariable = {
     fill: VariableFill;
     kind: 'time_zone';
     timezone: string;
+};
+
+/**
+ * One result in the person's work that several suggestions end at, such as
+ * a renewal, an event or a filled role, as generation sessions named it.
+ */
+export type Topic = {
+    /**
+     * Names the topic across nights.
+     */
+    key: string;
+    /**
+     * What it is, in a few words.
+     */
+    name: string;
+    /**
+     * How many of the listed suggestions are open and belong to it.
+     */
+    open: number;
+    reason?: null | TopicReason;
+};
+
+/**
+ * A topic, as a suggestion names it.
+ */
+export type TopicName = {
+    /**
+     * Names the topic across nights.
+     */
+    key: string;
+    /**
+     * What it is, in a few words.
+     */
+    name: string;
+};
+
+/**
+ * Why a topic matters now: one fact, and the item it was read in.
+ */
+export type TopicReason = {
+    /**
+     * The item that states it: whoever can't open it isn't shown the fact.
+     */
+    source: Target;
+    /**
+     * The fact, in one line.
+     */
+    text: string;
 };
 
 /**
@@ -2267,6 +2432,10 @@ export type CreateScheduledActionData = {
 export type CreateScheduledActionErrors = {
     400: string;
     401: string;
+    /**
+     * The owner's plan allows no more active routines
+     */
+    402: RoutineLimitErrorBody;
     403: string;
     /**
      * The routine already has the most active sub-routines it can
@@ -2719,6 +2888,10 @@ export type UpdateScheduledActionData = {
 export type UpdateScheduledActionErrors = {
     400: string;
     401: string;
+    /**
+     * The owner's plan allows no more active routines
+     */
+    402: RoutineLimitErrorBody;
     404: string;
     /**
      * Configuration changed or execution is active
@@ -2833,6 +3006,10 @@ export type SetScheduledActionEnabledData = {
 export type SetScheduledActionEnabledErrors = {
     400: string;
     401: string;
+    /**
+     * The owner's plan allows no more active routines
+     */
+    402: RoutineLimitErrorBody;
     404: string;
     /**
      * Configuration changed or execution is active
@@ -2913,6 +3090,35 @@ export type ListScheduledActionHistoryResponses = {
 };
 
 export type ListScheduledActionHistoryResponse = ListScheduledActionHistoryResponses[keyof ListScheduledActionHistoryResponses];
+
+export type StopScheduledActionRunData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the scheduled action
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/stop';
+};
+
+export type StopScheduledActionRunErrors = {
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type StopScheduledActionRunError = StopScheduledActionRunErrors[keyof StopScheduledActionRunErrors];
+
+export type StopScheduledActionRunResponses = {
+    /**
+     * The stop was sent, or nothing was running
+     */
+    204: void;
+};
+
+export type StopScheduledActionRunResponse = StopScheduledActionRunResponses[keyof StopScheduledActionRunResponses];
 
 export type UnshareScheduledActionTemplateData = {
     body?: never;
@@ -3011,6 +3217,10 @@ export type ActivateScheduledActionTemplateData = {
 export type ActivateScheduledActionTemplateErrors = {
     400: string;
     401: string;
+    /**
+     * The owner's plan allows no more active routines
+     */
+    402: RoutineLimitErrorBody;
     403: string;
     /**
      * The routine is not shared
@@ -3260,6 +3470,38 @@ export type ReviewSuggestionsResponses = {
 
 export type ReviewSuggestionsResponse = ReviewSuggestionsResponses[keyof ReviewSuggestionsResponses];
 
+export type ReportSuggestionRunData = {
+    body: RunReport;
+    path?: never;
+    query?: never;
+    url: '/suggestions/runs/report';
+};
+
+export type ReportSuggestionRunErrors = {
+    400: string;
+    401: string;
+    /**
+     * Only a suggestion's background run, still under way, may report
+     */
+    403: string;
+    /**
+     * Suggestions are off for the user
+     */
+    404: string;
+    500: string;
+};
+
+export type ReportSuggestionRunError = ReportSuggestionRunErrors[keyof ReportSuggestionRunErrors];
+
+export type ReportSuggestionRunResponses = {
+    /**
+     * Whether the report was stored, and what to fix when it wasn't
+     */
+    200: SuggestionWriteOutcome;
+};
+
+export type ReportSuggestionRunResponse = ReportSuggestionRunResponses[keyof ReportSuggestionRunResponses];
+
 export type RecordSuggestionsSeenData = {
     body?: never;
     path?: never;
@@ -3287,6 +3529,38 @@ export type RecordSuggestionsSeenResponses = {
 };
 
 export type RecordSuggestionsSeenResponse = RecordSuggestionsSeenResponses[keyof RecordSuggestionsSeenResponses];
+
+export type NameSuggestionTopicData = {
+    body: NameTopic;
+    path?: never;
+    query?: never;
+    url: '/suggestions/topics';
+};
+
+export type NameSuggestionTopicErrors = {
+    400: string;
+    401: string;
+    /**
+     * Only a suggestions generation session may name a topic
+     */
+    403: string;
+    /**
+     * Suggestions are off for the user
+     */
+    404: string;
+    500: string;
+};
+
+export type NameSuggestionTopicError = NameSuggestionTopicErrors[keyof NameSuggestionTopicErrors];
+
+export type NameSuggestionTopicResponses = {
+    /**
+     * Whether the topic was named, and what to fix when it wasn't
+     */
+    200: SuggestionWriteOutcome;
+};
+
+export type NameSuggestionTopicResponse = NameSuggestionTopicResponses[keyof NameSuggestionTopicResponses];
 
 export type RecordSuggestionsViewedData = {
     body?: never;
@@ -3496,7 +3770,7 @@ export type RestoreSuggestionErrors = {
      */
     404: string;
     /**
-     * Not dismissed in the last five minutes, or a routine suggestion
+     * Not dismissed, or completed by acting on it, in the last five minutes; or a routine suggestion
      */
     409: string;
     500: string;
@@ -3549,3 +3823,39 @@ export type RetireSuggestionResponses = {
 };
 
 export type RetireSuggestionResponse = RetireSuggestionResponses[keyof RetireSuggestionResponses];
+
+export type StopSuggestionRunData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the suggestion
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/suggestions/{id}/stop';
+};
+
+export type StopSuggestionRunErrors = {
+    401: string;
+    /**
+     * A generation session may not stop a run
+     */
+    403: string;
+    /**
+     * No open suggestion with this id for the caller, or suggestions are off
+     */
+    404: string;
+    500: string;
+};
+
+export type StopSuggestionRunError = StopSuggestionRunErrors[keyof StopSuggestionRunErrors];
+
+export type StopSuggestionRunResponses = {
+    /**
+     * Its run is being stopped, and the suggestion stays open: it shows running until the run settles, then can run again; with nothing under way, nothing changes
+     */
+    204: void;
+};
+
+export type StopSuggestionRunResponse = StopSuggestionRunResponses[keyof StopSuggestionRunResponses];

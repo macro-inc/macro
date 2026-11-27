@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-aws-apis
+  namespace: observability
+spec:
+  egress:
+    - ports:
+        - port: 443
+          protocol: TCP
+    - ports:
+        - port: 80
+          protocol: TCP
+      to:
+        - ipBlock:
+            cidr: 169.254.170.23/32
+  podSelector:
+    matchLabels:
+      observability.macro.com/aws-apis: "true"
+  policyTypes:
+    - Egress

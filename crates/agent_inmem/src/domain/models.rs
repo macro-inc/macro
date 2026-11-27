@@ -9,7 +9,7 @@ use chat::domain::models::CHAT_MODELS;
 pub const AUTO_MODEL: &str = "auto";
 
 /// The model an [`AUTO_MODEL`] turn runs on.
-const AUTO_TARGET: &str = "google/gemini-3.8-flash";
+const AUTO_TARGET: &str = "google/gemini-4-hydrogen";
 
 /// The routable id a turn runs on: [`AUTO_MODEL`] becomes its target, every
 /// other id is already routable.
@@ -39,7 +39,7 @@ pub const ROUTED_MODELS: &[(&str, &str)] = &[
         "fireworks/nemotron-lightning-3p5-30b-a3b",
         "Nemotron Lightning 3.5 30B A3B",
     ),
-    ("google/gemini-3.8-flash", "Gemini 3.8 Flash"),
+    ("google/gemini-4-hydrogen", "Gemini 4 Hydrogen"),
 ];
 
 /// House name for an advertised id, or the id itself when the catalog has
@@ -103,21 +103,22 @@ pub fn supports_images(id: &str) -> Option<bool> {
 /// provider Macro routes it to serves it, which can be less than the model
 /// itself reads: Fireworks serves MiniMax M3 at 512k of its native 1M.
 ///
-/// Sources (2026-10-10): the model pages at https://developers.openai.com/api/docs/models
-/// and https://fireworks.ai/models, Google's Gemini 3.8 Flash model card,
+/// Sources (2026-10-10, Haiku 5.5, GPT-6.2 Sol and GPT-6 Luna 2026-11-24,
+/// Gemini 4 Hydrogen 2026-11-26): the model pages at
+/// https://developers.openai.com/api/docs/models,
+/// https://fireworks.ai/models and
+/// https://aistudio.google.com/docs/models/gemini-4-hydrogen,
 /// Anthropic's model overview, and Cerebras' gpt-oss-120b listing. Fireworks
 /// lists no window for Qwen 3.8 Max; 262,144 is the model's own. Unknown
 /// models stay unknown rather than being given a guess.
 #[must_use]
 pub fn context_window(id: &str) -> Option<u64> {
     Some(match resolve(id) {
-        "anthropic/claude-sonnet-5-5" | "anthropic/claude-opus-5-5" => 1_000_000,
-        "anthropic/claude-haiku-4-5" => 200_000,
-        "openai/gpt-6-astra" | "openai/gpt-6.1-sol" | "openai/gpt-5.6" | "openai/gpt-5.5" => {
-            1_050_000
-        }
-        "openai/gpt-5.6-mini" | "openai/gpt-5-mini" => 400_000,
-        "google/gemini-3.8-flash" => 1_048_576,
+        "anthropic/claude-sonnet-5-5"
+        | "anthropic/claude-opus-5-5"
+        | "anthropic/claude-haiku-5-5" => 1_000_000,
+        "openai/gpt-6-astra" | "openai/gpt-6.2-sol" | "openai/gpt-6-luna" => 1_050_000,
+        "google/gemini-4-hydrogen" => 1_048_576,
         "fireworks/kimi-k3"
         | "fireworks/deepseek-v4p1-flash-1017"
         | "fireworks/glm-5p3"

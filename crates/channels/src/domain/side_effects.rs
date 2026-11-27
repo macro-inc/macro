@@ -182,6 +182,10 @@ pub enum ChannelNotificationEffect {
         sender_profile_picture_url: Option<String>,
         /// Users that should receive the notification.
         recipient_ids: HashSet<MacroUserIdStr<'static>>,
+        /// Members the reply @mentions, left out of `recipient_ids` because
+        /// they get a mention notification. Ingress adds back each one who
+        /// turned mentions off for the channel.
+        mention_fallback_ids: HashSet<MacroUserIdStr<'static>>,
     },
     /// A reaction was added to a user's message.
     Reaction {
@@ -222,6 +226,10 @@ pub enum ChannelNotificationEffect {
         sender_profile_picture_url: Option<String>,
         /// Users that should receive the notification.
         recipient_ids: HashSet<MacroUserIdStr<'static>>,
+        /// Members the message @mentions, left out of `recipient_ids` because
+        /// they get a mention notification. Ingress adds back each one who
+        /// turned mentions off for the channel.
+        mention_fallback_ids: HashSet<MacroUserIdStr<'static>>,
     },
     /// Someone asked to join a channel.
     AccessRequested {
@@ -353,6 +361,7 @@ where
 {
     async fn handle(&self, event: ChannelEvent) {
         let contact_sync_users = contact_sync_users_for_event(&event);
+        let interactions = interactions_for_event(&event);
         let broker_events = broker_events_for_event(&event);
         let mention_broker_events = mention_broker_events_for_event(&event);
 
@@ -455,6 +464,7 @@ where
                 }
             }
             ChannelEvent::ParticipantJoined { .. } => {}
+            ChannelEvent::MembersAutoJoined { .. } => {}
             ChannelEvent::AccessRequested {
                 request,
                 participant_user_ids,
@@ -494,6 +504,19 @@ where
         {
             let err: anyhow::Error = err.into();
             tracing::error!(error=?err, "unable to enqueue channel contact sync");
+        }
+        if let Some(Interactions { users, peers }) = interactions {
+            let user_count = users.len();
+            let peer_count = peers.len();
+            if let Err(err) = self.contacts.record_interactions(users, peers).await {
+                let err: anyhow::Error = err.into();
+                tracing::error!(
+                    error=?err,
+                    user_count,
+                    peer_count,
+                    "unable to record channel interactions"
+                );
+            }
         }
 
         // Published after the other side effects so broker latency never
@@ -680,7 +703,7 @@ where
             .map_err(Into::into)?;
         let is_first_top_level_message = message_count <= 1 && message.thread_id.is_none();
 
-        let (user_mentions, document_mention_ids) = mentions.into_iter().fold(
+        let (mut user_mentions, document_mention_ids) = mentions.into_iter().fold(
             (Vec::new(), Vec::new()),
             |(mut users, mut docs), mention| {
                 match mention.entity_type.as_str() {
@@ -693,6 +716,22 @@ where
                 (users, docs)
             },
         );
+        // Someone in a call can be outside its channel (a guest); only members
+        // may hear about channel messages.
+        let channel_members: HashSet<&str> = participants
+            .iter()
+            .filter(|participant| participant.left_at.is_none())
+            .map(|participant| participant.user_id.as_str())
+            .collect();
+        // Naming someone to an agent in an agent DM says who the agent should
+        // work with; it is not a message to them, and they cannot open the
+        // conversation anyway. Only its member still hears that it was named.
+        if self
+            .is_agent_dm(channel_id, &metadata, &user_mentions)
+            .await
+        {
+            user_mentions.retain(|user_id| channel_members.contains(user_id.as_str()));
+        }
         let document_mentions = self.load_document_mentions(document_mention_ids).await;
         let thread_context = self
             .load_thread_notification_context(message.thread_id)
@@ -703,13 +742,6 @@ where
             .into_iter()
             .chain(user_mentions.iter().cloned())
             .collect::<Vec<_>>();
-        // Someone in a call can be outside its channel (a guest); only members
-        // may hear about channel messages.
-        let channel_members: HashSet<&str> = participants
-            .iter()
-            .filter(|participant| participant.left_at.is_none())
-            .map(|participant| participant.user_id.as_str())
-            .collect();
         let thread_audience = thread_context
             .participants
             .iter()
@@ -739,6 +771,14 @@ where
             excluded_user_ids.iter().map(String::as_str),
         )
         .collect();
+        let mentioned_members = recipients_excluding(
+            user_mentions
+                .iter()
+                .map(String::as_str)
+                .filter(|user_id| channel_members.contains(user_id)),
+            sender.as_user().map(|user_id| user_id.as_ref()),
+        )
+        .collect();
 
         Ok(PostedMessageNotificationContext {
             metadata,
@@ -751,8 +791,32 @@ where
             excluded_user_ids,
             recipients_without_sender,
             recipients_without_sender_and_mentions,
+            mentioned_members,
             is_first_top_level_message,
         })
+    }
+
+    /// Whether a posted message is in an agent DM, looked up only when that
+    /// could change who it notifies: a direct message that names somebody.
+    /// A failed lookup notifies as in any DM.
+    async fn is_agent_dm(
+        &self,
+        channel_id: Uuid,
+        metadata: &ChannelMetadata,
+        user_mentions: &[String],
+    ) -> bool {
+        if metadata.channel_type != ChannelType::DirectMessage || user_mentions.is_empty() {
+            return false;
+        }
+
+        self.context
+            .is_agent_dm(channel_id)
+            .await
+            .map_err(Into::<anyhow::Error>::into)
+            .inspect_err(|error| {
+                tracing::warn!(error = ?error, %channel_id, "unable to tell whether a DM is an agent DM");
+            })
+            .unwrap_or(false)
     }
 
     async fn load_document_mentions(
@@ -897,6 +961,18 @@ where
                 context.excluded_user_ids.iter().map(String::as_str),
             )
             .collect(),
+            // Only members who follow the thread hear about its replies.
+            mention_fallback_ids: context
+                .mentioned_members
+                .iter()
+                .filter(|user_id| {
+                    context
+                        .thread_audience
+                        .iter()
+                        .any(|id| id == user_id.as_ref())
+                })
+                .cloned()
+                .collect(),
         })
         .await;
     }
@@ -983,6 +1059,7 @@ where
             metadata: context.metadata.clone(),
             sender_profile_picture_url: context.sender_profile_picture_url.clone(),
             recipient_ids: context.recipients_without_sender_and_mentions.clone(),
+            mention_fallback_ids: context.mentioned_members.clone(),
         })
         .await;
     }
@@ -1086,6 +1163,8 @@ struct PostedMessageNotificationContext {
     excluded_user_ids: Vec<String>,
     recipients_without_sender: HashSet<MacroUserIdStr<'static>>,
     recipients_without_sender_and_mentions: HashSet<MacroUserIdStr<'static>>,
+    /// Channel members the message @mentions, other than its sender.
+    mentioned_members: HashSet<MacroUserIdStr<'static>>,
     is_first_top_level_message: bool,
 }
 
@@ -1135,6 +1214,94 @@ fn contact_sync_users_for_event(event: &ChannelEvent) -> Option<HashSet<MacroUse
             ..
         } if user_id.as_user().is_some() && active_participant_user_ids.len() > 1 => {
             Some(active_participant_user_ids.iter().cloned().collect())
+        }
+        _ => None,
+    }
+}
+
+/// People who gained each other as "interacted on Macro" contacts: every user
+/// with every peer, both ways.
+#[derive(Debug, PartialEq, Eq)]
+struct Interactions {
+    users: Vec<MacroUserIdStr<'static>>,
+    peers: Vec<MacroUserIdStr<'static>>,
+}
+
+impl Interactions {
+    /// `None` when the event pairs nobody with anyone but themselves.
+    fn between(
+        users: Vec<MacroUserIdStr<'static>>,
+        peers: Vec<MacroUserIdStr<'static>>,
+    ) -> Option<Self> {
+        let pairs_someone = users
+            .iter()
+            .any(|user| peers.iter().any(|peer| peer != user));
+        pairs_someone.then_some(Self { users, peers })
+    }
+}
+
+/// Who the event makes "interacted on Macro" contacts.
+///
+/// Sharing a channel counts from the moment two people are both in it, so
+/// creation pairs everyone and each later arrival pairs the newcomers with
+/// the active members, who are already paired with each other. A DM counts
+/// only once a person posts in it: Macro opens DMs on its own (teammates,
+/// inbox contacts), so an empty one is never something two people did
+/// together. The Macro system bot's channels (the signup support channel)
+/// never count. Bots, call guests and other non-person ids never become
+/// contacts.
+fn interactions_for_event(event: &ChannelEvent) -> Option<Interactions> {
+    match event {
+        ChannelEvent::ChannelCreated {
+            channel_type,
+            actor,
+            participant_user_ids,
+            ..
+        } => {
+            let system_created = actor
+                .as_bot()
+                .is_some_and(|bot| bot.bot_id() == bot_id::MACRO_SYSTEM_BOT_ID);
+            if *channel_type == ChannelType::DirectMessage || system_created {
+                return None;
+            }
+            Interactions::between(participant_user_ids.clone(), participant_user_ids.clone())
+        }
+        ChannelEvent::ParticipantsAdded {
+            channel_type,
+            recipient_user_ids,
+            active_participant_user_ids,
+            ..
+        } if *channel_type != ChannelType::DirectMessage => Interactions::between(
+            recipient_user_ids.clone(),
+            active_participant_user_ids.clone(),
+        ),
+        ChannelEvent::ParticipantJoined {
+            channel_type,
+            user_id,
+            active_participant_user_ids,
+            ..
+        } if *channel_type != ChannelType::DirectMessage => {
+            let joiner = user_id.as_user()?.clone();
+            Interactions::between(vec![joiner], active_participant_user_ids.clone())
+        }
+        ChannelEvent::MembersAutoJoined {
+            added_user_ids,
+            active_participant_user_ids,
+            ..
+        } => Interactions::between(added_user_ids.clone(), active_participant_user_ids.clone()),
+        ChannelEvent::MessagePosted {
+            metadata,
+            participants,
+            message,
+            ..
+        } if metadata.channel_type == ChannelType::DirectMessage => {
+            let sender = message.sender_id.as_user()?.clone();
+            let others = recipients_excluding(
+                participants.iter().map(|p| p.user_id.as_str()),
+                [sender.as_ref()],
+            )
+            .collect();
+            Interactions::between(vec![sender], others)
         }
         _ => None,
     }
@@ -1252,7 +1419,8 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
         }
         ChannelEvent::EntityMentionCreated { .. }
         | ChannelEvent::EntityMentionDeleted { .. }
-        | ChannelEvent::AccessRequestResolved { .. } => Vec::new(),
+        | ChannelEvent::AccessRequestResolved { .. }
+        | ChannelEvent::MembersAutoJoined { .. } => Vec::new(),
     }
 }
 

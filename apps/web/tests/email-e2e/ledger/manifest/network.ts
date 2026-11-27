@@ -135,6 +135,7 @@ export const GRAPHQL: readonly Operation[] = [
   { id: 'DeleteSavedView', kind: 'mutation', scope: 'shared' },
   { id: 'EmailFocus', kind: 'query', scope: 'email' },
   { id: 'EmailSendAttempt', kind: 'query', scope: 'email' },
+  { id: 'EmailThreadLabels', kind: 'query', scope: 'email' },
   { id: 'EmailThreadPage', kind: 'query', scope: 'email' },
   { id: 'EntityProperties', kind: 'query', scope: 'shared' },
   { id: 'Favorites', kind: 'query', scope: 'shared' },

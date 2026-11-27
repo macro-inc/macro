@@ -1,13 +1,13 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/deploy_cla_worker.rs
 name: Deploy CLA Worker
-'on':
+on:
   push:
     branches:
-    - main
+      - main
     paths:
-    - '.github/workflows/deploy_cla_worker.yml'
-    - services/cla-worker/**
+      - .github/workflows/deploy_cla_worker.yml
+      - services/cla-worker/**
   workflow_dispatch: {}
 jobs:
   deploy:
@@ -16,29 +16,29 @@ jobs:
     permissions:
       contents: read
     steps:
-    - name: Checkout
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      with:
-        clean: 'false'
-        persist-credentials: 'false'
-      env:
-        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
-        GIT_HTTP_LOW_SPEED_TIME: '60'
-    - name: Setup Bun
-      uses: oven-sh/setup-bun@v2
-    - name: Setup Node
-      uses: actions/setup-node@v4
-      with:
-        node-version: '22'
-    - name: Install dependencies
-      run: bun install --frozen-lockfile
-      working-directory: services/cla-worker
-    - name: Deploy with wrangler
-      run: bun run deploy
-      env:
-        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-      working-directory: services/cla-worker
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          clean: 'false'
+          persist-credentials: 'false'
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+        working-directory: services/cla-worker
+      - name: Deploy with wrangler
+        run: bun run deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: services/cla-worker
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false

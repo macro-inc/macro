@@ -74,6 +74,18 @@ fn garbage_tokens_are_rejected() {
 }
 
 #[test]
+fn an_undo_token_names_no_more_keys_than_its_operation_touches() {
+    let receipt = DoneReceipt {
+        keys: (1..=3).map(|id| format!("document:{}", uuid(id))).collect(),
+        ..DoneReceipt::default()
+    };
+    let token = receipt.encode();
+    assert_eq!(DoneReceipt::decode_at_most(&token, 3).unwrap(), receipt);
+    assert!(DoneReceipt::decode_at_most(&token, 2).is_err());
+    assert!(DoneReceipt::decode_at_most("", 3).is_err());
+}
+
+#[test]
 fn a_revision_acknowledges_what_it_covers() {
     let older = doc_comment(1, 0xD0, 0xA0, 0xA0, 5);
     let newer = doc_comment(2, 0xD0, 0xB0, 0xB0, 8);

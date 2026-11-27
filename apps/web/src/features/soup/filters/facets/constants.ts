@@ -93,6 +93,9 @@ export const FILTER_TARGETS = {
     threadId: { backend: 'ThreadId' },
     emailLinkId: { backend: 'Owner' },
     emailProjectId: { backend: 'ProjectId' },
+    // A Gmail label or Outlook category id; matches only in inboxes the
+    // viewer owns or manages.
+    emailLabel: { backend: 'Label' },
     emailSender: {
       backend: 'Sender',
       formatValue: (value) => ({ Partial: value }),
@@ -323,6 +326,7 @@ type FilterTargetsMeta = {
     threadId: string[];
     emailLinkId: string[];
     emailProjectId: string[];
+    emailLabel: string[];
     emailSender: string[];
     emailSenderAddress: string[];
     emailRecipientAddress: string[];

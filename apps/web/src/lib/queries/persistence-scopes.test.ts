@@ -21,14 +21,21 @@ const entry = (queryHash: string): PersistedQueryEntry => ({
   buster: 'test',
 });
 
-it('deletes channel records saved without an account and keeps scoped ones', async () => {
+it('deletes the REST channel list and activity records, scoped or not, and keeps the directory and mentions', async () => {
   const store = createPerQueryIDBStore({
     dbName: createPersistenceKey(`channels-${getOrCreateCacheScope()}`, 1),
   });
-  const legacyList = '["channel","listChannels"]';
-  const legacyActivity = '["channel","activity"]';
-  const scopedList = '["channel","listChannels","user-1"]';
-  for (const hash of [legacyList, legacyActivity, scopedList]) {
+  const retired = [
+    '["channel","listChannels"]',
+    '["channel","activity"]',
+    '["channel","listChannels","user-1"]',
+    '["channel","activity","user-1"]',
+  ];
+  const kept = [
+    '["channel","directory","user-1"]',
+    '["channel","mentions","channel-1"]',
+  ];
+  for (const hash of [...retired, ...kept]) {
     store.set(entry(hash));
   }
   await store.flush();
@@ -36,7 +43,10 @@ it('deletes channel records saved without an account and keeps scoped ones', asy
   const [channels] = createQueryPersistenceScopes('test');
   await channels.store.flush();
 
-  expect(await store.get(legacyList)).toBeUndefined();
-  expect(await store.get(legacyActivity)).toBeUndefined();
-  expect(await store.get(scopedList)).toEqual(entry(scopedList));
+  for (const hash of retired) {
+    expect(await store.get(hash)).toBeUndefined();
+  }
+  for (const hash of kept) {
+    expect(await store.get(hash)).toEqual(entry(hash));
+  }
 });

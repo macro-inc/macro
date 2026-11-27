@@ -16,3 +16,6 @@ pub mod pg_discussion_context;
 /// Postgres persistence for the shared message store.
 #[cfg(feature = "outbound")]
 pub mod pg_message_repo;
+/// Discussions and mentions that follow a merged CRM record.
+#[cfg(feature = "outbound")]
+pub mod record_merge;

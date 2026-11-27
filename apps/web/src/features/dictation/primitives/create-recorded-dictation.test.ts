@@ -1,6 +1,7 @@
 import { renderHook } from '@solidjs/testing-library';
 import { describe, expect, it, vi } from 'vitest';
 import type { AudioRecorderCallbacks, RecorderHandle } from '../core/recording';
+import { FEEDBACK_MS } from '../core/types';
 import { createRecordedDictation } from './create-recorded-dictation';
 
 const audio = new Blob(['audio'], { type: 'audio/webm' });
@@ -20,6 +21,7 @@ class FakeRecorder implements RecorderHandle {
 }
 
 function setup() {
+  let now = 1_000;
   const transcribe = vi.fn(
     async (_blob: Blob, _signal: AbortSignal) => 'recognized words'
   );
@@ -40,9 +42,19 @@ function setup() {
       transcribe,
       onConfirm,
       onCancel,
+      now: () => now,
     })
   );
-  return { ...hook, transcribe, onConfirm, onCancel, trace };
+  return {
+    ...hook,
+    transcribe,
+    onConfirm,
+    onCancel,
+    trace,
+    advance: (ms: number) => {
+      now += ms;
+    },
+  };
 }
 
 describe('Whisper dictation', () => {
@@ -131,6 +143,7 @@ describe('Whisper dictation', () => {
     await test.result.confirm();
     expect(test.result.phase()).toBe('review');
     expect(test.result.message()).toBe('Try again');
+    expect(test.result.messageTone()).toBe('error');
     expect(test.onConfirm).not.toHaveBeenCalled();
     expect(test.trace.event).toHaveBeenCalledWith('dictation.upload_failed', {
       attempt: 1,
@@ -157,7 +170,9 @@ describe('Whisper dictation', () => {
     recorder.callbacks.onLimit?.();
     recorder.callbacks.onRecording?.(audio);
     expect(test.result.phase()).toBe('review');
+    expect(test.result.limitReached()).toBe(true);
     expect(test.result.message()).toMatch(/limit/i);
+    expect(test.result.messageTone()).toBe('info');
     expect(test.transcribe).not.toHaveBeenCalled();
     await test.result.confirm();
     expect(test.onConfirm).toHaveBeenCalledOnce();
@@ -221,5 +236,55 @@ describe('Whisper dictation', () => {
     await starting;
     expect(FakeRecorder.latest.cancel).toHaveBeenCalled();
     expect(test.transcribe).not.toHaveBeenCalled();
+  });
+
+  it('times the recording while listening and keeps its length for review', async () => {
+    const test = setup();
+    await test.result.start();
+    test.advance(3_400);
+    FakeRecorder.latest.callbacks.onLevel?.(0.4);
+    expect(test.result.elapsedMs()).toBe(3_400);
+    test.advance(600);
+    FakeRecorder.latest.callbacks.onRecording?.(audio);
+    expect(test.result.phase()).toBe('review');
+    expect(test.result.elapsedMs()).toBe(4_000);
+  });
+
+  it('clears a note about the last attempt after a while, or on request', async () => {
+    vi.useFakeTimers();
+    try {
+      const test = setup();
+      test.transcribe.mockResolvedValueOnce('  ');
+      await test.result.start();
+      await test.result.confirm();
+      expect(test.result.phase()).toBe('idle');
+      expect(test.result.message()).toMatch(/no speech/i);
+      vi.advanceTimersByTime(FEEDBACK_MS);
+      expect(test.result.message()).toBe('');
+
+      test.transcribe.mockResolvedValueOnce('');
+      await test.result.start();
+      await test.result.confirm();
+      expect(test.result.message()).not.toBe('');
+      test.result.clearMessage();
+      expect(test.result.message()).toBe('');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps a failed transcription in review instead of expiring it', async () => {
+    vi.useFakeTimers();
+    try {
+      const test = setup();
+      test.transcribe.mockRejectedValueOnce(new Error('Offline'));
+      await test.result.start();
+      await test.result.confirm();
+      vi.advanceTimersByTime(FEEDBACK_MS * 2);
+      expect(test.result.phase()).toBe('review');
+      expect(test.result.message()).toBe('Offline');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

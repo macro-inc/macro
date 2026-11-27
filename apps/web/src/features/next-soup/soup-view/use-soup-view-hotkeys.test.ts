@@ -18,9 +18,6 @@ vi.mock('@app/constants/hotkeys', () => ({
 vi.mock('@app/features/command/state', () => ({
   CommandState: { isOpen: () => false },
 }));
-vi.mock('@app/features/next-soup/sidebar/soup-filter-presets', () => ({
-  VIEW_TAB_PRESETS: {},
-}));
 vi.mock('@app/features/next-soup/utils', () => ({
   markChannelNotificationsSeenOnOpen: vi.fn(),
   markRowNotificationsSeenOnOpen: vi.fn(),
@@ -58,10 +55,6 @@ vi.mock('@entity', () => ({
   isWithNotification: () => false,
 }));
 vi.mock('@notifications', () => ({ openSingleStackNotification: vi.fn() }));
-vi.mock('./soup-view-tabs', () => ({
-  VIEW_TAB_LISTS: {},
-  useVisibleViewTabs: () => () => [],
-}));
 
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
 

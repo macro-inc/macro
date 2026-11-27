@@ -24,7 +24,6 @@ use import::{
     outbound::pg_import_repo::PgImportRepo,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_select::{ConnectorRef, ConnectorSelect, UserMcpTools};
 use models_pagination::{Query, SimpleSortMethod};
 use std::{
     collections::HashSet,
@@ -36,26 +35,10 @@ use std::{
 };
 use uuid::Uuid;
 
-struct NoConnectors;
-
-impl ConnectorSelect for NoConnectors {
-    async fn user_toolset(&self, _: &MacroUserIdStr<'static>) -> UserMcpTools {
-        unreachable!("deterministic Slack imports never invoke MCP")
-    }
-    async fn connector_toolset(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: ConnectorRef<'_>,
-    ) -> anyhow::Result<Option<UserMcpTools>> {
-        unreachable!("deterministic Slack imports never invoke MCP")
-    }
-    async fn connector_connected(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: ConnectorRef<'_>,
-    ) -> anyhow::Result<bool> {
-        unreachable!("deterministic Slack imports never invoke MCP")
-    }
+/// Connectors for a user with no connections: deterministic Slack imports
+/// never invoke MCP.
+fn no_connections() -> Arc<connectors::Connectors> {
+    Arc::new(connectors::fake::FakeConnectors::new().build())
 }
 
 struct ReservedCreator {
@@ -205,7 +188,7 @@ async fn concurrent_onboarding_and_archive_publish_one_canonical_ledger_target(p
     let row = stage(&repo).await;
     let service = ImportServiceImpl::new(
         repo.clone(),
-        Arc::new(NoConnectors),
+        no_connections(),
         Arc::new(ReservedCreator {
             service: ChannelServiceImpl::new(channels.clone()),
             lose_response: AtomicBool::new(false),
@@ -241,7 +224,7 @@ async fn onboarding_crash_retry_completes_the_original_reserved_channel(pool: sq
     let row = stage(&repo).await;
     let service = ImportServiceImpl::new(
         repo.clone(),
-        Arc::new(NoConnectors),
+        no_connections(),
         Arc::new(ReservedCreator {
             service: ChannelServiceImpl::new(channels.clone()),
             lose_response: AtomicBool::new(true),

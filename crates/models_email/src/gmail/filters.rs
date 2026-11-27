@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Represents the criteria for a Gmail filter
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FilterCriteria {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -21,7 +21,7 @@ pub struct FilterCriteria {
 }
 
 /// Represents the action to take when a filter matches
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FilterAction {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -38,7 +38,11 @@ pub struct FilterAction {
 pub struct Filter {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
+    /// Every filter field is optional in Gmail's schema: without a default, one
+    /// listed filter that omits `criteria` or `action` fails the whole list.
+    #[serde(default)]
     pub criteria: FilterCriteria,
+    #[serde(default)]
     pub action: FilterAction,
 }
 

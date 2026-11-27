@@ -48,13 +48,14 @@ pub trait Repository: Send + Sync + 'static {
     /// Count the bookings that take a place in an event type's daily limit on
     /// `[start, end)`: live bookings starting then, and moves out of that day
     /// still waiting on the calendar's first answer, since a refusal puts them
-    /// back.
+    /// back. `exclude` leaves out the booking being moved.
     fn daily_bookings(
         &self,
         profile: Uuid,
         event_type: Uuid,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
+        exclude: Option<Uuid>,
     ) -> impl Future<Output = Result<i64, Error>> + Send;
     /// Reserve host ranges atomically; enforce the daily limit and idempotency.
     fn reserve(
@@ -91,15 +92,24 @@ pub trait Repository: Send + Sync + 'static {
 }
 /// Calendar adapter, implemented with the existing calendar domain services.
 pub trait Calendars: Send + Sync + 'static {
-    /// Select and pin the organizer's writable primary calendar before reserving.
-    fn creation_calendar(&self, host: &str) -> impl Future<Output = Result<Uuid, Error>> + Send;
-    /// Load authoritative busy time, failing closed for disconnected or syncing hosts.
+    /// Select and pin the organizer's writable primary calendar before
+    /// reserving: `inbox`'s, when the link books on a chosen connected inbox,
+    /// and never another inbox's in its place.
+    fn creation_calendar(
+        &self,
+        host: &str,
+        inbox: Option<Uuid>,
+    ) -> impl Future<Output = Result<Uuid, Error>> + Send;
+    /// Load authoritative busy time, failing closed for disconnected or
+    /// syncing hosts and when no calendar can take the booking (`inbox`'s,
+    /// when the link books on a chosen connected inbox).
     fn busy(
         &self,
         hosts: &[String],
         start: DateTime<Utc>,
         end: DateTime<Utc>,
         exclude_event: Option<Uuid>,
+        inbox: Option<Uuid>,
     ) -> impl Future<Output = Result<Vec<BusyRange>, Error>> + Send;
     /// Create the organizer's provider event and invite all assigned hosts and the booker.
     fn create(
@@ -123,6 +133,20 @@ pub trait Directory: Send + Sync + 'static {
 /// Read-only calendar readiness needed to attach an existing booking link.
 /// Authoring hosts need no provider write or creation-recovery capability.
 pub trait AttachmentReadiness: Send + Sync + 'static {
-    /// Require a connected writable primary calendar and complete sync.
-    fn ready(&self, host: &str) -> impl Future<Output = Result<(), Error>> + Send;
+    /// Require a connected writable primary calendar (`inbox`'s, when the
+    /// link books on a chosen connected inbox) and complete sync.
+    fn ready(
+        &self,
+        host: &str,
+        inbox: Option<Uuid>,
+    ) -> impl Future<Output = Result<(), Error>> + Send;
+}
+
+/// The connected accounts a host's personal links can book on.
+pub trait BookingAccounts: Send + Sync + 'static {
+    /// The host's connected inboxes whose primary calendar they can write.
+    fn booking_accounts(
+        &self,
+        host: &str,
+    ) -> impl Future<Output = Result<Vec<super::booking_link_models::BookingAccount>, Error>> + Send;
 }

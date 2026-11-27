@@ -8,7 +8,7 @@ repository is cloned using the operator's Git credentials. New worktrees start
 from a fresh fetch of `origin/main`; macrod never pulls into the operator's
 working branch. A repository without `main` produces an error.
 
-Herdr creates and registers the worktree. The session ID determines its path
+macrod adds the worktree with `git worktree add`. The session ID determines its path
 and branch, so redelivery reuses existing work without resetting edits. Cached
 repositories and worktrees live under `~/.macrod/herdr/<harness-id>/`. Each
 paired macrod instance has one configuration and its own storage directory.
@@ -168,15 +168,31 @@ Choose a repository in Macro's composer; local sessions always start from `main`
 
 macrod drives both herdrs and picks by where it runs (`src/herdr/cli.rs`):
 
-- **herdr 0.9** (`HERDR_ENV=1`): the `herdr` CLI. Herdr creates worktrees, opens
-  tabs, starts agents, and reports their status and session IDs.
-- **herdr-core and the herdr app** (`HC_TERMINAL_ID`): the `hc` CLI, which must
-  be on `PATH`. Each session is a core terminal labelled with the app's
-  `herdr.space` and `herdr.tab`, so the app shows it as a tab in macrod's space.
-  A managed worktree gets its own space. macrod starts the shell and then types
-  `exec <agent> …` into it, so the agent gets the operator's login environment.
-  git creates the worktrees. Tab names and focus go through `herdr-app do`, and
-  macrod skips them when the app is not running.
+Every native session opens in its own herdr workspace (a space in the herdr
+app), never as a tab in macrod's or the operator's own. Its worktree is a plain
+`git worktree add` from a fresh `origin/main`, under either herdr. Sessions open
+in the background unless **Open sessions** is set to foreground. A workspace and
+tab are named after the first line of the prompt that opened the session, past
+macrod's hidden `<macrod-runtime>` header and other leading Macro tags.
+
+- **herdr 0.9** (`HERDR_ENV=1`): the `herdr` CLI. `herdr workspace create`
+  opens each session's workspace; herdr starts agents and reports their status
+  and session IDs. macrod does not use `herdr worktree`, which groups a
+  worktree under the operator's repository workspace.
+- **herdr-core and the herdr app** (`HC_TERMINAL_ID`): the `hc` at `HC_BIN`,
+  which herdr-core sets when it starts a terminal (a terminal already running
+  before herdr-core was updated has none until it is restarted). macrod never
+  looks `hc` up on `PATH`: a process `hc run` starts inherits the herdr-core
+  server's `PATH`, not the shell's. Without `HC_BIN`, sessions open no herdr
+  tabs and the daemon log says why, the herdr agents are not offered, and
+  `macrod herdr-acp` exits with the same error. Each session is a core terminal labelled with a new
+  `herdr.space` and `herdr.tab`, so the app shows it in a space of its own.
+  macrod starts the shell and then types `exec <agent> …` into it, so the agent
+  gets the operator's login environment. herdr-core refuses to type into a
+  terminal whose output has not settled in its first seconds ("still
+  starting"); nothing was typed, so macrod retries such a send for up to 30
+  seconds. Space and tab names and focus go through `herdr-app do`, and macrod
+  skips them when the app is not running.
 
 herdr-core does not guess status; it shows what a program reports through
 OSC 7501. Claude Code reports it. Codex does not, so under herdr-core a Codex

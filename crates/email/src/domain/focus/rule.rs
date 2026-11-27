@@ -64,12 +64,15 @@ const MOST_PERCENT_PER_DAY: f32 = 10.0;
 /// Jev's calendar answer plays no part: it can't tell these apart, so a thread only
 /// Jev calls calendar mail takes the rules above and reads as its sender's category.
 ///
-/// Time is not known here, so `is_focus` leaves out what time decides. A thread the
-/// owner is waiting on joins Focus once it has waited long enough, and a calendar
-/// change holds one until `calendar_hold_until`; the list applies both when it
-/// reads, since nothing reclassifies a thread as it ages. Its labels and importance
-/// are set for those moments here, and the read calls a held thread Calendar, so
-/// Calendar in Focus only ever means a change still ahead of its event.
+/// Time is not known here, and who wrote last can change before the worker reads
+/// the thread again, so `is_focus` leaves out what those decide and the list
+/// applies it when it reads. A thread the owner wrote last on is out until, still
+/// awaiting an answer, it has waited long enough or its due day comes; a calendar
+/// change holds one until `calendar_hold_until`; and once that hold, or the day
+/// of the meeting its mail is about, is over, it is out whatever else it reads as.
+/// Its labels and importance are set for those moments here, and the read calls a
+/// held thread Calendar, so Calendar in Focus only ever means a change still ahead
+/// of its event.
 ///
 /// How importance moves with time is set here too and applied by the read. The
 /// floors below only set where it starts: fading can take a thread under them.
@@ -160,6 +163,17 @@ pub fn decide(answers: &FocusAnswers, signals: &FocusSignals) -> FocusVerdict {
         importance,
         importance_rate: importance_rate(answers),
     }
+}
+
+/// Whether a thread decided as `verdict` still leaves its owner something to do:
+/// a reply or an open loop (`needs_reply`, `needs_follow_up`), an answer of their
+/// own still awaited, or a decision, approval, signature or payment only they can
+/// give, which asks for no written reply.
+pub(super) fn owner_has_something_to_do(answers: &FocusAnswers, verdict: &FocusVerdict) -> bool {
+    verdict.needs_reply
+        || verdict.needs_follow_up
+        || verdict.awaiting_reply
+        || answers.needs_decision >= YES
 }
 
 /// One signed rate from Jev's two time answers. Only a clear lean moves a thread:

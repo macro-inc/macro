@@ -68,6 +68,9 @@ pub enum SendMessageError {
     /// An agent's program asked to send without the user seeing the email.
     #[error("{PROGRAM_SEND_REFUSAL}")]
     ConfirmationRequired,
+    /// The inbox is busy; the same request succeeds once it settles.
+    #[error("{0}")]
+    Conflict(String),
     /// Internal error.
     #[error("Internal error")]
     Internal(EmailErr),
@@ -83,6 +86,7 @@ impl IntoResponse for SendMessageError {
             SendMessageError::Validation(_) => StatusCode::BAD_REQUEST,
             SendMessageError::NotFound(_) => StatusCode::NOT_FOUND,
             SendMessageError::ConfirmationRequired => StatusCode::FORBIDDEN,
+            SendMessageError::Conflict(_) => StatusCode::CONFLICT,
             SendMessageError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
@@ -111,6 +115,7 @@ impl From<EmailErr> for SendMessageError {
             | EmailErr::InvalidSender
             | EmailErr::UnverifiedSendingAlias { .. }
             | EmailErr::SendAsPermissionRequired => SendMessageError::Validation(err.to_string()),
+            EmailErr::Contended => SendMessageError::Conflict(err.to_string()),
             _ => SendMessageError::Internal(err),
         }
     }

@@ -22,21 +22,38 @@ import type { MacroClient } from '../../utils/client';
 import { AgentSession } from '../agent-sessions/agent-session';
 import type { Agent } from '../agents/agent';
 import { Chat } from '../chats/chat';
+import type { Label } from '../email/label';
+import { Link } from '../email/link';
 import { MacroEntity } from '../entity';
 import type { EntityReference } from '../reference';
 import type { Task } from '../tasks/task';
 import { User } from '../users/user';
 
 /** An event selector references resources by typed handles. */
-export type RoutineEventFilter = Omit<EventFilter, 'ids' | 'condition'> & {
+export type RoutineEventFilter = Omit<
+  EventFilter,
+  'ids' | 'condition' | 'inboxes' | 'labels'
+> & {
   /**
    * The items these events are watched on, as references to handles the SDK
    * returned, such as `{ type: 'channel', entity: channel }`; never ids.
    * Omit to match all items.
    */
   entities?: EntityReference[];
+  /**
+   * Only for `email.labeled`, alone in its filter: the labels, from
+   * `macro.email.labels()`, one of which a thread must gain. Omit for any label.
+   */
+  labels?: Label[];
   /** Optional yes/no condition on the triggering content. */
   condition?: string;
+  /**
+   * For `email.message_received` or `email.labeled` alone: the inboxes whose
+   * mail starts the routine, from `macro.email.links()`. Omit to watch every
+   * inbox the owner reads, their own and those shared with them; prefer this
+   * to checking the inbox in a code step.
+   */
+  inboxes?: Link[];
 };
 
 /**
@@ -61,12 +78,62 @@ function singleTriggerBody(trigger: SingleRoutineTrigger): RoutineTrigger {
     .with({ type: 'once' }, (value) => value)
     .with({ type: 'events' }, (value) => ({
       type: 'events' as const,
-      filters: value.filters.map(({ entities, ...filter }) => ({
-        ...filter,
-        ids: entities?.map((entity) => entity.entity.id),
-      })),
+      filters: value.filters.map(
+        ({ entities, inboxes, labels, ...filter }) => ({
+          ...filter,
+          ids: entities?.map((entity) => entity.entity.id),
+          inboxes: inboxes?.map((inbox) => inbox.id),
+          labels: labels?.map((label) => label.id),
+        }),
+      ),
     }))
     .exhaustive();
+}
+
+/** An event selector as read back: the inboxes it picked, as handles. */
+export type RoutineEventFilterDetail = Omit<EventFilter, 'inboxes'> & {
+  /** For `email.message_received` alone: the inboxes it watches. Absent: every one. */
+  inboxes?: Link[];
+};
+
+/** A single trigger as read back. */
+export type SingleRoutineTriggerDetail =
+  | Extract<RoutineTrigger, { type: 'cron' }>
+  | Extract<RoutineTrigger, { type: 'once' }>
+  | { type: 'events'; filters: RoutineEventFilterDetail[] };
+
+/** A routine's triggers as read back. */
+export type RoutineTriggerDetail =
+  | SingleRoutineTriggerDetail
+  | { type: 'multiple'; triggers: SingleRoutineTriggerDetail[] };
+
+function singleTriggerDetail(
+  client: MacroClient,
+  trigger: RoutineTrigger,
+): SingleRoutineTriggerDetail {
+  return match(trigger)
+    .with({ type: 'events' }, (value) => ({
+      type: 'events' as const,
+      filters: value.filters.map(({ inboxes, ...filter }) => ({
+        ...filter,
+        inboxes: inboxes?.map((id) => Link.byId(client, id)),
+      })),
+    }))
+    .otherwise((value) => value);
+}
+
+function triggerDetail(
+  client: MacroClient,
+  trigger: ActionTrigger,
+): RoutineTriggerDetail {
+  return trigger.type === 'multiple'
+    ? {
+        type: 'multiple',
+        triggers: trigger.triggers.map((single) =>
+          singleTriggerDetail(client, single),
+        ),
+      }
+    : singleTriggerDetail(client, trigger);
 }
 
 function triggerBody(trigger: RoutineTriggerOptions): ActionTrigger {
@@ -155,6 +222,15 @@ interface RoutineCommonOptions {
    * creation; an update that omits it keeps the stored value.
    */
   runVisibility?: RunVisibility;
+  /**
+   * An icon and color for what the routine does, picked by the agent writing
+   * it: `{ icon: { kind: 'macro', name }, color }`, with `name` from Macro's
+   * icon catalog (a check or save naming another lists the catalog). Saved
+   * on create, and on an update made for the routine's owner, unless the
+   * owner chose the routine's look with {@link Routine.setAppearance}, which
+   * it never replaces; omit it to keep the stored look.
+   */
+  appearance?: EntityAppearance;
   /**
    * Apps outside Macro (Linear, GitHub, Notion…) the routine's Ask AI step
    * uses. The owner must have each connected: saving and every run check.
@@ -266,8 +342,10 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
     );
   }
 
-  /** Configured triggers. */
-  readonly trigger = this.field('trigger');
+  /** Configured triggers; picked inboxes come back as `Link` handles. */
+  readonly trigger = this.mappedField('trigger', (trigger) =>
+    triggerDetail(this.client, trigger),
+  );
 
   /** Whether the routine is enabled. */
   readonly enabled = this.field('enabled');
@@ -474,6 +552,21 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
   }
 
   /**
+   * Stop the run in progress. It ends as stopped shortly after; with none
+   * running, nothing changes.
+   *
+   * @write
+   * @idempotent
+   */
+  async stop(): Promise<void> {
+    unwrap(
+      await this.client.scheduledAction.stopScheduledActionRun({
+        path: { id: this.id },
+      }),
+    );
+  }
+
+  /**
    * Completed executions, with their routine scoped identity.
    *
    * @readonly
@@ -637,6 +730,7 @@ export function routineBody(options: RoutineOptions) {
     name: options.name,
     enabled: options.enabled,
     run_visibility: options.runVisibility,
+    appearance: options.appearance,
     trigger: triggerBody(options.trigger),
     task: taskBody(options),
   };

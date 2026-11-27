@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.thread_id,(COALESCE((m.mailbox_state->>'provider_missing')::bool,false)\n            OR EXISTS(SELECT 1 FROM email_mailbox_drafts d WHERE d.message_id=m.id AND (d.delete_requested OR d.state='deleted'))\n            OR EXISTS(SELECT 1 FROM email_draft_transfers t WHERE t.source_id=m.id AND t.state<>'preparing')) AS \"retired!\"\n            FROM email_messages m WHERE m.id=$1 AND m.link_id=$2 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "retired!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "2b839a4b81fb2a1c5603d7b87c8f781d43093c29b9ca72d50f70871790b6de7d"
+}

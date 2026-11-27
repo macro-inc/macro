@@ -1,9 +1,9 @@
 import { expect, type Page, test } from '@playwright/test';
-
-/** Scrolls the picker's last listed row into view, as reading to the end does. */
-async function scrollToEnd(page: Page) {
-  await page.locator('[data-entity-index]').last().scrollIntoViewIfNeeded();
-}
+import {
+  entityList,
+  readTo,
+  scrollToEnd,
+} from '../../../property/browser-test/entity-list';
 
 const nextOptions = (page: Page) =>
   page.getByRole('button', { name: 'Next options', exact: true });
@@ -27,10 +27,9 @@ for (const [type, prefix] of [
     await expect(first).toBeVisible();
     await expect(later).toHaveCount(0);
     await expect(nextOptions(page)).toHaveCount(0);
-    await scrollToEnd(page);
-    await later.scrollIntoViewIfNeeded();
-    await expect(later).toBeVisible();
-    await expect(first).toHaveCount(1);
+    await readTo(page, later);
+    // Only the rows in view are mounted, however many are listed.
+    await expect(first).toHaveCount(0);
   });
 }
 
@@ -43,8 +42,11 @@ test('PageDown lists the next page from the search field on desktop', async ({
     .locator('[data-entity-index]')
     .filter({ hasText: 'Task 50' });
   await expect(later).toHaveCount(0);
+  const height = () => entityList(page).evaluate((list) => list.scrollHeight);
+  const firstPage = await height();
   await page.getByPlaceholder('Search options').press('PageDown');
-  await expect(later).toHaveCount(1);
+  await expect.poll(height).toBeGreaterThan(firstPage);
+  await readTo(page, later);
 });
 
 test('thread picker advances browsed emails and server search pages', async ({
@@ -57,17 +59,13 @@ test('thread picker advances browsed emails and server search pages', async ({
 
   await expect(option('Email 00')).toBeVisible();
   await expect(option('Email 50')).toHaveCount(0);
-  await scrollToEnd(page);
-  await option('Email 50').scrollIntoViewIfNeeded();
-  await expect(option('Email 50')).toBeVisible();
+  await readTo(page, option('Email 50'));
   await expect(nextOptions(page)).toHaveCount(0);
 
   await search.fill('remote');
   await expect(option('Remote email 00')).toBeVisible();
   await expect(option('Remote email 20')).toHaveCount(0);
-  await scrollToEnd(page);
-  await option('Remote email 20').scrollIntoViewIfNeeded();
-  await expect(option('Remote email 20')).toBeVisible();
+  await readTo(page, option('Remote email 20'));
 });
 
 test('thread picker shows email loading, failure, and successful retry', async ({
@@ -93,9 +91,10 @@ test('thread picker shows email loading, failure, and successful retry', async (
   const retry = page.getByRole('button', { name: 'Retry options' });
   await expect(retry).toBeEnabled();
   await retry.click();
-  await expect(
+  await readTo(
+    page,
     page.locator('[data-entity-index]').filter({ hasText: 'Email 50' })
-  ).toHaveCount(1);
+  );
   await expect(
     page.getByRole('status').filter({ hasText: 'Options unavailable' })
   ).toHaveCount(0);
@@ -112,8 +111,7 @@ test('generic picker advances Quick Access and browsed email pages together', as
   await expect(option('Task 00')).toBeVisible();
   await expect(option('Task 50')).toHaveCount(0);
   await expect(option('Email 50')).toHaveCount(0);
-  await scrollToEnd(page);
-  await expect(option('Task 50')).toHaveCount(1);
-  await expect(option('Email 50')).toHaveCount(1);
+  await readTo(page, option('Task 50'));
+  await readTo(page, option('Email 50'));
   await expect(nextOptions(page)).toHaveCount(0);
 });

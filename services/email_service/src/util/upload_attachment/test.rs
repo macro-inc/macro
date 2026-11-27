@@ -166,3 +166,109 @@ fn invalid_sender_keeps_the_other_attachment_properties() {
     assert_eq!(property.subject.as_deref(), Some("Quarterly report"));
     assert!(property.source.is_some());
 }
+
+#[tokio::test]
+async fn an_empty_document_is_uploaded_with_its_length() {
+    use wiremock::matchers::{header, method};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    // S3 answers a PUT without a Content-Length with 411 Length Required.
+    let storage = MockServer::start().await;
+    Mock::given(method("PUT"))
+        .and(header("content-length", "0"))
+        .respond_with(ResponseTemplate::new(200))
+        .with_priority(1)
+        .mount(&storage)
+        .await;
+    Mock::given(method("PUT"))
+        .respond_with(ResponseTemplate::new(411))
+        .with_priority(2)
+        .mount(&storage)
+        .await;
+    let (_, base64_hash) = calculate_hashes(&[]);
+
+    let uploaded = upload_data_to_presigned_url(
+        &format!("{}/document", storage.uri()),
+        "application/pdf",
+        Vec::new(),
+        &base64_hash,
+    )
+    .await;
+
+    assert!(uploaded.is_ok(), "{uploaded:?}");
+}
+
+/// A presigned upload URL as DSS signs it, with its credentials in the query.
+const SIGNED_QUERY: &str = "X-Amz-Credential=access-key-id&X-Amz-Security-Token=session-token-value&X-Amz-Signature=signature-value";
+
+fn assert_no_url_secrets(error: &UploadAttachmentError) {
+    let logged = format!("{error} {error:?}");
+    for secret in [
+        "X-Amz",
+        "access-key-id",
+        "session-token-value",
+        "signature-value",
+    ] {
+        assert!(!logged.contains(secret), "{secret} in {logged}");
+    }
+}
+
+#[tokio::test]
+async fn a_refused_upload_keeps_only_the_status_and_s3_error_code() {
+    use wiremock::matchers::method;
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    // S3 echoes the canonical request, signed query included, on a bad signature.
+    let storage = MockServer::start().await;
+    Mock::given(method("PUT"))
+        .respond_with(ResponseTemplate::new(403).set_body_string(format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<Error><Code>SignatureDoesNotMatch</Code><Message>The request signature we calculated does not match the signature you provided.</Message><CanonicalRequest>PUT
+/document
+{SIGNED_QUERY}</CanonicalRequest></Error>"#
+        )))
+        .mount(&storage)
+        .await;
+    let (_, base64_hash) = calculate_hashes(b"document");
+
+    let error = upload_data_to_presigned_url(
+        &format!("{}/document?{SIGNED_QUERY}", storage.uri()),
+        "application/pdf",
+        b"document".to_vec(),
+        &base64_hash,
+    )
+    .await
+    .unwrap_err();
+
+    assert_no_url_secrets(&error);
+    assert!(
+        matches!(
+            &error,
+            UploadAttachmentError::PresignedUrlRefused { status, code }
+                if *status == reqwest::StatusCode::FORBIDDEN
+                    && code.as_deref() == Some("SignatureDoesNotMatch")
+        ),
+        "{error:?}"
+    );
+}
+
+#[tokio::test]
+async fn an_unreachable_upload_url_is_not_logged() {
+    let (_, base64_hash) = calculate_hashes(b"document");
+
+    // Nothing listens on this port, so the upload never gets an answer.
+    let error = upload_data_to_presigned_url(
+        &format!("http://127.0.0.1:9/document?{SIGNED_QUERY}"),
+        "application/pdf",
+        b"document".to_vec(),
+        &base64_hash,
+    )
+    .await
+    .unwrap_err();
+
+    assert_no_url_secrets(&error);
+    assert!(
+        matches!(error, UploadAttachmentError::PresignedUrlUnreachable(_)),
+        "{error:?}"
+    );
+}

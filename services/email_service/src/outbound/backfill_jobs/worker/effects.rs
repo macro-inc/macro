@@ -2,10 +2,14 @@
 mod test;
 
 use super::*;
+use crate::outbound::inbox_source::inbox_source;
 use crate::util::upload_attachment::{
     UploadAttachmentContext, UploadAttachmentError, upload_attachment,
 };
-use contacts::domain::ports::ContactsIngress;
+use contacts::domain::{
+    models::messages::ContactConnection,
+    ports::{ContactListIngress, ContactsIngress},
+};
 use crm::domain::{
     email_policy::EmailPolicyGeneration,
     email_policy_work::{
@@ -62,13 +66,23 @@ impl BackfillEffects for BackfillWorkerEffects {
     }
     async fn connect(
         &self,
-        users: HashSet<MacroUserIdStr<'static>>,
+        link: &Link,
+        recipients: Vec<MacroUserIdStr<'static>>,
     ) -> Result<(), rootcause::Report> {
-        self.contacts_ingress.enqueue_contacts(users).await
+        // The legacy message pairs the owner with one recipient at a time, so
+        // the recipients are not connected to each other.
+        for recipient in &recipients {
+            self.contacts_ingress
+                .enqueue_contacts(HashSet::from([link.macro_id.clone(), recipient.clone()]))
+                .await?;
+        }
+        self.contacts_ingress
+            .record_inbox_contacts(inbox_source(link), recipients)
+            .await
     }
     async fn acquire_crm(&self, team: Uuid) -> anyhow::Result<Option<Self::Permit>> {
         self.redis_client
-            .acquire_crm_population_slot(team)
+            .try_acquire_crm_population_slot(team)
             .await
             .map_err(anyhow::Error::new)
     }
@@ -314,21 +328,19 @@ impl BackfillLifecycleEffects for BackfillWorkerEffects {
     }
     async fn connect_contacts(
         &self,
-        owner: &MacroUserIdStr<'static>,
+        link: &Link,
         contacts: Vec<MacroUserIdStr<'static>>,
     ) -> Result<(), rootcause::Report> {
         self.contacts_ingress
             .enqueue_contact_connections(
                 contacts
-                    .into_iter()
-                    .map(|contact| {
-                        contacts::domain::models::messages::ContactConnection::new(
-                            owner.clone(),
-                            contact,
-                        )
-                    })
+                    .iter()
+                    .map(|contact| ContactConnection::new(link.macro_id.clone(), contact.clone()))
                     .collect(),
             )
+            .await?;
+        self.contacts_ingress
+            .record_inbox_contacts(inbox_source(link), contacts)
             .await
     }
 }

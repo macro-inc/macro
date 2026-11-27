@@ -2,11 +2,12 @@
 //! reused, then upgraded with explicit property snapshots in the same write.
 //! No database schema or queued-mutation format change is required.
 
-use super::SoupFilterCacheAdapterError;
+use super::{SoupFilterCacheAdapterError, WriteResponse};
 use crate::mail::ProjectionError;
 use cache_core::predicate::{
     ProjectionMutation, ProjectionState, apply_authoritative_projection_mutations,
 };
+use cache_core::store::DurableRead;
 use item_filter_index::{properties as facts, vocabulary};
 use predicate_index::{
     ExactFact, IndexDocument, OptimisticProjectionMutation, Profile, RecordKey, Token,
@@ -16,6 +17,7 @@ use std::collections::{BTreeMap, HashMap};
 
 mod optimistic;
 mod prepare;
+pub(crate) use prepare::{PARENT_INPUTS, PARENTS, PROPERTY_INPUTS};
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod test;
 
@@ -127,16 +129,20 @@ pub async fn augment_authoritative<S: cache_core::predicate::PredicateIndexStora
     reuse_stored_identity: bool,
     mutations: Vec<ProjectionMutation>,
 ) -> Result<Vec<ProjectionMutation>, ProjectionError<S::Error>> {
-    let changes = prepare(
-        schema,
-        storage,
-        query,
-        operation,
-        variables,
-        data,
-        reuse_stored_identity,
-    )
-    .await?;
+    let response = WriteResponse::new(schema, query, operation, variables, data);
+    augment_authoritative_response(storage, &response, reuse_stored_identity, mutations).await
+}
+
+/// [`augment_authoritative`] over a response the other passes share.
+pub async fn augment_authoritative_response<S: DurableRead>(
+    storage: &S,
+    response: &WriteResponse<'_>,
+    reuse_stored_identity: bool,
+    mutations: Vec<ProjectionMutation>,
+) -> Result<Vec<ProjectionMutation>, ProjectionError<S::Error>> {
+    let (operation, variables, data) =
+        (response.operation(), response.variables(), response.data());
+    let changes = prepare(storage, response, reuse_stored_identity).await?;
     let mut by_key: BTreeMap<RecordKey, Vec<ProjectionMutation>> = BTreeMap::new();
     for mutation in mutations {
         by_key
@@ -150,7 +156,7 @@ pub async fn augment_authoritative<S: cache_core::predicate::PredicateIndexStora
     let keys: Vec<_> = by_key.keys().cloned().collect();
     let bases = if reuse_stored_identity {
         storage
-            .load_projection_states(&keys)
+            .read_projection_states(&keys)
             .await
             .map_err(ProjectionError::Storage)?
     } else {

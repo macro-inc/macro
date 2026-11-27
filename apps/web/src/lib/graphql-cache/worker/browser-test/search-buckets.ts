@@ -44,6 +44,7 @@ try {
       }
     );
     await host.writeQuery({
+      generation: (await host.authority!.current()).generation,
       query,
       variables: { input: { initial: { limit: offset + 1 } } },
       data: { user: { id: 'fixture-viewer', soup: { items } } },

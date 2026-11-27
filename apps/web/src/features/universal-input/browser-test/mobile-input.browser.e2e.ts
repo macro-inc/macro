@@ -77,7 +77,7 @@ test('keeps the mobile editor focused as forms appear above it and Enter adds a 
   expect(await original?.evaluate((element) => element.isConnected)).toBe(true);
 });
 
-test('replaces the normal results and filter tabs with the card until the input is cleared', async ({
+test('replaces the normal results and search starters with the card until the input is cleared', async ({
   page,
 }) => {
   const failures: string[] = [];
@@ -90,29 +90,29 @@ test('replaces the normal results and filter tabs with the card until the input 
     name: 'Search or create',
     exact: true,
   });
-  const filters = page.locator('header[aria-label="Search filters"]');
+  const starters = page.locator('header[aria-label="Search with"]');
   const results = page.getByRole('region', {
     name: 'Search results',
     exact: true,
   });
   await input.fill('John');
-  await expect(filters).toBeVisible();
+  await expect(starters).toBeVisible();
   await expect(results).toBeVisible();
   const original = await input.elementHandle();
   await input.fill('notification clicks are broken on iOS');
   await expect(
     page.getByRole('button', { name: 'Create task', exact: true })
   ).toBeEnabled();
-  await expect(filters).not.toBeVisible();
+  await expect(starters).not.toBeVisible();
   await expect(results).not.toBeVisible();
   await input.fill('short');
-  await expect(filters).not.toBeVisible();
+  await expect(starters).not.toBeVisible();
   await expect(results).not.toBeVisible();
   expect(
     await original?.evaluate((element) => element === document.activeElement)
   ).toBe(true);
   await input.fill('');
-  await expect(filters).toBeVisible();
+  await expect(starters).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Create task', exact: true })
   ).not.toBeVisible();
@@ -184,7 +184,7 @@ test('waits for IME composition before predicting from the mobile editor', async
   await expect(input).toBeFocused();
 });
 
-test('uses live global search filters on mobile and opens a filtered hit directly', async ({
+test('writes the search filters into Search for on mobile and opens a filtered hit directly', async ({
   page,
 }) => {
   await page.goto('/?mobile-search&eligible');
@@ -196,9 +196,9 @@ test('uses live global search filters on mobile and opens a filtered hit directl
     exact: true,
   });
   await input.fill('search messages from julia in #sales about budget');
-  const filters = page.getByLabel('Search filters');
-  await expect(filters.getByText('Channels', { exact: true })).toBeVisible();
-  await expect(filters.getByText('Julia Jones', { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('textbox', { name: 'Search for', exact: true })
+  ).toHaveText('type:channel in:#sales from:julia@macro.com budget');
   const results = page.getByRole('listbox', {
     name: 'Search results',
     exact: true,
@@ -206,7 +206,7 @@ test('uses live global search filters on mobile and opens a filtered hit directl
   await expect(results.getByRole('option')).toHaveCount(1);
   await expect(results).toContainText('Julia shared the budget');
   await expect(page.getByTestId('global-search-requests')).toContainText(
-    '"sender_ids":["macro|julia@macro.com"]'
+    '"query":"type:channel from:julia@macro.com budget"'
   );
   await expect(page.getByTestId('global-search-requests')).toContainText(
     '"channel_ids":["sales-channel"]'

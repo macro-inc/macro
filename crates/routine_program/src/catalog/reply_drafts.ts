@@ -17,7 +17,7 @@ export async function main({ macro, run, trigger, knobs }: StepContext) {
     earlier.push({ from: await message.from(), sentAt: await message.sentAt(), body: String((await message.body()) ?? '').slice(0, 4000) });
   }
   const { outcome } = await macro.ai.structuredCompletion({
-    model: 'google/gemini-3.8-flash',
+    model: 'google/gemini-4-hydrogen',
     thinking: 'low',
     toolset: { type: 'none' },
     prompt: JSON.stringify({

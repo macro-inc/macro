@@ -32,7 +32,7 @@ use rootcause::Report;
 mod test;
 
 use super::{
-    SearchProcessingKafkaConsumer,
+    Lane, LaneConsumer,
     metrics::PendingAges,
     offsets::{OffsetLedger, RecordTime},
     subscribed_topic,
@@ -91,9 +91,9 @@ impl BacklogSampler {
         }
     }
 
-    pub(super) fn sample_consumer(
+    pub(super) fn sample_consumer<L: Lane>(
         &mut self,
-        consumer: &SearchProcessingKafkaConsumer,
+        consumer: &LaneConsumer<L>,
         ledger: &OffsetLedger,
     ) {
         match read_partitions(consumer) {
@@ -155,9 +155,7 @@ impl Drop for BacklogSampler {
     }
 }
 
-fn read_partitions(
-    consumer: &SearchProcessingKafkaConsumer,
-) -> Result<Vec<PartitionReading>, Report> {
+fn read_partitions<L: Lane>(consumer: &LaneConsumer<L>) -> Result<Vec<PartitionReading>, Report> {
     let consumer = consumer.inner();
     // The position list is the assignment, with each partition's position.
     let positions = consumer.position()?;

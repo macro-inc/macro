@@ -71,9 +71,62 @@ type Timing = {
   processingEnd?: number;
   blockingDuration?: number;
   interactionId?: number;
+  /** Long animation frames: when rendering, and style and layout, began. */
+  renderStart?: number;
+  styleAndLayoutStart?: number;
+  /** Long animation frames: forced style and layout across all scripts. */
+  forcedStyleAndLayoutMs?: number;
+  /** Long animation frames: the longest scripts, sanitized. */
+  scripts?: ScriptTiming[];
+};
+
+/** The fields of a `PerformanceScriptTiming` kept, already sanitized. */
+type ScriptTiming = {
+  start: number;
+  duration: number;
+  invoker: string;
+  invokerType: string;
+  sourceURL: string;
+  sourceFunctionName: string;
+  sourceCharPosition: number;
+  forcedStyleAndLayoutDuration: number;
+};
+
+/** As the browser reports it; older Chrome builds lack some fields. */
+type LongAnimationFrameEntry = PerformanceEntry & {
+  blockingDuration?: number;
+  renderStart?: number;
+  styleAndLayoutStart?: number;
+  scripts?: readonly {
+    startTime: number;
+    duration: number;
+    invoker?: string;
+    invokerType?: string;
+    sourceURL?: string;
+    sourceFunctionName?: string;
+    sourceCharPosition?: number;
+    forcedStyleAndLayoutDuration?: number;
+  }[];
 };
 
 const MAX_ENTRIES = 200;
+/** Scripts reported per operation. */
+const MAX_SCRIPTS = 3;
+/**
+ * Scripts kept per long frame, more than are reported so a frame that
+ * straddles an operation's start or end still has the scripts inside the
+ * operation's window. Chrome lists only scripts of 5 ms or more.
+ */
+const MAX_FRAME_SCRIPTS = 10;
+const MAX_ATTRIBUTION_LENGTH = 200;
+/**
+ * How long a finished operation waits before reading long frames. Chrome
+ * queues a frame's `long-animation-frame` entry after the frame is
+ * presented, 5-46 ms after it ends (measured), which is later than the two
+ * animation frames `afterPaint` waits; without this the frame holding the
+ * operation's own work is missing. The span keeps its real end time.
+ */
+const ENTRY_DELAY_MS = 150;
 const MAX_OPERATIONS = 32;
 const TIMEOUT_MS = 30_000;
 const timings: Timing[] = [];
@@ -81,9 +134,41 @@ let collected = 0;
 // Event Timing only reports events at or above this duration.
 const EVENT_TIMING_THRESHOLD_MS = 16;
 const active = new Set<UiOperation>();
+/** Finished operations waiting for late entries, flushed on hide. */
+const reporting = new Set<() => void>();
 let observers: PerformanceObserver[] = [];
 let supported: string[] = [];
 let disposeObservers: (() => void) | undefined;
+
+/**
+ * The longest scripts of a long frame, already reduced to what a span may
+ * carry so the buffer holds no query strings, ids or `data:` payloads, and
+ * the frame's total forced layout.
+ */
+function frameScripts(entry: LongAnimationFrameEntry) {
+  let forced = 0;
+  for (const script of entry.scripts ?? [])
+    forced += script.forcedStyleAndLayoutDuration ?? 0;
+  const scripts = [...(entry.scripts ?? [])]
+    .sort((a, b) => b.duration - a.duration)
+    .slice(0, MAX_FRAME_SCRIPTS)
+    .map(
+      (script): ScriptTiming => ({
+        start: script.startTime,
+        duration: script.duration,
+        invoker: scriptInvoker(script.invoker ?? ''),
+        invokerType: (script.invokerType ?? '').slice(0, 40),
+        sourceURL: scriptSource(script.sourceURL ?? ''),
+        sourceFunctionName: (script.sourceFunctionName ?? '').slice(
+          0,
+          MAX_ATTRIBUTION_LENGTH
+        ),
+        sourceCharPosition: script.sourceCharPosition ?? -1,
+        forcedStyleAndLayoutDuration: script.forcedStyleAndLayoutDuration ?? 0,
+      })
+    );
+  return { scripts, forced };
+}
 
 function collect(entries: PerformanceEntry[]) {
   for (const entry of entries) {
@@ -93,6 +178,11 @@ function collect(entries: PerformanceEntry[]) {
       blockingDuration?: number;
       interactionId?: number;
     };
+    const frame =
+      entry.entryType === 'long-animation-frame'
+        ? (entry as LongAnimationFrameEntry)
+        : undefined;
+    const attribution = frame ? frameScripts(frame) : undefined;
     timings.push({
       sequence: collected++,
       kind: entry.entryType,
@@ -104,6 +194,10 @@ function collect(entries: PerformanceEntry[]) {
       processingEnd: timing.processingEnd,
       blockingDuration: timing.blockingDuration,
       interactionId: timing.interactionId,
+      renderStart: frame?.renderStart,
+      styleAndLayoutStart: frame?.styleAndLayoutStart,
+      forcedStyleAndLayoutMs: attribution?.forced,
+      scripts: attribution?.scripts,
     });
   }
   if (timings.length > MAX_ENTRIES)
@@ -150,6 +244,104 @@ function measureBlockingWork(
     }
   }
   return work;
+}
+
+const SCRIPT_PATH = /\.[cm]?[jt]sx?$/;
+const URL_SCHEME = /^([a-z][a-z0-9+.-]*):/i;
+/** Schemes whose URLs never have `//` but are still not invoker names. */
+const URL_SCHEMES = new Set(['blob', 'data', 'javascript', 'file', 'about']);
+
+/**
+ * A script URL without query or fragment. Code that runs from the page
+ * itself (inline handlers, injected scripts such as Tauri's IPC) is
+ * `<origin>/(document)`, so routes never reach the span; other schemes
+ * (`blob:`, `data:`, extensions) keep only the scheme.
+ */
+export function scriptSource(url: string): string {
+  if (!url) return '';
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return '(unparsed)';
+  }
+  if (!['http:', 'https:', 'tauri:'].includes(parsed.protocol))
+    return parsed.protocol;
+  const path = SCRIPT_PATH.test(parsed.pathname)
+    ? parsed.pathname
+    : '/(document)';
+  return `${parsed.protocol}//${parsed.host}${path}`.slice(
+    0,
+    MAX_ATTRIBUTION_LENGTH
+  );
+}
+
+/**
+ * What called a script, such as `DIV.onkeydown` or `Response.json.then`.
+ * Element ids and `[src=...]` are dropped; a script URL is a source.
+ */
+export function scriptInvoker(invoker: string): string {
+  const scheme = URL_SCHEME.exec(invoker)?.[1]?.toLowerCase();
+  if (scheme && (URL_SCHEMES.has(scheme) || invoker.includes('//')))
+    return scriptSource(invoker);
+  // `TAG#id.onclick` or `TAG[src=url].onload`: keep the tag and the event,
+  // whatever the id or attribute holds (dots, brackets).
+  if (/[#[]/.test(invoker.slice(1))) {
+    const tag = /^#?[A-Za-z0-9-]*/.exec(invoker)?.[0] ?? '';
+    const event = /\.on[a-z]+$/.exec(invoker)?.[0] ?? '';
+    return `${tag}${event}`;
+  }
+  return invoker.slice(0, MAX_ATTRIBUTION_LENGTH);
+}
+
+/**
+ * The scripts that held the main thread longest in the long frames
+ * overlapping `[start, end]`, with the longest frame's render and layout
+ * time, as `ui.long_animation_frame_*` attributes.
+ */
+function frameAttribution(
+  start: number,
+  end: number,
+  entries: readonly Timing[]
+): Attributes {
+  const attributes: Attributes = {};
+  let forced = 0;
+  let longest: Timing | undefined;
+  const scripts: ScriptTiming[] = [];
+  for (const entry of entries) {
+    if (entry.kind !== 'long-animation-frame') continue;
+    if (entry.start >= end || entry.start + entry.duration <= start) continue;
+    forced += entry.forcedStyleAndLayoutMs ?? 0;
+    if (!longest || entry.duration > longest.duration) longest = entry;
+    for (const script of entry.scripts ?? [])
+      if (script.start < end && script.start + script.duration > start)
+        scripts.push(script);
+  }
+  if (!longest) return attributes;
+  const frameEnd = longest.start + longest.duration;
+  attributes['ui.long_animation_frame_max_ms'] = longest.duration;
+  if (longest.renderStart)
+    attributes['ui.long_animation_frame_max_render_ms'] =
+      frameEnd - longest.renderStart;
+  if (longest.styleAndLayoutStart)
+    attributes['ui.long_animation_frame_max_style_layout_ms'] =
+      frameEnd - longest.styleAndLayoutStart;
+  attributes['ui.long_animation_frame_forced_style_layout_ms'] = forced;
+  scripts.sort((a, b) => b.duration - a.duration);
+  const top = scripts.slice(0, MAX_SCRIPTS);
+  attributes['ui.long_animation_frame_script_count'] = top.length;
+  top.forEach((script, index) => {
+    const prefix = `ui.long_animation_frame_script_${index + 1}`;
+    attributes[`${prefix}.invoker`] = script.invoker;
+    attributes[`${prefix}.invoker_type`] = script.invokerType;
+    attributes[`${prefix}.source_url`] = script.sourceURL;
+    attributes[`${prefix}.source_function`] = script.sourceFunctionName;
+    attributes[`${prefix}.source_char_position`] = script.sourceCharPosition;
+    attributes[`${prefix}.duration_ms`] = script.duration;
+    attributes[`${prefix}.forced_style_layout_ms`] =
+      script.forcedStyleAndLayoutDuration;
+  });
+  return attributes;
 }
 
 /**
@@ -246,13 +438,19 @@ export function initializeUiOperationTelemetry(): () => void {
       }
     }
   }
+  // A hidden page may never run the delayed reports; send what is known.
+  const flush = () => {
+    for (const report of [...reporting]) report();
+  };
   const hide = () => {
     if (document.visibilityState === 'hidden') {
       for (const operation of [...active]) operation.finish('hidden');
+      flush();
     }
   };
   const leave = () => {
     for (const operation of [...active]) operation.cancel();
+    flush();
   };
   document.addEventListener('visibilitychange', hide);
   window.addEventListener('pagehide', leave);
@@ -298,6 +496,8 @@ const noop: UiOperation = {
  * contents, prompts, SQL, DOM selectors or labels. Span duration starts at the
  * handler; input-to-ready/paint attributes also include pre-handler queueing.
  * Long-task/frame times describe overlapping browser work, not causal CPU time.
+ * Browser timing is read, and the span ended at its finish time, a short
+ * while after `finish`, when late long-frame entries have arrived.
  */
 export function startUiOperation(
   name: string,
@@ -340,18 +540,14 @@ export function startUiOperation(
   let ready: number | undefined;
   const timeout = window.setTimeout(() => finish('timeout'), TIMEOUT_MS);
 
-  function finish(outcome: Outcome = 'success') {
-    if (ended) return;
-    ended = true;
-    window.clearTimeout(timeout);
-    if (frame !== undefined) window.cancelAnimationFrame(frame);
-    const end = performance.now();
+  /** Browser timing for the operation, once late entries have arrived. */
+  function report(end: number) {
     for (const observer of observers) collect(observer.takeRecords());
+    const from = input ?? started;
     const overlap = timings.filter(
-      (entry) =>
-        entry.start < end && entry.start + entry.duration > (input ?? started)
+      (entry) => entry.start < end && entry.start + entry.duration > from
     );
-    const work = measureBlockingWork(input ?? started, end, overlap);
+    const work = measureBlockingWork(from, end, overlap);
     span.setAttr('ui.long_task_count', work.longTaskCount);
     span.setAttr('ui.long_task_overlap_ms', work.longTaskMs);
     span.setAttr('ui.long_animation_frame_count', work.longAnimationFrameCount);
@@ -363,6 +559,10 @@ export function startUiOperation(
       'ui.long_animation_frame_blocking_ms',
       work.longAnimationFrameBlockingMs
     );
+    for (const [key, value] of Object.entries(
+      frameAttribution(from, end, overlap)
+    ))
+      span.setAttr(key, value);
     const event =
       input === undefined
         ? undefined
@@ -387,6 +587,20 @@ export function startUiOperation(
       );
       span.setAttr('ui.event_duration_ms', event.duration);
     }
+    // Same clock as the start: OpenTelemetry offsets a `performance.now()`
+    // end onto the wall-clock start it took itself, while an explicit start
+    // is already epoch time from the time origin.
+    span.end(
+      options.startTime === undefined ? end : performance.timeOrigin + end
+    );
+  }
+
+  function finish(outcome: Outcome = 'success') {
+    if (ended) return;
+    ended = true;
+    window.clearTimeout(timeout);
+    if (frame !== undefined) window.cancelAnimationFrame(frame);
+    const end = performance.now();
     span.setAttr('ui.outcome', outcome);
     span.setAttr('ui.elapsed_ms', end - started);
     if (ready !== undefined && outcome === 'success') {
@@ -400,7 +614,20 @@ export function startUiOperation(
     }
     options.onFinish?.(span, outcome, end);
     active.delete(operation);
-    span.end();
+    const send = () => {
+      if (!reporting.delete(send)) return;
+      window.clearTimeout(delay);
+      report(end);
+    };
+    reporting.add(send);
+    const delay = window.setTimeout(send, ENTRY_DELAY_MS);
+    // Abandoned operations have no last frame worth waiting for.
+    if (
+      outcome === 'cancelled' ||
+      outcome === 'timeout' ||
+      document.visibilityState === 'hidden'
+    )
+      send();
   }
   const operation: UiOperation = {
     span,

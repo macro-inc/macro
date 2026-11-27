@@ -1,3 +1,4 @@
+import { TEST_AUTHORITY_GENERATION } from '@graphql-cache/authority-fixture';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPeopleCache } from '../people/host';
 import {
@@ -53,6 +54,25 @@ describe('createRetirableCacheHost', () => {
     expect(inner.readQuery).toHaveBeenCalledOnce();
   });
 
+  it('forwards its owner being ready until it is retired', () => {
+    let report: (() => void) | undefined;
+    const inner: CacheHost = {
+      ...disposedLikeHost(),
+      onOwnerReady: (cb) => {
+        report = cb;
+        return () => undefined;
+      },
+    };
+    const host = createRetirableCacheHost(inner);
+    const ready = vi.fn();
+    host.onOwnerReady?.(ready);
+    report?.();
+    host.dispose();
+    report?.();
+    expect(ready).toHaveBeenCalledOnce();
+    expect(() => host.onOwnerReady?.(ready)()).not.toThrow();
+  });
+
   it('turns every captured reference into a disabled cache on dispose', async () => {
     const inner = disposedLikeHost();
     const host = createRetirableCacheHost(inner);
@@ -70,7 +90,11 @@ describe('createRetirableCacheHost', () => {
     );
     await expect(host.readQuery(QUERY)).resolves.toEqual({ kind: 'miss' });
     await expect(
-      host.writeQuery({ ...QUERY, data: { user: { id: 'u' } } })
+      host.writeQuery({
+        generation: TEST_AUTHORITY_GENERATION,
+        ...QUERY,
+        data: { user: { id: 'u' } },
+      })
     ).resolves.toMatchObject({ revision: INITIAL_CACHE_REVISION });
     await expect(
       host.search({ profile: 'quick-access-v1', query: '', limit: 10 })
@@ -159,7 +183,9 @@ describe('createRetirableCacheHost', () => {
       kind: 'ready',
       epoch,
     });
-    await expect(people.update(update)).resolves.toBe('1');
+    await expect(
+      people.update(update, TEST_AUTHORITY_GENERATION)
+    ).resolves.toBe('1');
     await expect(people.search(search)).resolves.toEqual(page);
     await expect(people.resolveReferences(references)).resolves.toEqual(
       resolved
@@ -179,7 +205,9 @@ describe('createRetirableCacheHost', () => {
     });
     await expect(contextRead(scope)).resolves.toEqual({ kind: 'unsupported' });
     await expect(searchRead(search)).resolves.toEqual({ kind: 'unsupported' });
-    await expect(write(update)).rejects.toThrow(PEOPLE_UNSUPPORTED);
+    await expect(write(update, TEST_AUTHORITY_GENERATION)).rejects.toThrow(
+      PEOPLE_UNSUPPORTED
+    );
     expect(transport.context).toHaveBeenCalledOnce();
     expect(transport.update).toHaveBeenCalledOnce();
     expect(transport.search).toHaveBeenCalledOnce();
@@ -226,11 +254,14 @@ describe('createRetirableCacheHost', () => {
       })
     ).rejects.toBe(error);
     await expect(
-      people.update({
-        scope,
-        epoch: '00000000-0000-4000-8000-000000000002',
-        action: { kind: 'commit' },
-      })
+      people.update(
+        {
+          scope,
+          epoch: '00000000-0000-4000-8000-000000000002',
+          action: { kind: 'commit' },
+        },
+        TEST_AUTHORITY_GENERATION
+      )
     ).rejects.toBe(error);
     host.dispose();
   });
@@ -251,6 +282,60 @@ describe('createRetirableCacheHost', () => {
 
     expect(inner.dispose).toHaveBeenCalledOnce();
   });
+
+  it('reports an engine still opening as never ready once retired', async () => {
+    let opened = false;
+    const inner: CacheHost = {
+      ...disposedLikeHost(),
+      isReady: () => opened,
+      // Still opening; a retained lease keeps the inner host alive.
+      whenReady: () => new Promise<void>(() => {}),
+    };
+    const host = createRetirableCacheHost(inner);
+    const lease = retainCacheHost(host);
+    expect(host.isReady?.()).toBe(false);
+    const waiting = host.whenReady?.();
+
+    host.dispose();
+    opened = true;
+
+    await expect(waiting).resolves.toBeUndefined();
+    await expect(host.whenReady?.()).resolves.toBeUndefined();
+    expect(host.isReady?.()).toBe(false);
+    lease?.release();
+  });
+
+  it('passes readiness through while it is current', () => {
+    let opened = false;
+    const host = createRetirableCacheHost({
+      ...disposedLikeHost(),
+      isReady: () => opened,
+    });
+    expect(host.isReady?.()).toBe(false);
+    opened = true;
+    expect(host.isReady?.()).toBe(true);
+    expect(createRetirableCacheHost(disposedLikeHost()).isReady?.()).toBe(true);
+  });
+});
+
+it('keeps a paused host retainable, unlike a retired one', () => {
+  let paused = true;
+  const inner: CacheHost = Object.defineProperties(
+    { ...disposedLikeHost() },
+    { disabled: { get: () => paused }, paused: { get: () => paused } }
+  );
+  const host = createRetirableCacheHost(inner);
+  expect(host).toMatchObject({ disabled: true, paused: true });
+  expect(retainCacheHost(host)?.host).toBe(inner);
+  paused = false;
+  expect(host).toMatchObject({ disabled: false, paused: false });
+  expect(retainCacheHost(host)?.host).toBe(inner);
+
+  host.dispose();
+  paused = true;
+  expect(host.disabled).toBe(true);
+  expect(host.paused).toBeFalsy();
+  expect(retainCacheHost(host)).toBeUndefined();
 });
 
 it('keeps the physical host alive until every idempotent lease is released', async () => {
@@ -317,7 +402,7 @@ it('silences retired public subscriptions while retained storage still emits eve
   host.dispose();
   affected?.([2]);
   changed?.(INITIAL_CACHE_REVISION);
-  generation?.({ storage: 'preserved' });
+  generation?.({ storage: 'preserved', queue: 'preserved' });
   settled?.({ transactionId: 'draft', status: 'committed' });
   for (const callback of callbacks) expect(callback).not.toHaveBeenCalled();
   expect(inner.dispose).not.toHaveBeenCalled();

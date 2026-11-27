@@ -33,10 +33,43 @@ impl EntityAudienceLookup for RecordingLookup {
             users: self.users.clone(),
         }])
     }
+
+    async fn get_current_channel_users(
+        &self,
+        channel_id: &str,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        self.calls
+            .lock()
+            .expect("calls lock")
+            .push((EntityType::Channel, vec![channel_id.to_string()]));
+        Ok(self.users.clone())
+    }
 }
 
 fn user(value: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(value.to_string()).expect("valid user id")
+}
+
+#[tokio::test]
+async fn reads_a_channels_current_members_from_the_lookup() {
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let users = vec![user("macro|one@example.com")];
+    let adapter = EntityAccessExpander::new(RecordingLookup {
+        calls: calls.clone(),
+        users: users.clone(),
+    });
+    let channel_id = "00000000-0000-0000-0000-000000000004";
+
+    let members = adapter
+        .current_channel_members(channel_id)
+        .await
+        .expect("members are read");
+
+    assert_eq!(members, users);
+    assert_eq!(
+        *calls.lock().expect("calls lock"),
+        vec![(EntityType::Channel, vec![channel_id.to_string()])]
+    );
 }
 
 #[tokio::test]

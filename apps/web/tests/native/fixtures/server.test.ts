@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from 'bun:test';
 import { type DocumentNode, type ExecutionResult, print, visit } from 'graphql';
 import {
+  ChannelDirectoryPageDocument,
   ChannelUnreadPresenceDocument,
   type ChannelUnreadPresenceQuery,
   FavoritesDocument,
@@ -9,10 +10,15 @@ import {
   type ItemPreviewsQuery,
   MailAccountsDocument,
   type MailAccountsQuery,
+  RunningTimerDocument,
+  type RunningTimerQuery,
   SoupBackfillDocument,
+  SoupChannelDirectoryBackfillDocument,
   SoupDocument,
   type SoupInput,
   SoupMailBackfillDocument,
+  SoupPreviewPageDocument,
+  type SoupPreviewPageQuery,
   type SoupQuery,
   SoupSharedMailBackfillDocument,
 } from '../../../src/lib/service-clients/service-storage/graphql/generated/graphql';
@@ -436,6 +442,43 @@ test('favorite previews are ID-scoped and cannot seed arbitrary Mail pages', asy
   ).toBe('ItemPreviews only serves fixture favorites');
 });
 
+test('the channel directory lane and its network fallback read no channels', async () => {
+  server = startFixtureServer();
+  for (const [document, operationName] of [
+    [SoupChannelDirectoryBackfillDocument, 'SoupChannelDirectoryBackfill'],
+    [ChannelDirectoryPageDocument, 'ChannelDirectoryPage'],
+  ] as const) {
+    const response = await fetch(`${server.origin}/dss/items/soup/graphql`, {
+      method: 'POST',
+      body: JSON.stringify({
+        query: transportQuery(document),
+        operationName,
+        variables: {
+          input: {
+            initial: {
+              limit: 100,
+              emailView: 'ALL',
+              channelReads: 'PRIMARY',
+              filters: {
+                emailFilter: { tree: { literal: { threadId: fixtureId(0) } } },
+              },
+            },
+          },
+        },
+      }),
+    });
+    const result = await response.json();
+    expect(result.errors).toBeUndefined();
+    expect(result.data.user.soup).toEqual({
+      ...(operationName === 'SoupChannelDirectoryBackfill'
+        ? { items: [], scopeIds: [] }
+        : { items: [] }),
+      nextCursor: null,
+    });
+  }
+  expect(server.requests.filter((request) => request.error)).toEqual([]);
+});
+
 test('matrix fixtures validate against the production backfill selections', async () => {
   server = startFixtureServer(0, true);
   for (const [document, operationName, input, count] of [
@@ -472,6 +515,102 @@ test('matrix fixtures validate against the production backfill selections', asyn
     expect(result.errors).toBeUndefined();
     expect(result.data.user.soup.items).toHaveLength(count);
   }
+});
+
+test('one-shot preview lists read no items and never serve Mail views', async () => {
+  server = startFixtureServer();
+  const none = fixtureId(0);
+  const request = async (
+    input: SoupInput
+  ): Promise<ExecutionResult<SoupPreviewPageQuery>> => {
+    if (!server) throw new Error('Fixture server must be started first');
+    const response = await fetch(`${server.origin}/dss/items/soup/graphql`, {
+      method: 'POST',
+      body: JSON.stringify({
+        query: transportQuery(SoupPreviewPageDocument),
+        operationName: 'SoupPreviewPage',
+        variables: { input },
+      }),
+    });
+    return await response.json();
+  };
+  // Quick-access skills and the recently viewed list, as the app sends them.
+  for (const input of [
+    {
+      initial: {
+        expand: true,
+        limit: 500,
+        sortMethod: 'VIEWED_UPDATED',
+        filters: {
+          documentFilter: { literal: { subType: 'SKILL' } },
+          emailFilter: { tree: { literal: { threadId: none } } },
+          chatFilter: { literal: { chatId: none } },
+          channelFilter: { literal: { channelId: none } },
+        },
+      },
+    },
+    {
+      initial: {
+        expand: true,
+        limit: 50,
+        sortMethod: 'VIEWED_AT',
+        filters: {
+          agentSessionFilter: { literal: { include: true } },
+          callFilter: { literal: { callId: none } },
+        },
+      },
+    },
+  ] satisfies SoupInput[]) {
+    const result = await request(input);
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.user.soup).toEqual({ items: [], nextCursor: null });
+  }
+  expect(server.requests.filter((request) => request.error)).toEqual([]);
+  const mail = await request({ initial: { emailView: 'INBOX' } });
+  expect(mail.errors?.[0]?.message).toBe(
+    'SoupPreviewPage does not serve Mail views'
+  );
+});
+
+test('the startup running-timer read finds no timer', async () => {
+  server = startFixtureServer();
+  const response = await fetch(`${server.origin}/dss/items/soup/graphql`, {
+    method: 'POST',
+    body: JSON.stringify({
+      query: transportQuery(RunningTimerDocument),
+      operationName: 'RunningTimer',
+    }),
+  });
+  const result: ExecutionResult<RunningTimerQuery> = await response.json();
+  expect(result.errors).toBeUndefined();
+  const timeTracking = result.data?.user.timeTracking;
+  expect(timeTracking?.id).toBe(USER_ID);
+  expect(timeTracking?.runningTimer).toBeNull();
+  expect(Number.isNaN(Date.parse(timeTracking?.serverNow ?? ''))).toBe(false);
+  expect(server.requests.filter((request) => request.error)).toEqual([]);
+});
+
+test('startup notification settings have no overrides', async () => {
+  server = startFixtureServer();
+  const channels = await fetch(
+    `${server.origin}/notification/notification_settings/channels`
+  );
+  const sections = await fetch(
+    `${server.origin}/notification/notification_settings/sections`
+  );
+  expect(channels.status).toBe(200);
+  expect(await channels.json()).toEqual({ channels: [] });
+  expect(sections.status).toBe(200);
+  expect(await sections.json()).toEqual({ sections: [] });
+  expect(server.requests.filter((request) => request.error)).toEqual([]);
+});
+
+test('the Mail label read finds no labels', async () => {
+  server = startFixtureServer();
+  const response = await fetch(`${server.origin}/email/email/labels`);
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ labels: [] });
+  expect(server.requests.filter((request) => request.error)).toEqual([]);
 });
 
 test('unknown endpoints fail closed; disconnect removes the TCP listener', async () => {

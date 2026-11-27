@@ -9,7 +9,12 @@ export type ViewTourVideo = {
 /** What the tour offers to connect when the view's data source isn't linked yet. */
 export type ViewTourConnector =
   | { kind: 'email'; label: string }
-  | { kind: 'mcp'; label: string; tools: readonly string[] };
+  | {
+      kind: 'mcp';
+      label: string;
+      /** Catalog slugs of the apps; connecting any one is enough. */
+      apps: readonly string[];
+    };
 
 export type ViewTourStep = TourStep & {
   /** Shown when the step has a target but nothing to point at and no entry. */

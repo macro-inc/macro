@@ -421,8 +421,16 @@ async fn sign_in_failures_carry_the_code_that_says_how_to_recover() {
         .await,
         (StatusCode::CONFLICT, Some("computer_busy".to_owned()))
     );
+    // harnessd's own timeout waiting on the CLI has already ended the
+    // sign-in: a new one is needed, so it reads as expired.
+    assert_eq!(status_and_code(harnessd_error("timeout")).await, expired);
+    // This service giving up on harnessd may leave the computer still
+    // signing in: the code can be sent again.
     assert_eq!(
-        status_and_code(harnessd_error("timeout")).await,
+        status_and_code(super::ComputerRouteError::from(
+            super::super::harnessd::HarnessdError::Timeout
+        ))
+        .await,
         (StatusCode::GATEWAY_TIMEOUT, None)
     );
 }

@@ -320,7 +320,16 @@ impl OutlookApiClientRepository {
         master: Value,
     ) -> Result<CalendarEventUpsert, CalendarProviderError> {
         let instances = self.calendar_occurrences(token, target, &master).await?;
-        Ok(normalize::projection(target, master, instances)?.upsert)
+        let normalize::Projection {
+            mut upsert,
+            skipped,
+        } = normalize::projection(target, master, instances)?;
+        // An edit's echo of a series missing an occurrence Macro could not
+        // read is stored under no role, as the sync stores that series.
+        if !skipped.is_empty() {
+            upsert.source.details_mut().observed_access_role = None;
+        }
+        Ok(upsert)
     }
     async fn calendar_refresh(
         &self,
@@ -573,11 +582,27 @@ fn preserve_meeting_details(
             "Outlook has not finished preparing this online meeting. Try the description edit again shortly.",
         ));
     };
-    if description.contains(join) {
-        return Ok(description.into());
+    if !html_escape::decode_html_entities(description).contains(join) {
+        let (_, meeting) = conference_body::split(existing, join)?;
+        return Ok(format!("{description}{meeting}"));
     }
-    let (_, meeting) = conference_body::split(existing, join)?;
-    Ok(format!("{description}{meeting}"))
+    // Macro's editor shows the block and hands it back as plain paragraphs,
+    // without the markers that let a later edit or a replacement separate it:
+    // Outlook's own block from the current body takes their place. A
+    // description the block cannot be separated from (one an earlier save
+    // already rewrote, or one quoting the link in the person's own text) is
+    // written as given, as before; a body too large to parse whole is refused.
+    match conference_body::with_saved_meeting(description, existing, join) {
+        Ok(body) => Ok(body),
+        Err(error) if error.is_refused() => Err(error),
+        Err(_) => {
+            tracing::warn!(
+                body_bytes = description.len(),
+                "kept an edited Outlook meeting description whose meeting block Macro cannot separate"
+            );
+            Ok(description.into())
+        }
+    }
 }
 
 fn patch_body(

@@ -5,6 +5,19 @@ use soup_filter_projection::channel::{ChannelProjectionInput, project_channel};
 
 type Object = serde_json::Map<String, serde_json::Value>;
 
+/// The fields of a channel record its projection and patch read.
+pub(super) const INPUTS: &[&str] = &[
+    "id",
+    "ownerId",
+    "channelType",
+    "teamId",
+    "organizationId",
+    "isParticipant",
+    "createdAt",
+    "updatedAt",
+    "cacheProjection",
+];
+
 fn organization(value: &serde_json::Value) -> Result<Option<i64>, ()> {
     if value.is_null() {
         return Ok(None);

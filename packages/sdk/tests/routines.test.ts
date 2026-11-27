@@ -4,6 +4,7 @@ import type {
   RoutineKnob,
   ScheduledActionResponse,
 } from '../generated/scheduled-action/types.gen';
+import { Link } from '../src/entities/email/link';
 import type { RoutineKnobOptions } from '../src/entities/routines/routine';
 import { Macro } from '../src/macro';
 import { MacroApiError } from '../src/utils';
@@ -154,6 +155,51 @@ test('routine creation sends code and Ask AI steps that write as the user', asyn
     },
   ]);
 });
+
+test('an email trigger sends and reads the inboxes it watches as handles', async () => {
+  const bodies: ScheduledActionResponse[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      const body = (await request.json()) as ScheduledActionResponse;
+      bodies.push(body);
+      return Response.json(
+        { ...record, trigger: body.trigger },
+        { status: 201 },
+      );
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    token: 'user',
+    hosts: { 'scheduled-action': 'https://routines.test' },
+  });
+  const inbox = macro.email.link('inbox-1');
+  const routine = await macro.routines.create({
+    name: 'Helpdesk',
+    trigger: {
+      type: 'events',
+      filters: [{ events: ['email.message_received'], inboxes: [inbox] }],
+    },
+    prompt: 'Triage',
+    userPrompt: 'Triage helpdesk mail',
+  });
+  expect(bodies).toMatchObject([
+    {
+      trigger: {
+        type: 'events',
+        filters: [{ events: ['email.message_received'], inboxes: ['inbox-1'] }],
+      },
+    },
+  ]);
+  // Read back, a picked inbox is a handle again, not its id.
+  const trigger = await routine.trigger();
+  if (trigger.type !== 'events') throw new Error(`read ${trigger.type}`);
+  const [read] = trigger.filters[0]?.inboxes ?? [];
+  expect(read).toBeInstanceOf(Link);
+  expect(read?.id).toBe('inbox-1');
+});
+
 test('an entity knob takes the handle of the item it names, a task included, and sends its id', async () => {
   const bodies: unknown[] = [];
   globalThis.fetch = Object.assign(
@@ -331,6 +377,39 @@ test('routine options carry run visibility and updates that omit it keep it', as
   await routine.update(options);
   expect(bodies[0]).toMatchObject({ run_visibility: 'listed' });
   expect(bodies[1]).not.toHaveProperty('run_visibility');
+});
+
+test('routine options carry the agent’s pick of a look, and updates that omit it keep the stored one', async () => {
+  const bodies: unknown[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      bodies.push(await request.json());
+      return Response.json(record);
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    auth: { type: 'bot', token: 'mbot_test' },
+    requestedAs: record.owner,
+    hosts: { 'scheduled-action': 'https://routines.test' },
+  });
+  const options = {
+    name: 'Daily report',
+    trigger: { type: 'cron', schedule: '0 9 * * *', timezone: 'UTC' },
+    prompt: 'Summarize',
+    userPrompt: 'Daily summary',
+  } as const;
+  const appearance = {
+    icon: { kind: 'macro', name: 'chart-bar' },
+    color: 'blue',
+  } as const;
+  const routine = await macro.routines.create({ ...options, appearance });
+  await routine.update(options);
+  await macro.routines.check({ ...options, appearance });
+  expect(bodies[0]).toMatchObject({ appearance });
+  expect(bodies[1]).not.toHaveProperty('appearance');
+  expect(bodies[2]).toMatchObject({ routine: { appearance } });
 });
 
 test('a rejected routine create carries the server validation message', async () => {
@@ -539,5 +618,49 @@ test('a stored code step passes back with its picked items as handles, and its u
         },
       ],
     },
+  });
+});
+
+test('an email label trigger takes label handles and sends their ids', async () => {
+  const requests: Request[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      requests.push(request);
+      return Response.json(record, { status: 201 });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    auth: { type: 'bot', token: 'mbot_test' },
+    requestedAs: record.owner,
+    hosts: { 'scheduled-action': 'https://routines.test' },
+  });
+  await macro.routines.create({
+    name: 'Invoices',
+    trigger: {
+      type: 'events',
+      filters: [
+        {
+          events: ['email.labeled'],
+          labels: [macro.email.label('label-1')],
+          condition: 'Is it overdue?',
+        },
+      ],
+    },
+    prompt: 'Summarize',
+    userPrompt: 'Summarize the invoice',
+    agent: macro.agents.byId('agent-1'),
+  });
+  const body = await requests[0].json();
+  expect(body.trigger).toEqual({
+    type: 'events',
+    filters: [
+      {
+        events: ['email.labeled'],
+        labels: ['label-1'],
+        condition: 'Is it overdue?',
+      },
+    ],
   });
 });

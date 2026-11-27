@@ -11,10 +11,10 @@
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
+use connectors::McpConnectionsService;
 use futures::FutureExt;
 use import_notion::domain::ports::NotionConnections;
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_select::ConnectorSelect;
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 use uuid::Uuid;
@@ -22,7 +22,7 @@ use uuid::Uuid;
 use super::super::notion_workspace::{CANCEL_CHECK_EVERY, write};
 use super::super::{AbortOnDrop, IMPORT_HEARTBEAT, ImportServiceImpl};
 use crate::domain::models::{
-    AdoptedRun, ImportSource, ImportStatus, NotionDecision, NotionJob, RunStatus,
+    AdoptedRun, ImportSource, ImportStatus, NotionDecision, NotionJob, RunErrorKind, RunStatus,
 };
 use crate::domain::ports::{
     CanonicalImportRepo, EntityCreator, ImportRepo, NotionPlanRepo, NotionRunRepo, Result,
@@ -124,7 +124,7 @@ pub(in crate::domain::service) struct WriteSet {
 impl<R, S, C, W, N> ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + NotionPlanRepo + NotionRunRepo + WrittenObjects + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator + WorkspaceWriter,
     W: SlackWorkspaceSource,
     N: NotionConnections,
@@ -262,7 +262,6 @@ where
         let span = tracing::info_span!(
             "workspace_import.adopt",
             source = self.workspace_source.as_ref(),
-            user = %run.user,
             status = run.status.as_ref(),
             adoptions = run.adoptions,
             job,
@@ -290,7 +289,9 @@ where
                         Ok(set) => {
                             let span = tracing::Span::current();
                             span.record("pending", set.pending.len());
-                            span.record("done", set.all.len() - set.pending.len());
+                            let writes = set.all.iter().filter(|item| item.writes()).count();
+                            let pending = set.pending.iter().filter(|item| item.writes()).count();
+                            span.record("done", writes.saturating_sub(pending));
                             let service = self.clone();
                             self.jobs.tracker.spawn(
                                 async move { service.write_plan(&user, set).await }
@@ -315,21 +316,27 @@ where
     async fn give_up(&self, user: &MacroUserIdStr<'static>, status: RunStatus) {
         tracing::warn!("giving up on a stalled workspace import");
         let failed = match status {
-            RunStatus::Importing => {
-                self.end_write(user, RunStatus::Failed, Some(IMPORT_STOPPED))
-                    .await
-            }
-            _ => {
-                self.repo
-                    .transition_run(
-                        user,
-                        self.workspace_source,
-                        &[status],
-                        RunStatus::Failed,
-                        Some(IMPORT_STOPPED),
-                    )
-                    .await
-            }
+            RunStatus::Importing => self
+                .end_write(
+                    user,
+                    RunStatus::Failed,
+                    Some(IMPORT_STOPPED),
+                    Some(RunErrorKind::Interrupted),
+                )
+                .await
+                .map(|_| ()),
+            _ => self
+                .repo
+                .transition_reviewed_run(
+                    user,
+                    &[status],
+                    RunStatus::Failed,
+                    Some(IMPORT_STOPPED),
+                    Some(RunErrorKind::Interrupted),
+                    |_| None,
+                )
+                .await
+                .map(|_| ()),
         };
         if let Err(error) = failed {
             tracing::warn!(error = ?error, "could not fail the stalled workspace import");
@@ -338,8 +345,8 @@ where
         self.notify(user).await;
     }
 
-    /// The write for `review_id` as the ledger has it: the plan's copied
-    /// objects, and those still `importing`.
+    /// The current review’s persisted plan: copied/importing objects and
+    /// excluded data sources retained as link-only references.
     pub(in crate::domain::service) async fn resumable_write(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -359,14 +366,20 @@ where
             review_id,
             ..WriteSet::default()
         };
-        for row in rows.iter().filter(|row| {
-            row.review_id == Some(review_id)
-                && row.user_id == user.as_ref()
-                && row.status != ImportStatus::Discarded
-        }) {
-            let Some(item) = write::WriteItem::from_entity(row) else {
+        for row in rows
+            .iter()
+            .filter(|row| row.review_id == Some(review_id) && row.user_id == user.as_ref())
+        {
+            let Some(mut item) = write::WriteItem::from_entity(row) else {
                 continue;
             };
+            if row.status == ImportStatus::Discarded {
+                if item.kind == crate::domain::models::ImportKind::DataSource {
+                    item.decision = NotionDecision::Skip;
+                    set.all.push(item);
+                }
+                continue;
+            }
             if !matches!(item.decision, NotionDecision::Copy | NotionDecision::Tasks) {
                 continue;
             }

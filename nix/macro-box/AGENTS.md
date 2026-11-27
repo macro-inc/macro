@@ -37,7 +37,21 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   `_agent-runtime.nix` builds its `node_modules` from the starter agent's own
   `bun.lock` (one fixed-output fetch), with `@macro-inc/muppet` and
   `@macro-inc/observability` (TypeScript source) and `@macro-inc/sdk` (built
-  against those packages) beside them.
+  against those packages) beside them. The runtime also supplies the starter
+  dependency manifest for service-only compatibility checks. The
+  `macro-agent-runtime-update` root helper stages immutable bundles and
+  keeps the atomic selection and recovery journal in `/home/.macro-agent-runtime`.
+  The ordered boot unit reconciles interruptions before the agent starts
+  and resets the selection when the system image changes. Inspection uses
+  the running agent's mount namespace and a root-owned Git metadata view
+  with isolated configuration. The controller checks the guest journal
+  before accepting a terminal result.
+  The launcher preloads Muppet's `host/maintenance.ts` when present in the
+  selected runtime. The starter's optional bridge calls into it after
+  `markHealthy` and registers detached work. Earlier images and agent repos
+  can still boot, and the updater requires the current invocation's
+  bridge receipt before it sets a fence.
+  See the [rollout runbook](../../docs/runbooks/firecracker-computers-rollout.md).
   `_computer-use-linux.nix` builds computer-use-linux (MIT) from source at a
   pinned release.
 - `files/` holds the enrollment probe script, the agent's `start-agent`,
@@ -110,7 +124,22 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   `macro-agent.path` (`PathChanged` on it and on the runtime's restart
   marker `~macro/agent/.restart`) restarts `macro-agent.service`, so
   writing, rewriting or removing the file starts, restarts or stops the
-  agent (`ConditionPathExists`).
+  agent (`ConditionPathExists`). `start-agent` exports the file's
+  `OTEL_EXPORTER_OTLP_ENDPOINT` (telemetry, not a credential) to the runtime,
+  with `OTEL_EXPORTER_OTLP_HEADERS=x-macro-computer-id=<MACRO_COMPUTER_ID>`
+  (unauthenticated, so the analytics proxy ignores it until the id is signed),
+  and with it the file's `OTEL_DEPLOYMENT_ENVIRONMENT` (`[a-z]{1,16}`, else
+  left out); everything else stays a credential. `macro-agent-apply` also installs the
+  setup traceparent macrod staged (`setup-traceparent` in the inbox) once, as
+  `/run/macrod/agent-traceparent` (root, 0644, at most 128 bytes; a failure
+  never stops the environment's install), and `start-agent` exports it as
+  `MACRO_SETUP_TRACEPARENT` for the first start only (it records the one used
+  in `~macro/agent/state/setup-traceparent`). It times its own steps and
+  passes them as `MACRO_LAUNCH_TIMINGS`, which the runtime exports as
+  `agent.launch.*` spans (the script has no exporter).
+- `macrod.service` loads `/var/lib/macrod/telemetry.env` (written by
+  `macrod enroll` from the enrollment's telemetry intake) when present, so
+  macrod's setup spans export there.
 - The agent's units exist only with `macro.box.agentMode` (the
   `macro-box-agent` images), where macro has no sudo or docker.
 - `macro-agent.service` is a system unit running as `macro`, the user
@@ -128,6 +157,24 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   They keep user namespaces (Chromium's sandbox) and W+X memory (JITs). The
   firewall rejects group `macro-agent` on 127.0.0.1:5900 and :9222 (macro's
   own VNC and DevTools), and neither Xvnc listens on an abstract socket.
+- A person's take-over of the agent's screen freezes `macro-agent.service`:
+  `macro-agent-pause.socket` (`/run/macro-agent-pause/sock`, in a root:macro
+  0750 directory the sandbox hides whole with `InaccessiblePaths`, since the
+  agent is in group `macro` too) runs `files/macro-agent-pause` per
+  connection: `freeze|keep|thaw <drive>`, under one `flock`, fenced by the
+  drive in `/run/macro-agent-pause/paused`; a drive the harness thawed is
+  remembered (`ended`, the last 1024, each once) and never frozen again. A freeze arms a
+  transient timer (`macro-agent-autothaw-*`, 180 s, re-armed by `keep`; a new
+  one is armed before the old one stops; a replaced timer that fires late
+  does nothing) that thaws the unit on its own. A thaw that doesn't take
+  keeps the fence and the timer, and a timer whose thaw didn't take arms
+  another. The harness asks over the fleet's exec. A restart asked for while
+  frozen (`macro-agent-restart`) waits for the thaw. The agent's Xvnc runs
+  with `-SendPrimary=0`. `checks.macro-box-agent-pause` tests the helper
+  against a fake systemctl, including a late thaw racing a newer freeze. No
+  CI job builds the macro-box checks (`macro-box-agent-pause`,
+  `macro-box-boot`): run `nix build .#checks.x86_64-linux.<check>` by hand
+  when you change `nix/macro-box`.
 - agent.env is a systemd credential (`LoadCredential`), never process
   environment: the runtime reads `MUPPET_CREDENTIALS_FILE`
   (`/run/credentials/macro-agent.service/agent.env`). The runtime contract
@@ -153,6 +200,10 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   boot's HEAD, and after 3 the next start
   rolls back with a commit of last-good's tree on top of the broken head,
   which the runtime's next sync pushes, so a pull can't undo it.
+- The guest runtime updater inspects the checkout in a transient systemd
+  unit. It reuses the agent sandbox and disables network and namespaces for
+  inspection. Chromium retains its user namespaces. Boot-time pruning
+  requires an empty agent cgroup because children can survive a restart.
 - The agent's desktop is five system units in that sandbox, none in
   macro's session: `macro-agent-display` (Xvnc `:1`, VNC 127.0.0.1:5901),
   `macro-agent-openbox` (what its menu starts stays in the sandbox),
@@ -356,8 +407,8 @@ existing credentials: no new pairing and no Claude login.
   loopback while `network-online.target` never comes: the claim and macrod's
   runtime connection still go through, and neither unit is ordered after it.
 - The agent runtime (`packages/muppet` and the starter agent's packages)
-  reaches agents only in a new image; a harness deploy changes only the
-  seeded starter agent. Release the two together
+  ships with the image. A compatible dev teammate can select a versioned
+  runtime bundle. A harness deploy changes only the seeded starter agent
   (`docs/runbooks/firecracker-computers-rollout.md`).
 - After `packages/starter-agent/bun.lock` changes, update `outputHash` in
   `_agent-runtime.nix` from the fetch derivation's reported `got:` hash.
@@ -382,8 +433,12 @@ existing credentials: no new pairing and no Claude login.
   `files/claude-wrapper` against a fake claude: no credential, a credential,
   an unreadable one and one without a token.
 - `nix build .#checks.x86_64-linux.macro-box-boot` runs
-  `files/test-start-agent.sh`: start-agent's lock adoption and rollback, and
+  `files/test-start-agent.sh`: start-agent's lock adoption, rollback and
+  muppet API check (the code's `muppetApi` against the image's `apiLevel`), and
   agent-stopped's failure count, against local git repositories.
+- `tests/runtime-bundles/run.sh [image]` boots a disposable Docker agent
+  computer with synthetic input and exercises the systemd update
+  transaction, bridge, rollback and recovery.
 - `nix build .#checks.x86_64-linux.macro-box-claude-agent-acp` runs ACP
   `initialize` against the adapter. Evaluation fails when its version differs
   from macrod's pin in `crates/coding_agent_worker/src/tui/agent_catalog/claude_code.rs`;

@@ -1,7 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
-import { AppConnectionContext } from '@core/pipedream/connection-context';
+import { AppConnectionContext } from '@core/connectors/connection-context';
 import { reportAgentSessionAppConnected } from '@queries/agent-session/app-connections';
-import { connectPipedreamApp } from '@queries/pipedream-connectors';
+import { appConnectorKey, connectConnector } from '@queries/connectors';
 import { isSessionArchived } from '@service-agent-harness/session-archive';
 import type { ParentProps } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
@@ -11,13 +11,17 @@ import { createConnectorContinuation } from '../primitives/create-connector-cont
 export function AgentConnections(props: ParentProps) {
   const state = useAgentSession();
   const continuation = createConnectorContinuation({
+    // Only the owner connects their own account, in a session that loaded.
     disabled: () =>
       !state.sessionId() ||
       state.pending() ||
       state.loadFailed() ||
       state.session()?.canEdit !== true ||
       state.session()?.ownerId !== state.userId() ||
-      isSessionArchived(state.session()) ||
+      isSessionArchived(state.session()),
+    // The agent is mid-turn or has queued work: connecting is fine, but the
+    // turn that asked can't be continued in place.
+    busy: () =>
       !['idle', 'disconnected'].includes(state.turn()) ||
       state.queue.entries().length > 0,
     revision: () =>
@@ -25,7 +29,8 @@ export function AgentConnections(props: ParentProps) {
         .messages()
         .map((message) => message.key)
         .join(',')}`,
-    connect: connectPipedreamApp,
+    connect: async (app) =>
+      await connectConnector({ key: appConnectorKey(app.appSlug) }),
     resume: async (app) => {
       const sessionId = state.sessionId();
       if (!sessionId) throw new Error('No agent session to continue');

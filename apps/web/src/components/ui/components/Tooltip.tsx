@@ -41,7 +41,10 @@ const TooltipContext = createContext<{
   close: () => void;
 }>();
 
-type TooltipRootProps = ComponentProps<typeof KobalteTooltip>;
+type TooltipRootProps = ComponentProps<typeof KobalteTooltip> & {
+  /** Only open when this measured element overflows horizontally. */
+  measureTarget?: () => HTMLElement | undefined;
+};
 
 function TooltipRoot(props: TooltipRootProps) {
   const [local, rest] = splitProps(props, [
@@ -50,16 +53,27 @@ function TooltipRoot(props: TooltipRootProps) {
     'open',
     'defaultOpen',
     'onOpenChange',
+    'measureTarget',
   ]);
   const [open, setOpen] = createSignal(local.defaultOpen ?? false);
+  const [mounted, setMounted] = createSignal(false);
+  onMount(() => setMounted(true));
+  const allowsOpen = () => {
+    if (!local.measureTarget) return true;
+    const target = local.measureTarget();
+    return !!target && target.scrollWidth > target.clientWidth;
+  };
   const enabled = () =>
     import.meta.env.MODE !== 'test' &&
     !local.disabled &&
     !isTouchDevice() &&
     tooltipsEnabled();
-  const visible = () => enabled() && (local.open ?? open());
+  const visible = () =>
+    enabled() &&
+    (local.open ?? open()) &&
+    (!local.measureTarget || (mounted() && allowsOpen()));
   const changeOpen = (value: boolean) => {
-    const next = value && enabled();
+    const next = value && enabled() && allowsOpen();
     setOpen(next);
     local.onOpenChange?.(next);
   };
@@ -104,18 +118,22 @@ function TooltipContent(props: ComponentProps<typeof KobalteTooltip.Content>) {
   const [local, rest] = splitProps(props, ['class', 'children']);
   return (
     <Show when={context?.visible()}>
-      <KobalteTooltip.Content
-        {...rest}
-        class={cn(
-          // Kobalte mutates inline pointer-events as its layer stack changes.
-          'pointer-events-none! z-tool-tip max-w-[calc(100vw-32px)]',
-          local.class
-        )}
-      >
-        <Surface class={tooltipClasses()} depth={3}>
-          {local.children}
-        </Surface>
-      </KobalteTooltip.Content>
+      {/* Kobalte wraps the content in a positioner of the same size, which
+          would otherwise take clicks meant for the controls under it. */}
+      <div class="contents [&>[data-popper-positioner]]:pointer-events-none">
+        <KobalteTooltip.Content
+          {...rest}
+          class={cn(
+            // Kobalte mutates inline pointer-events as its layer stack changes.
+            'pointer-events-none! z-tool-tip max-w-[calc(100vw-32px)]',
+            local.class
+          )}
+        >
+          <Surface class={tooltipClasses()} depth={3}>
+            {local.children}
+          </Surface>
+        </KobalteTooltip.Content>
+      </div>
     </Show>
   );
 }
@@ -220,6 +238,12 @@ function TooltipComponent(props: TooltipProps) {
   );
 }
 
+/**
+ * Supplemental context on desktop hover or keyboard focus.
+ * @do Use compound parts to keep interactive controls as the trigger.
+ * @do Pass measureTarget to show a full label only while its text is truncated.
+ * @dont Put essential information only in a tooltip; touch devices do not show it.
+ */
 export const Tooltip = Object.assign(TooltipComponent, {
   Root: TooltipRoot,
   Trigger: TooltipTrigger,

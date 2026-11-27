@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CreateTaskRequestMarkdown } from './createTaskRequestMarkdown';
+import type { CreateTaskRequestPinnedPropertyDefinitionIds } from './createTaskRequestPinnedPropertyDefinitionIds';
 import type { CreateTaskRequestProjectId } from './createTaskRequestProjectId';
 import type { CreateTaskRequestPropertyValues } from './createTaskRequestPropertyValues';
 import type { CreateTaskRequestTeamId } from './createTaskRequestTeamId';
@@ -15,6 +16,8 @@ import type { CreateTaskRequestTeamId } from './createTaskRequestTeamId';
 export interface CreateTaskRequest {
   /** Markdown source text. Defaults to an empty task document. */
   markdown?: CreateTaskRequestMarkdown;
+  /** Property definition IDs to pin in the first task snapshot. Omission keeps implicit defaults. */
+  pinnedPropertyDefinitionIds?: CreateTaskRequestPinnedPropertyDefinitionIds;
   /** Optional project ID to associate the task with. */
   projectId?: CreateTaskRequestProjectId;
   /** Optional property values to set on the task. */

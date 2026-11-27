@@ -191,3 +191,76 @@ async fn unblock_deletes_the_matching_block_filter() {
         .await
         .unwrap();
 }
+
+#[tokio::test]
+async fn list_reads_filters_without_criteria_or_action() {
+    let server = MockServer::start().await;
+    mount_filters(
+        &server,
+        serde_json::from_str(include_str!(
+            "fixtures/filters_without_criteria_or_action.json"
+        ))
+        .unwrap(),
+    )
+    .await;
+
+    let blocked = repository(&server)
+        .list_blocked_senders(&AccessToken::new("token"))
+        .await
+        .unwrap();
+
+    assert_eq!(blocked, vec!["blocked@example.com"]);
+}
+
+#[tokio::test]
+async fn block_creates_a_filter_beside_filters_without_criteria_or_action() {
+    let server = MockServer::start().await;
+    mount_filters(
+        &server,
+        serde_json::from_str(include_str!(
+            "fixtures/filters_without_criteria_or_action.json"
+        ))
+        .unwrap(),
+    )
+    .await;
+    let expected = json!({
+        "criteria": { "from": "new@example.com" },
+        "action": { "addLabelIds": ["TRASH"] }
+    });
+    Mock::given(method("POST"))
+        .and(path("/users/me/settings/filters"))
+        .and(body_json(expected.clone()))
+        .respond_with(ResponseTemplate::new(200).set_body_json(expected))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    repository(&server)
+        .block_sender(&AccessToken::new("token"), "new@example.com")
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn unblock_deletes_a_filter_beside_filters_without_criteria_or_action() {
+    let server = MockServer::start().await;
+    mount_filters(
+        &server,
+        serde_json::from_str(include_str!(
+            "fixtures/filters_without_criteria_or_action.json"
+        ))
+        .unwrap(),
+    )
+    .await;
+    Mock::given(method("DELETE"))
+        .and(path("/users/me/settings/filters/blocked-1"))
+        .respond_with(ResponseTemplate::new(204))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    repository(&server)
+        .unblock_sender(&AccessToken::new("token"), "blocked@example.com")
+        .await
+        .unwrap();
+}

@@ -1,6 +1,7 @@
 import { ImageContent } from '@block-image/component/ImageContent';
 import { createFileDownload } from '@core/util/createFileDownload';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { invalidateDocumentLoadBundle } from '@queries/storage/documentLoad/documentLoadBundle';
 import { ok } from 'neverthrow';
 import type { JSX } from 'solid-js';
 import { FileDetailLayout, FileDetailLoadGate } from '../components/FileDetail';
@@ -57,6 +58,7 @@ export function ImageDetail(props: {
 }) {
   return (
     <FileDetailLoadGate
+      recover={invalidateDocumentLoadBundle}
       documentId={props.documentId}
       entityType="image"
       label="image"

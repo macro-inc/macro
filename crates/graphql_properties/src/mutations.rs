@@ -6,11 +6,12 @@ use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::api::requests::SetPropertyValue;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::shared::{DateRange, EntityReference};
-use properties::PropertiesService;
 use properties::domain::model::EntityPropertyOptionUpdate;
+use properties::{ManagedTeamDefinitions, PropertiesService};
 use std::{marker::PhantomData, sync::Arc};
 use uuid::Uuid;
 
+use crate::catalog::PropertyCatalogWriter;
 use crate::objects::GraphqlProperty;
 
 #[cfg(test)]
@@ -39,7 +40,7 @@ pub struct EntityPropertyOptionDelta {
 }
 
 /// GraphQL boundary for setting an entity property.
-pub trait EntityPropertyWriter: Send + Sync + 'static {
+pub trait EntityPropertyWriter: PropertyCatalogWriter + Send + Sync + 'static {
     /// Delete one property assignment after checking edit access to its entity.
     fn delete_entity_property(
         &self,
@@ -74,6 +75,8 @@ pub trait EntityPropertyWriter: Send + Sync + 'static {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct NoOpEntityPropertyWriter;
 
+impl PropertyCatalogWriter for NoOpEntityPropertyWriter {}
+
 impl EntityPropertyWriter for NoOpEntityPropertyWriter {
     async fn delete_entity_property(
         &self,
@@ -107,11 +110,13 @@ impl EntityPropertyWriter for NoOpEntityPropertyWriter {
 /// Entity property writer backed by the properties and entity access services.
 pub struct PropertiesEntityPropertyWriter<P, A> {
     /// Domain service used to write properties.
-    properties_service: Arc<P>,
+    pub(crate) properties_service: Arc<P>,
     /// Access service used to authorize writes.
-    entity_access_service: Arc<A>,
+    pub(crate) entity_access_service: Arc<A>,
     /// Authenticated user performing the write.
-    user_id: MacroUserIdStr<'static>,
+    pub(crate) user_id: MacroUserIdStr<'static>,
+    /// Team definitions other features manage, which catalog writes refuse.
+    pub(crate) managed_team_definitions: ManagedTeamDefinitions,
 }
 
 impl<P, A> PropertiesEntityPropertyWriter<P, A> {
@@ -125,7 +130,14 @@ impl<P, A> PropertiesEntityPropertyWriter<P, A> {
             properties_service,
             entity_access_service,
             user_id,
+            managed_team_definitions: ManagedTeamDefinitions::default(),
         }
+    }
+
+    /// Refuse catalog writes to these team definitions, as REST does.
+    pub fn with_managed_team_definitions(mut self, managed: ManagedTeamDefinitions) -> Self {
+        self.managed_team_definitions = managed;
+        self
     }
 }
 
@@ -251,6 +263,8 @@ pub enum GraphqlPropertyTargetEntityType {
     Chat,
     /// CRM company target.
     Company,
+    /// CRM contact target.
+    Contact,
     /// Row of a Macro database table.
     DatabaseRow,
     /// Document target, including tasks and snippets.
@@ -273,6 +287,7 @@ impl GraphqlPropertyTargetEntityType {
             Self::Channel => model_entity::EntityType::Channel,
             Self::Chat => model_entity::EntityType::Chat,
             Self::Company => model_entity::EntityType::CrmCompany,
+            Self::Contact => model_entity::EntityType::CrmContact,
             Self::DatabaseRow => model_entity::EntityType::DatabaseRow,
             Self::Document => model_entity::EntityType::Document,
             Self::Initiative => model_entity::EntityType::Initiative,
@@ -393,8 +408,11 @@ fn parse_date(value: &str) -> async_graphql::Result<chrono::DateTime<chrono::Utc
 pub enum GraphqlSetPropertyValue {
     /// A Boolean value.
     Boolean(bool),
-    /// An RFC 3339 date-time value.
+    /// An RFC 3339 date-time value standing for a whole day, shown as the day
+    /// it falls on in the viewer's time zone.
     Date(String),
+    /// An RFC 3339 date-time whose time of day was set.
+    DateWithTime(String),
     /// A span from a start date-time to an end one.
     DateRange(GraphqlDateRangeInput),
     /// A numeric value.
@@ -422,6 +440,11 @@ impl GraphqlSetPropertyValue {
             Self::Boolean(value) => SetPropertyValue::Boolean { value },
             Self::Date(value) => SetPropertyValue::Date {
                 value: parse_date(&value)?,
+                has_time: false,
+            },
+            Self::DateWithTime(value) => SetPropertyValue::Date {
+                value: parse_date(&value)?,
+                has_time: true,
             },
             Self::DateRange(range) => SetPropertyValue::DateRange {
                 value: range.try_into_model()?,
@@ -576,6 +599,8 @@ mod tests {
         property: EntityPropertyWithDefinition,
     }
 
+    impl crate::catalog::PropertyCatalogWriter for CapturingWriter {}
+
     impl EntityPropertyWriter for CapturingWriter {
         async fn delete_entity_property(
             &self,
@@ -727,6 +752,103 @@ mod tests {
                 Some(SetPropertyValue::SelectOption { option_id }),
             ))
         );
+    }
+
+    #[tokio::test]
+    async fn set_entity_property_keeps_whether_a_date_has_a_time() {
+        let property_definition_id = Uuid::from_u128(4);
+        let at = chrono::DateTime::parse_from_rfc3339("2026-11-24T21:00:00Z")
+            .expect("valid instant")
+            .with_timezone(&chrono::Utc);
+        for (input, has_time) in [("date", false), ("dateWithTime", true)] {
+            let stored = if has_time {
+                models_properties::shared::DateValue::with_time(at)
+            } else {
+                models_properties::shared::DateValue::new(at)
+            };
+            let writer = CapturingWriter {
+                write: Arc::default(),
+                options_write: Arc::default(),
+                property: EntityPropertyWithDefinition {
+                    property: models_properties::service::entity_property::EntityProperty {
+                        id: Uuid::from_u128(5),
+                        entity_id: "task-1".to_owned(),
+                        entity_type: models_properties::EntityType::Task,
+                        property_definition_id,
+                        created_at: at,
+                        updated_at: at,
+                    },
+                    definition:
+                        models_properties::service::property_definition::PropertyDefinition {
+                            id: property_definition_id,
+                            owner: models_properties::PropertyOwner::System,
+                            display_name: "Start Date".to_owned(),
+                            data_type: models_properties::DataType::Date,
+                            is_multi_select: false,
+                            specific_entity_type: None,
+                            created_at: at,
+                            updated_at: at,
+                            is_system: true,
+                            is_metadata: false,
+                        },
+                    value: Some(
+                        models_properties::service::property_value::PropertyValue::Date(stored),
+                    ),
+                    options: None,
+                },
+            };
+            let schema = Schema::build(
+                QueryRoot,
+                PropertiesMutationRoot::<CapturingWriter>::new(),
+                EmptySubscription,
+            )
+            .data(writer.clone())
+            .finish();
+
+            let response = schema
+                .execute(format!(
+                    r#"
+                    mutation {{
+                        setEntityProperty(input: {{
+                            entityType: DOCUMENT,
+                            entityId: "task-1",
+                            propertyDefinitionId: "{property_definition_id}",
+                            value: {{ {input}: "2026-11-24T21:00:00Z" }}
+                        }}) {{
+                            value {{
+                                ... on GraphqlDatePropertyValue {{
+                                    value
+                                    hasTime
+                                }}
+                            }}
+                        }}
+                    }}
+                    "#
+                ))
+                .await;
+
+            assert!(response.errors.is_empty(), "{:?}", response.errors);
+            assert_eq!(
+                response.data,
+                async_graphql::value!({
+                    "setEntityProperty": {
+                        "value": { "value": "2026-11-24T21:00:00+00:00", "hasTime": has_time },
+                    }
+                })
+            );
+            assert_eq!(
+                writer.write.lock().expect("capture mutex poisoned").clone(),
+                Some((
+                    model_entity::EntityType::Document,
+                    "task-1".to_string(),
+                    property_definition_id,
+                    Some(SetPropertyValue::Date {
+                        value: at,
+                        has_time,
+                    }),
+                ))
+            );
+        }
     }
 
     /// A user-owned multi-select tag property carrying `option_ids`.

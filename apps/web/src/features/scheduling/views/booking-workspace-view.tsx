@@ -288,7 +288,10 @@ export function BookingWorkspaceView(props: {
         onSave={() => fireAndForget(pageLeave.save(), 'scheduling')}
       />
       <ViewShell.Aside>
-        <ViewSidebar.Root aria-label="Scheduling navigation">
+        <ViewSidebar.Root
+          reorderId="scheduling"
+          aria-label="Scheduling navigation"
+        >
           <ViewSidebar.Header>
             <div class="flex min-w-0 items-center gap-1">
               <ViewSidebar.CloseButton />
@@ -296,59 +299,73 @@ export function BookingWorkspaceView(props: {
             </div>
           </ViewSidebar.Header>
           <ViewSidebar.Content>
-            <ViewSidebar.Nav
-              aria-label="Booking calendar owner"
-              class="max-h-[calc(4*var(--sidebar-row-height)+3*var(--sidebar-row-gap))] overflow-y-auto overscroll-none touch:max-h-[calc(11rem+3*var(--sidebar-row-gap))]"
+            <ViewSidebar.Section
+              id="owner"
+              label={t('viewMenus.calendarOwner')}
+              pinned
             >
-              <For each={scopes()}>
-                {(scope) => (
-                  <ViewSidebar.Item
-                    active={selectedOwnerId() === scope.id}
-                    aria-current={
-                      selectedOwnerId() === scope.id ? 'true' : undefined
-                    }
-                    title={scope.teamId ? scope.name : t('viewMenus.personal')}
-                    disabled={isSaving()}
-                    {...pressHandlers(() => selectOwner(scope.id))}
-                  >
-                    <ViewSidebar.Icon>
-                      <Show
-                        when={selectedOwnerId() === scope.id}
-                        fallback={
-                          <Show
-                            when={scope.teamId}
-                            fallback={<UserIcon class="size-4" />}
-                          >
-                            <UsersIcon class="size-4" />
-                          </Show>
-                        }
-                      >
-                        <CheckIcon class="size-4 text-accent" />
-                      </Show>
-                    </ViewSidebar.Icon>
-                    <span class="truncate">
-                      {scope.teamId ? scope.name : 'Personal'}
-                    </span>
-                  </ViewSidebar.Item>
-                )}
-              </For>
-            </ViewSidebar.Nav>
-            <ViewSidebar.Nav aria-label="Booking tabs">
-              <For each={TABS}>
-                {(item) => (
-                  <ViewSidebar.Item
-                    active={search.tab === item.value}
-                    disabled={isSaving()}
-                    onClick={() => selectTab(item.value)}
-                  >
-                    <ViewSidebar.Icon>
-                      <item.icon />
-                    </ViewSidebar.Icon>
-                    {item.label}
-                  </ViewSidebar.Item>
-                )}
-              </For>
-            </ViewSidebar.Nav>
+              <ViewSidebar.Nav
+                aria-label="Booking calendar owner"
+                class="max-h-[calc(4*var(--sidebar-row-height)+3*var(--sidebar-row-gap))] overflow-y-auto overscroll-none touch:max-h-[calc(11rem+3*var(--sidebar-row-gap))]"
+              >
+                <For each={scopes()}>
+                  {(scope) => (
+                    <ViewSidebar.Item
+                      active={selectedOwnerId() === scope.id}
+                      aria-current={
+                        selectedOwnerId() === scope.id ? 'true' : undefined
+                      }
+                      title={
+                        scope.teamId ? scope.name : t('viewMenus.personal')
+                      }
+                      disabled={isSaving()}
+                      {...pressHandlers(() => selectOwner(scope.id))}
+                    >
+                      <ViewSidebar.Icon>
+                        <Show
+                          when={selectedOwnerId() === scope.id}
+                          fallback={
+                            <Show
+                              when={scope.teamId}
+                              fallback={<UserIcon class="size-4" />}
+                            >
+                              <UsersIcon class="size-4" />
+                            </Show>
+                          }
+                        >
+                          <CheckIcon class="size-4 text-accent" />
+                        </Show>
+                      </ViewSidebar.Icon>
+                      <span class="truncate">
+                        {scope.teamId ? scope.name : 'Personal'}
+                      </span>
+                    </ViewSidebar.Item>
+                  )}
+                </For>
+              </ViewSidebar.Nav>
+            </ViewSidebar.Section>
+            <ViewSidebar.Section
+              id="views"
+              label={t('viewMenus.schedulingViews')}
+              headerless
+            >
+              <ViewSidebar.Nav aria-label="Booking tabs">
+                <For each={TABS}>
+                  {(item) => (
+                    <ViewSidebar.Item
+                      active={search.tab === item.value}
+                      disabled={isSaving()}
+                      onClick={() => selectTab(item.value)}
+                    >
+                      <ViewSidebar.Icon>
+                        <item.icon />
+                      </ViewSidebar.Icon>
+                      {item.label}
+                    </ViewSidebar.Item>
+                  )}
+                </For>
+              </ViewSidebar.Nav>
+            </ViewSidebar.Section>
           </ViewSidebar.Content>
         </ViewSidebar.Root>
       </ViewShell.Aside>

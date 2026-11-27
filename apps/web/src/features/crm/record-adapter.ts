@@ -10,6 +10,10 @@ import { isCrmContactEntity } from '@entity/types/entity';
 import { createContactAliasWindow } from '@queries/contacts/alias-window';
 import { queryReadyGate } from '@queries/gate';
 import { storageServiceClient } from '@service-storage/client';
+import {
+  crmAccessAllowed,
+  crmAccessAuthority,
+} from '@service-storage/crm-access-authority';
 import { useQueryClient } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import { createContactDiscovery } from './primitives/contact-discovery';
@@ -37,7 +41,7 @@ export function useCrmContactByEmailQuery(
     { storage: storageServiceClient, client: useQueryClient() },
     teamId,
     email,
-    enabled
+    () => enabled() && crmAccessAllowed()
   );
 }
 
@@ -45,7 +49,7 @@ export function useCrmContactByEmailQuery(
 export function useQuickAccessCrmContactsQuery() {
   return createContactSuggestions(
     { storage: storageServiceClient, client: useQueryClient() },
-    () => true
+    crmAccessAllowed
   );
 }
 
@@ -59,11 +63,11 @@ export function useCrmContactMentionSource(
 ) {
   const query = useCrmContactsQuery(
     { client: useQueryClient() },
-    enabled,
+    () => enabled() && crmAccessAllowed(),
     search
   );
   const entities = createMemo<EntityItem[]>(() =>
-    queryReadyGate(query)
+    crmAccessAllowed() && queryReadyGate(query)
       ? query.data.pages.flatMap((page) =>
           page.contacts.map((record) =>
             toCrmContactItem(toCrmContactEntity(record))
@@ -99,10 +103,64 @@ export function useCrmContactMentionSource(
     isLoading: () => query.isLoading || aliases.loading(),
     isLoadingMore: () => query.isFetchingNextPage || aliases.isLoadingMore(),
     loadMore: aliases.loadMore,
+    error: () => query.error ?? undefined,
+    // A failed later page is the next one to read; a failed first page is
+    // read from the start.
+    retry: async () => {
+      if (query.isFetchNextPageError) await query.fetchNextPage();
+      else await query.refetch();
+    },
   };
 }
 
 const CONTACT_SEARCH_DEBOUNCE_MS = 250;
+
+/**
+ * Every CRM contact the server matches for a typed query, page by page, with
+ * no address deduplication: a merge has to reach each record, even two that
+ * hold one address.
+ */
+export function useCrmContactSearch(search: Accessor<string>) {
+  const contactSearchDisabled = useFeatureFlag(disableCrmContactSearch);
+  const query = debouncedDependent(
+    () => search().trim(),
+    CONTACT_SEARCH_DEBOUNCE_MS
+  );
+  // Records, not an entry point: fetch and list them only while access is
+  // proven, so cached pages don't outlive a lapse in it.
+  const allowed = () => crmAccessAuthority.allowed();
+  const server = useCrmContactsQuery(
+    { client: useQueryClient() },
+    () => allowed() && !contactSearchDisabled().enabled && query().length > 0,
+    query
+  );
+  // Until typing settles, the pages answer an earlier search: list none of
+  // them, and count the wait as loading.
+  const settling = () => search().trim() !== query();
+  return {
+    contacts: () =>
+      allowed() && !settling() && queryReadyGate(server)
+        ? server.data.pages.flatMap((page) =>
+            page.contacts.map(toCrmContactEntity)
+          )
+        : [],
+    isLoading: () =>
+      search().trim().length > 0 &&
+      (!allowed() || settling() || (query().length > 0 && server.isLoading)),
+    hasMore: () => !!server.hasNextPage && !server.isFetchNextPageError,
+    isLoadingMore: () => server.isFetchingNextPage,
+    loadMore: async () => {
+      await server.fetchNextPage();
+    },
+    error: () => server.error ?? undefined,
+    // A failed later page is the next one to read; a failed first page is
+    // read from the start.
+    retry: async () => {
+      if (server.isFetchNextPageError) await server.fetchNextPage();
+      else await server.refetch();
+    },
+  };
+}
 
 /** Contacts matching a typed query: cached matches at once, then authorized
  * server pages across the viewer's CRM-enabled teams beyond the cached rows. */
@@ -113,7 +171,10 @@ export function useCrmContactDiscovery(
   const contactSearchDisabled = useFeatureFlag(disableCrmContactSearch);
   const query = () => search().trim();
   const enabled = () =>
-    !contactSearchDisabled().enabled && active() && query().length > 0;
+    crmAccessAllowed() &&
+    !contactSearchDisabled().enabled &&
+    active() &&
+    query().length > 0;
   const serverQuery = debouncedDependent(query, CONTACT_SEARCH_DEBOUNCE_MS);
   const cached = useQuickAccess().useList({
     buckets: ['crm_contact'],

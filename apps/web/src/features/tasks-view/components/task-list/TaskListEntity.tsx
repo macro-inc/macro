@@ -154,6 +154,7 @@ export function TaskListEntity(props: TaskListEntityProps) {
         props.onClick?.(e);
       }}
       ref={mergeRefs(props.ref, draggable)}
+      data-press-surface
       class={cn(
         'soup-list-entity @container/entity w-[calc(100%-0.5rem)] mr-1 relative group/narrow flex flex-col py-0.5 mobile:py-0 rounded-xl',
         {

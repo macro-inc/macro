@@ -116,6 +116,7 @@ document.querySelector('#drafts')!.addEventListener('click', async () => {
 document.querySelector('#network')!.addEventListener('click', async () => {
   try {
     await host.writeQuery({
+      generation: (await host.authority!.current()).generation,
       query: QUERY,
       operationName: 'Soup',
       variables: VARIABLES,
@@ -129,6 +130,7 @@ document.querySelector('#network')!.addEventListener('click', async () => {
 });
 if (parameters.get('seed') !== 'false') {
   await host.writeQuery({
+    generation: (await host.authority!.current()).generation,
     query: QUERY.replace('query Soup(', 'query SoupMailBackfill('),
     operationName: 'SoupMailBackfill',
     variables: VARIABLES,

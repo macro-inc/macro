@@ -1,131 +1,142 @@
 use super::*;
-use pipedream_mcp::domain::models::{ConnectorOverlay, PipedreamConnection};
-
-/// One user's Pipedream rows, with `sentry` overlaid.
-struct Connections(Vec<PipedreamConnection>);
-
-impl ConnectionStore for Connections {
-    type Err = String;
-    async fn save(&self, _: &PipedreamConnection) -> Result<(), String> {
-        unreachable!()
-    }
-    async fn load(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        app_slug: &str,
-    ) -> Result<Option<PipedreamConnection>, String> {
-        Ok(self.0.iter().find(|c| c.app_slug == app_slug).cloned())
-    }
-    async fn delete(&self, _: &MacroUserIdStr<'static>, _: &str) -> Result<(), String> {
-        unreachable!()
-    }
-    async fn list(&self, _: &MacroUserIdStr<'static>) -> Result<Vec<PipedreamConnection>, String> {
-        unreachable!()
-    }
-}
-
-impl ConnectorOverlays for Connections {
-    async fn overlays(&self) -> anyhow::Result<Vec<ConnectorOverlay>> {
-        unreachable!()
-    }
-    async fn overlay(&self, app_slug: &str) -> anyhow::Result<Option<ConnectorOverlay>> {
-        Ok((app_slug == "sentry").then(|| ConnectorOverlay {
-            app_slug: "sentry".into(),
-            server_url: "https://mcp.sentry.dev/mcp".into(),
-        }))
-    }
-}
-
-/// The user's native connection to the overlay server, by display name.
-struct Native(Option<&'static str>);
-
-impl OverlayConnections for Native {
-    async fn connected_name(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        overlay: &ConnectorOverlay,
-    ) -> anyhow::Result<Option<String>> {
-        assert_eq!(overlay.server_url, "https://mcp.sentry.dev/mcp");
-        Ok(self.0.map(str::to_owned))
-    }
-}
+use connectors::fake::{FakeConnection, FakeConnectors};
 
 fn user() -> MacroUserIdStr<'static> {
-    MacroUserIdStr::try_from_email("owner@example.com").unwrap()
+    MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id")
 }
 
-fn pipedream(app_slug: &str, enabled: bool) -> PipedreamConnection {
-    PipedreamConnection {
-        user_id: user(),
-        app_slug: app_slug.into(),
-        server_name: format!("{app_slug} (Pipedream)"),
-        account_id: "apn_1".into(),
-        enabled,
-        provider: pipedream_mcp::domain::models::ConnectionProvider::Pipedream,
-    }
+async fn name(fake: &FakeConnectors, app_slug: &str) -> Option<String> {
+    ConnectorsConnectedApps::new(Arc::new(fake.build()))
+        .connected_app_name(&user(), app_slug)
+        .await
+        .expect("read")
 }
 
+/// A usable connection answers with its display name, through whichever
+/// source counts for the app: the hosted catalog, the vendor's own server
+/// for an overlaid app, or Macro Connect for a user on it.
 #[tokio::test]
-async fn a_connect_grant_outranks_an_overlay() {
-    let connect = |enabled| PipedreamConnection {
-        provider: pipedream_mcp::domain::models::ConnectionProvider::Connect,
-        server_name: "Sentry (Connect)".into(),
-        ..pipedream("sentry", enabled)
+async fn a_usable_connection_answers_with_its_name() {
+    let fake = FakeConnectors::new()
+        .with_overlay("sentry", "https://mcp.sentry.dev/mcp")
+        .with_connect_app("asana", false)
+        .with_macro_connect_enabled(&user())
+        .with_connection(&user(), FakeConnection::app("stripe").named("Stripe"))
+        .with_connection(&user(), FakeConnection::app("sentry").named("Sentry"))
+        .with_connection(&user(), FakeConnection::app("asana").named("Asana"));
+
+    assert_eq!(name(&fake, "stripe").await.as_deref(), Some("Stripe"));
+    assert_eq!(name(&fake, "sentry").await.as_deref(), Some("Sentry"));
+    assert_eq!(name(&fake, "asana").await.as_deref(), Some("Asana"));
+}
+
+/// A session waiting on an app is not continued until it can be used: a
+/// connection turned off, or one needing authorization again, is not
+/// connected, and neither is an app never connected.
+#[tokio::test]
+async fn an_unusable_app_is_not_connected() {
+    let fake = FakeConnectors::new()
+        .with_connection(&user(), FakeConnection::app("stripe").disabled())
+        .with_connection(&user(), FakeConnection::app("github").needs_reauth());
+
+    assert_eq!(name(&fake, "stripe").await, None);
+    assert_eq!(name(&fake, "github").await, None);
+    assert_eq!(name(&fake, "notion").await, None);
+}
+
+/// `slack_v2` and `slack` are one app.
+#[tokio::test]
+async fn an_aliased_slug_answers_for_the_app() {
+    let fake =
+        FakeConnectors::new().with_connection(&user(), FakeConnection::app("slack").named("Slack"));
+
+    assert_eq!(name(&fake, "slack_v2").await.as_deref(), Some("Slack"));
+}
+
+/// A string that is not an app slug names nothing anyone connected.
+#[tokio::test]
+async fn a_string_that_is_not_a_slug_is_not_connected() {
+    assert_eq!(name(&FakeConnectors::new(), "Not A Slug!").await, None);
+}
+
+// "Continue after connecting" end to end over the real connection services.
+
+mod continuation {
+    use super::*;
+    use crate::domain::app_connections::{
+        AppConnectedContinuation, AppConnectedError, SessionNotifications, SessionStanding,
+        SessionStandings,
     };
-    let apps = PipedreamConnectedApps::new(
-        Arc::new(Connections(vec![connect(true)])),
-        Arc::new(Native(None)),
-    );
-    assert_eq!(
-        apps.connected_app_name(&user(), "sentry").await.unwrap(),
-        Some("Sentry (Connect)".into())
-    );
+    use agent_runtime_protocol::domain::notification::NotificationEvent;
+    use agent_session::domain::error::AgentSessionError;
+    use agent_session::domain::model::AgentSessionId;
+    use agent_session::domain::notifications::ProduceNotification;
+    use std::sync::Mutex;
 
-    let disabled = PipedreamConnectedApps::new(
-        Arc::new(Connections(vec![connect(false)])),
-        Arc::new(Native(Some("Sentry"))),
-    );
-    assert_eq!(
-        disabled
-            .connected_app_name(&user(), "sentry")
+    struct OwnedBy(MacroUserIdStr<'static>);
+
+    impl SessionStandings for OwnedBy {
+        async fn standing(
+            &self,
+            _session_id: AgentSessionId,
+        ) -> Result<SessionStanding, AgentSessionError> {
+            Ok(SessionStanding {
+                owner: Some(self.0.clone()),
+                archived: false,
+            })
+        }
+    }
+
+    #[derive(Default)]
+    struct Recorded(Mutex<Vec<ProduceNotification>>);
+
+    impl SessionNotifications for Recorded {
+        async fn produce(
+            &self,
+            notification: ProduceNotification,
+        ) -> Result<(), AgentSessionError> {
+            self.0.lock().expect("lock").push(notification);
+            Ok(())
+        }
+    }
+
+    /// The session wakes once its owner's connection is usable, named as
+    /// the connectors service names it, and not while it is turned off.
+    #[tokio::test]
+    async fn a_session_continues_only_once_the_app_is_usable() {
+        let notifications = Arc::new(Recorded::default());
+        let continuation = |fake: &FakeConnectors| {
+            AppConnectedContinuation::new(
+                Arc::new(OwnedBy(user())),
+                Arc::new(ConnectorsConnectedApps::new(Arc::new(fake.build()))),
+                Arc::clone(&notifications),
+            )
+        };
+
+        let off = FakeConnectors::new()
+            .with_connection(&user(), FakeConnection::app("notion").disabled());
+        let refused = continuation(&off)
+            .continue_session(AgentSessionId::new(), &user(), "notion", None)
             .await
-            .unwrap(),
-        None
-    );
-}
+            .expect_err("not connected");
+        assert!(
+            matches!(refused, AppConnectedError::NotConnected(_)),
+            "{refused:?}"
+        );
+        assert!(notifications.0.lock().expect("lock").is_empty());
 
-#[tokio::test]
-async fn overlaid_apps_are_connected_through_their_native_server_only() {
-    let apps = PipedreamConnectedApps::new(
-        Arc::new(Connections(vec![
-            pipedream("sentry", true),
-            pipedream("stripe", true),
-            pipedream("asana", false),
-        ])),
-        Arc::new(Native(Some("Sentry"))),
-    );
-    assert_eq!(
-        apps.connected_app_name(&user(), "sentry").await.unwrap(),
-        Some("Sentry".into())
-    );
-    assert_eq!(
-        apps.connected_app_name(&user(), "stripe").await.unwrap(),
-        Some("stripe (Pipedream)".into())
-    );
-    assert_eq!(
-        apps.connected_app_name(&user(), "asana").await.unwrap(),
-        None
-    );
-
-    let unconnected = PipedreamConnectedApps::new(
-        Arc::new(Connections(vec![pipedream("sentry", true)])),
-        Arc::new(Native(None)),
-    );
-    assert_eq!(
-        unconnected
-            .connected_app_name(&user(), "sentry")
+        let on = FakeConnectors::new()
+            .with_connection(&user(), FakeConnection::app("notion").named("Notion"));
+        continuation(&on)
+            .continue_session(AgentSessionId::new(), &user(), "notion", None)
             .await
-            .unwrap(),
-        None
-    );
+            .expect("continued");
+        let produced = notifications.0.lock().expect("lock");
+        assert_eq!(
+            produced[0].event,
+            NotificationEvent::AppConnected {
+                app: "Notion".into()
+            }
+        );
+    }
 }

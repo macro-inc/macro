@@ -236,6 +236,7 @@ fn the_dry_run_scope_is_every_sdk_read_and_no_write() {
 fn the_generation_scope_matches_the_sdk_catalog() {
     let intended = [
         "scheduled-action.addSuggestion",
+        "scheduled-action.nameSuggestionTopic",
         "scheduled-action.rewriteSuggestion",
         "scheduled-action.retireSuggestion",
         "scheduled-action.attachSuggestionDraft",
@@ -301,6 +302,9 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "notification.unsubscribeItem",
         "notification.unsubscribeItems",
         "notification.unsubscribeAll",
+        // A user's own notification settings for one channel reach nobody.
+        "notification.updateChannelNotificationSettings",
+        "notification.resetChannelNotificationSettings",
         "scheduled-action.dismissRoutineSuggestion",
         "scheduled-action.retireRoutineSuggestion",
         "scheduled-action.suggestRoutine",
@@ -310,6 +314,8 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "scheduled-action.deleteScheduledAction",
         // Detaching only moves the owner's own sub-routine to their list.
         "scheduled-action.detachScheduledAction",
+        // Stopping ends the owner's own run in progress; it starts nothing.
+        "scheduled-action.stopScheduledActionRun",
         // A routine's icon and color show only in its owner's lists.
         "scheduled-action.setScheduledActionAppearance",
         "scheduled-action.unshareScheduledActionTemplate",
@@ -928,7 +934,7 @@ async fn suggestions_brief_programs_type_check() {
         "  // the program's own lines go here and end with: return { data, reviews: [] };\n";
     assert!(shape.contains(marker));
     // What the brief leaves the session to fill in.
-    let session_values = "const docId = '', threadId = '', channelId = '', callId = '', messageId = '', dedupKey = '', title = '', summary = '', prompt = '', subject = '', bodyText = '', reason = '', now = '';\nconst importance = 50;\nconst keys: string[] = [];\n";
+    let session_values = "const docId = '', threadId = '', channelId = '', callId = '', messageId = '', dedupKey = '', title = '', summary = '', prompt = '', subject = '', bodyText = '', reason = '', now = '', topicKey = '', name = '', oneFact = '';\nconst importance = 50;\nconst keys: string[] = [], topicKeys: string[] = [];\n";
     let programs = [
         map.to_owned(),
         documents.to_owned(),

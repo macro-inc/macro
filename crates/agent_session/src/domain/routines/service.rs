@@ -99,19 +99,20 @@ where
         if matches!(persona, SelectedPersona::External { .. }) {
             return Err(RoutineSessionError::AppsUnsupported);
         }
-        let connected = self
-            .apps
-            .connected_app_slugs(&selection.owner)
-            .await
-            .map_err(|error| {
-                tracing::warn!(error = ?error, "could not list a routine owner's connected apps");
-                RoutineSessionError::OperationFailed
-            })?;
-        if selection
+        let required: Vec<&str> = selection
             .mcp_servers
             .iter()
-            .all(|server| connected.contains(&server.app_slug))
-        {
+            .map(|server| server.app_slug.as_str())
+            .collect();
+        let connected = self
+            .apps
+            .all_connected(&selection.owner, &required)
+            .await
+            .map_err(|error| {
+                tracing::warn!(error = ?error, "could not read a routine owner's connected apps");
+                RoutineSessionError::OperationFailed
+            })?;
+        if connected {
             Ok(())
         } else {
             Err(RoutineSessionError::AppNotConnected)
@@ -257,6 +258,10 @@ where
         {
             return Err(RoutineSessionError::Conflict);
         }
+        let mut prompt = AgentAction::prompt(command.prompt);
+        if let AgentAction::Prompt(prompt) = &mut prompt {
+            prompt.withhold_content = command.withhold_content;
+        }
         // A history check is a guard against known replays, not an exactly-once
         // transaction. Never retry this call after a lost or failed response.
         let accepted = self
@@ -264,7 +269,7 @@ where
             .control_event(
                 action.session_id,
                 ControlEvent {
-                    action: AgentAction::prompt(command.prompt),
+                    action: prompt,
                     action_id: Some(action.action_id),
                     actor: Some(action.owner),
                     context: command.context,

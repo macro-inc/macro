@@ -783,3 +783,52 @@ async fn unrelated_dm_pair_is_not_granted_provenance_and_pair_races_fail_closed(
     assert_eq!(winner.dm_members, plan.members);
     assert!(!winner.dm_members.contains(&user()));
 }
+
+/// A live DM a bot was added to and removed from stays the people's DM in
+/// the app, but discovery keeps the stored roster: the removed bot's row still
+/// makes it a group to the importer, so the import reserves its own DM, as it
+/// did before, instead of meeting a bot row it cannot authorize.
+#[sqlx::test(migrations = "../../crates/macro_db_client/migrations")]
+async fn discovery_skips_a_live_dm_a_bot_was_removed_from(pool: PgPool) {
+    use channels::{
+        domain::{dm::DmPair, historical::DmCreation},
+        outbound::pg_channels_repo::historical::ensure_dm_in,
+    };
+    let team = team(&pool).await;
+    let context = claim(&pool, team, ConversationKind::DirectMessage, 0).await;
+    let mut plan = plan(&pool, &context).await;
+    let stranger = MacroUserIdStr::parse_from_str("macro|stranger@example.com").unwrap();
+    plan.owner = other();
+    plan.members = HashSet::from([other(), stranger.clone()]);
+    let mut tx = pool.begin().await.unwrap();
+    let live = ensure_dm_in(
+        &mut tx,
+        DmPair::new(other(), stranger.clone()).unwrap(),
+        DmCreation::Live(other()),
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    sqlx::query!(
+        "INSERT INTO comms_channel_participants (channel_id, user_id, role, left_at) \
+         VALUES ($1, $2, 'member', now())",
+        live.id,
+        format!("bot|{}", Uuid::now_v7()),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let sink = sink(&pool);
+    assert!(
+        sink.find_dm(&[other(), stranger.clone()])
+            .await
+            .unwrap()
+            .is_none()
+    );
+    let (facts, created) = sink.create(&context.lease, &plan).await.unwrap();
+    assert!(created);
+    assert_eq!(facts.id, plan.channel_id);
+    assert_ne!(facts.id, live.id);
+    assert_eq!(facts.dm_members, plan.members);
+}

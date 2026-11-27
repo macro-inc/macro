@@ -5,7 +5,7 @@
 //! every permission allowed. Anything handed to that sandbox has been handed
 //! to the model, so the sandbox holds exactly one secret: a short-lived
 //! session token minted by the harness. Every upstream credential - the
-//! Pipedream project token that spends the owner's connected apps, GitHub
+//! tokens that spend the owner's connected apps and custom servers, GitHub
 //! App installation tokens - stays here, and is stamped onto requests as
 //! they pass through.
 //!
@@ -22,11 +22,11 @@
 //!    spend - or refuses it because the token is bad, expired, or the session
 //!    has since closed
 //! 3. one of two credential ports resolves the destination:
-//!    [`ports::McpCredentials`] finds the named app among *that owner's*
-//!    Pipedream connections and produces our project bearer plus the
-//!    `x-pd-*` headers that pin it to that owner and app - or, for a server
-//!    the owner added by URL, finds it among *that owner's* custom servers
-//!    and produces a fresh bearer from the stored OAuth grant - or
+//!    [`ports::McpCredentials`] asks the connectors service for *that
+//!    owner's* connections, narrowed to what the session's agent was given
+//!    ([`model::SessionGrant::selection`]), and produces the upstream and
+//!    credential of the one connection that counts for the app or server -
+//!    or refuses a destination the agent was not given - or
 //!    [`ports::GithubTokens`] mints an installation token scoped to the
 //!    session's own repository
 //! 4. the service strips the sandbox's own credentials from the request and
@@ -39,13 +39,14 @@
 //!
 //! The sandbox never names a destination, and that is the property everything
 //! else rests on. For MCP it names an app slug, which resolves only through
-//! the explicitly selected requester or owner's rows. Those identities come
-//! only from authenticated session/turn facts; cross-account tool calls wait
-//! for the selected account's approval. The Pipedream scope headers are stamped
-//! by the proxy and never accepted from generated code.
+//! the explicitly selected requester or owner's connections, and only when
+//! the session's agent was given the app. Those identities come only from
+//! authenticated session/turn facts; cross-account tool calls wait for the
+//! selected account's approval. Scope headers are stamped by the proxy and
+//! never accepted from generated code.
 //! For a custom server it names a digest of the server's URL, which likewise
-//! resolves only through the owner's own rows: the URL and the grant stay
-//! here, and the sandbox cannot point the proxy at a URL of its choosing.
+//! resolves only through the owner's own connections: the URL and the grant
+//! stay here, and the sandbox cannot point the proxy at a URL of its choosing.
 //! For git it names nothing at all: the repository comes from the session's
 //! grant, and the endpoint from a three-entry allowlist.
 

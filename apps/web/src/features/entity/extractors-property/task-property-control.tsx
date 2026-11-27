@@ -1,19 +1,17 @@
-import { t } from '@app/lib/i18n';
-import { TaskStatusIcon } from '@core/component/TaskStatusIcon';
-import { Property } from '@property';
+import { PropertyIconControl } from '@property/component/PropertyIconControl';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
-import { PropertyEmptyIcon } from '@property/extractors/PropertyEmpty';
-import { hasValue } from '@property/utils';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
-import { createMemo, Match, Switch } from 'solid-js';
+import { createMemo } from 'solid-js';
 import type { TaskEntityWithProperties } from '../types/entity';
 import { soupPropertyToProperty } from './property-helpers';
 
 /** Compact status and priority editors before the task title. */
 export function TaskPropertyControl(props: {
-  entity: TaskEntityWithProperties;
+  entity: Pick<TaskEntityWithProperties, 'id' | 'properties' | 'subType'>;
   property: 'status' | 'priority';
+  /** False shows the value without offering to change it. */
+  canEdit?: boolean;
 }) {
   const definitionId = () =>
     props.property === 'status'
@@ -45,10 +43,10 @@ export function TaskPropertyControl(props: {
   const save = useBulkSaveEntityPropertiesMutation();
 
   return (
-    <Property.Root
+    <PropertyIconControl
       property={property()}
-      class="shrink-0"
-      canEdit
+      canEdit={props.canEdit ?? true}
+      completed={props.entity.subType.is_completed}
       onSave={(property, apiValues) =>
         save.mutateAsync({
           properties: [
@@ -61,54 +59,6 @@ export function TaskPropertyControl(props: {
           ],
         })
       }
-    >
-      {(shown) => {
-        const statusId = () => {
-          const property = shown();
-          return property.valueType === 'SELECT_STRING'
-            ? property.value?.[0]
-            : undefined;
-        };
-        return (
-          <>
-            <Property.Tooltip property={shown()}>
-              <Property.Pill
-                aria-label={
-                  props.property === 'status'
-                    ? t('common.changeStatus')
-                    : t('common.changePriority')
-                }
-                data-blocks-navigation
-                class="flex size-6 shrink-0 items-center justify-center rounded-full border-0 touch:size-9"
-              >
-                <Switch>
-                  <Match when={props.property === 'status'}>
-                    <TaskStatusIcon
-                      statusId={statusId()}
-                      completed={props.entity.subType.is_completed}
-                      size="xs"
-                      class="size-4.5"
-                    />
-                  </Match>
-                  <Match when={hasValue(shown())}>
-                    <Property.Icon
-                      property={shown()}
-                      class="size-4 shrink-0 mobile:size-5"
-                    />
-                  </Match>
-                  <Match when={true}>
-                    <PropertyEmptyIcon
-                      propertyDefinitionId={definitionId()}
-                      class="size-4 shrink-0 text-ink-extra-muted mobile:size-5"
-                    />
-                  </Match>
-                </Switch>
-              </Property.Pill>
-            </Property.Tooltip>
-            <Property.PopoverEditor />
-          </>
-        );
-      }}
-    </Property.Root>
+    />
   );
 }

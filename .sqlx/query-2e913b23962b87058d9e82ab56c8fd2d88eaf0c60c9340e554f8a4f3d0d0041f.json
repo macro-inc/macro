@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- One page of the viewer's list-aware directory: every stored list, every inbox,\n-- the current team, and the viewer, in byte order after the cursor.\n-- $1 viewer, $2 exclusive cursor (NULL on the first page), $3 page size + 1.\n-- Each branch seeks its own index from the cursor and stops after $3 distinct\n-- contacts, so a page reads at most a few times $3 rows whatever the directory\n-- size. COALESCE, not `$2 IS NULL OR`, keeps the cursor an index condition in\n-- generic plans. A contact in several lists or inboxes appears once.\nSELECT contact AS \"contact!\"\nFROM (\n    (\n        SELECT DISTINCT contact_user_id AS contact\n        FROM contact_list_members\n        WHERE user_id = $1 AND contact_user_id > COALESCE($2::text, '')\n        ORDER BY contact_user_id\n        LIMIT $3\n    )\n    UNION\n    (\n        SELECT DISTINCT contact_user_id\n        FROM contact_inbox_members\n        WHERE user_id = $1 AND contact_user_id > COALESCE($2::text, '')\n        ORDER BY contact_user_id\n        LIMIT $3\n    )\n    UNION\n    (\n        -- A user has at most one team, and its roster includes the viewer.\n        -- team_user ids may predate canonical lowercase ids; fold them like\n        -- people search does. The roster is read whole: no index orders it.\n        SELECT DISTINCT lower(teammate.user_id COLLATE \"C\")\n        FROM team_user AS own\n        JOIN team_user AS teammate ON teammate.team_id = own.team_id\n        WHERE own.user_id IN (\n            -- team_user may hold a legacy mixed-case id for this user. Find\n            -- it through the lower(email) index and keep it only if it folds\n            -- to the canonical id.\n            SELECT $1::text\n            UNION\n            SELECT account.id\n            FROM \"User\" AS account\n            WHERE lower(account.email) = substr($1, length('macro|') + 1)\n              AND lower(account.id COLLATE \"C\") = $1\n        )\n          AND teammate.user_id COLLATE \"C\" LIKE 'macro|%'\n          AND lower(teammate.user_id COLLATE \"C\") > COALESCE($2::text, '')\n        ORDER BY 1\n        LIMIT $3\n    )\n    UNION\n    SELECT $1::text COLLATE \"C\" WHERE $1::text COLLATE \"C\" > COALESCE($2::text, '')\n) AS directory\nORDER BY contact\nLIMIT $3\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "contact!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2e913b23962b87058d9e82ab56c8fd2d88eaf0c60c9340e554f8a4f3d0d0041f"
+}

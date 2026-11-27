@@ -52,17 +52,22 @@ pub(super) struct EmailEventDescription {
 ///
 /// Email events are produced with a link-scoped (whole inbox) Kafka key, so
 /// thread- and message-scoped events shard by thread id instead: one inbox's
-/// backfill spreads across the worker pool while events for a single thread
-/// stay ordered. Link-scoped events keep the link-id producer key, so their
-/// ordering against a buffered thread event (e.g. a link removal racing a
-/// message upsert) is not guaranteed — an accepted risk of the same order as
-/// this consumer's existing commit-at-handoff drop window.
+/// backfill or reindex spreads across the worker pool while events for a
+/// single thread stay ordered. A reindex request naming several threads
+/// shards by its first, so only that thread's events stay ordered with it.
+/// Link-scoped events keep the link-id producer key, so their ordering
+/// against a buffered thread event (e.g. a link removal racing a message
+/// upsert) is not guaranteed — an accepted risk of the same order as this
+/// consumer's existing commit-at-handoff drop window.
 pub(super) fn email_ordering_key(event: &EmailMacroEvent) -> Cow<'_, str> {
     let thread_id = match &event.event().event {
         EmailTopicEvent::LinkConnected(_)
         | EmailTopicEvent::LinkDisconnected(_)
-        | EmailTopicEvent::LinkReauthRequired(_)
-        | EmailTopicEvent::ThreadsReindexRequested(_) => return Cow::Borrowed(event.key()),
+        | EmailTopicEvent::LinkReauthRequired(_) => return Cow::Borrowed(event.key()),
+        EmailTopicEvent::ThreadsReindexRequested(metadata) => match metadata.thread_ids.first() {
+            Some(thread_id) => *thread_id,
+            None => return Cow::Borrowed(event.key()),
+        },
         EmailTopicEvent::MessageReceived(metadata) => metadata.thread_id,
         EmailTopicEvent::MessageDraftSynced(metadata) => metadata.thread_id,
         EmailTopicEvent::MessageSent(metadata) => metadata.thread_id,
@@ -79,6 +84,36 @@ pub(super) fn email_ordering_key(event: &EmailMacroEvent) -> Cow<'_, str> {
         EmailTopicEvent::ThreadBackfilled(metadata) => metadata.thread_id,
     };
     Cow::Owned(thread_id.to_string())
+}
+
+/// Key of a reindex request for one thread, which only rereads that thread,
+/// so a reread of it already queued covers the request.
+pub(super) fn reread_key(event: &EmailMacroEvent) -> Option<String> {
+    match &event.event().event {
+        EmailTopicEvent::ThreadsReindexRequested(metadata) => {
+            match metadata.thread_ids.as_slice() {
+                [thread_id] => Some(thread_id.to_string()),
+                _ => None,
+            }
+        }
+        EmailTopicEvent::LinkConnected(_)
+        | EmailTopicEvent::LinkDisconnected(_)
+        | EmailTopicEvent::LinkReauthRequired(_)
+        | EmailTopicEvent::MessageReceived(_)
+        | EmailTopicEvent::MessageDraftSynced(_)
+        | EmailTopicEvent::MessageSent(_)
+        | EmailTopicEvent::MessageDeleted(_)
+        | EmailTopicEvent::MessageSendQueued(_)
+        | EmailTopicEvent::MessageSendCancelled(_)
+        | EmailTopicEvent::ThreadArchived(_)
+        | EmailTopicEvent::ThreadTrashed(_)
+        | EmailTopicEvent::ThreadRead(_)
+        | EmailTopicEvent::ThreadStarred(_)
+        | EmailTopicEvent::ThreadSpamChanged(_)
+        | EmailTopicEvent::ThreadProjectChanged(_)
+        | EmailTopicEvent::ThreadLabelsUpdated(_)
+        | EmailTopicEvent::ThreadBackfilled(_) => None,
+    }
 }
 
 pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescription {

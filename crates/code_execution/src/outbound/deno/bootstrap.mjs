@@ -1,4 +1,4 @@
-import { Macro, gateRequests, observeRequests, sendVerbHeaders } from "@macro-inc/sdk";
+import { Macro, gateRequests, limitSearches, observeRequests, sendVerbHeaders } from "@macro-inc/sdk";
 
 // Trusted bootstrap: credentials arrive once on stdin, then user code is imported
 // dynamically so module reads are checked against the scratch-only read grant.
@@ -12,6 +12,10 @@ const decoder = new TextDecoder();
 const isArray = Array.isArray;
 const entries = Object.entries;
 const hasOwn = Object.hasOwn;
+// Each search is heavy for the search cluster's few threads, so a program that
+// fans searches out makes every other user's search wait behind it. Four at once
+// still lets a program with dozens of searches finish inside its deadline.
+const SEARCHES_IN_FLIGHT = 4;
 // Calls of one operation that, unfinished at the deadline, read as a loop.
 const LOOP_HINT_CALLS = 50;
 function emit(frame) {
@@ -19,6 +23,24 @@ function emit(frame) {
   let offset = 0;
   while (offset < bytes.length) offset += write(bytes.subarray(offset));
 }
+// A promise that rejects before anything awaits or catches it (one started
+// early and awaited after other work) makes Deno exit with no frame, and the
+// run reads only "Deno exited without a result". Report the rejection instead.
+globalThis.addEventListener("unhandledrejection", (event) => {
+  event.preventDefault();
+  // A reason whose string form throws (a null-prototype object) still reports.
+  let reason;
+  try {
+    reason = String(event.reason);
+  } catch {
+    reason = inspect(event.reason, {colors: false, depth: 4, customInspect: false});
+  }
+  emit({
+    type: "error",
+    message: `${reason}\nThis promise rejected before the program awaited or caught it, which ends the run. Calls already started, writes included, may have taken effect: check what they did before running anything again. Await or catch each promise where it starts, or collect them with Promise.allSettled.`,
+  });
+  exit(0);
+});
 function cut(text, bytes) {
   const encoded = encoder.encode(text);
   return encoded.length <= bytes ? text : decoder.decode(encoded.subarray(0, bytes));
@@ -182,6 +204,7 @@ try {
     } else if (!activeRequests.delete(value.id)) return;
     emit({type: "progress", value});
   });
+  limitSearches(SEARCHES_IN_FLIGHT);
   const macro = new Macro({token: context.token, hosts: context.hosts, webAppUrl: context.webAppUrl});
   // A literal dynamic import joins Deno's initial static graph, bypassing read
   // permissions. Compute this specifier so the entire generated graph is loaded

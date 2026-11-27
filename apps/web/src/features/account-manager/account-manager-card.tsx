@@ -140,7 +140,7 @@ function GrantContent(props: { grant: AccountManagerGrant }) {
         <Show when={props.grant.status === 'pending' && !askedByViewer()}>
           <Button
             size="sm"
-            variant="primary"
+            variant="secondary"
             disabled={busy()}
             onClick={() => setConfirming(true)}
           >
@@ -180,7 +180,7 @@ function GrantContent(props: { grant: AccountManagerGrant }) {
         <Show when={props.grant.status === 'approved' && isManager()}>
           <Button
             size="sm"
-            variant="primary"
+            variant="secondary"
             disabled={busy()}
             onClick={reveal}
           >

@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import * as Cause from 'effect/Cause';
 import * as Effect from 'effect/Effect';
 import * as Exit from 'effect/Exit';
@@ -16,6 +17,7 @@ import { workerCacheTelemetry } from '../telemetry-relay';
 import { compiledEngineFromPage } from './compiled-engine';
 import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
+  type CacheQueueState,
   type CleanupToPageEnvelope,
   type CoordinatorToEngineEnvelope,
   type EngineFatalCode,
@@ -86,6 +88,7 @@ interface CacheWorkerCoreLike {
   ): Promise<void>;
   drain(): Promise<void>;
   recordCachedQueueDiagnostics?(): void;
+  queueLossTold?(): Promise<void>;
 }
 
 interface DedicatedWorkerScopeLike {
@@ -97,7 +100,7 @@ export interface CacheEngineRuntimeOptions {
   scope?: DedicatedWorkerScopeLike;
   hooks?: CacheEngineRuntimeHooks;
   createCore?: (options: CacheWorkerCoreOptions) => CacheWorkerCoreLike;
-  ownerLockIsHeld?: (ownerLockName: string) => Promise<boolean>;
+  findOwnerLock?: (ownerLockName: string) => Promise<LockInfo | undefined>;
   telemetry?: CacheTelemetryRecorderLike;
   /** Injectable clock/memory source for throttling tests. */
   now?: () => number;
@@ -153,12 +156,12 @@ async function initializeCore(
   }
 }
 
-async function defaultOwnerLockIsHeld(ownerLockName: string): Promise<boolean> {
+async function findHeldOwnerLock(
+  ownerLockName: string
+): Promise<LockInfo | undefined> {
   const snapshot = await navigator.locks.query();
-  return Boolean(
-    snapshot.held?.some(
-      (lock) => lock.name === ownerLockName && lock.mode === 'exclusive'
-    )
+  return snapshot.held?.find(
+    (lock) => lock.name === ownerLockName && lock.mode === 'exclusive'
   );
 }
 
@@ -226,6 +229,21 @@ async function activate(
     activation.databaseAction === 'wipe-before-open'
       ? 'reset-storage-uncertain'
       : 'opened-existing';
+  let initializationQueue: CacheQueueState =
+    activation.databaseAction === 'wipe-before-open' ? 'reset' : 'preserved';
+  let lossToTell = false;
+  // A coordinator sends these only to an engine whose `engine-ready` it took.
+  const coordinatorTookReady = async (): Promise<void> => {
+    if (!lossToTell) return;
+    lossToTell = false;
+    try {
+      await core.queueLossTold?.();
+    } catch (error) {
+      // What keeps the side file open may be gone by the next one.
+      lossToTell = true;
+      throw error;
+    }
+  };
   let draining = false;
   // Keep every admitted handler and graceful drain in one explicit scope.
   // Abrupt owner loss still relies on DedicatedWorker termination; graceful
@@ -284,7 +302,7 @@ async function activate(
     // WASM holds the owner lock but has not touched OPFS yet. The coordinator
     // records that this epoch may change storage before granting the open.
     onOwnerLockAcquired: async () => {
-      if (failed || ownerLockAcquired) {
+      if (failed || draining || ownerLockAcquired) {
         throw new Error('cache engine was not waiting for a storage grant');
       }
       ownerLockAcquired = true;
@@ -296,8 +314,8 @@ async function activate(
         })
       );
       await openPermission;
-      if (failed)
-        throw new Error('cache engine failed before its storage grant');
+      if (failed || !openGranted)
+        throw new Error('cache engine ended before its storage grant');
     },
     // Never queue for the lock. The coordinator decides from these reports
     // whether another build holds it and may end this activation early.
@@ -317,7 +335,8 @@ async function activate(
         throw new Error('cache database owner lock stayed unavailable');
       }
       await (options.sleep ?? sleep)(delayMs);
-      if (failed) throw new Error('cache engine failed while waiting to open');
+      if (failed || draining)
+        throw new Error('cache engine ended while waiting to open');
     },
     onStorageResetRequired: () => {
       fatal('cache storage requested physical reset', 'storage-reset-required');
@@ -325,8 +344,9 @@ async function activate(
     onStorageBusy: () => {
       storageBusy = true;
     },
-    onInitializationOutcome: (outcome) => {
+    onInitializationOutcome: (outcome, queue) => {
       initializationOpenOutcome = outcome;
+      initializationQueue = queue;
     },
     telemetry,
   });
@@ -398,6 +418,7 @@ async function activate(
       }
       match(message)
         .with({ kind: 'open-engine' }, () => {
+          if (draining) return;
           if (!ownerLockAcquired || openGranted) {
             fatal('unexpected database-open grant');
             return;
@@ -410,11 +431,17 @@ async function activate(
             fatal('coordinator routed a request after drain began');
             return;
           }
+          fireAndForget(
+            coordinatorTookReady(),
+            'graphql_cache.queue_loss_told'
+          );
           admitRequest(request);
         })
         .with({ kind: 'drain-engine' }, () => {
           if (draining) return;
           draining = true;
+          // A coordinator that ended grants nothing any more.
+          resolveOpen();
           const drainFiber = runLifecycle(
             Effect.gen(function* () {
               yield* FiberSet.awaitEmpty(admissions);
@@ -446,6 +473,10 @@ async function activate(
           });
         })
         .with({ kind: 'heartbeat' }, ({ heartbeatId }) => {
+          fireAndForget(
+            coordinatorTookReady(),
+            'graphql_cache.queue_loss_told'
+          );
           recordLinearMemory(false);
           core.recordCachedQueueDiagnostics?.();
           post(
@@ -486,8 +517,9 @@ async function activate(
     // another context holds it. Storage is touched only after `open-engine`.
     await initializeCore(core, activation);
     if (failed) return;
-    const ownerLockIsHeld = options.ownerLockIsHeld ?? defaultOwnerLockIsHeld;
-    if (!(await ownerLockIsHeld(activation.ownerLockName))) {
+    const findOwnerLock = options.findOwnerLock ?? findHeldOwnerLock;
+    const ownerLock = await findOwnerLock(activation.ownerLockName);
+    if (!ownerLock) {
       throw new Error('cache engine does not hold its physical owner Web Lock');
     }
     core.addPort(enginePort);
@@ -499,12 +531,15 @@ async function activate(
         ownerEpoch: activation.ownerEpoch,
         ownerLockName: activation.ownerLockName,
         ownerLockHeld: true,
+        ownerLockClientId: ownerLock.clientId,
         databaseActionProof: initializationOpenOutcome.startsWith('reset-')
           ? 'wiped-before-open'
           : 'opened-existing',
         openOutcome: initializationOpenOutcome,
+        queue: initializationQueue,
       })
     );
+    lossToTell = initializationQueue === 'reset';
     emitEvent({ kind: 'ready', activation });
     telemetry.record({
       name: 'graphql_cache.db_ready',
@@ -522,6 +557,8 @@ async function activate(
       durationMs: now() - activationStartedAt,
     });
     telemetry.flush();
+    // The drain ends this worker once the open has unwound.
+    if (!failed && draining && !openGranted) return;
     // A fatal report already ended this activation; the open only unwound.
     if (!failed) {
       post(

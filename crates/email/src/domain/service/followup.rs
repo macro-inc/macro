@@ -153,7 +153,7 @@ where
         };
         let messages = self
             .email_repo
-            .followup_messages(user, thread_id, link.id)
+            .followup_messages(user.clone(), thread_id, link.id)
             .await?;
         if messages.is_empty() {
             return Ok(None);
@@ -167,7 +167,7 @@ where
                 .any(|message| message.is_present && (message.in_trash || message.in_junk))
         } else {
             self.email_repo
-                .labels_by_thread_ids(&[thread_id])
+                .labels_by_thread_ids(&[thread_id], Some(&user))
                 .await
                 .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?
                 .iter()

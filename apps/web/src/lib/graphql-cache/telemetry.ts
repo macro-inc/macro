@@ -5,8 +5,15 @@ import type { CacheRequest } from './protocol';
 export const CACHE_TELEMETRY_EVENT_NAMES = [
   'graphql_cache.wasm_download',
   'graphql_cache.wasm_compile',
+  // The page's download and compile ahead of its engine worker, which may
+  // never start: a follower tab's compile is dropped unused.
+  'graphql_cache.wasm_prefetch_download',
+  'graphql_cache.wasm_prefetch_compile',
   'graphql_cache.wasm_instantiate',
   'graphql_cache.schema_init',
+  'graphql_cache.queue_read',
+  'graphql_cache.recovery_wipe',
+  'graphql_cache.queue_import',
   'graphql_cache.db_ready',
   'graphql_cache.host_ready',
   'graphql_cache.registration_retry',
@@ -16,6 +23,7 @@ export const CACHE_TELEMETRY_EVENT_NAMES = [
   'graphql_cache.transaction',
   'graphql_cache.read',
   'graphql_cache.slow_query',
+  'graphql_cache.slow_request',
   'graphql_cache.owner',
   'graphql_cache.stale_drop',
   'graphql_cache.lock_wait',
@@ -27,6 +35,7 @@ export const CACHE_TELEMETRY_EVENT_NAMES = [
   'graphql_cache.origin_storage_pressure',
   'graphql_cache.linear_memory',
   'graphql_cache.queue_diagnostics',
+  'graphql_cache.wal_checkpoint',
   'graphql_cache.navigation',
   'graphql_cache.aggregate',
 ] as const;
@@ -71,6 +80,38 @@ export const CACHE_OPEN_OUTCOMES = [
   'reset-storage-uncertain',
 ] as const;
 export type CacheOpenOutcome = (typeof CACHE_OPEN_OUTCOMES)[number];
+
+/** What opening a cache with this build's GraphQL schema did to its records:
+ * nothing, a compatible change, dropping the changed types, or a reset. */
+export const CACHE_SCHEMA_CHANGES = [
+  'unchanged',
+  'compatible',
+  'types',
+  'reset',
+] as const;
+export type CacheSchemaChange = (typeof CACHE_SCHEMA_CHANGES)[number];
+
+/** Why a schema change dropped every record. */
+export const CACHE_SCHEMA_RESET_REASONS = [
+  'unreadable',
+  'roots',
+  'invalid',
+  'failed',
+] as const;
+export type CacheSchemaResetReason =
+  (typeof CACHE_SCHEMA_RESET_REASONS)[number];
+
+/** What became of the mutations a wiped database queued: `none` without any,
+ * `kept` with every one queued under its own ID, `partial` with some lost or
+ * queued under new IDs, and none of them otherwise. */
+export const CACHE_QUEUE_OUTCOMES = [
+  'none',
+  'kept',
+  'partial',
+  'unreadable',
+  'abandoned',
+] as const;
+export type CacheQueueOutcome = (typeof CACHE_QUEUE_OUTCOMES)[number];
 
 export const CACHE_QUEUE_DIAGNOSTICS_AVAILABILITY = [
   'available',
@@ -131,6 +172,7 @@ export const CACHE_OWNER_EVENTS = [
   'elected',
   'activated',
   'graceful-drain-started',
+  'drain-timed-out',
   'graceful-drain-completed',
   'visibility-handoff-started',
   'visibility-handoff-blocked',
@@ -141,6 +183,9 @@ export const CACHE_OWNER_EVENTS = [
   'unpark-completed',
   'navigation-departure',
   'coordinator-restarted',
+  'startup-unanswered',
+  'coordinator-renamed',
+  'coordinator-replaced',
   'abrupt-loss',
   'replacement',
   'multiple-owner-detected',
@@ -152,6 +197,22 @@ export const CACHE_OWNER_EVENTS = [
   'stale-database-kept',
 ] as const;
 export type CacheOwnerEvent = (typeof CACHE_OWNER_EVENTS)[number];
+
+/**
+ * Why a cache failed closed, leaving its tabs on the network: the engine gave
+ * up waiting for the owner lock, another build holds the database and could
+ * not be asked to yield (no BroadcastChannel) or declined, the database files
+ * stayed open elsewhere, or a newer build took the database over.
+ */
+export const CACHE_UNAVAILABLE_REASONS = [
+  'owner-lock-timeout',
+  'no-takeover-channel',
+  'holder-kept',
+  'files-busy',
+  'recovery-failed',
+  'superseded',
+] as const;
+export type CacheUnavailableReason = (typeof CACHE_UNAVAILABLE_REASONS)[number];
 
 export const CACHE_ROLLOUT_COHORTS = [
   'control',
@@ -208,6 +269,42 @@ export const CACHE_ERROR_DETAILS = [
 ] as const;
 export type CacheErrorDetail = (typeof CACHE_ERROR_DETAILS)[number];
 
+/** Every engine request kind, so a new kind fails to compile until listed. */
+const CACHE_REQUEST_KINDS: Readonly<Record<CacheRequest['kind'], true>> = {
+  init: true,
+  read: true,
+  'current-revision': true,
+  'read-records-by-keys': true,
+  search: true,
+  'people-search': true,
+  'people-references': true,
+  'people-sql': true,
+  'contact-snapshot': true,
+  'people-context': true,
+  'entity-filter': true,
+  'calendar-range': true,
+  write: true,
+  hydrate: true,
+  'calendar-commit': true,
+  'people-update': true,
+  'contact-reconcile': true,
+  'enqueue-optimistic-mutation': true,
+  'claim-next-mutation': true,
+  'defer-optimistic-write': true,
+  'commit-optimistic-write': true,
+  'rollback-optimistic-write': true,
+  'inspect-query': true,
+  'inspect-query-variants': true,
+  invalidate: true,
+  'delete-records': true,
+  teardown: true,
+  clear: true,
+  'current-storage-generation': true,
+  'current-authority': true,
+  'transition-authority': true,
+  'inspect-mutations': true,
+};
+
 export type CacheTelemetryObservation = {
   name: CacheTelemetryEventName;
   /** Original fixed event name represented by an aggregate envelope. */
@@ -219,8 +316,21 @@ export type CacheTelemetryObservation = {
   errorDetail?: CacheErrorDetail;
   resetReason?: CacheResetReason;
   ownerEvent?: CacheOwnerEvent;
+  unavailableReason?: CacheUnavailableReason;
   persistence?: 'granted' | 'denied' | 'unknown';
   openOutcome?: CacheOpenOutcome;
+  /** The open's schema change (`graphql_cache.schema_init`). */
+  schemaChange?: CacheSchemaChange;
+  schemaResetReason?: CacheSchemaResetReason;
+  schemaChangedTypes?: number;
+  schemaDroppedRecords?: number;
+  schemaIncompleteDocuments?: number;
+  schemaRetiredOverlays?: number;
+  /** How long the open spent bringing its records to the schema. */
+  schemaAdoptMs?: number;
+  queueOutcome?: CacheQueueOutcome;
+  queueKept?: number;
+  queueDropped?: number;
   queueDiagnosticsAvailability?: CacheQueueDiagnosticsAvailability;
   revisionCategory?: CacheRevisionCategory;
   resetAttempt?: 'wipe-before-open';
@@ -236,6 +346,12 @@ export type CacheTelemetryObservation = {
   sampleRate?: number;
   queueDepth?: number;
   oldestAgeMs?: number;
+  /** Frames in the WAL when a checkpoint ran (`graphql_cache.wal_checkpoint`). */
+  walFrames?: number;
+  /** The engine request a `slow_request` timed; a fixed protocol name. */
+  requestKind?: CacheRequest['kind'];
+  /** How long a `slow_request` waited in the engine queue before it ran. */
+  queueWaitMs?: number;
 };
 
 /** The only cohort/browser/backend dimensions permitted on exported events. */
@@ -318,6 +434,10 @@ function sanitizeObservation(
     CACHE_OWNER_EVENTS.includes(input.ownerEvent)
       ? { ownerEvent: input.ownerEvent }
       : {}),
+    ...(input.unavailableReason !== undefined &&
+    CACHE_UNAVAILABLE_REASONS.includes(input.unavailableReason)
+      ? { unavailableReason: input.unavailableReason }
+      : {}),
     ...(input.persistence === 'granted' ||
     input.persistence === 'denied' ||
     input.persistence === 'unknown'
@@ -326,6 +446,43 @@ function sanitizeObservation(
     ...(input.openOutcome !== undefined &&
     CACHE_OPEN_OUTCOMES.includes(input.openOutcome)
       ? { openOutcome: input.openOutcome }
+      : {}),
+    ...(input.schemaChange !== undefined &&
+    CACHE_SCHEMA_CHANGES.includes(input.schemaChange)
+      ? { schemaChange: input.schemaChange }
+      : {}),
+    ...(input.schemaResetReason !== undefined &&
+    CACHE_SCHEMA_RESET_REASONS.includes(input.schemaResetReason)
+      ? { schemaResetReason: input.schemaResetReason }
+      : {}),
+    ...(boundedNumber(input.schemaChangedTypes) !== undefined
+      ? { schemaChangedTypes: boundedNumber(input.schemaChangedTypes) }
+      : {}),
+    ...(boundedNumber(input.schemaDroppedRecords) !== undefined
+      ? { schemaDroppedRecords: boundedNumber(input.schemaDroppedRecords) }
+      : {}),
+    ...(boundedNumber(input.schemaIncompleteDocuments) !== undefined
+      ? {
+          schemaIncompleteDocuments: boundedNumber(
+            input.schemaIncompleteDocuments
+          ),
+        }
+      : {}),
+    ...(boundedNumber(input.schemaRetiredOverlays) !== undefined
+      ? { schemaRetiredOverlays: boundedNumber(input.schemaRetiredOverlays) }
+      : {}),
+    ...(boundedNumber(input.schemaAdoptMs, 3_600_000) !== undefined
+      ? { schemaAdoptMs: boundedNumber(input.schemaAdoptMs, 3_600_000) }
+      : {}),
+    ...(input.queueOutcome !== undefined &&
+    CACHE_QUEUE_OUTCOMES.includes(input.queueOutcome)
+      ? { queueOutcome: input.queueOutcome }
+      : {}),
+    ...(boundedNumber(input.queueKept) !== undefined
+      ? { queueKept: boundedNumber(input.queueKept) }
+      : {}),
+    ...(boundedNumber(input.queueDropped) !== undefined
+      ? { queueDropped: boundedNumber(input.queueDropped) }
       : {}),
     ...(input.queueDiagnosticsAvailability !== undefined &&
     CACHE_QUEUE_DIAGNOSTICS_AVAILABILITY.includes(
@@ -376,6 +533,16 @@ function sanitizeObservation(
       : {}),
     ...(boundedNumber(input.oldestAgeMs, 31_536_000_000) !== undefined
       ? { oldestAgeMs: boundedNumber(input.oldestAgeMs, 31_536_000_000) }
+      : {}),
+    ...(boundedNumber(input.walFrames) !== undefined
+      ? { walFrames: boundedNumber(input.walFrames) }
+      : {}),
+    ...(typeof input.requestKind === 'string' &&
+    Object.hasOwn(CACHE_REQUEST_KINDS, input.requestKind)
+      ? { requestKind: input.requestKind }
+      : {}),
+    ...(boundedNumber(input.queueWaitMs, 3_600_000) !== undefined
+      ? { queueWaitMs: boundedNumber(input.queueWaitMs, 3_600_000) }
       : {}),
   };
 }
@@ -607,6 +774,8 @@ export function operationCategoryForRequest(
       'teardown',
       'clear',
       'current-storage-generation',
+      'current-authority',
+      'transition-authority',
       'inspect-mutations',
       () => 'lifecycle' as const
     )
@@ -788,8 +957,19 @@ export function isCacheTelemetryObservation(
       'errorDetail',
       'resetReason',
       'ownerEvent',
+      'unavailableReason',
       'persistence',
       'openOutcome',
+      'schemaChange',
+      'schemaResetReason',
+      'schemaChangedTypes',
+      'schemaDroppedRecords',
+      'schemaIncompleteDocuments',
+      'schemaRetiredOverlays',
+      'schemaAdoptMs',
+      'queueOutcome',
+      'queueKept',
+      'queueDropped',
       'queueDiagnosticsAvailability',
       'revisionCategory',
       'resetAttempt',
@@ -804,6 +984,9 @@ export function isCacheTelemetryObservation(
       'sampleRate',
       'queueDepth',
       'oldestAgeMs',
+      'walFrames',
+      'requestKind',
+      'queueWaitMs',
     ].includes(key)
   );
 }

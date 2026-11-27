@@ -26,7 +26,7 @@ const args: GraphqlSaveEmailDraftArgs = {
   subject: 'Updated subject',
   optimisticBodyHtml: '<p>Updated body</p>',
 };
-function queuedClient() {
+function queuedClient(disposition: 'queued' | 'committed' = 'queued') {
   const operations: Operation[] = [];
   const client = createClient({
     url: 'http://example.test/graphql',
@@ -42,7 +42,7 @@ function queuedClient() {
               hasNext: false,
               extensions: {
                 normalizedCacheMutationDisposition: {
-                  kind: 'queued',
+                  kind: disposition,
                   transactionId: 'queued',
                 },
               },
@@ -557,3 +557,16 @@ it.each([
     );
   }
 );
+
+it('acknowledges a committed save and delete after their copied response content is retired', async () => {
+  const { client } = queuedClient('committed');
+  await expect(executeGraphqlSaveEmailDraft(client, args)).resolves.toEqual({
+    kind: 'committed-without-content',
+  });
+  await expect(
+    executeGraphqlDeleteEmailDraft(client, {
+      draftId: String(args.draftId),
+      threadDbId: args.threadDbId,
+    })
+  ).resolves.toEqual({ kind: 'committed-without-content' });
+});

@@ -74,7 +74,7 @@ test('a new user signs up, connects everything, and starts the trial', async ({
     licensed: true,
   });
   expect(world.teams).toEqual([{ name: 'Acme' }]);
-  expect(world.connectedTools).toEqual(['linear']);
+  expect(world.connectors).toEqual([{ slug: 'linear', status: 'connected' }]);
 });
 
 test('a deep link survives the inbox OAuth round-trip', async ({ page }) => {
@@ -148,7 +148,7 @@ test('an unknown step link starts at welcome', async ({ page }) => {
   await expect(heading(page, 'Create your workspace')).toBeVisible();
 });
 
-test('Free, Pro, and Max appear below the unchanged trial offer', async ({
+test('Free, Pro, Business, and Max appear below the unchanged trial offer', async ({
   page,
 }) => {
   await openFixture(page, '/?view=flow&next=/md/notes');
@@ -165,12 +165,12 @@ test('Free, Pro, and Max appear below the unchanged trial offer', async ({
     page.getByRole('button', { name: 'Start 30 day trial' })
   ).toBeInViewport();
   const comparison = page.getByRole('table', {
-    name: 'Compare Free, Pro, and Max plans',
+    name: 'Compare Free, Pro, Business, and Max plans',
   });
   await expect(comparison).not.toBeInViewport();
   await page.getByRole('button', { name: 'See more' }).click();
   await expect(comparison).toBeInViewport();
-  for (const name of ['Free', 'Pro', 'Max']) {
+  for (const name of ['Free', 'Pro', 'Business', 'Max']) {
     await expect(
       comparison.getByRole('columnheader', { name: new RegExp(`^${name}`) })
     ).toBeVisible();
@@ -209,6 +209,13 @@ test('Max checkout returns with a licensed account and no trial', async ({
   });
   await page.reload();
   await page.getByRole('button', { name: 'Continue with Max' }).click();
+  await expect(
+    page.getByRole('dialog', { name: 'Choose billing cycle for Max' })
+  ).toBeVisible();
+  await expect(
+    page.getByRole('radio', { name: /Billed annually/ })
+  ).toBeChecked();
+  await page.getByRole('button', { name: 'Continue to checkout' }).click();
   await expectLanded(page, 'Entered Macro at /home');
   expect((await fakeWorld(page)).viewer).toMatchObject({
     tutorialComplete: true,
@@ -538,21 +545,13 @@ test('tools keep Drive and Sheets, hide excluded Google apps and preserve native
       ['asana', 'Asana'],
       ['trello', 'Trello'],
       ['slack', 'Slack'],
-      ['slack_v2', 'Slack'],
       ['linear', 'Linear'],
     ].map(([slug, name]) => ({
       slug,
       name,
       iconUrl: fixtureConnectorIcon(slug),
     })),
-    nativeTools: [
-      {
-        url: 'https://mcp.linear.app/mcp/',
-        server_name: 'My issues',
-        authenticated: true,
-        enabled: true,
-      },
-    ],
+    connectors: [{ slug: 'linear', status: 'connected' }],
   });
   await page.evaluate(() =>
     localStorage.setItem(
@@ -669,24 +668,12 @@ test('tools keep Drive and Sheets, hide excluded Google apps and preserve native
   ).toBeDisabled();
 });
 
-for (const githubLinkStatus of [
-  'unlinked',
-  'reauthentication_required',
-] as const) {
-  test(`GitHub uses native account linking from ${githubLinkStatus} and returns to tools`, async ({
+for (const status of ['notConnected', 'needsReauth'] as const) {
+  test(`GitHub uses native account linking from ${status} and returns to tools`, async ({
     page,
   }) => {
     await openFixture(page, '/?view=flow', {
-      githubLinkStatus,
-      connectedTools: ['github'],
-      nativeTools: [
-        {
-          url: 'https://api.githubcopilot.com/mcp',
-          authenticated: true,
-          enabled: true,
-          server_name: 'GitHub MCP',
-        },
-      ],
+      connectors: [{ slug: 'github', status }],
     });
     await page.evaluate(() =>
       localStorage.setItem(
@@ -701,26 +688,28 @@ for (const githubLinkStatus of [
       .click();
     await expect(
       page.getByRole('button', {
-        name: 'Account linked to GitHub',
+        name: 'Connected to GitHub',
         exact: true,
       })
     ).toBeDisabled();
     await expect(heading(page, 'Connect your tools.')).toBeVisible();
-    expect((await fakeWorld(page)).githubLinkStatus).toBe('linked');
+    expect((await fakeWorld(page)).connectors).toEqual([
+      { slug: 'github', status: 'connected' },
+    ]);
     await page.reload();
     await expect(
       page.getByRole('button', {
-        name: 'Account linked to GitHub',
+        name: 'Connected to GitHub',
         exact: true,
       })
     ).toBeDisabled();
   });
 }
 
-test('connection status failure leaves native GitHub available', async ({
+test('connection status failure holds connecting and offers retry', async ({
   page,
 }) => {
-  await openFixture(page, '/?view=flow', { connectionFailures: ['pipedream'] });
+  await openFixture(page, '/?view=flow', { connectorsFail: true });
   await page.evaluate(() =>
     localStorage.setItem(
       'onboarding-flow-step',
@@ -728,29 +717,18 @@ test('connection status failure leaves native GitHub available', async ({
     )
   );
   await page.reload();
-  await expect(
-    page.getByRole('button', { name: 'Connect GitHub', exact: true })
-  ).toBeEnabled();
-  await expect(
-    page.getByRole('button', { name: 'Connect Notion', exact: true })
-  ).toBeDisabled();
+  for (const name of ['GitHub', 'Notion'])
+    await expect(
+      page.getByRole('button', { name: `Connect ${name}`, exact: true })
+    ).toBeDisabled();
   await expect(
     page.getByRole('button', { name: 'Retry connection status' })
   ).toBeVisible();
 });
 
-test('enables an existing native tool without reconnecting', async ({
-  page,
-}) => {
+test('enables a held tool without reconnecting', async ({ page }) => {
   await openFixture(page, '/?view=flow', {
-    nativeTools: [
-      {
-        url: 'https://mcp.linear.app/mcp',
-        server_name: 'Linear',
-        authenticated: true,
-        enabled: false,
-      },
-    ],
+    connectors: [{ slug: 'linear', status: 'disabled' }],
   });
   await page.evaluate(() =>
     localStorage.setItem(
@@ -765,8 +743,9 @@ test('enables an existing native tool without reconnecting', async ({
   await expect(
     page.getByRole('button', { name: 'Connected to Linear', exact: true })
   ).toBeDisabled();
-  expect((await fakeWorld(page)).connectedTools).toEqual([]);
-  expect((await fakeWorld(page)).nativeTools[0].enabled).toBe(true);
+  expect((await fakeWorld(page)).connectors).toEqual([
+    { slug: 'linear', status: 'connected' },
+  ]);
 });
 
 for (const width of [1280, 390]) {
@@ -875,4 +854,59 @@ test('connecting an inbox starts the first suggestions generation once, without 
   await connect(['work@example.com', 'home@example.com']);
   await page.waitForTimeout(300);
   expect(await starts()).toBe(1);
+});
+
+test.describe('a phone browser finishing onboarding', () => {
+  test.use({ viewport: { width: 390, height: 664 }, hasTouch: true });
+
+  test('ends on Macro is better on desktop before entering the app', async ({
+    page,
+  }) => {
+    await openFixture(page, '/?view=flow&step=plan&handoff');
+    await page.getByRole('button', { name: 'Start 30 day trial' }).click();
+
+    await expect(heading(page, 'Macro is better on desktop.')).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: 'Download mobile app' })
+    ).toHaveAttribute('href', /apps\.apple\.com/);
+    const continueButton = page.getByRole('button', {
+      name: 'Continue in browser',
+    });
+    await expect(continueButton).toBeInViewport();
+    await continueButton.click();
+
+    await expectLanded(page, 'Entered Macro at /home');
+    expect(
+      (await fakeEvents(page))
+        .filter((e) => e.event === 'onboarding_v4_desktop_handoff')
+        .map((e) => e.data)
+    ).toEqual([{ action: 'viewed' }, { action: 'continue_in_browser' }]);
+  });
+  test('ends there after Continue with Free too', async ({ page }) => {
+    await openFixture(page, '/?view=flow&step=plan&handoff');
+    await page
+      .getByRole('button', { name: 'Continue with Free' })
+      .last()
+      .click();
+    await expect(heading(page, 'Macro is better on desktop.')).toBeVisible();
+    await page.getByRole('button', { name: 'Continue in browser' }).click();
+    await expectLanded(page, 'Entered Macro at /home');
+  });
+
+  test('ends there after the routines step, once the plan is chosen', async ({
+    page,
+  }) => {
+    await openFixture(page, '/?view=flow&step=plan&handoff', {
+      routineSuggestionsEnabled: true,
+      routineSuggestions: { status: 'none', suggestions: [] },
+    });
+    await page.getByRole('button', { name: 'Start 30 day trial' }).click();
+    await expect(
+      heading(page, 'Put your busywork on autopilot.')
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Continue to workspace' }).click();
+    await expect(heading(page, 'Macro is better on desktop.')).toBeVisible();
+    await page.getByRole('button', { name: 'Continue in browser' }).click();
+    await expectLanded(page, 'Entered Macro at /home');
+  });
 });

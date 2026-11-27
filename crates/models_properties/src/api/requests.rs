@@ -147,6 +147,17 @@ impl CreatePropertyDefinitionRequest {
     /// Validate all property definition constraints
     pub fn validate(&self) -> Result<(), PropertyDefinitionValidationError> {
         self.validate_display_name()?;
+        self.validate_seed_options()?;
+        Ok(())
+    }
+
+    /// Refuse a blank seed option, as adding one later is refused.
+    pub fn validate_seed_options(&self) -> Result<(), PropertyDefinitionValidationError> {
+        if let PropertyDataType::SelectString { options, .. } = &self.data_type
+            && options.iter().any(|option| option.value.trim().is_empty())
+        {
+            return Err(PropertyDefinitionValidationError::EmptyOptionValue);
+        }
         Ok(())
     }
 }
@@ -247,8 +258,14 @@ pub fn is_valid_hex_color(color: &str) -> bool {
 pub enum SetPropertyValue {
     /// Boolean true/false value
     Boolean { value: bool },
-    /// Date and time value
-    Date { value: DateTime<Utc> },
+    /// Date value. `has_time: true` makes it an exact instant; `false` or no
+    /// flag makes it a whole day, shown as the day its instant falls on in the
+    /// viewer's time zone.
+    Date {
+        value: DateTime<Utc>,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        has_time: bool,
+    },
     /// Date range value
     DateRange { value: DateRange },
     /// Numeric value

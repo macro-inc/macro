@@ -13,7 +13,7 @@ use serde_json::json;
 
 use super::{AutoModelSelector, DefaultAutoModel, HIGH_MODEL, JevAutoModel, MID_MODEL};
 
-const GEMINI: &str = "google/gemini-3.8-flash";
+const GEMINI: &str = "google/gemini-4-hydrogen";
 
 enum Answer {
     Probabilities(&'static [(&'static str, f32)]),
@@ -108,7 +108,7 @@ async fn an_ordinary_prompt_runs_on_sol() {
         selector.select(&owner(), "Summarize this doc").await,
         MID_MODEL
     );
-    assert_eq!(MID_MODEL, "openai/gpt-6.1-sol");
+    assert_eq!(MID_MODEL, "openai/gpt-6.2-sol");
 }
 
 #[tokio::test]

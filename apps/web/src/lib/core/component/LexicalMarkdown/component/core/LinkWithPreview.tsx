@@ -5,9 +5,14 @@ import { useUnfurl } from '@core/signal/unfurl';
 import { openExternalUrl } from '@core/util/url';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui';
-import { createSignal, type ParentProps, Show } from 'solid-js';
+import { createMemo, createSignal, type ParentProps, Show } from 'solid-js';
 import { floatWithElement } from '../../directive/floatWithElement';
-import { useAppLinkOpener } from './app-link-opener';
+import {
+  useAppLinkChip,
+  useAppLinkDescriber,
+  useAppLinkOpener,
+} from './app-link-opener';
+import { previewCardMiddleware } from './scroll-column';
 
 false && floatWithElement;
 
@@ -18,13 +23,29 @@ type LinkWithPreviewProps = ParentProps<{
 }>;
 
 export function LinkWithPreview(props: LinkWithPreviewProps) {
+  // A link the surface knows as a typed reference is drawn as its chip.
+  const chipFor = useAppLinkChip();
+  const chip = createMemo(() => chipFor?.(props.url));
+  return (
+    <Show when={chip()} fallback={<PlainLinkWithPreview {...props} />}>
+      {chip()}
+    </Show>
+  );
+}
+
+function PlainLinkWithPreview(props: LinkWithPreviewProps) {
   const [previewOpen, setPreviewOpen] = createSignal(false);
   const debouncedSetPreviewOpen = debounce((val: boolean) => {
     setPreviewOpen(val);
   });
 
-  const [unfurlData] = useUnfurl(props.url);
   const openAppLink = useAppLinkOpener();
+  const describeLink = useAppLinkDescriber();
+  // Only a web page unfurls: a relative link, such as a path to code, never
+  // goes to the unfurl service.
+  const [unfurlData] = useUnfurl(
+    /^https?:\/\//i.test(props.url) ? props.url : undefined
+  );
 
   let linkRef: HTMLAnchorElement | undefined;
 
@@ -65,9 +86,24 @@ export function LinkWithPreview(props: LinkWithPreviewProps) {
             style={{
               transform: 'translateY(0)',
             }}
-            use:floatWithElement={{ element: () => linkRef, spacing: 4 }}
+            // Kept inside the column the link scrolls in, so the card neither
+            // covers the icon rail nor reaches into a pane beside it.
+            use:floatWithElement={{
+              element: () => linkRef,
+              spacing: 4,
+              floatingOptions: { middleware: previewCardMiddleware(4) },
+            }}
           >
             {(() => {
+              const described = describeLink?.(props.url);
+              if (described) {
+                return (
+                  <LinkHoverCard
+                    unfurled={{ url: props.url, title: described.title }}
+                    subtitle={described.subtitle}
+                  />
+                );
+              }
               const data = unfurlData();
               if (data?.type === 'success') {
                 return <LinkHoverCard unfurled={data.data} />;

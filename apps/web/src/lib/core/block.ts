@@ -98,13 +98,8 @@ type BlockCombinationRules = {
 };
 
 export type PreviewState = {
-  canvas?: {
-    onLocationChange?: (location: {
-      x: number;
-      y: number;
-      scale: number;
-    }) => void;
-  };
+  onChangePreviewHeight?: (height: string) => void;
+  showDraftSelectorButton?: boolean;
 };
 
 export type NestedState<Name extends BlockName> = {
@@ -398,6 +393,14 @@ export type BlockDefinition<
 
   /** Whether mounting this block records an entity-open history row and page view. */
   openTrackingEnabled?: boolean;
+
+  /**
+   * Whether the block's view records the history row instead, once it knows
+   * the id it shows (`createOpenTracker` with `ownBlock`); mounting still
+   * sends the page view and `open_entity`. For a block whose id can name a
+   * record merged into another.
+   */
+  openHistoryFromView?: boolean;
 
   /**
    * Whether mounting this block sends `open_entity`. Defaults to

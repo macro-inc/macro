@@ -1,6 +1,5 @@
 import { CollapsibleSection } from '@app/components/view-shell/CollapsibleSection';
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
-import { t } from '@app/lib/i18n';
 import { usePreference } from '@app/preferences/use-preference';
 import { useMaybeBlockAliasedName } from '@core/block';
 import { Resize, ResizeZoneContext } from '@core/component/Resize/Resize';
@@ -13,7 +12,7 @@ import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
 import InfoIcon from '@icon/system/regular/info.svg';
 import SidePanelIcon from '@icon/system/regular/sidebar-simple.svg';
 import { Accordion } from '@kobalte/core/accordion';
-import { Button, ButtonGroup, Panel, Scroll } from '@ui';
+import { Button, ButtonGroup, CountBadge, Panel, Scroll } from '@ui';
 import { cn } from '@ui/utils/classname';
 import {
   type Accessor,
@@ -448,16 +447,26 @@ function Toggle(props: { size?: 'sm' | 'md' } = {}) {
   if (!ctx) {
     throw new Error('<SidePanel.Toggle> must be inside <SidePanel.Root>');
   }
-  const iconSize = () =>
-    isTouchDevice() || props.size === 'md' ? 'icon-md' : 'icon-sm';
+  const large = () => isTouchDevice() || props.size === 'md';
+  const unseen = () => (ctx.isOpen() ? 0 : ctx.unseenCount());
+  const size = () => {
+    if (unseen() > 0) return large() ? 'md' : 'sm';
+    return large() ? 'icon-md' : 'icon-sm';
+  };
+  const label = () => {
+    if (ctx.isOpen()) return 'Hide details';
+    if (unseen() === 0) return 'Show details';
+    if (unseen() === 1) return 'Show details, 1 unseen item';
+    return `Show details, ${unseen()} unseen items`;
+  };
 
   return (
     <Show when={ctx.hasSections()}>
       <HeaderActionGroup label="Details" size={props.size}>
         <ButtonGroup.Button
           variant="ghost"
-          size={iconSize()}
-          aria-label={ctx.isOpen() ? 'Hide details' : 'Show details'}
+          size={size()}
+          aria-label={label()}
           class={cn(
             isTouchDevice() &&
               'border-0 hover:bg-transparent! active:bg-transparent! focus-visible:bg-transparent! active:text-accent',
@@ -492,16 +501,7 @@ function Toggle(props: { size?: 'sm' | 'md' } = {}) {
               class={cn('size-6 shrink-0', ctx.isOpen() && 'text-accent')}
             />
           </Show>
-          <Show when={ctx.unseenCount() > 0 && !ctx.isOpen()}>
-            <span
-              aria-label={t('nav.unseenItems', {
-                count: ctx.unseenCount(),
-              })}
-              class="absolute -right-1 -top-1 flex min-w-4 h-4 items-center justify-center rounded-full bg-button-accent-bg px-0.5 text-[10px] font-semibold text-button-accent-ink"
-            >
-              {ctx.unseenCount()}
-            </span>
-          </Show>
+          <CountBadge count={unseen()} />
         </ButtonGroup.Button>
       </HeaderActionGroup>
     </Show>

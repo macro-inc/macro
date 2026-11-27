@@ -20,6 +20,7 @@ import {
 } from '@core/util/upload';
 import BuildingsIcon from '@icon/system/regular/buildings.svg';
 import UploadIcon from '@icon/system/regular/upload-simple.svg';
+import { crmAccessAllowed } from '@service-storage/crm-access-authority';
 import { Dropdown } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { NewCallButton } from './NewCallButton';
@@ -105,7 +106,7 @@ function getViewCreateOptions(
   if (view === 'folders') {
     options.push(IMPORT_FOLDER_OPTION);
   }
-  if (view === 'companies') {
+  if (view === 'companies' && crmAccessAllowed()) {
     options.push(CREATE_COMPANY_OPTION);
   }
   return options;

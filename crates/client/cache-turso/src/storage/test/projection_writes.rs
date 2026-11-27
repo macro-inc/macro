@@ -1,6 +1,100 @@
 use super::*;
 
 #[test]
+fn deletion_rebases_ordered_pending_contributions_without_changing_other_keys_or_commands() {
+    block_on(async {
+        use predicate_index::{ExactAttributePatch, ExactValue, OptimisticProjectionMutation};
+        let mut storage = TursoStorage::open_in_memory("delete-projection-rebase").unwrap();
+        let a = PredicateRecordKey::new("Thing:a").unwrap();
+        let b = PredicateRecordKey::new("Thing:b").unwrap();
+        let original = authoritative_projection("Thing:a", "original");
+        let replacement = authoritative_projection("Thing:a", "first");
+        let other = authoritative_projection("Thing:b", "other");
+        let layers = [
+            vec![
+                OptimisticProjectionMutation::Replace(replacement.clone()),
+                OptimisticProjectionMutation::Replace(other.clone()),
+            ],
+            vec![OptimisticProjectionMutation::Patch {
+                record_key: a.clone(),
+                profile: replacement.profile.clone(),
+                partition: replacement.partition.clone(),
+                exact: vec![ExactAttributePatch {
+                    attribute: Token::new("owner").unwrap(),
+                    values: vec![ExactValue::utf8("last").unwrap()],
+                }],
+                integers: vec![],
+                sorts: vec![],
+            }],
+        ];
+        let mut last_owner = 0;
+        for layer in layers {
+            let mut mutation = queued("Pending");
+            mutation.optimistic.optimistic_data_json =
+                cache_core::queue::encode_optimistic_source(&cache_core::queue::OptimisticSource {
+                    client_metadata: Some(serde_json::json!({"authored":"kept"})),
+                    identity_bindings: vec![],
+                    mutation_data: serde_json::json!({}),
+                    link_patches: vec![],
+                    revalidations: vec![],
+                    projection_mutations: layer,
+                    uncertain_calendar_event_keys: vec![],
+                });
+            last_owner = storage.enqueue_mutation(mutation).await.unwrap();
+        }
+        storage
+            .put_batch_with_projections(
+                vec![],
+                vec![
+                    ProjectionMutation::Replace(original),
+                    ProjectionMutation::Replace(other),
+                ],
+            )
+            .await
+            .unwrap();
+        let commands = storage.load_mutation_queue().await.unwrap();
+        let previous = storage
+            .load_optimistic_projections(&[a.clone(), b.clone()])
+            .await
+            .unwrap();
+        assert_eq!(previous[0].as_ref().unwrap().owner, last_owner);
+        for _ in 0..2 {
+            storage
+                .put_batch_with_projections(vec![], vec![ProjectionMutation::Delete(a.clone())])
+                .await
+                .unwrap();
+            assert_eq!(
+                storage
+                    .load_projection_states(std::slice::from_ref(&a))
+                    .await
+                    .unwrap(),
+                vec![None]
+            );
+            assert_eq!(
+                storage
+                    .load_optimistic_projections(&[a.clone(), b.clone()])
+                    .await
+                    .unwrap(),
+                previous
+            );
+            assert_eq!(storage.load_mutation_queue().await.unwrap(), commands);
+        }
+        let OptimisticProjectionState::Complete(ref final_state) =
+            previous[0].as_ref().unwrap().state
+        else {
+            panic!("replace followed by patch remains complete")
+        };
+        assert!(
+            final_state
+                .exact_facts
+                .iter()
+                .any(|fact| fact.attribute == Token::new("owner").unwrap()
+                    && fact.value == ExactValue::utf8("last").unwrap())
+        );
+    });
+}
+
+#[test]
 fn normalized_updates_do_not_rewrite_unchanged_projection_facts() {
     block_on(async {
         let mut storage = TursoStorage::open_in_memory("unchanged-projection-write").unwrap();
@@ -158,6 +252,172 @@ fn unchanged_authority_still_rebases_durable_optimistic_intent() {
         assert_eq!(
             shadow.state,
             OptimisticProjectionState::Complete(optimistic)
+        );
+    });
+}
+
+fn fact_rows(storage: &TursoStorage) -> Vec<Vec<Value>> {
+    let mut rows = Vec::new();
+    for table in ["exact_facts", "integer_facts", "sort_facts"] {
+        rows.extend(
+            driver::query(
+                &storage.connection(),
+                &format!(
+                    "SELECT '{table}', d.record_key, f.attribute, f.value FROM {table} AS f JOIN index_documents AS d ON d.id = f.document_id ORDER BY 2, 3, 4"
+                ),
+                Vec::new(),
+            )
+            .unwrap(),
+        );
+    }
+    rows
+}
+
+#[test]
+fn a_changed_document_writes_only_its_changed_facts() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("delta-projection-write").unwrap();
+        let initial = authoritative_projection("Thing:1", "owner-1");
+        storage
+            .put_batch_with_projections(Vec::new(), vec![ProjectionMutation::Replace(initial)])
+            .await
+            .unwrap();
+        let mut changed = authoritative_projection("Thing:1", "owner-2");
+        changed.sort_facts[0].value = 2;
+        changed.integer_facts.push(predicate_index::IntegerFact {
+            attribute: Token::new("size").unwrap(),
+            value: 7,
+        });
+        let before = storage.connection().total_changes();
+        storage
+            .put_batch_with_projections(
+                Vec::new(),
+                vec![ProjectionMutation::Replace(changed.clone())],
+            )
+            .await
+            .unwrap();
+        // One exact fact and one sort value replaced, one integer fact added;
+        // the document row and the unchanged relation fact are left alone.
+        assert_eq!(storage.connection().total_changes() - before, 5);
+        assert_eq!(
+            storage
+                .load_projection_states(&[PredicateRecordKey::new("Thing:1").unwrap()])
+                .await
+                .unwrap(),
+            vec![Some(ProjectionState::Complete(changed))]
+        );
+    });
+}
+
+#[test]
+fn a_repeated_fact_is_stored_once() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("delta-projection-repeated").unwrap();
+        storage
+            .put_batch_with_projections(
+                Vec::new(),
+                vec![ProjectionMutation::Replace(authoritative_projection(
+                    "Thing:1", "owner-1",
+                ))],
+            )
+            .await
+            .unwrap();
+        let mut repeated = authoritative_projection("Thing:1", "owner-2");
+        repeated.exact_facts.push(repeated.exact_facts[0].clone());
+        storage
+            .put_batch_with_projections(Vec::new(), vec![ProjectionMutation::Replace(repeated)])
+            .await
+            .unwrap();
+        assert_eq!(
+            storage
+                .load_projection_states(&[PredicateRecordKey::new("Thing:1").unwrap()])
+                .await
+                .unwrap(),
+            vec![Some(ProjectionState::Complete(authoritative_projection(
+                "Thing:1", "owner-2"
+            )))]
+        );
+    });
+}
+
+/// Differential check against the full rewrite: each step is written as a
+/// delta over the previous state in one storage, and from nothing in another.
+#[test]
+fn delta_writes_leave_the_same_facts_as_full_rewrites() {
+    block_on(async {
+        let mut seed = 0x9e37_79b9_7f4a_7c15_u64;
+        let mut next = |bound: u64| {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed % bound
+        };
+        let token = |value: &str| Token::new(value).unwrap();
+        let mut delta = TursoStorage::open_in_memory("delta-differential-a").unwrap();
+        let mut full = TursoStorage::open_in_memory("delta-differential-b").unwrap();
+        let keys = ["Thing:1", "Thing:2", "Thing:3"];
+        for step in 0..400 {
+            let key = keys[next(3) as usize];
+            let mut document = authoritative_projection(key, "owner");
+            document.exact_facts.clear();
+            document.sort_facts.clear();
+            if next(4) == 0 {
+                document.partition = token("other");
+            }
+            let mut exact = BTreeSet::new();
+            for _ in 0..next(5) {
+                exact.insert((next(3), next(3)));
+            }
+            document.exact_facts = exact
+                .into_iter()
+                .map(|(attribute, value)| predicate_index::ExactFact {
+                    attribute: token(&format!("e{attribute}")),
+                    value: predicate_index::ExactValue::utf8(format!("v{value}")).unwrap(),
+                })
+                .collect();
+            let mut integer = BTreeSet::new();
+            for _ in 0..next(4) {
+                integer.insert((next(2), next(3) as i64 - 1));
+            }
+            document.integer_facts = integer
+                .into_iter()
+                .map(|(attribute, value)| predicate_index::IntegerFact {
+                    attribute: token(&format!("i{attribute}")),
+                    value,
+                })
+                .collect();
+            for attribute in 0..next(3) {
+                document.sort_facts.push(predicate_index::IntegerFact {
+                    attribute: token(&format!("s{attribute}")),
+                    value: next(3) as i64,
+                });
+            }
+            let record_key = document.record_key.clone();
+            delta
+                .put_batch_with_projections(
+                    Vec::new(),
+                    vec![ProjectionMutation::Replace(document.clone())],
+                )
+                .await
+                .unwrap();
+            full.put_batch_with_projections(
+                Vec::new(),
+                vec![ProjectionMutation::Delete(record_key)],
+            )
+            .await
+            .unwrap();
+            full.put_batch_with_projections(
+                Vec::new(),
+                vec![ProjectionMutation::Replace(document)],
+            )
+            .await
+            .unwrap();
+            assert_eq!(fact_rows(&delta), fact_rows(&full), "step {step}");
+        }
+        let keys = keys.map(|key| PredicateRecordKey::new(key).unwrap());
+        assert_eq!(
+            delta.load_projection_states(&keys).await.unwrap(),
+            full.load_projection_states(&keys).await.unwrap()
         );
     });
 }

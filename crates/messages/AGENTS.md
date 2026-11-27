@@ -87,6 +87,9 @@ channel message tools change a message as their bot only when
 
 ## Gotchas
 
+- `outbound/record_merge::merge_discussions_in` moves a merged CRM record's
+  messages and thread rows in one statement: the thread's key to its root
+  is not deferrable and is checked at the statement's end.
 - `MessageKind::CallRoot` messages stand for a channel call. Only `ensure_call_root` creates them, and
   they announce themselves with `MessageChange::CallRootPosted`, which reaches viewers and nothing else.
 - A call chat's first message is a normal `MessageKind::Message` root; deleting it tombstones only

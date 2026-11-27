@@ -13,8 +13,8 @@ use std::{ops::Range, time::Duration};
 
 use chrono::{DateTime, Utc};
 use email_e2e::{
-    DEFAULT_TIMEOUT, Mail, Provider, Report, Stack, StackOptions, User, eventually, gmail_emulator,
-    outlook_emulator,
+    DEFAULT_TIMEOUT, Inbox, Mail, Provider, ProviderMessage, Report, Stack, StackOptions, User,
+    eventually, gmail_emulator, outlook_emulator,
 };
 use reqwest::Method;
 use serde_json::{Value, json};
@@ -283,7 +283,8 @@ async fn an_odd_message_does_not_keep_its_thread_out_of_search(
     wait_for_found(&ada, "persimmon", &["After linking"]).await?;
     deliver_odd_thread(&stack, provider, ada.email(), "After linking", after, 1..4)?;
 
-    // The message with the broken table has no text to be found by.
+    // The message with the broken table is indexed from its HTML, which does
+    // not hold its word.
     let sender_optional = provider == Provider::Gmail;
     for word in ["marmalade", "mulberry", "muscadine"] {
         if word != "muscadine" || sender_optional {
@@ -306,6 +307,55 @@ async fn gmail_an_odd_message_does_not_keep_its_thread_out_of_search() -> Result
 #[tokio::test(flavor = "multi_thread")]
 async fn outlook_an_odd_message_does_not_keep_its_thread_out_of_search() -> Result<(), Report> {
     an_odd_message_does_not_keep_its_thread_out_of_search(Provider::Outlook).await
+}
+
+/// A thread trashed or reported as junk from Macro leaves search, as the
+/// thread menu does it: Outlook keeps that state as folder facts, not labels.
+/// When this fails, mail the user threw away is still found.
+async fn a_thread_trashed_or_junked_in_macro_leaves_search(
+    provider: Provider,
+) -> Result<(), Report> {
+    let stack = search_stack().await?;
+    let ada = stack.unique_user("ada").await?;
+    let inbox = ada.link(provider, ada.email()).await?;
+    for subject in ["Kept wombat", "Trashed wombat", "Junk wombat"] {
+        inbox.deliver(&Mail::new(
+            "Grace <grace@example.com>",
+            subject,
+            "A wombat dug under the fence.",
+        ))?;
+    }
+    wait_for_found(
+        &ada,
+        "wombat",
+        &["Junk wombat", "Kept wombat", "Trashed wombat"],
+    )
+    .await?;
+
+    for (subject, field) in [("Trashed wombat", "trashed"), ("Junk wombat", "junk")] {
+        let preview = inbox.wait_for_preview("inbox", subject).await?;
+        let thread_id = preview["id"].as_str().unwrap_or_default();
+        inbox
+            .patch(
+                &format!("/email/threads/{thread_id}/state"),
+                Some(&json!({ "field": field, "value": true })),
+            )
+            .await?
+            .ok()?;
+    }
+
+    wait_for_found(&ada, "wombat", &["Kept wombat"]).await?;
+    stack.finish().await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_a_thread_trashed_or_junked_in_macro_leaves_search() -> Result<(), Report> {
+    a_thread_trashed_or_junked_in_macro_leaves_search(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_a_thread_trashed_or_junked_in_macro_leaves_search() -> Result<(), Report> {
+    a_thread_trashed_or_junked_in_macro_leaves_search(Provider::Outlook).await
 }
 
 /// The words of the messages that arrive together in one new thread.
@@ -638,4 +688,198 @@ async fn a_personal_tag_is_in_its_owners_search_results_only() -> Result<(), Rep
 #[tokio::test(flavor = "multi_thread")]
 async fn outlook_a_personal_tag_is_in_its_owners_search_results_only() -> Result<(), Report> {
     a_personal_tag_stays_its_owners(Provider::Outlook).await
+}
+
+const CLIENTS: &str = "Clients";
+
+/// Puts one mail in the inbox and waits until search finds it. A label test
+/// then changes its labels, which must reach the index on their own.
+async fn indexed_mail(inbox: &Inbox, ada: &User, subject: &str) -> Result<ProviderMessage, Report> {
+    let delivered = inbox.deliver(&Mail::new(SENDER, subject, "Numbers inside."))?;
+    inbox.wait_for_preview("inbox", subject).await?;
+    wait_for_found(ada, subject, &[subject]).await?;
+    Ok(delivered)
+}
+
+/// A label put on a thread, in Macro or at the provider, finds it, and one
+/// taken off stops finding it.
+///
+/// When this fails: a label the user just put on mail finds nothing, or the
+/// mail they took a label off is still listed under it.
+async fn a_label_put_on_and_taken_off_changes_what_it_finds(
+    provider: Provider,
+) -> Result<(), Report> {
+    let stack = search_stack().await?;
+    let ada = stack.unique_user("ada").await?;
+    let inbox = ada.link(provider, ada.email()).await?;
+    let label = stack.make_provider_label(&inbox, CLIENTS).await?;
+    let mail = indexed_mail(&inbox, &ada, "Quarterly numbers").await?;
+    let query = "label:clients";
+
+    // At the provider, as another mail client does.
+    label_at_provider(&stack, &inbox, &mail.id, &label, true)?;
+    wait_for_found(&ada, query, &["Quarterly numbers"]).await?;
+    label_at_provider(&stack, &inbox, &mail.id, &label, false)?;
+    wait_for_found(&ada, query, &[""; 0]).await?;
+
+    // In Macro, as the label picker does.
+    let labels = ada.get("/email/labels").await?.ok()?;
+    let macro_label = labels["labels"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|candidate| candidate["name"] == CLIENTS)
+        .and_then(|label| label["id"].as_str())
+        .ok_or_else(|| rootcause::report!("Macro has no label {CLIENTS}: {labels}"))?
+        .to_owned();
+    let thread = inbox.wait_for_preview("inbox", "Quarterly numbers").await?["id"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    for (on, subjects) in [(true, &["Quarterly numbers"][..]), (false, &[][..])] {
+        inbox
+            .patch(
+                &format!("/email/threads/{thread}/labels"),
+                Some(&json!({ "label_id": macro_label, "value": on })),
+            )
+            .await?
+            .ok()?;
+        wait_for_found(&ada, query, subjects).await?;
+    }
+    stack.finish().await
+}
+
+/// Puts the label on a message, or takes it off, at the provider.
+fn label_at_provider(
+    stack: &Stack,
+    inbox: &Inbox,
+    message: &str,
+    label: &str,
+    on: bool,
+) -> Result<(), Report> {
+    match inbox.provider() {
+        Provider::Gmail => {
+            let label = [label.to_owned()];
+            let (add, remove) = if on {
+                (&label[..], &[][..])
+            } else {
+                (&[][..], &label[..])
+            };
+            stack
+                .gmail()
+                .modify_labels(inbox.email(), message, add, remove)?;
+        }
+        Provider::Outlook => stack.outlook().update_message(
+            inbox.email(),
+            message,
+            &outlook_emulator::MessageChange {
+                categories: Some(if on { vec![label.to_owned()] } else { vec![] }),
+                ..Default::default()
+            },
+        )?,
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_a_label_put_on_and_taken_off_changes_what_it_finds() -> Result<(), Report> {
+    a_label_put_on_and_taken_off_changes_what_it_finds(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_a_label_put_on_and_taken_off_changes_what_it_finds() -> Result<(), Report> {
+    a_label_put_on_and_taken_off_changes_what_it_finds(Provider::Outlook).await
+}
+
+/// A label that reaches a stored message as another upsert of that message,
+/// as Gmail reports one added moments after the message arrived, finds it.
+///
+/// When this fails: a label another app put on new mail finds none of it
+/// until the thread is read or archived.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_a_label_that_arrives_with_a_message_upsert_finds_it() -> Result<(), Report> {
+    let stack = search_stack().await?;
+    let ada = stack.unique_user("ada").await?;
+    let inbox = ada.link_gmail().await?;
+    let label = stack.make_provider_label(&inbox, CLIENTS).await?;
+    let mail = indexed_mail(&inbox, &ada, "Quarterly numbers").await?;
+
+    // Gmail tells Macro nothing of this change by itself.
+    stack.gmail().set_push(None);
+    label_at_provider(&stack, &inbox, &mail.id, &label, true)?;
+    stack
+        .send_to_queue(
+            "gmail-inbox-sync",
+            &json!({
+                "linkId": inbox.link_id(),
+                "operation": { "upsert_message": { "provider_message_id": mail.id } },
+            }),
+        )
+        .await?;
+    wait_for_found(&ada, "label:clients", &["Quarterly numbers"]).await?;
+    stack.finish().await
+}
+
+/// A label with no event of its own, such as Gmail's Important, finds the
+/// mail it is put on.
+///
+/// When this fails: marking mail important in Gmail leaves it out of a
+/// search for important mail, and a category Gmail moves it to keeps it in
+/// or out of results it should not be in.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_a_system_label_added_later_finds_the_mail() -> Result<(), Report> {
+    let stack = search_stack().await?;
+    let ada = stack.unique_user("ada").await?;
+    let inbox = ada.link_gmail().await?;
+    let mail = indexed_mail(&inbox, &ada, "Quarterly numbers").await?;
+
+    label_at_provider(&stack, &inbox, &mail.id, "IMPORTANT", true)?;
+    wait_for_found(&ada, "label:important", &["Quarterly numbers"]).await?;
+    stack.finish().await
+}
+
+/// A label renamed in Gmail finds its mail under the new name.
+///
+/// When this fails: everything a renamed label is on disappears from a
+/// search for it, until each thread is changed.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_a_renamed_label_finds_its_mail_under_the_new_name() -> Result<(), Report> {
+    let stack = search_stack().await?;
+    let ada = stack.unique_user("ada").await?;
+    let inbox = ada.link_gmail().await?;
+    let label = stack.make_provider_label(&inbox, CLIENTS).await?;
+    let mail = indexed_mail(&inbox, &ada, "Quarterly numbers").await?;
+    label_at_provider(&stack, &inbox, &mail.id, &label, true)?;
+    wait_for_found(&ada, "label:clients", &["Quarterly numbers"]).await?;
+
+    stack
+        .gmail()
+        .rename_label(inbox.email(), &label, "Customers")?;
+    // Gmail tells of no change, so the next mail's sync finds the new name.
+    indexed_mail(&inbox, &ada, "Something new").await?;
+
+    wait_for_found(&ada, "label:customers", &["Quarterly numbers"]).await?;
+    assert_eq!(found(&ada, "label:clients").await?, [""; 0]);
+    stack.finish().await
+}
+
+/// Mail sent from Macro is found by the labels Gmail gives it as it files
+/// the message.
+///
+/// When this fails: a search for sent mail leaves out what was sent from
+/// Macro, and one that leaves sent mail out keeps it.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_mail_sent_from_macro_is_found_by_its_sent_label() -> Result<(), Report> {
+    let stack = search_stack().await?;
+    let ada = stack.unique_user("ada").await?;
+    let inbox = ada.link_gmail().await?;
+    inbox
+        .send(&json!({
+            "subject": "Sent from here",
+            "to": [{ "email": "grace@example.com" }],
+            "body_text": "Numbers inside.",
+        }))
+        .await?;
+    wait_for_found(&ada, "label:sent", &["Sent from here"]).await?;
+    stack.finish().await
 }

@@ -1,15 +1,16 @@
-import type { PipedreamConnectOutcome } from '@queries/pipedream-connectors';
+import type { ConnectOutcome } from '@queries/connectors';
 import { createRoot } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { createConnectorContinuation } from './create-connector-continuation';
 
 function setup() {
-  let finish!: (outcome: PipedreamConnectOutcome) => void;
-  const outcome = new Promise<PipedreamConnectOutcome>((resolve) => {
+  let finish!: (outcome: ConnectOutcome) => void;
+  const outcome = new Promise<ConnectOutcome>((resolve) => {
     finish = resolve;
   });
   const deps = {
     disabled: () => false,
+    busy: () => false,
     revision: () => 'session:message',
     connect: vi.fn(() => outcome),
     resume: vi.fn(async () => {}),
@@ -38,17 +39,29 @@ describe('connector continuation', () => {
     dispose();
   });
 
-  it.each(['closed', 'unsupported'] as const)(
-    'does not resume after %s',
-    async (outcome) => {
-      const { deps, flow, finish, dispose } = setup();
-      const pending = flow.connect(app);
-      finish(outcome);
-      await pending;
-      expect(deps.resume).not.toHaveBeenCalled();
-      dispose();
-    }
-  );
+  it('connects while the agent is working, then asks the user to continue', async () => {
+    const { deps, flow, finish, dispose } = setup();
+    deps.busy = () => true;
+    expect(flow.disabled()).toBe(false);
+    const pending = flow.connect(app);
+    expect(deps.connect).toHaveBeenCalledOnce();
+    finish('connected');
+    await pending;
+    expect(deps.resume).not.toHaveBeenCalled();
+    expect(deps.notify).toHaveBeenCalledExactlyOnceWith(
+      'Linear connected. Send a message when you are ready to continue.'
+    );
+    dispose();
+  });
+
+  it('does not resume after the user closes the connect flow', async () => {
+    const { deps, flow, finish, dispose } = setup();
+    const pending = flow.connect(app);
+    finish('closed');
+    await pending;
+    expect(deps.resume).not.toHaveBeenCalled();
+    dispose();
+  });
 
   it.each(['changed', 'generating', 'unmounted'] as const)(
     'does not resume a session that is %s',
@@ -56,7 +69,7 @@ describe('connector continuation', () => {
       const { deps, flow, finish, dispose } = setup();
       const pending = flow.connect(app);
       if (state === 'changed') deps.revision = () => 'session:new-message';
-      if (state === 'generating') deps.disabled = () => true;
+      if (state === 'generating') deps.busy = () => true;
       if (state === 'unmounted') dispose();
       finish('connected');
       await pending;

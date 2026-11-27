@@ -1,5 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { CacheHost } from '@graphql-cache/host/types';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import {
   type NotificationState,
   NotificationStateCacheWriteDocument,
@@ -19,9 +20,11 @@ export async function writeNotificationStates(
   ids: readonly string[],
   state: NotificationState
 ): Promise<void> {
+  const generation = cacheSessionGeneration.capture();
   // The subscription root carries one notification per event.
   for (const id of ids) {
     await host.writeQuery({
+      generation,
       query: stateWrite,
       operationName: 'NotificationStateCacheWrite',
       variables: {},

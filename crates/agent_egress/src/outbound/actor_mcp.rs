@@ -4,8 +4,8 @@ use crate::domain::{
     model::{AgentSessionId, UpstreamCall},
     ports::ActorMcpTransport,
 };
+use connectors::guarded_http::{self, AddressPolicy};
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_client::outbound::guarded_http::{self, AddressPolicy};
 use rmcp::transport::streamable_http_client::{
     StreamableHttpClientTransportConfig, StreamableHttpError,
 };
@@ -113,7 +113,7 @@ impl HttpActorMcpTransport {
                     StreamableHttpClientTransport::with_client(self.client.clone(), config);
                 let client = tokio::time::timeout(
                     std::time::Duration::from_secs(30),
-                    mcp_client::domain::models::client_info().serve(transport),
+                    mcp_toolset::client_info().serve(transport),
                 )
                 .await
                 .map_err(|error| EgressError::Upstream(rootcause::report!(error).into()))?

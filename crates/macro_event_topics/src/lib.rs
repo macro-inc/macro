@@ -73,6 +73,8 @@ topics! {
     MacroChannelsTopic => "macro.channels",
     /// Shared channel and document message events.
     MacroMessagesTopic => "macro.messages",
+    /// Committed channel changes, hydrated and addressed to the channel's participants.
+    MacroChannelTimelineTopic => "macro.channel_timeline",
     /// Signals telling the agent harness to open or feed an agent session.
     MacroAgentSessionsTopic => "macro.agent_sessions",
     /// Email lifecycle events (links, messages, threads, labels).
@@ -104,4 +106,6 @@ topics! {
     MacroUsersTopic => "macro.users",
     /// Vault facts addressed to one account, such as a resolved agent access request.
     MacroPasswordsTopic => "macro.passwords",
+    /// Time logged on tasks: entries logged, edited and deleted, with the task's new total.
+    MacroTimeEntriesTopic => "macro.time_entries",
 }

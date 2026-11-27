@@ -22,7 +22,7 @@ export interface CalendarReplacementView {
   /** Number of completed provider steps. */
   completedSteps: number;
   event?: CalendarReplacementViewEvent;
-  /** Entire recurring series, including exceptions, is replaced. */
+  /** The replacement is a recurring series. */
   isSeries: boolean;
   /** Use this identity when confirming or checking progress. */
   operationId: string;

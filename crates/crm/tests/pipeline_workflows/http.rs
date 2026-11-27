@@ -214,6 +214,7 @@ async fn http_routes_add_find_update_remove_edit_and_move_csv_by_name(pool: PgPo
             {"label": "Open", "count": 2},
             {"label": "Won", "count": 0},
             {"label": "Lost", "count": 0},
+            {"label": "Declined", "count": 0},
         ], "empty": 0})
     );
     let revenue = found["pipeline"]["fields"]

@@ -80,6 +80,8 @@ pub struct SQS {
     #[cfg(feature = "email")]
     link_manager_queue: Option<String>,
     #[cfg(feature = "email")]
+    link_maintenance_queue: Option<String>,
+    #[cfg(feature = "email")]
     email_scheduled_queue: Option<String>,
     #[cfg(feature = "email")]
     email_backfill_queue: Option<String>,
@@ -121,6 +123,8 @@ impl SQS {
             gmail_label_write_batches: false,
             #[cfg(feature = "email")]
             link_manager_queue: None,
+            #[cfg(feature = "email")]
+            link_maintenance_queue: None,
             #[cfg(feature = "email")]
             email_scheduled_queue: None,
             #[cfg(feature = "email")]

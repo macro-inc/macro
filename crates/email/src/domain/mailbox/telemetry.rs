@@ -2,7 +2,9 @@
 //! (`outlook.sync.*` spans). Each claimed unit of work gets one root span;
 //! idle polls get none.
 
-use super::MailboxError;
+use super::claim::StreamClaim;
+use super::drafts::models::{DraftChange, DraftFailure, DraftLease};
+use super::{MailboxError, StreamLease};
 use email_api_client::domain::models::{EmailApiError, GateLimit, RateLimitOrigin};
 use tracing::Span;
 use uuid::Uuid;
@@ -29,13 +31,48 @@ pub fn defer_reason(error: &MailboxError) -> &'static str {
         MailboxError::Effect(_) => "effect",
         MailboxError::LocationUnsettled => "location_unsettled",
         MailboxError::CalendarPartsUnavailable => "calendar_parts",
+        MailboxError::NoMailbox => "no_mailbox",
+        MailboxError::ClaimsUnfinished(_) => "unfinished",
+        MailboxError::DraftChanged(_) => "draft_changed",
         _ => "other",
     }
 }
 
+/// The root span of one claimed folder stream. `outlook.due_ms` is how long
+/// the stream waited in line after it came due, `outlook.import_round`
+/// whether it was claimed in its import round rather than as a poll, and
+/// `outlook.claim` the claim that took it, so claims can be counted by kind.
+pub(super) fn enumerate_span(lease: &StreamLease, claim: StreamClaim) -> Span {
+    tracing::info_span!(
+        "outlook.sync.enumerate",
+        mailbox.link_id = %lease.mailbox.link_id,
+        mailbox.sync_generation = lease.mailbox.sync_generation,
+        outlook.stream_kind = lease.pass.kind().as_str(),
+        outlook.stream_id = %lease.id,
+        outlook.claim = claim.as_str(),
+        outlook.import_round = !lease.initial_complete,
+        outlook.due_ms = since_ms(lease.due_at),
+        outlook.poll_interval_seconds = tracing::field::Empty,
+        outlook.page_items = tracing::field::Empty,
+        outlook.rows_queued = tracing::field::Empty,
+        outlook.live_pass_opened = tracing::field::Empty,
+        outlook.delta_advanced = tracing::field::Empty,
+        outlook.folder_initial_complete = tracing::field::Empty,
+        outlook.cursor_reset = tracing::field::Empty,
+        outlook.notification_wait_ms = lease
+            .notification
+            .as_ref()
+            .map(|notification| since_ms(notification.received_at)),
+        outlook.outcome = tracing::field::Empty,
+        outlook.defer_reason = tracing::field::Empty,
+        outlook.defer_seconds = tracing::field::Empty,
+        otel.status_description = tracing::field::Empty,
+    )
+}
+
 /// A refusal by the shared request gate is routine back-pressure, so it is
 /// logged at DEBUG; the span still records it.
-fn is_gate_refusal(error: &MailboxError) -> bool {
+pub(super) fn is_gate_refusal(error: &MailboxError) -> bool {
     matches!(
         error,
         MailboxError::Provider(EmailApiError::RateLimited {
@@ -46,7 +83,8 @@ fn is_gate_refusal(error: &MailboxError) -> bool {
 }
 
 /// The unit committed its work: `imported` or, for a vanished message,
-/// `absent`; `paced` for an import round's folder that waited for its import.
+/// `absent`; `unsynced` for a notified message no folder page would list;
+/// `paced` for an import round's folder that waited for its import.
 pub(super) fn record_done(span: &Span, outcome: &'static str) {
     span.record("outlook.outcome", outcome);
 }
@@ -78,6 +116,34 @@ pub(super) fn record_abandoned(span: &Span, link_id: Uuid, error: &MailboxError,
     span.record("outlook.defer_reason", reason);
     span.record("otel.status_description", tracing::field::display(error));
     tracing::warn!(parent: span, %link_id, defer_reason = reason, attempts, %error, "mailbox message abandoned");
+}
+
+/// The projection gave up on an event (`MessageRetry::Abandon`, or claims
+/// that kept ending unfinished): its entry is deleted, so this is the one
+/// record of it. The line holds only ids and kinds.
+pub(super) fn record_projection_abandoned(
+    span: &Span,
+    link_id: Uuid,
+    event_id: Uuid,
+    event_kind: &'static str,
+    attempts: i32,
+    error: &MailboxError,
+) {
+    let reason = defer_reason(error);
+    span.record("outlook.outcome", "abandoned");
+    span.record("outlook.defer_reason", reason);
+    span.record("otel.status_description", tracing::field::display(error));
+    let attachment_id = record_effect(span, error);
+    tracing::warn!(
+        parent: span,
+        %link_id,
+        %event_id,
+        event_kind,
+        attempts,
+        defer_reason = reason,
+        attachment_id = attachment_id.map(tracing::field::display),
+        "mailbox projection abandoned"
+    );
 }
 
 /// The unit stopped without releasing its work, which another worker retries
@@ -112,8 +178,91 @@ fn record_effect(span: &Span, error: &MailboxError) -> Option<Uuid> {
     attachment_id
 }
 
-/// Logs why a unit of the other mailbox loops (contacts, drafts, commands,
-/// settings, watches), which have no span, stopped or was deferred.
+/// The root span of one claimed step of a draft. Its Graph requests are its
+/// children, and its failure, if any, is logged inside it.
+pub(super) fn draft_span(lease: &DraftLease) -> Span {
+    tracing::info_span!(
+        "outlook.draft.step",
+        mailbox.link_id = %lease.mailbox.link_id,
+        mailbox.sync_generation = lease.mailbox.sync_generation,
+        email.message_id = %lease.message_id,
+        draft.stage = draft_stage(lease),
+        draft.revision = lease.revision,
+        draft.delete_requested = lease.delete_requested,
+        draft.error_code = tracing::field::Empty,
+        outlook.outcome = tracing::field::Empty,
+        outlook.defer_reason = tracing::field::Empty,
+        otel.status_description = tracing::field::Empty,
+    )
+}
+
+/// Where the step started: a lease with no checkpoint yet inspects the draft.
+fn draft_stage(lease: &DraftLease) -> &'static str {
+    lease
+        .checkpoint
+        .as_ref()
+        .map_or("inspect", |checkpoint| checkpoint.stage.into())
+}
+
+/// The draft step was put back to run again.
+pub(super) fn record_draft_deferred(span: &Span, error: &MailboxError) {
+    span.record("outlook.outcome", "deferred");
+    span.record("outlook.defer_reason", defer_reason(error));
+    span.record("otel.status_description", tracing::field::display(error));
+}
+
+/// The draft's version moved with no edit, so the step goes on with the moved
+/// draft. Shows which mailboxes change drafts on their own.
+pub(super) fn draft_version_moved(lease: &DraftLease) {
+    tracing::info!(
+        event = "email_send.draft_version_moved",
+        link_id = %lease.mailbox.link_id,
+        message_id = %lease.message_id,
+        stage = draft_stage(lease),
+        "outlook draft version moved without an edit"
+    );
+}
+
+/// The draft stopped with `failure`, so every send attempt waiting on it
+/// reads as failed or unconfirmed. Logs ids and field names, never content.
+pub(super) fn draft_failed(
+    lease: &DraftLease,
+    failure: DraftFailure,
+    error: Option<&MailboxError>,
+    attempts: &[Uuid],
+) {
+    let code = failure.code();
+    Span::current().record("draft.error_code", code);
+    let (change, changed_fields) = match error {
+        Some(MailboxError::DraftChanged(DraftChange::Content(fields))) => {
+            (Some("content"), Some(fields.join(",")))
+        }
+        Some(MailboxError::DraftChanged(DraftChange::Unknown)) => (Some("unknown"), None),
+        _ => (None, None),
+    };
+    let attempt_ids = attempts
+        .iter()
+        .map(Uuid::to_string)
+        .collect::<Vec<_>>()
+        .join(",");
+    tracing::warn!(
+        event = "email_send.draft_failed",
+        link_id = %lease.mailbox.link_id,
+        message_id = %lease.message_id,
+        attempt_ids,
+        code,
+        stage = draft_stage(lease),
+        revision = lease.revision,
+        delete_requested = lease.delete_requested,
+        change,
+        changed_fields,
+        reason = error.map(defer_reason),
+        "outlook draft failed"
+    );
+}
+
+/// Logs why a unit of the other mailbox loops stopped or was deferred. Contacts,
+/// commands, settings and watches have no span.
 pub(super) fn log_unit_error(link_id: Uuid, error: &MailboxError) {
     let reason = defer_reason(error);
     if is_gate_refusal(error) || matches!(error, MailboxError::Stale) {

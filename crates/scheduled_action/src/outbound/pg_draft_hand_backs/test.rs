@@ -1,6 +1,8 @@
 use super::*;
 use crate::domain::event_trigger::ActionTrigger;
-use crate::domain::models::{ActionConfiguration, ActionKind, CreatedItem};
+use crate::domain::models::{
+    ActionConfiguration, ActionKind, CheckedStepProblems, CreatedItem, RunVisibility,
+};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 fn owner() -> MacroUserIdStr<'static> {
@@ -24,6 +26,7 @@ fn check(name: &str) -> RoutineCheck {
             enabled: true,
             run_visibility: Default::default(),
             description: String::new(),
+            appearance: None,
         },
         missing_apps: Vec::new(),
     }
@@ -108,6 +111,72 @@ async fn a_drafts_latest_check_by_its_owner_is_its_answer(pool: PgPool) {
         drafts.handed_back(session).await.unwrap(),
         HandedBack::default()
     );
+}
+
+/// `RoutineCheck` as a replica built before `appearance` reads it.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[expect(dead_code, reason = "only whether a check decodes matters")]
+struct CheckBeforeAppearance {
+    ok: bool,
+    problems: Vec<String>,
+    steps: Vec<CheckedStepProblems>,
+    routine: ConfigurationBeforeAppearance,
+}
+
+/// `ActionConfiguration` before `appearance`: it refuses fields it doesn't
+/// know.
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+#[expect(dead_code, reason = "only whether a check decodes matters")]
+struct ConfigurationBeforeAppearance {
+    name: String,
+    trigger: ActionTrigger,
+    kind: ActionKind,
+    task: serde_json::Value,
+    enabled: bool,
+    #[serde(default)]
+    run_visibility: RunVisibility,
+    #[serde(default)]
+    description: String,
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_check_with_a_look_is_kept_where_an_older_replica_still_reads_it(pool: PgPool) {
+    let drafts = PgDraftHandBacks::new(pool.clone());
+    let session = macro_uuid::generate_uuid_v7();
+    drafts
+        .begin(session, &owner(), bot_id::BotId::TEST_A)
+        .await
+        .unwrap();
+    let mut picked = check("Bug triage");
+    picked.routine.appearance = Some(model_entity::EntityAppearance {
+        icon: Some(model_entity::AppearanceIcon::Macro { name: "bug".into() }),
+        color: Some(model_entity::AppearanceColor::Red),
+    });
+    assert!(
+        drafts
+            .record(session, &owner(), &picked, &[])
+            .await
+            .unwrap()
+    );
+
+    let handed_back = drafts.handed_back(session).await.unwrap();
+    assert_eq!(handed_back.check, Some(picked.clone()));
+    assert_eq!(handed_back.passed, Some(picked));
+
+    let row = sqlx::query!(
+        r#"SELECT checked AS "checked!", passed AS "passed!" FROM scheduled_action_draft WHERE session_id = $1"#,
+        session,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    for kept in [row.checked, row.passed] {
+        if let Err(error) = serde_json::from_value::<CheckBeforeAppearance>(kept) {
+            panic!("a replica built before `appearance` can't read the check: {error}");
+        }
+    }
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

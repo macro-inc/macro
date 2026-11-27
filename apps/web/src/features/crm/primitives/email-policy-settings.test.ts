@@ -1,3 +1,4 @@
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { err, ok } from 'neverthrow';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -292,6 +293,48 @@ describe('email sharing decisions', () => {
       if_preview_id: 'observed',
     });
     expect(settings.stale()).toBe(true);
+    expect(settings.state.draft).toBe(JSON.stringify(RULES, null, 2));
+  });
+
+  it('revalidates a successful preview across retirement without replaying its POST', async () => {
+    const { settings, source } = mount();
+    const pending =
+      Promise.withResolvers<
+        Awaited<ReturnType<EmailPolicySource['startPreview']>>
+      >();
+    const started = Promise.withResolvers<void>();
+    vi.mocked(source.startPreview).mockImplementation(() => {
+      started.resolve();
+      return pending.promise;
+    });
+    settings.beginEdit();
+    await settings.inspectPreview();
+    const attempt = settings.startPreview();
+    await started.promise;
+    await cacheSessionGeneration.transition(async () => {});
+    pending.resolve(
+      ok({
+        preview_id: 'stale',
+        context_id: 'context',
+        status: 'complete',
+        created_at: '2026-01-01T00:00:00Z',
+        expires_at: '2026-01-01T00:05:00Z',
+        scanned_threads: 1,
+        counts: {
+          current: 1,
+          proposed: 1,
+          added: 0,
+          removed: 0,
+          retained: 1,
+          denied: 0,
+        },
+      })
+    );
+    await attempt;
+    expect(source.startPreview).toHaveBeenCalledOnce();
+    expect(source.preview).toHaveBeenCalledTimes(2);
+    expect(settings.state.preview).toBeNull();
+    expect(settings.state.previewDraft).toBeUndefined();
     expect(settings.state.draft).toBe(JSON.stringify(RULES, null, 2));
   });
 });

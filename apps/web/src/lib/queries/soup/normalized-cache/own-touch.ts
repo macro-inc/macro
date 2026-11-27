@@ -10,8 +10,8 @@
  * `ActivitySource` impls: create, rename, file-type change, project move,
  * property change, channel message send) may stamp — bumping an
  * unattributed action would reorder the Recent feed only to snap back once
- * the server truth arrives. Doc content edits are NOT attributed yet
- * (`SyncContentUpdated` carries no actor), so typing must not stamp.
+ * the server truth arrives. Doc content edits are recorded once per editing
+ * session, so typing stamps only when a session starts (`editing-touch.ts`).
  */
 
 import { createStampFloors } from './stamp-floors';

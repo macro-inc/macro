@@ -1,7 +1,7 @@
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
-import { ComposerSurface, cn, TabSelector } from '@ui';
+import { Card, cn, TabSelector } from '@ui';
 import { For, type JSX, type ParentProps, Show } from 'solid-js';
 import type { EntityAppearance } from '../../entity-appearance/core/appearance';
 import type { ScheduleDraft } from '../core/draft';
@@ -10,21 +10,14 @@ import { RoutineDescription } from './routine-description';
 import { RoutineIcon } from './routine-icon';
 
 /**
- * The raised card a page section or step sits on: the composer surface
- * settings use (menu fill, glass edge) with a tighter radius, framed on touch
- * as settings are.
+ * The raised card a page section or step sits on, above the tray under it.
+ * Callers lay out their own contents, so it drops the Card column.
  */
 export function RoutineSurface(props: ParentProps<{ class?: string }>) {
   return (
-    <ComposerSurface
-      as="div"
-      class={cn(
-        'relative z-[1] min-w-0 rounded-xl touch:rounded-xl touch:border touch:border-edge-muted touch:bg-composer touch:text-composer-ink',
-        props.class
-      )}
-    >
+    <Card variant="raised" class={cn('z-[1] block flex-row', props.class)}>
       {props.children}
-    </ComposerSurface>
+    </Card>
   );
 }
 
@@ -104,6 +97,14 @@ function RoutineSection(props: {
  */
 export function RoutineEditor(props: {
   draft: ScheduleDraft;
+  mobile?: boolean;
+  mobileHeader?: (props: {
+    name: string;
+    identityIcon?: JSX.Element;
+    headerActions?: JSX.Element;
+    actions?: JSX.Element;
+    onBack: () => void;
+  }) => JSX.Element;
   onChange: (update: (draft: ScheduleDraft) => ScheduleDraft) => void;
   disabled?: boolean;
   tab: 'settings' | 'history';
@@ -217,6 +218,15 @@ export function RoutineEditor(props: {
           </div>
         )}
       </ViewBreadcrumbs.Item>
+      <Show when={props.mobile}>
+        {props.mobileHeader?.({
+          name: breadcrumbName(),
+          identityIcon: props.identityIcon?.(icon('size-4')) ?? icon('size-4'),
+          headerActions: props.headerActions,
+          actions: props.actions,
+          onBack: props.onBack,
+        })}
+      </Show>
       <TabSelector.Root
         value={props.tab}
         onChange={(value) => {
@@ -224,51 +234,72 @@ export function RoutineEditor(props: {
         }}
         class="@container/routine flex size-full min-h-0 min-w-0 flex-col text-ink"
       >
-        {/* On touch the bar floats over the page and ignores taps outside
-            islands: the breadcrumbs sit in one, and the tab pills and the
-            split Run button (its own island) take taps themselves. Nothing
-            wider does, so the bar's empty space still lets taps through. */}
-        <ViewShell.TopBar
-          class="gap-x-3 gap-y-2 touch:flex @max-[600px]/routine:h-auto @max-[600px]/routine:flex-wrap"
-          aria-label="Routine toolbar"
-        >
-          {/* Fills the row beside Run on a phone, but never past its own
-              content, so no blank part of the island takes taps. */}
-          <ViewShell.TopBarTitle class="max-w-fit @max-[600px]/routine:flex-1">
-            <ViewBreadcrumbs.Outlet
-              aria-label="Routine location"
-              class="min-w-0 @max-[600px]/routine:flex-1"
-            />
-          </ViewShell.TopBarTitle>
-          <Show when={!props.creating}>
-            <div class="shrink-0 @max-[600px]/routine:order-last @max-[600px]/routine:w-full">
-              <TabSelector class="w-fit touch:pointer-events-auto">
-                <TabSelector.List aria-label="Routine details">
-                  <For each={tabs()}>
-                    {(tab) => (
-                      <TabSelector.Tab value={tab.value}>
-                        {tab.label}
-                        <Show when={tab.count}>
-                          {(count) => (
-                            <span
-                              aria-hidden="true"
-                              class="ml-1.5 tabular-nums text-ink-extra-muted"
-                            >
-                              {count()}
-                            </span>
-                          )}
-                        </Show>
-                      </TabSelector.Tab>
-                    )}
-                  </For>
-                </TabSelector.List>
-              </TabSelector>
+        <Show when={!props.mobile}>
+          <ViewShell.TopBar
+            class="gap-x-3 gap-y-2 touch:flex @max-[600px]/routine:h-auto @max-[600px]/routine:flex-wrap"
+            aria-label="Routine toolbar"
+          >
+            <ViewShell.TopBarTitle class="max-w-fit @max-[600px]/routine:flex-1">
+              <ViewBreadcrumbs.Outlet
+                aria-label="Routine location"
+                class="min-w-0 @max-[600px]/routine:flex-1"
+              />
+            </ViewShell.TopBarTitle>
+            <Show when={!props.creating}>
+              <div class="shrink-0 @max-[600px]/routine:order-last @max-[600px]/routine:w-full">
+                <TabSelector class="w-fit touch:pointer-events-auto">
+                  <TabSelector.List aria-label="Routine details">
+                    <For each={tabs()}>
+                      {(tab) => (
+                        <TabSelector.Tab value={tab.value}>
+                          {tab.label}
+                          <Show when={tab.count}>
+                            {(count) => (
+                              <span
+                                aria-hidden="true"
+                                class="ml-1.5 tabular-nums text-ink-extra-muted"
+                              >
+                                {count()}
+                              </span>
+                            )}
+                          </Show>
+                        </TabSelector.Tab>
+                      )}
+                    </For>
+                  </TabSelector.List>
+                </TabSelector>
+              </div>
+            </Show>
+            <div class="ml-auto flex shrink-0 items-center gap-2">
+              {props.headerActions}
             </div>
-          </Show>
-          <div class="ml-auto flex shrink-0 items-center gap-2">
-            {props.headerActions}
+          </ViewShell.TopBar>
+        </Show>
+        <Show when={props.mobile && !props.creating}>
+          <div class="shrink-0 px-4 pt-3">
+            <TabSelector class="w-fit">
+              <TabSelector.List aria-label="Routine details">
+                <For each={tabs()}>
+                  {(tab) => (
+                    <TabSelector.Tab value={tab.value}>
+                      {tab.label}
+                      <Show when={tab.count}>
+                        {(count) => (
+                          <span
+                            aria-hidden="true"
+                            class="ml-1.5 tabular-nums text-ink-extra-muted"
+                          >
+                            {count()}
+                          </span>
+                        )}
+                      </Show>
+                    </TabSelector.Tab>
+                  )}
+                </For>
+              </TabSelector.List>
+            </TabSelector>
           </div>
-        </ViewShell.TopBar>
+        </Show>
         <TabSelector.Panel
           value="settings"
           class="relative min-h-0 flex-1 outline-none"

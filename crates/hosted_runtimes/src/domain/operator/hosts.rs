@@ -114,8 +114,25 @@ where
         &self,
         computer_id: ComputerId,
     ) -> Result<FleetHandle<'_, Machines::Fleet>, ComputerError> {
+        self.fleet_and_image_of(computer_id)
+            .await
+            .map(|(fleet, _)| fleet)
+    }
+
+    /// Resolve the fleet and the recorded guest image from the same computer row.
+    pub async fn fleet_and_image_of(
+        &self,
+        computer_id: ComputerId,
+    ) -> Result<
+        (
+            FleetHandle<'_, Machines::Fleet>,
+            Option<crate::domain::image::GuestImage>,
+        ),
+        ComputerError,
+    > {
         let computer = self.computer(computer_id).await?;
-        self.fleet_for(computer.host).await
+        let fleet = self.fleet_for(computer.host).await?;
+        Ok((fleet, computer.image))
     }
 
     /// Compare each host's fleet with the rows: a missing or stopped instance of an

@@ -4,6 +4,7 @@ import { peopleBeforeAgents } from '@core/user/people-before-agents';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useMaybePropertiesContext } from '@property/context/PropertiesContext';
+import { copyEntityReferences } from '@property/utils/copy-entity-references';
 import {
   entityReferencesToIdSet,
   updateEntityReferences,
@@ -63,7 +64,7 @@ export function EntityEditor(props: EntityEditorProps) {
 function createEntityEditorDraft() {
   const ctx = useProperty();
   const property = ctx.property() as EntityProperty;
-  const initialRefs: EntityReference[] = property.value ?? [];
+  const initialRefs = copyEntityReferences(property.value ?? []);
   const [selectedRefs, setSelectedRefs] =
     createSignal<EntityReference[]>(initialRefs);
   const [dirty, setDirty] = createSignal(false);

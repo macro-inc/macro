@@ -1,4 +1,8 @@
 use aws_sdk_sqs::types::MessageSystemAttributeName;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+#[cfg(test)]
+mod test;
 
 /// Receives messages from the queue.
 #[tracing::instrument(skip(inner))]
@@ -17,6 +21,7 @@ pub async fn receive_messages(
         .set_message_attribute_names(Some(vec!["*".to_string()])) // Needed to get all the message
         // attributes
         .message_system_attribute_names(MessageSystemAttributeName::ApproximateReceiveCount)
+        .message_system_attribute_names(MessageSystemAttributeName::SentTimestamp)
         .send()
         .await?;
 
@@ -29,5 +34,18 @@ pub fn receive_count(message: &aws_sdk_sqs::types::Message) -> Option<u32> {
         .attributes()?
         .get(&MessageSystemAttributeName::ApproximateReceiveCount)?
         .parse()
+        .ok()
+}
+
+/// How long `message` had been in its queue at `now`, counted from when SQS
+/// accepted it (`SentTimestamp`), so earlier deliveries of it are included.
+/// `None` without the attribute or when `now` reads earlier than it.
+pub fn queue_wait(message: &aws_sdk_sqs::types::Message, now: SystemTime) -> Option<Duration> {
+    let sent_ms: u64 = message
+        .attributes()?
+        .get(&MessageSystemAttributeName::SentTimestamp)?
+        .parse()
+        .ok()?;
+    now.duration_since(UNIX_EPOCH + Duration::from_millis(sent_ms))
         .ok()
 }

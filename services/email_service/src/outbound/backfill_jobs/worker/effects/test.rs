@@ -56,12 +56,13 @@ async fn effects(
             email_api.clone(),
         ),
         sqs_client,
-        contacts_ingress: Arc::new(contacts::domain::service::SqsContactsIngress {
-            queue: contacts::outbound::ingress::SqsContactsQueue::new(
-                sqs_sdk.clone(),
-                unused_url.to_string(),
-            ),
-        }),
+        contacts_ingress: Arc::new(crate::composition::contacts_producer(
+            sqs_sdk.clone(),
+            unused_url.to_string(),
+            // No flags: list-aware contacts messages stay off.
+            macro_env::Environment::Develop,
+            None,
+        )),
         email_api,
         redis_client: RedisClient::new(redis_client, 60),
         sfs_client: static_file_service_client::StaticFileServiceClient::new(

@@ -7,7 +7,13 @@ use axum::{
     response::{IntoResponse, Response},
     routing::post,
 };
+use connectors::inbound::{ConnectorChange, ConnectorHook};
+use connectors::{ConnectorId, ConnectorKey};
 use std::sync::Arc;
+use tracing::Instrument as _;
+
+#[cfg(test)]
+mod test;
 use uuid::Uuid;
 
 pub fn webhook_router<S: Send + Sync>(service: Option<Arc<dyn SyncService>>) -> Router<S> {
@@ -16,6 +22,28 @@ pub fn webhook_router<S: Send + Sync>(service: Option<Arc<dyn SyncService>>) -> 
         .layer(DefaultBodyLimit::max(16 * 1024))
         .with_state(service)
 }
+/// A connectors hook that starts a user's sync over when they connect
+/// Granola, in the background so the connect request does not wait on
+/// Granola's API.
+pub fn connected_hook(service: Arc<dyn SyncService>) -> ConnectorHook {
+    Arc::new(move |change: ConnectorChange| {
+        let is_granola =
+            ConnectorId::parse(GRANOLA_APP).is_ok_and(|app| change.key == ConnectorKey::App(app));
+        if is_granola {
+            let service = service.clone();
+            tokio::spawn(
+                async move {
+                    if let Err(error) = service.connected(change.user).await {
+                        tracing::warn!(error = ?error, "could not restart Granola sync after a connect; reconcile will retry");
+                    }
+                }
+                .in_current_span(),
+            );
+        }
+        Box::pin(async {})
+    })
+}
+
 fn error(error: SyncError) -> Response {
     let status = match error {
         SyncError::Conflict => StatusCode::CONFLICT,

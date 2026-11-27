@@ -47,6 +47,8 @@ pub const MUTATION_SETTLED_EVENT: &str = "graphql-cache://mutation-settled";
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OpsAffectedEvent {
+    /// Permission generation that produced these patches.
+    pub authority_generation: Option<String>,
     /// Composed record changes, including optimistic rollback.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub field_changes: Option<Vec<cache_core::field_changes::RecordFieldChange>>,
@@ -58,6 +60,8 @@ pub struct OpsAffectedEvent {
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CacheChangedEvent {
+    /// Permission generation that produced these invalidation proofs.
+    pub authority_generation: Option<String>,
     /// Exact displayed windows unaffected by every change in this notification.
     #[serde(skip_serializing_if = "Option::is_none")]
     unchanged_views: Option<Vec<String>>,
@@ -115,6 +119,7 @@ fn emit_ops_affected<R: Runtime>(
     app: &AppHandle<R>,
     op_ids: &[String],
     field_changes: Option<&Vec<cache_core::field_changes::RecordFieldChange>>,
+    authority_generation: Option<&str>,
 ) {
     if op_ids.is_empty() {
         return;
@@ -123,14 +128,20 @@ fn emit_ops_affected<R: Runtime>(
         app,
         OPS_AFFECTED_EVENT,
         OpsAffectedEvent {
+            authority_generation: authority_generation.map(str::to_owned),
             field_changes: field_changes.cloned(),
             op_ids: op_ids.to_vec(),
         },
     );
 }
 
-fn emit_cache_changed<R: Runtime>(app: &AppHandle<R>, revision: &str, reset: bool) {
-    emit_cache_changed_with_hints(app, revision, reset, None, None);
+fn emit_cache_changed<R: Runtime>(
+    app: &AppHandle<R>,
+    revision: &str,
+    reset: bool,
+    authority_generation: Option<&str>,
+) {
+    emit_cache_changed_with_hints(app, revision, reset, None, None, authority_generation);
 }
 
 fn emit_cache_changed_with_hints<R: Runtime>(
@@ -139,11 +150,13 @@ fn emit_cache_changed_with_hints<R: Runtime>(
     reset: bool,
     search_changed_buckets: Option<&std::collections::BTreeSet<String>>,
     unchanged_views: Option<&Vec<String>>,
+    authority_generation: Option<&str>,
 ) {
     emit_cache_event(
         app,
         CACHE_CHANGED_EVENT,
         CacheChangedEvent {
+            authority_generation: authority_generation.map(str::to_owned),
             unchanged_views: if reset {
                 None
             } else {

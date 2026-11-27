@@ -665,3 +665,95 @@ async fn returning_a_reply_to_its_original_inbox_never_rebinds_the_old_draft(db:
         Some("Keep this subject")
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_transfer_runs_beside_a_population_and_gives_up_behind_a_worker(db: PgPool) {
+    let (repo, request) = fixture(&db).await;
+    let begin = || {
+        tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            repo.begin_transfer(ACTOR, &request),
+        )
+    };
+    let transfers = || async {
+        sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM email_draft_transfers"#)
+            .fetch_one(&db)
+            .await
+            .unwrap()
+    };
+
+    // A mailbox worker or a disconnect holds the source link exclusively.
+    let mut worker = db.begin().await.unwrap();
+    sqlx::query!(
+        "SELECT id FROM email_links WHERE id = $1 FOR UPDATE",
+        request.source_link_id
+    )
+    .fetch_one(&mut *worker)
+    .await
+    .unwrap();
+    let blocked = begin().await.expect("waited past its lock timeout");
+    assert!(matches!(blocked, Err(EmailErr::Contended)));
+    assert_eq!(transfers().await, 0);
+    worker.rollback().await.unwrap();
+
+    // A CRM contact population holds it this way for its whole transaction.
+    let mut population = db.begin().await.unwrap();
+    sqlx::query!(
+        "SELECT id FROM email_links WHERE id = $1 FOR SHARE",
+        request.source_link_id
+    )
+    .fetch_one(&mut *population)
+    .await
+    .unwrap();
+    let prepared = begin().await.expect("waited past its lock timeout");
+    population.rollback().await.unwrap();
+    assert!(matches!(prepared, Ok(TransferPreparation::Pending(_))));
+    assert_eq!(transfers().await, 1);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_transfer_waiting_on_a_schedule_sees_it_and_refuses(db: PgPool) {
+    let (repo, request) = fixture(&db).await;
+    // Scheduling shares the link lock too, so the transfer waits on the
+    // draft's row while the schedule commits.
+    let mut schedule = db.begin().await.unwrap();
+    sqlx::query!(
+        "SELECT id FROM email_messages WHERE id = $1 FOR UPDATE",
+        request.source_id
+    )
+    .fetch_one(&mut *schedule)
+    .await
+    .unwrap();
+    sqlx::query!("INSERT INTO email_scheduled_messages (link_id,message_id,send_time,actor_id) VALUES ($1,$2,now()+interval '1 hour',$3)",request.source_link_id,request.source_id,ACTOR)
+        .execute(&mut *schedule)
+        .await
+        .unwrap();
+    let transfer = tokio::spawn({
+        let repo = repo.clone();
+        let request = request.clone();
+        async move { repo.begin_transfer(ACTOR, &request).await }
+    });
+    tokio::time::timeout(std::time::Duration::from_secs(4), async {
+        while sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'"#)
+            .fetch_one(&db)
+            .await
+            .unwrap()
+            == 0
+        {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("the transfer never waited on the draft");
+    schedule.commit().await.unwrap();
+
+    let refused = transfer.await.unwrap();
+    assert!(matches!(refused, Err(EmailErr::InvalidDraft(_))));
+    assert_eq!(
+        sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM email_draft_transfers"#)
+            .fetch_one(&db)
+            .await
+            .unwrap(),
+        0
+    );
+}

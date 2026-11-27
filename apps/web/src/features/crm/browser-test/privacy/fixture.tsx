@@ -16,8 +16,10 @@ import {
 } from '../../views/email-privacy';
 import { PrivacyNavigationFixture } from './navigation-fixture';
 import {
+  excludedListReads,
   lastChange,
   lastToast,
+  mailboxConnections,
   setStatusUnavailable,
 } from './preview-adapters';
 import { SelectiveSettingsFixture } from './selective-fixture';
@@ -51,7 +53,9 @@ function Fixture() {
   return (
     <main class="min-h-dvh bg-page text-ink">
       <CrmEmailOptInBanner />
+      <output data-testid="excluded-list-reads">{excludedListReads()}</output>
       <output data-testid="toast">{lastToast()}</output>
+      <output data-testid="mailbox-connections">{mailboxConnections()}</output>
       <div class="p-6">
         <Button onClick={() => setOpen(true)}>Email settings</Button>
         <ThreadMenuFixture />

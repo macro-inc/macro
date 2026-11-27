@@ -20,7 +20,8 @@ produces one `review.settled` per review, carrying the final report
 (`ImportSettlement`: outcome, counts, failures, by-hand items, root folder),
 in the transaction that ends the write, including a resumed write and one
 given up on. A plan presented while planning also produces `import.planned`
-once it is ready to approve. Both name the workspace they read (`source`:
+once it is ready to approve; its prompt tells the agent to say so in one
+sentence with the plan's numbers and never to approve it in that turn. Both name the workspace they read (`source`:
 `notion`, `linear` or `jira`; absent on events stored before trackers, which
 are Notion's). Both wake the session. A settled payload is
 either an import report or the review service's own outcome; the enum is
@@ -102,8 +103,10 @@ subject action. Failed and unconfirmed outcomes use the error tone; summary
 text truncates on mobile without adding another row. A pending review response shows
 responding until agent output begins, on desktop and mobile.
 
-Only notification turns may suppress an exact `<noop/>` response, and only if
-no tool was called in that turn. This conservatively treats all tool activity
+Only notification turns may suppress a `<noop/>` response, and only if no tool
+was called in that turn. A reply that is only `<noop/>` is a silent turn; a
+`<noop/>` ending prose is dropped and the prose kept. The fold holds back a
+possible trailing tag while it streams, so it never shows. This conservatively treats all tool activity
 as potentially mutating, including tools without reliable effect annotations.
 Noop turns generate no assistant
 message, unread, push or activity bump; their outbox outcome records noop.

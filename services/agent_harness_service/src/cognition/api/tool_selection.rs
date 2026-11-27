@@ -1,7 +1,7 @@
 use crate::cognition::model::stream::ToolSet;
-use ai_tools::{AiToolSet, ToolMcpSelector, ToolServiceContext};
+use ai_tools::{AiToolSet, ToolServiceContext};
+use connectors::{McpConnectionsService, McpHandle, UserMcpTools};
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_select::ConnectorSelect;
 use std::sync::{Arc, LazyLock};
 
 #[cfg(test)]
@@ -70,10 +70,10 @@ pub(crate) fn structured_completion_prompt(
 
 /// The service's tools for `selection`: a database toolset, or every static
 /// tool plus the user's connectors.
-pub(crate) async fn service_tools(
+pub(crate) async fn service_tools<S: McpConnectionsService>(
     selection: &ToolSet,
     static_tools: Arc<AiToolSet>,
-    mcp_selector: &ToolMcpSelector,
+    connectors: &S,
     user_id: &MacroUserIdStr<'static>,
 ) -> SelectedTools<ToolServiceContext> {
     select_tools(
@@ -88,13 +88,29 @@ pub(crate) async fn service_tools(
             tools
         },
         async {
-            let mcp_tools = mcp_selector.user_toolset(user_id).await;
+            let mcp_tools = user_mcp_tools(connectors, user_id).await;
             let tools: SelectedTools<ToolServiceContext> =
-                Arc::new(mcp_select::CombinedToolSet::new(static_tools, mcp_tools));
+                Arc::new(mcp_toolset::CombinedToolSet::new(static_tools, mcp_tools));
             tools
         },
     )
     .await
+}
+
+/// The tools of every connection the rules leave usable for `user_id`. A
+/// failed listing loads none: chat still answers, without connectors.
+pub(crate) async fn user_mcp_tools<S: McpConnectionsService>(
+    connectors: &S,
+    user_id: &MacroUserIdStr<'static>,
+) -> UserMcpTools {
+    let handles: Vec<McpHandle> = match connectors.connections(user_id).await {
+        Ok(connections) => connections.handles().cloned().collect(),
+        Err(error) => {
+            tracing::warn!(error = ?error, "could not list the user's connections; loading no MCP tools");
+            Vec::new()
+        }
+    };
+    connectors.toolset(&handles).await
 }
 
 /// Select actual capabilities before polling discovery. Restricting the prompt

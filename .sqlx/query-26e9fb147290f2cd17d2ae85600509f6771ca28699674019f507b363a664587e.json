@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_threads t\n        SET has_pdf_attachment = t.has_pdf_attachment OR kinds.has_pdf,\n            has_image_attachment = t.has_image_attachment OR kinds.has_image,\n            has_document_attachment = t.has_document_attachment OR kinds.has_document\n        FROM (\n            SELECT\n                m.thread_id,\n                COALESCE(bool_or(per_message.has_pdf), false) AS has_pdf,\n                COALESCE(bool_or(per_message.has_image), false) AS has_image,\n                COALESCE(bool_or(per_message.has_document), false) AS has_document\n            FROM (SELECT id, thread_id FROM email_messages WHERE link_id = $1 OFFSET 0) m\n            CROSS JOIN LATERAL (\n                SELECT\n                    bool_or(a.mime_type LIKE ANY($2::text[])) AS has_pdf,\n                    bool_or(a.mime_type LIKE ANY($3::text[])) AS has_image,\n                    bool_or(a.mime_type LIKE ANY($4::text[])) AS has_document\n                FROM email_attachments a\n                WHERE a.message_id = m.id\n            ) per_message\n            GROUP BY m.thread_id\n        ) kinds\n        WHERE t.id = kinds.thread_id\n          AND ((kinds.has_pdf AND NOT t.has_pdf_attachment)\n               OR (kinds.has_image AND NOT t.has_image_attachment)\n               OR (kinds.has_document AND NOT t.has_document_attachment))\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "26e9fb147290f2cd17d2ae85600509f6771ca28699674019f507b363a664587e"
+}

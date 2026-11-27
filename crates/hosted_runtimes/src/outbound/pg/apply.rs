@@ -1,6 +1,7 @@
 //! Applying lifecycle events under the host and computer locks.
 
 use super::*;
+use crate::domain::lifecycle::Rejected;
 
 impl PgComputerRepo {
     /// Serialize host transitions before locking computer or timer rows.
@@ -80,7 +81,7 @@ impl PgComputerRepo {
             ComputerRow,
             r#"
             SELECT id, team_id, host_id, name, size AS "size: ComputerSize", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, state, harness_id, created_by,
-                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image
+                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image, hibernated_at
             FROM hosted_runtime
             WHERE id = $1
             FOR UPDATE
@@ -106,10 +107,28 @@ impl PgComputerRepo {
             span.record("event", tag);
         }
 
+        // The runtime request takes the same computer lock. Reject explicit
+        // power and release requests before they change the phase required
+        // for image recovery.
+        if matches!(event, Event::PowerOn | Event::PowerOff | Event::ReleaseNow)
+            && Self::runtime_update_pending(tx, computer_id, false).await?
+        {
+            let rejected = Rejected::RuntimeUpdateInProgress;
+            span.record("rejected", tracing::field::debug(rejected));
+            return Ok(Some(Applied::Rejected(rejected)));
+        }
+
         let host = computer.host;
         if matches!(event, Event::PowerOn) {
             // On to the lifecycle already; only its guest sleeps.
             Self::request_wake_in(tx, computer_id, now).await?;
+        }
+        if matches!(
+            event,
+            Event::MacrodConnected | Event::MacrodConnectedWithoutAgentHandOff
+        ) {
+            // An image upgrade under way waits for exactly this.
+            Self::note_upgrade_reconnect(tx, computer_id, now).await?;
         }
         let host_has_room =
             Self::host_has_room(tx, host, computer.id, computer.resources, now).await?;
@@ -131,6 +150,29 @@ impl PgComputerRepo {
                 return Ok(Some(Applied::Rejected(rejected)));
             }
         };
+        // The setup timeline is part of the state: an event that only
+        // advances it (a finished agent hand-off) is still a change.
+        let agent = crate::domain::setup::AgentProgress {
+            reported_online: matches!(event, Event::AgentOnline),
+            delivered: matches!(event, Event::AgentDelivered),
+        };
+        let waiting_for_capacity = state.waiting_for_capacity();
+        let (phase, connected, payment) = (
+            state.phase.clone(),
+            state.macrod_connected,
+            state.payment_progress(),
+        );
+        let finished_setup = state
+            .setup
+            .as_mut()
+            .map(|setup| {
+                let mut finished =
+                    setup.advance(&phase, connected, waiting_for_capacity, payment, now);
+                finished.extend(setup.advance_agent(agent, now));
+                finished
+            })
+            .unwrap_or_default();
+
         if state == computer.state && effects.is_empty() {
             return Ok(Some(Applied::Changed(Box::new(computer))));
         }
@@ -150,18 +192,6 @@ impl PgComputerRepo {
         {
             span.record("phase", tag);
         }
-
-        let waiting_for_capacity = state.waiting_for_capacity();
-        let (phase, connected, payment) = (
-            state.phase.clone(),
-            state.macrod_connected,
-            state.payment_progress(),
-        );
-        let finished_setup = state
-            .setup
-            .as_mut()
-            .map(|setup| setup.advance(&phase, connected, waiting_for_capacity, payment, now))
-            .unwrap_or_default();
 
         if !state.is_live() {
             sqlx::query!(

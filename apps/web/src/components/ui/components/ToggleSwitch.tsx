@@ -7,7 +7,7 @@ import type { JSX } from 'solid-js';
 import { Show, splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
 
-export type ToggleSwitchSize = 'xs' | 'sm' | 'md';
+export type ToggleSwitchSize = 'compact' | 'xs' | 'sm' | 'md' | 'lg';
 export type ToggleSwitchProps = Omit<
   PolymorphicProps<'div', SwitchRootProps<'div'>>,
   'children'
@@ -20,6 +20,11 @@ export type ToggleSwitchProps = Omit<
 };
 
 const SWITCH_SIZES = {
+  compact: {
+    control: 'h-4 w-7',
+    thumb: 'left-px top-px size-3 data-checked:translate-x-3',
+    pressed: '',
+  },
   xs: {
     control: 'h-3.5 w-7',
     thumb: '-left-0.5 -top-px size-3.5 data-checked:translate-x-4',
@@ -38,6 +43,12 @@ const SWITCH_SIZES = {
     thumb: '-left-0.5 -top-px size-5 data-checked:translate-x-5.5',
     pressed:
       'group-active/switch:w-6 data-checked:group-active/switch:translate-x-4.5',
+  },
+  lg: {
+    control: 'h-6 w-10',
+    thumb: 'left-px top-px size-5 data-checked:translate-x-4',
+    pressed:
+      'group-active/switch:w-6 data-checked:group-active/switch:translate-x-3',
   },
 } as const;
 
@@ -72,7 +83,9 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
   // the hidden input so the whole component is one hit target.
   const handleRootClick = (event: MouseEvent) => {
     if (event.target !== event.currentTarget) return;
-    (event.currentTarget as HTMLElement).querySelector('input')?.click();
+    const input = (event.currentTarget as HTMLElement).querySelector('input');
+    input?.focus();
+    input?.click();
   };
 
   return (

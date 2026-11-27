@@ -102,12 +102,15 @@ pub trait SoupRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<TouchedEntity>, Self::Err>> + Send;
 
     /// Every entity whose Companies property names one of `company_ids` or
-    /// whose Contacts property names one of `contact_ids`. Not authorized:
+    /// whose Contacts property names one of `contact_ids`. With
+    /// `custom_task_properties`, also every task whose own custom
+    /// entity-reference property names one of those records. Not authorized:
     /// each entity reaches the caller only through its own source query.
     fn crm_property_edges<'a>(
         &self,
         company_ids: &'a [uuid::Uuid],
         contact_ids: &'a [uuid::Uuid],
+        custom_task_properties: bool,
     ) -> impl Future<Output = Result<Vec<CrmPropertyEdge>, Self::Err>> + Send;
 
     /// Fetch one page of notified-at candidates: entities the user holds a

@@ -41,6 +41,8 @@ pub enum ImportReviewSource {
     Linear,
     /// A Jira plan, staged by ImportFromJira.
     Jira,
+    /// A HubSpot plan, staged by ImportFromHubspot.
+    Hubspot,
 }
 
 impl From<ImportReviewSource> for import::domain::models::ImportSource {
@@ -49,6 +51,7 @@ impl From<ImportReviewSource> for import::domain::models::ImportSource {
             ImportReviewSource::Notion => Self::Notion,
             ImportReviewSource::Linear => Self::Linear,
             ImportReviewSource::Jira => Self::Jira,
+            ImportReviewSource::Hubspot => Self::Hubspot,
         }
     }
 }
@@ -65,6 +68,9 @@ pub struct ImportDraft {
     /// Plan rows left out of the import.
     #[serde(default)]
     pub excluded: Vec<Uuid>,
+    /// Skipped Notion pages the owner chose to copy.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub copy_skipped: Vec<Uuid>,
     /// Plan rows shared with the team although the plan keeps them private.
     #[serde(default)]
     pub shared: Vec<Uuid>,

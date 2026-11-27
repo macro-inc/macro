@@ -657,11 +657,15 @@ impl ScheduledActionRepo for UnusedRepo {
     async fn set_appearance(
         &self,
         _change: crate::domain::appearance::ChangeAppearance,
-    ) -> Result<Option<model_entity::EntityAppearance>> {
+    ) -> Result<crate::domain::appearance::AppearanceSet> {
         anyhow::bail!("appearance writes are not supported by this execution-only adapter")
     }
 
-    async fn create_action(&self, _: ScheduledAction) -> Result<ScheduledAction> {
+    async fn create_action(
+        &self,
+        _: ScheduledAction,
+        _: Option<crate::domain::routine_limit::RoutineLimit>,
+    ) -> Result<ScheduledAction> {
         unimplemented!()
     }
     async fn get_owned_actions(&self, _: &MacroUserIdStr<'static>) -> Result<Vec<ScheduledAction>> {
@@ -676,7 +680,11 @@ impl ScheduledActionRepo for UnusedRepo {
     async fn get_next_unclaimed_actions(&self, _: i64) -> Result<Vec<ScheduledAction>> {
         unimplemented!()
     }
-    async fn update_action(&self, _: ScheduledAction) -> Result<ScheduledAction> {
+    async fn update_action(
+        &self,
+        _: ScheduledAction,
+        _: Option<crate::domain::routine_limit::RoutineLimit>,
+    ) -> Result<ScheduledAction> {
         unimplemented!()
     }
     async fn delete_action(&self, _: &Uuid) -> Result<()> {
@@ -746,6 +754,7 @@ fn event_run() -> ClaimedEventRun {
                 revision: action.configuration_revision,
                 event,
                 admitted_at: Utc::now(),
+                traceparent: None,
             },
         },
         action,

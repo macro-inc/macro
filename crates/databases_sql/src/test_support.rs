@@ -90,6 +90,10 @@ pub(crate) struct World {
         Vec<std::collections::HashMap<TableId, databases::domain::models::TableVersion>>,
     /// The filter of every Soup read, in order.
     pub(crate) soup_reads: Vec<EntityFilterAst>,
+    /// Companies merged away, and the companies they were merged into.
+    pub(crate) merged_companies: std::collections::HashMap<Uuid, Uuid>,
+    /// Contacts merged away, and the contacts they were merged into.
+    pub(crate) merged_contacts: std::collections::HashMap<Uuid, Uuid>,
 }
 
 /// One table row, its cells keyed by property definition.
@@ -475,6 +479,28 @@ impl EntityAccessService for FakeAccess {
     ) -> Result<Option<UserTeamInfo>, AccessError> {
         unimplemented!("SQL never touches teams")
     }
+
+    async fn merged_crm_company_ids(
+        &self,
+        company_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, Uuid>, AccessError> {
+        let world = self.0.lock().unwrap();
+        Ok(company_ids
+            .iter()
+            .filter_map(|id| world.merged_companies.get(id).map(|into| (*id, *into)))
+            .collect())
+    }
+
+    async fn merged_crm_contact_ids(
+        &self,
+        contact_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, Uuid>, AccessError> {
+        let world = self.0.lock().unwrap();
+        Ok(contact_ids
+            .iter()
+            .filter_map(|id| world.merged_contacts.get(id).map(|into| (*id, *into)))
+            .collect())
+    }
 }
 
 /// Answers the world's rows, newest first, in one page, filtered the way
@@ -729,6 +755,14 @@ impl ContactsService for FakeContacts {
     }
 
     async fn add_contact_nodes(&self, _: ContactsNodes) -> Result<(), rootcause::Report> {
+        unimplemented!("SQL never adds contacts")
+    }
+
+    async fn invite_contact(
+        &self,
+        _: MacroUserIdStr<'static>,
+        _: MacroUserIdStr<'static>,
+    ) -> Result<(), rootcause::Report> {
         unimplemented!("SQL never adds contacts")
     }
 }

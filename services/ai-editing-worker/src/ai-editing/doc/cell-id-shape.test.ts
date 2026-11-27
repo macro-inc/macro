@@ -1,3 +1,4 @@
+import { $isListNode } from '@lexical/list';
 import { $getId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
 import { $getRoot, $isElementNode } from 'lexical';
 import { describe, expect, it, vi } from 'vitest';
@@ -40,10 +41,8 @@ function tableFixture(text = 'original') {
     const cell = row.getFirstChild();
     if (!$isElementNode(cell)) throw new Error('missing cell');
     const paragraph = cell.getFirstChild()!;
-    const list = $getRoot()
-      .getChildren()
-      .find((n) => n.getType() === 'list');
-    if (!$isElementNode(list)) throw new Error('missing list');
+    const list = $getRoot().getChildren().find($isListNode);
+    if (!list) throw new Error('missing list');
     return {
       table: 'table',
       row: $getId(row)!,

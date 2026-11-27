@@ -31,7 +31,7 @@ pub struct ToolEntryUpdate {
     pub record_id: Option<Uuid>,
     /// Fields to set.
     #[schemars(
-        description = "Fields to set, e.g. [{\"field\": \"Stage\", \"value\": \"Negotiation\"}, {\"field\": \"Revenue\", \"value\": \"48000\"}]. Leave value out to empty an ordinary field; Outcome and currency cannot be empty. Outcome is Open, Won or Lost independently of Stage. Monetary fields have a separate currency field (e.g. Revenue currency); set its three-letter option code with the amount."
+        description = "Fields to set, e.g. [{\"field\": \"Stage\", \"value\": \"Negotiation\"}, {\"field\": \"Revenue\", \"value\": \"48000\"}]. Leave value out to empty an ordinary field; Outcome and currency cannot be empty. Outcome is Open, Won, Lost or Declined independently of Stage; Declined means the team turned the deal down: closed, not lost. Monetary fields have a separate currency field (e.g. Revenue currency); set its three-letter option code with the amount."
     )]
     pub set: Vec<ToolFieldValue>,
 }

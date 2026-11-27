@@ -45,6 +45,19 @@ describe('message grouping meta', () => {
     expect(shouldGroupWithPreviousMessage(current, previous)).toBe(true);
   });
 
+  it('starts a new group on a new day, so its first message shows when it was sent', () => {
+    const previous = createMessage(
+      'm1',
+      new Date(2026, 1, 20, 23, 59).toISOString()
+    );
+    const current = createMessage(
+      'm2',
+      new Date(2026, 1, 21, 0, 1).toISOString()
+    );
+
+    expect(shouldGroupWithPreviousMessage(current, previous)).toBe(false);
+  });
+
   it.each([
     [null, undefined],
     [undefined, null],

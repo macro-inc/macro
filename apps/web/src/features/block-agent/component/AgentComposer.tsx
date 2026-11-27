@@ -1,8 +1,12 @@
-import { SpeedSelector } from '@core/component/AI/component/input/SpeedSelector';
-import { catalogModelLabel } from '@core/component/AI/constant/model-label';
+import { UnifiedModelSelector } from '@app/features/agents-view/model-selector';
+import {
+  catalogModelLabel,
+  modelLabel,
+} from '@core/component/AI/constant/model-label';
 import { nativeSpeeds, resolveSpeed } from '@core/component/AI/constant/speed';
 import {
   preferredSpeed,
+  preferredSpeedRevision,
   setPreferredSpeed,
 } from '@core/component/AI/signal/speed';
 /**
@@ -22,9 +26,10 @@ import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { uploadFile } from '@core/util/upload';
+import { useAgentCapabilitiesQuery } from '@queries/agents/capabilities';
 import type { AgentAction } from '@service-agent-harness/generated/schemas';
 import { isNoRuntimeAccessError } from '@service-agent-harness/no-runtime-access';
-import { type Component, createSignal, For, Show } from 'solid-js';
+import { type Component, createMemo, createSignal, For, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
 import {
   createSessionAttachmentTracker,
@@ -38,20 +43,16 @@ import {
 import {
   type EffortSelection,
   effortConfigOption,
-  effortLabel,
   selectConfigOption,
 } from '../state/session-config';
+import { shownSessionModel, shownSessionModels } from '../state/session-model';
 import {
   AgentInput,
   type AgentInputProps,
-  AgentModelSelector,
   ComposerNotice,
   type QueuedPromptItem,
   QueuedPrompts,
 } from '../ui';
-import type { AgentModelSelectorProps } from '../ui/AgentModelSelector';
-import { AgentModelMenuItem } from './AgentModelMenuItem';
-import { EffortSelector } from './EffortSelector';
 import { PermissionRequest } from './PermissionRequest';
 import { promptActionOf } from './prompt-action';
 import { ToolApprovalRequest } from './ToolApprovalRequest';
@@ -63,10 +64,8 @@ export function AgentComposer(props: {
    */
   autofocus?: boolean;
   input?: Component<AgentInputProps>;
-  modelSelector?: Component<AgentModelSelectorProps>;
 }) {
   const Input = props.input ?? AgentInput;
-  const ModelSelector = props.modelSelector ?? AgentModelSelector;
   const {
     session,
     selectModel,
@@ -110,22 +109,47 @@ export function AgentComposer(props: {
 
   const [configuring, setConfiguring] = createSignal(false);
   const chooseModel = async (model: string, selection?: EffortSelection) => {
-    if (readOnly() || configuring()) return;
+    if (readOnly() || configuring()) return false;
+    const resetSpeed = !selection && isMacroHarness(session()?.harness);
+    const speedRevision = preferredSpeedRevision();
     setConfiguring(true);
     try {
       await selectModel(model, selection);
+      if (resetSpeed && speedRevision === preferredSpeedRevision())
+        setPreferredSpeed('standard');
+      return true;
     } catch (error) {
       toast.failure(
         error instanceof Error
           ? error.message
           : 'The model settings could not be changed'
       );
+      return false;
     } finally {
       setConfiguring(false);
     }
   };
 
   const effort = () => effortConfigOption(metadata()?.configOptions ?? []);
+  // Session currentValue changes after confirmation; discovery retains the model default.
+  const defaultCapabilities = useAgentCapabilitiesQuery(() => {
+    const source = session()?.harness;
+    const harness = isMacroHarness(source) ? 'in-memory' : source;
+    const model = metadata()?.model;
+    if (
+      !model ||
+      !effort() ||
+      (harness !== 'in-memory' && harness !== 'cursor')
+    )
+      return;
+    return { harness, model };
+  });
+  const defaultEffortValue = () =>
+    effortConfigOption(
+      defaultCapabilities.isSuccess
+        ? defaultCapabilities.data.configOptions
+        : []
+    )?.currentValue;
   /** Macro's tier option, when the current model offers more than standard.
    * Other harnesses' speed values are theirs to interpret, so they are left alone. */
   const speedOption = () => {
@@ -148,6 +172,23 @@ export function AgentComposer(props: {
     const option = effort();
     return option ? changingConfig(messages(), option.id) : undefined;
   };
+
+  const sessionModel = (): string | undefined => {
+    const model = metadata()?.model ?? undefined;
+    return model && shownSessionModel(model, session()?.harness);
+  };
+
+  const runtimeModels = createMemo(() =>
+    shownSessionModels(metadata()?.supportedModels ?? [], session()?.harness)
+  );
+
+  const catalog = createMemo(() =>
+    runtimeModels().map((option) => ({
+      id: option.id,
+      label: modelLabel(option.id, option.name, option.description),
+      group: option.group ?? undefined,
+    }))
+  );
 
   // A turn is open in some form: the send button becomes a stop square and
   // prompts sent now wait in the server queue behind it. A stop the fold has
@@ -297,7 +338,7 @@ export function AgentComposer(props: {
         <ComposerNotice
           text={
             interactions.canAnswer()
-              ? 'The agent is waiting for your answer above. Messages sent now are queued.'
+              ? 'The agent is waiting for your answer above; Skip lets it continue without one. Messages sent now are queued.'
               : 'The agent is waiting for an editor to answer above. Messages sent now are queued.'
           }
         />
@@ -342,14 +383,10 @@ export function AgentComposer(props: {
             'agent-composer'
           )
         }
-        modelName={catalogModelLabel(
-          metadata()?.model ?? undefined,
-          metadata()?.supportedModels ?? []
-        )}
+        modelName={catalogModelLabel(sessionModel(), runtimeModels())}
         supportsImages={
-          metadata()?.supportedModels.find(
-            (model) => model.id === metadata()?.model
-          )?.supportsImages
+          runtimeModels().find((model) => model.id === sessionModel())
+            ?.supportsImages
         }
         attachments={attachmentTracker.attachments()}
         onAttachFiles={attachFiles}
@@ -368,72 +405,43 @@ export function AgentComposer(props: {
         }}
         registerQuoteInsert={registerQuoteInsert}
         modelControl={
-          <div class="flex min-w-0 items-center gap-1">
-            <ModelSelector
-              onCloseAutoFocus={restoreInputFocus}
-              model={metadata()?.model ?? null}
-              changingTo={changingModel(messages(), metadata()?.model ?? null)}
-              options={metadata()?.supportedModels ?? []}
-              effortLabel={effortLabel(effort(), changingEffort())}
-              disabled={
-                loadFailed() ||
-                readOnly() ||
-                pending() ||
-                configuring() ||
-                changingEffort() !== undefined
-              }
-              onSelect={(model) =>
-                fireAndForget(chooseModel(model), 'agent-composer')
-              }
-              modelRow={(row) => (
-                <AgentModelMenuItem
-                  {...row}
-                  harness={session()?.harness}
-                  effort={
-                    row.option.id === metadata()?.model ? effort() : undefined
-                  }
-                  effortValue={
-                    row.option.id === metadata()?.model
-                      ? changingEffort()
-                      : undefined
-                  }
-                  onSelectEffort={(selection) =>
-                    fireAndForget(
-                      chooseModel(row.option.id, selection),
-                      'agent-composer'
-                    )
-                  }
-                />
-              )}
-            />
-            <EffortSelector
-              onCloseAutoFocus={restoreInputFocus}
-              config={effort()}
-              value={changingEffort()}
-              disabled={
-                loadFailed() ||
-                readOnly() ||
-                pending() ||
-                configuring() ||
-                changingEffort() !== undefined ||
+          <UnifiedModelSelector
+            state={{
+              model:
+                changingModel(messages(), metadata()?.model ?? null) ??
+                sessionModel(),
+              models: catalog(),
+              suggestedModels: catalog(),
+              effort: effort(),
+              effortValue: changingEffort(),
+              defaultEffortValue: defaultEffortValue(),
+              effortDisabled:
                 changingModel(messages(), metadata()?.model ?? null) !==
+                undefined,
+              speeds: speedOption()?.option.options.map(
+                (option) => option.value
+              ),
+              speedValue: speed(),
+              disabled:
+                loadFailed() ||
+                readOnly() ||
+                pending() ||
+                configuring() ||
+                changingEffort() !== undefined,
+              onModel: chooseModel,
+              onEffort: (choice) => {
+                if (
+                  changingModel(messages(), metadata()?.model ?? null) !==
                   undefined
-              }
-              onChange={(choice) => {
-                const model = metadata()?.model;
-                if (model)
-                  fireAndForget(chooseModel(model, choice), 'agent-composer');
-              }}
-            />
-
-            <SpeedSelector
-              onCloseAutoFocus={restoreInputFocus}
-              offered={speedOption()?.option.options ?? []}
-              value={speed() ?? 'standard'}
-              disabled={readOnly() || configuring()}
-              onChange={setPreferredSpeed}
-            />
-          </div>
+                )
+                  return;
+                const model = sessionModel();
+                if (model) return chooseModel(model, choice);
+              },
+              onSpeed: setPreferredSpeed,
+              onCloseAutoFocus: restoreInputFocus,
+            }}
+          />
         }
       />
     </>

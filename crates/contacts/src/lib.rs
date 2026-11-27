@@ -11,3 +11,6 @@ pub mod domain;
 pub mod inbound;
 /// Outbound adapters (database, connection gateway).
 pub mod outbound;
+/// W3C trace context carried on contacts queue messages.
+#[cfg(any(feature = "inbound", feature = "outbound"))]
+mod trace_context;

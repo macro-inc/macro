@@ -186,11 +186,15 @@ impl AgentSessionNotificationRecipient for Controls {
 struct Apps(Arc<Mutex<Vec<String>>>);
 
 impl ConnectedApps for Apps {
-    async fn connected_app_slugs(
+    async fn all_connected(
         &self,
         _: &MacroUserIdStr<'static>,
-    ) -> anyhow::Result<Vec<String>> {
-        Ok(self.0.lock().unwrap().clone())
+        apps: &[&str],
+    ) -> anyhow::Result<bool> {
+        let connected = self.0.lock().unwrap();
+        Ok(apps
+            .iter()
+            .all(|app| connected.iter().any(|held| held == app)))
     }
 }
 
@@ -483,6 +487,7 @@ async fn every_subsequent_operation_checks_owner_and_persona_before_controls_or_
                     action,
                     prompt: "task".into(),
                     context: None,
+                    withhold_content: false,
                 })
                 .await
                 .unwrap_err(),
@@ -503,6 +508,7 @@ async fn prompt_and_cancel_only_emit_attributed_prompt_and_stop_controls() {
             action: action.clone(),
             prompt: "routine guidance and task".into(),
             context: None,
+            withhold_content: false,
         })
         .await
         .unwrap();
@@ -523,6 +529,26 @@ async fn prompt_and_cancel_only_emit_attributed_prompt_and_stop_controls() {
 }
 
 #[tokio::test]
+async fn a_prompt_that_withholds_content_sends_an_action_that_says_so() {
+    let fx = Fixture::new(true);
+    fx.service
+        .prompt(PromptRoutineSession {
+            action: fx.action(),
+            prompt: "draft from the mail".into(),
+            context: None,
+            withhold_content: true,
+        })
+        .await
+        .unwrap();
+    let events = fx.controls.events.lock().unwrap();
+    assert!(matches!(
+        &events[0].action,
+        AgentAction::Prompt(prompt)
+            if prompt.withhold_content && prompt.prompt == "draft from the mail"
+    ));
+}
+
+#[tokio::test]
 async fn ambiguous_prompt_failure_is_not_replayed() {
     let fx = Fixture::new(true);
     *fx.controls.fail.lock().unwrap() = true;
@@ -532,6 +558,7 @@ async fn ambiguous_prompt_failure_is_not_replayed() {
                 action: fx.action(),
                 prompt: "task".into(),
                 context: None,
+                withhold_content: false,
             })
             .await
             .unwrap_err(),
@@ -577,6 +604,7 @@ async fn refuses_known_prompt_replays_even_after_completion() {
                 action,
                 prompt: "retry".into(),
                 context: None,
+                withhold_content: false,
             })
             .await
             .unwrap_err(),
@@ -601,6 +629,7 @@ async fn queued_prompt_prevents_second_submission() {
                 action,
                 prompt: "retry".into(),
                 context: None,
+                withhold_content: false,
             })
             .await
             .unwrap_err(),
@@ -891,6 +920,7 @@ async fn a_routine_step_prompts_as_a_program() {
             action: fx.action(),
             prompt: "approve the review".into(),
             context: None,
+            withhold_content: false,
         })
         .await
         .unwrap();

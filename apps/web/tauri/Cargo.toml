@@ -34,17 +34,22 @@ debug-assertions = false
 webauthn-authenticator-rs = { git = "https://github.com/beeper/webauthn-rs", rev = "579f9144d37161bedf25ed1236d73486ce303de6", default-features = false }
 webauthn-rs-proto = { git = "https://github.com/beeper/webauthn-rs", rev = "579f9144d37161bedf25ed1236d73486ce303de6" }
 
+# Crash reports: reads Chromium's minidumps; tests build synthetic ones.
+minidump = "0.27"
+minidump-synth = "0.27"
 pollster = "0.4"
 reqwest = "0.13"
 rootcause = "0.12"
 semver = "1"
 serde = "1"
+test-assembler = "0.1.6"
 # Resolved through the crates-io patch below, so desktop-cef/ can repoint it.
 tauri = "2.11"
 thiserror = "2"
 tokio = "1"
 tracing = "0.1"
 url = "2.5.4"
+uuid = "1"
 
 [patch.crates-io]
 # Backport tao#1257 plus nullable launch-option accessors; see the fork's FORK.md.

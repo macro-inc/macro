@@ -14,6 +14,16 @@ use std::fmt;
 /// off Namespace deliberately — migrations need to reach RDS.
 pub const DB_MIGRATOR: &str = "db-migrator";
 
+/// The GitHub-hosted larger runner that builds the Rust CI custom image. Its
+/// CPU, RAM and disk stay at or below the smallest runner size that should be
+/// allowed to use the image.
+pub const RUST_CI_IMAGE_GENERATION: &str = "linux-rust-ci-image-generation-small";
+
+/// The GitHub-hosted Windows Server 2025 runner that launches the desktop app.
+/// [`Runner::Windows`] runs jobs elevated in non-interactive session 0, where
+/// WebView2 cannot start.
+pub const GITHUB_WINDOWS: &str = "windows-2025";
+
 /// A Namespace runner profile. The set of profiles we're allowed to target is
 /// closed; `Display` renders the `runs-on` label.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

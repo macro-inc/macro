@@ -198,15 +198,36 @@ impl CompaniesRepositoryImpl {
         Ok(())
     }
 
-    pub(super) async fn eligible_interactions(
-        &self,
+    /// Whether the mailbox may contribute this address at all: a live primary
+    /// mailbox, current membership, consent (in a queued worker's exact
+    /// generation) and an unblocked domain. It reads no message history.
+    async fn admitted(
         conn: &mut PgConnection,
         team: Uuid,
         link: Uuid,
         email: &str,
-    ) -> Result<Option<EligibleInteractions>, CrmError> {
-        self.eligible_interactions_with_authority(conn, team, link, email, None)
-            .await
+        authority: Option<crate::domain::email_policy_work::EmailHistoryAuthority>,
+    ) -> Result<bool, CrmError> {
+        use crate::domain::email_policy_work::EmailHistoryAuthority;
+        let (incarnation, version) = match authority {
+            Some(EmailHistoryAuthority::Policy(generation)) => (
+                Some(generation.consent_incarnation),
+                Some(generation.policy_version),
+            ),
+            None | Some(EmailHistoryAuthority::Legacy) => (None, None),
+        };
+        sqlx::query_file_scalar!(
+            "src/outbound/companies_repo/email_privacy/admission.sql",
+            team,
+            link,
+            email,
+            authority.is_some(),
+            incarnation,
+            version
+        )
+        .fetch_one(conn)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))
     }
 
     #[tracing::instrument(
@@ -230,29 +251,9 @@ impl CompaniesRepositoryImpl {
             .execute(&mut *conn)
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        use crate::domain::email_policy_work::EmailHistoryAuthority;
-        let (incarnation, version) = match authority {
-            Some(EmailHistoryAuthority::Policy(generation)) => (
-                Some(generation.consent_incarnation),
-                Some(generation.policy_version),
-            ),
-            None | Some(EmailHistoryAuthority::Legacy) => (None, None),
-        };
         // Reject stale work cheaply, without a mailbox row lock. Sync commits
         // need that row while this potentially long address-history scan runs.
-        let admitted = sqlx::query_file_scalar!(
-            "src/outbound/companies_repo/email_privacy/admission.sql",
-            team,
-            link,
-            email,
-            authority.is_some(),
-            incarnation,
-            version
-        )
-        .fetch_one(&mut *conn)
-        .await
-        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        if !admitted {
+        if !Self::admitted(conn, team, link, email, authority).await? {
             return Ok(None);
         }
         let row = sqlx::query_file!(
@@ -530,19 +531,16 @@ impl EmailPrivacyRepository for CompaniesRepositoryImpl {
         link: Uuid,
         email: &str,
     ) -> Result<bool, CrmError> {
-        let mut tx = self
+        // Admission only. The population transaction scans the address
+        // history once, after skipping a job that would change nothing: one
+        // job is queued per message, so most of a busy contact's jobs are
+        // duplicates that need no history at all.
+        let mut conn = self
             .pool
-            .begin()
+            .acquire()
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        let eligible = self
-            .eligible_interactions(&mut tx, team, link, &email.to_ascii_lowercase())
-            .await?
-            .is_some();
-        tx.commit()
-            .await
-            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        Ok(eligible)
+        Self::admitted(&mut conn, team, link, &email.to_ascii_lowercase(), None).await
     }
 
     #[tracing::instrument(skip_all, fields(team_id = %team), err)]
@@ -563,11 +561,35 @@ impl EmailPrivacyRepository for CompaniesRepositoryImpl {
         let consent = Self::read_email_consent(&mut tx, team, user).await?;
         // The company team predicate lets the partial disabled-company index
         // drive this reload, including after an individual thread toggle.
+        // The materialized CTE keeps it in charge: unfenced, fresh statistics
+        // read every team's sync-off companies through the all-teams index,
+        // and joining domains by team let stale statistics loop over the
+        // team's whole domain list for each of them.
         let team_domains = sqlx::query_scalar!(
-            r#"SELECT domain AS "domain!" FROM crm_blocked_domains WHERE team_id = $1
-               UNION SELECT lower(d.domain) FROM crm_domains d JOIN crm_companies c ON c.id = d.company_id
-               WHERE d.team_id = $1 AND c.team_id = $1 AND NOT c.email_sync ORDER BY 1"#, team
+            r#"WITH sync_off AS MATERIALIZED (
+                   SELECT id FROM crm_companies WHERE team_id = $1 AND NOT email_sync
+               )
+               SELECT domain AS "domain!" FROM crm_blocked_domains WHERE team_id = $1
+               UNION SELECT lower(d.domain) FROM sync_off JOIN crm_domains d ON d.company_id = sync_off.id
+               ORDER BY 1"#, team
         ).fetch_all(&mut *tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        // Removing a team domain is refused while its company is archived,
+        // whatever its sync state, and archiving turns sync off, so these
+        // domains are all on the list above. Keep `NOT email_sync` and
+        // `d.team_id` out: either lets the planner read past the team's
+        // archived companies.
+        let archived_team_domains = sqlx::query!(
+            r#"SELECT lower(d.domain) AS "domain!", c.id AS company_id FROM crm_companies c
+               JOIN crm_domains d ON d.company_id = c.id
+               WHERE c.team_id = $1 AND c.hidden"#,
+            team
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?
+        .into_iter()
+        .map(|row| (row.domain, row.company_id))
+        .collect();
         let personal_domains = sqlx::query_scalar!(
             "SELECT domain FROM crm_personal_email_blocklist WHERE team_id = $1 AND user_id = $2 ORDER BY domain", team, user
         ).fetch_all(&mut *tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
@@ -587,6 +609,7 @@ impl EmailPrivacyRepository for CompaniesRepositoryImpl {
             personal_domains,
             team_domain_warnings,
             personal_domain_warnings,
+            archived_team_domains,
             can_remove_team_domains: false,
         })
     }

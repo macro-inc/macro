@@ -1,5 +1,6 @@
 //! Rendering for the macrod control panel. Pure: reads [`App`], draws frames.
 
+mod color_support;
 #[cfg(unix)]
 mod herdr_pane;
 mod layout;
@@ -14,6 +15,7 @@ use ratatui::layout::{Constraint, Direction, Layout};
 
 use super::app::{App, Mode};
 
+pub(crate) use color_support::ColorSupport;
 #[cfg(unix)]
 pub(crate) use herdr_pane::render_herdr_pane;
 #[cfg(all(unix, test))]

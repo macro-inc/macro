@@ -16,6 +16,7 @@ import {
   SUPPORTED_ATTACHMENT_EXTENSIONS,
 } from '@core/component/AI/constant';
 import { useChatInputContext } from '@core/component/AI/context';
+import { createComposerItemDrop } from '@core/component/AI/primitives/create-composer-item-drop';
 import type { ToolSet } from '@core/component/AI/types';
 import { isImageAttachment } from '@core/component/AI/util/attachment';
 import { insertChatAttachmentMention } from '@core/component/AI/util/chatAttachmentMention';
@@ -26,7 +27,6 @@ import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { TOKENS } from '@core/hotkey/tokens';
-import { hapticImpact } from '@core/mobile/haptics';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -212,7 +212,6 @@ export function ChatInput(props: ChatInputComponentProps) {
       };
       props.editor.controls.clear();
       attachments.setAttached([]);
-      hapticImpact('light');
       props.onSend(sendInput);
     }
   );
@@ -253,6 +252,10 @@ export function ChatInput(props: ChatInputComponentProps) {
       props.onChange?.(md);
     });
 
+  const itemDrop = createComposerItemDrop({
+    editor: () => props.editor.lexical,
+    enabled: () => !generating() && !dictation.active(),
+  });
   const composerLayout = createComposerLayout(
     props.editor.buildHandle().lexical,
     {
@@ -378,6 +381,8 @@ export function ChatInput(props: ChatInputComponentProps) {
         }}
       />
       <ComposerSurface
+        ref={itemDrop.ref}
+        classList={{ 'outline-2 outline-accent': itemDrop.isDraggedOver() }}
         class={cn(
           'relative h-auto',
           composerLayout.isCompact() &&
@@ -478,6 +483,7 @@ export function ChatInput(props: ChatInputComponentProps) {
               <ComposerEditor
                 class={isCompactMobile() ? 'min-h-5' : undefined}
                 config={props.editor}
+                onConnect={itemDrop.onConnect}
                 placeholder={
                   props.placeholder ??
                   (isTouchDevice() ? 'Ask AI…' : 'Ask AI, @mention anything')

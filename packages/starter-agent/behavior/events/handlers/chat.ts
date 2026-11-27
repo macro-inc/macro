@@ -2,15 +2,97 @@ import type { Woke } from '@macro-inc/muppet/core/agent';
 import { behavior } from '@macro-inc/muppet/core/behavior';
 import { isoText } from '@macro-inc/muppet/utilities/time';
 import type { ChatContext } from '../../capabilities/chat/context.ts';
-import { judge } from '../../capabilities/chat/listen.ts';
+import type { Incoming } from '../../capabilities/chat/entry.ts';
+import { judge, screenAttributes } from '../../capabilities/chat/listen.ts';
 import { replyPrompt, threadOf } from '../../capabilities/chat/prompt.ts';
+import { trackMaintenanceTask } from '../../context/runtime-maintenance.ts';
 import type { chatSources } from '../sources/chat.ts';
+import { millisecondsSince, recordOutcome } from './outcome.ts';
 
 const listenLog = 'listen';
+const screenSpan = 'chat.screen';
+/** A reply run: from its start to its end, in the trace of the screen that queued it. */
+const turnSpan = 'chat.turn';
 const replyLog = 'replies';
 const handledLog = 'handled';
 const screenHistory = 6;
 const promptHistory = 20;
+
+/** What the listener uses of the chat context. */
+export type Listening = {
+  readonly chat: Pick<ChatContext['chat'], 'me' | 'decide'>;
+  readonly history: Pick<
+    ChatContext['history'],
+    'recorded' | 'recent' | 'record' | 'wait'
+  >;
+  readonly waiting: Pick<ChatContext['waiting'], 'push'>;
+  readonly log: Pick<ChatContext['log'], 'event'>;
+  readonly relevanceScreen: ChatContext['relevanceScreen'];
+  readonly config: { readonly identity: { readonly name: string } };
+  readonly trace: ChatContext['trace'];
+};
+
+/** The listener: records every message, and queues the ones that are for the agent. */
+export const listen = async (
+  incoming: Incoming,
+  { chat, history, waiting, log, relevanceScreen, config, trace }: Listening
+): Promise<void> => {
+  const { channelId, channel, entry } = incoming;
+  // A replayed or caught-up message the agent already judged.
+  if (await history.recorded(channelId, entry.id)) return;
+  // One span per message: how long the screen took and what it decided.
+  // The screen's span: a message it queues is answered in this trace.
+  let screened: string | undefined;
+  const verdict = await trace(screenSpan, async (span) => {
+    screened = span.traceparent();
+    span.set('chat.channel_id', channelId);
+    span.set('chat.message_id', entry.id);
+    const recent = await history.recent(channelId, screenHistory);
+    span.set('chat.screen.history', recent.length);
+    const judged = await judge(incoming, {
+      me: await chat.me(),
+      name: config.identity.name,
+      history: recent,
+      screen: await relevanceScreen(),
+      decide: chat.decide,
+      failed: (error) => {
+        span.set('chat.screen.retried', true);
+        return log.event(listenLog, {
+          channel,
+          message_id: entry.id,
+          decide_error: String(error),
+        });
+      },
+    });
+    for (const [key, value] of Object.entries(screenAttributes(judged)))
+      span.set(key, value);
+    return judged;
+  });
+  // Recorded, so a restart from here needn't judge it again. A message
+  // for the agent is queued first: recorded but not queued, it would
+  // never be answered.
+  const done = () => history.record(channelId, entry);
+  if (verdict.kind === 'ignored') return done();
+  await log.event(listenLog, {
+    channel,
+    message_id: entry.id,
+    relevant: verdict.kind === 'relevant',
+    p: verdict.p,
+  });
+  if (verdict.kind !== 'relevant') return done();
+  const message = {
+    channel_id: channelId,
+    channel,
+    ...entry,
+    mentioned: verdict.mentioned,
+    p: { ...verdict.p },
+    ...(screened === undefined ? {} : { traceparent: screened }),
+  };
+  // Already waiting when a restart restored it from the queue.
+  const queued = await history.wait(message);
+  await done();
+  if (queued) waiting.push(channelId, message);
+};
 
 export const chatHandlers = (sources: ReturnType<typeof chatSources>) =>
   behavior<ChatContext>()
@@ -18,43 +100,15 @@ export const chatHandlers = (sources: ReturnType<typeof chatSources>) =>
     // The listener: records every message, and queues the ones that are for the agent.
     .on(
       (sources) => sources.messages,
-      async (
-        incoming,
-        { chat, history, waiting, log, relevanceScreen, config }
-      ) => {
-        const { channelId, channel, entry } = incoming;
-        const recent = await history.recent(channelId, screenHistory);
-        const verdict = await judge(incoming, {
-          me: await chat.me(),
-          name: config.identity.name,
-          history: recent,
-          screen: await relevanceScreen(),
-          decide: chat.decide,
-          failed: (error) =>
-            log.event(listenLog, {
-              channel,
-              message_id: entry.id,
-              decide_error: String(error),
-            }),
-        });
-        await history.record(channelId, entry);
-        if (verdict.kind === 'ignored') return;
-        await log.event(listenLog, {
-          channel,
-          message_id: entry.id,
-          relevant: verdict.kind === 'relevant',
-          p: verdict.p,
-        });
-        if (verdict.kind !== 'relevant') return;
-        const message = {
-          channel_id: channelId,
-          channel,
-          ...entry,
-          mentioned: verdict.mentioned,
-          p: { ...verdict.p },
-        };
-        await history.wait(message);
-        waiting.push(channelId, message);
+      async (incoming, context) => {
+        // Handled however it ends: one that fails here would otherwise hold
+        // the stream's cursor back for the rest of the process. The runner
+        // logs the failure.
+        try {
+          await listen(incoming, context);
+        } finally {
+          context.chat.handled(incoming.entry.id);
+        }
       }
     )
     // The responder: wakes the agent to answer one conversation. It doesn't
@@ -64,8 +118,16 @@ export const chatHandlers = (sources: ReturnType<typeof chatSources>) =>
       (sources) => sources.conversations,
       async (conversation, context) => {
         const { channelId, messages } = conversation;
-        const { typing, history, waiting, answered, unanswered, log, clock } =
-          context;
+        const {
+          typing,
+          history,
+          waiting,
+          answered,
+          unanswered,
+          log,
+          clock,
+          trace,
+        } = context;
         const last = messages.at(-1);
         if (last === undefined) return waiting.release(channelId);
         const started = clock.now();
@@ -75,40 +137,80 @@ export const chatHandlers = (sources: ReturnType<typeof chatSources>) =>
           conversation,
           await history.recent(channelId, promptHistory)
         );
-        void context
-          .wake(request)
-          .catch(
-            (error: unknown): Woke => ({
-              kind: 'failed',
-              error: String(error),
-            })
-          )
-          .then(async (woke) => {
-            await typing.stop(channelId);
-            const first = answered.get(channelId);
-            await log.event(replyLog, {
-              channel: conversation.channel,
-              messages: messages.length,
-              result: woke.kind,
-              ...(woke.kind === 'failed' ? { error: woke.error } : {}),
-              first_reply:
-                first === undefined
-                  ? 'none'
-                  : `${(first.since(started).total('milliseconds') / 1000).toFixed(1)}s`,
-            });
-            // A run that died before answering must not lose the messages.
-            if (woke.kind === 'failed' && first === undefined)
-              await unanswered.push(conversation);
-            for (const message of messages)
-              await log.event(handledLog, {
-                ...message,
-                handled: isoText(clock.now()),
+        // One span from the reply run's start to its end, in the trace of
+        // the screen that queued the conversation's last message; the wake
+        // (and every script and Macro call it makes) is its child.
+        void trackMaintenanceTask(() =>
+          trace(
+            turnSpan,
+            async (span) => {
+              span.set('chat.channel_id', channelId);
+              span.set('chat.message_id', last.id);
+              span.set('chat.turn.dm', last.dm);
+              span.set('chat.turn.in_thread', last.thread !== null);
+              span.set('chat.turn.messages', messages.length);
+              const queued = millisecondsSince(messages[0]?.at, started);
+              if (queued !== undefined) span.set('chat.turn.queued_ms', queued);
+              const woke = await context.wake(request).catch(
+                (error: unknown): Woke => ({
+                  kind: 'failed',
+                  error: String(error),
+                })
+              );
+              recordOutcome(span, 'chat.turn', woke);
+              await typing.stop(channelId);
+              const first = answered.get(channelId);
+              span.set('chat.turn.answered', first !== undefined);
+              // Whether anything reached the conversation: what a person sees.
+              span.set(
+                'chat.turn.result',
+                first === undefined ? 'not_posted' : 'posted'
+              );
+              span.set(
+                'chat.turn.duration_ms',
+                Math.round(clock.now().since(started).total('milliseconds'))
+              );
+              if (first !== undefined)
+                span.set(
+                  'chat.turn.first_reply_ms',
+                  Math.round(first.since(started).total('milliseconds'))
+                );
+              await log.event(replyLog, {
+                channel: conversation.channel,
+                messages: messages.length,
+                result: woke.kind,
+                ...(woke.kind === 'failed' ? { error: woke.error } : {}),
+                first_reply:
+                  first === undefined
+                    ? 'none'
+                    : `${(first.since(started).total('milliseconds') / 1000).toFixed(1)}s`,
               });
-            await history.answered(
-              channelId,
-              messages.map(({ id }) => id)
-            );
-          })
-          .finally(() => waiting.release(channelId));
+              // A run that died before answering must not lose the messages.
+              if (woke.kind === 'failed' && first === undefined)
+                await unanswered.push(conversation);
+              for (const message of messages)
+                await log.event(handledLog, {
+                  ...message,
+                  handled: isoText(clock.now()),
+                });
+              await history.answered(
+                channelId,
+                messages.map(({ id }) => id)
+              );
+            },
+            last.traceparent
+          )
+            // The run is detached: its bookkeeping failing must not become an
+            // unhandled rejection. Logged (log.event never throws), and the
+            // conversation is released either way.
+            .catch((error: unknown) =>
+              log.event(replyLog, {
+                channel: conversation.channel,
+                failed: 'bookkeeping',
+                error: String(error),
+              })
+            )
+            .finally(() => waiting.release(channelId))
+        );
       }
     );

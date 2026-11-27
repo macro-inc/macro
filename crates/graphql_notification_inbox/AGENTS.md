@@ -16,8 +16,8 @@ client serves both.
 - `src/inputs.rs`: scope, row type and mutation inputs with their limits.
 - `src/subscriptions.rs`: realtime patches, batched by `attention_feed`'s
   `live::coalesce` with `FiledEntity` triggers; and the unread counts stream,
-  which sends the whole inbox's unread rows by kind when it opens and again
-  only when they change.
+  which sends the whole inbox's unread rows by kind (`count`), and how many of
+  them Chat shows (`chatCount`), when it opens and again only when they change.
 - `src/context.rs`: `NotificationInboxGraphqlContext`. It also runs the
   clears a request starts (`run_started_clear`: on a tracked task, replying
   after a short wait) and resumes stalled ones (`recover_clears`, spawned

@@ -24,21 +24,24 @@ provider serialization tests when adding support.
 
 | Routed model | Explicit effort values |
 | --- | --- |
-| anthropic/claude-sonnet-5-5, anthropic/claude-opus-5-5 | low, medium, high, xhigh, max |
-| openai/gpt-6.1-sol, openai/gpt-6-astra | low, medium, high, xhigh, max |
-| openai/gpt-5.5 | none, low, medium, high, xhigh |
-| openai/gpt-5-mini | minimal, low, medium, high |
+| anthropic/claude-sonnet-5-5, anthropic/claude-opus-5-5, anthropic/claude-haiku-5-5 | low, medium, high, xhigh, max |
+| openai/gpt-6.2-sol, openai/gpt-6-astra | low, medium, high, xhigh, max |
+| openai/gpt-6-luna | none, low, medium, high, xhigh, max |
+| openai/gpt-5.5 (retired, kept for old sessions) | none, low, medium, high, xhigh |
+| openai/gpt-5-mini (retired, kept for old sessions) | minimal, low, medium, high |
 | Haiku 4.5, retired Claude ids (Sonnet 5, Opus 5), and unknown models | No effort control |
 
 Every supported profile also offers **Default**, meaning no session override.
-It preserves Macro's existing adapter defaults (including low for GPT-5 mini).
+It preserves Macro's existing adapter defaults (including low for GPT-6 Luna
+and the GPT minis).
 It is distinct from OpenAI's explicit `none` and is never sent as a provider
 value. Anthropic receives `output_config.effort`; OpenAI Responses receives
 `reasoning.effort`. A compatible Chat Completions endpoint does not inherit
 native OpenAI capabilities merely because its model name resembles GPT.
 Thinking token budgets are not exposed as effort levels.
 
-Sources checked September 21, 2026 (GPT-6 rows November 12, 2026):
+Sources checked September 21, 2026 (GPT-6 rows November 12, 2026; Haiku 5.5,
+GPT-6.2 Sol and GPT-6 Luna November 24, 2026):
 [Anthropic effort](https://platform.claude.com/docs/en/build-with-claude/effort),
 [GPT-5.5](https://developers.openai.com/api/docs/models/gpt-5.5),
 [OpenAI models](https://developers.openai.com/api/docs/models), and
@@ -97,17 +100,29 @@ an external harness result.
 
 ## Model menu interaction
 
-The selected model also has a labeled **Effort** button (dial icon and current
-level) beside its model selector in new-chat and running-session composers. It
-opens a titled desktop menu or a dedicated bottom sheet on mobile. A simple list shows the supported effort levels and checks the current choice. Selecting a level applies it and closes the menu; models with fewer than two choices hide the button.
+The Agents new-chat and running-session composers use one card-first selector.
+Model cards expose Thinking through the shared Slider, with pointer commits on
+release and immediate keyboard commits. Models with at most one effort option
+retain the no-thinking slot. Agent cards expose the same advertised controls,
+without a no-thinking slot, and a Model row opens that agent's runtime catalog.
+Auto retains the name row alone. The name opens in-place desktop selection pages
+or a phone sheet. Existing EffortSelector and legacy pickers remain unwired for
+reference.
+The trigger omits the advertised default Thinking level and shows only a
+non-default choice. A running session's confirmed current value is not a model
+default: supported preflight discovery supplies that default separately. Until a
+default is known, the trigger omits the level rather than guessing.
 
-On desktop, effort remains available in each model’s submenu.
-Discovery runs when the submenu opens, scoped to that model and harness;
-the current session's advertised options take precedence for its selected model.
-The trigger displays the model and selected effort together. Keyboard Right Arrow
-opens the submenu. On mobile, tapping a model selects it directly; use the adjacent
-effort button to adjust its supported effort levels. Loading, discovery errors, and models with
-no effort options keep ordinary model selection available.
+Speed uses a small Dropdown menu on both platforms, not a phone page. Only
+advertised in-memory tiers are offered: Standard, Fast (`priority` or `fast`),
+and Ultrafast. One tier hides the button; model names never imply Ultrafast.
+New explicit model picks reset controls to defaults, while merely reopening the
+card retains settings. The hosts still own all preference and session mutations.
+Custom-agent overrides last one send unless kept with the Model row's pin.
+Kept choices are browser-local per account and agent; they survive sends without
+changing the agent's shared default. Returning to that default or a successful
+catalog response that removes the kept model clears the pin. Loading, failed,
+or unsupported discovery does not erase a kept choice.
 
 A combined running-session selection waits for the model's correlated ACP
 confirmation, validates effort against the new snapshot, then confirms effort.

@@ -224,6 +224,7 @@ export function draftToCreateBody(draft: ScheduleDraft): ActionConfiguration {
     ...(draft.description?.trim()
       ? { description: draft.description.trim() }
       : {}),
+    ...(draft.appearance ? { appearance: draft.appearance } : {}),
   };
 }
 

@@ -8,13 +8,19 @@ pub(crate) mod helpers;
 
 mod activity_property_edges;
 mod blocked_domains;
+mod company_aliases;
+mod company_domains;
+mod contact_aliases;
 mod contact_emails;
+mod contact_filing;
 mod contact_update;
 mod create_company;
 mod create_contact;
+mod create_team_contact;
 mod domain_directory;
 mod email_policy;
 mod email_privacy;
+mod get_company_by_domain;
 mod get_company_for_team;
 mod get_contact_by_email_for_team;
 mod get_contact_detail_for_team;
@@ -31,8 +37,11 @@ mod personal_emails;
 mod populate_contact;
 mod population_lifecycle;
 mod population_locks;
+mod population_scans;
 #[cfg(feature = "inbound")]
 mod previews;
+#[cfg(feature = "merge")]
+mod record_merge;
 mod resolve_association;
 mod search_contacts_for_team;
 mod selected_email_policy;

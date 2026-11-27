@@ -198,6 +198,139 @@ pub const QUICK_ACCESS_TYPENAMES: &[&str] = &[
     "GraphqlContact",
 ];
 
+/// Timestamps the Quick Access projection orders most types by.
+const RECENT_FIELDS: [&str; 3] = ["viewedAt", "updatedAt", "createdAt"];
+/// Timestamps it takes the latest of for the other types.
+const ACTIVITY_FIELDS: [&str; 6] = [
+    "viewedAt",
+    "interactedAt",
+    "sortTs",
+    "lastInteraction",
+    "updatedAt",
+    "createdAt",
+];
+
+/// The fields the Quick Access projection reads, by record type: presence,
+/// bucket, search text and timestamp. A schema change that removes one of
+/// them drops the type's records: the incoming build would never refresh the
+/// value a row came from (`schema_change`).
+pub const QUICK_ACCESS_INPUTS: &[(&str, &[&str])] = &[
+    (
+        "GraphqlSoupDocument",
+        &[
+            "deletedAt",
+            "hidden",
+            "subType",
+            "fileType",
+            "documentName",
+            "name",
+            RECENT_FIELDS[0],
+            RECENT_FIELDS[1],
+            RECENT_FIELDS[2],
+        ],
+    ),
+    (
+        "GraphqlSoupChat",
+        &[
+            "deletedAt",
+            "hidden",
+            "chatName",
+            "name",
+            RECENT_FIELDS[0],
+            RECENT_FIELDS[1],
+            RECENT_FIELDS[2],
+        ],
+    ),
+    (
+        "GraphqlSoupProject",
+        &[
+            "deletedAt",
+            "hidden",
+            "projectName",
+            "name",
+            RECENT_FIELDS[0],
+            RECENT_FIELDS[1],
+            RECENT_FIELDS[2],
+        ],
+    ),
+    (
+        "GraphqlSoupEmailThread",
+        &[
+            "deletedAt",
+            "hidden",
+            "emailName",
+            "name",
+            "senderName",
+            "senderEmail",
+            "senders",
+            ACTIVITY_FIELDS[0],
+            ACTIVITY_FIELDS[1],
+            ACTIVITY_FIELDS[2],
+            ACTIVITY_FIELDS[3],
+            ACTIVITY_FIELDS[4],
+            ACTIVITY_FIELDS[5],
+        ],
+    ),
+    (
+        "GraphqlSoupChannel",
+        &[
+            "deletedAt",
+            "hidden",
+            "channelType",
+            "channelName",
+            "name",
+            RECENT_FIELDS[0],
+            RECENT_FIELDS[1],
+            RECENT_FIELDS[2],
+        ],
+    ),
+    (
+        "GraphqlSoupCrmCompany",
+        &[
+            "deletedAt",
+            "hidden",
+            "crmCompanyName",
+            "name",
+            "domains",
+            RECENT_FIELDS[0],
+            RECENT_FIELDS[1],
+            RECENT_FIELDS[2],
+        ],
+    ),
+    (
+        "GraphqlSoupCrmContact",
+        &[
+            "deletedAt",
+            "hidden",
+            "crmContactName",
+            "name",
+            "email",
+            "lastInteraction",
+            "updatedAt",
+            "createdAt",
+        ],
+    ),
+    (
+        "GraphqlSoupInitiative",
+        &["deletedAt", "hidden", "displayName", "metadata"],
+    ),
+    (
+        "GraphqlContact",
+        &[
+            "deletedAt",
+            "hidden",
+            "name",
+            "email",
+            ACTIVITY_FIELDS[0],
+            ACTIVITY_FIELDS[1],
+            ACTIVITY_FIELDS[2],
+            ACTIVITY_FIELDS[3],
+            ACTIVITY_FIELDS[4],
+            ACTIVITY_FIELDS[5],
+        ],
+    ),
+];
+
 /// Maximum number of compact documents returned by one RPC.
 pub const MAX_SEARCH_LIMIT: usize = 500;
 /// Maximum accepted query length in bytes.
@@ -234,7 +367,21 @@ pub fn validate_search_request(request: &SearchRequest) -> Result<Vec<String>, S
 /// of a current profile. Storage backends delete any old derived row in that
 /// case, in the same transaction as the base-record upsert.
 pub fn project_search_documents(key: &EntityKey<'static>, record: &Record) -> Vec<SearchDocument> {
-    project_quick_access(key, record).into_iter().collect()
+    project_quick_access(key, record, || source_hash(&encode_record(record)))
+        .into_iter()
+        .collect()
+}
+
+/// Projects like [`project_search_documents`] for a caller that already holds
+/// the record's [`encode_record`] bytes, so the hash doesn't encode it again.
+pub fn project_encoded_search_documents(
+    key: &EntityKey<'static>,
+    record: &Record,
+    encoded: &[u8],
+) -> Vec<SearchDocument> {
+    project_quick_access(key, record, || source_hash(encoded))
+        .into_iter()
+        .collect()
 }
 
 fn quick_access_fields<'a>(
@@ -272,7 +419,11 @@ fn quick_access_fields<'a>(
         .then_some((typename, bucket, text_fields))
 }
 
-fn project_quick_access(key: &EntityKey<'static>, record: &Record) -> Option<SearchDocument> {
+fn project_quick_access(
+    key: &EntityKey<'static>,
+    record: &Record,
+    source_hash: impl FnOnce() -> String,
+) -> Option<SearchDocument> {
     let (typename, bucket, text_fields) = quick_access_fields(key, record)?;
     let search_text = if typename == "GraphqlContact" {
         let email = string_field(record, "email").unwrap_or("");
@@ -296,7 +447,7 @@ fn project_quick_access(key: &EntityKey<'static>, record: &Record) -> Option<Sea
         bucket: bucket.to_owned(),
         search_text,
         timestamp_ms: quick_access_timestamp(typename, record),
-        source_hash: source_hash(record),
+        source_hash: source_hash(),
     })
 }
 
@@ -413,24 +564,17 @@ fn quick_access_timestamp(typename: &str, record: &Record) -> i64 {
             | "GraphqlSoupChannel"
             | "GraphqlSoupCrmCompany"
     ) {
-        return ["viewedAt", "updatedAt", "createdAt"]
+        return RECENT_FIELDS
             .into_iter()
             .find_map(|field| record.fields.get(field).and_then(value_timestamp))
             .unwrap_or(0);
     }
 
-    [
-        "viewedAt",
-        "interactedAt",
-        "sortTs",
-        "lastInteraction",
-        "updatedAt",
-        "createdAt",
-    ]
-    .into_iter()
-    .filter_map(|field| record.fields.get(field).and_then(value_timestamp))
-    .max()
-    .unwrap_or(0)
+    ACTIVITY_FIELDS
+        .into_iter()
+        .filter_map(|field| record.fields.get(field).and_then(value_timestamp))
+        .max()
+        .unwrap_or(0)
 }
 
 fn value_timestamp(value: &CacheValue) -> Option<i64> {
@@ -443,8 +587,8 @@ fn value_timestamp(value: &CacheValue) -> Option<i64> {
     }
 }
 
-fn source_hash(record: &Record) -> String {
-    let digest = Sha256::digest(encode_record(record));
+fn source_hash(encoded: &[u8]) -> String {
+    let digest = Sha256::digest(encoded);
     digest[..8]
         .iter()
         .map(|byte| format!("{byte:02x}"))

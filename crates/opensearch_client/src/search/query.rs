@@ -5,6 +5,7 @@ use std::borrow::Cow;
 use crate::{Result, error::OpensearchClientError};
 
 use opensearch_query_builder::*;
+use unicode_segmentation::UnicodeSegmentation;
 
 /// Containing keys for the title and content fields
 pub struct Keys<'a> {
@@ -36,8 +37,12 @@ pub(crate) struct CreateQueryParams<'a> {
     pub term: &'a str,
 }
 
-/// Creates a query for a given term
-pub(crate) fn create_query<'a>(params: CreateQueryParams<'a>) -> QueryType<'a> {
+/// Creates a query for a given term. A partial term that is one word of at
+/// least [`MIN_PREFIX_LEN`] characters matches as an uncapped prefix
+/// ([`single_word_prefix`]); any other partial term, a shorter word or several
+/// words, stays a `match_phrase_prefix` that expands to only the first
+/// `max_expansions` terms of a shard.
+pub(crate) fn create_query<'a>(params: CreateQueryParams<'_>) -> QueryType<'a> {
     let CreateQueryParams {
         query_key,
         field,
@@ -48,52 +53,172 @@ pub(crate) fn create_query<'a>(params: CreateQueryParams<'a>) -> QueryType<'a> {
         QueryKey::MatchPhrase => {
             QueryType::MatchPhrase(MatchPhraseQuery::new(field.to_string(), term.to_string()))
         }
-        QueryKey::MatchPhrasePrefix => QueryType::MatchPhrasePrefix(
-            MatchPhrasePrefixQuery::new(field.to_string(), term.to_string())
-                .max_expansions(MATCH_PHRASE_PREFIX_MAX_EXPANSIONS),
-        ),
+        QueryKey::MatchPhrasePrefix => single_word_prefix(field, term).unwrap_or_else(|| {
+            QueryType::MatchPhrasePrefix(
+                MatchPhrasePrefixQuery::new(field.to_string(), term.to_string())
+                    .max_expansions(MATCH_PHRASE_PREFIX_MAX_EXPANSIONS),
+            )
+        }),
         QueryKey::Regexp => {
             QueryType::Regexp(RegexpQuery::new(field.to_string(), term.to_string()))
         }
     }
 }
 
-/// Fewest characters a content term needs before it matches as a prefix.
-/// Shorter prefixes expand to too many tokens.
+/// Fewest characters a word needs before it matches as an uncapped prefix,
+/// and a content term before it matches as a prefix at all. Shorter prefixes
+/// expand to too many tokens.
 const MIN_PREFIX_LEN: usize = 3;
+
+/// The standard tokenizer's longest token, in UTF-16 units; it splits a
+/// longer word into several tokens.
+const MAX_TOKEN_LEN: usize = 255;
+
+/// The one word of a term the analyzer reads as a single token. The standard
+/// tokenizer, which every field these queries search uses, splits words at
+/// the Unicode (UAX #29) boundaries `unicode_words` finds: `con.`, `naïve`,
+/// `o'brien` and `node.js` are one word, `c++` is the word `c`, and `e-mail`,
+/// `東京` and `gab@macro.com` are several. They disagree on what surrounds a
+/// word (the tokenizer keeps an emoji as a token, `unicode_words` drops it) and
+/// on scripts written without spaces (a Thai run is one token and many
+/// words), and UAX #29 keeps an emoji joined to a word by a zero-width joiner
+/// in it. So a word counts only when it holds nothing but letters, digits,
+/// combining marks (a decomposed `é`), ASCII punctuation and `’`, has nothing
+/// but ASCII punctuation around it, and fits in one token.
+fn single_word(term: &str) -> Option<&str> {
+    let mut words = term.unicode_word_indices();
+    let (start, word) = words.next()?;
+    if words.next().is_some() {
+        return None;
+    }
+
+    let letters_and_digits = word.chars().all(|c| {
+        c.is_alphanumeric()
+            || c.is_ascii_punctuation()
+            || c == '’'
+            || matches!(c, '\u{0300}'..='\u{036F}' | '\u{1AB0}'..='\u{1AFF}' | '\u{1DC0}'..='\u{1DFF}' | '\u{20D0}'..='\u{20FF}' | '\u{FE20}'..='\u{FE2F}')
+    });
+    let mut around = term[..start]
+        .chars()
+        .chain(term[start + word.len()..].chars());
+    let only_punctuation = around.all(|c| c.is_ascii_punctuation());
+    let one_token = word.encode_utf16().count() <= MAX_TOKEN_LEN;
+    (letters_and_digits && only_punctuation && one_token).then_some(word)
+}
+
+/// A prefix query over every token of `field` that starts with `term`'s one
+/// word, when the term is one word of at least [`MIN_PREFIX_LEN`] characters.
+/// `match_phrase_prefix` keeps only the first `max_expansions` terms of a
+/// shard that start with the prefix, before any filter, and silently drops
+/// the matches past them; OpenSearch also expands it again for every inner hit
+/// of every returned parent. `match_bool_prefix` of one token is a prefix
+/// query, which expands lazily, keeps every match and scores as a constant.
+///
+/// It is given the word, not the term: `match_bool_prefix` reads a last token
+/// followed by other characters as finished, so `con.` would match only the
+/// word `con`.
+fn single_word_prefix<'a>(field: &str, term: &str) -> Option<QueryType<'a>> {
+    let word = single_word(term)?;
+    if word.chars().count() < MIN_PREFIX_LEN {
+        return None;
+    }
+    Some(QueryType::MatchBoolPrefix(MatchBoolPrefixQuery::new(
+        field.to_string(),
+        word.to_string(),
+    )))
+}
 
 /// Builds the per-term query a `has_child` clause runs against children's
 /// `content`.
 ///
-/// - `exact` match type, a quoted phrase (term with whitespace), or a term
-///   shorter than [`MIN_PREFIX_LEN`] → `match_phrase`.
-/// - A single ASCII word → `match_bool_prefix`, a prefix query over every
-///   token starting with the word.
-/// - Anything else (punctuation, non-ASCII text the analyzer may split into
-///   several tokens) → `match_phrase_prefix`.
+/// - `exact` match type or a quoted phrase (term with whitespace) →
+///   `match_phrase`.
+/// - One word → an uncapped prefix ([`single_word_prefix`]), or
+///   `match_phrase` when the word is shorter than [`MIN_PREFIX_LEN`]: `c++`
+///   is the one-character word `c`, so it matches `C++` and not every word
+///   starting with `c`.
+/// - Several words (`e-mail`, CJK text) → `match_phrase` when the term is
+///   shorter than [`MIN_PREFIX_LEN`], else `match_phrase_prefix`, which keeps
+///   the words adjacent but expands the last one to only the first
+///   `max_expansions` terms of a shard. OpenSearch has no phrase prefix that
+///   expands every match.
 ///
-/// The single word avoids `match_phrase_prefix` because OpenSearch expands its
-/// prefix again for every inner hit of every returned parent, and keeps only
-/// the first `max_expansions` terms of the shard, silently dropping the
-/// matches past them. A prefix query expands lazily and keeps every match.
-/// Its children score as a constant, so inner hits come back in index order.
+/// Children matched by a prefix score as a constant, so inner hits come back
+/// in index order.
 pub(crate) fn child_content_query<'a>(term: &str, match_type: &str) -> QueryType<'a> {
-    let exact = match_type == "exact"
-        || term.chars().any(char::is_whitespace)
-        || term.chars().count() < MIN_PREFIX_LEN;
-    if exact {
-        return QueryType::MatchPhrase(MatchPhraseQuery::new("content", term.to_string()));
+    let phrase = || QueryType::MatchPhrase(MatchPhraseQuery::new("content", term.to_string()));
+    if match_type == "exact" || term.chars().any(char::is_whitespace) {
+        return phrase();
     }
 
-    let single_word = term.chars().all(|c| c.is_ascii_alphanumeric());
-    if single_word {
-        return QueryType::MatchBoolPrefix(MatchBoolPrefixQuery::new("content", term.to_string()));
+    if single_word(term).is_some() {
+        return single_word_prefix("content", term).unwrap_or_else(phrase);
     }
 
+    if term.chars().count() < MIN_PREFIX_LEN {
+        return phrase();
+    }
     QueryType::MatchPhrasePrefix(
         MatchPhrasePrefixQuery::new("content", term.to_string())
             .max_expansions(MATCH_PHRASE_PREFIX_MAX_EXPANSIONS),
     )
+}
+
+/// Words nearly every link URL starts with, which a link query leaves out
+/// where they start the term; inside a path (`/http/guide`) they stay, or a
+/// phrase would miss the words around them.
+const LINK_BOILERPLATE_WORDS: [&str; 3] = ["http", "https", "www"];
+
+/// Words that name no site on their own: the link boilerplate and the
+/// endings most hosts share. A term whose words are only these, or the start
+/// of one (`htt`, `co`, typed on the way to `https://` or `company`), matches
+/// no link; beside other words (`example.com`) they still narrow it.
+const NO_SITE_WORDS: [&str; 6] = ["http", "https", "www", "com", "org", "net"];
+
+/// The query a content term runs against a field of link URLs, which the
+/// built-in `pattern` analyzer splits at every character that is not an ASCII
+/// letter, digit or `_`: `https://app.sketchpad.example/a` is `https`, `app`,
+/// `sketchpad`, `example`, `a`. The term is split the same way and matched by
+/// [`create_query`]'s rules for those words, as message text is: one word as
+/// a prefix, several in order with the last a prefix (`sketchpad.example`
+/// finds `app.sketchpad.example`, `example.com` no `github.com/example`).
+/// `http`, `https` and `www` that start the term are left out. A term that names no
+/// site ([`NO_SITE_WORDS`]), one with a letter or digit outside ASCII, which
+/// the analyzer would split into looser ASCII pieces (`über` into `ber`), and
+/// a regexp term match no link.
+pub(crate) fn link_query<'a>(
+    query_key: QueryKey,
+    field: &str,
+    term: &str,
+) -> Option<QueryType<'a>> {
+    let non_ascii = term.chars().any(|c| !c.is_ascii() && c.is_alphanumeric());
+    if query_key == QueryKey::Regexp || non_ascii {
+        return None;
+    }
+    let words: Vec<&str> = term
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+        .filter(|word| !word.is_empty())
+        .skip_while(|word| {
+            LINK_BOILERPLATE_WORDS
+                .iter()
+                .any(|boilerplate| word.eq_ignore_ascii_case(boilerplate))
+        })
+        .collect();
+    let names_no_site = words.iter().all(|word| {
+        NO_SITE_WORDS.iter().any(|no_site| {
+            no_site
+                .get(..word.len())
+                .is_some_and(|start| start.eq_ignore_ascii_case(word))
+        })
+    });
+    if names_no_site {
+        return None;
+    }
+    Some(create_query(CreateQueryParams {
+        query_key,
+        field,
+        term: &words.join(" "),
+    }))
 }
 
 impl QueryKey {
@@ -125,13 +250,15 @@ pub(crate) fn generate_terms_must_query<'a>(
     terms: impl Into<Cow<'a, [&'a str]>>,
     combine: TermCombine,
 ) -> QueryType<'a> {
-    generate_terms_must_query_for_fields(query_key, &[field], terms, combine)
+    generate_terms_must_query_for_fields(query_key, &[field], None, terms, combine)
 }
 
-/// Each term must match at least one field on the same document.
+/// Each term must match at least one field on the same document, or a link
+/// URL in `link_field` ([`link_query`]).
 pub(crate) fn generate_terms_must_query_for_fields<'a>(
     query_key: QueryKey,
     fields: &[&'a str],
+    link_field: Option<&str>,
     terms: impl Into<Cow<'a, [&'a str]>>,
     combine: TermCombine,
 ) -> QueryType<'a> {
@@ -140,17 +267,25 @@ pub(crate) fn generate_terms_must_query_for_fields<'a>(
     let queries: Vec<_> = terms
         .iter()
         .map(|term| {
+            let mut queries: Vec<QueryType<'a>> = fields
+                .iter()
+                .map(|field| {
+                    create_query(CreateQueryParams {
+                        query_key,
+                        field,
+                        term,
+                    })
+                })
+                .collect();
+            queries.extend(link_field.and_then(|field| link_query(query_key, field, term)));
+            if queries.len() == 1
+                && let Some(query) = queries.pop()
+            {
+                return query;
+            }
             let mut alternatives = BoolQueryBuilder::new();
             alternatives.minimum_should_match(1);
-            for field in fields {
-                let query = create_query(CreateQueryParams {
-                    query_key,
-                    field,
-                    term,
-                });
-                if fields.len() == 1 {
-                    return query;
-                }
+            for query in queries {
                 alternatives.should(query);
             }
             alternatives.build().into()

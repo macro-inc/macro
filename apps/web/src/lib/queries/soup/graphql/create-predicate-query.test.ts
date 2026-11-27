@@ -10,6 +10,7 @@ import type {
   CacheHost,
 } from '../../../graphql-cache/host/types';
 import {
+  type CacheChangeHints,
   type EntityFilterCacheArgs,
   type EntityFilterCacheResult,
   type LiveQueryUpdate,
@@ -117,7 +118,8 @@ function setup(onRead: () => void = () => {}) {
     requests,
     listeners,
     generations,
-    change: (rev: string) => listeners.forEach((cb) => cb(revision(rev))),
+    change: (rev: string, changes?: CacheChangeHints) =>
+      listeners.forEach((cb) => cb(revision(rev), changes)),
   };
 }
 const flush = async () => {
@@ -239,7 +241,9 @@ it('resets the stale-read budget when an old-generation request rejects', async 
     state.requests[index].resolve(snapshot());
     await flush();
   }
-  state.generations.forEach((callback) => callback({ storage: 'reset' }));
+  state.generations.forEach((callback) =>
+    callback({ storage: 'reset', queue: 'reset' })
+  );
   state.requests[2].reject(new Error('old generation closed'));
   await flush();
   state.change('2');
@@ -286,7 +290,9 @@ it('reports unsupported sources without publishing an empty result', async () =>
   state.change('2');
   state.query.refresh();
   expect(state.requests).toHaveLength(1);
-  state.generations.forEach((callback) => callback({ storage: 'reset' }));
+  state.generations.forEach((callback) =>
+    callback({ storage: 'reset', queue: 'reset' })
+  );
   expect(state.requests).toHaveLength(2);
 });
 
@@ -295,7 +301,9 @@ it('discards old-generation reads and restarts without a cursor', async () => {
   state.requests[0].resolve(snapshot());
   await flush();
   state.change('2');
-  state.generations.forEach((callback) => callback({ storage: 'reset' }));
+  state.generations.forEach((callback) =>
+    callback({ storage: 'reset', queue: 'reset' })
+  );
   expect(state.query.data()).toBeUndefined();
   state.requests[1].resolve(patch());
   await flush();
@@ -348,7 +356,9 @@ it('does not read on cache changes while hidden, then catches up once', async ()
     visibility.mockReturnValue('hidden');
     state.change('2');
     state.change('3');
-    state.generations.forEach((cb) => cb({ storage: 'preserved' }));
+    state.generations.forEach((cb) =>
+      cb({ storage: 'preserved', queue: 'preserved' })
+    );
     expect(state.requests).toHaveLength(1);
 
     visibility.mockReturnValue('visible');
@@ -358,4 +368,29 @@ it('does not read on cache changes while hidden, then catches up once', async ()
   } finally {
     visibility.mockRestore();
   }
+});
+
+it('skips entityFilter reads when cache-change hints prove the observation unchanged', async () => {
+  const state = setup();
+  state.requests[0].resolve({ ...snapshot(), observationId: 'obs-1' });
+  await flush();
+
+  state.change('2', { unchangedViews: ['obs-1'] });
+  expect(state.requests).toHaveLength(1);
+
+  state.change('3', { unchangedViews: ['other-view'] });
+  expect(state.requests).toHaveLength(2);
+  state.requests[1].resolve({ ...patch('3'), observationId: 'obs-2' });
+  await flush();
+
+  state.change('4', { unchangedViews: ['obs-2'] });
+  expect(state.requests).toHaveLength(2);
+
+  // A generation reset clears the observation proof; later hints must not suppress reads.
+  state.generations.forEach((cb) => cb({ storage: 'reset', queue: 'reset' }));
+  expect(state.requests).toHaveLength(3);
+  state.requests[2].resolve({ ...snapshot(), revision: revision('5') });
+  await flush();
+  state.change('6', { unchangedViews: ['obs-2'] });
+  expect(state.requests).toHaveLength(4);
 });

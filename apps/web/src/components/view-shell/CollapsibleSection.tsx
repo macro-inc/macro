@@ -9,6 +9,9 @@ import {
   Suspense,
   splitProps,
 } from 'solid-js';
+import { SidebarSection } from './SidebarSection';
+import { SidebarSectionHeader } from './SidebarSectionHeader';
+import { SidebarSectionContext } from './sidebar-section-context';
 import { ViewSidebar } from './ViewSidebar';
 
 export type CollapsibleSectionRootProps = Omit<
@@ -17,32 +20,69 @@ export type CollapsibleSectionRootProps = Omit<
 > & {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Stable identity within the owning ViewSidebar's saved order. */
+  sectionId?: string;
+  sectionLabel?: string;
+  pinned?: boolean;
 };
 
 function Root(props: CollapsibleSectionRootProps) {
-  const [local, rest] = splitProps(props, ['class']);
-  return (
+  const [local, rest] = splitProps(props, [
+    'class',
+    'sectionId',
+    'sectionLabel',
+    'pinned',
+  ]);
+  const content = () => (
     <Collapsible
       {...rest}
       // Content owns presence so exit motion finishes before it unmounts.
       forceMount
-      class={cn('group/sidebar-section min-w-0 shrink-0', local.class)}
+      class={cn(
+        'group/sidebar-section',
+        local.sectionId ? 'contents' : 'min-w-0 shrink-0',
+        !local.sectionId && local.class
+      )}
     />
+  );
+  return (
+    <Show
+      when={local.sectionId}
+      fallback={
+        <SidebarSectionContext.Provider value={undefined}>
+          {content()}
+        </SidebarSectionContext.Provider>
+      }
+    >
+      {(id) => (
+        <SidebarSection
+          id={id()}
+          label={local.sectionLabel ?? id()}
+          pinned={local.pinned}
+          class={local.class}
+        >
+          {content()}
+        </SidebarSection>
+      )}
+    </Show>
   );
 }
 
 function Header(props: JSX.HTMLAttributes<HTMLDivElement>) {
   const [local, rest] = splitProps(props, ['children', 'class']);
   return (
-    <div
-      {...rest}
-      class={cn(
-        'flex h-(--sidebar-row-height) min-w-0 shrink-0 items-center gap-1 pr-(--sidebar-action-inset)',
-        local.class
-      )}
-    >
-      {local.children}
-    </div>
+    <SidebarSectionHeader>
+      <div
+        {...rest}
+        data-sidebar-section-header=""
+        class={cn(
+          'flex h-(--sidebar-row-height) min-w-0 shrink-0 items-center gap-1 pr-(--sidebar-action-inset)',
+          local.class
+        )}
+      >
+        {local.children}
+      </div>
+    </SidebarSectionHeader>
   );
 }
 
@@ -51,6 +91,7 @@ function Trigger(props: ComponentProps<typeof Collapsible.Trigger>) {
   return (
     <Collapsible.Trigger
       {...rest}
+      data-sidebar-section-trigger=""
       class={cn(
         'flex h-(--sidebar-row-height) w-full min-w-0 items-center gap-1 rounded-lg px-(--sidebar-item-inset) py-1 text-left text-xs leading-5 font-medium text-ink-muted outline-none transition-colors group-hover/sidebar-section:text-ink focus-visible:outline-2 focus-visible:outline-accent',
         local.class

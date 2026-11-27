@@ -10,28 +10,49 @@ import type {
 import { EmailThreadMention } from '../../email-thread-mention';
 import { createEmailPolicySource } from '../../queries/email-policy';
 import { createEmailPrivacySource } from '../../queries/email-privacy';
-import { policyClient } from './policy-adapter';
+import { connectPolicyMailbox, policyClient } from './policy-adapter';
 
 // Rich mentions import the same optional capabilities as other app references.
 export * from '@app/lib/analytics/posthog.tsx';
 export * from '@core/context/user.ts';
 export * from '@queries/team/teams.ts';
+export * from '@service-storage/crm-access-authority.ts';
 
 const params = new URLSearchParams(location.search);
+const crmAccess = () => !params.has('no-access');
+export const crmAccessAllowed = crmAccess;
+export const crmAccessState = () => (crmAccess() ? 'allowed' : 'denied');
+export const [excludedListReads, setExcludedListReads] = createSignal(0);
 const pendingPrivacyRead = Promise.withResolvers<void>();
 export const finishPrivacyRead = () => pendingPrivacyRead.resolve();
 let privacyReads = 0;
 export const mailboxId = '00000000-0000-4000-8000-000000000045';
+function fixtureDomains(guarded: string, usual: string) {
+  if (params.has('mailbox-guard')) return [guarded];
+  if (params.has('long-domain'))
+    return ['regional-sales-office.north-america.example.com', usual];
+  return [usual];
+}
+// archived-domain lists an archived company's domain, named as such only to
+// admins like the server does; stale-archived lists it as a plain row, as a
+// list read before the company was archived would.
+const archivedDomain = 'archived.example.com';
+const archivedCompanyId = '00000000-0000-4000-8000-000000000060';
+const listsArchivedDomain =
+  params.has('archived-domain') || params.has('stale-archived');
 const [state, setState] = createSignal<EmailPrivacy>({
   enabled: params.has('contributing'),
   mailboxEmail: params.has('disconnected') ? null : 'member@example.com',
   mailboxLinkId: params.has('disconnected') ? null : mailboxId,
-  teamDomains: params.has('mailbox-guard')
-    ? ['example.com']
-    : ['team.example.com'],
-  personalDomains: params.has('mailbox-guard')
-    ? ['gmail.com']
-    : ['personal.example.com'],
+  teamDomains: [
+    ...(listsArchivedDomain ? [archivedDomain] : []),
+    ...fixtureDomains('example.com', 'team.example.com'),
+  ],
+  archivedTeamDomains:
+    params.has('archived-domain') && params.has('admin')
+      ? { [archivedDomain]: archivedCompanyId }
+      : {},
+  personalDomains: fixtureDomains('gmail.com', 'personal.example.com'),
   teamDomainWarnings: params.has('mailbox-guard')
     ? { 'example.com': 'company' }
     : {},
@@ -41,6 +62,26 @@ const [state, setState] = createSignal<EmailPrivacy>({
   canRemoveTeamDomains: params.has('admin'),
 });
 export const [lastChange, setLastChange] = createSignal('');
+export const [mailboxConnections, setMailboxConnections] = createSignal(0);
+const [primaryLinkId, setPrimaryLinkId] = createSignal(
+  params.has('disconnected') ? undefined : mailboxId
+);
+/**
+ * Stands in for the add-inbox flow completing in place, as it does on native
+ * iOS: the backend now reports the mailbox and the app's email links list it as
+ * primary. Nothing here refreshes CRM queries or touches consent, so the
+ * privacy source must notice the new link itself and sharing stays off.
+ */
+function connectMailbox() {
+  setMailboxConnections((count) => count + 1);
+  setState((s) => ({
+    ...s,
+    mailboxEmail: 'member@example.com',
+    mailboxLinkId: mailboxId,
+  }));
+  connectPolicyMailbox();
+  setPrimaryLinkId(mailboxId);
+}
 export const [statusUnavailable, setStatusUnavailable] = createSignal(
   params.has('status-unavailable')
 );
@@ -90,7 +131,11 @@ const [threads, setThreads] = createSignal([
     : []),
 ]);
 export const useCrmContext = () => ({
+  canAccess: crmAccess,
+  accessState: () => (crmAccess() ? 'allowed' : 'denied'),
+  retryAccess: async () => {},
   EmailThreadMention,
+  connectMailbox,
   createEmailPrivacy: () =>
     createEmailPrivacySource(
       {
@@ -99,7 +144,8 @@ export const useCrmContext = () => ({
         feedback: toast,
       },
       () => '00000000-0000-4000-8000-000000000048',
-      useUserId()
+      useUserId(),
+      primaryLinkId
     ),
   createEmailPolicy: () =>
     createEmailPolicySource(
@@ -150,6 +196,7 @@ function response() {
     personal_domains: value.personalDomains,
     team_domain_warnings: value.teamDomainWarnings ?? {},
     personal_domain_warnings: value.personalDomainWarnings ?? {},
+    archived_team_domains: value.archivedTeamDomains ?? {},
     can_remove_team_domains: value.canRemoveTeamDomains,
   };
 }
@@ -174,6 +221,7 @@ export const crmEmailPrivacyClient = {
     _signal?: AbortSignal,
     threadId?: string
   ) => {
+    if (!threadId) setExcludedListReads((count) => count + 1);
     if (threadId && statusUnavailable())
       return err([{ code: 'NETWORK_ERROR' as const, message: 'Unavailable' }]);
     const matching = threads()
@@ -196,6 +244,15 @@ export const crmEmailPrivacyClient = {
     });
   },
   update: async (change: EmailPrivacyChange) => {
+    if (
+      listsArchivedDomain &&
+      change.action === 'remove_domain' &&
+      change.scope === 'team' &&
+      change.domain === archivedDomain
+    ) {
+      setLastChange(JSON.stringify(change));
+      return err([{ code: 'CONFLICT' as const, message: 'Resource conflict' }]);
+    }
     if (params.has('mailbox-guard') && change.action === 'add_domain') {
       const domain = change.domain.toLowerCase();
       if (domain === 'example.com' || domain === 'gmail.com') {

@@ -1,3 +1,4 @@
+import type { CacheAuthorityHost } from '../authority';
 import type { PeopleCache } from '../people/host';
 import type { IdentityBindingWire, MutationInspection } from '../protocol';
 /**
@@ -77,19 +78,29 @@ export type InspectQueryVariantsArgs = Omit<
 >;
 
 export interface CacheWriteArgs extends Omit<CacheReadArgs, 'priority'> {
+  /** Capture before dispatch; the shared owner compares it before publication. */
+  generation: string;
   data: unknown;
   /** Installs this active query's dependencies from the normalized response. */
   registerDependencies?: boolean;
   /** Opaque session tag; see protocol.ts `identity`. */
   identity?: string;
+  /**
+   * A query result nobody waits for. The native host refuses it with
+   * `CacheWriteSupersededError` when a mutation that committed after it was
+   * sent changed one of its records; other hosts ignore it.
+   */
+  background?: boolean;
 }
 
-export interface CacheHydrateArgs extends Omit<CacheWriteArgs, 'opKey'> {
+export interface CacheHydrateArgs
+  extends Omit<CacheWriteArgs, 'opKey' | 'background'> {
   /** Reject a response from another account or cleared database before writing. */
   hydrationScope?: HydrationScope;
 }
 
-export interface EnqueueOptimisticMutationArgs extends CacheWriteArgs {
+export interface EnqueueOptimisticMutationArgs
+  extends Omit<CacheWriteArgs, 'background'> {
   /** Caller-supplied RFC UUID used for explicit safe coalescing. */
   uuid: string;
   /** Opaque durable client correlation; never included in GraphQL variables. */
@@ -127,6 +138,9 @@ export type CacheChangeOptions = {
 /** Engine replacement is independent of whether durable cache data survived. */
 export type CacheGenerationChange = {
   storage: 'preserved' | 'reset';
+  /** Queued mutations can outlive the storage that queued them. Reset means
+   * that some may be gone and that transaction IDs may start over. */
+  queue: 'preserved' | 'reset';
 };
 
 export type AffectedOperationsListener = (
@@ -135,12 +149,26 @@ export type AffectedOperationsListener = (
 ) => void;
 
 export interface CacheHost {
+  /** Shared permission ordering; required by the current browser/native runtime. */
+  readonly authority?: CacheAuthorityHost;
   /** The host understands engine-maintained fragment query requests. */
   readonly liveQueries?: boolean;
   /** Stable id of this context; used to namespace operation ids. */
   readonly clientId: string;
-  /** True for the storage-free fallback when browser cache APIs are unsupported. */
+  /** True for the storage-free fallback when browser cache APIs are unsupported,
+   * and while `paused`. */
   readonly disabled?: boolean;
+  /** Whether the cache engine is open now, and not `paused`. Writes made
+   * before it opens wait for it (while paused they are refused), so a reader
+   * that must see its write land last can check this. Absent on hosts that are
+   * always ready. */
+  isReady?(): boolean;
+  /** Settles once the engine is open, or once this host stops trying (fails
+   * or is disposed). Never rejects and never starts initialization. */
+  whenReady?(): Promise<void>;
+  /** Nothing can open the database for now. The host keeps its subscriptions
+   * and serves again, without being replaced, once something can. */
+  readonly paused?: boolean;
 
   /** Returns the current revision of the active cache-engine generation. */
   currentRevision(): Promise<CacheRevision>;
@@ -169,7 +197,10 @@ export interface CacheHost {
     args: CalendarRangeCacheArgs
   ): Promise<CalendarRangeCacheResult>;
   /** Atomically applies calendar coverage, deletions, and sync state. */
-  calendarCommit(args: CalendarCommitArgs): Promise<CalendarCommitCacheResult>;
+  calendarCommit(
+    args: CalendarCommitArgs,
+    generation: string
+  ): Promise<CalendarCommitCacheResult>;
   writeQuery(args: CacheWriteArgs): Promise<WriteResult>;
   /**
    * Stores a background query response and returns only fields not marked
@@ -221,7 +252,10 @@ export interface CacheHost {
   /** Evict records by entity key (external/push updates); returns affected local op ids. */
   invalidate(keys: string[]): Promise<AffectedOperationsResult>;
   /** Apply explicit server-provided cache-deletion effects. */
-  deleteRecords(keys: string[]): Promise<AffectedOperationsResult>;
+  deleteRecords(
+    keys: string[],
+    authorityGeneration?: string
+  ): Promise<AffectedOperationsResult>;
   /** urql teardown for an operation key. */
   teardown(opKey: number): Promise<void>;
   /** Wipe all cached state (logout). */
@@ -246,6 +280,16 @@ export interface CacheHost {
   onCacheGenerationChanged(
     cb: (change: CacheGenerationChange) => void
   ): () => void;
+
+  /**
+   * The cache's owner answers again: after the host starts, after an owner
+   * change that replaced the engine, and after one that was called off. For a
+   * reader with no network to turn to, refused with
+   * `isOwnerHandoffBlockedError` or ended by a `CacheRequestTimeoutError`
+   * while it waited. Nothing is replayed to a late subscriber. Absent on a host
+   * whose reads never wait for an owner.
+   */
+  onOwnerReady?(cb: () => void): () => void;
 
   /** Subscribes to final commit, rollback, or supersession events. */
   onMutationSettled(cb: (settlement: MutationSettlement) => void): () => void;

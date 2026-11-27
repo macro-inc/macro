@@ -46,7 +46,7 @@ function useCard(): CardState | undefined {
 
 /**
  * The one shell every agent card uses: the app's `Card` from `@ui`, filled at
- * depth 3 as the routine and For you cards are. Compose the inside from its
+ * depth 3 as every card in an agent chat is. Compose the inside from its
  * parts: `Card.Header` with an `Item`, `CardBody`, `CardFooter`.
  *
  * A card with `onOpen` opens its item from anywhere on it: a button covers

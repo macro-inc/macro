@@ -118,6 +118,18 @@ it('leaves new-tab clicks and other links to the browser', () => {
   expect(screen.queryByRole('dialog')).toBeNull();
 });
 
+it('lets both the label and arrow of a direct booking link open the hosted page', () => {
+  renderSite();
+  render(() => (
+    <a href={DEMO_BOOKING_URL} target="_blank" data-booking-direct="true">
+      Get migration help <span aria-hidden="true">↗</span>
+    </a>
+  ));
+  expect(followsLink(screen.getByRole('link', { name: 'Get migration help' }))).toBe(true);
+  expect(followsLink(screen.getByText('↗'))).toBe(true);
+  expect(screen.queryByRole('dialog')).toBeNull();
+});
+
 it('sends the visitor to the booking page when the frame is refused', async () => {
   renderSite();
   const { frame } = await openDialog();
@@ -147,7 +159,7 @@ it('reports a demo booked in the dialog to Meta, and only from its own frame', a
 
   booked(frame.contentWindow);
   expect(analytics.trackMeta).toHaveBeenCalledExactlyOnceWith(
-    'CompleteRegistration',
+    'Lead',
     {
       content_name: 'demo_meeting',
       content_category: 'cal_booking',

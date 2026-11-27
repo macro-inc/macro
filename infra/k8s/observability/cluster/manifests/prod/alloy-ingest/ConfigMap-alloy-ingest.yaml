@@ -1,0 +1,769 @@
+apiVersion: v1
+data:
+  config.alloy: |-
+    local.file "otlp_token" {
+      filename = sys.env("CREDENTIALS_DIRECTORY") + "/otlp_token"
+      is_secret = true
+    }
+
+    otelcol.auth.bearer "ingest" {
+      token = local.file.otlp_token.content
+    }
+
+    otelcol.receiver.otlp "ingest" {
+      http {
+        endpoint = "0.0.0.0:4318"
+        auth = otelcol.auth.bearer.ingest.handler
+        max_request_body_size = "8MiB"
+      }
+      output {
+        logs = [otelcol.processor.memory_limiter.ingest.input]
+        traces = [otelcol.processor.memory_limiter.ingest.input]
+        metrics = [otelcol.processor.memory_limiter.ingest.input]
+      }
+    }
+
+    otelcol.processor.memory_limiter "ingest" {
+      check_interval = "1s"
+      limit = "1536MiB"
+      spike_limit = "128MiB"
+      output {
+        logs = [otelcol.processor.filter.local_logs.input]
+        traces = [otelcol.processor.transform.ai_content.input]
+        metrics = [otelcol.processor.transform.emails.input]
+      }
+    }
+
+    // Local stacks forward their logs here (docker/grafana-forwarder), and one
+    // service failing in a loop sent more than every other sender together, nearly
+    // all of it error-level. Only local-telemetry's run events are kept; the rest
+    // stay in the stack's own Loki.
+    otelcol.processor.filter "local_logs" {
+      error_mode = "ignore"
+      logs {
+        log_record = [
+          `(resource.attributes["deployment.environment"] == "local" or resource.attributes["deployment.environment.name"] == "local") and resource.attributes["service.name"] != "local-telemetry"`,
+        ]
+      }
+      output { logs = [otelcol.processor.transform.emails.input] }
+    }
+
+    // What people and models wrote never reaches storage. Token counts, models,
+    // operations, outcomes and the macro.genai.* sizes stay. A failed statement
+    // fails the batch, so content can't slip through.
+    otelcol.processor.transform "ai_content" {
+      error_mode = "propagate"
+      trace_statements {
+        context = "span"
+        statements = [
+          `delete_matching_keys(attributes, "^gen_ai\\.(input|output|prompt|completion|choice|system_instructions|(system|user|assistant|tool)\\.message|tool\\.definitions|tool\\.call\\.(arguments|result))(\\.|$)")`,
+          // A harness's own title for a tool call, often its command line. Where it
+          // gave no tool name, the title is the name and part of the span's.
+          `delete_key(attributes, "macro.genai.tool.title")`,
+          `set(name, "execute_tool") where IsMatch(attributes["gen_ai.tool.name"], "[^A-Za-z0-9_:-]")`,
+          `delete_key(attributes, "gen_ai.tool.name") where IsMatch(attributes["gen_ai.tool.name"], "[^A-Za-z0-9_:-]")`,
+          // A provider's error can quote the request, and a tool's is its output.
+          // error.type stays.
+          `set(status.message, "") where attributes["gen_ai.operation.name"] != nil`,
+        ]
+      }
+      trace_statements {
+        context = "spanevent"
+        statements = [
+          `delete_matching_keys(attributes, "^gen_ai\\.(input|output|prompt|completion|choice|system_instructions|(system|user|assistant|tool)\\.message|tool\\.definitions|tool\\.call\\.(arguments|result))(\\.|$)")`,
+          `delete_matching_keys(attributes, "^(error|exception\\.(message|stacktrace))$") where span.attributes["gen_ai.operation.name"] != nil`,
+          // The model client's events carry responses it couldn't parse, in the
+          // event's name or its fields.
+          `set(name, "rig") where IsMatch(attributes["target"], "^rig")`,
+          `keep_keys(attributes, ["level", "target"]) where IsMatch(attributes["target"], "^rig")`,
+        ]
+      }
+      output { traces = [otelcol.processor.transform.emails.input] }
+    }
+
+    // User IDs are email addresses, and logs and errors quote them. Each address,
+    // wherever it appears, becomes its SHA-256 ("macro|<hash>"), so one user's
+    // telemetry can still be found by hashing their address as written. A map or
+    // list attribute that holds one is flattened (`ids.0`, `m.inner`) and scanned
+    // again; a list or map body that holds one becomes its JSON text.
+    //
+    // The pattern scan tripled ingest's CPU on spans with long attributes, so a
+    // map is scanned only when its JSON holds an "@" or a "%40", and checked for a
+    // nested address only when the JSON also shows a list or map value. The
+    // macro.ingest.* keys mark what to scan between blocks; senders' are removed
+    // first, and all after. JSON can't hold a NaN or an infinity, so the checks
+    // ignore errors, and a map they couldn't check is scanned and flattened.
+    // Addresses in map keys and byte values stay, and a flattened map can pass
+    // Loki's 128 metadata entries or Mimir's 30 labels and be refused.
+    otelcol.processor.transform "emails" {
+      error_mode = "propagate"
+      log_statements {
+        context = "resource"
+        error_mode = "ignore"
+        statements = [
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+          `set(cache["json"], String(attributes))`,
+          `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+          `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
+        ]
+      }
+      log_statements {
+        context = "resource"
+        statements = [`replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
+      }
+      log_statements {
+        context = "resource"
+        error_mode = "ignore"
+        statements = [
+          `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+          `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
+        ]
+      }
+      log_statements {
+        context = "resource"
+        statements = [
+          `replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+        ]
+      }
+      log_statements {
+        context = "scope"
+        error_mode = "ignore"
+        statements = [
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+          `set(cache["json"], String(attributes))`,
+          `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+          `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
+        ]
+      }
+      log_statements {
+        context = "scope"
+        statements = [`replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
+      }
+      log_statements {
+        context = "scope"
+        error_mode = "ignore"
+        statements = [
+          `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+          `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
+        ]
+      }
+      log_statements {
+        context = "scope"
+        statements = [
+          `replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+          `replace_pattern(name, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256)`,
+        ]
+      }
+      log_statements {
+        context = "log"
+        error_mode = "ignore"
+        statements = [
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+          // A list of user IDs the web app sends stays one value.
+          `set(attributes["presence.user_ids"], String(attributes["presence.user_ids"])) where IsList(attributes["presence.user_ids"])`,
+          `set(cache["json"], String(attributes))`,
+          `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+          `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
+        ]
+      }
+      log_statements {
+        context = "log"
+        statements = [`replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
+      }
+      log_statements {
+        context = "log"
+        error_mode = "ignore"
+        statements = [
+          `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+          `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
+        ]
+      }
+      log_statements {
+        context = "log"
+        statements = [
+          `replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+        ]
+      }
+      log_statements {
+        context = "log"
+        error_mode = "ignore"
+        statements = [`set(body, String(body)) where (IsMap(body) or IsList(body)) and IsMatch(body, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`]
+      }
+      log_statements {
+        context = "log"
+        statements = [`replace_pattern(body, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where IsString(body) and (IsMatch(body, "@") or IsMatch(body, "%40"))`]
+      }
+      trace_statements {
+        context = "resource"
+        error_mode = "ignore"
+        statements = [
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+          `set(cache["json"], String(attributes))`,
+          `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+          `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
+        ]
+      }
+      trace_statements {
+        context = "resource"
+        statements = [`replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
+      }
+      trace_statements {
+        context = "resource"
+        error_mode = "ignore"
+        statements = [
+          `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+          `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
+        ]
+      }
+      trace_statements {
+        context = "resource"
+        statements = [
+          `replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+        ]
+      }
+      trace_statements {
+        context = "scope"
+        error_mode = "ignore"
+        statements = [
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+          `set(cache["json"], String(attributes))`,
+          `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+          `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
+        ]
+      }
+      trace_statements {
+        context = "scope"
+        statements = [`replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
+      }
+      trace_statements {
+        context = "scope"
+        error_mode = "ignore"
+        statements = [
+          `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+          `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
+        ]
+      }
+      trace_statements {
+        context = "scope"
+        statements = [
+          `replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+          `replace_pattern(name, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256)`,
+        ]
+      }
+      trace_statements {
+        context = "span"
+        error_mode = "ignore"
+        statements = [
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+          // A list of user IDs the web app sends stays one value.
+          `set(attributes["presence.user_ids"], String(attributes["presence.user_ids"])) where IsList(attributes["presence.user_ids"])`,
+          `set(cache["json"], String(attributes))`,
+          `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+          `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
+        ]
+      }
+      trace_statements {
+        context = "span"
+        statements = [`replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
+      }
+      trace_statements {
+        context = "span"
+        error_mode = "ignore"
+        statements = [
+          `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+          `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
+        ]
+      }
+      trace_statements {
+        context = "span"
+        statements = [
+          `replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+          `replace_pattern(name, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where (IsMatch(name, "@") or IsMatch(name, "%40"))`,
+          `replace_pattern(status.message, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where (IsMatch(status.message, "@") or IsMatch(status.message, "%40"))`,
+        ]
+      }
+      trace_statements {
+        context = "spanevent"
+        error_mode = "ignore"
+        statements = [
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+          `set(cache["json"], String(attributes))`,
+          `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+          `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
+        ]
+      }
+      trace_statements {
+        context = "spanevent"
+        statements = [`replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
+      }
+      trace_statements {
+        context = "spanevent"
+        error_mode = "ignore"
+        statements = [
+          `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+          `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
+        ]
+      }
+      trace_statements {
+        context = "spanevent"
+        statements = [
+          `replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+          `replace_pattern(name, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where (IsMatch(name, "@") or IsMatch(name, "%40"))`,
+        ]
+      }
+      metric_statements {
+        context = "resource"
+        error_mode = "ignore"
+        statements = [
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+          `set(cache["json"], String(attributes))`,
+          `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+          `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
+        ]
+      }
+      metric_statements {
+        context = "resource"
+        statements = [`replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
+      }
+      metric_statements {
+        context = "resource"
+        error_mode = "ignore"
+        statements = [
+          `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+          `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
+        ]
+      }
+      metric_statements {
+        context = "resource"
+        statements = [
+          `replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+        ]
+      }
+      metric_statements {
+        context = "scope"
+        error_mode = "ignore"
+        statements = [
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+          `set(cache["json"], String(attributes))`,
+          `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+          `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
+        ]
+      }
+      metric_statements {
+        context = "scope"
+        statements = [`replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
+      }
+      metric_statements {
+        context = "scope"
+        error_mode = "ignore"
+        statements = [
+          `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+          `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
+        ]
+      }
+      metric_statements {
+        context = "scope"
+        statements = [
+          `replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+          `replace_pattern(name, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256)`,
+        ]
+      }
+      metric_statements {
+        context = "datapoint"
+        error_mode = "ignore"
+        statements = [
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+          `set(cache["json"], String(attributes))`,
+          `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+          `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
+        ]
+      }
+      metric_statements {
+        context = "datapoint"
+        statements = [`replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
+      }
+      metric_statements {
+        context = "datapoint"
+        error_mode = "ignore"
+        statements = [
+          `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+          `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
+        ]
+      }
+      metric_statements {
+        context = "datapoint"
+        statements = [
+          `replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+        ]
+      }
+      output {
+        logs = [otelcol.processor.batch.ingest.input]
+        metrics = [otelcol.processor.batch.ingest.input]
+        traces = [otelcol.processor.batch.ingest.input]
+      }
+    }
+
+    otelcol.processor.batch "ingest" {
+      timeout = "1s"
+      send_batch_size = 512
+      send_batch_max_size = 1024
+      output {
+        logs = [otelcol.exporter.otlphttp.loki.input, otelcol.processor.filter.derived.input]
+        traces = [otelcol.exporter.loadbalancing.sampler.input, otelcol.processor.filter.derived.input]
+        metrics = [otelcol.exporter.prometheus.metrics.input]
+      }
+    }
+
+    otelcol.exporter.otlphttp "loki" {
+      client { endpoint = "http://loki.observability.svc.cluster.local:3100/otlp" }
+      sending_queue { queue_size = 256 }
+    }
+
+    // Every span of a trace to the same sampler (modules/sampler in
+    // infra/k8s/observability/cluster), which keeps or drops whole traces. The
+    // queue is in front of the routing, so a span waiting here goes to a sampler
+    // that is up when it leaves; a full one holds senders back instead of dropping.
+    otelcol.exporter.loadbalancing "sampler" {
+      timeout = "10s"
+      resolver {
+        dns {
+          hostname = "alloy-sampler.observability.svc.cluster.local"
+          interval = "5s"
+        }
+      }
+      protocol {
+        otlp {
+          timeout = "2s"
+          queue { enabled = false }
+          retry { enabled = false }
+          client {
+            tls { insecure = true }
+          }
+        }
+      }
+      sending_queue {
+        queue_size = 256
+        block_on_overflow = true
+      }
+      retry_on_failure { max_elapsed_time = "2m" }
+    }
+
+    otelcol.exporter.prometheus "metrics" {
+      forward_to = [prometheus.remote_write.local.receiver]
+    }
+
+    prometheus.remote_write "local" {
+      endpoint { url = "http://mimir.observability.svc.cluster.local:8080/api/v1/push" }
+    }
+
+    // Generated by infra/k8s/observability/cluster/modules/derived-metrics.
+    otelcol.processor.filter "derived" {
+      error_mode = "ignore"
+      traces {
+        span      = [`not ((name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service") or (name == "agent.acp.prompt" and resource.attributes["service.name"] == "agent-harness-service") or (attributes["gen_ai.operation.name"] == "execute_tool" and attributes["gen_ai.conversation.id"] != nil and resource.attributes["service.name"] == "agent-harness-service") or (name == "agent.turn" and resource.attributes["service.name"] == "agent-harness-service") or (name == "firecracker_host.launch" and resource.attributes["service.name"] == "firecracker-host") or (attributes["gen_ai.operation.name"] == "chat") or (attributes["outlook.throttle_origin"] != nil) or (IsMatch(name, "^outlook[.]sync[.]")) or (attributes["outlook.token_cache"] != nil) or (name == "ai.provider_account_unavailable") or (name == "agent.runtime.reattach" and resource.attributes["service.name"] == "agent-harness-service") or (attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"))`]
+        spanevent = [`true`]
+      }
+      logs {
+        log_record = [`not ((((IsString(attributes["level"]) and IsMatch(attributes["level"], "(?i)^err")) or (not IsString(attributes["level"]) and ((severity_number >= 17 and severity_number <= 20) or (severity_number == SEVERITY_NUMBER_UNSPECIFIED and IsMatch(severity_text, "(?i)^err")))))) or (IsString(body) and IsMatch(body, "(?i)\\boutlook mailbox health\\b") and ((IsString(attributes["level"]) and IsMatch(attributes["level"], "(?i)^i")) or (not IsString(attributes["level"]) and ((severity_number >= 9 and severity_number <= 12) or (severity_number == SEVERITY_NUMBER_UNSPECIFIED and IsMatch(severity_text, "(?i)^i")))))) or (IsString(body) and IsMatch(body, "(?i)\\bai provider account unavailable\\b") and ((IsString(attributes["level"]) and IsMatch(attributes["level"], "(?i)^err")) or (not IsString(attributes["level"]) and ((severity_number >= 17 and severity_number <= 20) or (severity_number == SEVERITY_NUMBER_UNSPECIFIED and IsMatch(severity_text, "(?i)^err")))))) or (IsString(body) and IsMatch(body, "(?i)\\btokio runtime starvation detected\\b") and resource.attributes["service.name"] == "agent-harness-service" and ((IsString(attributes["level"]) and IsMatch(attributes["level"], "(?i)^w")) or (not IsString(attributes["level"]) and ((severity_number >= 13 and severity_number <= 16) or (severity_number == SEVERITY_NUMBER_UNSPECIFIED and IsMatch(severity_text, "(?i)^w")))))) or (attributes["event"] == "routine_suggestions.dismissed" and resource.attributes["service.name"] == "agent-harness-service" and ((IsString(attributes["level"]) and IsMatch(attributes["level"], "(?i)^i")) or (not IsString(attributes["level"]) and ((severity_number >= 9 and severity_number <= 12) or (severity_number == SEVERITY_NUMBER_UNSPECIFIED and IsMatch(severity_text, "(?i)^i")))))) or (attributes["event"] == "routine_suggestions.generated" and resource.attributes["service.name"] == "agent-harness-service" and ((IsString(attributes["level"]) and IsMatch(attributes["level"], "(?i)^i")) or (not IsString(attributes["level"]) and ((severity_number >= 9 and severity_number <= 12) or (severity_number == SEVERITY_NUMBER_UNSPECIFIED and IsMatch(severity_text, "(?i)^i"))))) and attributes["trigger"] == "onboarding") or (attributes["event"] == "routine_suggestions.saved" and resource.attributes["service.name"] == "agent-harness-service" and ((IsString(attributes["level"]) and IsMatch(attributes["level"], "(?i)^i")) or (not IsString(attributes["level"]) and ((severity_number >= 9 and severity_number <= 12) or (severity_number == SEVERITY_NUMBER_UNSPECIFIED and IsMatch(severity_text, "(?i)^i")))))) or (attributes["event"] == "routine_suggestions.suggested" and resource.attributes["service.name"] == "agent-harness-service" and ((IsString(attributes["level"]) and IsMatch(attributes["level"], "(?i)^i")) or (not IsString(attributes["level"]) and ((severity_number >= 9 and severity_number <= 12) or (severity_number == SEVERITY_NUMBER_UNSPECIFIED and IsMatch(severity_text, "(?i)^i")))))) or (attributes["event"] == "routine_suggestions.surface" and resource.attributes["service.name"] == "agent-harness-service" and ((IsString(attributes["level"]) and IsMatch(attributes["level"], "(?i)^i")) or (not IsString(attributes["level"]) and ((severity_number >= 9 and severity_number <= 12) or (severity_number == SEVERITY_NUMBER_UNSPECIFIED and IsMatch(severity_text, "(?i)^i"))))) and attributes["trigger"] == "onboarding") or (attributes["metric"] == "TIME-TO-FIRST-TOKEN") or (attributes["metric"] == "TIME-TO-SEND-REQUEST") or (IsString(body) and IsMatch(body, "(?i)\\bai usage priced\\b") and ((IsString(attributes["level"]) and IsMatch(attributes["level"], "(?i)^i")) or (not IsString(attributes["level"]) and ((severity_number >= 9 and severity_number <= 12) or (severity_number == SEVERITY_NUMBER_UNSPECIFIED and IsMatch(severity_text, "(?i)^i")))))))`]
+      }
+      output {
+        traces = [otelcol.processor.transform.derived.input]
+        logs   = [otelcol.processor.transform.derived.input]
+      }
+    }
+
+    otelcol.processor.transform "derived" {
+      error_mode = "ignore"
+      trace_statements {
+        context    = "resource"
+        statements = [
+        `keep_keys(attributes, ["gen_ai.usage.cache_read.input_tokens", "gen_ai.usage.cache_creation.input_tokens", "gen_ai.usage.input_tokens", "macro.genai.prompt.connected_integrations.bytes", "macro.genai.prompt.history.bytes", "macro.genai.prompt.identity.bytes", "macro.genai.prompt.macro_prompt.bytes", "macro.genai.prompt.memory.bytes", "macro.genai.prompt.model_id.bytes", "macro.genai.prompt.opener_note.bytes", "macro.genai.prompt.preamble.bytes", "macro.genai.prompt.sdk_docs.bytes", "macro.genai.prompt.session_instructions.bytes", "macro.genai.prompt.session_note.bytes", "macro.genai.prompt.tool_results.bytes", "macro.genai.prompt.tools.eager.bytes", "macro.genai.prompt.tools.loaded.bytes", "macro.genai.tool.result_bytes", "agent.turn.code_executions", "agent.turn.code_failures", "agent.turn.compaction_wait_ms", "agent.stream.model_calls", "agent.runtime.reattach_eager", "agent.runtime.reattach_failures", "agent.runtime.reattach_lazy", "agent.runtime.reattach_sessions", "agent.runtime.reattach_skipped", "macro.genai.chat.time_to_first_chunk_ms", "outlook.notification_lag_ms", "ui.long_animation_frame_blocking_ms", "ui.elapsed_ms", "graphql.body_ms", "http.body_ms", "runtime.long_animation_frame.blocking_ms", "macro.memory.js_heap.used_bytes", "typing.event_duration_p95_ms", "gen_ai.usage.output_tokens", "deployment.environment", "deployment.environment.name", "gen_ai.provider.name", "gen_ai.tool.name", "agent.model", "harness", "ai.provider", "ai.account_unavailable", "host.name", "source", "gen_ai.response.model", "gen_ai.request.model", "service.name", "http.response.status_code", "http.status_code", "outlook.throttle_origin", "outlook.outcome", "outlook.defer_reason", "http.request.method", "outlook.token_cache", "app.platform", "flow.kind", "os.type", "route.id", "ui.outcome", "flow.root", "app.runtime", "typing.surface", "gen_ai.operation.name", "gen_ai.conversation.id", "macro.sampling.class", "macro.genai.tool.result_cut", "graphql.body_outcome", "http.body_outcome", "flow.outcome"])`,
+        `delete_key(attributes, "gen_ai.usage.cache_read.input_tokens") where attributes["gen_ai.usage.cache_read.input_tokens"] != nil and not (IsString(attributes["gen_ai.usage.cache_read.input_tokens"]) or IsBool(attributes["gen_ai.usage.cache_read.input_tokens"]) or IsInt(attributes["gen_ai.usage.cache_read.input_tokens"]) or IsDouble(attributes["gen_ai.usage.cache_read.input_tokens"]))`,
+        `delete_key(attributes, "gen_ai.usage.cache_creation.input_tokens") where attributes["gen_ai.usage.cache_creation.input_tokens"] != nil and not (IsString(attributes["gen_ai.usage.cache_creation.input_tokens"]) or IsBool(attributes["gen_ai.usage.cache_creation.input_tokens"]) or IsInt(attributes["gen_ai.usage.cache_creation.input_tokens"]) or IsDouble(attributes["gen_ai.usage.cache_creation.input_tokens"]))`,
+        `delete_key(attributes, "gen_ai.usage.input_tokens") where attributes["gen_ai.usage.input_tokens"] != nil and not (IsString(attributes["gen_ai.usage.input_tokens"]) or IsBool(attributes["gen_ai.usage.input_tokens"]) or IsInt(attributes["gen_ai.usage.input_tokens"]) or IsDouble(attributes["gen_ai.usage.input_tokens"]))`,
+        `delete_key(attributes, "macro.genai.prompt.connected_integrations.bytes") where attributes["macro.genai.prompt.connected_integrations.bytes"] != nil and not (IsString(attributes["macro.genai.prompt.connected_integrations.bytes"]) or IsBool(attributes["macro.genai.prompt.connected_integrations.bytes"]) or IsInt(attributes["macro.genai.prompt.connected_integrations.bytes"]) or IsDouble(attributes["macro.genai.prompt.connected_integrations.bytes"]))`,
+        `delete_key(attributes, "macro.genai.prompt.history.bytes") where attributes["macro.genai.prompt.history.bytes"] != nil and not (IsString(attributes["macro.genai.prompt.history.bytes"]) or IsBool(attributes["macro.genai.prompt.history.bytes"]) or IsInt(attributes["macro.genai.prompt.history.bytes"]) or IsDouble(attributes["macro.genai.prompt.history.bytes"]))`,
+        `delete_key(attributes, "macro.genai.prompt.identity.bytes") where attributes["macro.genai.prompt.identity.bytes"] != nil and not (IsString(attributes["macro.genai.prompt.identity.bytes"]) or IsBool(attributes["macro.genai.prompt.identity.bytes"]) or IsInt(attributes["macro.genai.prompt.identity.bytes"]) or IsDouble(attributes["macro.genai.prompt.identity.bytes"]))`,
+        `delete_key(attributes, "macro.genai.prompt.macro_prompt.bytes") where attributes["macro.genai.prompt.macro_prompt.bytes"] != nil and not (IsString(attributes["macro.genai.prompt.macro_prompt.bytes"]) or IsBool(attributes["macro.genai.prompt.macro_prompt.bytes"]) or IsInt(attributes["macro.genai.prompt.macro_prompt.bytes"]) or IsDouble(attributes["macro.genai.prompt.macro_prompt.bytes"]))`,
+        `delete_key(attributes, "macro.genai.prompt.memory.bytes") where attributes["macro.genai.prompt.memory.bytes"] != nil and not (IsString(attributes["macro.genai.prompt.memory.bytes"]) or IsBool(attributes["macro.genai.prompt.memory.bytes"]) or IsInt(attributes["macro.genai.prompt.memory.bytes"]) or IsDouble(attributes["macro.genai.prompt.memory.bytes"]))`,
+        `delete_key(attributes, "macro.genai.prompt.model_id.bytes") where attributes["macro.genai.prompt.model_id.bytes"] != nil and not (IsString(attributes["macro.genai.prompt.model_id.bytes"]) or IsBool(attributes["macro.genai.prompt.model_id.bytes"]) or IsInt(attributes["macro.genai.prompt.model_id.bytes"]) or IsDouble(attributes["macro.genai.prompt.model_id.bytes"]))`,
+        `delete_key(attributes, "macro.genai.prompt.opener_note.bytes") where attributes["macro.genai.prompt.opener_note.bytes"] != nil and not (IsString(attributes["macro.genai.prompt.opener_note.bytes"]) or IsBool(attributes["macro.genai.prompt.opener_note.bytes"]) or IsInt(attributes["macro.genai.prompt.opener_note.bytes"]) or IsDouble(attributes["macro.genai.prompt.opener_note.bytes"]))`,
+        `delete_key(attributes, "macro.genai.prompt.preamble.bytes") where attributes["macro.genai.prompt.preamble.bytes"] != nil and not (IsString(attributes["macro.genai.prompt.preamble.bytes"]) or IsBool(attributes["macro.genai.prompt.preamble.bytes"]) or IsInt(attributes["macro.genai.prompt.preamble.bytes"]) or IsDouble(attributes["macro.genai.prompt.preamble.bytes"]))`,
+        `delete_key(attributes, "macro.genai.prompt.sdk_docs.bytes") where attributes["macro.genai.prompt.sdk_docs.bytes"] != nil and not (IsString(attributes["macro.genai.prompt.sdk_docs.bytes"]) or IsBool(attributes["macro.genai.prompt.sdk_docs.bytes"]) or IsInt(attributes["macro.genai.prompt.sdk_docs.bytes"]) or IsDouble(attributes["macro.genai.prompt.sdk_docs.bytes"]))`,
+        `delete_key(attributes, "macro.genai.prompt.session_instructions.bytes") where attributes["macro.genai.prompt.session_instructions.bytes"] != nil and not (IsString(attributes["macro.genai.prompt.session_instructions.bytes"]) or IsBool(attributes["macro.genai.prompt.session_instructions.bytes"]) or IsInt(attributes["macro.genai.prompt.session_instructions.bytes"]) or IsDouble(attributes["macro.genai.prompt.session_instructions.bytes"]))`,
+        `delete_key(attributes, "macro.genai.prompt.session_note.bytes") where attributes["macro.genai.prompt.session_note.bytes"] != nil and not (IsString(attributes["macro.genai.prompt.session_note.bytes"]) or IsBool(attributes["macro.genai.prompt.session_note.bytes"]) or IsInt(attributes["macro.genai.prompt.session_note.bytes"]) or IsDouble(attributes["macro.genai.prompt.session_note.bytes"]))`,
+        `delete_key(attributes, "macro.genai.prompt.tool_results.bytes") where attributes["macro.genai.prompt.tool_results.bytes"] != nil and not (IsString(attributes["macro.genai.prompt.tool_results.bytes"]) or IsBool(attributes["macro.genai.prompt.tool_results.bytes"]) or IsInt(attributes["macro.genai.prompt.tool_results.bytes"]) or IsDouble(attributes["macro.genai.prompt.tool_results.bytes"]))`,
+        `delete_key(attributes, "macro.genai.prompt.tools.eager.bytes") where attributes["macro.genai.prompt.tools.eager.bytes"] != nil and not (IsString(attributes["macro.genai.prompt.tools.eager.bytes"]) or IsBool(attributes["macro.genai.prompt.tools.eager.bytes"]) or IsInt(attributes["macro.genai.prompt.tools.eager.bytes"]) or IsDouble(attributes["macro.genai.prompt.tools.eager.bytes"]))`,
+        `delete_key(attributes, "macro.genai.prompt.tools.loaded.bytes") where attributes["macro.genai.prompt.tools.loaded.bytes"] != nil and not (IsString(attributes["macro.genai.prompt.tools.loaded.bytes"]) or IsBool(attributes["macro.genai.prompt.tools.loaded.bytes"]) or IsInt(attributes["macro.genai.prompt.tools.loaded.bytes"]) or IsDouble(attributes["macro.genai.prompt.tools.loaded.bytes"]))`,
+        `delete_key(attributes, "macro.genai.tool.result_bytes") where attributes["macro.genai.tool.result_bytes"] != nil and not (IsString(attributes["macro.genai.tool.result_bytes"]) or IsBool(attributes["macro.genai.tool.result_bytes"]) or IsInt(attributes["macro.genai.tool.result_bytes"]) or IsDouble(attributes["macro.genai.tool.result_bytes"]))`,
+        `delete_key(attributes, "agent.turn.code_executions") where attributes["agent.turn.code_executions"] != nil and not (IsString(attributes["agent.turn.code_executions"]) or IsBool(attributes["agent.turn.code_executions"]) or IsInt(attributes["agent.turn.code_executions"]) or IsDouble(attributes["agent.turn.code_executions"]))`,
+        `delete_key(attributes, "agent.turn.code_failures") where attributes["agent.turn.code_failures"] != nil and not (IsString(attributes["agent.turn.code_failures"]) or IsBool(attributes["agent.turn.code_failures"]) or IsInt(attributes["agent.turn.code_failures"]) or IsDouble(attributes["agent.turn.code_failures"]))`,
+        `delete_key(attributes, "agent.turn.compaction_wait_ms") where attributes["agent.turn.compaction_wait_ms"] != nil and not (IsString(attributes["agent.turn.compaction_wait_ms"]) or IsBool(attributes["agent.turn.compaction_wait_ms"]) or IsInt(attributes["agent.turn.compaction_wait_ms"]) or IsDouble(attributes["agent.turn.compaction_wait_ms"]))`,
+        `delete_key(attributes, "agent.stream.model_calls") where attributes["agent.stream.model_calls"] != nil and not (IsString(attributes["agent.stream.model_calls"]) or IsBool(attributes["agent.stream.model_calls"]) or IsInt(attributes["agent.stream.model_calls"]) or IsDouble(attributes["agent.stream.model_calls"]))`,
+        `delete_key(attributes, "agent.runtime.reattach_eager") where attributes["agent.runtime.reattach_eager"] != nil and not (IsString(attributes["agent.runtime.reattach_eager"]) or IsBool(attributes["agent.runtime.reattach_eager"]) or IsInt(attributes["agent.runtime.reattach_eager"]) or IsDouble(attributes["agent.runtime.reattach_eager"]))`,
+        `delete_key(attributes, "agent.runtime.reattach_failures") where attributes["agent.runtime.reattach_failures"] != nil and not (IsString(attributes["agent.runtime.reattach_failures"]) or IsBool(attributes["agent.runtime.reattach_failures"]) or IsInt(attributes["agent.runtime.reattach_failures"]) or IsDouble(attributes["agent.runtime.reattach_failures"]))`,
+        `delete_key(attributes, "agent.runtime.reattach_lazy") where attributes["agent.runtime.reattach_lazy"] != nil and not (IsString(attributes["agent.runtime.reattach_lazy"]) or IsBool(attributes["agent.runtime.reattach_lazy"]) or IsInt(attributes["agent.runtime.reattach_lazy"]) or IsDouble(attributes["agent.runtime.reattach_lazy"]))`,
+        `delete_key(attributes, "agent.runtime.reattach_sessions") where attributes["agent.runtime.reattach_sessions"] != nil and not (IsString(attributes["agent.runtime.reattach_sessions"]) or IsBool(attributes["agent.runtime.reattach_sessions"]) or IsInt(attributes["agent.runtime.reattach_sessions"]) or IsDouble(attributes["agent.runtime.reattach_sessions"]))`,
+        `delete_key(attributes, "agent.runtime.reattach_skipped") where attributes["agent.runtime.reattach_skipped"] != nil and not (IsString(attributes["agent.runtime.reattach_skipped"]) or IsBool(attributes["agent.runtime.reattach_skipped"]) or IsInt(attributes["agent.runtime.reattach_skipped"]) or IsDouble(attributes["agent.runtime.reattach_skipped"]))`,
+        `delete_key(attributes, "macro.genai.chat.time_to_first_chunk_ms") where attributes["macro.genai.chat.time_to_first_chunk_ms"] != nil and not (IsString(attributes["macro.genai.chat.time_to_first_chunk_ms"]) or IsBool(attributes["macro.genai.chat.time_to_first_chunk_ms"]) or IsInt(attributes["macro.genai.chat.time_to_first_chunk_ms"]) or IsDouble(attributes["macro.genai.chat.time_to_first_chunk_ms"]))`,
+        `delete_key(attributes, "outlook.notification_lag_ms") where attributes["outlook.notification_lag_ms"] != nil and not (IsString(attributes["outlook.notification_lag_ms"]) or IsBool(attributes["outlook.notification_lag_ms"]) or IsInt(attributes["outlook.notification_lag_ms"]) or IsDouble(attributes["outlook.notification_lag_ms"]))`,
+        `delete_key(attributes, "ui.long_animation_frame_blocking_ms") where attributes["ui.long_animation_frame_blocking_ms"] != nil and not (IsString(attributes["ui.long_animation_frame_blocking_ms"]) or IsBool(attributes["ui.long_animation_frame_blocking_ms"]) or IsInt(attributes["ui.long_animation_frame_blocking_ms"]) or IsDouble(attributes["ui.long_animation_frame_blocking_ms"]))`,
+        `delete_key(attributes, "ui.elapsed_ms") where attributes["ui.elapsed_ms"] != nil and not (IsString(attributes["ui.elapsed_ms"]) or IsBool(attributes["ui.elapsed_ms"]) or IsInt(attributes["ui.elapsed_ms"]) or IsDouble(attributes["ui.elapsed_ms"]))`,
+        `delete_key(attributes, "graphql.body_ms") where attributes["graphql.body_ms"] != nil and not (IsString(attributes["graphql.body_ms"]) or IsBool(attributes["graphql.body_ms"]) or IsInt(attributes["graphql.body_ms"]) or IsDouble(attributes["graphql.body_ms"]))`,
+        `delete_key(attributes, "http.body_ms") where attributes["http.body_ms"] != nil and not (IsString(attributes["http.body_ms"]) or IsBool(attributes["http.body_ms"]) or IsInt(attributes["http.body_ms"]) or IsDouble(attributes["http.body_ms"]))`,
+        `delete_key(attributes, "runtime.long_animation_frame.blocking_ms") where attributes["runtime.long_animation_frame.blocking_ms"] != nil and not (IsString(attributes["runtime.long_animation_frame.blocking_ms"]) or IsBool(attributes["runtime.long_animation_frame.blocking_ms"]) or IsInt(attributes["runtime.long_animation_frame.blocking_ms"]) or IsDouble(attributes["runtime.long_animation_frame.blocking_ms"]))`,
+        `delete_key(attributes, "macro.memory.js_heap.used_bytes") where attributes["macro.memory.js_heap.used_bytes"] != nil and not (IsString(attributes["macro.memory.js_heap.used_bytes"]) or IsBool(attributes["macro.memory.js_heap.used_bytes"]) or IsInt(attributes["macro.memory.js_heap.used_bytes"]) or IsDouble(attributes["macro.memory.js_heap.used_bytes"]))`,
+        `delete_key(attributes, "typing.event_duration_p95_ms") where attributes["typing.event_duration_p95_ms"] != nil and not (IsString(attributes["typing.event_duration_p95_ms"]) or IsBool(attributes["typing.event_duration_p95_ms"]) or IsInt(attributes["typing.event_duration_p95_ms"]) or IsDouble(attributes["typing.event_duration_p95_ms"]))`,
+        `delete_key(attributes, "gen_ai.usage.output_tokens") where attributes["gen_ai.usage.output_tokens"] != nil and not (IsString(attributes["gen_ai.usage.output_tokens"]) or IsBool(attributes["gen_ai.usage.output_tokens"]) or IsInt(attributes["gen_ai.usage.output_tokens"]) or IsDouble(attributes["gen_ai.usage.output_tokens"]))`,
+        `delete_key(attributes, "deployment.environment") where attributes["deployment.environment"] != nil and not (IsString(attributes["deployment.environment"]) or IsBool(attributes["deployment.environment"]) or IsInt(attributes["deployment.environment"]) or IsDouble(attributes["deployment.environment"]))`,
+        `delete_key(attributes, "deployment.environment.name") where attributes["deployment.environment.name"] != nil and not (IsString(attributes["deployment.environment.name"]) or IsBool(attributes["deployment.environment.name"]) or IsInt(attributes["deployment.environment.name"]) or IsDouble(attributes["deployment.environment.name"]))`,
+        `delete_key(attributes, "gen_ai.provider.name") where attributes["gen_ai.provider.name"] != nil and not (IsString(attributes["gen_ai.provider.name"]) or IsBool(attributes["gen_ai.provider.name"]) or IsInt(attributes["gen_ai.provider.name"]) or IsDouble(attributes["gen_ai.provider.name"]))`,
+        `delete_key(attributes, "gen_ai.tool.name") where attributes["gen_ai.tool.name"] != nil and not (IsString(attributes["gen_ai.tool.name"]) or IsBool(attributes["gen_ai.tool.name"]) or IsInt(attributes["gen_ai.tool.name"]) or IsDouble(attributes["gen_ai.tool.name"]))`,
+        `delete_key(attributes, "agent.model") where attributes["agent.model"] != nil and not (IsString(attributes["agent.model"]) or IsBool(attributes["agent.model"]) or IsInt(attributes["agent.model"]) or IsDouble(attributes["agent.model"]))`,
+        `delete_key(attributes, "harness") where attributes["harness"] != nil and not (IsString(attributes["harness"]) or IsBool(attributes["harness"]) or IsInt(attributes["harness"]) or IsDouble(attributes["harness"]))`,
+        `delete_key(attributes, "ai.provider") where attributes["ai.provider"] != nil and not (IsString(attributes["ai.provider"]) or IsBool(attributes["ai.provider"]) or IsInt(attributes["ai.provider"]) or IsDouble(attributes["ai.provider"]))`,
+        `delete_key(attributes, "ai.account_unavailable") where attributes["ai.account_unavailable"] != nil and not (IsString(attributes["ai.account_unavailable"]) or IsBool(attributes["ai.account_unavailable"]) or IsInt(attributes["ai.account_unavailable"]) or IsDouble(attributes["ai.account_unavailable"]))`,
+        `delete_key(attributes, "host.name") where attributes["host.name"] != nil and not (IsString(attributes["host.name"]) or IsBool(attributes["host.name"]) or IsInt(attributes["host.name"]) or IsDouble(attributes["host.name"]))`,
+        `delete_key(attributes, "source") where attributes["source"] != nil and not (IsString(attributes["source"]) or IsBool(attributes["source"]) or IsInt(attributes["source"]) or IsDouble(attributes["source"]))`,
+        `delete_key(attributes, "gen_ai.response.model") where attributes["gen_ai.response.model"] != nil and not (IsString(attributes["gen_ai.response.model"]) or IsBool(attributes["gen_ai.response.model"]) or IsInt(attributes["gen_ai.response.model"]) or IsDouble(attributes["gen_ai.response.model"]))`,
+        `delete_key(attributes, "gen_ai.request.model") where attributes["gen_ai.request.model"] != nil and not (IsString(attributes["gen_ai.request.model"]) or IsBool(attributes["gen_ai.request.model"]) or IsInt(attributes["gen_ai.request.model"]) or IsDouble(attributes["gen_ai.request.model"]))`,
+        `delete_key(attributes, "service.name") where attributes["service.name"] != nil and not (IsString(attributes["service.name"]) or IsBool(attributes["service.name"]) or IsInt(attributes["service.name"]) or IsDouble(attributes["service.name"]))`,
+        `delete_key(attributes, "http.response.status_code") where attributes["http.response.status_code"] != nil and not (IsString(attributes["http.response.status_code"]) or IsBool(attributes["http.response.status_code"]) or IsInt(attributes["http.response.status_code"]) or IsDouble(attributes["http.response.status_code"]))`,
+        `delete_key(attributes, "http.status_code") where attributes["http.status_code"] != nil and not (IsString(attributes["http.status_code"]) or IsBool(attributes["http.status_code"]) or IsInt(attributes["http.status_code"]) or IsDouble(attributes["http.status_code"]))`,
+        `delete_key(attributes, "outlook.throttle_origin") where attributes["outlook.throttle_origin"] != nil and not (IsString(attributes["outlook.throttle_origin"]) or IsBool(attributes["outlook.throttle_origin"]) or IsInt(attributes["outlook.throttle_origin"]) or IsDouble(attributes["outlook.throttle_origin"]))`,
+        `delete_key(attributes, "outlook.outcome") where attributes["outlook.outcome"] != nil and not (IsString(attributes["outlook.outcome"]) or IsBool(attributes["outlook.outcome"]) or IsInt(attributes["outlook.outcome"]) or IsDouble(attributes["outlook.outcome"]))`,
+        `delete_key(attributes, "outlook.defer_reason") where attributes["outlook.defer_reason"] != nil and not (IsString(attributes["outlook.defer_reason"]) or IsBool(attributes["outlook.defer_reason"]) or IsInt(attributes["outlook.defer_reason"]) or IsDouble(attributes["outlook.defer_reason"]))`,
+        `delete_key(attributes, "http.request.method") where attributes["http.request.method"] != nil and not (IsString(attributes["http.request.method"]) or IsBool(attributes["http.request.method"]) or IsInt(attributes["http.request.method"]) or IsDouble(attributes["http.request.method"]))`,
+        `delete_key(attributes, "outlook.token_cache") where attributes["outlook.token_cache"] != nil and not (IsString(attributes["outlook.token_cache"]) or IsBool(attributes["outlook.token_cache"]) or IsInt(attributes["outlook.token_cache"]) or IsDouble(attributes["outlook.token_cache"]))`,
+        `delete_key(attributes, "app.platform") where attributes["app.platform"] != nil and not (IsString(attributes["app.platform"]) or IsBool(attributes["app.platform"]) or IsInt(attributes["app.platform"]) or IsDouble(attributes["app.platform"]))`,
+        `delete_key(attributes, "flow.kind") where attributes["flow.kind"] != nil and not (IsString(attributes["flow.kind"]) or IsBool(attributes["flow.kind"]) or IsInt(attributes["flow.kind"]) or IsDouble(attributes["flow.kind"]))`,
+        `delete_key(attributes, "os.type") where attributes["os.type"] != nil and not (IsString(attributes["os.type"]) or IsBool(attributes["os.type"]) or IsInt(attributes["os.type"]) or IsDouble(attributes["os.type"]))`,
+        `delete_key(attributes, "route.id") where attributes["route.id"] != nil and not (IsString(attributes["route.id"]) or IsBool(attributes["route.id"]) or IsInt(attributes["route.id"]) or IsDouble(attributes["route.id"]))`,
+        `delete_key(attributes, "ui.outcome") where attributes["ui.outcome"] != nil and not (IsString(attributes["ui.outcome"]) or IsBool(attributes["ui.outcome"]) or IsInt(attributes["ui.outcome"]) or IsDouble(attributes["ui.outcome"]))`,
+        `delete_key(attributes, "flow.root") where attributes["flow.root"] != nil and not (IsString(attributes["flow.root"]) or IsBool(attributes["flow.root"]) or IsInt(attributes["flow.root"]) or IsDouble(attributes["flow.root"]))`,
+        `delete_key(attributes, "app.runtime") where attributes["app.runtime"] != nil and not (IsString(attributes["app.runtime"]) or IsBool(attributes["app.runtime"]) or IsInt(attributes["app.runtime"]) or IsDouble(attributes["app.runtime"]))`,
+        `delete_key(attributes, "typing.surface") where attributes["typing.surface"] != nil and not (IsString(attributes["typing.surface"]) or IsBool(attributes["typing.surface"]) or IsInt(attributes["typing.surface"]) or IsDouble(attributes["typing.surface"]))`,
+        `delete_key(attributes, "gen_ai.operation.name") where attributes["gen_ai.operation.name"] != nil and not (IsString(attributes["gen_ai.operation.name"]) or IsBool(attributes["gen_ai.operation.name"]) or IsInt(attributes["gen_ai.operation.name"]) or IsDouble(attributes["gen_ai.operation.name"]))`,
+        `delete_key(attributes, "gen_ai.conversation.id") where attributes["gen_ai.conversation.id"] != nil and not (IsString(attributes["gen_ai.conversation.id"]) or IsBool(attributes["gen_ai.conversation.id"]) or IsInt(attributes["gen_ai.conversation.id"]) or IsDouble(attributes["gen_ai.conversation.id"]))`,
+        `delete_key(attributes, "macro.sampling.class") where attributes["macro.sampling.class"] != nil and not (IsString(attributes["macro.sampling.class"]) or IsBool(attributes["macro.sampling.class"]) or IsInt(attributes["macro.sampling.class"]) or IsDouble(attributes["macro.sampling.class"]))`,
+        `delete_key(attributes, "macro.genai.tool.result_cut") where attributes["macro.genai.tool.result_cut"] != nil and not (IsString(attributes["macro.genai.tool.result_cut"]) or IsBool(attributes["macro.genai.tool.result_cut"]) or IsInt(attributes["macro.genai.tool.result_cut"]) or IsDouble(attributes["macro.genai.tool.result_cut"]))`,
+        `delete_key(attributes, "graphql.body_outcome") where attributes["graphql.body_outcome"] != nil and not (IsString(attributes["graphql.body_outcome"]) or IsBool(attributes["graphql.body_outcome"]) or IsInt(attributes["graphql.body_outcome"]) or IsDouble(attributes["graphql.body_outcome"]))`,
+        `delete_key(attributes, "http.body_outcome") where attributes["http.body_outcome"] != nil and not (IsString(attributes["http.body_outcome"]) or IsBool(attributes["http.body_outcome"]) or IsInt(attributes["http.body_outcome"]) or IsDouble(attributes["http.body_outcome"]))`,
+        `delete_key(attributes, "flow.outcome") where attributes["flow.outcome"] != nil and not (IsString(attributes["flow.outcome"]) or IsBool(attributes["flow.outcome"]) or IsInt(attributes["flow.outcome"]) or IsDouble(attributes["flow.outcome"]))`,
+        `truncate_all(attributes, 256)`,
+      ]
+      }
+      trace_statements {
+        context    = "scope"
+        statements = [`keep_keys(attributes, [])`]
+      }
+      trace_statements {
+        context    = "span"
+        statements = [
+        `keep_keys(attributes, ["gen_ai.usage.cache_read.input_tokens", "gen_ai.usage.cache_creation.input_tokens", "gen_ai.usage.input_tokens", "macro.genai.prompt.connected_integrations.bytes", "macro.genai.prompt.history.bytes", "macro.genai.prompt.identity.bytes", "macro.genai.prompt.macro_prompt.bytes", "macro.genai.prompt.memory.bytes", "macro.genai.prompt.model_id.bytes", "macro.genai.prompt.opener_note.bytes", "macro.genai.prompt.preamble.bytes", "macro.genai.prompt.sdk_docs.bytes", "macro.genai.prompt.session_instructions.bytes", "macro.genai.prompt.session_note.bytes", "macro.genai.prompt.tool_results.bytes", "macro.genai.prompt.tools.eager.bytes", "macro.genai.prompt.tools.loaded.bytes", "macro.genai.tool.result_bytes", "agent.turn.code_executions", "agent.turn.code_failures", "agent.turn.compaction_wait_ms", "agent.stream.model_calls", "agent.runtime.reattach_eager", "agent.runtime.reattach_failures", "agent.runtime.reattach_lazy", "agent.runtime.reattach_sessions", "agent.runtime.reattach_skipped", "macro.genai.chat.time_to_first_chunk_ms", "outlook.notification_lag_ms", "ui.long_animation_frame_blocking_ms", "ui.elapsed_ms", "graphql.body_ms", "http.body_ms", "runtime.long_animation_frame.blocking_ms", "macro.memory.js_heap.used_bytes", "typing.event_duration_p95_ms", "gen_ai.usage.output_tokens", "deployment.environment", "deployment.environment.name", "gen_ai.provider.name", "gen_ai.tool.name", "agent.model", "harness", "ai.provider", "ai.account_unavailable", "host.name", "source", "gen_ai.response.model", "gen_ai.request.model", "service.name", "http.response.status_code", "http.status_code", "outlook.throttle_origin", "outlook.outcome", "outlook.defer_reason", "http.request.method", "outlook.token_cache", "app.platform", "flow.kind", "os.type", "route.id", "ui.outcome", "flow.root", "app.runtime", "typing.surface", "gen_ai.operation.name", "gen_ai.conversation.id", "macro.sampling.class", "macro.genai.tool.result_cut", "graphql.body_outcome", "http.body_outcome", "flow.outcome"])`,
+        `delete_key(attributes, "gen_ai.usage.cache_read.input_tokens") where attributes["gen_ai.usage.cache_read.input_tokens"] != nil and not (IsString(attributes["gen_ai.usage.cache_read.input_tokens"]) or IsBool(attributes["gen_ai.usage.cache_read.input_tokens"]) or IsInt(attributes["gen_ai.usage.cache_read.input_tokens"]) or IsDouble(attributes["gen_ai.usage.cache_read.input_tokens"]))`,
+        `delete_key(attributes, "gen_ai.usage.cache_creation.input_tokens") where attributes["gen_ai.usage.cache_creation.input_tokens"] != nil and not (IsString(attributes["gen_ai.usage.cache_creation.input_tokens"]) or IsBool(attributes["gen_ai.usage.cache_creation.input_tokens"]) or IsInt(attributes["gen_ai.usage.cache_creation.input_tokens"]) or IsDouble(attributes["gen_ai.usage.cache_creation.input_tokens"]))`,
+        `delete_key(attributes, "gen_ai.usage.input_tokens") where attributes["gen_ai.usage.input_tokens"] != nil and not (IsString(attributes["gen_ai.usage.input_tokens"]) or IsBool(attributes["gen_ai.usage.input_tokens"]) or IsInt(attributes["gen_ai.usage.input_tokens"]) or IsDouble(attributes["gen_ai.usage.input_tokens"]))`,
+        `delete_key(attributes, "macro.genai.prompt.connected_integrations.bytes") where attributes["macro.genai.prompt.connected_integrations.bytes"] != nil and not (IsString(attributes["macro.genai.prompt.connected_integrations.bytes"]) or IsBool(attributes["macro.genai.prompt.connected_integrations.bytes"]) or IsInt(attributes["macro.genai.prompt.connected_integrations.bytes"]) or IsDouble(attributes["macro.genai.prompt.connected_integrations.bytes"]))`,
+        `delete_key(attributes, "macro.genai.prompt.history.bytes") where attributes["macro.genai.prompt.history.bytes"] != nil and not (IsString(attributes["macro.genai.prompt.history.bytes"]) or IsBool(attributes["macro.genai.prompt.history.bytes"]) or IsInt(attributes["macro.genai.prompt.history.bytes"]) or IsDouble(attributes["macro.genai.prompt.history.bytes"]))`,
+        `delete_key(attributes, "macro.genai.prompt.identity.bytes") where attributes["macro.genai.prompt.identity.bytes"] != nil and not (IsString(attributes["macro.genai.prompt.identity.bytes"]) or IsBool(attributes["macro.genai.prompt.identity.bytes"]) or IsInt(attributes["macro.genai.prompt.identity.bytes"]) or IsDouble(attributes["macro.genai.prompt.identity.bytes"]))`,
+        `delete_key(attributes, "macro.genai.prompt.macro_prompt.bytes") where attributes["macro.genai.prompt.macro_prompt.bytes"] != nil and not (IsString(attributes["macro.genai.prompt.macro_prompt.bytes"]) or IsBool(attributes["macro.genai.prompt.macro_prompt.bytes"]) or IsInt(attributes["macro.genai.prompt.macro_prompt.bytes"]) or IsDouble(attributes["macro.genai.prompt.macro_prompt.bytes"]))`,
+        `delete_key(attributes, "macro.genai.prompt.memory.bytes") where attributes["macro.genai.prompt.memory.bytes"] != nil and not (IsString(attributes["macro.genai.prompt.memory.bytes"]) or IsBool(attributes["macro.genai.prompt.memory.bytes"]) or IsInt(attributes["macro.genai.prompt.memory.bytes"]) or IsDouble(attributes["macro.genai.prompt.memory.bytes"]))`,
+        `delete_key(attributes, "macro.genai.prompt.model_id.bytes") where attributes["macro.genai.prompt.model_id.bytes"] != nil and not (IsString(attributes["macro.genai.prompt.model_id.bytes"]) or IsBool(attributes["macro.genai.prompt.model_id.bytes"]) or IsInt(attributes["macro.genai.prompt.model_id.bytes"]) or IsDouble(attributes["macro.genai.prompt.model_id.bytes"]))`,
+        `delete_key(attributes, "macro.genai.prompt.opener_note.bytes") where attributes["macro.genai.prompt.opener_note.bytes"] != nil and not (IsString(attributes["macro.genai.prompt.opener_note.bytes"]) or IsBool(attributes["macro.genai.prompt.opener_note.bytes"]) or IsInt(attributes["macro.genai.prompt.opener_note.bytes"]) or IsDouble(attributes["macro.genai.prompt.opener_note.bytes"]))`,
+        `delete_key(attributes, "macro.genai.prompt.preamble.bytes") where attributes["macro.genai.prompt.preamble.bytes"] != nil and not (IsString(attributes["macro.genai.prompt.preamble.bytes"]) or IsBool(attributes["macro.genai.prompt.preamble.bytes"]) or IsInt(attributes["macro.genai.prompt.preamble.bytes"]) or IsDouble(attributes["macro.genai.prompt.preamble.bytes"]))`,
+        `delete_key(attributes, "macro.genai.prompt.sdk_docs.bytes") where attributes["macro.genai.prompt.sdk_docs.bytes"] != nil and not (IsString(attributes["macro.genai.prompt.sdk_docs.bytes"]) or IsBool(attributes["macro.genai.prompt.sdk_docs.bytes"]) or IsInt(attributes["macro.genai.prompt.sdk_docs.bytes"]) or IsDouble(attributes["macro.genai.prompt.sdk_docs.bytes"]))`,
+        `delete_key(attributes, "macro.genai.prompt.session_instructions.bytes") where attributes["macro.genai.prompt.session_instructions.bytes"] != nil and not (IsString(attributes["macro.genai.prompt.session_instructions.bytes"]) or IsBool(attributes["macro.genai.prompt.session_instructions.bytes"]) or IsInt(attributes["macro.genai.prompt.session_instructions.bytes"]) or IsDouble(attributes["macro.genai.prompt.session_instructions.bytes"]))`,
+        `delete_key(attributes, "macro.genai.prompt.session_note.bytes") where attributes["macro.genai.prompt.session_note.bytes"] != nil and not (IsString(attributes["macro.genai.prompt.session_note.bytes"]) or IsBool(attributes["macro.genai.prompt.session_note.bytes"]) or IsInt(attributes["macro.genai.prompt.session_note.bytes"]) or IsDouble(attributes["macro.genai.prompt.session_note.bytes"]))`,
+        `delete_key(attributes, "macro.genai.prompt.tool_results.bytes") where attributes["macro.genai.prompt.tool_results.bytes"] != nil and not (IsString(attributes["macro.genai.prompt.tool_results.bytes"]) or IsBool(attributes["macro.genai.prompt.tool_results.bytes"]) or IsInt(attributes["macro.genai.prompt.tool_results.bytes"]) or IsDouble(attributes["macro.genai.prompt.tool_results.bytes"]))`,
+        `delete_key(attributes, "macro.genai.prompt.tools.eager.bytes") where attributes["macro.genai.prompt.tools.eager.bytes"] != nil and not (IsString(attributes["macro.genai.prompt.tools.eager.bytes"]) or IsBool(attributes["macro.genai.prompt.tools.eager.bytes"]) or IsInt(attributes["macro.genai.prompt.tools.eager.bytes"]) or IsDouble(attributes["macro.genai.prompt.tools.eager.bytes"]))`,
+        `delete_key(attributes, "macro.genai.prompt.tools.loaded.bytes") where attributes["macro.genai.prompt.tools.loaded.bytes"] != nil and not (IsString(attributes["macro.genai.prompt.tools.loaded.bytes"]) or IsBool(attributes["macro.genai.prompt.tools.loaded.bytes"]) or IsInt(attributes["macro.genai.prompt.tools.loaded.bytes"]) or IsDouble(attributes["macro.genai.prompt.tools.loaded.bytes"]))`,
+        `delete_key(attributes, "macro.genai.tool.result_bytes") where attributes["macro.genai.tool.result_bytes"] != nil and not (IsString(attributes["macro.genai.tool.result_bytes"]) or IsBool(attributes["macro.genai.tool.result_bytes"]) or IsInt(attributes["macro.genai.tool.result_bytes"]) or IsDouble(attributes["macro.genai.tool.result_bytes"]))`,
+        `delete_key(attributes, "agent.turn.code_executions") where attributes["agent.turn.code_executions"] != nil and not (IsString(attributes["agent.turn.code_executions"]) or IsBool(attributes["agent.turn.code_executions"]) or IsInt(attributes["agent.turn.code_executions"]) or IsDouble(attributes["agent.turn.code_executions"]))`,
+        `delete_key(attributes, "agent.turn.code_failures") where attributes["agent.turn.code_failures"] != nil and not (IsString(attributes["agent.turn.code_failures"]) or IsBool(attributes["agent.turn.code_failures"]) or IsInt(attributes["agent.turn.code_failures"]) or IsDouble(attributes["agent.turn.code_failures"]))`,
+        `delete_key(attributes, "agent.turn.compaction_wait_ms") where attributes["agent.turn.compaction_wait_ms"] != nil and not (IsString(attributes["agent.turn.compaction_wait_ms"]) or IsBool(attributes["agent.turn.compaction_wait_ms"]) or IsInt(attributes["agent.turn.compaction_wait_ms"]) or IsDouble(attributes["agent.turn.compaction_wait_ms"]))`,
+        `delete_key(attributes, "agent.stream.model_calls") where attributes["agent.stream.model_calls"] != nil and not (IsString(attributes["agent.stream.model_calls"]) or IsBool(attributes["agent.stream.model_calls"]) or IsInt(attributes["agent.stream.model_calls"]) or IsDouble(attributes["agent.stream.model_calls"]))`,
+        `delete_key(attributes, "agent.runtime.reattach_eager") where attributes["agent.runtime.reattach_eager"] != nil and not (IsString(attributes["agent.runtime.reattach_eager"]) or IsBool(attributes["agent.runtime.reattach_eager"]) or IsInt(attributes["agent.runtime.reattach_eager"]) or IsDouble(attributes["agent.runtime.reattach_eager"]))`,
+        `delete_key(attributes, "agent.runtime.reattach_failures") where attributes["agent.runtime.reattach_failures"] != nil and not (IsString(attributes["agent.runtime.reattach_failures"]) or IsBool(attributes["agent.runtime.reattach_failures"]) or IsInt(attributes["agent.runtime.reattach_failures"]) or IsDouble(attributes["agent.runtime.reattach_failures"]))`,
+        `delete_key(attributes, "agent.runtime.reattach_lazy") where attributes["agent.runtime.reattach_lazy"] != nil and not (IsString(attributes["agent.runtime.reattach_lazy"]) or IsBool(attributes["agent.runtime.reattach_lazy"]) or IsInt(attributes["agent.runtime.reattach_lazy"]) or IsDouble(attributes["agent.runtime.reattach_lazy"]))`,
+        `delete_key(attributes, "agent.runtime.reattach_sessions") where attributes["agent.runtime.reattach_sessions"] != nil and not (IsString(attributes["agent.runtime.reattach_sessions"]) or IsBool(attributes["agent.runtime.reattach_sessions"]) or IsInt(attributes["agent.runtime.reattach_sessions"]) or IsDouble(attributes["agent.runtime.reattach_sessions"]))`,
+        `delete_key(attributes, "agent.runtime.reattach_skipped") where attributes["agent.runtime.reattach_skipped"] != nil and not (IsString(attributes["agent.runtime.reattach_skipped"]) or IsBool(attributes["agent.runtime.reattach_skipped"]) or IsInt(attributes["agent.runtime.reattach_skipped"]) or IsDouble(attributes["agent.runtime.reattach_skipped"]))`,
+        `delete_key(attributes, "macro.genai.chat.time_to_first_chunk_ms") where attributes["macro.genai.chat.time_to_first_chunk_ms"] != nil and not (IsString(attributes["macro.genai.chat.time_to_first_chunk_ms"]) or IsBool(attributes["macro.genai.chat.time_to_first_chunk_ms"]) or IsInt(attributes["macro.genai.chat.time_to_first_chunk_ms"]) or IsDouble(attributes["macro.genai.chat.time_to_first_chunk_ms"]))`,
+        `delete_key(attributes, "outlook.notification_lag_ms") where attributes["outlook.notification_lag_ms"] != nil and not (IsString(attributes["outlook.notification_lag_ms"]) or IsBool(attributes["outlook.notification_lag_ms"]) or IsInt(attributes["outlook.notification_lag_ms"]) or IsDouble(attributes["outlook.notification_lag_ms"]))`,
+        `delete_key(attributes, "ui.long_animation_frame_blocking_ms") where attributes["ui.long_animation_frame_blocking_ms"] != nil and not (IsString(attributes["ui.long_animation_frame_blocking_ms"]) or IsBool(attributes["ui.long_animation_frame_blocking_ms"]) or IsInt(attributes["ui.long_animation_frame_blocking_ms"]) or IsDouble(attributes["ui.long_animation_frame_blocking_ms"]))`,
+        `delete_key(attributes, "ui.elapsed_ms") where attributes["ui.elapsed_ms"] != nil and not (IsString(attributes["ui.elapsed_ms"]) or IsBool(attributes["ui.elapsed_ms"]) or IsInt(attributes["ui.elapsed_ms"]) or IsDouble(attributes["ui.elapsed_ms"]))`,
+        `delete_key(attributes, "graphql.body_ms") where attributes["graphql.body_ms"] != nil and not (IsString(attributes["graphql.body_ms"]) or IsBool(attributes["graphql.body_ms"]) or IsInt(attributes["graphql.body_ms"]) or IsDouble(attributes["graphql.body_ms"]))`,
+        `delete_key(attributes, "http.body_ms") where attributes["http.body_ms"] != nil and not (IsString(attributes["http.body_ms"]) or IsBool(attributes["http.body_ms"]) or IsInt(attributes["http.body_ms"]) or IsDouble(attributes["http.body_ms"]))`,
+        `delete_key(attributes, "runtime.long_animation_frame.blocking_ms") where attributes["runtime.long_animation_frame.blocking_ms"] != nil and not (IsString(attributes["runtime.long_animation_frame.blocking_ms"]) or IsBool(attributes["runtime.long_animation_frame.blocking_ms"]) or IsInt(attributes["runtime.long_animation_frame.blocking_ms"]) or IsDouble(attributes["runtime.long_animation_frame.blocking_ms"]))`,
+        `delete_key(attributes, "macro.memory.js_heap.used_bytes") where attributes["macro.memory.js_heap.used_bytes"] != nil and not (IsString(attributes["macro.memory.js_heap.used_bytes"]) or IsBool(attributes["macro.memory.js_heap.used_bytes"]) or IsInt(attributes["macro.memory.js_heap.used_bytes"]) or IsDouble(attributes["macro.memory.js_heap.used_bytes"]))`,
+        `delete_key(attributes, "typing.event_duration_p95_ms") where attributes["typing.event_duration_p95_ms"] != nil and not (IsString(attributes["typing.event_duration_p95_ms"]) or IsBool(attributes["typing.event_duration_p95_ms"]) or IsInt(attributes["typing.event_duration_p95_ms"]) or IsDouble(attributes["typing.event_duration_p95_ms"]))`,
+        `delete_key(attributes, "gen_ai.usage.output_tokens") where attributes["gen_ai.usage.output_tokens"] != nil and not (IsString(attributes["gen_ai.usage.output_tokens"]) or IsBool(attributes["gen_ai.usage.output_tokens"]) or IsInt(attributes["gen_ai.usage.output_tokens"]) or IsDouble(attributes["gen_ai.usage.output_tokens"]))`,
+        `delete_key(attributes, "deployment.environment") where attributes["deployment.environment"] != nil and not (IsString(attributes["deployment.environment"]) or IsBool(attributes["deployment.environment"]) or IsInt(attributes["deployment.environment"]) or IsDouble(attributes["deployment.environment"]))`,
+        `delete_key(attributes, "deployment.environment.name") where attributes["deployment.environment.name"] != nil and not (IsString(attributes["deployment.environment.name"]) or IsBool(attributes["deployment.environment.name"]) or IsInt(attributes["deployment.environment.name"]) or IsDouble(attributes["deployment.environment.name"]))`,
+        `delete_key(attributes, "gen_ai.provider.name") where attributes["gen_ai.provider.name"] != nil and not (IsString(attributes["gen_ai.provider.name"]) or IsBool(attributes["gen_ai.provider.name"]) or IsInt(attributes["gen_ai.provider.name"]) or IsDouble(attributes["gen_ai.provider.name"]))`,
+        `delete_key(attributes, "gen_ai.tool.name") where attributes["gen_ai.tool.name"] != nil and not (IsString(attributes["gen_ai.tool.name"]) or IsBool(attributes["gen_ai.tool.name"]) or IsInt(attributes["gen_ai.tool.name"]) or IsDouble(attributes["gen_ai.tool.name"]))`,
+        `delete_key(attributes, "agent.model") where attributes["agent.model"] != nil and not (IsString(attributes["agent.model"]) or IsBool(attributes["agent.model"]) or IsInt(attributes["agent.model"]) or IsDouble(attributes["agent.model"]))`,
+        `delete_key(attributes, "harness") where attributes["harness"] != nil and not (IsString(attributes["harness"]) or IsBool(attributes["harness"]) or IsInt(attributes["harness"]) or IsDouble(attributes["harness"]))`,
+        `delete_key(attributes, "ai.provider") where attributes["ai.provider"] != nil and not (IsString(attributes["ai.provider"]) or IsBool(attributes["ai.provider"]) or IsInt(attributes["ai.provider"]) or IsDouble(attributes["ai.provider"]))`,
+        `delete_key(attributes, "ai.account_unavailable") where attributes["ai.account_unavailable"] != nil and not (IsString(attributes["ai.account_unavailable"]) or IsBool(attributes["ai.account_unavailable"]) or IsInt(attributes["ai.account_unavailable"]) or IsDouble(attributes["ai.account_unavailable"]))`,
+        `delete_key(attributes, "host.name") where attributes["host.name"] != nil and not (IsString(attributes["host.name"]) or IsBool(attributes["host.name"]) or IsInt(attributes["host.name"]) or IsDouble(attributes["host.name"]))`,
+        `delete_key(attributes, "source") where attributes["source"] != nil and not (IsString(attributes["source"]) or IsBool(attributes["source"]) or IsInt(attributes["source"]) or IsDouble(attributes["source"]))`,
+        `delete_key(attributes, "gen_ai.response.model") where attributes["gen_ai.response.model"] != nil and not (IsString(attributes["gen_ai.response.model"]) or IsBool(attributes["gen_ai.response.model"]) or IsInt(attributes["gen_ai.response.model"]) or IsDouble(attributes["gen_ai.response.model"]))`,
+        `delete_key(attributes, "gen_ai.request.model") where attributes["gen_ai.request.model"] != nil and not (IsString(attributes["gen_ai.request.model"]) or IsBool(attributes["gen_ai.request.model"]) or IsInt(attributes["gen_ai.request.model"]) or IsDouble(attributes["gen_ai.request.model"]))`,
+        `delete_key(attributes, "service.name") where attributes["service.name"] != nil and not (IsString(attributes["service.name"]) or IsBool(attributes["service.name"]) or IsInt(attributes["service.name"]) or IsDouble(attributes["service.name"]))`,
+        `delete_key(attributes, "http.response.status_code") where attributes["http.response.status_code"] != nil and not (IsString(attributes["http.response.status_code"]) or IsBool(attributes["http.response.status_code"]) or IsInt(attributes["http.response.status_code"]) or IsDouble(attributes["http.response.status_code"]))`,
+        `delete_key(attributes, "http.status_code") where attributes["http.status_code"] != nil and not (IsString(attributes["http.status_code"]) or IsBool(attributes["http.status_code"]) or IsInt(attributes["http.status_code"]) or IsDouble(attributes["http.status_code"]))`,
+        `delete_key(attributes, "outlook.throttle_origin") where attributes["outlook.throttle_origin"] != nil and not (IsString(attributes["outlook.throttle_origin"]) or IsBool(attributes["outlook.throttle_origin"]) or IsInt(attributes["outlook.throttle_origin"]) or IsDouble(attributes["outlook.throttle_origin"]))`,
+        `delete_key(attributes, "outlook.outcome") where attributes["outlook.outcome"] != nil and not (IsString(attributes["outlook.outcome"]) or IsBool(attributes["outlook.outcome"]) or IsInt(attributes["outlook.outcome"]) or IsDouble(attributes["outlook.outcome"]))`,
+        `delete_key(attributes, "outlook.defer_reason") where attributes["outlook.defer_reason"] != nil and not (IsString(attributes["outlook.defer_reason"]) or IsBool(attributes["outlook.defer_reason"]) or IsInt(attributes["outlook.defer_reason"]) or IsDouble(attributes["outlook.defer_reason"]))`,
+        `delete_key(attributes, "http.request.method") where attributes["http.request.method"] != nil and not (IsString(attributes["http.request.method"]) or IsBool(attributes["http.request.method"]) or IsInt(attributes["http.request.method"]) or IsDouble(attributes["http.request.method"]))`,
+        `delete_key(attributes, "outlook.token_cache") where attributes["outlook.token_cache"] != nil and not (IsString(attributes["outlook.token_cache"]) or IsBool(attributes["outlook.token_cache"]) or IsInt(attributes["outlook.token_cache"]) or IsDouble(attributes["outlook.token_cache"]))`,
+        `delete_key(attributes, "app.platform") where attributes["app.platform"] != nil and not (IsString(attributes["app.platform"]) or IsBool(attributes["app.platform"]) or IsInt(attributes["app.platform"]) or IsDouble(attributes["app.platform"]))`,
+        `delete_key(attributes, "flow.kind") where attributes["flow.kind"] != nil and not (IsString(attributes["flow.kind"]) or IsBool(attributes["flow.kind"]) or IsInt(attributes["flow.kind"]) or IsDouble(attributes["flow.kind"]))`,
+        `delete_key(attributes, "os.type") where attributes["os.type"] != nil and not (IsString(attributes["os.type"]) or IsBool(attributes["os.type"]) or IsInt(attributes["os.type"]) or IsDouble(attributes["os.type"]))`,
+        `delete_key(attributes, "route.id") where attributes["route.id"] != nil and not (IsString(attributes["route.id"]) or IsBool(attributes["route.id"]) or IsInt(attributes["route.id"]) or IsDouble(attributes["route.id"]))`,
+        `delete_key(attributes, "ui.outcome") where attributes["ui.outcome"] != nil and not (IsString(attributes["ui.outcome"]) or IsBool(attributes["ui.outcome"]) or IsInt(attributes["ui.outcome"]) or IsDouble(attributes["ui.outcome"]))`,
+        `delete_key(attributes, "flow.root") where attributes["flow.root"] != nil and not (IsString(attributes["flow.root"]) or IsBool(attributes["flow.root"]) or IsInt(attributes["flow.root"]) or IsDouble(attributes["flow.root"]))`,
+        `delete_key(attributes, "app.runtime") where attributes["app.runtime"] != nil and not (IsString(attributes["app.runtime"]) or IsBool(attributes["app.runtime"]) or IsInt(attributes["app.runtime"]) or IsDouble(attributes["app.runtime"]))`,
+        `delete_key(attributes, "typing.surface") where attributes["typing.surface"] != nil and not (IsString(attributes["typing.surface"]) or IsBool(attributes["typing.surface"]) or IsInt(attributes["typing.surface"]) or IsDouble(attributes["typing.surface"]))`,
+        `delete_key(attributes, "gen_ai.operation.name") where attributes["gen_ai.operation.name"] != nil and not (IsString(attributes["gen_ai.operation.name"]) or IsBool(attributes["gen_ai.operation.name"]) or IsInt(attributes["gen_ai.operation.name"]) or IsDouble(attributes["gen_ai.operation.name"]))`,
+        `delete_key(attributes, "gen_ai.conversation.id") where attributes["gen_ai.conversation.id"] != nil and not (IsString(attributes["gen_ai.conversation.id"]) or IsBool(attributes["gen_ai.conversation.id"]) or IsInt(attributes["gen_ai.conversation.id"]) or IsDouble(attributes["gen_ai.conversation.id"]))`,
+        `delete_key(attributes, "macro.sampling.class") where attributes["macro.sampling.class"] != nil and not (IsString(attributes["macro.sampling.class"]) or IsBool(attributes["macro.sampling.class"]) or IsInt(attributes["macro.sampling.class"]) or IsDouble(attributes["macro.sampling.class"]))`,
+        `delete_key(attributes, "macro.genai.tool.result_cut") where attributes["macro.genai.tool.result_cut"] != nil and not (IsString(attributes["macro.genai.tool.result_cut"]) or IsBool(attributes["macro.genai.tool.result_cut"]) or IsInt(attributes["macro.genai.tool.result_cut"]) or IsDouble(attributes["macro.genai.tool.result_cut"]))`,
+        `delete_key(attributes, "graphql.body_outcome") where attributes["graphql.body_outcome"] != nil and not (IsString(attributes["graphql.body_outcome"]) or IsBool(attributes["graphql.body_outcome"]) or IsInt(attributes["graphql.body_outcome"]) or IsDouble(attributes["graphql.body_outcome"]))`,
+        `delete_key(attributes, "http.body_outcome") where attributes["http.body_outcome"] != nil and not (IsString(attributes["http.body_outcome"]) or IsBool(attributes["http.body_outcome"]) or IsInt(attributes["http.body_outcome"]) or IsDouble(attributes["http.body_outcome"]))`,
+        `delete_key(attributes, "flow.outcome") where attributes["flow.outcome"] != nil and not (IsString(attributes["flow.outcome"]) or IsBool(attributes["flow.outcome"]) or IsInt(attributes["flow.outcome"]) or IsDouble(attributes["flow.outcome"]))`,
+        `truncate_all(attributes, 256)`,
+        `set(status.message, "")`,
+        `set(trace_state, "")`,
+        `set(links, nil)`,
+      ]
+      }
+      log_statements {
+        context    = "resource"
+        statements = [
+        `keep_keys(attributes, ["duration_ms", "cost_usd", "abandoned", "import_round_wait_seconds", "imported_5m", "oldest_waiting_seconds", "parked", "parked_until_max_seconds", "queued", "seconds_since_last_import", "first_ms", "surfaces_filled", "deployment.environment", "deployment.environment.name", "model_name", "provider", "reason", "service.name", "link_id", "needs_reauth", "sync_active", "from", "kind", "surface", "outcome", "ok", "filled", "level", "event", "trigger", "metric"])`,
+        `delete_key(attributes, "duration_ms") where attributes["duration_ms"] != nil and not (IsString(attributes["duration_ms"]) or IsBool(attributes["duration_ms"]) or IsInt(attributes["duration_ms"]) or IsDouble(attributes["duration_ms"]))`,
+        `delete_key(attributes, "cost_usd") where attributes["cost_usd"] != nil and not (IsString(attributes["cost_usd"]) or IsBool(attributes["cost_usd"]) or IsInt(attributes["cost_usd"]) or IsDouble(attributes["cost_usd"]))`,
+        `delete_key(attributes, "abandoned") where attributes["abandoned"] != nil and not (IsString(attributes["abandoned"]) or IsBool(attributes["abandoned"]) or IsInt(attributes["abandoned"]) or IsDouble(attributes["abandoned"]))`,
+        `delete_key(attributes, "import_round_wait_seconds") where attributes["import_round_wait_seconds"] != nil and not (IsString(attributes["import_round_wait_seconds"]) or IsBool(attributes["import_round_wait_seconds"]) or IsInt(attributes["import_round_wait_seconds"]) or IsDouble(attributes["import_round_wait_seconds"]))`,
+        `delete_key(attributes, "imported_5m") where attributes["imported_5m"] != nil and not (IsString(attributes["imported_5m"]) or IsBool(attributes["imported_5m"]) or IsInt(attributes["imported_5m"]) or IsDouble(attributes["imported_5m"]))`,
+        `delete_key(attributes, "oldest_waiting_seconds") where attributes["oldest_waiting_seconds"] != nil and not (IsString(attributes["oldest_waiting_seconds"]) or IsBool(attributes["oldest_waiting_seconds"]) or IsInt(attributes["oldest_waiting_seconds"]) or IsDouble(attributes["oldest_waiting_seconds"]))`,
+        `delete_key(attributes, "parked") where attributes["parked"] != nil and not (IsString(attributes["parked"]) or IsBool(attributes["parked"]) or IsInt(attributes["parked"]) or IsDouble(attributes["parked"]))`,
+        `delete_key(attributes, "parked_until_max_seconds") where attributes["parked_until_max_seconds"] != nil and not (IsString(attributes["parked_until_max_seconds"]) or IsBool(attributes["parked_until_max_seconds"]) or IsInt(attributes["parked_until_max_seconds"]) or IsDouble(attributes["parked_until_max_seconds"]))`,
+        `delete_key(attributes, "queued") where attributes["queued"] != nil and not (IsString(attributes["queued"]) or IsBool(attributes["queued"]) or IsInt(attributes["queued"]) or IsDouble(attributes["queued"]))`,
+        `delete_key(attributes, "seconds_since_last_import") where attributes["seconds_since_last_import"] != nil and not (IsString(attributes["seconds_since_last_import"]) or IsBool(attributes["seconds_since_last_import"]) or IsInt(attributes["seconds_since_last_import"]) or IsDouble(attributes["seconds_since_last_import"]))`,
+        `delete_key(attributes, "first_ms") where attributes["first_ms"] != nil and not (IsString(attributes["first_ms"]) or IsBool(attributes["first_ms"]) or IsInt(attributes["first_ms"]) or IsDouble(attributes["first_ms"]))`,
+        `delete_key(attributes, "surfaces_filled") where attributes["surfaces_filled"] != nil and not (IsString(attributes["surfaces_filled"]) or IsBool(attributes["surfaces_filled"]) or IsInt(attributes["surfaces_filled"]) or IsDouble(attributes["surfaces_filled"]))`,
+        `delete_key(attributes, "deployment.environment") where attributes["deployment.environment"] != nil and not (IsString(attributes["deployment.environment"]) or IsBool(attributes["deployment.environment"]) or IsInt(attributes["deployment.environment"]) or IsDouble(attributes["deployment.environment"]))`,
+        `delete_key(attributes, "deployment.environment.name") where attributes["deployment.environment.name"] != nil and not (IsString(attributes["deployment.environment.name"]) or IsBool(attributes["deployment.environment.name"]) or IsInt(attributes["deployment.environment.name"]) or IsDouble(attributes["deployment.environment.name"]))`,
+        `delete_key(attributes, "model_name") where attributes["model_name"] != nil and not (IsString(attributes["model_name"]) or IsBool(attributes["model_name"]) or IsInt(attributes["model_name"]) or IsDouble(attributes["model_name"]))`,
+        `delete_key(attributes, "provider") where attributes["provider"] != nil and not (IsString(attributes["provider"]) or IsBool(attributes["provider"]) or IsInt(attributes["provider"]) or IsDouble(attributes["provider"]))`,
+        `delete_key(attributes, "reason") where attributes["reason"] != nil and not (IsString(attributes["reason"]) or IsBool(attributes["reason"]) or IsInt(attributes["reason"]) or IsDouble(attributes["reason"]))`,
+        `delete_key(attributes, "service.name") where attributes["service.name"] != nil and not (IsString(attributes["service.name"]) or IsBool(attributes["service.name"]) or IsInt(attributes["service.name"]) or IsDouble(attributes["service.name"]))`,
+        `delete_key(attributes, "link_id") where attributes["link_id"] != nil and not (IsString(attributes["link_id"]) or IsBool(attributes["link_id"]) or IsInt(attributes["link_id"]) or IsDouble(attributes["link_id"]))`,
+        `delete_key(attributes, "needs_reauth") where attributes["needs_reauth"] != nil and not (IsString(attributes["needs_reauth"]) or IsBool(attributes["needs_reauth"]) or IsInt(attributes["needs_reauth"]) or IsDouble(attributes["needs_reauth"]))`,
+        `delete_key(attributes, "sync_active") where attributes["sync_active"] != nil and not (IsString(attributes["sync_active"]) or IsBool(attributes["sync_active"]) or IsInt(attributes["sync_active"]) or IsDouble(attributes["sync_active"]))`,
+        `delete_key(attributes, "from") where attributes["from"] != nil and not (IsString(attributes["from"]) or IsBool(attributes["from"]) or IsInt(attributes["from"]) or IsDouble(attributes["from"]))`,
+        `delete_key(attributes, "kind") where attributes["kind"] != nil and not (IsString(attributes["kind"]) or IsBool(attributes["kind"]) or IsInt(attributes["kind"]) or IsDouble(attributes["kind"]))`,
+        `delete_key(attributes, "surface") where attributes["surface"] != nil and not (IsString(attributes["surface"]) or IsBool(attributes["surface"]) or IsInt(attributes["surface"]) or IsDouble(attributes["surface"]))`,
+        `delete_key(attributes, "outcome") where attributes["outcome"] != nil and not (IsString(attributes["outcome"]) or IsBool(attributes["outcome"]) or IsInt(attributes["outcome"]) or IsDouble(attributes["outcome"]))`,
+        `delete_key(attributes, "ok") where attributes["ok"] != nil and not (IsString(attributes["ok"]) or IsBool(attributes["ok"]) or IsInt(attributes["ok"]) or IsDouble(attributes["ok"]))`,
+        `delete_key(attributes, "filled") where attributes["filled"] != nil and not (IsString(attributes["filled"]) or IsBool(attributes["filled"]) or IsInt(attributes["filled"]) or IsDouble(attributes["filled"]))`,
+        `delete_key(attributes, "level") where attributes["level"] != nil and not (IsString(attributes["level"]) or IsBool(attributes["level"]) or IsInt(attributes["level"]) or IsDouble(attributes["level"]))`,
+        `delete_key(attributes, "event") where attributes["event"] != nil and not (IsString(attributes["event"]) or IsBool(attributes["event"]) or IsInt(attributes["event"]) or IsDouble(attributes["event"]))`,
+        `delete_key(attributes, "trigger") where attributes["trigger"] != nil and not (IsString(attributes["trigger"]) or IsBool(attributes["trigger"]) or IsInt(attributes["trigger"]) or IsDouble(attributes["trigger"]))`,
+        `delete_key(attributes, "metric") where attributes["metric"] != nil and not (IsString(attributes["metric"]) or IsBool(attributes["metric"]) or IsInt(attributes["metric"]) or IsDouble(attributes["metric"]))`,
+        `truncate_all(attributes, 256)`,
+      ]
+      }
+      log_statements {
+        context    = "scope"
+        statements = [`keep_keys(attributes, [])`]
+      }
+      log_statements {
+        context    = "log"
+        statements = [
+        `keep_keys(attributes, ["duration_ms", "cost_usd", "abandoned", "import_round_wait_seconds", "imported_5m", "oldest_waiting_seconds", "parked", "parked_until_max_seconds", "queued", "seconds_since_last_import", "first_ms", "surfaces_filled", "deployment.environment", "deployment.environment.name", "model_name", "provider", "reason", "service.name", "link_id", "needs_reauth", "sync_active", "from", "kind", "surface", "outcome", "ok", "filled", "level", "event", "trigger", "metric"])`,
+        `delete_key(attributes, "duration_ms") where attributes["duration_ms"] != nil and not (IsString(attributes["duration_ms"]) or IsBool(attributes["duration_ms"]) or IsInt(attributes["duration_ms"]) or IsDouble(attributes["duration_ms"]))`,
+        `delete_key(attributes, "cost_usd") where attributes["cost_usd"] != nil and not (IsString(attributes["cost_usd"]) or IsBool(attributes["cost_usd"]) or IsInt(attributes["cost_usd"]) or IsDouble(attributes["cost_usd"]))`,
+        `delete_key(attributes, "abandoned") where attributes["abandoned"] != nil and not (IsString(attributes["abandoned"]) or IsBool(attributes["abandoned"]) or IsInt(attributes["abandoned"]) or IsDouble(attributes["abandoned"]))`,
+        `delete_key(attributes, "import_round_wait_seconds") where attributes["import_round_wait_seconds"] != nil and not (IsString(attributes["import_round_wait_seconds"]) or IsBool(attributes["import_round_wait_seconds"]) or IsInt(attributes["import_round_wait_seconds"]) or IsDouble(attributes["import_round_wait_seconds"]))`,
+        `delete_key(attributes, "imported_5m") where attributes["imported_5m"] != nil and not (IsString(attributes["imported_5m"]) or IsBool(attributes["imported_5m"]) or IsInt(attributes["imported_5m"]) or IsDouble(attributes["imported_5m"]))`,
+        `delete_key(attributes, "oldest_waiting_seconds") where attributes["oldest_waiting_seconds"] != nil and not (IsString(attributes["oldest_waiting_seconds"]) or IsBool(attributes["oldest_waiting_seconds"]) or IsInt(attributes["oldest_waiting_seconds"]) or IsDouble(attributes["oldest_waiting_seconds"]))`,
+        `delete_key(attributes, "parked") where attributes["parked"] != nil and not (IsString(attributes["parked"]) or IsBool(attributes["parked"]) or IsInt(attributes["parked"]) or IsDouble(attributes["parked"]))`,
+        `delete_key(attributes, "parked_until_max_seconds") where attributes["parked_until_max_seconds"] != nil and not (IsString(attributes["parked_until_max_seconds"]) or IsBool(attributes["parked_until_max_seconds"]) or IsInt(attributes["parked_until_max_seconds"]) or IsDouble(attributes["parked_until_max_seconds"]))`,
+        `delete_key(attributes, "queued") where attributes["queued"] != nil and not (IsString(attributes["queued"]) or IsBool(attributes["queued"]) or IsInt(attributes["queued"]) or IsDouble(attributes["queued"]))`,
+        `delete_key(attributes, "seconds_since_last_import") where attributes["seconds_since_last_import"] != nil and not (IsString(attributes["seconds_since_last_import"]) or IsBool(attributes["seconds_since_last_import"]) or IsInt(attributes["seconds_since_last_import"]) or IsDouble(attributes["seconds_since_last_import"]))`,
+        `delete_key(attributes, "first_ms") where attributes["first_ms"] != nil and not (IsString(attributes["first_ms"]) or IsBool(attributes["first_ms"]) or IsInt(attributes["first_ms"]) or IsDouble(attributes["first_ms"]))`,
+        `delete_key(attributes, "surfaces_filled") where attributes["surfaces_filled"] != nil and not (IsString(attributes["surfaces_filled"]) or IsBool(attributes["surfaces_filled"]) or IsInt(attributes["surfaces_filled"]) or IsDouble(attributes["surfaces_filled"]))`,
+        `delete_key(attributes, "deployment.environment") where attributes["deployment.environment"] != nil and not (IsString(attributes["deployment.environment"]) or IsBool(attributes["deployment.environment"]) or IsInt(attributes["deployment.environment"]) or IsDouble(attributes["deployment.environment"]))`,
+        `delete_key(attributes, "deployment.environment.name") where attributes["deployment.environment.name"] != nil and not (IsString(attributes["deployment.environment.name"]) or IsBool(attributes["deployment.environment.name"]) or IsInt(attributes["deployment.environment.name"]) or IsDouble(attributes["deployment.environment.name"]))`,
+        `delete_key(attributes, "model_name") where attributes["model_name"] != nil and not (IsString(attributes["model_name"]) or IsBool(attributes["model_name"]) or IsInt(attributes["model_name"]) or IsDouble(attributes["model_name"]))`,
+        `delete_key(attributes, "provider") where attributes["provider"] != nil and not (IsString(attributes["provider"]) or IsBool(attributes["provider"]) or IsInt(attributes["provider"]) or IsDouble(attributes["provider"]))`,
+        `delete_key(attributes, "reason") where attributes["reason"] != nil and not (IsString(attributes["reason"]) or IsBool(attributes["reason"]) or IsInt(attributes["reason"]) or IsDouble(attributes["reason"]))`,
+        `delete_key(attributes, "service.name") where attributes["service.name"] != nil and not (IsString(attributes["service.name"]) or IsBool(attributes["service.name"]) or IsInt(attributes["service.name"]) or IsDouble(attributes["service.name"]))`,
+        `delete_key(attributes, "link_id") where attributes["link_id"] != nil and not (IsString(attributes["link_id"]) or IsBool(attributes["link_id"]) or IsInt(attributes["link_id"]) or IsDouble(attributes["link_id"]))`,
+        `delete_key(attributes, "needs_reauth") where attributes["needs_reauth"] != nil and not (IsString(attributes["needs_reauth"]) or IsBool(attributes["needs_reauth"]) or IsInt(attributes["needs_reauth"]) or IsDouble(attributes["needs_reauth"]))`,
+        `delete_key(attributes, "sync_active") where attributes["sync_active"] != nil and not (IsString(attributes["sync_active"]) or IsBool(attributes["sync_active"]) or IsInt(attributes["sync_active"]) or IsDouble(attributes["sync_active"]))`,
+        `delete_key(attributes, "from") where attributes["from"] != nil and not (IsString(attributes["from"]) or IsBool(attributes["from"]) or IsInt(attributes["from"]) or IsDouble(attributes["from"]))`,
+        `delete_key(attributes, "kind") where attributes["kind"] != nil and not (IsString(attributes["kind"]) or IsBool(attributes["kind"]) or IsInt(attributes["kind"]) or IsDouble(attributes["kind"]))`,
+        `delete_key(attributes, "surface") where attributes["surface"] != nil and not (IsString(attributes["surface"]) or IsBool(attributes["surface"]) or IsInt(attributes["surface"]) or IsDouble(attributes["surface"]))`,
+        `delete_key(attributes, "outcome") where attributes["outcome"] != nil and not (IsString(attributes["outcome"]) or IsBool(attributes["outcome"]) or IsInt(attributes["outcome"]) or IsDouble(attributes["outcome"]))`,
+        `delete_key(attributes, "ok") where attributes["ok"] != nil and not (IsString(attributes["ok"]) or IsBool(attributes["ok"]) or IsInt(attributes["ok"]) or IsDouble(attributes["ok"]))`,
+        `delete_key(attributes, "filled") where attributes["filled"] != nil and not (IsString(attributes["filled"]) or IsBool(attributes["filled"]) or IsInt(attributes["filled"]) or IsDouble(attributes["filled"]))`,
+        `delete_key(attributes, "level") where attributes["level"] != nil and not (IsString(attributes["level"]) or IsBool(attributes["level"]) or IsInt(attributes["level"]) or IsDouble(attributes["level"]))`,
+        `delete_key(attributes, "event") where attributes["event"] != nil and not (IsString(attributes["event"]) or IsBool(attributes["event"]) or IsInt(attributes["event"]) or IsDouble(attributes["event"]))`,
+        `delete_key(attributes, "trigger") where attributes["trigger"] != nil and not (IsString(attributes["trigger"]) or IsBool(attributes["trigger"]) or IsInt(attributes["trigger"]) or IsDouble(attributes["trigger"]))`,
+        `delete_key(attributes, "metric") where attributes["metric"] != nil and not (IsString(attributes["metric"]) or IsBool(attributes["metric"]) or IsInt(attributes["metric"]) or IsDouble(attributes["metric"]))`,
+        `truncate_all(attributes, 256)`,
+        `set(cache["account_unavailable"], true) where IsString(body) and IsMatch(body, "(?i)\\bai provider account unavailable\\b")`,
+        `set(cache["mailbox_health"], true) where IsString(body) and IsMatch(body, "(?i)\\boutlook mailbox health\\b")`,
+        `set(cache["runtime_starvation"], true) where IsString(body) and IsMatch(body, "(?i)\\btokio runtime starvation detected\\b")`,
+        `set(cache["usage_priced"], true) where IsString(body) and IsMatch(body, "(?i)\\bai usage priced\\b")`,
+        `set(body, "")`,
+        `set(body, Concat([body, "ai provider account unavailable"], ". ")) where cache["account_unavailable"] == true`,
+        `set(body, Concat([body, "outlook mailbox health"], ". ")) where cache["mailbox_health"] == true`,
+        `set(body, Concat([body, "tokio runtime starvation detected"], ". ")) where cache["runtime_starvation"] == true`,
+        `set(body, Concat([body, "ai usage priced"], ". ")) where cache["usage_priced"] == true`,
+      ]
+      }
+      output {
+        traces = [otelcol.exporter.otlp.derived.input]
+        logs   = [otelcol.exporter.otlp.derived.input]
+      }
+    }
+
+    otelcol.exporter.otlp "derived" {
+      client {
+        endpoint = "derived-metrics.observability.svc.cluster.local:4317"
+        tls { insecure = true }
+      }
+      sending_queue {
+        sizer      = "bytes"
+        queue_size = 4194304
+      }
+      retry_on_failure { max_elapsed_time = "1m" }
+    }
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/component: config
+    app.kubernetes.io/instance: alloy-ingest
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: alloy
+    app.kubernetes.io/part-of: alloy
+    app.kubernetes.io/version: v1.22.0
+    helm.sh/chart: alloy-1.16.0
+  name: alloy-ingest
+  namespace: observability

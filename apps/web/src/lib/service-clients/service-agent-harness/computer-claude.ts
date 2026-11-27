@@ -14,6 +14,7 @@ import type {
   ClaudeSignInComplete,
   ClaudeSignInStarted,
 } from './generated/schemas';
+import { SignInRecoveryCode } from './generated/schemas';
 
 type ClaudeErrorCode =
   | 'CLAUDE_INVALID_CODE'
@@ -27,17 +28,25 @@ type ClaudeErrorCode =
 const harnessUrl = (path: (harnessId: string) => string, harnessId: string) =>
   `${SERVER_HOSTS['agent-harness']}${path(encodeURIComponent(harnessId))}`;
 
-/** The `code` the harness service puts on a failure, if any. */
-async function bodyCode(response: Response): Promise<string | undefined> {
+/** The recovery code the harness service puts on a sign-in failure, if any. */
+async function recoveryCode(
+  response: Response
+): Promise<SignInRecoveryCode | undefined> {
   try {
     const body: unknown = await response.json();
-    if (typeof body === 'object' && body !== null && 'code' in body)
-      return typeof body.code === 'string' ? body.code : undefined;
+    if (typeof body !== 'object' || body === null || !('code' in body))
+      return undefined;
+    const code = body.code;
+    // A newer server may send a code this build doesn't know.
+    return RECOVERY_CODES.find((known) => known === code);
   } catch {
     // Not JSON: a proxy's error page. The status decides.
+    return undefined;
   }
-  return undefined;
 }
+
+const RECOVERY_CODES: readonly SignInRecoveryCode[] =
+  Object.values(SignInRecoveryCode);
 
 const claudeError: ErrorResponseHandler<ClaudeErrorCode> = async (response) => {
   // The pending sign-in is gone: it timed out, or another tab replaced it.
@@ -51,7 +60,8 @@ const claudeError: ErrorResponseHandler<ClaudeErrorCode> = async (response) => {
   if (response.status === 504) {
     return { code: 'CLAUDE_TIMEOUT', message: 'The computer took too long' };
   }
-  const code = await bodyCode(response);
+  const code = await recoveryCode(response);
+  if (!code) return statusError(response.status);
   const known = match(code)
     .returnType<{ code: ClaudeErrorCode; message: string } | undefined>()
     .with('invalid_code', () => ({
@@ -79,7 +89,7 @@ const claudeError: ErrorResponseHandler<ClaudeErrorCode> = async (response) => {
       code: 'ROLLOUT_DISABLED',
       message: 'Computers are not enabled for this account',
     }))
-    .otherwise(() => undefined);
+    .exhaustive(() => undefined);
   return known ?? statusError(response.status);
 };
 
@@ -94,7 +104,7 @@ export const computerClaudeClient = {
       harnessUrl(getStartClaudeSignInUrl, harnessId),
       { method: 'POST', signal, errorResponseHandler: claudeError }
     ),
-  completeSignIn: (harnessId: string, code: string, signal: AbortSignal) =>
+  completeSignIn: (harnessId: string, code: string) =>
     fetchWithToken<ClaudeSignedIn, ClaudeErrorCode>(
       harnessUrl(getCompleteClaudeSignInUrl, harnessId),
       {
@@ -102,7 +112,6 @@ export const computerClaudeClient = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code } satisfies ClaudeSignInComplete),
         errorResponseHandler: claudeError,
-        signal,
       }
     ),
   signOut: (harnessId: string) =>

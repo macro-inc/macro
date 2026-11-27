@@ -7,8 +7,9 @@ import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
 import { usePropertyEntityDisplay } from '@property/hooks';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { Button, InputGroup, RadioGroup } from '@ui';
-import { createSignal, For, Show, Suspense } from 'solid-js';
+import { Button, cn, InputGroup, RadioGroup, Tooltip } from '@ui';
+import { createMemo, createSignal, Show, Suspense } from 'solid-js';
+import { Virtualizer } from 'virtua/solid';
 import {
   aEntityKnob,
   type Knob,
@@ -24,11 +25,26 @@ function pickerTypes(knob: EntityKnob): EntityType[] {
 }
 
 /** The picked item's icon and name, as the step's sentence shows it. */
-export function KnobEntityValue(props: { knob: EntityKnob }) {
+export function KnobEntityValue(props: {
+  knob: EntityKnob;
+  /** In a sentence, which keeps the comma or stop after it on its line. */
+  inSentence?: boolean;
+}) {
   return (
     <Show when={props.knob.value} keyed>
       {(value) => (
-        <span class="inline-flex max-w-full items-center gap-1 align-bottom">
+        // A grid, whose name column can shrink to nothing: a flex row is
+        // always as wide as its whole name, which pushed the sentence and its
+        // card's edge aside. A long name ends in an ellipsis at the line's
+        // width, less the value's padding and the punctuation after it.
+        <span
+          class={cn(
+            'inline-grid grid-cols-[auto_minmax(0,max-content)] items-center gap-1 align-bottom',
+            props.inSentence
+              ? 'max-w-[calc(100%-1em)]'
+              : 'max-w-[calc(100%-4px)]'
+          )}
+        >
           <Show
             when={knobPickerType(value.type)}
             keyed
@@ -56,7 +72,7 @@ function EntityName(props: { id: string; type: EntityType }) {
           <UserIcon id={props.id} size="sm" suppressClick showTooltip={false} />
         </Show>
       </span>
-      <span class="truncate">{display.name()}</span>
+      <ItemName name={display.name()} />
     </>
   );
 }
@@ -68,8 +84,27 @@ function DatabaseName(props: { id: string }) {
   return (
     <>
       <EntityIcon targetType="database" size="xs" class="shrink-0" />
-      <span class="truncate">{name()}</span>
+      <ItemName name={name()} />
     </>
+  );
+}
+
+/** A picked item's name; hovering it shows all of it when it's cut short. */
+function ItemName(props: { name: string }) {
+  let name!: HTMLSpanElement;
+  return (
+    <Tooltip.Root measureTarget={() => name}>
+      <Tooltip.Trigger as="span" ref={name} class="truncate">
+        {props.name}
+      </Tooltip.Trigger>
+      <Tooltip.Portal>
+        <Tooltip.Content>
+          {/* A name with nowhere to break, such as a file's, still wraps
+              inside the tooltip rather than running out of it. */}
+          <span class="min-w-0 wrap-anywhere">{props.name}</span>
+        </Tooltip.Content>
+      </Tooltip.Portal>
+    </Tooltip.Root>
   );
 }
 
@@ -154,6 +189,9 @@ function EntityList(props: {
   );
 }
 
+const DATABASE_ROW_HEIGHT = 28;
+const TOUCH_DATABASE_ROW_HEIGHT = 52;
+
 function databaseName(database: { data: { name?: string | null } }) {
   return database.data.name || 'Untitled database';
 }
@@ -165,10 +203,22 @@ function DatabaseList(props: {
 }) {
   const all = useQuickAccess().useList('database').items;
   const [query, setQuery] = createSignal('');
-  const databases = () => {
+  const databases = createMemo(() => {
     const words = query().trim().toLowerCase();
     return all().filter(
       (item) => !words || databaseName(item).toLowerCase().includes(words)
+    );
+  });
+  // Arrow keys move between mounted radios: from the picked one to those on
+  // either side, and around the ends.
+  const arrowTargets = () => {
+    const last = databases().length - 1;
+    const picked = Math.max(
+      0,
+      databases().findIndex((item) => item.id === props.value?.id)
+    );
+    return [0, picked - 1, picked, picked + 1, last].filter(
+      (index) => index >= 0 && index <= last
     );
   };
   // On touch the search field keeps the keyboard while a row is picked.
@@ -195,7 +245,7 @@ function DatabaseList(props: {
         fallback={<p class="px-1 text-sm text-ink-muted">No databases found</p>}
       >
         <RadioGroup
-          class="min-h-0 overflow-y-auto text-sm text-ink"
+          class="min-h-0 overflow-y-auto touch:overscroll-none text-sm text-ink not-touch:max-h-48"
           // Cleared, no database is picked.
           value={props.value?.id ?? ''}
           onChange={(id) => props.onInput({ type: 'database', id })}
@@ -205,21 +255,33 @@ function DatabaseList(props: {
           <RadioGroup.Label class="sr-only">
             {props.knob.label}
           </RadioGroup.Label>
-          <For each={databases()}>
+          <Virtualizer
+            data={databases()}
+            itemSize={
+              isTouchDevice() ? TOUCH_DATABASE_ROW_HEIGHT : DATABASE_ROW_HEIGHT
+            }
+            keepMounted={arrowTargets()}
+          >
             {(database) => (
-              <RadioGroup.Item value={database.id} class="touch:min-h-11">
-                <RadioGroup.ItemControl />
-                <RadioGroup.ItemLabel class="flex min-w-0 flex-1 items-center gap-1.5 self-stretch">
-                  <EntityIcon
-                    targetType="database"
-                    size="xs"
-                    class="shrink-0"
-                  />
-                  <span class="truncate">{databaseName(database)}</span>
-                </RadioGroup.ItemLabel>
-              </RadioGroup.Item>
+              <div class="flex pb-2">
+                <RadioGroup.Item
+                  value={database.id}
+                  // The virtualizer takes pointer events off its rows while it scrolls.
+                  class="pointer-events-auto min-w-0 flex-1 touch:min-h-11"
+                >
+                  <RadioGroup.ItemControl />
+                  <RadioGroup.ItemLabel class="flex min-w-0 flex-1 items-center gap-1.5 self-stretch">
+                    <EntityIcon
+                      targetType="database"
+                      size="xs"
+                      class="shrink-0"
+                    />
+                    <span class="truncate">{databaseName(database)}</span>
+                  </RadioGroup.ItemLabel>
+                </RadioGroup.Item>
+              </div>
             )}
-          </For>
+          </Virtualizer>
         </RadioGroup>
       </Show>
     </div>

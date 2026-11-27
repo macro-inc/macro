@@ -1,4 +1,5 @@
-import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
+import type { DirectoryChannel } from '@queries/channel/directory-core';
+import { directoryChannel } from '@queries/channel/tests/directory-channel';
 import {
   cleanup,
   fireEvent,
@@ -19,13 +20,12 @@ vi.mock('@app/lib/analytics', () => ({ analytics: { track } }));
 
 // The app's channel list and split router, as the dialog's support link reads them.
 const channelList = vi.hoisted(() => ({
-  channels: [] as (Pick<ApiChannelWithLatest, 'id' | 'name' | 'owner_id'> &
-    Partial<Pick<ApiChannelWithLatest, 'updated_at'>>)[],
+  channels: [] as DirectoryChannel[],
 }));
 vi.mock('@core/context/channels', () => ({
-  useChannelsContext: () => ({
+  useChannelDirectory: () => ({
     channels: () => channelList.channels,
-    isLoading: () => false,
+    complete: () => true,
   }),
 }));
 vi.mock('@core/context/user', () => ({
@@ -241,17 +241,18 @@ describe('shelf after a video ends', () => {
 describe('support link under the video', () => {
   it("opens the person's support channel and closes the dialog", async () => {
     channelList.channels = [
-      { id: 'general', name: 'general', owner_id: 'macro|ada@acme.test' },
-      {
-        id: 'someone-elses-support',
+      directoryChannel('general', {
+        name: 'general',
+        ownerId: 'macro|ada@acme.test',
+      }),
+      directoryChannel('someone-elses-support', {
         name: 'Macro Support x grace',
-        owner_id: 'macro|grace@acme.test',
-      },
-      {
-        id: 'support-ada',
+        ownerId: 'macro|grace@acme.test',
+      }),
+      directoryChannel('support-ada', {
         name: 'Macro Support x ada',
-        owner_id: 'macro|ada@acme.test',
-      },
+        ownerId: 'macro|ada@acme.test',
+      }),
     ];
     render(() => <TutorialPill tutorial="crm" />);
     fireEvent.click(
@@ -280,18 +281,16 @@ describe('support link under the video', () => {
   it("opens a Macro team member's most recently active support channel", async () => {
     // A Macro team member is in customers' support channels but owns none.
     channelList.channels = [
-      {
-        id: 'older-support',
+      directoryChannel('older-support', {
         name: 'Macro Support x grace',
-        owner_id: 'macro|grace@acme.test',
-        updated_at: '2026-11-01T10:00:00Z',
-      },
-      {
-        id: 'recent-support',
+        ownerId: 'macro|grace@acme.test',
+        updatedAt: '2026-11-01T10:00:00Z',
+      }),
+      directoryChannel('recent-support', {
         name: 'Macro Support x lin',
-        owner_id: 'macro|lin@acme.test',
-        updated_at: '2026-11-04T10:00:00Z',
-      },
+        ownerId: 'macro|lin@acme.test',
+        updatedAt: '2026-11-04T10:00:00Z',
+      }),
     ];
     render(() => <TutorialRow tutorial="mail" />);
     fireEvent.click(row()!);
@@ -310,7 +309,10 @@ describe('support link under the video', () => {
 
   it('leaves the lip out when the person is in no support channel', async () => {
     channelList.channels = [
-      { id: 'general', name: 'general', owner_id: 'macro|ada@acme.test' },
+      directoryChannel('general', {
+        name: 'general',
+        ownerId: 'macro|ada@acme.test',
+      }),
     ];
     render(() => <TutorialRow tutorial="mail" />);
     fireEvent.click(row()!);

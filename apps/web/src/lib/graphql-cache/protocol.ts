@@ -7,6 +7,7 @@ export type IdentityBindingWire = {
   revalidationVariables?: string[];
 };
 
+import { CacheAuthoritySchema } from './authority.generated';
 import type { EntityResolverWire } from './exchange/entity-resolvers';
 import type {
   ContactReconcile,
@@ -684,8 +685,14 @@ export type RecordFieldChange =
 export type WriteResult = CacheChangeHints & {
   /** Effective view changes. Missing metadata requires a conservative reread. */
   fieldChanges?: RecordFieldChange[];
-  /** Bindings omitted while committing an otherwise normalizable response. */
+  /** Bindings omitted while committing a response. */
   identityErrors?: string[];
+  /**
+   * Why a confirmed response's content was not written: it did not normalize,
+   * so its write settled with only the identities it resolved. Nothing is
+   * applied from that response; its queries are revalidated instead.
+   */
+  unwritableResponse?: string;
   mutationUuid?: string;
   /** Effective-view revision installed by this logical mutation. */
   revision: CacheRevision;
@@ -703,7 +710,15 @@ export type WriteResult = CacheChangeHints & {
   reset: boolean;
   /** Recovery queries for terminal settlement; skip superseded outcomes. */
   revalidations?: QueryRevalidationWire[];
+  /**
+   * How long a queued mutation's enqueue or commit waited for the native
+   * engine and then held it. Absent from the browser engine and older binaries.
+   */
+  engine?: EngineLockTiming;
 };
+
+/** A native engine command's wait for the engine lock and its hold of it. */
+export type EngineLockTiming = { lockWaitMs: number; lockHoldMs: number };
 
 /**
  * Result of installing an optimistic layer. `changed`/`affectedOps` reflect
@@ -832,10 +847,21 @@ export type MutationSettlement = { mutationUuid?: string } & (
     }
 );
 
-export type CacheRequest = { id: number } & (
+export type CacheRequest = {
+  id: number;
+  generation?: string;
+} & (
   | { kind: 'init'; scope: string; hotCapacity?: number }
   | { kind: 'current-revision' }
   | { kind: 'current-storage-generation' }
+  | { kind: 'current-authority'; identity: string; traceparent?: string }
+  | {
+      kind: 'transition-authority';
+      traceparent?: string;
+      identity: string;
+      expected: string;
+      policy: string;
+    }
   | { kind: 'inspect-mutations' }
   | {
       kind: 'read';
@@ -988,6 +1014,7 @@ export type CacheResponseErrorCode =
   | 'owner-lock-unavailable'
   | 'cache-superseded'
   | 'owner-handoff-blocked'
+  | 'write-not-admitted'
   | 'admitted-enqueue-uncertain';
 
 /** Old-owner work was rejected after fenced engine loss and was not replayed. */
@@ -1034,12 +1061,19 @@ export function isTypedSearchRowRead(request: CacheRequest): boolean {
 export const OWNER_HANDOFF_BLOCKED_ERROR_CODE: CacheResponseErrorCode =
   'owner-handoff-blocked';
 
+/**
+ * A write waited too long for an owner and was dropped before any engine got
+ * it: nothing of it is stored, and nobody will send it.
+ */
+export const WRITE_NOT_ADMITTED_ERROR_CODE: CacheResponseErrorCode =
+  'write-not-admitted';
+
 /** An admitted enqueue lost its reply and may already be durably queued. */
 export const ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE: CacheResponseErrorCode =
   'admitted-enqueue-uncertain';
 
 export type CacheResponse =
-  | { id: number; ok: true; result: unknown }
+  | { id: number; ok: true; result: unknown; authorityGeneration?: string }
   | {
       id: number;
       ok: false;
@@ -1052,7 +1086,11 @@ export type CacheResponse =
  * operations whose underlying records changed. The host filters by its own
  * clientId prefix and re-executes.
  */
-export type CachePush =
+export type CachePush = { authorityGeneration?: string } & (
+  | {
+      kind: 'authority-changed';
+      authority: import('./authority').CacheAuthority;
+    }
   | {
       kind: 'ops-affected';
       opIds: string[];
@@ -1069,7 +1107,8 @@ export type CachePush =
       kind: 'cache-hydrated';
       revision: CacheRevision;
     } & CacheChangeHints)
-  | { kind: 'mutation-settled'; settlement: MutationSettlement };
+  | { kind: 'mutation-settled'; settlement: MutationSettlement }
+);
 
 export type WorkerMessage = CacheResponse | CachePush;
 
@@ -1094,6 +1133,7 @@ export const isCacheResponseErrorCode = (
   value === OWNER_LOCK_UNAVAILABLE_ERROR_CODE ||
   value === CACHE_SUPERSEDED_ERROR_CODE ||
   value === OWNER_HANDOFF_BLOCKED_ERROR_CODE ||
+  value === WRITE_NOT_ADMITTED_ERROR_CODE ||
   value === ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE;
 
 /** Identifies a coordinator-fenced rejection from a lost owner epoch. */
@@ -1103,6 +1143,11 @@ export const isOwnerEpochLostError = (
   value instanceof Error &&
   'errorCode' in value &&
   value.errorCode === OWNER_EPOCH_LOST_ERROR_CODE;
+
+/** Identifies a request no engine got or answered. A later engine serves the
+ * same host. */
+export const isEngineAbsentError = (value: unknown): boolean =>
+  isOwnerEpochLostError(value) || isCacheOutageError(value);
 
 /** Identifies a request refused because another context holds the database,
  * including a newer build that took it over. */
@@ -1115,6 +1160,15 @@ export const isOwnerLockUnavailableError = (
   'errorCode' in value &&
   (value.errorCode === OWNER_LOCK_UNAVAILABLE_ERROR_CODE ||
     value.errorCode === CACHE_SUPERSEDED_ERROR_CODE);
+
+/** Identifies a request refused because nothing can open the database for now.
+ * The host that refused it serves again once something can. */
+export const isCacheOutageError = (
+  value: unknown
+): value is Error & { errorCode: 'owner-lock-unavailable' } =>
+  value instanceof Error &&
+  'errorCode' in value &&
+  value.errorCode === OWNER_LOCK_UNAVAILABLE_ERROR_CODE;
 
 /** Identifies a request refused because a newer build took the database over;
  * this page session never gets the cache back. */
@@ -1132,6 +1186,14 @@ export const isOwnerHandoffBlockedError = (
   value instanceof Error &&
   'errorCode' in value &&
   value.errorCode === OWNER_HANDOFF_BLOCKED_ERROR_CODE;
+
+/** Identifies a write dropped before any engine got it. */
+export const isWriteNotAdmittedError = (
+  value: unknown
+): value is Error & { errorCode: 'write-not-admitted' } =>
+  value instanceof Error &&
+  'errorCode' in value &&
+  value.errorCode === WRITE_NOT_ADMITTED_ERROR_CODE;
 
 /** Identifies an admitted enqueue whose durable outcome is unknown. */
 export const isAdmittedEnqueueUncertainError = (
@@ -1152,7 +1214,10 @@ export function isCacheResponse(value: unknown): value is CacheResponse {
   }
   if (value.ok === true) {
     return (
-      hasOnlyWireKeys(value, ['id', 'ok', 'result']) &&
+      hasOnlyWireKeys(value, ['id', 'ok', 'result', 'authorityGeneration']) &&
+      (value.authorityGeneration === undefined ||
+        (typeof value.authorityGeneration === 'string' &&
+          /^[0-9a-f-]{36}$/.test(value.authorityGeneration))) &&
       Object.hasOwn(value, 'result')
     );
   }
@@ -1193,7 +1258,21 @@ export function isRecordFieldChanges(
 /** Strictly validates a pushed cache notification. */
 export function isCachePush(value: unknown): value is CachePush {
   if (!isWireRecord(value)) return false;
+  if (Object.hasOwn(value, 'authorityGeneration')) {
+    const { authorityGeneration, ...push } = value;
+    return (
+      (authorityGeneration === undefined ||
+        (typeof authorityGeneration === 'string' &&
+          /^[0-9a-f-]{36}$/.test(authorityGeneration))) &&
+      isCachePush(push)
+    );
+  }
   switch (value.kind) {
+    case 'authority-changed':
+      return (
+        hasOnlyWireKeys(value, ['kind', 'authority']) &&
+        CacheAuthoritySchema.safeParse(value.authority).success
+      );
     case 'ops-affected':
       return (
         hasOnlyWireKeys(value, ['kind', 'opIds', 'keys', 'fieldChanges']) &&

@@ -1,4 +1,4 @@
-import { AppConnectionContext } from '@core/pipedream/connection-context';
+import { AppConnectionContext } from '@core/connectors/connection-context';
 import {
   cleanup,
   fireEvent,
@@ -20,8 +20,9 @@ const mocks = vi.hoisted(() => ({
   reportConnected: vi.fn(),
   notify: vi.fn(),
 }));
-vi.mock('@queries/pipedream-connectors', () => ({
-  connectPipedreamApp: mocks.connect,
+vi.mock('@queries/connectors', () => ({
+  appConnectorKey: (slug: string) => `app/${slug}`,
+  connectConnector: mocks.connect,
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { alert: mocks.notify },
@@ -99,6 +100,23 @@ it('cancellation never prompts the agent', async () => {
       false
     )
   );
+  expect(mocks.reportConnected).not.toHaveBeenCalled();
+});
+it('connects while the agent is still working, without continuing the turn', async () => {
+  // An agent reply asks for an app and keeps working; the chip must not be
+  // dead until the turn ends.
+  mocks.turn = 'running';
+  mocks.connect.mockResolvedValue('connected');
+  render(() => (
+    <AgentConnections>
+      <Button />
+    </AgentConnections>
+  ));
+  const button = screen.getByRole('button') as HTMLButtonElement;
+  expect(button.disabled).toBe(false);
+  fireEvent.click(button);
+  await waitFor(() => expect(mocks.notify).toHaveBeenCalledOnce());
+  expect(mocks.connect).toHaveBeenCalledOnce();
   expect(mocks.reportConnected).not.toHaveBeenCalled();
 });
 it('collaborators cannot connect their account on behalf of the session owner', () => {

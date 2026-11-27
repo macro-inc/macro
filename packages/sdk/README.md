@@ -253,6 +253,53 @@ await doc.setProperty(macro.properties.byId('prop_status'), {
 const props = await doc.properties();
 ```
 
+### Task creation
+
+Task creation leaves an omitted `shareWithTeam` to the backend: tasks default to
+team sharing, or private when the calling session cannot share. Explicit `true`
+still requests sharing and is subject to the backend's permission checks.
+
+### Task templates
+
+`macro.taskTemplates` manages personal and team templates. Selected fields can
+stay blank or carry a default. An optional `title` is the default task title,
+separate from the template's `name`; description Markdown fills a blank task body.
+Read the default with `template.title()`. Omitted update fields stay unchanged;
+pass `title: ''` to clear the default.
+
+An optional `shareWithTeam` controls task sharing independently of the template's
+own `team`; `false` is an explicit private-task default. Omission leaves the
+composer switch unchanged. Read it with `template.shareWithTeam()` and update it
+with `template.update({ shareWithTeam: false })`. Property-only updates retain it.
+Without a current team the composer hides the switch and ignores the saved value.
+
+Pass a client-generated UUID as `idempotencyKey` and retain it with the same input
+when retrying creation. The server returns the same template rather than creating
+a duplicate; changed content or ownership conflicts.
+
+```ts
+const effort = macro.properties.definition('00000001-0000-0000-0000-000000000008');
+// Persist this key and input before sending; retries reuse both unchanged.
+const creation: Parameters<typeof macro.taskTemplates.create>[0] = {
+  idempotencyKey: crypto.randomUUID(),
+  name: 'Bug report',
+  title: 'Investigate issue',
+  shareWithTeam: false, // create private tasks even from a team-owned template
+  team: await macro.teams.current(), // omit for a personal template
+  properties: [{ property: effort, defaultValue: { type: 'number', value: 0 } }],
+  descriptionMarkdown: '## Details\n\n- [ ] Describe the task',
+};
+const template = await macro.taskTemplates.create(creation);
+// After an uncertain response: await macro.taskTemplates.create(creation).
+const templates = await macro.taskTemplates.list({ team: await macro.teams.current() });
+await template.update({ name: 'Detailed bug report' });
+```
+
+Current team members can use team templates; the creator and current team admins
+can edit or delete them. Ownership cannot change. Updates and `template.delete()`
+use the observed revision; after a conflict, read a fresh handle before retrying.
+Template edits and deletion never change tasks already created from them.
+
 ### Databases
 
 Databases are collections of tables. Tables, columns, and views are parts of
@@ -523,6 +570,18 @@ await macro.routines.create({
 
 Event triggers use `{ type: 'events', filters: [{ events, entities, condition }] }`;
 `entities` takes typed references such as `{ type: 'document', entity: doc }`.
+A filter on `email.message_received` or `email.labeled` alone can take `inboxes`,
+`Link` handles from `macro.email.links()`, to watch only those of the owner's
+inboxes; without it, it watches every inbox the owner reads. `routine.trigger()`
+returns picked inboxes as `Link` handles too. `email.labeled` runs when a thread
+gains one of the owner's Gmail labels or Outlook categories, as mail arrives or
+later; its filter can take `labels`, `Label` handles from `macro.email.labels()`,
+to run only on those. Labels a routine or an agent adds never start one, and
+neither do Gmail's system labels and categories (Inbox, Unread, Important, …),
+drafts, mail that arrives in spam or trash, or historical imports.
+Saving it needs the owner's `enable-email-labeled-trigger` PostHog flag on top
+of the `enable-event-routines` every event trigger needs; without it the save
+fails with a 400 (`email label triggers are not enabled`).
 Use `{ type: 'multiple', triggers: [...] }` to combine schedules and events.
 `routine.update(options)` replaces task and trigger settings; `delete()` removes it.
 Routines run as their owner, so share one as a template instead:
@@ -744,7 +803,7 @@ atomic database operation contract, including batch-local UUIDs, like
 successful batches. Call `row.refresh()` to reload a row after a batch changes it.
 
 A pipeline that tracks companies or contacts has an **Outcome** field (`Open`,
-`Won` or `Lost`, independent of Stage) and a currency field beside each
+`Won`, `Lost` or `Declined`, a deal the team turned down, independent of Stage) and a currency field beside each
 monetary field, such as `Revenue currency`; new entries default to `Open` and
 `USD`, and neither field can be emptied. `listWithFields()` and `find()` name
 each monetary field's `currencyField`, `find()` returns one total per
@@ -966,8 +1025,7 @@ is undefined when the picture was removed or set by URL).
 Agent-session events describe a coding agent's life: `opened`, `turn_started`,
 `turn_ended`, `settled` (a turn ended with nothing queued behind it),
 `waiting_for_input` (the agent asked its owner a question), `input_received`,
-`mentioned` (a prompt named other users who can see the session), `stopped`,
-`renamed`, and `deleted`. Each carries the session's identity and
+`stopped`, `renamed`, and `deleted`. Each carries the session's identity and
 hydrates to an `AgentSession` handle, the owner `User`, and, for a session
 opened from a channel thread, the `Channel`, `Thread`, and magic-chip
 `Message` the turn renders into.
@@ -1104,7 +1162,7 @@ supplied context, explicitly set `toolset: { type: 'none' }`:
 ```ts
 const answer = await macro.ai.structuredCompletion({
   prompt: 'Summarize these supplied notes: ...',
-  model: 'google/gemini-3.8-flash',
+  model: 'google/gemini-4-hydrogen',
   toolset: { type: 'none' },
   output_schema: {
     name: 'Summary',

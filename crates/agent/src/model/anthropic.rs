@@ -28,6 +28,11 @@ const TOOL_REFERENCE_MODELS: &[&str] = &[
     "claude-sonnet-5-5",
 ];
 
+/// Haiku models that think adaptively and reject manual `budget_tokens`
+/// thinking (https://platform.claude.com/docs/en/about-claude/models/overview,
+/// 2026-11-24). Older Haiku models take only the manual form.
+const ADAPTIVE_HAIKU_MODELS: &[&str] = &["claude-haiku-5-5"];
+
 /// Model id prefixes whose Messages API output cap is 32K (Opus 4 / 4.1).
 const OUTPUT_32K_PREFIXES: &[&str] = &["claude-opus-4-0", "claude-opus-4-1", "claude-opus-4-2"];
 
@@ -97,9 +102,10 @@ impl<'a, H: HttpClientExt + Clone + Default + 'static> AnthropicModel<'a, H> {
     /// Best-effort extended-thinking config for the configured model, flattened
     /// into the request body by rig, or `None` if the model doesn't support it.
     ///
-    /// - Opus / Fable / Mythos / Sonnet: `adaptive` (the model chooses when to
-    ///   think; avoids the `budget_tokens < max_tokens` constraint).
-    /// - Haiku: no adaptive support, so `enabled` + `budget_tokens`.
+    /// - Opus / Fable / Mythos / Sonnet / Haiku 5.5: `adaptive` (the model
+    ///   chooses when to think; avoids the `budget_tokens < max_tokens`
+    ///   constraint). Haiku 5.5 rejects manual `budget_tokens` thinking.
+    /// - Older Haiku: no adaptive support, so `enabled` + `budget_tokens`.
     ///
     /// `temperature` is never set: it is rejected on Opus 4.7+ and constrained
     /// to 1 with extended thinking elsewhere, so we let the API default apply.
@@ -113,6 +119,7 @@ impl<'a, H: HttpClientExt + Clone + Default + 'static> AnthropicModel<'a, H> {
             || model.contains("fable")
             || model.contains("mythos")
             || model.contains("sonnet")
+            || ADAPTIVE_HAIKU_MODELS.contains(&model.as_str())
         {
             serde_json::json!({
                 "thinking": { "type": "adaptive", "display": "summarized" }

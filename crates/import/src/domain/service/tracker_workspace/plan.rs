@@ -104,6 +104,8 @@ fn row(
         ),
     };
     let plan = NotionPlanItem {
+        dependency_of: Vec::new(),
+        inline_on: Vec::new(),
         decision: None,
         reason: None,
         path: Vec::new(),
@@ -182,6 +184,7 @@ pub(in crate::domain::service) fn triage_items(
                 .iter()
                 .filter(|issue| issue.group.as_ref().or(issue.team.as_ref()) == Some(&group.id))
                 .count(),
+            explicitly_selected: false,
             table: None,
         });
     }

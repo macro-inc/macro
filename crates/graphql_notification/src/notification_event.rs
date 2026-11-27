@@ -33,12 +33,13 @@ use model_notifications::{
     AgentSignInExpiryStage, AiResponseMetadata, CalendarEventReminderMetadata, CallStartedMetadata,
     ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageReactionMetadata,
     ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType, CommentedOnDocumentMetadata,
-    ComputerSetupMetadata, ComputerSetupOutcome, DocumentMentionMetadata, GithubPrCheckRun,
+    ComputerSetupMetadata, ComputerSetupOutcome, CrmEmailSharingChangeReason,
+    CrmEmailSharingChangedMetadata, DocumentMentionMetadata, GithubPrCheckRun,
     GithubPrCheckRunState, GithubPrComment, GithubPrCommentKind, GithubPrEventAction,
     GithubPrEventStatus, GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon,
     GithubPrReview, GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested,
     InboxReauthRequiredMetadata, InviteToTeamMetadata, MentionedInDocumentCommentMetadata,
-    NewEmailMetadata, NotifEvent, NotificationDocumentSubType, ReminderMetadata,
+    NewEmailMetadata, NotifEvent, NotificationDocumentSubType, PingMetadata, ReminderMetadata,
     RepliedToDocumentCommentThreadMetadata, RoutineRunFinishedMetadata, RoutineRunOutcome,
     RuntimeAccessRemovedMetadata, StoppedAgent, TaskAssignedMetadata,
 };
@@ -758,6 +759,35 @@ impl GraphqlInboxReauthRequiredMetadata {
     }
 }
 
+/// Why someone's CRM email sharing rules changed.
+#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq)]
+pub enum GraphqlCrmEmailSharingChangeReason {
+    /// Companies their rules named were merged.
+    CompaniesMerged,
+}
+
+/// GraphQL wrapper for CRM email sharing change metadata.
+pub struct GraphqlCrmEmailSharingChangedMetadata(CrmEmailSharingChangedMetadata);
+
+/// A teammate's action changed the viewer's CRM email sharing rules. It names
+/// no company, count or person.
+#[Object]
+impl GraphqlCrmEmailSharingChangedMetadata {
+    /// The team whose CRM the rules share mail with.
+    async fn team_id(&self) -> ID {
+        ID(self.0.team_id.to_string())
+    }
+
+    /// Why they changed.
+    async fn reason(&self) -> GraphqlCrmEmailSharingChangeReason {
+        match self.0.reason {
+            CrmEmailSharingChangeReason::CompaniesMerged => {
+                GraphqlCrmEmailSharingChangeReason::CompaniesMerged
+            }
+        }
+    }
+}
+
 /// GraphQL wrapper for routine run metadata.
 pub struct GraphqlRoutineRunFinishedMetadata(RoutineRunFinishedMetadata);
 
@@ -904,6 +934,58 @@ impl GraphqlComputerSetupMetadata {
             ComputerSetupOutcome::Ready => None,
             ComputerSetupOutcome::Failed { failure_reason, .. } => Some(failure_reason),
         }
+    }
+}
+
+/// GraphQL wrapper for ping metadata.
+pub struct GraphqlPingMetadata(PingMetadata);
+
+/// Metadata for a notification its sender wrote.
+#[Object]
+impl GraphqlPingMetadata {
+    /// What the sender wrote.
+    async fn body(&self) -> &str {
+        &self.0.body
+    }
+
+    /// The linked entity's name when it was sent, when it has one that reads
+    /// the same to every recipient.
+    async fn entity_name(&self) -> Option<&str> {
+        self.0.entity_name.as_deref()
+    }
+
+    /// The agent whose code sent it, when one did.
+    async fn agent_id(&self) -> Option<ID> {
+        self.0.agent.as_ref().map(|agent| ID(agent.id.to_string()))
+    }
+
+    /// The sending agent's name when it was sent.
+    async fn agent_name(&self) -> Option<&str> {
+        self.0.agent.as_ref().map(|agent| agent.name.as_str())
+    }
+
+    /// The sending agent's avatar when it was sent.
+    async fn agent_avatar_url(&self) -> Option<&str> {
+        self.0
+            .agent
+            .as_ref()
+            .and_then(|agent| agent.avatar_url.as_deref())
+    }
+
+    /// The channel message it opens at, when the sender linked one.
+    async fn message_id(&self) -> Option<ID> {
+        self.0
+            .message
+            .map(|message| ID(message.message_id.to_string()))
+    }
+
+    /// The top-level message the linked message replies to, when it is a
+    /// reply.
+    async fn thread_id(&self) -> Option<ID> {
+        self.0
+            .message
+            .and_then(|message| message.thread_id)
+            .map(|thread| ID(thread.to_string()))
     }
 }
 
@@ -1476,6 +1558,8 @@ pub enum GraphqlNotifEvent {
     NewEmail(GraphqlNewEmailMetadata),
     /// Inbox reauthentication metadata.
     InboxReauthRequired(GraphqlInboxReauthRequiredMetadata),
+    /// A teammate's action changed the viewer's CRM email sharing rules.
+    CrmEmailSharingChanged(GraphqlCrmEmailSharingChangedMetadata),
     /// Team invitation metadata.
     InviteToTeam(GraphqlInviteToTeamMetadata),
     /// Task assignment metadata.
@@ -1516,6 +1600,8 @@ pub enum GraphqlNotifEvent {
     AgentSignInExpiry(GraphqlAgentSignInExpiryMetadata),
     /// Computer setup metadata.
     ComputerSetup(GraphqlComputerSetupMetadata),
+    /// Ping metadata.
+    Ping(GraphqlPingMetadata),
     /// Schema-only stub for released clients. Never returned.
     WhatsappGroupMessage(GraphqlWhatsappGroupMessageMetadata),
     /// Removed runtime access that stopped the recipient's agents.
@@ -1589,11 +1675,15 @@ impl From<NotifEvent> for GraphqlNotifEvent {
             NotifEvent::ComputerSetup(metadata) => {
                 Self::ComputerSetup(GraphqlComputerSetupMetadata(metadata))
             }
+            NotifEvent::Ping(metadata) => Self::Ping(GraphqlPingMetadata(metadata)),
             NotifEvent::RuntimeAccessRemoved(metadata) => {
                 Self::RuntimeAccessRemoved(GraphqlRuntimeAccessRemovedMetadata(metadata))
             }
             NotifEvent::InboxReauthRequired(metadata) => {
                 Self::InboxReauthRequired(GraphqlInboxReauthRequiredMetadata(metadata))
+            }
+            NotifEvent::CrmEmailSharingChanged(metadata) => {
+                Self::CrmEmailSharingChanged(GraphqlCrmEmailSharingChangedMetadata(metadata))
             }
             NotifEvent::InviteToTeam(metadata) => {
                 Self::InviteToTeam(GraphqlInviteToTeamMetadata(metadata))

@@ -93,6 +93,17 @@ export const callStartedEvent: ActivityEventFieldsFragment = {
   },
 };
 
+export const timeLoggedEvent: ActivityEventFieldsFragment = {
+  ...BASE,
+  id: 'evt-15',
+  action: {
+    __typename: 'GraphqlActivityTimeLogged',
+    minutes: 90,
+    entryDate: '2026-11-20',
+    source: 'TIMER',
+  },
+};
+
 export const unknownActionEvent: ActivityEventFieldsFragment = {
   ...BASE,
   id: 'evt-11',
@@ -126,4 +137,26 @@ export const databaseCreatedEvent: ActivityEventFieldsFragment = {
   entityType: 'DATABASE',
   entityId: 'database-1',
   action: { __typename: 'GraphqlActivityCreated' },
+};
+
+/** Two companies merged into a company, with a value of one dropped. */
+export const recordMergedEvent: ActivityEventFieldsFragment = {
+  ...BASE,
+  id: 'evt-merge',
+  entityType: 'CRM_COMPANY',
+  entityId: 'company-kept',
+  action: {
+    __typename: 'GraphqlActivityRecordMerged',
+    merged: [
+      { id: 'company-old', name: 'Old Co' },
+      { id: 'company-other', name: null },
+    ],
+    dropped: [
+      {
+        property: 'tier',
+        record: 'company-old',
+        value: { type: 'String', value: 'Silver' },
+      },
+    ],
+  },
 };

@@ -1,0 +1,33 @@
+# Every third-party action the generated workflows use, pinned to a commit.
+# `cargo x workflows actions fetch` copies each one's action.yml at that commit
+# into actions/; `cargo x workflows` generates typed bindings from those copies
+# (src/workflows/actions.rs). Change a pin here, fetch, regenerate, review.
+#
+# action                                          commit                                    version
+actions/cache/restore                             27d5ce7f107fe9357f9df03efb73ab90386fccae  v5.0.5
+actions/cache/save                                27d5ce7f107fe9357f9df03efb73ab90386fccae  v5.0.5
+# v6.1.0 changes how `pull_request_target` runs check out a PR: review that
+# before moving checkout past v6.0.3.
+actions/checkout                                  df4cb1c069e1874edd31b4311f1884172cec0e10  v6.0.3
+actions/download-artifact                         634f93cb2916e3fdff6788551b99b062d0335ce0  v5.0.0
+actions/github-script                             f28e40c7f34bde8b3046d885e986cb6290c5673b  v7.1.0
+actions/setup-node                                49933ea5288caeca8642d1e84afbd3f7d6820020  v4.4.0
+actions/upload-artifact                           ea165f8d65b6e75b540449e92b4886f43607fa02  v4.6.2
+aws-actions/configure-aws-credentials             e7f100cf4c008499ea8adda475de1042d6975c7b  v6.2.0
+denoland/setup-deno                               22d081ff2d3a40755e97629de92e3bcbfa7cf2ed  v2.0.5
+docker/setup-buildx-action                        8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  v3.12.0
+dorny/paths-filter                                d1c1ffe0248fe513906c8e24db8ea791d46f8590  v3.0.3
+google-github-actions/auth                        7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  v3.0.0
+grafana/grafana-github-actions/gha-otel-export    b1c422726cc4ff4adb0838ebca67586f24babb42  main
+namespacelabs/nscloud-cache-action                15799a6b54e5765f85b2aac25b3f0df43ed571c0  v1.4.3
+namespacelabs/nscloud-setup-buildx-action         d059ed7184f0bc7c8b27e8810cea153d02bcc6dd  v0.0.23
+oven-sh/setup-bun                                 0c5077e51419868618aeaa5fe8019c62421857d6  v2.2.0
+pulumi/actions                                    8e5e406f4007fca908480587cb9893c07090f58d  v7.0.0
+r0adkll/upload-google-play                        e738b9dd8f2476ea806d921b64aacd24f34515a5  v1.1.5
+# runs-on/cache: a commit on its v4 branch, v4.3.0 plus 5 commits.
+runs-on/cache/restore                             a5f51d6f3fece787d03b7b4e981c82538a0654ed  v4
+runs-on/cache/save                                a5f51d6f3fece787d03b7b4e981c82538a0654ed  v4
+softprops/action-gh-release                       3bb12739c298aeb8a4eeaf626c5b8d85266b0e65  v2.6.2
+Swatinem/rust-cache                               d1527c8f67ef9af357290475d4af4b0fab8f12e0  v2.9.3
+technote-space/assign-author                      9558557c5c4816f38bd06176fbc324ba14bb3160  v1.6.2
+tj-actions/changed-files                          24d32ffd492484c1d75e0c0b894501ddb9d30d62  v47.0.0

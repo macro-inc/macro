@@ -54,6 +54,47 @@ mod test;
 pub(crate) type RuleDiscoveryPort =
     dyn crm::domain::email_rule_discovery::EmailRuleDiscoveryService<PgConnection>;
 
+/// Opens a transaction that gives up on a lock it cannot get within 5 s
+/// (SQLSTATE 55P03). Every user write that locks an inbox's link row runs in
+/// one, so a request queued behind a long lock holder returns a retryable
+/// error instead of holding a pooled connection.
+pub(super) async fn begin(
+    pool: &PgPool,
+) -> Result<sqlx::Transaction<'static, sqlx::Postgres>, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    sqlx::query!("SET LOCAL lock_timeout = '5s'")
+        .execute(&mut *tx)
+        .await?;
+    Ok(tx)
+}
+
+/// Whether a statement gave up waiting for a lock.
+pub(super) fn is_lock_timeout(error: &sqlx::Error) -> bool {
+    error
+        .as_database_error()
+        .and_then(|error| error.code())
+        .is_some_and(|code| code == crate::domain::models::error::LOCK_NOT_AVAILABLE)
+}
+
+/// A lock timeout is a busy inbox the user can retry, not an outage.
+pub(super) fn contended(error: EmailErr) -> EmailErr {
+    match error {
+        EmailErr::RepoErr(cause)
+            if cause
+                .chain()
+                .filter_map(|cause| cause.downcast_ref::<sqlx::Error>())
+                .any(is_lock_timeout) =>
+        {
+            EmailErr::Contended
+        }
+        error => error,
+    }
+}
+
+fn repo_error(error: sqlx::Error) -> EmailErr {
+    contended(EmailErr::RepoErr(error.into()))
+}
+
 /// Internal read errors preserve resource failures until the domain boundary.
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum PreviewReadError {
@@ -166,8 +207,10 @@ impl EmailRepo for EmailPgRepo {
         sender: &str,
         blocked: bool,
         important: Option<bool>,
-    ) -> Result<(), Self::Err> {
-        sender_policy::commit(&self.pool, actor, link, sender, blocked, important).await
+    ) -> Result<(), EmailErr> {
+        sender_policy::commit(&self.pool, actor, link, sender, blocked, important)
+            .await
+            .map_err(repo_error)
     }
 
     async fn commit_message_resolution(
@@ -175,7 +218,9 @@ impl EmailRepo for EmailPgRepo {
         actor: &MacroUserIdStr<'_>,
         plan: crate::domain::models::mailbox_operation::MessageResolutionPlan,
     ) -> Result<Uuid, EmailErr> {
-        draft_resolution::commit(&self.pool, actor, plan).await
+        draft_resolution::commit(&self.pool, actor, plan)
+            .await
+            .map_err(contended)
     }
     async fn message_operation_facts(
         &self,
@@ -206,8 +251,10 @@ impl EmailRepo for EmailPgRepo {
         actor: MacroUserIdStr<'_>,
         action: &crate::domain::models::mailbox_action::MailboxAction,
         targets: &[crate::domain::models::mailbox_action::MailboxActionTarget],
-    ) -> Result<Uuid, Self::Err> {
-        mailbox_action::enqueue(&self.pool, link_id, actor, action, targets).await
+    ) -> Result<Uuid, EmailErr> {
+        mailbox_action::enqueue(&self.pool, link_id, actor, action, targets)
+            .await
+            .map_err(repo_error)
     }
     type Err = sqlx::Error;
 
@@ -222,6 +269,16 @@ impl EmailRepo for EmailPgRepo {
         query: PreviewCursorQuery,
         user_id: MacroUserIdStr<'static>,
     ) -> Result<Vec<EmailThreadPreview>, EmailErr> {
+        self.previews_page_for_view_cursor(query, user_id)
+            .await
+            .map(|page| page.previews)
+    }
+
+    async fn previews_page_for_view_cursor(
+        &self,
+        query: PreviewCursorQuery,
+        user_id: MacroUserIdStr<'static>,
+    ) -> Result<crate::domain::models::PreviewCursorPage, EmailErr> {
         preview::previews_for_view_cursor(
             &self.pool,
             query,
@@ -243,8 +300,12 @@ impl EmailRepo for EmailPgRepo {
         preview::contacts_by_thread_ids(&self.pool, thread_ids).await
     }
 
-    async fn labels_by_thread_ids(&self, thread_ids: &[Uuid]) -> Result<Vec<Label>, Self::Err> {
-        preview::labels_by_thread_ids(&self.pool, thread_ids).await
+    async fn labels_by_thread_ids(
+        &self,
+        thread_ids: &[Uuid],
+        reader: Option<&MacroUserIdStr<'_>>,
+    ) -> Result<Vec<Label>, Self::Err> {
+        preview::labels_by_thread_ids(&self.pool, thread_ids, reader).await
     }
 
     async fn link_by_fusionauth_and_macro_id(
@@ -270,6 +331,14 @@ impl EmailRepo for EmailPgRepo {
         macro_id: MacroUserIdStr<'_>,
     ) -> Result<Vec<Link>, Self::Err> {
         link::inboxes_for_macro_id(&self.pool, macro_id).await
+    }
+
+    async fn inbox_ids_among(
+        &self,
+        macro_id: MacroUserIdStr<'_>,
+        ids: &[Uuid],
+    ) -> Result<Vec<Uuid>, Self::Err> {
+        link::inbox_ids_among(&self.pool, macro_id, ids).await
     }
 
     async fn thread_by_id(&self, thread_id: Uuid) -> Result<Option<ThreadRow>, Self::Err> {
@@ -334,8 +403,9 @@ impl EmailRepo for EmailPgRepo {
     async fn labels_by_message_ids(
         &self,
         message_ids: &[Uuid],
+        reader: Option<&MacroUserIdStr<'_>>,
     ) -> Result<HashMap<Uuid, Vec<MessageLabel>>, Self::Err> {
-        message::labels_by_message_ids(&self.pool, message_ids).await
+        message::labels_by_message_ids(&self.pool, message_ids, reader).await
     }
 
     async fn calendar_invitations_by_message_ids(
@@ -434,7 +504,7 @@ impl EmailRepo for EmailPgRepo {
         actor: Option<&str>,
 
         expected_generation: i32,
-    ) -> Result<Option<DraftDeletion>, Self::Err> {
+    ) -> Result<Option<DraftDeletion>, EmailErr> {
         message::delete_draft_message(
             &self.pool,
             message_id,
@@ -444,6 +514,7 @@ impl EmailRepo for EmailPgRepo {
             expected_generation,
         )
         .await
+        .map_err(repo_error)
     }
 
     async fn upsert_contacts(
@@ -462,7 +533,9 @@ impl EmailRepo for EmailPgRepo {
         new_thread: Option<ThreadRow>,
         is_draft: bool,
     ) -> Result<Option<SettledDraftIds>, EmailErr> {
-        draft::insert_message(&self.pool, input, contacts, link_id, new_thread, is_draft).await
+        draft::insert_message(&self.pool, input, contacts, link_id, new_thread, is_draft)
+            .await
+            .map_err(contended)
     }
 
     async fn get_label_by_id(

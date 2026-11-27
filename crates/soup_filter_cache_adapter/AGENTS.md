@@ -14,6 +14,8 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
 - `src/lib.rs`: the GraphQL `Document`/`Selection` → `ValidatedIndexQuery`
   compile path (`compile_soup_flat_v4`) and crate-level docs.
 - `src/live_query.rs`: reactive query registration/re-evaluation.
+- `src/permissions.rs`: CRM snapshot retirement shared by native and browser owners. Retire on proven denial or loss/change of the prior team scope; first allowed/team-less proofs and same-team regrants preserve snapshots, while account changes use the engine reset. Trace retirement phases and scanned/retired counts. Derive property-owner sidecars from already-normalized responses through `response_property_owners` and commit them in the response transaction; skip traversal when no properties are selected. Track property ownership from each field's own arguments; keep independently owned properties and received notification history. Retire copied optimism and persist rebased link updates without deleting authored commands, fresh query revalidations, identity bindings, unrelated projection shadows, or legacy draft attachment recovery. Classify optimism before removing retired CRM owner sidecars, and retain independent owner associations. The ignored full-retirement measurement covers large normalized/projection/property sets with pending commands.
+- Return a resumed retirement's transition to the host so every client can discard the old generation, including when recovery was triggered by an ordinary cache read.
 - `src/direct_patch.rs`, `src/notifications.rs`: optimistic local mutation
   and notification projection updates applied without a server round-trip.
 - `src/channels.rs`, `src/database_rows.rs`, `src/mail.rs`, `src/properties.rs`:
@@ -27,6 +29,7 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
   thread the page left out, but an archive whose Undo is queued keeps its row.
   At most 500 local matches are checked per write; later full snapshots
   restore completeness.
+- `src/projection_inputs.rs`: every stored field the projections read, by type (each kind module's `INPUTS`), which both hosts pass to `TursoStorage::adopt_schema`, so removing a field changes only the record types whose documents read it (`cache_core::schema_change`). The `a_field_no_input_names_never_changes_*` tests fail when a projection reads a field its list leaves out.
 - `src/mail/retention.rs`: retain same-query server rows while local facts are
   incomplete, reject proven nonmembers, and preserve the indexed cursor.
 
@@ -49,11 +52,13 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
 
 - Add a filterable/projectable field: `item_filter_index`/`predicate_index`
   (if the vocabulary is new) → `soup_filter_projection` (wire encoding) →
-  the matching `src/<kind>.rs` here (projection + optimistic patch).
+  the matching `src/<kind>.rs` here (projection + optimistic patch), and the
+  field in that kind's `INPUTS` (`src/projection_inputs.rs`).
 
 ## Checks
 
 - `cargo test -p soup-filter-cache-adapter` (`SQLX_OFFLINE` unset).
+- `CACHE_SCHEMA_DB=<storage-12 or 13 bench database> cargo test --release -p soup-filter-cache-adapter --lib schema_change_cost_on_a_retained_cache -- --ignored --nocapture`: time each schema change tier, with CPU and run-queue wait, against a physical reset, on copies of the database (`CACHE_SCHEMA_CASE` filters cases, `CACHE_SCHEMA_RUNS` sets runs, `CACHE_SCHEMA_OUT` keeps the storage-13 copy for the browser test in `cache-wasm`).
 
 ## Gotchas
 
@@ -73,6 +78,16 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
   `Document::parse`: one cache write passes the same text through the
   projection, notification, mail and property passes, and parsing a 20 KB Soup
   operation for each cost more than the write.
+- Hosts pass one `WriteResponse` to the notification, Mail and property passes
+  (`*_for`, `*_for_response`, `augment_authoritative_response`) so a write
+  normalizes its response once; normalizing a Soup page costs milliseconds.
+  Build it with `WriteResponse::with_updates` from the engine's
+  `Engine::normalize_network` and write with `write_normalized_query`, so the
+  passes and the write share that one normalization.
+- Hosts run those passes through `write_passes` (or `WritePasses::step` to
+  yield between them), never one by one: it reads each stored key once
+  through `Engine::pass_reads` and keeps what it read for the write that
+  follows, which reuses it only while `Storage::write_position` holds still.
 
 - This crate must stay wasm-compatible — no `sqlx`, no native-only crates in
   default features; native-only test fixtures live under

@@ -1,4 +1,6 @@
+import { captureQueryAuthorization } from '@app/lib/urql-solid/authorization';
 import { recordExternalWrite } from '@graphql-cache/exchange/external-writes';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry } from '@macro-inc/observability';
 import { stringifyDocument } from '@urql/core';
 import {
@@ -9,10 +11,14 @@ import { getGraphqlSoupCacheHost, getGraphqlSoupClient } from './graphql-soup';
 
 /** Capture the session before REST dispatch; a late response cannot enter a new session. */
 export function prepareCrmVisibilityWrite() {
+  const canCache = captureQueryAuthorization();
   const client = getGraphqlSoupClient();
   const host = getGraphqlSoupCacheHost();
+  const generation = cacheSessionGeneration.capture();
   const isCurrent = () =>
-    client === getGraphqlSoupClient() && host === getGraphqlSoupCacheHost();
+    canCache() &&
+    client === getGraphqlSoupClient() &&
+    host === getGraphqlSoupCacheHost();
   return {
     isCurrent,
     async commit(change: {
@@ -47,6 +53,7 @@ export function prepareCrmVisibilityWrite() {
         });
       try {
         await host.writeQuery({
+          generation,
           query: stringifyDocument(CrmVisibilityCacheWriteDocument),
           operationName: 'CrmVisibilityCacheWrite',
           data: {
@@ -63,7 +70,8 @@ export function prepareCrmVisibilityWrite() {
                 item.__typename === 'SoupUpdated' && 'id' in item.item
                   ? [`${item.item.__typename}:${item.item.id}`]
                   : []
-              )
+              ),
+              generation
             );
           } catch (error) {
             Telemetry.error(error);

@@ -919,7 +919,9 @@ async fn test_insert_draft_message_upsert_existing(pool: Pool<Postgres>) -> anyh
         .unwrap();
     assert_eq!(timestamps_after.created_at, timestamps_before.created_at);
     assert!(timestamps_after.updated_at > timestamps_before.updated_at);
-    let labels = repo.labels_by_message_ids(&[message_db_id]).await?;
+    let labels = repo
+        .labels_by_message_ids(&[message_db_id], Some(&inbox_owner(&repo.pool).await))
+        .await?;
     assert_eq!(labels[&message_db_id][0].provider_label_id, "INBOX");
 
     let thread_after = repo

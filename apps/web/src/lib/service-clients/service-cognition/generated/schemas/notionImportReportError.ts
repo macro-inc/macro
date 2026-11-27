@@ -6,6 +6,10 @@
  */
 
 /**
- * Why the run failed, when it did.
+ * Why the run failed or what it could not finish, in text Macro wrote
+(a canned reason, a reviewed object's title, or the sentence for its
+kind; never a provider's text): the report keeps it only when the run
+recorded a kind. The agent's tool answers drop it and read
+`error_kind`.
  */
 export type NotionImportReportError = string | null;

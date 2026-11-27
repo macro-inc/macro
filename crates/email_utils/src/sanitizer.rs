@@ -6,6 +6,7 @@
 //! Macro, and [`sanitize_html_fragment`] for standalone fragments such as
 //! signatures.
 
+use crate::bounded_html;
 use ammonia::Builder;
 use regex::Regex;
 use scraper::{Html, Selector};
@@ -16,30 +17,52 @@ use std::sync::LazyLock;
 #[cfg(test)]
 mod test;
 
+/// Ends a body clipped at a parse bound. It is English only: the stored body
+/// is shown as it is, with no locale.
+const CLIPPED_NOTICE: &str =
+    "<p>This message is too long to show in full. Download it as .eml to read the original.</p>";
+
 /// Sanitizes a full email HTML document against the shared allowlist.
 ///
 /// Extracts `<style>` and `<body>` content from (possibly malformed)
 /// documents, cleans the markup with ammonia, and scrubs `<style>` element
-/// text of external references and non-allowlisted properties.
+/// text of external references and non-allowlisted properties. A body whose
+/// parse reaches a bound of [`bounded_html`] is clipped there, since parsing
+/// it all could take gigabytes, and ends with a notice that it was clipped.
 pub fn sanitize_email_html(raw_html: &str) -> String {
-    // Attempt 1: Parse as a full document. This is best for well-formed emails.
-    let document = Html::parse_document(raw_html);
-    let content_to_clean = if let Some(reconstructed) = find_and_reconstruct(&document) {
-        reconstructed
-    } else {
-        // Attempt 2 (Fallback): The document is likely malformed (e.g., body inside a p tag).
-        // `parse_fragment` is more lenient and will build a usable DOM from the mess.
-        let fragment = Html::parse_fragment(raw_html);
-        if let Some(reconstructed) = find_and_reconstruct(&fragment) {
-            reconstructed
-        } else {
-            // Ultimate fallback: No body tag was found with either method.
-            // Sanitize the original HTML as-is.
-            raw_html.to_string()
-        }
-    };
+    let (content_to_clean, clipped) = reconstruct_body(raw_html);
+    let mut sanitized = sanitize_style_blocks(&CLEANER.clean(&content_to_clean).to_string());
+    if clipped {
+        tracing::info!(
+            html_len = raw_html.len(),
+            "clipped an email body too large to sanitize whole"
+        );
+        sanitized.push_str(CLIPPED_NOTICE);
+    }
+    sanitized
+}
 
-    sanitize_style_blocks(&CLEANER.clean(&content_to_clean).to_string())
+/// The HTML for ammonia to clean, and whether its parse was clipped. Ammonia
+/// parses it again, so it is never more than the bounded parse built.
+fn reconstruct_body(raw_html: &str) -> (String, bool) {
+    // Attempt 1: Parse as a full document. This is best for well-formed emails.
+    let document = bounded_html::parse_document(raw_html);
+    if let Some(reconstructed) = find_and_reconstruct(&document.html) {
+        return (reconstructed, document.clipped);
+    }
+    drop(document);
+    // Attempt 2 (Fallback): The document is likely malformed (e.g., body inside a p tag).
+    // `parse_fragment` is more lenient and will build a usable DOM from the mess.
+    let fragment = bounded_html::parse_fragment(raw_html);
+    if let Some(reconstructed) = find_and_reconstruct(&fragment.html) {
+        return (reconstructed, fragment.clipped);
+    }
+    if fragment.clipped {
+        return (fragment.html.root_element().inner_html(), true);
+    }
+    // Ultimate fallback: No body tag was found with either method.
+    // Sanitize the original HTML as-is.
+    (raw_html.to_string(), false)
 }
 
 /// Sanitizes a user-supplied HTML fragment (e.g. an email signature) with the

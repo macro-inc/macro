@@ -177,6 +177,7 @@ pub(crate) fn email_run(action: &ScheduledAction) -> AuthorizedEventRun {
             revision: action.configuration_revision,
             event,
             admitted_at: Utc::now(),
+            traceparent: None,
         },
     }
 }
@@ -377,6 +378,7 @@ async fn a_task_status_change_hands_the_agent_the_task_instead_of_its_ids() {
             markdown: "Steps: open login on Safari 17.".into(),
             status: Some("In review".into()),
             priority: Some("High".into()),
+            start: None,
             due: Some(Utc.with_ymd_and_hms(2026, 10, 9, 0, 0, 0).unwrap()),
             assignees: vec![ContextPerson {
                 id: "macro|sam@example.com".into(),
@@ -441,6 +443,7 @@ async fn a_task_status_change_hands_the_agent_the_task_instead_of_its_ids() {
             revision: ConfigurationRevision::INITIAL,
             event,
             admitted_at: at,
+            traceparent: None,
         },
     };
     let mut handle = ExecutionHandle::default();

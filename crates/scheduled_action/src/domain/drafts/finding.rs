@@ -237,6 +237,7 @@ impl FindingPrompts {
             .replace("{items}", ITEMS.trim())
             .replace("{conditions}", conditions)
             .replace("{steps}", &steps)
+            .replace("{icons}", &model_entity::macro_icon_names().join(", "))
             .replace("{reference}", reference.trim())
     }
 }

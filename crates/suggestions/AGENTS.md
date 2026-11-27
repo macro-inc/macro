@@ -11,17 +11,17 @@ scheduler's spec.
 
 ## How it works
 
-- A generation session calls `review` (every suggestion, open or not, with limits),
-  then `suggest` (add, or update the suggestion with the same `dedupKey`), `rewrite`
-  and `retire`. Only the person's open `suggestions` session in
+- A generation session calls `review` (every suggestion, open or not, with
+  their topics and the limits), then `nameTopic`, `suggest` (add, or update
+  the suggestion with the same `dedupKey`), `rewrite` and `retire`. Only the person's open `suggestions` session in
   `suggestion_generation_session` (`GenerationSessions`), found from the
   request's code-mode invocation (`RequestSessions`), may call them; others
   get 403. Reading the feed with `?timezone=` counts the person in for
   nightly generations (`SuggestionAudience`).
-- The feed (`GET /suggestions`) is `{ suggestions, done, counts }`: open
+- The feed (`GET /suggestions`) is `{ suggestions, done, counts, topics }`: open
   suggestions best first, then those done in the last day, most recently
   first (a finished run makes its suggestion done in the same write).
-  `?limit` caps the open list and leaves `done` out; `counts` (`open`,
+  `?limit` caps the open list and leaves `done` and `topics` out; `counts` (`open`,
   `running`, `failed`, `done`) counts every suggestion shown either way. Each
   carries its server-computed `status` (`open`, `running` while its latest run
   is unsettled, a restored suggestion's run still being cancelled included,
@@ -34,6 +34,25 @@ scheduler's spec.
   items can't be checked is left out and logged, never failing the feed. Each
   process keeps a person's flag for 60 s and counts them in at most once an
   hour per time zone (`Recent`).
+- Topics: a suggestion belongs to at most one (`suggestion.topic_key`), which the
+  generation session names (`PUT /suggestions/topics`: key, name and an
+  optional reason, one line and the item that states it; the same key names it
+  again, replacing both, at most 15 topics a generation) before a suggestion may
+  carry its key. Suggesting a key again keeps its topic unless the new version
+  names one, or null. Which topics
+  there are and what belongs to them is the session's call alone: the brief
+  groups suggestions by the result they end at, not by a shared sender,
+  company or kind of work, and moves each open row of an earlier topic that
+  doesn't end at its result to the topic of the result it does, or to none,
+  retiring a key that stands for no result. A routine
+  suggestion has none. `review` and the feed return the topics of the
+  open suggestions they list (`review`, of its closed ones too), in the order
+  those first appear, each with how many are open; a topic is never deleted but with its person, so the key keeps its
+  name when suggestions come back to it. A reason is left out, never reworded,
+  when it may no longer hold or the person may not see what it says: once one
+  of the topic's suggestions became done or resolved after the topic was last
+  named (taking that back brings it back), and while the person can't open its
+  source, the message it names was deleted, or either can't be checked.
 - A reply suggestion carries `waitingSince` and `from` (the sender's name,
   never an address): its email thread's newest message, or its channel
   message, unless the person sent it, read when a session writes it
@@ -42,14 +61,22 @@ scheduler's spec.
   carries `preview`, the first 300 characters of its plain text, read when it
   is attached.
 - The person takes back a dismissal within five minutes
-  (`POST /suggestions/{id}/restore`, lifecycle event `undismiss`): it is
-  proposed again, and a run the dismissal cancelled stays cancelled, so a new
-  one starts once that settles: until then it shows `running`, and accepting
-  it answers 409 with it as it is. A routine suggestion isn't restored (409):
+  (`POST /suggestions/{id}/restore`, lifecycle event `undo`), or marking done
+  one they completed themself (opened, or a composer prompt; never a finished
+  run or an answered reply, 409), within five minutes too: it is proposed
+  again, and a run the dismissal cancelled stays cancelled, so a new one
+  starts once that settles: until then it shows `running`, and accepting it
+  answers 409 with it as it is. A routine suggestion isn't restored (409):
   its routine suggestion has no way back.
-- The feed, `accept`, `dismiss` and `restore` (`UserOnly`) serve the person and anyone
-  acting for them: a code-mode credential is a Macro API token for the
-  person, so it passes. The router labels the caller (`SuggestionCaller`, span
+- The person stops a run without dismissing its suggestion
+  (`POST /suggestions/{id}/stop`): its run moves to `cancelling` and its
+  session is stopped, under the suggestion's row lock; the suggestion stays
+  accepted, shows `running` until the run settles `cancelled`, then `open`
+  with nothing made, to run again. Nothing under way is a 204 that changes
+  nothing.
+- The feed, `accept`, `dismiss`, `restore` and `stop` (`UserOnly`) serve the
+  person and anyone acting for them: a code-mode credential is a Macro API
+  token for the person, so it passes. The router labels the caller (`SuggestionCaller`, span
   field `suggestions.caller`): only the person's own session with no program's
   marks (no code-mode invocation, no code-execution header) is `user`; any
   other credential is `agent`. An agent whose signed invocation names a
@@ -111,12 +138,13 @@ scheduler's spec.
 
 - `src/domain/service.rs`: the tools' rules (kind never changes, a dismissed
   suggestion needs a `reason` to come back, 30 open and 12 new per generation).
+- `src/domain/topic.rs`, `src/domain/service/topics.rs`: topics.
 - `src/outbound/pg_suggestion_repo.rs`: base row plus one child table per kind;
   limits are checked under a per-person advisory lock.
 
 ## Scope
 
-- Owns: `suggestion`, `suggestion_prompt`, `suggestion_entity`,
+- Owns: `suggestion`, `suggestion_topic`, `suggestion_prompt`, `suggestion_entity`,
   `suggestion_routine`, `suggestion_target`, `suggestion_run`,
   `suggestion_feed_view`, and its `suggestion_change` rows.
 - Also: the vocabulary every generation's tools share (`GenerationTrigger`,
@@ -172,8 +200,8 @@ scheduler's spec.
 - Runs move only through the run state machine (`domain/run.rs`, one table of
   `(state, event) → (state, effect)`): `starting` → `running` ⇄ `waiting` →
   `finished` or `failed`, plus `stopping` (over its time: stop it, delete it
-  after a 5 minute grace, end `failed`) and `cancelling` (its suggestion closed:
-  end `cancelled`). A run gets 10 minutes to start, 10 minutes waiting
+  after a 5 minute grace, end `failed`) and `cancelling` (its suggestion
+  closed, or the person stopped it: end `cancelled`). A run gets 10 minutes to start, 10 minutes waiting
   (counted from when it began waiting) and 60 minutes in all. The state and
   when it was entered are stored, so the feed never asks a session. Every move
   compares and sets the state it read, under a 2 minute hold
@@ -189,6 +217,14 @@ scheduler's spec.
   (each item once, at most 200; the harness reads every page of the session's
   activity); a failed run leaves it accepted, and accepting it again runs it
   again.
+- A run reports what it did: `run_prompt` asks it to call
+  `macro.suggestions.reportRun(line)` (`PUT /suggestions/runs/report`) just
+  before its last message. The run is found from the request's code-mode
+  invocation (`RequestSessions`) and must be the caller's own unsettled run
+  (403 `NotARun` otherwise). The line is checked like a title (one plain line,
+  at most 120 characters, no personal details; `{ ok: false, problems }`
+  otherwise), stored on `suggestion_run.report`, a later one replacing it, and
+  served as the feed's `run.report`. A run that never reports has none.
 - Runs move from their sessions' lifecycle events (`inbound/run_consumer.rs`,
   group `suggestions-runs`, `macro.agent_session_lifecycle`: settled, waiting
   for input, command rejected, stopped, deleted) and from a reconcile sweep

@@ -1,0 +1,36 @@
+export default {
+  description: 'The version of Macro on this device and its updates.',
+  aboutTitle: 'About',
+  version: 'Version',
+  build: 'Build',
+  buildDate: 'Build date',
+  bundleDate: 'Bundle date',
+  notAvailable: 'Not available',
+  loading: 'Loading…',
+  builtIn: 'Built into the app',
+  updatesTitle: 'Updates',
+  appUpdate: 'App update',
+  desktopAppUpdate: 'Desktop app update',
+  restartToUpdate: 'Restart to update',
+
+  // App update (over-the-air bundle) status
+  statusIdle: 'Idle',
+  statusChecking: 'Checking for updates…',
+  statusUpdateFound: 'Update available: v{{version}}',
+  statusUpToDate: 'Up to date',
+  statusWaitingForWifi: 'Waiting for Wi-Fi to download',
+  statusDownloading: 'Downloading: {{progress}}%',
+  statusInstalling: 'Installing: {{progress}}%',
+  statusClearRequired: 'Downloaded update withdrawn',
+  statusNativeUpdateRequired: 'App update required',
+  statusCompleted: 'Update ready',
+  statusError: 'Couldn’t check for updates',
+
+  // App update actions
+  checkForUpdates: 'Check for updates',
+  retry: 'Retry',
+  download: 'Download',
+  downloadAnyway: 'Download anyway',
+  reload: 'Reload',
+  update: 'Update',
+};

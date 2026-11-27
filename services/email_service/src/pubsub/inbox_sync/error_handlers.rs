@@ -8,7 +8,10 @@ use sqs_worker::cleanup_message;
 mod test;
 
 /// Log the domain-selected failure and perform its terminal acknowledgement.
-#[tracing::instrument(skip(ctx, message, log))]
+#[tracing::instrument(
+    skip(ctx, message, log),
+    fields(db.response.status_code = crate::pubsub::util::sqlstate(&e.source).as_deref())
+)]
 pub(crate) async fn handle_non_retryable_error(
     ctx: &InboxSyncContext,
     message: &aws_sdk_sqs::types::Message,
@@ -22,7 +25,9 @@ pub(crate) async fn handle_non_retryable_error(
 }
 
 /// Retain a retryable delivery after recording its existing error event.
-#[tracing::instrument]
+#[tracing::instrument(fields(
+    db.response.status_code = crate::pubsub::util::sqlstate(&e.source).as_deref()
+))]
 pub(crate) async fn handle_retryable_error(
     data: &InboxSyncPubsubMessage,
     e: &DetailedError,

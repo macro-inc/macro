@@ -88,17 +88,6 @@ fn one_of_each() -> Vec<AgentSessionLifecycleEvent> {
             turn: TurnId(1),
             action_id: action_id(),
         }),
-        AgentSessionLifecycleEvent::Mentioned(SessionMentionedMetadata {
-            identity: identity(),
-            action_id: action_id(),
-            mentioned_by: Some(owner()),
-            mentioned: vec![
-                MacroUserIdStr::parse_from_str("macro|reviewer@macro.com")
-                    .expect("valid user id")
-                    .into_owned(),
-            ],
-            origin_message_id: None,
-        }),
         AgentSessionLifecycleEvent::Stopped(SessionStoppedMetadata {
             identity: identity(),
             reason: "transport closed".to_owned(),

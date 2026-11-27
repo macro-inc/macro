@@ -1,64 +1,17 @@
 use super::*;
 
 #[test]
-fn schema_11_cache_is_replaced_without_migrating_pending_writes() {
-    block_on(async {
-        let directory = tempfile::tempdir().unwrap();
-        let database = TursoFileDatabase::new(directory.path().join("cache.turso")).unwrap();
-        let mut engine = cache_core::engine::Engine::new(database.open("scope").unwrap());
-        let previous_generation = engine.current_storage_generation().await.unwrap();
-        let mut storage = engine.into_storage();
-        storage
-            .put_batch(vec![(key("Thing:1"), record("old"))])
-            .await
-            .unwrap();
-        storage
-            .enqueue_mutation(queued("BeforeUpgrade"))
-            .await
-            .unwrap();
-        raw_execute(&storage, "DROP INDEX search_documents_browse_idx", vec![]);
-        raw_execute(
-            &storage,
-            "CREATE INDEX search_documents_browse_idx ON search_documents(profile, bucket, timestamp_ms DESC, __typename, id)",
-            vec![],
-        );
-        raw_execute(
-            &storage,
-            "UPDATE meta SET value = '11' WHERE key = 'storage_schema_version'",
-            vec![],
-        );
+fn native_file_storage_keeps_temporary_tables_in_memory_and_a_larger_page_cache() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = TursoFileDatabase::new(directory.path().join("cache.turso")).unwrap();
+    for _ in 0..2 {
+        let storage = database.open("scope").unwrap();
+        assert_eq!(storage.connection.get_temp_store(), TempStore::Memory);
+        let rows = driver::query(&storage.connection(), "PRAGMA cache_size", Vec::new()).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(required_i64(&rows[0], 0).unwrap(), NATIVE_PAGE_CACHE_PAGES);
         storage.try_close().unwrap();
-
-        expect_reset_reason(database.open("scope"), PhysicalResetReason::Compatibility);
-        let mut storage = database.open_or_reset("scope").unwrap();
-        assert_eq!(storage.get_batch(&[key("Thing:1")]).await.unwrap(), [None]);
-        assert!(storage.load_mutation_queue().await.unwrap().is_empty());
-        assert_eq!(
-            raw_scalar(
-                &storage,
-                "SELECT CAST(value AS INTEGER) FROM meta WHERE key = 'storage_schema_version'"
-            ),
-            i64::from(STORAGE_SCHEMA_VERSION)
-        );
-        storage
-            .enqueue_mutation(queued("AfterUpgrade"))
-            .await
-            .unwrap();
-        let pending = storage.load_mutation_queue().await.unwrap();
-        let mut engine = cache_core::engine::Engine::new(storage);
-        let generation = engine.current_storage_generation().await.unwrap();
-        assert_ne!(generation, previous_generation);
-        engine.into_storage().try_close().unwrap();
-
-        let storage = database.open_or_reset("scope").unwrap();
-        assert_eq!(storage.load_mutation_queue().await.unwrap(), pending);
-        let mut engine = cache_core::engine::Engine::new(storage);
-        assert_eq!(
-            engine.current_storage_generation().await.unwrap(),
-            generation
-        );
-        engine.into_storage().try_close().unwrap();
-    });
+    }
 }
 
 #[test]
@@ -137,7 +90,7 @@ fn previous_format_drops_records_and_keeps_pending_writes() {
         storage.enqueue_mutation(queued("Pending")).await.unwrap();
         let pending = storage.load_mutation_queue().await.unwrap();
 
-        mark_previous_format(&storage, "scope");
+        mark_previous_format(&storage, &cache_namespace_at("scope", 3));
         storage.try_close().unwrap();
 
         let storage = database.open("scope").unwrap();
@@ -176,39 +129,6 @@ fn previous_format_drops_records_and_keeps_pending_writes() {
     });
 }
 
-/// Rewrites every record as the previous format stored it: untagged postcard
-/// bytes under the previous namespace.
-fn mark_previous_format(storage: &TursoStorage, scope: &str) {
-    let rows = driver::query(
-        &storage.connection(),
-        "SELECT __typename, id, value FROM records",
-        Vec::new(),
-    )
-    .unwrap();
-    for row in rows {
-        let typename = required_text(&row, 0).unwrap();
-        let id = required_text(&row, 1).unwrap();
-        let Value::Blob(bytes) = required_value(&row, 2).unwrap() else {
-            panic!("records.value must be a blob");
-        };
-        let legacy = match bytes.first() {
-            Some(0) => bytes[1..].to_vec(),
-            Some(1) => miniz_oxide::inflate::decompress_to_vec(&bytes[1..]).unwrap(),
-            other => panic!("unexpected record encoding {other:?} for {typename}:{id}"),
-        };
-        raw_execute(
-            storage,
-            "UPDATE records SET value = ?1 WHERE __typename = ?2 AND id = ?3",
-            vec![Value::from_blob(legacy), text(&typename), text(&id)],
-        );
-    }
-    raw_execute(
-        storage,
-        "UPDATE meta SET value = ?1 WHERE key = 'namespace'",
-        vec![text(&cache_namespace_at(scope, 3))],
-    );
-}
-
 fn namespace(storage: &TursoStorage) -> String {
     let rows = driver::query(
         &storage.connection(),
@@ -236,7 +156,7 @@ fn migrating_a_file_reclaims_space_and_keeps_pending_writes() {
             .unwrap();
         storage.enqueue_mutation(queued("Pending")).await.unwrap();
         let pending = storage.load_mutation_queue().await.unwrap();
-        mark_previous_format(&storage, "scope");
+        mark_previous_format(&storage, &cache_namespace_at("scope", 3));
         storage.try_close().unwrap();
         let before = std::fs::metadata(&path).unwrap().len();
         assert!(before > 100_000, "fixture file was only {before} bytes");
@@ -276,7 +196,7 @@ fn failed_compaction_keeps_the_migrated_database() {
             .unwrap();
         storage.enqueue_mutation(queued("Pending")).await.unwrap();
         let pending = storage.load_mutation_queue().await.unwrap();
-        mark_previous_format(&storage, "scope");
+        mark_previous_format(&storage, &cache_namespace_at("scope", 3));
         storage.try_close().unwrap();
 
         // A directory at the compaction target makes VACUUM INTO fail. The
@@ -301,6 +221,123 @@ fn failed_compaction_keeps_the_migrated_database() {
 
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
+fn a_swap_a_crash_interrupted_reopens_the_migrated_database() {
+    block_on(async {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("cache.turso");
+        let database = TursoFileDatabase::new(&path).unwrap();
+        let mut storage = database.open("scope").unwrap();
+        storage.enqueue_mutation(queued("Pending")).await.unwrap();
+        let pending = storage.load_mutation_queue().await.unwrap();
+        storage.try_close().unwrap();
+
+        // A crash after the swap moved the migrated original aside, before
+        // the compacted file took its place.
+        let backup_path = path.with_extension("backup");
+        std::fs::rename(&path, &backup_path).unwrap();
+        let storage = database.open("scope").unwrap();
+        assert_eq!(storage.load_mutation_queue().await.unwrap(), pending);
+        assert_eq!(namespace(&storage), cache_namespace("scope"));
+        storage.try_close().unwrap();
+        assert!(!backup_path.exists());
+    });
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn an_original_that_cannot_be_put_back_stays_for_the_next_open() {
+    block_on(async {
+        let directory = tempfile::tempdir().unwrap();
+        let kept = directory.path().join("cache.turso");
+        let mut storage = TursoFileDatabase::new(&kept)
+            .unwrap()
+            .open("scope")
+            .unwrap();
+        storage.enqueue_mutation(queued("Pending")).await.unwrap();
+        let pending = storage.load_mutation_queue().await.unwrap();
+        storage.try_close().unwrap();
+
+        // The original a crashed swap moved aside, under a database name
+        // longer than a file name may be: moving it back fails, for any user.
+        let path = directory
+            .path()
+            .join(format!("{}.{}", "a".repeat(240), "x".repeat(20)));
+        let backup_path = path.with_extension("backup");
+        std::fs::rename(&kept, &backup_path).unwrap();
+        let database = TursoFileDatabase::new(&path).unwrap();
+        assert!(matches!(
+            database.open_or_reset("scope"),
+            Err(error) if !error.requires_physical_reset()
+        ));
+        assert!(backup_path.is_file());
+
+        // Anything but a file at the database's path is no compacted copy.
+        let blocked = directory.path().join("blocked.turso");
+        let blocked_backup = blocked.with_extension("backup");
+        std::fs::create_dir(&blocked).unwrap();
+        std::fs::rename(&backup_path, &blocked_backup).unwrap();
+        let database = TursoFileDatabase::new(&blocked).unwrap();
+        assert!(matches!(
+            database.open_or_reset("scope"),
+            Err(error) if !error.requires_physical_reset()
+        ));
+        assert!(blocked_backup.is_file());
+
+        std::fs::rename(&blocked_backup, &kept).unwrap();
+        let storage = TursoFileDatabase::new(&kept)
+            .unwrap()
+            .open("scope")
+            .unwrap();
+        assert_eq!(storage.load_mutation_queue().await.unwrap(), pending);
+        storage.try_close().unwrap();
+    });
+}
+
+/// A file at `path` with one queued write, and a copy of it where a swap a
+/// crash stopped after the compacted file was in place leaves the original.
+#[cfg(not(target_arch = "wasm32"))]
+async fn a_swap_finished_but_for_its_cleanup(path: &Path) -> (TursoFileDatabase, PathBuf) {
+    let database = TursoFileDatabase::new(path).unwrap();
+    let mut storage = database.open("scope").unwrap();
+    storage.enqueue_mutation(queued("Pending")).await.unwrap();
+    storage.try_close().unwrap();
+    let backup_path = path.with_extension("backup");
+    std::fs::copy(path, &backup_path).unwrap();
+    (database, backup_path)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn an_open_after_a_finished_swap_deletes_the_original() {
+    block_on(async {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("cache.turso");
+        let (database, backup_path) = a_swap_finished_but_for_its_cleanup(&path).await;
+        let storage = database.open("scope").unwrap();
+        assert_eq!(storage.load_mutation_queue().await.unwrap().len(), 1);
+        storage.try_close().unwrap();
+        assert!(!backup_path.exists());
+    });
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_physical_reset_leaves_no_original_to_reopen() {
+    block_on(async {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("cache.turso");
+        let (database, backup_path) = a_swap_finished_but_for_its_cleanup(&path).await;
+        database.physical_reset().unwrap();
+        // The queued write the original holds may have settled since.
+        let storage = database.open("scope").unwrap();
+        assert!(storage.load_mutation_queue().await.unwrap().is_empty());
+        storage.try_close().unwrap();
+        assert!(!backup_path.exists());
+    });
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
 fn failed_swap_keeps_the_migrated_database() {
     block_on(async {
         let directory = tempfile::tempdir().unwrap();
@@ -313,7 +350,7 @@ fn failed_swap_keeps_the_migrated_database() {
             .unwrap();
         storage.enqueue_mutation(queued("Pending")).await.unwrap();
         let pending = storage.load_mutation_queue().await.unwrap();
-        mark_previous_format(&storage, "scope");
+        mark_previous_format(&storage, &cache_namespace_at("scope", 3));
         storage.try_close().unwrap();
 
         // A directory at the backup path fails the move of the original, which
@@ -329,5 +366,56 @@ fn failed_swap_keeps_the_migrated_database() {
         assert_eq!(storage.load_mutation_queue().await.unwrap(), pending);
         assert_eq!(namespace(&storage), cache_namespace("scope"));
         storage.try_close().unwrap();
+    });
+}
+
+#[test]
+fn used_database_reopens_with_the_pinned_schema_digest() {
+    block_on(async {
+        let directory = tempfile::tempdir().unwrap();
+        let database = TursoFileDatabase::new(directory.path().join("cache.turso")).unwrap();
+        let mut storage = database.open("scope").unwrap();
+        let created = schema_digest(&storage.connection()).unwrap();
+        storage
+            .put_batch(vec![(key("Thing:1"), record("kept"))])
+            .await
+            .unwrap();
+        storage.enqueue_mutation(queued("Pending")).await.unwrap();
+        storage.try_close().unwrap();
+
+        let storage = database.open("scope").unwrap();
+        let reopened = schema_digest(&storage.connection()).unwrap();
+        validate_frozen_schema(&storage.connection()).unwrap();
+        validate_statements(&storage.connection()).unwrap();
+        assert_eq!(created, reopened);
+        assert_eq!(
+            reopened,
+            Some(FRESH_SCHEMA_DIGEST),
+            "update FRESH_SCHEMA_DIGEST to {:#034x}",
+            reopened.unwrap_or_default(),
+        );
+    });
+}
+
+#[test]
+fn fresh_schema_passes_every_open_check() {
+    let storage = TursoStorage::open_in_memory("scope").unwrap();
+    let connection = storage.connection();
+    assert!(has_fresh_schema(&connection).unwrap());
+    validate_frozen_schema(&connection).unwrap();
+    validate_statements(&connection).unwrap();
+}
+
+#[test]
+fn changed_schema_takes_the_full_checks_on_reopen() {
+    block_on(async {
+        let directory = tempfile::tempdir().unwrap();
+        let database = TursoFileDatabase::new(directory.path().join("cache.turso")).unwrap();
+        let storage = database.open("scope").unwrap();
+        raw_execute(&storage, "DROP INDEX search_documents_browse_idx", vec![]);
+        assert!(!has_fresh_schema(&storage.connection()).unwrap());
+        storage.try_close().unwrap();
+
+        expect_reset_reason(database.open("scope"), PhysicalResetReason::Compatibility);
     });
 }

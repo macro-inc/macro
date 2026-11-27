@@ -43,16 +43,27 @@ payloads.
 
 `domain/notification.rs` owns typed system events and their ACP metadata/XML.
 Notification-only invocations use `AgentAction::notification`; public control must
-reject caller-supplied notification metadata. Payloads contain facts, not drafts.
+reject caller-supplied notification metadata. Import settlements carry confirmed
+partial database rows, exact failure totals and a truncation flag for sampled
+details. Older events may omit these fields and the warning list.
 The fold reuses this tagged event enum for its generated TypeScript union;
 retain Specta derives on event payloads and preserve the producer wire shape.
-Allow exact `<noop/>` only before any tool call in a notification turn; prompt
-instructions must match the fold's conservative treatment of all tool activity.
+An `import.planned` notification appends `IMPORT_PLANNED_GUIDANCE`: tell the
+user the plan is ready, never approve it in that turn.
+Allow `<noop/>`, and nothing else, only before any tool call in a notification
+turn; prompt instructions must match the fold's conservative treatment of all
+tool activity. The fold drops a `<noop/>` that ends prose, but asks for the bare
+tag.
 
 UUID prompt actions append their action ID in hidden invocation context for
 ExecuteCode stale-turn fencing; mark that block with `INVOCATION_CONTEXT_META`
 so the transcript fold omits it. Preserve existing prompt content and notification
 metadata; compaction must remain the single `/compact` block.
+
+A prompt with `withhold_content` (harness-authored only: `ControlEvent::authorized`
+refuses it from callers) carries `WITHHOLD_CONTENT_META` in its `_meta`; the
+session projector and the in-process runtime read it with `withholds_content` and
+record none of that turn's content on traces.
 
 ## Checks
 

@@ -19,6 +19,8 @@ and usage metering.
   hook into `ai_usage`).
 - `AgentLoop::with_streamed_tool_calls` opts hosts into early tool-call
   announcements and argument deltas; the accumulator persists only final calls.
+  When an invalid-call retry throws a reply away, its announced calls never
+  finish and the stream sends `ToolCallDropped` for each.
 - `src/system_prompt.rs`: `SystemPrompt`, built from named `PromptSection`s
   in a shared and a per-session part; every model call records each
   section's bytes and hash (and those of text the turn sends elsewhere, such as

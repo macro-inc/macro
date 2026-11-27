@@ -2,16 +2,17 @@
 
 CRM access and email contribution are separate permissions. Existing and new
 members start with CRM access. Admins and owners can deny or restore a plain
-member through the team member-access API; admins and owners always retain access. A member
-can use company and contact records without contributing a mailbox. Existing CRM
-feature flags still control optional product surfaces such as pipelines.
+member in Team > Members, in CRM settings' Who can use CRM, or through the API;
+admins and owners always retain access. A member
+can use company and contact records without contributing a mailbox. Optional CRM product surfaces retain their own rollout gates.
 Existing record hiding remains a separate admin action; blocking email never
 hides or deletes a company or contact.
 
 ## Member access
 
 Preference changes are rollout-gated by `enable-crm-member-access-changes`,
-evaluated for service context `team-crm-member-access`. It starts off: missing
+evaluated for service context `team-crm-member-access`. The admin switch uses
+the same remote key and stays hidden until enabled. It starts off: missing
 configuration, missing/disabled flags, or evaluation failure returns 503 without
 updating the team. Enable it only after every old membership-removal writer has
 drained and all access consumers are upgraded. Older removal compensation omits
@@ -61,9 +62,138 @@ seconds. The first opted-in request after expiry obtains a fresh hint or no
 hint within the signal budget; receiving it also takes the authentication time, the handler's remaining
 time, network delivery, and client retirement work. An idle or offline client
 has no finite retirement deadline. Fresh authority reads and newly started protected requests
-still enforce revocation immediately. Settings controls and retirement of
-already-cached client content are a separate client change; this server API alone
-does not remove previously downloaded content from an older client.
+still enforce revocation immediately.
+
+The client opts into the hint for storage requests, except the fresh authority
+endpoint. A valid changed hint or a CRM 403 schedules a fresh authority read in
+the background; the hint never changes policy directly. Boot, focus and
+reconnect also refresh authority. No email response, subscription frame, cached
+read or ordinary request waits for that proof. Missing hints remain unknown and
+do not cause per-response polling.
+
+One owner-issued generation fences all response content. Requests and
+subscription sources retain the generation captured before dispatch. On an
+access transition, older reads and frames are discarded and active queries
+refetch. Writes compare the same generation under the shared native owner lock
+or browser worker. There are no CRM admission classifiers or ownership witnesses
+on these paths. The existing account fence remains independent.
+
+Startup renders without waiting for the local store. Initialization keeps the
+host's phase deadlines and classified failure handling, so a slow asset load or
+retry cannot become a permanent queue failure through a separate owner timer.
+A profile-scoped
+localStorage mirror supplies the account, policy string and generation as hints;
+missing or unreadable mirrors send an explicit nonmatching UUID. Windows update
+the mirror from validated owner observations, without treating cross-window
+storage events as authority. A matching account and policy with a different
+generation corrects stamps for new requests without retiring in-memory responses.
+Copied data retains its original stamp, is rejected at the shared store when
+stale, and recovers with a fresh read of its own query. A different account or
+known policy, or a denied/incomplete first observation triggers normal visible
+retirement. A missing or unreadable mirror alone is not an access change. A first
+non-denied owner initializes the current stamp while preserving mounted observers,
+rows, open menus and persisted snapshots. This also applies to the first launch
+after upgrading a bound legacy owner with no
+policy. TanStack keeps existing data and in-flight reads without refetching; urql
+rereads only the queries whose original copied writes the shared owner rejects,
+in the background while their current rows remain visible. Recovery dispatches
+inside the exchange so cache rereads cannot replace the required network read;
+its fresh persisted page then receives subsequent mutations and realtime updates.
+Physical resets
+issue new owner generations, so
+delayed or missing mirror updates cannot admit pre-reset content.
+
+A deny-then-grant cycle during startup can return to the same account, team and
+allowed status. In-memory bodies from the last observation remain visible under
+the accepted offline semantics until normal refetching updates them. Matching
+account, team and allowed status does not prove current access to each thread:
+a mailbox owner may have withdrawn consent while the member was denied.
+Copied writes still require an exact generation match at the owner. On web,
+a ready allowed mirror for the signed-in
+account may open CRM UI before storage is ready. A missing mirror and unknown
+owner also start a short, UI-only server proof in parallel with storage. Its
+result is bound to that login and host and cannot override an owner observation.
+It never commits policy: the normal proof starts after reading the owner's
+generation and commits under that generation check. This first launch uses two
+permission reads; returning launches normally use one. Native uses neither early
+UI path because CRM email-list REST pages can restore independently from IndexedDB
+before the owner finishes interrupted cleanup. Its ready allowed local owner
+opens CRM without waiting for network proof. None of these UI paths changes
+storage admission or server authorization.
+
+An in-flight document or file load superseded by retirement retries its complete
+load once, from its source identity with fresh credentials. This includes direct
+binary reads outside active TanStack queries. It does not replay an old presigned
+URL, reload an already-open editor, or retry indefinitely through further changes.
+
+Before deleting snapshots, the owner durably records the new policy and marks
+retirement incomplete. Interrupted retirement resumes before returning cached
+content. Initial allowed/team-less proofs preserve legacy offline data and the
+existing generation. A proven denial or a change of team retires CRM records,
+derived mail/database-row families, protected properties, mixed query lists and
+projection-only orphans. This conservative cleanup can remove independently
+accessible mail or database data; fresh authorized reads restore it. Normalized
+email-thread storage and native-mobile Soup persistence remain available until
+proven denial. The legacy TanStack `email-threads` scope remains disabled, as on
+main; it is retained only to remove snapshots saved by earlier versions.
+
+Owner privacy query families (`emailPrivacy`, `emailConsent`,
+`excludedEmailThreads`, `emailPolicy`, `emailPolicyHistory`,
+`emailPolicyRevision`, `emailPolicyPreview`) survive CRM-access retirement.
+They remain authorized without CRM viewing access, so the settings editor keeps
+its draft during revalidation. Account/session retirement still clears them.
+Company and contact rule labels do not fetch previews while access is denied;
+the member's own thread labels remain available. Preview commands preserve their
+server outcome across retirement but re-read instead of publishing stale counts.
+
+Authored draft content, queued variables, UUIDs, leases and identity bindings
+survive retirement. Successful mutations keep their real server outcome. Stale
+queued responses settle identities without copied response content, projections
+or link recipes, then revalidate. The draft journal receives the actual result
+before that discard. A confirmed local settlement retry retains the original
+request generation; a fresh HTTP attempt captures a new one. A mutation waits
+only for its affected publications, so an unrelated read cannot hold its notice.
+
+Malformed persisted mutation entries can prevent retirement from completing.
+The durable marker stays incomplete and owner commands retry cleanup and fail
+until the queue is repaired. Existing queue hydration also rejects these
+entries. Isolating their copied snapshots without losing authored metadata is a
+separate recovery improvement; retirement does not delete authored commands.
+
+CRM routes initially show loading. A failed initial proof ends in the existing
+retry state after at most one network/stale-generation retry; the second network
+attempt has a short timeout. Manual retry and reconnect restart verification.
+Transient failure retains the last proven allowed/denied state. Only a proven
+denial closes CRM views and dialogs. An offline device may retain allowed cached
+content after revocation until its next server contact; already-rendered content
+stays until rerender. This design introduces no offline TTL.
+
+Team-view list edits still obtain a network-only settings baseline inside their
+serialized mutation and retain the authoring account/session through the write.
+A failed baseline read prevents PUT. Cross-client edits retain their existing
+last-write-wins behavior.
+
+Coordinator protocol 18 and the native permission commands must ship with this
+web bundle. Older native binaries require an app update; there is no unguarded
+cache fallback for the new bundle. New native binaries preserve the legacy cache
+contract for older bundles that omit `generation`; new hosts always send an
+explicit stamp for copied writes, including before initialization. Supplied
+older or unknown generations are rejected under the shared owner lock. This reverse
+compatibility supports native upgrades and web rollbacks, but does not add
+retirement to an older bundle. Queue inspection sanitizes copied optimistic data
+for every caller, so an older bundle with legacy queued `SaveEmailDraft` entries
+may lose that optimistic display/recovery data after rollback. Authored command
+variables remain; current bundles also use the preserved legacy recovery metadata.
+Keep preference changes disabled until the client rollout is
+complete, including already-open older builds. The server API cannot erase
+content already downloaded by an older client.
+
+Deploy the server's authority endpoint and CORS allowance for
+`x-macro-crm-access-signal` before publishing this client. The client sends that
+header on storage requests even while preference changes are
+disabled. A server rollback must retain the header allowance and endpoint while
+opted-in clients remain active; otherwise browser preflights or fresh authority
+reads fail.
 
 Notifications follow the existing snapshot policy: a revoked member keeps
 already-delivered CRM comment text and may still receive a previously queued
@@ -474,6 +604,8 @@ and cleanup behavior.
 
 A deferred job goes back to the queue as a new message, after a jittered delay
 that doubles from one second up to a minute, and keeps its delivery budget. A
+job refused one of its team's four population slots is never held waiting for
+one: it goes back after 10 to 15 minutes, since the team is paused or busy. A
 policy history page (up to 100 contacts) is deferred whole: its cursor has not
 moved, so the retry scans every contact of the page again, and its writes are
 idempotent. Lock-wait contention already takes this path. Changed evidence adds

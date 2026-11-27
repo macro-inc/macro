@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE import_entity\n            SET metadata = metadata #- '{plan,alreadyImported}' #- '{plan,reason}' #- '{plan,sharedReason}', updated_at = NOW()\n            WHERE id = $2 AND (SELECT import_entity.user_id OFFSET 0) = $1 AND status = 'importing'\n              AND metadata->'plan' IS NOT NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "98b25c740724de98970302163a663a9b613ce7388ab852b5fd02f662fcf8bba3"
+}

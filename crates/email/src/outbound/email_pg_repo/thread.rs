@@ -423,6 +423,15 @@ pub(super) async fn update_thread_metadata(
     thread_id: Uuid,
     link_id: Uuid,
 ) -> Result<(), sqlx::Error> {
+    // User writes share the link lock, so two in one thread can run at once.
+    // Taking the thread row first makes the later recompute read what the
+    // earlier one committed, not the snapshot from before it waited.
+    sqlx::query!(
+        "SELECT id FROM email_threads WHERE id = $1 FOR NO KEY UPDATE",
+        thread_id
+    )
+    .fetch_optional(&mut **tx)
+    .await?;
     email_db_client::threads::update::recompute_thread_metadata(tx, thread_id, link_id).await
 }
 

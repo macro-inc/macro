@@ -18,6 +18,9 @@ fails isn't run.
 
 - `DESIGN.md`: the layout an agent's repository follows, and why.
 - `core/behavior.ts`: the behavior builder and `serve`.
+- `core/maintenance.ts`: the dispatch fence and invocation receipts. Mark
+  replayable sources explicitly and register detached work that needs to
+  drain before a service restart.
 - `core/capability.ts`, `core/code.ts`: capabilities as modules
   of typed functions, and how scripts run (in the agent's process, or each in
   its own with `inSubprocess`).
@@ -82,3 +85,14 @@ in `packages/sdk`:
   stop, and "stop" reaches Macro only when the last one stops.
 - Agents import this library from source and restart to pick up a change, so
   a change to an exported function is a breaking change for every agent.
+- `apiLevel` in `package.json` is the API an agent's code may rely on, and
+  `api.json` records what each level exports (`core/test/api.test.ts` checks
+  it). The API only grows: a level keeps everything the one before had, so
+  code that needs a level runs on any image at or above it, and a removal is
+  never allowed. The snapshot holds names, not signatures: a changed signature
+  is a breaking change it doesn't catch. Raise `apiLevel` with any change to
+  what the library exports, in its own change, ahead of the template that
+  uses it: an image ships this
+  library, and `start-agent` refuses code whose `muppetApi` is higher than
+  the image's `apiLevel` (a Nix assert in `_agent-runtime.nix` also stops an
+  image whose template needs more than its muppet).

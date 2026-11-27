@@ -13,6 +13,14 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import { invoke } from '@tauri-apps/api/core';
 import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
+import {
+  type AuthorityTransition,
+  cacheAuthorityError,
+  createAuthorityObserver,
+  StaleCacheAuthorityError,
+} from '../authority';
+import { CacheAuthoritySchema } from '../authority.generated';
+import { UNKNOWN_CACHE_GENERATION } from '../generation-mirror';
 import type {
   AffectedOperationsResult,
   CacheChangeHints,
@@ -49,6 +57,8 @@ import {
   validateCacheSearchArgs,
   validateRecordSelectionKeys,
 } from '../protocol';
+import { emitNativeSchemaInit, type NativeSchemaInit } from '../telemetry-otel';
+import { CacheWriteSupersededError, isNativeWriteSuperseded } from './errors';
 import type {
   AffectedOperationsListener,
   CacheChangeListener,
@@ -72,14 +82,17 @@ const CACHE_CHANGED_EVENT = 'graphql-cache://cache-changed';
 const CACHE_HYDRATED_EVENT = 'graphql-cache://cache-hydrated';
 /** Keep in sync with `MUTATION_SETTLED_EVENT` in graphql_cache_plugin. */
 const MUTATION_SETTLED_EVENT = 'graphql-cache://mutation-settled';
+const AUTHORITY_CHANGED_EVENT = 'graphql-cache://authority-changed';
 
 /** Payload of the ops-affected event (graphql_cache_plugin `OpsAffectedEvent`). */
 type OpsAffectedPayload = {
+  authorityGeneration?: string;
   fieldChanges?: RecordFieldChange[];
   opIds: string[];
 };
 
 type CacheChangedPayload = {
+  authorityGeneration?: string;
   revision: string;
   reset?: boolean;
 } & CacheChangeHints;
@@ -120,6 +133,7 @@ const CALENDAR_COMMIT_COMMAND = 'graphql_cache_calendar_commit';
 const INSPECT_MUTATIONS_COMMAND = 'graphql_cache_inspect_mutations';
 
 const INIT_COMMAND = 'graphql_cache_init_with_schema';
+const ABANDON_COMMAND = 'graphql_cache_abandon';
 
 // The only commands a caller stops waiting for: a read falls back to the
 // network, and a hung init would block every request. Tauri cannot cancel a
@@ -127,6 +141,7 @@ const INIT_COMMAND = 'graphql_cache_init_with_schema';
 const TIMED_COMMANDS: ReadonlySet<string> = new Set([
   INIT_COMMAND,
   INSPECT_MUTATIONS_COMMAND,
+  'graphql_cache_current_authority',
   'graphql_cache_current_revision',
   'graphql_cache_current_storage_generation',
   'graphql_cache_read',
@@ -142,10 +157,49 @@ const TIMED_COMMANDS: ReadonlySet<string> = new Set([
   'graphql_cache_inspect_query',
 ]);
 
+function returnsCachedContent(command: string): boolean {
+  return (
+    (TIMED_COMMANDS.has(command) &&
+      command !== INIT_COMMAND &&
+      command !== 'graphql_cache_current_authority') ||
+    command === PEOPLE_SQL_COMMAND ||
+    command === PEOPLE_REFERENCES_COMMAND ||
+    command === 'graphql_cache_contact_snapshot'
+  );
+}
+
 // A deadline timer running this late measured a stall of the page itself (an
 // occluded or napping window, a long task): the engine's answer may already be
 // queued behind it. Time out only after a window the page ran through on time.
 const PAGE_STALL_MS = 1_000;
+
+type RequestDeadlineState = { timedOut: boolean; pageStallMs: number };
+
+function withRequestDeadline<T>(
+  command: string,
+  operation: Promise<T>,
+  timeoutMs: number,
+  state: RequestDeadlineState
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    const arm = () => {
+      const due = performance.now() + timeoutMs;
+      timer = setTimeout(() => {
+        const late = performance.now() - due;
+        if (late > PAGE_STALL_MS) {
+          state.pageStallMs += late;
+          arm();
+          return;
+        }
+        state.timedOut = true;
+        reject(new Error(`graphql cache ipc timeout: ${command}`));
+      }, timeoutMs);
+    };
+    arm();
+  });
+  return Promise.race([operation, deadline]).finally(() => clearTimeout(timer));
+}
 
 const DRAFTS_NEED_UPDATE =
   'Update Macro to sync drafts saved on this device. Your queued drafts are preserved until the app is updated.';
@@ -165,6 +219,7 @@ export class NativeCacheUpgradeRequiredError extends Error {
 }
 
 export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
+  const authorityObserver = createAuthorityObserver(options.scope);
   const clientId = crypto.randomUUID();
   const affectedSubscribers = new Set<AffectedOperationsListener>();
   const cacheChangeSubscribers = new Set<CacheChangeListener>();
@@ -209,6 +264,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   // Only identical in-flight reads share a result. Any intervening command or
   // native notification is a barrier: never reuse a read across a write/reset.
   const pendingReads = new Map<string, Promise<ReadResult>>();
+  let requestSequence = 0;
   const liveQueries = new Map<
     string,
     { descriptor: string; registrationId?: string }
@@ -230,6 +286,11 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     command: string,
     args: Record<string, unknown>
   ): Promise<T> {
+    if ('generation' in args)
+      args = {
+        ...args,
+        generation: args.generation ?? UNKNOWN_CACHE_GENERATION,
+      };
     if (command !== 'graphql_cache_read') pendingReads.clear();
     const span = Telemetry.span('graphql_cache.ipc.request', {
       sampling: 'perf',
@@ -237,53 +298,123 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     span.setAttr('graphql_cache.ipc.command', command);
     const traceparent = span.traceparent();
     const wireArgs = traceparent ? { ...args, traceparent } : args;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let timedOut = false;
-    let pageStallMs = 0;
-    try {
-      const operation = span.run(() => invoke<T>(command, wireArgs));
-      const deadline = TIMED_COMMANDS.has(command)
-        ? new Promise<never>((_, reject) => {
-            const arm = () => {
-              const due = performance.now() + requestTimeoutMs;
-              timer = setTimeout(() => {
-                const late = performance.now() - due;
-                if (late > PAGE_STALL_MS) {
-                  pageStallMs += late;
-                  arm();
-                  return;
-                }
-                timedOut = true;
-                reject(new Error(`graphql cache ipc timeout: ${command}`));
-              }, requestTimeoutMs);
-            };
-            arm();
-          })
+    // A timed read carries an id, so the native side can drop it from the
+    // engine's queue once this caller stops waiting (Tauri cannot cancel a
+    // command). Binaries without the abandon command ignore the id.
+    const requestId =
+      TIMED_COMMANDS.has(command) && command !== INIT_COMMAND
+        ? `${clientId}:${++requestSequence}`
         : undefined;
-      const value = await (deadline
-        ? Promise.race([operation, deadline])
+    const sentArgs = requestId ? { ...wireArgs, requestId } : wireArgs;
+    const deadline = { timedOut: false, pageStallMs: 0 };
+    const authorityGeneration = authorityObserver.snapshot()?.generation;
+    try {
+      const operation = span.run(() => invoke<T>(command, sentArgs));
+      const value = await (TIMED_COMMANDS.has(command)
+        ? withRequestDeadline(command, operation, requestTimeoutMs, deadline)
         : operation);
+      if (
+        returnsCachedContent(command) &&
+        authorityGeneration !== authorityObserver.snapshot()?.generation
+      )
+        throw new StaleCacheAuthorityError();
       span.setAttr('graphql_cache.ipc.outcome', 'ok');
       return value;
     } catch (error) {
-      span.setAttr('graphql_cache.ipc.outcome', timedOut ? 'timeout' : 'error');
+      const superseded = isNativeWriteSuperseded(error);
+      span.setAttr(
+        'graphql_cache.ipc.outcome',
+        deadline.timedOut ? 'timeout' : superseded ? 'superseded' : 'error'
+      );
+      // Refused before writing anything; the caller fetches the query again.
+      if (superseded) throw new CacheWriteSupersededError();
+      // A marked read skips reading natively unless it had already started;
+      // a native read span, where the command has one, records the skip;
+      // this one records only the mark. Older binaries lack the command,
+      // and the read then runs as before.
+      if (deadline.timedOut && requestId) {
+        fireAndForget(
+          span.span('graphql_cache.ipc.abandon', async (abandon) => {
+            let outcome: string;
+            try {
+              const running = await invoke<boolean>(ABANDON_COMMAND, {
+                requestId,
+              });
+              outcome = running ? 'marked' : 'not_running';
+            } catch {
+              outcome = 'failed';
+            }
+            abandon.setAttr('graphql_cache.ipc.abandon.outcome', outcome);
+          }),
+          'graphql_cache.ipc.abandon'
+        );
+      }
       span.error(
-        timedOut
+        deadline.timedOut
           ? 'Native cache request timed out'
           : 'Native cache request failed'
       );
       // Native command errors cross the boundary as strings.
-      throw error instanceof Error ? error : new Error(String(error));
+      throw cacheAuthorityError(error);
     } finally {
-      clearTimeout(timer);
-      if (pageStallMs > 0)
+      if (deadline.pageStallMs > 0)
         span.setAttr(
           'graphql_cache.ipc.page_stall_ms',
-          Math.round(pageStallMs)
+          Math.round(deadline.pageStallMs)
         );
       span.end();
     }
   }
+
+  async function currentAuthority() {
+    const context = Telemetry.captureContext();
+    const version = authorityObserver.version();
+    const value = await request('graphql_cache_current_authority', {
+      identity: options.scope,
+    });
+    const observed = context.run(() =>
+      authorityObserver.observeCurrent(value, version)
+    );
+    return observed;
+  }
+
+  let authorityListenerError: Error | undefined;
+  const authorityListenerDeadline = { timedOut: false, pageStallMs: 0 };
+  const installingAuthorityListener = listen<unknown>(
+    AUTHORITY_CHANGED_EVENT,
+    (event) => {
+      const parsed = CacheAuthoritySchema.safeParse(event.payload);
+      if (!parsed.success || parsed.data.identity !== options.scope) return;
+      authorityObserver.reset();
+      // Publish the owner-issued generation before any async refresh so retained
+      // query callbacks are fenced by the application's retirement epoch too.
+      authorityObserver.observe(parsed.data);
+      pendingReads.clear();
+      liveQueries.clear();
+      fireAndForget(currentAuthority(), 'graphql_cache.authority');
+    }
+  );
+  const unlistenAuthority: Promise<UnlistenFn | undefined> =
+    withRequestDeadline(
+      AUTHORITY_CHANGED_EVENT,
+      installingAuthorityListener,
+      requestTimeoutMs,
+      authorityListenerDeadline
+    ).catch((error: unknown) => {
+      authorityListenerError =
+        error instanceof Error ? error : new Error(String(error));
+      authorityObserver.reset();
+      return undefined;
+    });
+  fireAndForget(
+    installingAuthorityListener.then(
+      (unlisten) => {
+        if (authorityListenerDeadline.timedOut) return unlisten();
+      },
+      () => undefined
+    ),
+    'graphql-cache-host'
+  );
 
   // Failure tolerated: reads/writes still work, only push-driven
   // re-execution is lost — same degradation as a broken worker port.
@@ -297,7 +428,12 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         .map((id) => Number(id.slice(prefix.length)))
         .filter((n) => Number.isFinite(n));
       if (opKeys.length === 0) return;
-      if (isRecordFieldChanges(event.payload.fieldChanges)) {
+      if (
+        event.payload.authorityGeneration !== undefined &&
+        event.payload.authorityGeneration ===
+          authorityObserver.snapshot()?.generation &&
+        isRecordFieldChanges(event.payload.fieldChanges)
+      ) {
         // Patches are ordered data, so deliver them immediately after earlier
         // invalidations. Only conservative reread notifications can coalesce.
         flushAffected();
@@ -328,12 +464,16 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       const revision = parseCacheRevision(event.payload.revision);
       observeRevision(revision);
       if (event.payload.reset) {
+        authorityObserver.reset();
         liveQueries.clear();
-        for (const cb of generationChangeSubscribers) cb({ storage: 'reset' });
+        for (const cb of generationChangeSubscribers)
+          cb({ storage: 'reset', queue: 'reset' });
       }
       for (const cb of cacheChangeSubscribers) {
         if (
           event.payload.reset ||
+          event.payload.authorityGeneration !==
+            authorityObserver.snapshot()?.generation ||
           (event.payload.searchChangedBuckets === undefined &&
             event.payload.unchangedViews === undefined)
         )
@@ -354,15 +494,21 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       return await listen<CacheChangedPayload>(
         CACHE_HYDRATED_EVENT,
         (event) => {
+          const currentAuthority =
+            event.payload.authorityGeneration !== undefined &&
+            event.payload.authorityGeneration ===
+              authorityObserver.snapshot()?.generation;
           pendingReads.clear();
           flushAffected();
           const revision = parseCacheRevision(event.payload.revision);
           observeRevision(revision);
           for (const cb of hydrationSubscribers) {
-            cb(revision, {
-              searchChangedBuckets: event.payload.searchChangedBuckets,
-              unchangedViews: event.payload.unchangedViews,
-            });
+            if (!currentAuthority) cb(revision);
+            else
+              cb(revision, {
+                searchChangedBuckets: event.payload.searchChangedBuckets,
+                unchangedViews: event.payload.unchangedViews,
+              });
           }
         }
       );
@@ -374,36 +520,63 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   const unlistenHydration = listenForHydration();
 
   async function initialize(): Promise<void> {
+    // Authority notifications fence replies already in flight. Without the
+    // listener this host cannot safely publish cached content.
+    await unlistenAuthority;
+    if (authorityListenerError) throw authorityListenerError;
     const { default: schemaSdl } = await import(
       '../../../../../../static_assets/schema.graphql?raw'
     );
     // An app from before runtime SDL loading has no such command. Its own
     // `graphql_cache_init` would run its compiled-in schema, which can lack
     // fields this bundle reads, so the bundle stays uncached instead.
+    let opened: NativeSchemaInit | null | undefined;
     try {
-      await request<void>(INIT_COMMAND, {
-        scope: options.scope,
-        hotCapacity: options.hotCapacity,
-        schemaSdl,
-      });
+      opened = await request<NativeSchemaInit | null | undefined>(
+        INIT_COMMAND,
+        {
+          scope: options.scope,
+          hotCapacity: options.hotCapacity,
+          schemaSdl,
+        }
+      );
     } catch (error) {
       if (isMissingCommand(error, INIT_COMMAND)) {
         throw new NativeCacheUpgradeRequiredError(CACHE_NEEDS_UPDATE);
       }
       throw error;
     }
+    // Null when another webview opened the cache first; binaries from
+    // before the report resolve with nothing.
+    if (opened) emitNativeSchemaInit(opened);
     // Probe before any enqueue/claim. Older binaries silently ignore new
     // metadata arguments, so waiting until a draft fails would lose correlation.
     try {
-      await request<MutationInspection[]>(INSPECT_MUTATIONS_COMMAND, {});
+      await currentAuthority();
     } catch (error) {
-      if (isMissingCommand(error, INSPECT_MUTATIONS_COMMAND)) {
-        throw new NativeCacheUpgradeRequiredError();
+      if (isMissingCommand(error, 'graphql_cache_current_authority')) {
+        throw new NativeCacheUpgradeRequiredError(CACHE_NEEDS_UPDATE);
       }
       throw error;
     }
   }
   const ready = initialize();
+  let opened = false;
+  let disposed = false;
+  let stop = () => {};
+  const stopped = new Promise<void>((resolve) => {
+    stop = resolve;
+  });
+  // Settles either way (a failed native init never opens), or on dispose.
+  const settled = Promise.race([
+    ready.then(
+      () => {
+        opened = !disposed;
+      },
+      () => undefined
+    ),
+    stopped,
+  ]);
   fireAndForget(
     (async () => {
       try {
@@ -421,6 +594,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     revision: CacheRevision,
     advanced: boolean | undefined,
     searchChangedBuckets: string[] | undefined,
+    authorityGeneration: string | undefined,
     unchangedViews?: string[]
   ): Promise<void> {
     const newlyObserved = observeRevision(parseCacheRevision(revision));
@@ -428,6 +602,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     try {
       await emit(CACHE_HYDRATED_EVENT, {
         revision,
+        authorityGeneration,
         ...(unchangedViews !== undefined ? { unchangedViews } : {}),
         ...(searchChangedBuckets !== undefined ? { searchChangedBuckets } : {}),
       });
@@ -441,6 +616,38 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
 
   return {
     clientId,
+    isReady: () => opened && !disposed,
+    whenReady: () => settled,
+    authority: {
+      current: async () => {
+        const context = Telemetry.captureContext();
+        await ready;
+        return context.run(currentAuthority);
+      },
+      snapshot: authorityObserver.snapshot,
+      onChanged: authorityObserver.onChanged,
+      async transition(expected, policy) {
+        const context = Telemetry.captureContext();
+        await ready;
+        const version = authorityObserver.version();
+        const result = await context.run(() =>
+          request<AuthorityTransition>('graphql_cache_transition_authority', {
+            identity: options.scope,
+            expected,
+            policy,
+          })
+        );
+        const previousGeneration = authorityObserver.snapshot()?.generation;
+        context.run(() =>
+          authorityObserver.observe(result.authority, version, 'transition')
+        );
+        if (previousGeneration !== result.authority.generation) {
+          pendingReads.clear();
+          liveQueries.clear();
+        }
+        return result;
+      },
+    },
     liveQueries: true,
     people: createPeopleCache({
       async snapshot(args, traceparent) {
@@ -458,13 +665,13 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           return { kind: 'unsupported' };
         }
       },
-      async reconcile(args, traceparent) {
+      async reconcile(args, traceparent, generation) {
         await ready;
         if (contactSyncUnavailable) return { kind: 'unsupported' };
         try {
           const result = await request<WriteResult>(
             'graphql_cache_contact_reconcile',
-            { request: args, traceparent }
+            { request: args, traceparent, generation }
           );
           return result.revision;
         } catch (error) {
@@ -527,7 +734,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           return { kind: 'unsupported' };
         }
       },
-      async update(update, traceparent) {
+      async update(update, traceparent, generation) {
         await ready;
         if (peopleUnavailable) throw new Error(PEOPLE_UNSUPPORTED);
         let result: WriteResult;
@@ -535,15 +742,19 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           result = await request<WriteResult>(PEOPLE_UPDATE_COMMAND, {
             update,
             traceparent,
+            generation,
           });
         } catch (error) {
           if (!isMissingCommand(error, PEOPLE_UPDATE_COMMAND)) throw error;
           peopleUnavailable = true;
           throw new Error(PEOPLE_UNSUPPORTED);
         }
-        await publishHydration(result.revision, result.revisionAdvanced, [
-          'person',
-        ]);
+        await publishHydration(
+          result.revision,
+          result.revisionAdvanced,
+          ['person'],
+          generation
+        );
         return result.revision;
       },
     }),
@@ -571,7 +782,10 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         variables: args.variables,
         entityResolvers: args.entityResolvers,
       };
-      const key = JSON.stringify(wireArgs);
+      const key = JSON.stringify([
+        authorityObserver.snapshot()?.generation,
+        wireArgs,
+      ]);
       const pending = pendingReads.get(key);
       if (pending) return pending;
       const reading = request<ReadResult>('graphql_cache_read', wireArgs);
@@ -659,11 +873,13 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
             if (oldest !== undefined) liveQueries.delete(oldest);
           }
           if (registration.registrationId) {
+            const registered = registration;
+            const registrationId = registered.registrationId;
             const update = await request<LiveQueryUpdate | null>(
               ENTITY_FILTER_RESUME_COMMAND,
               {
                 id: live.id,
-                registrationId: registration.registrationId,
+                registrationId,
                 since: live.since,
               }
             );
@@ -721,13 +937,15 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     },
 
     async calendarCommit(
-      args: CalendarCommitArgs
+      args: CalendarCommitArgs,
+      generation: string
     ): Promise<CalendarCommitCacheResult> {
       await ready;
       if (calendarUnavailable) return { kind: 'unsupported' };
       try {
         const result = await request<WriteResult>(CALENDAR_COMMIT_COMMAND, {
           commit: args,
+          generation,
         });
         return {
           kind: 'committed',
@@ -742,25 +960,39 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     },
 
     async writeQuery(args: CacheWriteArgs): Promise<WriteResult> {
+      const context = Telemetry.captureContext();
+      args = {
+        ...args,
+        generation: args.generation ?? UNKNOWN_CACHE_GENERATION,
+      };
       await ready;
-      return await request<WriteResult>('graphql_cache_write', {
-        originOpId: args.opKey === undefined ? undefined : opId(args.opKey),
-        registration:
-          args.registerDependencies && args.opKey !== undefined
-            ? {
-                opId: opId(args.opKey),
-                entityResolvers: args.entityResolvers,
-              }
-            : undefined,
-        query: args.query,
-        operationName: args.operationName,
-        variables: args.variables,
-        data: args.data,
-        identity: args.identity,
-      });
+      return await context.run(() =>
+        request<WriteResult>('graphql_cache_write', {
+          originOpId: args.opKey === undefined ? undefined : opId(args.opKey),
+          registration:
+            args.registerDependencies && args.opKey !== undefined
+              ? {
+                  opId: opId(args.opKey),
+                  entityResolvers: args.entityResolvers,
+                }
+              : undefined,
+          query: args.query,
+          operationName: args.operationName,
+          variables: args.variables,
+          data: args.data,
+          generation: args.generation,
+          identity: args.identity,
+          // An older binary drops the key and keeps today's order.
+          background: args.background,
+        })
+      );
     },
 
     async hydrateQuery(args: CacheHydrateArgs): Promise<HydrationResult> {
+      args = {
+        ...args,
+        generation: args.generation ?? UNKNOWN_CACHE_GENERATION,
+      };
       await ready;
       if (args.hydrationScope) {
         scopedHydrationSupported ??= request<SearchCachePage>(
@@ -792,16 +1024,18 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       };
       const result = args.hydrationScope
         ? await request<NativeHydrationResult>('graphql_cache_hydrate_scoped', {
+            generation: args.generation,
             request: { ...payload, hydrationScope: args.hydrationScope },
           })
-        : await request<NativeHydrationResult>(
-            'graphql_cache_hydrate',
-            payload
-          );
+        : await request<NativeHydrationResult>('graphql_cache_hydrate', {
+            ...payload,
+            generation: args.generation,
+          });
       await publishHydration(
         result.revision,
         result.revisionAdvanced,
         result.searchChangedBuckets,
+        args.generation,
         result.unchangedViews
       );
       return result;
@@ -811,6 +1045,10 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       args: EnqueueOptimisticMutationArgs,
       claim: InitialMutationClaimArgs
     ): Promise<EnqueueOptimisticMutationResult> {
+      args = {
+        ...args,
+        generation: args.generation ?? UNKNOWN_CACHE_GENERATION,
+      };
       await ready;
       return await request<EnqueueOptimisticMutationResult>(
         'graphql_cache_enqueue_optimistic_mutation',
@@ -821,6 +1059,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           operationName: args.operationName,
           variables: args.variables,
           data: args.data,
+          generation: args.generation,
           linkPatches: args.linkPatches,
           revalidations: args.revalidations,
           identityBindings: args.identityBindings,
@@ -905,6 +1144,10 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       claim: MutationClaim,
       args: CacheWriteArgs
     ): Promise<CommitOptimisticWriteResult> {
+      args = {
+        ...args,
+        generation: args.generation ?? UNKNOWN_CACHE_GENERATION,
+      };
       await ready;
       return await request<CommitOptimisticWriteResult>(
         'graphql_cache_commit_optimistic_write',
@@ -916,6 +1159,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           operationName: args.operationName,
           variables: args.variables,
           data: args.data,
+          generation: args.generation,
         }
       );
     },
@@ -940,19 +1184,31 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     },
 
     async invalidate(keys: string[]): Promise<AffectedOperationsResult> {
+      // Removal carries no fetched content, so it needs no source stamp; the
+      // observed generation only fences a transition already under way.
+      const generation =
+        authorityObserver.snapshot()?.generation ?? UNKNOWN_CACHE_GENERATION;
       await ready;
       const result = await request<AffectedOperationsResult>(
         'graphql_cache_invalidate',
-        { keys }
+        { keys, generation }
       );
       return { ...result, revision: parseCacheRevision(result.revision) };
     },
 
-    async deleteRecords(keys: string[]): Promise<AffectedOperationsResult> {
+    async deleteRecords(
+      keys: string[],
+      authorityGeneration?: string
+    ): Promise<AffectedOperationsResult> {
+      const context = Telemetry.captureContext();
+      authorityGeneration ??=
+        authorityObserver.snapshot()?.generation ?? UNKNOWN_CACHE_GENERATION;
       await ready;
-      const result = await request<AffectedOperationsResult>(
-        'graphql_cache_delete_records',
-        { keys }
+      const result = await context.run(() =>
+        request<AffectedOperationsResult>('graphql_cache_delete_records', {
+          keys,
+          generation: authorityGeneration,
+        })
       );
       return { ...result, revision: parseCacheRevision(result.revision) };
     },
@@ -1001,6 +1257,8 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     },
 
     dispose() {
+      disposed = true;
+      stop();
       clearTimeout(affectedTimer);
       pendingAffected.clear();
       pendingReads.clear();
@@ -1015,6 +1273,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         unlistenCacheChanges,
         unlistenHydration,
         unlistenSettlements,
+        unlistenAuthority,
       ]) {
         // UnlistenFn returns the unlisten IPC promise despite its void type.
         fireAndForget(

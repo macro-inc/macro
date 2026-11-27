@@ -123,7 +123,7 @@ pub trait EmailRepo: Send + Sync + 'static {
         sender: &str,
         blocked: bool,
         important: Option<bool>,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<(), EmailErr>> + Send;
 
     /// Revalidate actor and expected facts while committing a user-directed resolution.
     fn commit_message_resolution(
@@ -160,12 +160,19 @@ pub trait EmailRepo: Send + Sync + 'static {
         actor: MacroUserIdStr<'_>,
         action: &crate::domain::models::mailbox_action::MailboxAction,
         targets: &[crate::domain::models::mailbox_action::MailboxActionTarget],
-    ) -> impl Future<Output = Result<Uuid, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Uuid, EmailErr>> + Send;
     fn previews_for_view_cursor(
         &self,
         query: PreviewCursorQuery,
         user_id: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Vec<EmailThreadPreview>, EmailErr>> + Send;
+
+    /// [`Self::previews_for_view_cursor`] with where a short page goes on.
+    fn previews_page_for_view_cursor(
+        &self,
+        query: PreviewCursorQuery,
+        user_id: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<crate::domain::models::PreviewCursorPage, EmailErr>> + Send;
 
     fn attachments_by_thread_ids(
         &self,
@@ -177,9 +184,15 @@ pub trait EmailRepo: Send + Sync + 'static {
         thread_ids: &[Uuid],
     ) -> impl Future<Output = Result<Vec<Contact>, Self::Err>> + Send;
 
+    /// The labels on each thread, as `reader` may see them: system labels,
+    /// which say what state a message is in, and the labels people made in
+    /// the inboxes `reader` owns or manages. Labels people make are theirs, so
+    /// no one else reading the thread gets them; `None` (a bot, a signed-out
+    /// reader or an internal caller) gets system labels alone.
     fn labels_by_thread_ids(
         &self,
         thread_ids: &[Uuid],
+        reader: Option<&MacroUserIdStr<'_>>,
     ) -> impl Future<Output = Result<Vec<Label>, Self::Err>> + Send;
 
     fn link_by_fusionauth_and_macro_id(
@@ -203,6 +216,16 @@ pub trait EmailRepo: Send + Sync + 'static {
         &self,
         macro_id: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<Link>, Self::Err>> + Send;
+
+    /// Which of `ids` are among the inboxes [`Self::inboxes_for_macro_id`]
+    /// returns for `macro_id`, read by those ids alone, so the cost follows
+    /// `ids` and not how many inboxes the account reaches. The caller bounds
+    /// `ids`.
+    fn inbox_ids_among(
+        &self,
+        macro_id: MacroUserIdStr<'_>,
+        ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
 
     /// Fetch a thread by its database ID (without messages).
     fn thread_by_id(
@@ -259,10 +282,12 @@ pub trait EmailRepo: Send + Sync + 'static {
         message_ids: &[Uuid],
     ) -> impl Future<Output = Result<RecipientsByMessageId, Self::Err>> + Send;
 
-    /// Fetch labels for a set of message IDs, keyed by message ID.
+    /// Fetch labels for a set of message IDs, keyed by message ID, as `reader`
+    /// may see them (see [`Self::labels_by_thread_ids`]).
     fn labels_by_message_ids(
         &self,
         message_ids: &[Uuid],
+        reader: Option<&MacroUserIdStr<'_>>,
     ) -> impl Future<Output = Result<HashMap<Uuid, Vec<MessageLabel>>, Self::Err>> + Send;
 
     /// Fetch saved calendar invitation components, keyed by message ID.
@@ -375,7 +400,7 @@ pub trait EmailRepo: Send + Sync + 'static {
         actor: Option<&str>,
 
         expected_generation: i32,
-    ) -> impl Future<Output = Result<Option<DraftDeletion>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<DraftDeletion>, EmailErr>> + Send;
 
     /// Upsert contacts from the parsed addresses. Must be called outside a transaction
     /// to avoid deadlocks (contacts are shared across messages).

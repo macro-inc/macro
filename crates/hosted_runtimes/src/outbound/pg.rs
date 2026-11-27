@@ -21,6 +21,7 @@ use crate::domain::models::{
 };
 use crate::domain::ports::{Applied, ComputerRepo, DueTimer, PendingEffect, ReserveError};
 use crate::domain::size::{ComputerResources, ComputerSize};
+use crate::domain::telemetry::invite_purchase_phase;
 
 mod agents;
 pub use agents::PgComputerAgents;
@@ -29,10 +30,12 @@ mod apply;
 mod effect_signals;
 pub use effect_signals::PgEffectSignals;
 mod hosts;
+mod image_upgrades;
 mod moves;
 mod records;
 mod reservations;
 mod row;
+mod runtime_updates;
 mod usage;
 use row::{ComputerRow, ReservationRow};
 
@@ -354,11 +357,12 @@ impl ComputerRepo for PgComputerRepo {
             created_by: reservation.created_by,
             created_at: reservation.created_at,
             enrolled_at: None,
+            hibernated_at: None,
             setup_completed_at: None,
             default_agent_id: None,
             image: None,
         };
-        tx.commit().await?;
+        invite_purchase_phase(reservation.agent.is_some(), "commit", tx.commit()).await?;
         Self::record_setup(&computer, &computer.state, &finished_setup);
         Ok(Some(computer))
     }
@@ -451,7 +455,7 @@ impl ComputerRepo for PgComputerRepo {
             ComputerRow,
             r#"
             SELECT id, team_id, host_id, name, size AS "size: ComputerSize", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, state, harness_id, created_by,
-                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image
+                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image, hibernated_at
             FROM hosted_runtime
             WHERE id = $1
             "#,
@@ -467,7 +471,7 @@ impl ComputerRepo for PgComputerRepo {
             ComputerRow,
             r#"
             SELECT id, team_id, host_id, name, size AS "size: ComputerSize", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, state, harness_id, created_by,
-                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image
+                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image, hibernated_at
             FROM hosted_runtime
             WHERE team_id = $1
             ORDER BY created_at
@@ -496,7 +500,7 @@ impl ComputerRepo for PgComputerRepo {
             ComputerRow,
             r#"
             SELECT id, team_id, host_id, name, size AS "size: ComputerSize", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, state, harness_id, created_by,
-                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image
+                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image, hibernated_at
             FROM hosted_runtime
             WHERE harness_id = $1
             "#,
@@ -633,7 +637,7 @@ impl ComputerRepo for PgComputerRepo {
             SET setup_completed_at = COALESCE(setup_completed_at, $2)
             WHERE id = $1
             RETURNING id, team_id, host_id, name, size AS "size: ComputerSize", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, state, harness_id, created_by,
-                      created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image
+                      created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image, hibernated_at
             "#,
             computer_id.as_uuid(),
             now,

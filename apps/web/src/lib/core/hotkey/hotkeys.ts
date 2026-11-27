@@ -49,6 +49,9 @@ import {
   runCommand,
 } from './utils';
 
+/** Commands that dispose with their reactive owner; see registerHotkey. */
+const ownerBoundCommands = new WeakSet<HotkeyCommand>();
+
 /**
  * Registers a keyboard shortcut to a particular, existing scope.
  *
@@ -255,14 +258,21 @@ export function registerHotkey(
   };
 
   // An override re-registration of the same logical command — same token in
-  // this scope — replaces the old registration outright instead of stacking:
-  // persistent commands (disposeWithOwner: false) re-register on every mount
-  // of their view and must not accumulate eclipsed copies.
+  // this scope — replaces an old persistent registration outright instead of
+  // stacking: persistent commands (disposeWithOwner: false) re-register on
+  // every mount of their view and must not accumulate eclipsed copies. A
+  // registration that disposes with its owner is only eclipsed, so a second
+  // live registrant (a view's loading skeleton shown while the view suspends)
+  // hands the key back when it unmounts.
   if (registrationType === 'override' && hotkeyToken) {
     const replaced: HotkeyCommand[] = [];
     for (let i = scopeNode.commands.length - 1; i >= 0; i--) {
       const existingCommand = scopeNode.commands[i];
-      if (existingCommand && existingCommand.hotkeyToken === hotkeyToken) {
+      if (
+        existingCommand &&
+        existingCommand.hotkeyToken === hotkeyToken &&
+        !ownerBoundCommands.has(existingCommand)
+      ) {
         replaced.push(existingCommand);
         scopeNode.commands.splice(i, 1);
       }
@@ -337,6 +347,7 @@ export function registerHotkey(
   // over unmounted state. `disposeWithOwner: false` opts out for commands
   // meant to persist past their registrant (see HotkeyRegistrationOptions).
   if (disposeWithOwner !== false && getOwner()) {
+    ownerBoundCommands.add(command);
     onCleanup(() => disposer.dispose());
   }
 
@@ -494,30 +505,35 @@ export function useHotkeyDOMScope(
       return console.error(
         'Trying to attach hotkeys to an element that does exist.'
       );
-    const DOMScope = hotkeyScopeTree.get(scopeId);
-    // Attach this scope to the closest parent scope.
-    // Note: this only works in "ideal" circumstances, where children are attached sequentially after parents. This is not always the case.
-    let parentScopeId;
-    if (!detachedScope) {
-      parentScopeId = findClosestParentScopeId(el);
-      const parentScope = hotkeyScopeTree.get(parentScopeId);
-      if (parentScope) {
-        parentScope.childScopeIds.push(scopeId);
+    const currentDataAttribute = el.getAttribute('data-hotkey-scope');
+    // Solid re-runs a spread ref on the same element whenever another spread
+    // prop changes (a Kobalte tooltip trigger spreads its open state), and the
+    // re-run's cleanup has just removed the focus listener. Re-add only that.
+    const reattaching = currentDataAttribute === scopeId;
+    if (!reattaching) {
+      const DOMScope = hotkeyScopeTree.get(scopeId);
+      // Attach this scope to the closest parent scope.
+      // Note: this only works in "ideal" circumstances, where children are attached sequentially after parents. This is not always the case.
+      let parentScopeId;
+      if (!detachedScope) {
+        parentScopeId = findClosestParentScopeId(el);
+        const parentScope = hotkeyScopeTree.get(parentScopeId);
+        if (parentScope) {
+          parentScope.childScopeIds.push(scopeId);
+        }
       }
-    }
-    if (DOMScope?.type === 'dom') {
-      DOMScope.parentScopeId = parentScopeId;
+      if (DOMScope?.type === 'dom') {
+        DOMScope.parentScopeId = parentScopeId;
+      }
+      if (currentDataAttribute) {
+        Telemetry.error(
+          `Attempting to attach ${scopeId} hotkey scope, but the specified element already has a hotkey scope attached to it. This is an error and will break the hotkey scope tree. Please use that scope, ${currentDataAttribute}, instead of inventing your own.`
+        );
+      }
+      el.setAttribute('data-hotkey-scope', scopeId);
     }
 
     el.addEventListener('focusin', handleFocusIn);
-
-    const currentDataAttribute = el.getAttribute('data-hotkey-scope');
-    if (currentDataAttribute) {
-      Telemetry.error(
-        `Attempting to attach ${scopeId} hotkey scope, but the specified element already has a hotkey scope attached to it. This is an error and will break the hotkey scope tree. Please use that scope, ${currentDataAttribute}, instead of inventing your own.`
-      );
-    }
-    el.setAttribute('data-hotkey-scope', scopeId);
 
     onCleanup(() => {
       el.removeEventListener('focusin', handleFocusIn);
@@ -614,8 +630,17 @@ export function useHotKeyRoot() {
     typeof e.key !== 'string' ||
     (!e.isTrusted && import.meta.env.MODE !== 'test');
 
+  // A control marked `data-owns-keyboard` (the agent screen viewer while it
+  // drives a remote computer) takes every key itself: no app hotkey may run,
+  // or typing "macro" into the remote desktop opens Create at the "c". Its
+  // key-ups still release keys pressed before focus moved in, or they would
+  // stick (a Tab pressed on a button, let go in the viewer).
+  const insideKeyboardOwner = (target: EventTarget | null) =>
+    target instanceof Element &&
+    target.closest('[data-owns-keyboard]') !== null;
+
   const handleKeyDown = (e: KeyboardEvent) => {
-    if (shouldIgnoreKeyEvent(e)) return;
+    if (shouldIgnoreKeyEvent(e) || insideKeyboardOwner(e.target)) return;
     document.documentElement.dataset.modality = 'keyboard';
     const key = normalizeEventKeyPress(e);
 
@@ -670,7 +695,14 @@ export function useHotKeyRoot() {
       );
     }
 
+    if (insideKeyboardOwner(e.target)) return;
     checkHotKeys(e);
+  };
+
+  // Keys still down as focus enters a keyboard owner never get their key-up
+  // here (the owner may cancel it): forget them, as on window blur.
+  const handleFocusIn = (e: FocusEvent) => {
+    if (insideKeyboardOwner(e.target)) setPressedKeys(new Set<string>());
   };
 
   // Clear all pressed keys when window loses focus
@@ -681,12 +713,14 @@ export function useHotKeyRoot() {
   onMount(() => {
     document.addEventListener('keydown', handleKeyDown, { capture: true });
     document.addEventListener('keyup', handleKeyUp, { capture: true });
+    document.addEventListener('focusin', handleFocusIn, { capture: true });
     window.addEventListener('blur', handleWindowBlur);
   });
 
   onCleanup(() => {
     document.removeEventListener('keydown', handleKeyDown, { capture: true });
     document.removeEventListener('keyup', handleKeyUp, { capture: true });
+    document.removeEventListener('focusin', handleFocusIn, { capture: true });
     window.removeEventListener('blur', handleWindowBlur);
   });
 

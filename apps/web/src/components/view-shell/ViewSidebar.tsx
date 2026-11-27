@@ -4,6 +4,7 @@ import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { callHandler } from '@kobalte/utils';
 import { mergeRefs } from '@solid-primitives/refs';
+import { useDragDropContext } from '@thisbeyond/solid-dnd';
 import { Button, type ButtonProps, cn } from '@ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
 import type { Component, JSX } from 'solid-js';
@@ -15,27 +16,38 @@ import {
   useContext,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { useChosenDestination } from './chosen-destination';
 import { useListSearchKeys } from './list-search-keys';
 import { SearchBar } from './SearchBar';
+import { SidebarSection } from './SidebarSection';
+import { SidebarSectionHeader } from './SidebarSectionHeader';
+import { SidebarSections } from './SidebarSections';
 import {
   ViewSidebarCloseButton,
   ViewSidebarToggle,
 } from './ViewNavigationControls';
 import { ViewShellContext } from './view-shell-context';
 
-function Root(props: JSX.HTMLAttributes<HTMLElement>) {
-  const [local, rest] = splitProps(props, ['children', 'class']);
+const SidebarViewContext = createContext<{ view: () => string | undefined }>();
+
+function Root(props: JSX.HTMLAttributes<HTMLElement> & { reorderId?: string }) {
+  const [local, rest] = splitProps(props, ['children', 'class', 'reorderId']);
+  // A destination chosen here before the tabs of the view it opens mount
+  // still leaves the keyboard on that view.
+  useChosenDestination();
   return (
-    <aside
-      {...rest}
-      class={cn(
-        'flex size-full min-h-0 min-w-0 flex-col bg-panel',
-        local.class
-      )}
-      data-view-sidebar=""
-    >
-      {local.children}
-    </aside>
+    <SidebarViewContext.Provider value={{ view: () => local.reorderId }}>
+      <aside
+        {...rest}
+        class={cn(
+          'flex size-full min-h-0 min-w-0 flex-col bg-panel',
+          local.class
+        )}
+        data-view-sidebar=""
+      >
+        {local.children}
+      </aside>
+    </SidebarViewContext.Provider>
   );
 }
 
@@ -290,9 +302,15 @@ function Control(props: ButtonProps) {
 }
 
 function Content(props: JSX.HTMLAttributes<HTMLDivElement>) {
-  const [local, rest] = splitProps(props, ['children', 'class']);
+  const [local, rest] = splitProps(props, ['children', 'class', 'ref']);
+  const view = useContext(SidebarViewContext);
+  const dnd = useDragDropContext();
+  let viewport: HTMLDivElement | undefined;
   return (
     <div
+      ref={mergeRefs(local.ref, (element) => {
+        viewport = element;
+      })}
       {...rest}
       class={cn(
         'flex min-h-0 min-w-0 flex-1 flex-col gap-(--sidebar-section-gap) overflow-auto px-(--sidebar-gutter) py-(--sidebar-content-inset)',
@@ -300,7 +318,13 @@ function Content(props: JSX.HTMLAttributes<HTMLDivElement>) {
       )}
       data-view-sidebar-content=""
     >
-      {local.children}
+      <Show when={dnd && view?.view()} fallback={local.children}>
+        {(id) => (
+          <SidebarSections view={id()} viewport={() => viewport}>
+            {local.children}
+          </SidebarSections>
+        )}
+      </Show>
     </div>
   );
 }
@@ -346,6 +370,9 @@ function Item(
       {...rest}
       type={local.type ?? 'button'}
       aria-current={ariaCurrent()}
+      data-view-sidebar-item=""
+      // The current page's row keeps its selected fill when pressed.
+      data-press-surface={local.active ? 'self' : ''}
       onClick={(
         event: MouseEvent & {
           currentTarget: HTMLButtonElement;
@@ -509,6 +536,8 @@ export const ViewSidebar = Object.assign(Root, {
   Control,
   Content,
   Nav,
+  Section: SidebarSection,
+  SectionHeader: SidebarSectionHeader,
   Item,
   Icon,
   Trailing,

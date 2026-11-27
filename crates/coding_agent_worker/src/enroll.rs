@@ -128,18 +128,28 @@ impl Host for SystemHost {
 /// Enroll this computer, or enroll it again for a newer enrollment
 /// generation; an enrolled one is left as it is.
 pub async fn run_enroll(options: EnrollOptions) -> rootcause::Result<()> {
-    run_enroll_with_host(options, &SystemHost).await
+    run_enroll_with_host(options, &SystemHost, crate::telemetry::install).await
 }
 
-async fn run_enroll_with_host(options: EnrollOptions, host: &impl Host) -> rootcause::Result<()> {
+/// Enroll on `host`, starting telemetry with `start_telemetry` once the
+/// enrollment is read, since it names where spans go.
+async fn run_enroll_with_host<Guard>(
+    options: EnrollOptions,
+    host: &impl Host,
+    start_telemetry: impl FnOnce(Option<crate::telemetry::Exporter>) -> Guard,
+) -> rootcause::Result<()> {
     use tracing::Instrument as _;
     let paths = SystemPaths {
         root: options.root.clone(),
         mmds: firecracker_host_api::mmds::ADDRESS.to_owned(),
     };
     let marker = paths.at(ENROLLED_MARKER);
+    let telemetry_env = paths.at(crate::telemetry::TELEMETRY_ENV);
     let enrolled = read_marker(&marker)?;
-    let enrollment = match (read_enrollment(&options.from, &paths).await?, enrolled) {
+    let read = read_enrollment(&options.from, &paths).await?;
+    let exporter = read.as_ref().and_then(telemetry_exporter);
+    let _telemetry = start_telemetry(exporter.clone());
+    let enrollment = match (read, enrolled) {
         (None, Some(_)) => {
             tracing::info!(marker = %marker.display(), "already enrolled");
             return Ok(());
@@ -169,12 +179,17 @@ async fn run_enroll_with_host(options: EnrollOptions, host: &impl Host) -> rootc
         otel.status_code = tracing::field::Empty
     );
     hosted_runtimes::domain::telemetry::attach(&span, enrollment.traceparent.as_deref());
-    enroll(&options, host, &marker, &enrollment)
-        .instrument(span.clone())
-        .await
-        .inspect_err(|_| {
-            span.record("otel.status_code", "ERROR");
-        })
+    async {
+        // Before the marker: once it is written a retry stops at "already
+        // enrolled", so failed settings would never be written.
+        write_telemetry_env(&telemetry_env, exporter.as_ref())?;
+        enroll(&options, host, &marker, &enrollment).await
+    }
+    .instrument(span.clone())
+    .await
+    .inspect_err(|_| {
+        span.record("otel.status_code", "ERROR");
+    })
 }
 
 async fn enroll(
@@ -209,6 +224,47 @@ async fn enroll(
     )
     .context(format!("could not write {}", marker.display()))?;
     tracing::info!("enrolled");
+    Ok(())
+}
+
+/// The enrollment's telemetry intake, which takes OTLP/HTTP, named this
+/// computer.
+fn telemetry_exporter(enrollment: &Enrollment) -> Option<crate::telemetry::Exporter> {
+    enrollment
+        .deployment
+        .telemetry_url
+        .as_ref()
+        .map(|url| crate::telemetry::Exporter::Http {
+            endpoint: url.as_str().trim_end_matches('/').to_owned(),
+            computer: Some(enrollment.computer_id),
+        })
+}
+
+/// Record the enrollment's telemetry settings for `macrod.service`, or
+/// remove them when this enrollment names no intake. Not a secret.
+fn write_telemetry_env(
+    path: &Path,
+    exporter: Option<&crate::telemetry::Exporter>,
+) -> rootcause::Result<()> {
+    match exporter {
+        Some(exporter) => {
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)
+                    .context(format!("could not create {}", parent.display()))?;
+            }
+            std::fs::write(path, exporter.environment_file())
+                .context(format!("could not write {}", path.display()))?;
+        }
+        None => match std::fs::remove_file(path) {
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
+                return Err(rootcause::report!(
+                    "could not remove {}: {error}",
+                    path.display()
+                ));
+            }
+            _ => {}
+        },
+    }
     Ok(())
 }
 

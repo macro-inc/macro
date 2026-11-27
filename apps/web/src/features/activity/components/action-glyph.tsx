@@ -1,12 +1,14 @@
 import ChatCircle from '@icon/system/regular/chat-circle.svg';
 import ClipboardText from '@icon/system/regular/clipboard-text.svg';
 import Eye from '@icon/system/regular/eye.svg';
+import GitMerge from '@icon/system/regular/git-merge.svg';
 import Minus from '@icon/system/regular/minus.svg';
 import PaperPlaneTilt from '@icon/system/regular/paper-plane-tilt.svg';
 import PencilSimple from '@icon/system/regular/pencil-simple.svg';
 import Phone from '@icon/system/regular/phone.svg';
 import Plus from '@icon/system/regular/plus.svg';
 import SlidersHorizontal from '@icon/system/regular/sliders-horizontal.svg';
+import Timer from '@icon/system/regular/timer.svg';
 import Trash from '@icon/system/regular/trash.svg';
 import UserMinus from '@icon/system/regular/user-minus.svg';
 import UserPlus from '@icon/system/regular/user-plus.svg';
@@ -27,6 +29,8 @@ const GLYPHS = {
   'participant-removed': UserMinus,
   'call-started': Phone,
   responded: ClipboardText,
+  'time-logged': Timer,
+  'record-merged': GitMerge,
   unknown: PencilSimple,
 } as const;
 

@@ -10,6 +10,7 @@ import {
   type ElementNode,
   type LexicalEditor,
   type LexicalNode,
+  type LexicalUpdateJSON,
   type NodeKey,
   type SerializedLexicalNode,
   type Spread,
@@ -157,6 +158,24 @@ export class DocumentCardNode extends DecoratorBlockNode<
     });
     $applyIdFromSerialized(node, serializedNode);
     return node;
+  }
+
+  // Collaboration applies another person's change through this. Without it the
+  // node kept its own fields, and its next write put them back over the change.
+  // The name stays local: each viewer's card writes the name it can see ("No
+  // Access" for one without access), so applying it would remount the other
+  // card and start the two writing their names back and forth.
+  updateFromJSON(
+    serializedNode: LexicalUpdateJSON<SerializedDocumentCardNode>
+  ): this {
+    const self = super.updateFromJSON(serializedNode);
+    self.__documentId = serializedNode.documentId;
+    self.__blockName = serializedNode.blockName;
+    self.__blockParams = serializedNode.blockParams || {};
+    self.__previewBox = serializedNode.previewBox || DEFAULT_PREVIEW_BOX;
+    self.__previewData = serializedNode.previewData ?? undefined;
+    self.__mentionUuid = serializedNode.mentionUuid ?? undefined;
+    return self;
   }
 
   exportJSON(): SerializedDocumentCardNode {

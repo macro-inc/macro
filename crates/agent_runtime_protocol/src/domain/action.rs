@@ -26,6 +26,19 @@ pub const MODEL_CONFIG_ID: &str = "model";
 /// Marks server-added execution context that runtimes read but transcripts omit.
 pub const INVOCATION_CONTEXT_META: &str = "macro/invocation-context";
 
+/// Set to `true` in a `session/prompt`'s `_meta` when the turn's content
+/// must stay off traces: see [`AgentPromptAction::withhold_content`].
+pub const WITHHOLD_CONTENT_META: &str = "macro.dev/withhold-content";
+
+/// Whether a `session/prompt`'s `_meta` asks for its turn's content to stay
+/// off traces.
+#[must_use]
+pub fn withholds_content(meta: Option<&serde_json::Map<String, serde_json::Value>>) -> bool {
+    meta.and_then(|meta| meta.get(WITHHOLD_CONTENT_META))
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+}
+
 /// Identifies one accepted [`AgentAction`] end to end: returned by the
 /// control endpoint, written as the JSON-RPC request id on the action's wire
 /// frame, and read back off that frame as `request_id` on the folded message
@@ -187,6 +200,13 @@ pub struct AgentPromptAction {
     /// Delivered after the text as one `resource_link` block each.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub attachments: Vec<PromptAttachment>,
+    /// Record none of this turn's content on traces: no prompt, output, tool
+    /// arguments or results, whatever the process's GenAI content policy
+    /// says. For turns whose prompt carries what must not be kept outside the
+    /// session, such as a person's mail. Set only by the harness.
+    #[cfg_attr(feature = "utoipa", schema(ignore))]
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub withhold_content: bool,
     /// Raw user text used for a visible session name when `prompt` is enriched.
     #[serde(skip)]
     name_source: Option<String>,
@@ -470,6 +490,7 @@ impl AgentAction {
             prompt: prompt.into(),
             attachments,
             notifications: None,
+            withhold_content: false,
             name_source: None,
         })
     }
@@ -606,6 +627,9 @@ impl AgentAction {
                         .insert(0, serde_json::json!({"type":"text", "text":context}));
                     params["_meta"] =
                         serde_json::json!({crate::domain::notification::NOTIFICATIONS_META: input});
+                }
+                if action.withhold_content {
+                    params["_meta"][WITHHOLD_CONTENT_META] = serde_json::Value::Bool(true);
                 }
                 if let Some(turn) = AgentActionId::from_request_id(&request_id) {
                     let context = serde_json::json!({

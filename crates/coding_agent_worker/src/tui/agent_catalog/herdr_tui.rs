@@ -1,6 +1,7 @@
 use super::{AgentKind, AgentPreset, Availability, CommandLookup, DetectedAgent, LaunchSpec};
 use crate::config::Harness;
 use crate::herdr::acp_agent::TuiAgent;
+use crate::herdr::{HcBinMissing, HerdrSession};
 
 /// A coding agent's own TUI, one herdr tab per session, driven over ACP by
 /// `macrod herdr-acp`. Offered only when macrod itself runs inside herdr.
@@ -22,13 +23,37 @@ impl AgentPreset for HerdrTui {
     }
 
     fn detect(&self, commands: &dyn CommandLookup) -> Availability {
-        let Some(herdr) = crate::herdr::HerdrSession::detect() else {
-            return Availability::Unavailable {
-                missing: vec!["a herdr pane"],
-            };
+        self.availability(HerdrSession::detect(), commands)
+    }
+
+    fn recognizes(&self, harness: &Harness) -> bool {
+        crate::herdr::herdr_agent(harness) == Some(self.0)
+    }
+}
+
+impl HerdrTui {
+    /// Whether this agent can run in `herdr`, the herdr macrod was found in.
+    pub(super) fn availability(
+        &self,
+        herdr: Result<Option<HerdrSession>, HcBinMissing>,
+        commands: &dyn CommandLookup,
+    ) -> Availability {
+        let herdr = match herdr {
+            Ok(Some(herdr)) => herdr,
+            Ok(None) => {
+                return Availability::Unavailable {
+                    missing: vec!["a herdr pane"],
+                };
+            }
+            Err(HcBinMissing) => {
+                return Availability::Unavailable {
+                    missing: vec!["HC_BIN"],
+                };
+            }
         };
-        let missing: Vec<&'static str> = [self.0.herdr_kind(), herdr.command()]
+        let missing: Vec<&'static str> = [Some(self.0.herdr_kind()), herdr.path_command()]
             .into_iter()
+            .flatten()
             .filter(|command| commands.resolve(command).is_none())
             .collect();
         if !missing.is_empty() {
@@ -55,9 +80,5 @@ impl AgentPreset for HerdrTui {
             note: None,
             install: None,
         })
-    }
-
-    fn recognizes(&self, harness: &Harness) -> bool {
-        crate::herdr::herdr_agent(harness) == Some(self.0)
     }
 }

@@ -12,15 +12,16 @@ use agent_runtime_protocol::domain::notification::{
     NotificationEvent, ReviewSettlement,
 };
 use agent_session::domain::notifications::{PendingNotification, ProduceNotification};
+use connectors::McpConnectionsService;
 use import_notion::domain::ports::NotionConnections;
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_select::ConnectorSelect;
 use uuid::Uuid;
 
 use super::super::ImportServiceImpl;
-use super::super::notion_workspace::report;
+use super::super::notion_workspace::{confirmed_import_ids, notice_import_ids, report};
 use crate::domain::models::{
-    ImportSource, NotionImportReport, NotionReportItem, ReviewedRun, RunStatus,
+    ImportSource, ImportStatus, NotionImportReport, NotionReportItem, ReviewedRun, RunErrorKind,
+    RunStatus, WrittenKind, explain_failure,
 };
 use crate::domain::ports::{
     CanonicalImportRepo, EntityCreator, ImportRepo, NotionPlanRepo, NotionRunRepo, Result,
@@ -33,7 +34,7 @@ const MAX_TEXT_CHARS: usize = 300;
 impl<R, S, C, W, N> ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + NotionPlanRepo + NotionRunRepo + WrittenObjects + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator + WorkspaceWriter,
     W: SlackWorkspaceSource,
     N: NotionConnections,
@@ -46,10 +47,11 @@ where
         user: &MacroUserIdStr<'static>,
         to: RunStatus,
         error: Option<&str>,
+        error_kind: Option<RunErrorKind>,
     ) -> Result<bool> {
         // Read before the run moves: once it has, the rows still claimed go
         // back to staged and no longer say they were part of this write.
-        let report = self.current_report(user).await?;
+        let report = self.report_with_write_counts(user, true).await?;
         let root_folder = self.repo.root_folder(user).await?;
         let source = self.workspace_source;
         let moved = self
@@ -59,9 +61,10 @@ where
                 &[RunStatus::Importing, RunStatus::Dismissed],
                 to,
                 error,
+                error_kind,
                 |run| {
                     let review = run.review?;
-                    let settlement = settlement(source, &report, root_folder, run)?;
+                    let settlement = settlement(source, &report, root_folder, run, error_kind)?;
                     produce(ProduceNotification {
                         session_id: review.session_id,
                         subject_id: review.review_id.to_string(),
@@ -85,12 +88,13 @@ where
         user: &MacroUserIdStr<'static>,
         to: RunStatus,
         error: Option<&str>,
+        error_kind: Option<RunErrorKind>,
     ) -> Result<bool> {
         let report = self.current_report(user).await?;
         let source = self.workspace_source;
         let moved = self
             .repo
-            .transition_reviewed_run(user, &[RunStatus::Running], to, error, |run| {
+            .transition_reviewed_run(user, &[RunStatus::Running], to, error, error_kind, |run| {
                 let review = run.review?;
                 if run.status != RunStatus::Ready {
                     return None;
@@ -113,6 +117,14 @@ where
         &self,
         user: &MacroUserIdStr<'static>,
     ) -> Result<NotionImportReport> {
+        self.report_with_write_counts(user, false).await
+    }
+
+    async fn report_with_write_counts(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        settling_write: bool,
+    ) -> Result<NotionImportReport> {
         let run = self
             .repo
             .list_runs(user)
@@ -123,9 +135,71 @@ where
             .repo
             .list(user, Some(self.workspace_source), None)
             .await?;
-        let mut report = report(run.as_ref(), &rows);
+        let ids = notice_import_ids(run.as_ref(), &rows);
+        let notices = self.repo.task_notice_counts(user, &ids).await?;
+        let mut report = report(run.as_ref(), &rows, &notices)?;
+        if self.workspace_source == ImportSource::Notion
+            && let Some(writes) = self
+                .confirmed_report_writes(run.as_ref(), user, &rows, settling_write)
+                .await?
+        {
+            report.imported = writes
+                .documents
+                .saturating_add(writes.databases)
+                .saturating_add(writes.task_lists);
+            report.documents = writes.documents;
+            report.databases = writes.databases;
+            report.database_rows = writes.database_rows;
+            report.task_rows = writes.tasks;
+            report.confirmed = Some(writes);
+        }
         report.on_team = self.repo.user_team_id(user).await?.is_some();
+        if let Some(hubspot) = report.hubspot.as_mut() {
+            // A record this import created carries its CRM marker; one it
+            // matched by natural key or linked from a teammate does not.
+            let imported: Vec<Uuid> = rows
+                .iter()
+                .filter(|row| {
+                    row.user_id == user.as_ref()
+                        && row.review_id.is_some()
+                        && row.review_id == report.review_id
+                        && row.status == ImportStatus::Imported
+                })
+                .map(|row| row.id)
+                .collect();
+            let created = self
+                .repo
+                .written(user, &imported)
+                .await?
+                .into_iter()
+                .filter(|object| object.kind == WrittenKind::CrmRecord)
+                .count();
+            hubspot.created = u32::try_from(created).unwrap_or(u32::MAX);
+            hubspot.linked =
+                u32::try_from(imported.len().saturating_sub(created)).unwrap_or(u32::MAX);
+        }
         Ok(report)
+    }
+
+    async fn confirmed_report_writes(
+        &self,
+        run: Option<&crate::domain::models::ImportRun>,
+        user: &MacroUserIdStr<'static>,
+        rows: &[crate::domain::models::ImportEntity],
+        settling_write: bool,
+    ) -> Result<Option<crate::domain::models::ConfirmedNotionWrites>> {
+        let finished = settling_write || run.is_some_and(|run| run.status == RunStatus::Completed);
+        let stopped = run.is_some_and(|run| {
+            run.review_id.is_some()
+                && matches!(run.status, RunStatus::Failed | RunStatus::Dismissed)
+        });
+        if !(finished || stopped) {
+            return Ok(None);
+        }
+        let ids = confirmed_import_ids(run, rows);
+        let writes = self.repo.confirmed_notion_writes(user, &ids).await?;
+        // A failed or dismissed planning run can have a review but no write receipts.
+        Ok((finished || writes != Default::default()).then_some(writes))
     }
 }
 
@@ -144,6 +218,7 @@ fn workspace(source: ImportSource) -> Option<ImportWorkspace> {
         ImportSource::Notion => Some(ImportWorkspace::Notion),
         ImportSource::Linear => Some(ImportWorkspace::Linear),
         ImportSource::Jira => Some(ImportWorkspace::Jira),
+        ImportSource::Hubspot => Some(ImportWorkspace::Hubspot),
         ImportSource::Slack => None,
     }
 }
@@ -166,6 +241,7 @@ fn settlement(
     report: &NotionImportReport,
     root_folder: Option<Uuid>,
     run: &ReviewedRun,
+    error_kind: Option<RunErrorKind>,
 ) -> Option<ImportSettlement> {
     let outcome = match run.status {
         RunStatus::Completed => ImportOutcome::Completed,
@@ -173,16 +249,37 @@ fn settlement(
         RunStatus::Dismissed => ImportOutcome::Cancelled,
         RunStatus::Running | RunStatus::Ready | RunStatus::Importing => return None,
     };
+    let failures = items(&report.failures);
+    let hand_items = items(&report.hand_items);
+    let details_truncated = report.settlement_lists_truncated
+        || (report.failure_count as usize) > failures.len()
+        || report.hand_items.len() > hand_items.len();
     Some(ImportSettlement {
+        warnings: report.warnings.clone(),
         source: workspace(source)?,
         outcome,
-        error: run.error.as_deref().map(bounded),
+        // A failed write says why from its kind; a cancelled or partial one
+        // keeps Macro's own sentence. Never the importer's raw error.
+        error: match run.status {
+            RunStatus::Failed => Some(bounded(&explain_failure(error_kind, source))),
+            _ => run.error.as_deref().map(bounded),
+        },
+        error_kind: (run.status == RunStatus::Failed)
+            .then_some(error_kind)
+            .flatten(),
         imported: report.imported,
         planned: report.copy + report.tasks,
         documents: report.documents,
         databases: report.databases,
         database_rows: report.database_rows,
-        task_lists: report.tasks,
+        partial_database_rows: report
+            .confirmed
+            .as_ref()
+            .map_or(0, |writes| writes.partial_database_rows),
+        task_lists: report
+            .confirmed
+            .as_ref()
+            .map_or(report.tasks, |writes| writes.task_lists),
         task_rows: report.task_rows,
         skipped: report.skip,
         not_written: report.waiting + report.writing,
@@ -190,8 +287,10 @@ fn settlement(
         already_in_macro: report.already_in_macro,
         waiting_on_teammates: report.waiting_on_teammates,
         root_folder_id: root_folder,
-        failures: items(&report.failures),
-        hand_items: items(&report.hand_items),
+        failures,
+        failure_count: Some(report.failure_count),
+        details_truncated,
+        hand_items,
     })
 }
 

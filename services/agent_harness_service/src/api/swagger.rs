@@ -140,6 +140,7 @@ impl Modify for SecurityAddon {
         crate::computers::claude::claude_sign_in_complete_handler,
         crate::computers::claude::claude_sign_out_handler,
         crate::computers::claude::claude_mode_handler,
+        crate::computers::screen::ticket_handler,
     ),
     components(schemas(
         team_agents::domain::voice::Voice,
@@ -221,10 +222,14 @@ impl Modify for SecurityAddon {
         ToolApprovalAnswerDto,
         ToolApprovalStatusDto,
         crate::computers::claude::ClaudeSignInStarted,
+        crate::computers::claude::ClaudeSignInError,
+        crate::computers::claude::SignInRecoveryCode,
         crate::computers::claude::ClaudeSignInComplete,
         crate::computers::claude::ClaudeSignedIn,
         crate::computers::claude::ClaudeModeResponse,
         crate::computers::claude::ClaudeAccountStatus,
+        crate::computers::screen::ScreenTicketRequest,
+        crate::computers::screen::ScreenTicket,
     )),
     tags(
         (name = "agent-sessions", description = "Agent sessions"),

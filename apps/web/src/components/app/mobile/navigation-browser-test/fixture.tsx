@@ -3,6 +3,7 @@
 import '@app/features/channel/Input/Input';
 import '@fontsource-variable/inter';
 import '../../../../index.css';
+import { MediaViewerDialog } from '@app/features/channel/Media/MediaViewerDialog';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
 import {
   createMemoryHistory,
@@ -32,15 +33,19 @@ import {
   resolveContentLocation,
   splitContentFromLocation,
 } from '@components/app/split-layout/split-router/legacy-route';
+import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
+import { ShareDialogFrame } from '@core/component/TopBar/ShareDialogFrame';
 import { blocks } from '@core/constant/allBlocks';
 import { createBlockOrchestrator } from '@core/orchestrator';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { receiveNotificationTap } from '@notifications/notification-navigation-intent';
 import { mockIPC } from '@tauri-apps/api/mocks';
-import { Button, Dialog } from '@ui';
+import { Button, Dialog, Dropdown } from '@ui';
 import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
 import { macroLightTheme } from '../../../../features/theme/themes/macro-light';
 import { createPushApi } from '../../../../lib/tauri/push-api';
+import { MobileCreateMenu } from '../MobileCreateMenu';
 import { MobileDrawer } from '../MobileDrawer';
 import { PickerSheet } from '../PickerSheet';
 
@@ -50,19 +55,69 @@ for (const [token, value] of Object.entries(macroLightTheme.colorTokens)) {
 document.documentElement.dataset.themeLight = 'true';
 
 const RECIPIENT = 'macro|fixture@example.com';
+/** A 1×1 photo, so the media viewer needs no service. */
+const PHOTO =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
 const [pressed, setPressed] = createSignal<string[]>([]);
 const press = (control: string) => setPressed((list) => [...list, control]);
 
-/** A document with the sheets a page opens: stacked ones and a dialog. */
+/**
+ * A document with the overlays a page opens: stacked sheets, a dialog, the
+ * full-screen media viewers, a menu, the share dialog and the create menu.
+ */
 function DocumentPage() {
   const [properties, setProperties] = createSignal(false);
   const [picker, setPicker] = createSignal(false);
   const [rename, setRename] = createSignal(false);
+  const [photo, setPhoto] = createSignal(false);
+  const [share, setShare] = createSignal(false);
   return (
     <div class="flex flex-col items-start gap-3 p-4 pt-16">
       <h1 class="text-lg font-semibold">Document</h1>
       <Button onClick={() => setProperties(true)}>Properties</Button>
       <Button onClick={() => setRename(true)}>Rename</Button>
+      <Button onClick={() => setPhoto(true)}>Photo</Button>
+      <Button onClick={() => setShare(true)}>Share</Button>
+      <Dropdown>
+        <Dropdown.Trigger>Options</Dropdown.Trigger>
+        <Dropdown.Content>
+          <Dropdown.Item onSelect={() => press('Duplicate')}>
+            Duplicate
+          </Dropdown.Item>
+        </Dropdown.Content>
+      </Dropdown>
+      {/* An image in an email, which holds its viewer's open state itself. */}
+      <div data-testid="gallery">
+        <ImageGalleryPreview
+          images={[{ id: 'image-one', width: 120, height: 80 }]}
+          attachmentIds={['image-one']}
+          variant="small"
+        />
+      </div>
+      <MediaViewerDialog
+        items={() => [
+          {
+            id: 'photo-one',
+            src: PHOTO,
+            fullSrc: PHOTO,
+            kind: 'image',
+            width: 1,
+            height: 1,
+          },
+        ]}
+        open={photo()}
+        onOpenChange={setPhoto}
+        currentIndex={() => 0}
+        onCurrentIndexChange={() => {}}
+      />
+      <ShareDialogFrame open={share()} onOpenChange={setShare}>
+        <h2 class="p-4">Share document</h2>
+      </ShareDialogFrame>
+      <MobileCreateMenu
+        items={[
+          { label: 'Note', icon: PlusIcon, onSelect: () => press('Note') },
+        ]}
+      />
       <MobileDrawer open={properties()} onOpenChange={setProperties}>
         <MobileDrawer.Portal>
           <MobileDrawer.Overlay />

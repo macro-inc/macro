@@ -28,5 +28,6 @@ pub(crate) struct ApiContext {
     /// The cap and pause every backfill in this task passes.
     pub backfill_gate: crate::domain::backfill_gate::BackfillGate,
     pub email_attachment_status_backfill: Arc<crate::EmailAttachmentStatusBackfill>,
+    pub deleted_chat_message_repair: Arc<crate::DeletedChatMessageRepair>,
     pub macro_event_broker: SpsEventBroker,
 }

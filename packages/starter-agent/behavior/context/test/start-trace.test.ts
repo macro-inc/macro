@@ -13,7 +13,12 @@ import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
 } from '@opentelemetry/sdk-trace-base';
-import { setupTraceparentVariable, traceStart } from '../telemetry.ts';
+import {
+  launchTimings,
+  launchTimingsVariable,
+  setupTraceparentVariable,
+  traceStart,
+} from '../telemetry.ts';
 
 const exporter = new InMemorySpanExporter();
 const contextManager = new AsyncLocalStorageContextManager();
@@ -130,4 +135,106 @@ test('the start ends while the event loop it began keeps running', async () => {
   expect(exporter.getFinishedSpans().map((span) => span.name)).toEqual([
     'agent.start',
   ]);
+});
+
+test('what ran before the start (loading the code, telemetry) is shown as its first steps', async () => {
+  exporter.reset();
+  const processStart = Date.now() - process.uptime() * 1000;
+  const loaded = processStart + 1_200;
+  const telemetry = loaded + 300;
+
+  await traceStart({}, async () => undefined, [
+    { name: 'agent.start.load', end: loaded },
+    { name: 'agent.start.telemetry', start: loaded, end: telemetry },
+  ]);
+
+  const spans = Object.fromEntries(
+    exporter.getFinishedSpans().map((span) => [span.name, span])
+  );
+  const ms = (time: [number, number] | undefined) =>
+    time === undefined ? 0 : time[0] * 1000 + time[1] / 1e6;
+  const start = spans['agent.start'];
+  const load = spans['agent.start.load'];
+  const setup = spans['agent.start.telemetry'];
+  for (const step of [load, setup])
+    expect(step?.parentSpanContext?.spanId).toBe(start?.spanContext().spanId);
+  // Loading starts with the process, as the start does.
+  expect(Math.abs(ms(load?.startTime) - ms(start?.startTime))).toBeLessThan(50);
+  expect(Math.abs(ms(load?.endTime) - loaded)).toBeLessThan(5);
+  expect(Math.abs(ms(setup?.startTime) - loaded)).toBeLessThan(5);
+  expect(Math.abs(ms(setup?.endTime) - telemetry)).toBeLessThan(5);
+});
+
+const milliseconds = ([seconds, nanoseconds]: readonly [number, number]) =>
+  seconds * 1000 + nanoseconds / 1e6;
+
+test("the launcher's steps are agent.launch spans under the start, which begins with the launcher", async () => {
+  exporter.reset();
+  const timings =
+    'started:1795000000000000,clone:1795000000010000:1795000000250000,lockfile:1795000000250000:1795000000300500,exec:1795000000301000';
+
+  await traceStart({ [launchTimingsVariable]: timings }, async (phase) =>
+    phase('agent.start.checks', async () => undefined)
+  );
+
+  const spans = Object.fromEntries(
+    exporter.getFinishedSpans().map((span) => [span.name, span])
+  );
+  const start = spans['agent.start'];
+  const launch = spans['agent.launch'];
+  expect(milliseconds(start?.startTime ?? [0, 0])).toBe(1795000000000);
+  expect(launch?.parentSpanContext?.spanId).toBe(start?.spanContext().spanId);
+  expect(milliseconds(launch?.startTime ?? [0, 0])).toBe(1795000000000);
+  expect(milliseconds(launch?.endTime ?? [0, 0])).toBe(1795000000301);
+  const clone = spans['agent.launch.clone'];
+  expect(clone?.parentSpanContext?.spanId).toBe(launch?.spanContext().spanId);
+  expect(milliseconds(clone?.startTime ?? [0, 0])).toBe(1795000000010);
+  expect(milliseconds(clone?.endTime ?? [0, 0])).toBe(1795000000250);
+  expect(
+    milliseconds(spans['agent.launch.lockfile']?.endTime ?? [0, 0])
+  ).toBeCloseTo(1795000000300.5, 3);
+  expect(spans['agent.start.checks']?.parentSpanContext?.spanId).toBe(
+    start?.spanContext().spanId
+  );
+});
+
+test('malformed launcher timings are ignored', () => {
+  expect(launchTimings(undefined)).toBeUndefined();
+  expect(launchTimings('')).toBeUndefined();
+  expect(launchTimings('started:1,exec:x')).toBeUndefined();
+  expect(launchTimings('started:1,clone:2,exec:3')).toBeUndefined();
+  expect(launchTimings('started:1000,exec:3000')).toEqual({
+    started: 1,
+    steps: [],
+    ended: 3,
+  });
+});
+
+test("the launcher's steps come before the process's own first steps, all under the start", async () => {
+  exporter.reset();
+  const processStart = Date.now() - process.uptime() * 1000;
+  const micros = (ms: number) => String(Math.round(ms * 1000));
+  const timings = `started:${micros(processStart - 500)},settings:${micros(processStart - 500)}:${micros(processStart - 400)},exec:${micros(processStart - 10)}`;
+
+  await traceStart(
+    { [launchTimingsVariable]: timings },
+    async () => undefined,
+    [{ name: 'agent.start.load', end: processStart + 100 }]
+  );
+
+  const spans = Object.fromEntries(
+    exporter.getFinishedSpans().map((span) => [span.name, span])
+  );
+  const start = spans['agent.start'];
+  const launch = spans['agent.launch'];
+  const load = spans['agent.start.load'];
+  for (const child of [launch, load])
+    expect(child?.parentSpanContext?.spanId).toBe(start?.spanContext().spanId);
+  expect(milliseconds(start?.startTime ?? [0, 0])).toBeCloseTo(
+    processStart - 500,
+    0
+  );
+  expect(milliseconds(launch?.endTime ?? [0, 0])).toBeLessThanOrEqual(
+    milliseconds(load?.startTime ?? [0, 0])
+  );
 });

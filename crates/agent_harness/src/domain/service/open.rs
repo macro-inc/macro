@@ -25,7 +25,6 @@ impl<
     PromptComposer,
     Egress,
     Lifecycle,
-    Mentions,
     Notifier,
 > agent_session::domain::ports::SessionOpener
     for AgentHarnessService<
@@ -37,7 +36,6 @@ impl<
         PromptComposer,
         Egress,
         Lifecycle,
-        Mentions,
         Notifier,
     >
 where
@@ -49,7 +47,6 @@ where
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
     Lifecycle: AgentSessionLifecyclePublisher,
-    Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
     async fn open_external_session(
@@ -290,7 +287,6 @@ impl<
     PromptComposer,
     Egress,
     Lifecycle,
-    Mentions,
     Notifier,
 >
     AgentHarnessInner<
@@ -302,7 +298,6 @@ impl<
         PromptComposer,
         Egress,
         Lifecycle,
-        Mentions,
         Notifier,
     >
 where
@@ -314,7 +309,6 @@ where
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
     Lifecycle: AgentSessionLifecyclePublisher,
-    Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
     /// A new session's instructions, ending with the workflows its owner's

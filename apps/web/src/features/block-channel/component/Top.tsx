@@ -1,3 +1,4 @@
+import { useViewTabHotkeys } from '@app/components/view-shell';
 import { withChannelTabIcons } from '@channel/Channel/channel-tab-icons';
 import type { ChannelTabId } from '@channel/Channel/channel-tabs';
 import { ChannelTopIcon } from '@channel/components/ChannelTopIcon';
@@ -8,14 +9,17 @@ import {
   SplitLabel,
   titleFileMenuMount,
 } from '@components/app/split-layout/components/SplitLabel';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import {
+  splitRootScope,
+  useSplitPanelOrThrow,
+} from '@components/app/split-layout/layoutUtils';
 import { useBlockId } from '@core/block';
 import { useChannelName } from '@core/context/channels';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ChannelParticipant } from '@queries/channel/types';
 import type { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { type TabOption, Tabs } from '@ui';
-import { Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 
 type TopProps = {
   channelType: ChannelType;
@@ -40,6 +44,16 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
   );
 
   const hasTabsMenu = () => !!(props.tabs?.length && props.onTabChange);
+  const [tabsElement, setTabsElement] = createSignal<HTMLElement>();
+  useViewTabHotkeys<ChannelTabId>({
+    scopeId: splitRootScope(panel),
+    enabled: () => panel.isPanelActive() && hasTabsMenu(),
+    tabs: tabsElement,
+    ids: () => (props.tabs ?? []).map((tab) => tab.value),
+    activeId: () => props.activeTab,
+    setActiveId: (id) => props.onTabChange?.(id),
+    label: (id) => props.tabs?.find((tab) => tab.value === id)?.label ?? id,
+  });
 
   return (
     <SplitHeaderLeft>
@@ -70,6 +84,7 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
         >
           {(isCollapsed) => (
             <Tabs
+              ref={setTabsElement}
               aria-label="Channel sections"
               size="sm"
               options={

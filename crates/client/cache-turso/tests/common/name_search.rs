@@ -41,6 +41,8 @@ pub async fn contract<S: Storage>(engine: &mut Engine<S>, scope: &HydrationScope
             limit: 7,
             now_ms: 0,
             cursor: None,
+            list_priority: vec![],
+            only_listed: false,
         };
         for _ in 0..3 {
             let mut expected =
@@ -75,6 +77,8 @@ pub async fn contract<S: Storage>(engine: &mut Engine<S>, scope: &HydrationScope
         limit: 1,
         now_ms: 0,
         cursor: None,
+        list_priority: vec![],
+        only_listed: false,
     };
     let PeopleSearchResult::Page { next_cursor, .. } =
         engine.search_people(&request).await.unwrap()
@@ -129,7 +133,9 @@ pub async fn contract<S: Storage>(engine: &mut Engine<S>, scope: &HydrationScope
                 sender_domain: None,
                 limit: 1,
                 now_ms: 0,
-                cursor: None
+                cursor: None,
+                list_priority: vec![],
+                only_listed: false,
             })
             .await
             .is_err()

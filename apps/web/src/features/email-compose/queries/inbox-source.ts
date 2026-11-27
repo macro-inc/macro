@@ -7,6 +7,12 @@ export type EmailInboxQuery = Pick<
   'data' | 'isSuccess' | 'isError' | 'isPending'
 >;
 
+type SendingInbox = EmailInbox &
+  Pick<
+    NonNullable<EmailInboxQuery['data']>['links'][number],
+    'macro_id' | 'draft_is_signal' | 'is_primary'
+  >;
+
 /** Expose available inbox metadata, including cached data after a failed refresh. */
 export function createEmailInboxSource(
   owner: Accessor<string | undefined>,
@@ -15,7 +21,7 @@ export function createEmailInboxSource(
 ) {
   const snapshot = createMemo<{
     owner: string | undefined;
-    inboxes: EmailInbox[];
+    inboxes: SendingInbox[];
   }>((previous) => {
     const id = owner();
     // A newly mounted source can use cached data after a failed refresh.
@@ -27,6 +33,9 @@ export function createEmailInboxSource(
       };
     const inboxes = (query.data?.links ?? []).map((inbox) => ({
       id: inbox.id,
+      macro_id: inbox.macro_id,
+      draft_is_signal: inbox.draft_is_signal,
+      is_primary: inbox.is_primary,
       provider: inbox.provider,
       email_address: inbox.email_address,
       photo_url: inbox.photo_url,

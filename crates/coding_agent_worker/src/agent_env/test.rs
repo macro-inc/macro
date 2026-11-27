@@ -106,3 +106,39 @@ fn an_environment_the_agent_already_runs_with_is_not_staged_again() {
     assert_eq!(staged, Staged::Unchanged);
     assert!(!path.exists());
 }
+
+#[test]
+fn the_setup_trace_is_staged_once_beside_the_environment_never_in_it() {
+    let (_dir, path) = inbox();
+    let trace = path.with_file_name("setup-traceparent");
+    let environment: std::collections::BTreeMap<_, _> =
+        [("MACRO_AGENT_NAME".to_owned(), "Ada".to_owned())]
+            .into_iter()
+            .collect();
+    let first = "00-11111111111111111111111111111111-2222222222222222-01";
+    let redelivered = "00-33333333333333333333333333333333-4444444444444444-01";
+
+    stage_setup_traceparent(&trace, Some(first)).unwrap();
+    stage_agent_env(&path, &installed(&path), &environment).unwrap();
+    // A redelivery carries a fresh trace context: the environment stays
+    // byte-identical (no restart) and the first context is kept.
+    stage_setup_traceparent(&trace, Some(redelivered)).unwrap();
+    stage_agent_env(&path, &installed(&path), &environment).unwrap();
+
+    assert_eq!(std::fs::read_to_string(&trace).unwrap(), first);
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        "MACRO_AGENT_NAME=\"Ada\"\n"
+    );
+}
+
+#[test]
+fn a_malformed_or_absent_setup_trace_stages_nothing() {
+    let (_dir, path) = inbox();
+    let trace = path.with_file_name("setup-traceparent");
+
+    stage_setup_traceparent(&trace, Some("00-not-a-trace")).unwrap();
+    stage_setup_traceparent(&trace, None).unwrap();
+
+    assert!(!trace.exists());
+}

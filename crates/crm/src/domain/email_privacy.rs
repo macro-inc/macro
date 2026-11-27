@@ -48,6 +48,10 @@ pub struct EmailPrivacySettings {
     pub team_domain_warnings: std::collections::BTreeMap<String, MailboxDomainConflict>,
     /// Existing personal exclusions that cover the caller's whole mailbox.
     pub personal_domain_warnings: std::collections::BTreeMap<String, MailboxDomainConflict>,
+    /// Team domains listed because their company is archived, mapped to that
+    /// company. They can't be removed until the company is restored. Empty for
+    /// members, who can't see archived companies.
+    pub archived_team_domains: std::collections::BTreeMap<String, Uuid>,
     /// Whether the caller can remove a team exclusion.
     pub can_remove_team_domains: bool,
 }
@@ -170,7 +174,10 @@ pub trait EmailPrivacyRepository: Clone + Send + Sync + 'static {
         change: EmailPrivacyChange,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
-    /// Admission check before metadata enrichment or contact ingestion.
+    /// Admission check before metadata enrichment or contact ingestion:
+    /// mailbox, membership, consent and the contact's domain. It reads no
+    /// message history; population checks eligible history in its own
+    /// transaction.
     fn may_contribute_contact(
         &self,
         team: Uuid,

@@ -36,7 +36,6 @@ roles_and_permissions = { path = "../roles_and_permissions", default-features = 
 http = { workspace = true }
 http-body-util = { workspace = true }
 macro_uuid = { path = "../macro_uuid" }
-mcp_select = { path = "../mcp_select" }
 mcp_toolset = { path = "../mcp_toolset" }
 memory = { path = "../memory" }
 model-entity = { path = "../model-entity" }

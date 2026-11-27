@@ -1,9 +1,6 @@
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { describe, expect, it } from 'vitest';
-import {
-  searchFiltersSchema,
-  searchNeedsKeywords,
-} from '../../next-soup/core/search-filters';
+import { searchFiltersSchema } from '../../next-soup/core/search-filters';
 import { compileSearchQuery } from '../../next-soup/core/search-query';
 import { resolveSearchFilters } from '../core/search';
 import { extractedSearchFields } from './extracted-search';
@@ -172,18 +169,6 @@ describe('model-owned search fields', () => {
       const result = resolveSearchFilters(filters, people, []);
       expect(result.unresolved).toEqual(['Julia']);
       expect(result.state.channels.from).toEqual(['Julia']);
-    }
-  });
-  it('requires keywords for message sender and call speaker constraints', () => {
-    for (const type of ['channels', 'calls'] as const) {
-      const state = searchFiltersSchema.parse({
-        type,
-        [type]: { in: [], from: [julia.id] },
-      });
-      expect(searchNeedsKeywords(state, '')).toBe(true);
-      expect(searchNeedsKeywords(state, '  ')).toBe(true);
-      expect(searchNeedsKeywords(state, 'pr')).toBe(false);
-      expect(searchNeedsKeywords(state, 'budget')).toBe(false);
     }
   });
 });

@@ -194,7 +194,7 @@ fn effect_queued_spans_the_wait_from_queue_to_start_under_the_purchase_trace() {
 }
 
 #[test]
-fn work_joins_the_purchase_trace_only_while_setup_runs() {
+fn work_joins_the_purchase_trace_only_during_the_first_start() {
     use crate::domain::ids::HostId;
     use crate::domain::lifecycle::{Billing, BillingPolicy, Context, Phase, provision};
 
@@ -239,6 +239,13 @@ fn work_joins_the_purchase_trace_only_while_setup_runs() {
             crate::domain::setup::PaymentProgress::Settled,
             now,
         );
+        // macrod connected, but the agent teammate hasn't reported online:
+        // handing it over is still part of the first start.
+        state.awaiting_agent = true;
+        let awaiting_agent = tracing::info_span!("awaiting_agent");
+        adopt(&awaiting_agent, &state);
+        drop(awaiting_agent.enter());
+        state.awaiting_agent = false;
         let after = tracing::info_span!("after");
         adopt(&after, &state);
         drop(after.enter());
@@ -248,6 +255,14 @@ fn work_joins_the_purchase_trace_only_while_setup_runs() {
     let during = spans.iter().find(|span| span.name == "during").unwrap();
     assert_eq!(
         during.span_context.trace_id().to_string(),
+        "11111111111111111111111111111111"
+    );
+    let awaiting_agent = spans
+        .iter()
+        .find(|span| span.name == "awaiting_agent")
+        .unwrap();
+    assert_eq!(
+        awaiting_agent.span_context.trace_id().to_string(),
         "11111111111111111111111111111111"
     );
     let after = spans.iter().find(|span| span.name == "after").unwrap();
@@ -366,4 +381,58 @@ fn capacity_gauges_each_host_and_the_fleet_sum() {
                 && point.contains("resource=disk_gib"))
     );
     assert_eq!(points.len(), 15);
+}
+
+#[tokio::test]
+async fn invite_purchase_phases_keep_the_parent_and_redact_errors() {
+    use tracing::instrument::WithSubscriber as _;
+
+    let exporter = InMemorySpanExporter::default();
+    let provider = SdkTracerProvider::builder()
+        .with_simple_exporter(exporter.clone())
+        .build();
+    let subscriber = tracing_subscriber::registry()
+        .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test")));
+
+    async {
+        async {
+            let result = invite_purchase_phase(true, "price", async { Ok::<_, ()>(12) }).await;
+            assert_eq!(result, Ok(12));
+
+            let result = invite_purchase_phase(true, "commit", async {
+                Err::<(), _>("synthetic diagnostic must stay private")
+            })
+            .await;
+            assert_eq!(result, Err("synthetic diagnostic must stay private"));
+
+            let result = invite_purchase_phase(false, "commit", async { Ok::<_, ()>(()) }).await;
+            assert_eq!(result, Ok(()));
+        }
+        .instrument(tracing::info_span!("team_agents.create"))
+        .await;
+    }
+    .with_subscriber(subscriber)
+    .await;
+
+    provider.force_flush().expect("flush spans");
+    let spans = exporter.get_finished_spans().expect("purchase trace");
+    let invite = spans
+        .iter()
+        .find(|span| span.name == "team_agents.create")
+        .expect("invite root");
+    let phases: Vec<_> = spans
+        .iter()
+        .filter(|span| span.name == "computer.purchase.invite_phase")
+        .collect();
+    assert_eq!(phases.len(), 2);
+    for (span, phase, outcome) in [(phases[0], "price", "ok"), (phases[1], "commit", "error")] {
+        assert_eq!(span.parent_span_id, invite.span_context.span_id());
+        assert_eq!(span.span_context.trace_id(), invite.span_context.trace_id());
+        assert!(span.attributes.contains(&KeyValue::new("phase", phase)));
+        assert!(span.attributes.contains(&KeyValue::new("outcome", outcome)));
+        assert!(!format!("{span:?}").contains("synthetic diagnostic must stay private"));
+        assert!(span.events.is_empty());
+    }
+    assert_eq!(phases[0].status, opentelemetry::trace::Status::Unset);
+    assert_eq!(phases[1].status, opentelemetry::trace::Status::error(""));
 }

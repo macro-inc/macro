@@ -84,7 +84,7 @@ where
     );
 
     ctx.effects
-        .connect_contacts(&link.macro_id, connections)
+        .connect_contacts(link, connections)
         .await
         .map_err(|e| {
             ProcessingError::NonRetryable(DetailedError {

@@ -96,6 +96,8 @@ Browser calls play a clear two-note ascending chime when you or another
 participant joins, and a descending chime when someone deliberately leaves.
 Both last under half a second. Joining an occupied call plays only your own
 join chime. Reconnects and recovery rejoins stay silent.
+Cues arriving within 1.5 seconds share one sound, including rapid leave/rejoin
+cycles. Suppressed announcements are remembered, not queued for later playback.
 
 **Settings → Notifications → Sounds → Call sounds** is on by default, independent
 of the notification-sounds switch. Join and Leave preview buttons play the fixed
@@ -103,7 +105,9 @@ cues. The shared volume slider and quiet-hours schedule apply. Guest browser
 calls use the default settings because they have no signed-in device profile.
 
 Call cues follow the speaker selected in the call controls; notification sounds
-and settings previews still use the system-default output. Mouse, touch, Enter,
+and settings previews still use the system-default output. Outside a call, or
+with no speaker selected, cues play without taking the device's audio session,
+so music or podcasts from other apps keep playing on iPhone. Mouse, touch, Enter,
 and Space activation unlock audio, including when enabling sounds. A browser
 that cannot resume audio promptly drops the cue rather than replaying it on a
 later click.
@@ -114,6 +118,21 @@ are best-effort: crashes, abrupt tab closure, legacy clients, and native CallKit
 sessions do not announce departures or joins. Native channel calls need a bridge
 extension before they can send or play these cues. Do not infer a leave from a
 missing participant, because recovery uses the same RTC removal events.
+
+Incoming channel-call ringing keeps its original 30-second deadline when duplicate
+start events arrive. Expiry, answer, decline, and end resolutions silence every
+tab and prevent delayed starts from restarting that ring, including answers on
+another device. Resolved calls also reject late system notifications, including
+notifications waiting for a caller name. Late starts cannot restore an ended call
+to the active-call cache; answered or declined calls can still remain active.
+Ring coordination owns the deadline and joined-state checks;
+the audio loop only repeats the phrase while that ownership remains active.
+`call.sound.play` traces record the cue kind and count; incoming rings also carry
+the opaque call ID, a scheduled outcome, and the audio-context state. Scheduling
+a ring does not prove audible playback, especially while the context is suspended.
+Remote participation playback nests `call.sound.play` and
+`audio.cue.play` under the presence receive span. The audio span distinguishes
+scheduled playback from audio that was not ready.
 
 To verify, join one browser call from two participants. Check each self join,
 the first participant hearing the second join, and both sides of a deliberate
@@ -230,8 +249,10 @@ contain only the call ID and tab kind, never transcript or message contents.
 
 ### Imported Granola meetings
 
-Adding Granola in **Settings → Agent connections** (Pipedream Connect, Granola
-Business or Enterprise API key) is the only setup; there are no sync controls.
+Adding Granola in **Settings → Integrations** (Granola Business or Enterprise
+API key) is the only setup; there are no sync controls. Sync needs a
+connection that provides Granola's API; one that does not (Macro Connect holds
+Granola as tools only) reads **Connected · Meetings don't sync**.
 Within about 30 seconds the backend registers a Granola webhook at the widest
 scope the key allows, and removing or disabling the connection stops sync. Notes
 whose first summary is generated, edited, or shared after that are imported as

@@ -1,0 +1,15 @@
+id: rust-workflows-typed-expressions
+valid:
+  - |
+    fn f() -> Expr<Bool> { needs("build").output("ok").is_true() }
+  - |
+    fn f() -> String { format!("echo ${{HOME}}") }
+invalid:
+  - |
+    fn f() -> Expression { Expression::new("github.ref == 'main'") }
+  - |
+    fn f() -> Expr<Bool> { raw::<Bool>("inputs.x") }
+  - |
+    fn f() -> &'static str { "${{ github.sha }}" }
+  - |
+    fn f() -> String { format!("pr-${{{{ github.run_id }}}}") }

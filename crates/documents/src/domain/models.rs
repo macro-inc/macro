@@ -5,7 +5,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model::document::response::DocumentResponseMetadata;
 use model::document::{DocumentMetadata, FileType};
 use model_owner::Owner;
-use models_permissions::share_permission::{LinkShareState, TeamLinkShareDefault};
+use models_permissions::share_permission::TeamLinkShareDefault;
 
 use super::response::DocumentResponse;
 use model::sync_service::SyncServiceVersionID;
@@ -369,16 +369,7 @@ pub struct CopyDocumentQueryParams {
     pub version_id: Option<i64>,
 }
 
-/// How a new document's link share is initialized.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum InitialLinkShare {
-    /// The entity-type default (md is PUBLIC/Edit), overridden only by the owner's team default.
-    #[default]
-    EntityDefault,
-    /// Exactly this state, already resolved by the caller. The document never carries the
-    /// entity-type default, not even between creation and a later update.
-    Exact(LinkShareState),
-}
+pub use models_permissions::share_permission::InitialLinkShare;
 
 /// A document to create, before its owner is known.
 ///
@@ -612,6 +603,9 @@ pub struct CreateTaskRequest {
     pub team_id: Option<uuid::Uuid>,
     /// Optional property values to set on the task.
     pub property_values: Option<Vec<PropertyInput>>,
+    /// Property definition IDs to pin in the first task snapshot. Omission keeps implicit defaults.
+    #[serde(default)]
+    pub pinned_property_definition_ids: Option<Vec<String>>,
     /// Whether to share the task with your team or not
     /// Defaults to true
     // An agent session that may not share gets a private task by default.

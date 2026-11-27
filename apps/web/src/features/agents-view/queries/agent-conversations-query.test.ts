@@ -23,6 +23,19 @@ describe('agentConversationsQuery', () => {
     });
   });
 
+  it('sends the selected ordering to the paged query', () => {
+    expect(
+      agentConversationsQuery(OWNER, { showUnlistedRuns: false }).params
+        .sort_method
+    ).toBe('updated_at');
+    expect(
+      agentConversationsQuery(OWNER, {
+        showUnlistedRuns: false,
+        sort: 'created',
+      }).params.sort_method
+    ).toBe('created_at');
+  });
+
   it('keeps unlisted sessions when asked to', () => {
     const { body } = agentConversationsQuery(OWNER, { showUnlistedRuns: true });
 

@@ -39,14 +39,16 @@ pub struct OnboardingRow {
     pub completed_at: Option<DateTime<Utc>>,
 }
 
-/// One of the user's MCP server connections, as the setup page sees it.
+/// One of the user's usable connections, an app or a server added by URL,
+/// as the setup page sees it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct ConnectedServer {
-    /// The server's display name.
+    /// The display name.
     pub name: String,
-    /// The server URL.
+    /// The app's slug, or the server's URL.
     pub url: String,
-    /// Whether the user has completed OAuth against it.
+    /// Whether it is usable; always true, since only usable connections are
+    /// listed.
     pub authenticated: bool,
 }
 
@@ -56,7 +58,7 @@ pub struct ConnectedServer {
 pub struct OnboardingState {
     /// The user's onboarding row.
     pub row: OnboardingRow,
-    /// The user's MCP server connections.
+    /// The user's usable connections.
     pub connected_servers: Vec<ConnectedServer>,
     /// The account email's domain when it can back a domain team — i.e. it
     /// is not a generic consumer provider — `None` otherwise. Judged with

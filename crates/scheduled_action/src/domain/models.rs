@@ -18,6 +18,7 @@ use routine_program::{AgentStep, StepRecord};
 
 use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
+use super::routine_limit::RoutineLimit;
 
 #[cfg(test)]
 mod test;
@@ -181,6 +182,12 @@ pub struct ActionConfiguration {
     /// What the routine is for, in the owner's words; empty when unset.
     #[serde(default)]
     pub description: String,
+    /// An icon and colour an agent picked for what the routine does. Saved
+    /// unless the owner chose the routine's appearance, which only the
+    /// appearance endpoint does; absent leaves the stored one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(nullable = false)]
+    pub appearance: Option<EntityAppearance>,
 }
 
 /// What saving a routine would find wrong, without saving it: the answer to
@@ -249,6 +256,11 @@ pub struct ActionConfigurationUpdate {
     /// An empty string clears it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// An icon and colour an agent picked, as on create. Saved only when the
+    /// update is made for the routine's owner; skipped for anyone else.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(nullable = false)]
+    pub appearance: Option<EntityAppearance>,
 }
 
 impl ActionConfigurationUpdate {
@@ -265,6 +277,7 @@ impl ActionConfigurationUpdate {
             description: self
                 .description
                 .unwrap_or_else(|| stored.description.clone()),
+            appearance: self.appearance,
         }
     }
 }
@@ -278,14 +291,23 @@ pub enum ActionPolicyError {
     NoFutureFirings,
     #[error("event-trigger management is not enabled")]
     EventManagementDisabled,
+    #[error("email label triggers are not enabled")]
+    EmailLabelsDisabled,
     #[error("trigger conditions are not enabled")]
     ConditionsDisabled,
     #[error("connect GitHub before enabling a GitHub trigger")]
     GithubNotLinked,
+    #[error("pick only inboxes you have connected or that are shared with you")]
+    UnknownInboxes,
     #[error("a routine description can be at most {MAX_DESCRIPTION_CHARS} characters")]
     DescriptionTooLong,
     #[error("scheduled action changed or is running; reload before updating")]
     UpdateConflict,
+    #[error(
+        "You've reached your plan's limit of {} active routines. Pause or delete a routine to activate another.",
+        .0.max_active()
+    )]
+    RoutineLimitReached(RoutineLimit),
     #[error("{0}")]
     InvalidAppearance(String),
     #[error("only a routine suggestion session may suggest routines")]
@@ -611,6 +633,10 @@ pub struct ExecutionResult {
     /// What started the run and when, for runs of programs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub run: Option<RunInfo>,
+    /// The owner stopped the run before it finished. Older records, and
+    /// replicas built before it, leave it out.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub stopped: bool,
 }
 
 impl ExecutionResult {
@@ -623,6 +649,7 @@ impl ExecutionResult {
             steps: Vec::new(),
             configuration_revision: None,
             run: None,
+            stopped: false,
         }
     }
 
@@ -635,6 +662,12 @@ impl ExecutionResult {
     /// What started the run and when.
     pub fn with_run(mut self, run: Option<RunInfo>) -> Self {
         self.run = run;
+        self
+    }
+
+    /// Whether the owner stopped the run.
+    pub fn with_stopped(mut self, stopped: bool) -> Self {
+        self.stopped = stopped;
         self
     }
 
