@@ -11,6 +11,7 @@ use tui_input::Input;
 use super::agent_catalog::{self, DetectedAgent, PathCommands};
 use super::api::{HarnessSelfApi, Snapshot, dashboard_client};
 use super::config_form::{ConfigForm, Setting, settings};
+use super::health::{self, Health, Viewer};
 use super::input::handle_text_input;
 use super::logging::LogBuffer;
 use super::platform::{BrowserTarget, copy_to_clipboard};
@@ -124,6 +125,10 @@ pub(crate) struct App {
     pub(crate) spinner: usize,
     pub(crate) logs: LogBuffer,
     pub(crate) daemon: Option<Daemon>,
+    /// Where this terminal can be seen, and the check keeping that current
+    /// once [`App::watch_viewer`] starts it.
+    viewer: tokio::sync::watch::Receiver<Viewer>,
+    _viewer_watch: Option<tokio_util::task::AbortOnDropHandle<()>>,
     /// The agent the previous macrod handed over, relayed by the first start.
     inherited: Option<InheritedAgent>,
     /// A release staged for the next launch (Windows), shown until restart.
@@ -167,6 +172,8 @@ impl App {
             spinner: 0,
             logs,
             daemon: None,
+            viewer: tokio::sync::watch::channel(Viewer::Terminal).1,
+            _viewer_watch: None,
             inherited,
             update_ready: None,
             update_log: crate::update::log::user_log_path(),
@@ -181,12 +188,31 @@ impl App {
         self.daemon.as_ref().is_some_and(Daemon::is_running)
     }
 
-    /// (Re)start the serving core on the current config and credential.
-    /// Whether this process currently holds a runtime connection.
-    pub(crate) fn runtime_connected(&self) -> bool {
-        self.daemon.as_ref().is_some_and(Daemon::runtime_connected)
+    /// Start finding out where this terminal can be seen. The panel calls it
+    /// once it runs, so loading the app starts no background work.
+    pub(crate) fn watch_viewer(&mut self) {
+        (self.viewer, self._viewer_watch) = health::watch_viewer();
     }
 
+    /// The daemon, runtime, trigger stream and viewer, each as it is now.
+    pub(crate) fn health(&self) -> Health {
+        let running = self.daemon.as_ref().filter(|daemon| daemon.is_running());
+        let held = running.is_some_and(Daemon::runtime_connected);
+        let service = self
+            .snapshot
+            .harness
+            .as_ref()
+            .map(|harness| harness.connected);
+        let stream = running.map(|daemon| daemon.trigger_stream_health().borrow().clone());
+        Health {
+            daemon: health::daemon(self.paired(), running.is_some()),
+            runtime: health::runtime(running.is_some(), held, service),
+            triggers: health::triggers(stream.as_ref(), tokio::time::Instant::now()),
+            viewer: self.viewer.borrow().clone(),
+        }
+    }
+
+    /// (Re)start the serving core on the current config and credential.
     pub(crate) async fn restart_daemon(&mut self) -> bool {
         if let Some(daemon) = self.daemon.take() {
             daemon.stop().await;
