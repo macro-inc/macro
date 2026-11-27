@@ -23,6 +23,7 @@ export default defineConfig({
     'search-buckets.browser.e2e.ts',
     'people-references.browser.e2e.ts',
     'people-list-order.browser.e2e.ts',
+    'deleted-documents.browser.e2e.ts',
   ],
   timeout: 90_000,
   fullyParallel: false,
