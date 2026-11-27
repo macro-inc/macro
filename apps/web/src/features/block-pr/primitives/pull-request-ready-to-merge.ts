@@ -1,3 +1,7 @@
+import type { GithubPullRequestMergeability } from '@service-auth/generated/schemas';
+
+export const PULL_REQUEST_CONFLICT_REASON =
+  'This pull request has merge conflicts';
 /** A check run, as far as merge readiness needs it. */
 export type PullRequestCheck = {
   status?: string | null;
@@ -10,14 +14,17 @@ const PASSING_CONCLUSIONS = new Set(['success', 'skipped', 'neutral']);
 /**
  * Merge is offered for an open pull request that is not a draft and whose
  * checks have all finished without failing. No checks, a check still running,
- * or a failing check is not passing CI.
+ * or a failing check is not passing CI. Known conflicts block merging; unknown
+ * mergeability does not.
  */
 export function pullRequestReadyToMerge(input: {
   status: string | null | undefined;
   draft?: boolean | null;
   checks?: readonly PullRequestCheck[] | null;
+  mergeability?: GithubPullRequestMergeability | null;
 }): boolean {
   if (input.status !== 'open' || input.draft === true) return false;
+  if (input.mergeability === 'conflicting') return false;
   const checks = input.checks;
   if (!checks || checks.length === 0) return false;
   return checks.every(

@@ -53067,6 +53067,17 @@
             "description": "The id of the pull request review this comment was submitted with.\nOnly ever present on `review_comment` sources.",
             "minimum": 0
           },
+          "reviewState": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GithubPullRequestReviewState",
+                "description": "The submitted review's state; absent on ordinary comments."
+              }
+            ]
+          },
           "source": {
             "type": "string",
             "description": "The GitHub source for the comment, such as `issue_comment` or `review_comment`."
@@ -68621,6 +68632,10 @@
             },
             "description": "Comments from the pull request's conversation, reviews, and review threads.\nComment `authorId` intentionally retains the shared numeric GitHub comment contract;\nconvert it to a decimal string before comparing it with `authorGithubUserId`."
           },
+          "defaultBranch": {
+            "type": ["string", "null"],
+            "description": "The base repository's default branch, when known."
+          },
           "deletions": {
             "type": ["integer", "null"],
             "format": "int64",
@@ -68634,6 +68649,11 @@
           "draft": {
             "type": "boolean",
             "description": "Whether the pull request is a draft."
+          },
+          "githubCreatedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When GitHub opened the pull request; unknown until the next sync for older rows."
           },
           "githubKey": {
             "type": "string",
@@ -68667,6 +68687,16 @@
             },
             "description": "The pull request's labels."
           },
+          "linkedMacroUsers": {
+            "type": "object",
+            "description": "GitHub user ids linked to Macro users within the record's source, resolved at read time.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
           "number": {
             "type": "integer",
             "format": "int64",
@@ -68686,6 +68716,13 @@
               "type": "string"
             },
             "description": "Stable numeric GitHub user ids of the users asked to review."
+          },
+          "requestedReviewers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GithubPullRequestUser"
+            },
+            "description": "The users asked to review."
           },
           "reviewDecision": {
             "oneOf": [

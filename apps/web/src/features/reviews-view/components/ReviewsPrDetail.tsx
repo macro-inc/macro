@@ -71,7 +71,11 @@ function ReviewsPrBreadcrumb(props: {
 export function ReviewsPrDetail(props: { foreignEntityId: string }) {
   const analytics = useAnalytics();
   const detail = usePrDetail(() => props.foreignEntityId);
-  const actions = createPrActions(detail.data, confirmMergePullRequest);
+  const actions = createPrActions(
+    detail.data,
+    confirmMergePullRequest,
+    detail.mergeability
+  );
   const operations = usePrFileOperations(detail.data, actions);
   const name = () => {
     const data = detail.data();

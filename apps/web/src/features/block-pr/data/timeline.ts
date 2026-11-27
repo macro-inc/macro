@@ -46,8 +46,8 @@ function threadRootId(
  * enrich endpoint returns them) with Macro discussion threads into a single
  * timestamp-ordered timeline. Review comments that reply to another comment
  * are grouped under their thread root, which carries the group's timestamp.
- * Empty bodies (e.g. approve-only reviews) are dropped; when a thread root's
- * body cleans to empty its earliest reply takes its place.
+ * Submitted reviews retain their state even without a body. Empty commented
+ * reviews only anchor visible review threads; empty ordinary roots give way to replies.
  */
 export function buildTimeline(
   githubItems: GithubPullRequestComment[],
@@ -58,13 +58,19 @@ export function buildTimeline(
 
   // Group before any filtering so a dropped root (empty body, hidden bot)
   // cannot orphan its replies.
-  const byId = new Map(githubItems.map((item) => [item.id, item] as const));
-  const groups = new Map<number, GithubPullRequestComment[]>();
+  // GitHub allocates review, issue-comment, and diff-comment ids independently.
+  const byId = new Map(
+    githubItems
+      .filter((item) => item.source === 'review_comment')
+      .map((item) => [item.id, item] as const)
+  );
+  const groups = new Map<string, GithubPullRequestComment[]>();
   for (const item of githubItems) {
     const rootId = threadRootId(item, byId);
-    const group = groups.get(rootId);
+    const key = `${item.source}:${rootId}`;
+    const group = groups.get(key);
     if (group) group.push(item);
-    else groups.set(rootId, [item]);
+    else groups.set(key, [item]);
   }
 
   for (const group of groups.values()) {
@@ -78,7 +84,10 @@ export function buildTimeline(
     }
     const [root, ...replies] = group
       .map((item) => ({ ...item, body: normalizeGithubMarkdown(item.body) }))
-      .filter((item) => item.body)
+      .filter(
+        (item) =>
+          item.body || (item.source === 'review' && item.reviewState != null)
+      )
       .sort((a, b) => timestamp(a.createdAt) - timestamp(b.createdAt));
     if (!root) continue;
     entries.push({
@@ -125,5 +134,27 @@ export function buildTimeline(
     });
   }
 
-  return entries.sort((a, b) => a.ts - b.ts);
+  const threadedReviewIds = new Set(
+    entries.flatMap((entry) => {
+      if (
+        entry.kind !== 'github-comment' ||
+        entry.item.pullRequestReviewId == null
+      )
+        return [];
+      return [entry.item.pullRequestReviewId];
+    })
+  );
+  return entries
+    .filter((entry) => {
+      if (entry.kind !== 'github-comment') return true;
+      const review = entry.item;
+      if (
+        review.source !== 'review' ||
+        review.body ||
+        review.reviewState !== 'commented'
+      )
+        return true;
+      return threadedReviewIds.has(review.id);
+    })
+    .sort((a, b) => a.ts - b.ts);
 }

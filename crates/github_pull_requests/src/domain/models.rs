@@ -103,6 +103,12 @@ pub struct GithubPullRequestRow {
     pub participant_github_user_ids: Vec<String>,
     /// When GitHub last updated the pull request.
     pub github_updated_at: Option<DateTime<Utc>>,
+    /// When GitHub opened the pull request.
+    pub github_created_at: Option<DateTime<Utc>>,
+    /// The users asked to review.
+    pub requested_reviewers: Vec<GithubPullRequestUser>,
+    /// The base repository's default branch.
+    pub default_branch: Option<String>,
     /// The users assigned to the pull request.
     pub assignees: Vec<GithubPullRequestUser>,
     /// The pull request's labels.
@@ -141,6 +147,9 @@ impl GithubPullRequestRow {
                 .participant_github_user_ids
                 .unwrap_or_default(),
             github_updated_at: pull_request.github_updated_at,
+            github_created_at: pull_request.github_created_at,
+            requested_reviewers: pull_request.requested_reviewers.unwrap_or_default(),
+            default_branch: pull_request.default_branch,
             assignees: pull_request.assignees.unwrap_or_default(),
             labels: pull_request.labels.unwrap_or_default(),
             review_decision: GithubPullRequestReviewDecision::derive(
@@ -191,6 +200,12 @@ pub struct GithubPullRequestWrite {
     pub participant_github_user_ids: Option<Vec<String>>,
     /// GitHub update time, if supplied.
     pub github_updated_at: Option<DateTime<Utc>>,
+    /// GitHub opening time, if supplied.
+    pub github_created_at: Option<DateTime<Utc>>,
+    /// Requested reviewers, if supplied; an empty list clears requests.
+    pub requested_reviewers: Option<Vec<GithubPullRequestUser>>,
+    /// Base repository default branch, if supplied.
+    pub default_branch: Option<String>,
     /// Assignees, if supplied.
     pub assignees: Option<Vec<GithubPullRequestUser>>,
     /// Labels, if supplied.
@@ -232,6 +247,9 @@ impl GithubPullRequestWrite {
                 .clone(),
             participant_github_user_ids: pull_request.participant_github_user_ids.clone(),
             github_updated_at: pull_request.github_updated_at,
+            github_created_at: pull_request.github_created_at,
+            requested_reviewers: pull_request.requested_reviewers.clone(),
+            default_branch: pull_request.default_branch.clone(),
             assignees: pull_request.assignees.clone(),
             labels: pull_request.labels.clone(),
             reviews: pull_request.reviews.clone(),
@@ -264,6 +282,9 @@ impl GithubPullRequestWrite {
                 requested_reviewer_github_user_ids: Vec::new(),
                 participant_github_user_ids: Vec::new(),
                 github_updated_at: None,
+                github_created_at: None,
+                requested_reviewers: Vec::new(),
+                default_branch: None,
                 assignees: Vec::new(),
                 labels: Vec::new(),
                 reviews: Vec::new(),
@@ -284,6 +305,11 @@ impl GithubPullRequestWrite {
             .or(row.author_github_user_id);
         row.author_login = self.author_login.clone().or(row.author_login);
         row.github_updated_at = self.github_updated_at.or(row.github_updated_at);
+        row.github_created_at = self.github_created_at.or(row.github_created_at);
+        row.default_branch = self.default_branch.clone().or(row.default_branch);
+        if let Some(reviewers) = &self.requested_reviewers {
+            row.requested_reviewers = reviewers.clone();
+        }
         if let Some(requests) = &self.requested_reviewer_github_user_ids {
             row.requested_reviewer_github_user_ids = requests.clone();
         }
@@ -338,6 +364,9 @@ impl From<&GithubPullRequestRow> for GithubPullRequestWrite {
             ),
             participant_github_user_ids: Some(row.participant_github_user_ids.clone()),
             github_updated_at: row.github_updated_at,
+            github_created_at: row.github_created_at,
+            requested_reviewers: Some(row.requested_reviewers.clone()),
+            default_branch: row.default_branch.clone(),
             assignees: Some(row.assignees.clone()),
             labels: Some(row.labels.clone()),
             reviews: Some(row.reviews.clone()),
@@ -417,6 +446,18 @@ pub struct StoredGithubPullRequest {
     /// When GitHub last updated the pull request.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub github_updated_at: Option<DateTime<Utc>>,
+    /// When GitHub opened the pull request; unknown until the next sync for older rows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub github_created_at: Option<DateTime<Utc>>,
+    /// The users asked to review.
+    #[serde(default)]
+    pub requested_reviewers: Vec<GithubPullRequestUser>,
+    /// The base repository's default branch, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_branch: Option<String>,
+    /// GitHub user ids linked to Macro users within the record's source, resolved at read time.
+    #[serde(default)]
+    pub linked_macro_users: std::collections::BTreeMap<String, String>,
     /// The branch and commit the pull request merges into, when known.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub base: Option<GitRefDto>,
@@ -466,6 +507,10 @@ impl StoredGithubPullRequest {
             comments: pull_request.comments.unwrap_or_default(),
             checks: pull_request.checks.unwrap_or_default(),
             github_updated_at: row.github_updated_at,
+            github_created_at: row.github_created_at,
+            requested_reviewers: row.requested_reviewers,
+            default_branch: row.default_branch,
+            linked_macro_users: std::collections::BTreeMap::new(),
             base: row.base.map(Into::into),
             head: row.head.map(Into::into),
         })

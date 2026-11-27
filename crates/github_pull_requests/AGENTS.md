@@ -39,6 +39,18 @@ lists visible PRs.
   → the merge rule in `src/domain/models.rs` that decides how it's refreshed.
 - Add a changeset/diff capability: `src/domain/service.rs` (`changes` module)
   → `src/outbound/s3_patch_store.rs` → `git_patch` if the diff shape changes.
+- PR typed rows also store nullable GitHub opening time and default branch, plus
+  requested reviewer users alongside indexed reviewer ids. Sparse updates retain
+  omitted values; supplied empty reviewer lists clear requests. Older rows fill on sync.
+- Detail reads return `linkedMacroUsers` from current GitHub links, never stored
+  metadata. Resolve author, assignees, reviewers, and numeric comment authors in
+  one lookup scoped to the record's source. Shared outsiders receive no team
+  identities; personal records resolve only their owner. Prefer the viewer when
+  several members link one GitHub account, otherwise the lowest Macro id.
+- The people lookup (`src/outbound/pg_github_pull_request_repo/linked_macro_users.sql`)
+  resolves viewer links first and materializes link-derived users before filtering
+  team membership, preventing stale statistics from scanning the whole team.
+  Its span records only asked/linked counts, never Macro ids.
 
 ## Checks
 

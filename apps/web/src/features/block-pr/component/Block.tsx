@@ -14,7 +14,11 @@ import { PrSidePanelSections } from './sidepanel/PrSidePanelSections';
 export default function PrBlock() {
   const foreignEntityId = useBlockId();
   const detail = usePrDetail(() => foreignEntityId);
-  const actions = createPrActions(detail.data, confirmMergePullRequest);
+  const actions = createPrActions(
+    detail.data,
+    confirmMergePullRequest,
+    detail.mergeability
+  );
   return (
     <div class="size-full overflow-hidden flex flex-col relative">
       <SidePanel.Layout floating headerToggle={!isTouchDevice()}>

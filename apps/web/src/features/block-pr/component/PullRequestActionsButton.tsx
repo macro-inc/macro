@@ -8,7 +8,7 @@ import type { PrActions } from '../primitives/create-pr-actions';
 /**
  * The pull request header's split button: Merge, or Ready for review for a
  * draft, with the other state changes (convert to draft, close) behind the
- * chevron. Merge stays visible but disabled until every check passes.
+ * chevron. Merge stays visible but disabled until checks pass and no conflict is known.
  */
 export function PullRequestActionsButton(props: { actions: PrActions }) {
   return (

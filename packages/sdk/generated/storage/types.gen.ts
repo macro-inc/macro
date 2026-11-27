@@ -13093,6 +13093,7 @@ export type GithubPullRequestComment = {
      * Only ever present on `review_comment` sources.
      */
     pullRequestReviewId?: number | null;
+    reviewState?: null | GithubPullRequestReviewState;
     /**
      * The GitHub source for the comment, such as `issue_comment` or `review_comment`.
      */
@@ -22996,6 +22997,10 @@ export type StoredGithubPullRequest = {
      */
     comments: Array<GithubPullRequestComment>;
     /**
+     * The base repository's default branch, when known.
+     */
+    defaultBranch?: string | null;
+    /**
      * Lines deleted across the pull request's changes.
      */
     deletions?: number | null;
@@ -23007,6 +23012,10 @@ export type StoredGithubPullRequest = {
      * Whether the pull request is a draft.
      */
     draft: boolean;
+    /**
+     * When GitHub opened the pull request; unknown until the next sync for older rows.
+     */
+    githubCreatedAt?: string | null;
     /**
      * The pull request's `owner/repo/pull/number` key.
      */
@@ -23025,6 +23034,12 @@ export type StoredGithubPullRequest = {
      */
     labels: Array<GithubPullRequestLabel>;
     /**
+     * GitHub user ids linked to Macro users within the record's source, resolved at read time.
+     */
+    linkedMacroUsers?: {
+        [key: string]: string;
+    };
+    /**
      * The pull request number within its repository.
      */
     number: number;
@@ -23040,6 +23055,10 @@ export type StoredGithubPullRequest = {
      * Stable numeric GitHub user ids of the users asked to review.
      */
     requestedReviewerGithubUserIds: Array<string>;
+    /**
+     * The users asked to review.
+     */
+    requestedReviewers?: Array<GithubPullRequestUser>;
     reviewDecision?: null | GithubPullRequestReviewDecision;
     /**
      * Each reviewer's latest submitted review.

@@ -101,16 +101,19 @@ impl GithubPullRequestIndexRepository for PgGithubPullRequestRepo {
         let assignees = json(serde_json::to_value(&row.assignees))?;
         let labels = json(serde_json::to_value(&row.labels))?;
         let reviews = json(serde_json::to_value(&row.reviews))?;
+        let requested_reviewers = json(serde_json::to_value(&row.requested_reviewers))?;
         let inserted = sqlx::query!(
             r#"
             INSERT INTO github_pull_request (
                 github_key, repository_id, number, owner, repo, title, status, draft,
                 author_github_user_id, author_login, requested_reviewer_github_user_ids,
                 participant_github_user_ids, github_updated_at, assignees, labels, reviews,
-                review_decision, base_ref, base_sha, head_ref, head_sha
+                review_decision, base_ref, base_sha, head_ref, head_sha,
+                github_created_at, requested_reviewers, default_branch
             ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-                $14::jsonb, $15::jsonb, $16::jsonb, $17, $18, $19, $20, $21
+                $14::jsonb, $15::jsonb, $16::jsonb, $17, $18, $19, $20, $21,
+                $22, $23::jsonb, $24
             )
             ON CONFLICT DO NOTHING
             "#,
@@ -135,6 +138,9 @@ impl GithubPullRequestIndexRepository for PgGithubPullRequestRepo {
             row.base.as_ref().and_then(|base| base.sha.as_deref()),
             row.head.as_ref().and_then(|head| head.name.as_deref()),
             row.head.as_ref().and_then(|head| head.sha.as_deref()),
+            row.github_created_at,
+            requested_reviewers,
+            row.default_branch.as_deref(),
         )
         .execute(&mut *tx)
         .await?

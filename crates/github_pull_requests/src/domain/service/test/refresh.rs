@@ -78,3 +78,68 @@ async fn partial_refresh_defers_a_new_typed_row_until_retry_succeeds() {
     assert_eq!(rows.rows().len(), 1);
     assert_eq!(rows.rows()[0].status, Some(GithubPullRequestStatus::Closed));
 }
+
+#[tokio::test]
+async fn detail_people_lookup_collects_every_author_once_and_guards_personal_sources() {
+    use crate::domain::models::GithubPullRequestUser;
+
+    let metadata = serde_json::json!({
+        "githubKey":GITHUB_KEY, "owner":"macro", "repo":"app", "number":7,
+        "url":"https://github.com/macro/app/pull/7", "displayName":"PR",
+        "authorId":1,
+        "assignees":[{"githubUserId":"2"}],
+        "requestedReviewers":[{"githubUserId":"3"}],
+        "reviews":[{"reviewerGithubUserId":"4", "state":"approved"}],
+        "comments":[{"id":10,"body":"Review", "authorId":5, "source":"review_comment"},
+                    {"id":11,"body":"Reply", "authorId":1, "source":"issue_comment"}]
+    });
+    let record = stored_record(&team(), metadata.clone());
+    let foreign_entities = StubForeignEntityService::with_records(vec![record.clone()]);
+    let rows = StubPullRequestRows::default();
+    let service = service(&foreign_entities, &rows);
+    let result = service
+        .get_pull_request(view_receipt(&record))
+        .await
+        .unwrap();
+    assert!(result.linked_macro_users.is_empty());
+    assert_eq!(
+        rows.people_requests.lock().unwrap().as_slice(),
+        &[(
+            vec!["1".into(), "2".into(), "3".into(), "4".into(), "5".into()],
+            team()
+        )]
+    );
+
+    let outsider_record = stored_record(&SourceId::user("macro|outside@example.com"), metadata);
+    foreign_entities
+        .state
+        .lock()
+        .unwrap()
+        .records
+        .push(outsider_record.clone());
+    assert!(
+        service
+            .get_pull_request(view_receipt(&outsider_record))
+            .await
+            .unwrap()
+            .linked_macro_users
+            .is_empty()
+    );
+    assert_eq!(rows.people_requests.lock().unwrap().len(), 1);
+
+    // The typed row wins over stale record metadata when choosing people to resolve.
+    let mut typed = GithubPullRequestRow::from_metadata(&record.metadata).unwrap();
+    typed.assignees = vec![GithubPullRequestUser {
+        github_user_id: "6".into(),
+        login: None,
+    }];
+    rows.rows.lock().unwrap().push(typed);
+    service
+        .get_pull_request(view_receipt(&record))
+        .await
+        .unwrap();
+    assert_eq!(
+        rows.people_requests.lock().unwrap()[1].0,
+        vec!["1", "3", "4", "5", "6"]
+    );
+}

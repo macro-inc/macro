@@ -10,8 +10,9 @@ import { ENABLE_PR_DISCUSSION_INPUT } from '@core/constant/featureFlags';
 import CaretDown from '@icon/system/regular/caret-down.svg';
 import CaretRight from '@icon/system/regular/caret-right.svg';
 import type { GithubPullRequestComment } from '@service-storage/generated/schemas';
+import { Key } from '@solid-primitives/keyed';
 import { ToggleSwitch } from '@ui';
-import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
+import { createMemo, createSignal, Match, Show, Switch } from 'solid-js';
 
 import { buildTimeline } from '../data/timeline';
 import { isGithubBotLogin } from '../util/githubMarkdown';
@@ -82,25 +83,46 @@ export function PrTimeline(props: {
         <DiscussionProvider source={props.source}>
           <StaticMarkdownContext>
             <div class="py-2 flex flex-col text-xs">
-              <For each={entries()}>
-                {(entry) => (
-                  <Switch>
-                    <Match when={entry.kind === 'github-comment' && entry}>
-                      {(commentEntry) => (
-                        <GithubMessageView
-                          comment={commentEntry().item}
-                          replies={commentEntry().replies}
-                        />
-                      )}
-                    </Match>
-                    <Match when={entry.kind === 'macro-thread' && entry}>
-                      {(threadEntry) => (
-                        <DiscussionThreadView thread={threadEntry().thread} />
-                      )}
-                    </Match>
-                  </Switch>
-                )}
-              </For>
+              <Key
+                each={entries()}
+                by={(entry) =>
+                  entry.kind === 'github-comment'
+                    ? `github:${entry.item.source}:${entry.item.id}`
+                    : `macro:${entry.thread.id}`
+                }
+              >
+                {(entry) => {
+                  const comment = () => {
+                    const current = entry();
+                    return current.kind === 'github-comment'
+                      ? current
+                      : undefined;
+                  };
+                  const thread = () => {
+                    const current = entry();
+                    return current.kind === 'macro-thread'
+                      ? current
+                      : undefined;
+                  };
+                  return (
+                    <Switch>
+                      <Match when={comment()}>
+                        {(commentEntry) => (
+                          <GithubMessageView
+                            comment={commentEntry().item}
+                            replies={commentEntry().replies}
+                          />
+                        )}
+                      </Match>
+                      <Match when={thread()}>
+                        {(threadEntry) => (
+                          <DiscussionThreadView thread={threadEntry().thread} />
+                        )}
+                      </Match>
+                    </Switch>
+                  );
+                }}
+              </Key>
 
               <Show when={ENABLE_PR_DISCUSSION_INPUT && props.source.canEdit()}>
                 <div class="pt-2">

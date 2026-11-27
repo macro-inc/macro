@@ -48,6 +48,11 @@ function pullRequest(
   return {
     id: 'pr-1',
     prRef: target,
+    assignees: [],
+    requestedReviewers: [],
+    reviewers: [],
+    baseIsDefault: false,
+    linkedMacroUsers: {},
     pullRequest: {
       ...target,
       displayName: 'macro-inc/macro#6369',

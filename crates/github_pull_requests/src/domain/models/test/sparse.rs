@@ -192,3 +192,47 @@ fn sparse_git_refs_replace_pairs_and_omitted_refs_keep_both_components() {
         }
     }
 }
+
+#[test]
+fn detail_metadata_survives_sparse_refresh_and_clears_review_requests() {
+    let mut stored = EnrichedGithubPullRequest::from_reference(pull_request_reference());
+    stored.github_created_at = Some(utc_datetime("2026-11-01T10:00:00Z"));
+    stored.default_branch = Some("main".to_string());
+    stored.requested_reviewers = Some(vec![GithubPullRequestUser {
+        github_user_id: "42".to_string(),
+        login: Some("reviewer".to_string()),
+    }]);
+    stored.requested_reviewer_github_user_ids = Some(vec!["42".to_string()]);
+    let metadata = stored.foreign_entity_metadata(None).unwrap();
+    let sparse = EnrichedGithubPullRequest::from_reference(pull_request_reference());
+    let merged = sparse.foreign_entity_metadata(Some(&metadata)).unwrap();
+    let row = GithubPullRequestWrite::from_enriched(&sparse)
+        .unwrap()
+        .merge(GithubPullRequestRow::from_metadata(&metadata));
+    let record = stored_record(&stored);
+    let response = StoredGithubPullRequest::from_record(&record, Some(row.clone())).unwrap();
+    assert_eq!(response.github_created_at, stored.github_created_at);
+    assert_eq!(response.default_branch, stored.default_branch);
+    assert_eq!(
+        response.requested_reviewers,
+        stored.requested_reviewers.clone().unwrap()
+    );
+    assert_eq!(
+        GithubPullRequestRow::from_metadata(&merged),
+        Some(row.clone())
+    );
+
+    let mut cleared = sparse;
+    cleared.requested_reviewers = Some(vec![]);
+    cleared.requested_reviewer_github_user_ids = Some(vec![]);
+    let cleared_metadata = cleared.foreign_entity_metadata(Some(&merged)).unwrap();
+    let cleared_row = GithubPullRequestWrite::from_enriched(&cleared)
+        .unwrap()
+        .merge(Some(row));
+    assert!(cleared_row.requested_reviewers.is_empty());
+    assert!(cleared_row.requested_reviewer_github_user_ids.is_empty());
+    assert_eq!(
+        GithubPullRequestRow::from_metadata(&cleared_metadata),
+        Some(cleared_row)
+    );
+}

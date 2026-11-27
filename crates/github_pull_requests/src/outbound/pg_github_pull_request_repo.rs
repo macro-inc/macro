@@ -63,7 +63,8 @@ impl GithubPullRequestRepository for PgGithubPullRequestRepo {
             r#"SELECT github_key, repository_id, number, owner, repo, title, status,
                       draft, author_github_user_id, author_login,
                       requested_reviewer_github_user_ids, participant_github_user_ids,
-                      github_updated_at, assignees, labels, reviews,
+                      github_updated_at, github_created_at, requested_reviewers, default_branch,
+                      assignees, labels, reviews,
                       base_ref, base_sha, head_ref, head_sha
                FROM github_pull_request
                WHERE github_key = $1
@@ -134,6 +135,10 @@ impl GithubPullRequestRepository for PgGithubPullRequestRepo {
                     requested_reviewer_github_user_ids,
                     participant_github_user_ids: stored.participant_github_user_ids,
                     github_updated_at: stored.github_updated_at,
+                    github_created_at: stored.github_created_at,
+                    requested_reviewers: serde_json::from_value(stored.requested_reviewers)
+                        .map_err(|error| sqlx::Error::Decode(error.into()))?,
+                    default_branch: stored.default_branch,
                     assignees: serde_json::from_value(stored.assignees)
                         .map_err(|error| sqlx::Error::Decode(error.into()))?,
                     labels: serde_json::from_value(stored.labels)
@@ -160,6 +165,7 @@ impl GithubPullRequestRepository for PgGithubPullRequestRepo {
             value.map_err(|error| sqlx::Error::Encode(error.into()))
         };
         let assignees = json(serde_json::to_value(&row.assignees))?;
+        let requested_reviewers = json(serde_json::to_value(&row.requested_reviewers))?;
         let labels = json(serde_json::to_value(&row.labels))?;
         let reviews = json(serde_json::to_value(&row.reviews))?;
         sqlx::query!(
@@ -185,11 +191,15 @@ impl GithubPullRequestRepository for PgGithubPullRequestRepo {
                 base_ref,
                 base_sha,
                 head_ref,
-                head_sha
+                head_sha,
+                github_created_at,
+                requested_reviewers,
+                default_branch
             )
             VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-                $14::jsonb, $15::jsonb, $16::jsonb, $17, $18, $19, $20, $21
+                $14::jsonb, $15::jsonb, $16::jsonb, $17, $18, $19, $20, $21,
+                $24, $25::jsonb, $26
             )
             ON CONFLICT (github_key) DO UPDATE SET
                 repository_id = COALESCE(EXCLUDED.repository_id, github_pull_request.repository_id),
@@ -204,6 +214,9 @@ impl GithubPullRequestRepository for PgGithubPullRequestRepo {
                 requested_reviewer_github_user_ids = EXCLUDED.requested_reviewer_github_user_ids,
                 participant_github_user_ids = EXCLUDED.participant_github_user_ids,
                 github_updated_at = EXCLUDED.github_updated_at,
+                github_created_at = EXCLUDED.github_created_at,
+                requested_reviewers = EXCLUDED.requested_reviewers,
+                default_branch = EXCLUDED.default_branch,
                 assignees = EXCLUDED.assignees,
                 labels = EXCLUDED.labels,
                 reviews = EXCLUDED.reviews,
@@ -237,6 +250,9 @@ impl GithubPullRequestRepository for PgGithubPullRequestRepo {
             row.head.as_ref().and_then(|head| head.sha.as_deref()),
             row.base.is_some(),
             row.head.is_some(),
+            row.github_created_at,
+            requested_reviewers,
+            row.default_branch.as_deref(),
         )
         .execute(&mut *tx)
         .await?;
@@ -290,6 +306,9 @@ impl GithubPullRequestRepository for PgGithubPullRequestRepo {
                 requested_reviewer_github_user_ids,
                 participant_github_user_ids,
                 github_updated_at,
+                github_created_at,
+                requested_reviewers,
+                default_branch,
                 assignees,
                 labels,
                 reviews,
@@ -326,6 +345,9 @@ impl GithubPullRequestRepository for PgGithubPullRequestRepo {
             requested_reviewer_github_user_ids: row.requested_reviewer_github_user_ids,
             participant_github_user_ids: row.participant_github_user_ids,
             github_updated_at: row.github_updated_at,
+            github_created_at: row.github_created_at,
+            requested_reviewers: decode(row.requested_reviewers)?,
+            default_branch: row.default_branch,
             assignees: decode(row.assignees)?,
             labels: decode(row.labels)?,
             reviews: decode(row.reviews)?,
@@ -336,6 +358,47 @@ impl GithubPullRequestRepository for PgGithubPullRequestRepo {
             base: git_ref(row.base_ref, row.base_sha),
             head: git_ref(row.head_ref, row.head_sha),
         }))
+    }
+
+    #[tracing::instrument(skip_all, fields(ids_asked = github_user_ids.len() as i64, ids_linked = tracing::field::Empty), err)]
+    async fn linked_macro_users(
+        &self,
+        github_user_ids: &[String],
+        source: &foreign_entity::domain::models::SourceId,
+        viewer: &macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> Result<std::collections::BTreeMap<String, String>, Self::Err> {
+        let team_id = if source.auth_entity == "team" {
+            Some(
+                uuid::Uuid::parse_str(&source.id)
+                    .map_err(|_| sqlx::Error::Protocol("invalid PR source team".into()))?,
+            )
+        } else {
+            None
+        };
+        let source_user = (source.auth_entity == "user").then_some(source.id.as_str());
+        let mut tx = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '5s'")
+            .execute(&mut *tx)
+            .await?;
+        // Prefer the viewer before expanding shared GitHub accounts. Materialize the
+        // link-derived user set before filtering its team, so stale statistics cannot
+        // turn a people lookup into a scan of every member of the source team.
+        let rows = sqlx::query_file!(
+            "src/outbound/pg_github_pull_request_repo/linked_macro_users.sql",
+            github_user_ids,
+            source_user,
+            team_id,
+            viewer.as_ref(),
+        )
+        .fetch_all(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        let linked = rows
+            .into_iter()
+            .map(|row| (row.github_user_id, row.macro_id))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        tracing::Span::current().record("ids_linked", linked.len() as i64);
+        Ok(linked)
     }
 }
 

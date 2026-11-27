@@ -25,7 +25,12 @@ beside **Changes** (`[data-pull-request-primary-action]` names its main action).
 For a draft the main action is **Ready for review**; otherwise it is **Merge**,
 disabled (with a tooltip) until every check has finished with a success, skipped,
 or neutral conclusion, so PRs with no checks or with running or failing checks
-cannot merge from it. The chevron beside it (**More pull request actions**) offers
+cannot merge from it.
+A known GitHub merge conflict also disables Merge with a conflict reason. Unknown
+mergeability does not block merging; GitHub's lazy computation is retried up to
+three times, three seconds apart. PR pushes and successful merge, draft, or
+state changes refresh the detail's separate mergeability query.
+The chevron beside it (**More pull request actions**) offers
 **Convert to draft** (non-drafts) and **Close pull request**; there is no
 confirmation for either. **Merge** opens a confirmation with the repository, PR
 number, and title, then merges on GitHub as the signed-in user through their
@@ -41,10 +46,17 @@ onto their own row below the breadcrumb when it leaves no room for them.
 The **Share** button has a **Copy Share Link** button beside it, like other
 items. The "…" menu beside the PR title (in the Reviews breadcrumb, the standalone
 `/app/pr/<id>` page, and PR previews) holds the same changes as the split button,
-with **Merge** only once its checks pass, plus **Reopen pull request** for a
-closed unmerged PR; then **Copy Link** (the Macro link), **Copy ID**, **Copy
+with **Merge** only when checks pass and no conflict is known, plus **Reopen pull
+request** for a closed unmerged PR; then **Copy Link** (the Macro link), **Copy ID**, **Copy
 GitHub link**, **Open on GitHub**, and **Copy branch name** when the head branch
 is stored.
+
+The timeline retains every submitted review, including repeated reviews by one
+person. Bodyless approvals, change requests, and dismissals show compact avatar,
+state, and time rows. Reviews with bodies show their state beside the body.
+An empty commented review only appears when visible review threads need its
+submission anchor. Hide bots also hides bot review events.
+
 The metadata pills beneath the PR title include linked agent sessions, using the
 agent sparkle icon. A single session shows its name; several sessions show a
 count chip opening a session list. Selecting a session opens it, with Shift-click
@@ -122,6 +134,13 @@ account. In the network panel, confirm the update arrives on the Soup GraphQL
 subscription without triggering a refetch of every Soup list. Replaying an
 unchanged webhook should not produce another Soup update. The PR detail's
 separate diff and discussion requests are outside this subscription behavior.
+The `github_pull_request_updated` push also marks that source record's detail
+and mergeability queries stale. Active details refetch; inactive details do not.
+Detail and mergeability reads coalesce independently, so slow mergeability never
+holds up live checks. Each running read has at most one pending refresh; pushes
+received during a trailing read queue one more read rather than losing that
+update. The push itself never replaces detail data, since typed columns and
+current linked people are only returned by the detail read.
 
 Opening a pull request from Home clears its loaded unread notifications immediately,
 including desktop previews, keyboard activation, j/k navigation, and phone taps.
@@ -129,3 +148,11 @@ Keyboard browsing marks the row when its debounced preview actually opens;
 marking a row done also marks the next PR read when it opens. A failed read
 write restores the unread dot; opening the row again retries it. The detail
 view also marks the whole pull request read on mount, without an extra delay.
+
+The detail data layer also exposes `githubCreatedAt`, `authorGithubUserId`,
+`assignees`, `requestedReviewers`, the combined state-sorted `reviewers` list, `baseBranch`, `defaultBranch`,
+`baseIsDefault`, and `linkedMacroUsers` for later UI composition. These fields do
+not add visible metadata to the current page. Older rows fill opening time,
+reviewer names, and default branch on their next sync. Linked people resolve at
+read time only within the source team, and only for a viewer in that team;
+personal records resolve only their own user. Shared outsiders receive no links.

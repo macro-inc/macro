@@ -2,6 +2,7 @@ import { useTouchTopBarsFloat, ViewShell } from '@app/components/view-shell';
 import { ChangesSplit, ChangesToggle } from '@app/features/changes/changes';
 import { useOptionalChanges } from '@app/features/changes/context/changes-controller';
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
+import { usePending } from '@app/observability/flow';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { HeaderActionButton } from '@components/app/HeaderActionButton';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
@@ -57,6 +58,7 @@ import {
 import { PrTimeline } from '../component/PrTimeline';
 import { PullRequestActionsButton } from '../component/PullRequestActionsButton';
 import { PrSidePanelSections } from '../component/sidepanel/PrSidePanelSections';
+import { usePrMergeabilityQuery } from '../data/mergeability';
 import { createPrDiscussionSource } from '../data/prDiscussionSource';
 import {
   type PrForeignEntityData,
@@ -81,6 +83,13 @@ export function usePrDetail(foreignEntityId: Accessor<string>) {
   const discussionSource = createPrDiscussionSource();
   const data = (): PrForeignEntityData | undefined =>
     query.isPending ? undefined : query.data;
+  const mergeabilityQuery = usePrMergeabilityQuery(foreignEntityId, () => {
+    const detail = data();
+    return detail?.pullRequest.status === 'open' ? detail.prRef : undefined;
+  });
+  usePending('pr.mergeability', () => mergeabilityQuery.isLoading);
+  const mergeability = () =>
+    mergeabilityQuery.isPending ? undefined : mergeabilityQuery.data?.state;
   const changeCounts = () => {
     const pullRequest = data()?.pullRequest;
     return pullRequest?.additions != null && pullRequest.deletions != null
@@ -108,7 +117,7 @@ export function usePrDetail(foreignEntityId: Accessor<string>) {
       ];
     }
   );
-  return { query, data, discussionSource, changeCounts };
+  return { query, data, discussionSource, changeCounts, mergeability };
 }
 
 type PrDetailBodyProps = {
@@ -274,7 +283,11 @@ export function PrDetailActions(props: {
 
 export function StandalonePrDetail(props: { foreignEntityId: string }) {
   const detail = usePrDetail(() => props.foreignEntityId);
-  const actions = createPrActions(detail.data, confirmMergePullRequest);
+  const actions = createPrActions(
+    detail.data,
+    confirmMergePullRequest,
+    detail.mergeability
+  );
   const operations = usePrFileOperations(detail.data, actions);
   const name = () => {
     const data = detail.data();

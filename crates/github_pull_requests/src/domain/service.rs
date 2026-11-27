@@ -303,6 +303,7 @@ impl<F: ForeignEntityService, R: GithubPullRequestRepository> GithubPullRequestS
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<StoredGithubPullRequest, GithubPullRequestError> {
+        let viewer = receipt.get_authenticated_user().ok().cloned();
         let record = self
             .foreign_entity_service
             .get_foreign_entity(receipt)
@@ -316,7 +317,57 @@ impl<F: ForeignEntityService, R: GithubPullRequestRepository> GithubPullRequestS
             .await
             .map_err(repository_error)?;
 
-        StoredGithubPullRequest::from_record(&record, row)
+        let mut stored = StoredGithubPullRequest::from_record(&record, row)?;
+        let Some(viewer) = viewer else {
+            return Ok(stored);
+        };
+        let source = SourceId::new(record.stored_for_id, record.stored_for_auth_entity);
+        // Sharing a PR grants access to its content, not its source's people directory.
+        match source.auth_entity.as_str() {
+            "team" if Uuid::parse_str(&source.id).is_ok() => {}
+            "user" if source.id == viewer.as_ref() => {}
+            _ => return Ok(stored),
+        }
+        let ids: Vec<String> = stored
+            .author_github_user_id
+            .iter()
+            .cloned()
+            .chain(stored.requested_reviewer_github_user_ids.iter().cloned())
+            .chain(
+                stored
+                    .assignees
+                    .iter()
+                    .map(|user| user.github_user_id.clone()),
+            )
+            .chain(
+                stored
+                    .requested_reviewers
+                    .iter()
+                    .map(|user| user.github_user_id.clone()),
+            )
+            .chain(
+                stored
+                    .reviews
+                    .iter()
+                    .map(|review| review.reviewer_github_user_id.clone()),
+            )
+            .chain(
+                stored
+                    .comments
+                    .iter()
+                    .filter_map(|comment| comment.author_id.map(|id| id.to_string())),
+            )
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        if !ids.is_empty() {
+            stored.linked_macro_users = self
+                .repo
+                .linked_macro_users(&ids, &source, &viewer)
+                .await
+                .map_err(repository_error)?;
+        }
+        Ok(stored)
     }
 }
 

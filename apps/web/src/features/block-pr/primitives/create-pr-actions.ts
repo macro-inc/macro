@@ -10,6 +10,7 @@ import { queryClient } from '@queries/client';
 import { soupKeys } from '@queries/soup/keys';
 import { useSetGithubPullRequestDraftMutation } from '@queries/storage/pr-draft';
 import { useSetGithubPullRequestStateMutation } from '@queries/storage/pr-state';
+import type { GithubPullRequestMergeability } from '@service-auth/generated/schemas';
 import {
   type Accessor,
   type Component,
@@ -27,7 +28,10 @@ import {
   type MergePullRequestTarget,
   pullRequestFailureMessage,
 } from './create-merge-pull-request-action';
-import { pullRequestReadyToMerge } from './pull-request-ready-to-merge';
+import {
+  PULL_REQUEST_CONFLICT_REASON,
+  pullRequestReadyToMerge,
+} from './pull-request-ready-to-merge';
 
 export type PrActionKey =
   | 'merge'
@@ -67,7 +71,9 @@ export function createPrActions(
   confirmMerge: (
     target: MergePullRequestTarget,
     owner: Owner | null
-  ) => Promise<boolean>
+  ) => Promise<boolean>,
+  mergeability: Accessor<GithubPullRequestMergeability | undefined> = () =>
+    undefined
 ): PrActions {
   const owner = getOwner();
   // The routes patch the stored pull request first, so refetches see the
@@ -140,6 +146,18 @@ export function createPrActions(
           }),
       });
     } else {
+      let disabledReason: string | undefined;
+      if (mergeability() === 'conflicting') {
+        disabledReason = PULL_REQUEST_CONFLICT_REASON;
+      } else if (
+        !pullRequestReadyToMerge({
+          status: pullRequest.status,
+          draft: pullRequest.draft,
+          checks: pullRequest.checks,
+        })
+      ) {
+        disabledReason = t('entityActions.prMergeWaitsOnChecksTooltip');
+      }
       actions.push({
         key: 'merge',
         label: t('entityActions.prMerge'),
@@ -149,13 +167,7 @@ export function createPrActions(
             merge.merge({ ...prRef, title: pullRequest.name }),
             'pr-merge'
           ),
-        disabledReason: pullRequestReadyToMerge({
-          status: pullRequest.status,
-          draft: pullRequest.draft,
-          checks: pullRequest.checks,
-        })
-          ? undefined
-          : t('entityActions.prMergeWaitsOnChecksTooltip'),
+        disabledReason,
       });
     }
     // Draft state unknown: offer neither direction rather than guess.

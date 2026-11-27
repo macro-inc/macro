@@ -294,3 +294,65 @@ async fn rejects_an_unsuccessful_branch_list_without_leaking_the_token() {
     assert!(!error.contains("sensitive-install-token"));
     server.finish();
 }
+
+#[test]
+fn pull_request_list_keeps_opening_time_reviewers_and_default_branch() {
+    use crate::outbound::pull_request_metadata::GithubOpenPullRequestResponse;
+    let response: GithubOpenPullRequestResponse = serde_json::from_value(serde_json::json!({
+        "number":7, "title":"Review metadata", "html_url":"https://github.com/example/repo/pull/7",
+        "created_at":"2026-11-01T10:00:00Z", "updated_at":"2026-11-02T10:00:00Z",
+        "base":{"ref":"release", "repo":{"id":99,"default_branch":"main"}},
+        "requested_reviewers":[{"id":42,"login":"reviewer"}]
+    }))
+    .unwrap();
+    let enriched = response.into_enriched_pull_request("example", "repo");
+    assert_eq!(
+        enriched.github_created_at,
+        Some("2026-11-01T10:00:00Z".parse().unwrap())
+    );
+    assert_eq!(enriched.default_branch.as_deref(), Some("main"));
+    assert_eq!(enriched.base.unwrap().name.as_deref(), Some("release"));
+    assert_eq!(
+        enriched.requested_reviewer_github_user_ids.unwrap(),
+        vec!["42"]
+    );
+    let requested = enriched.requested_reviewers.unwrap();
+    assert_eq!(requested[0].github_user_id, "42");
+    assert_eq!(requested[0].login.as_deref(), Some("reviewer"));
+}
+
+#[test]
+fn submitted_reviews_keep_empty_bodies_state_and_numeric_authors() {
+    use crate::domain::models::GithubPullRequestReviewState;
+    use crate::outbound::pull_request_metadata::GithubReviewResponse;
+    for (state, expected) in [
+        ("APPROVED", GithubPullRequestReviewState::Approved),
+        (
+            "CHANGES_REQUESTED",
+            GithubPullRequestReviewState::ChangesRequested,
+        ),
+        ("COMMENTED", GithubPullRequestReviewState::Commented),
+        ("DISMISSED", GithubPullRequestReviewState::Dismissed),
+    ] {
+        for body in [None, Some(""), Some("Review body")] {
+            let review: GithubReviewResponse = serde_json::from_value(serde_json::json!({
+                "id":123, "state":state, "body":body,
+                "user":{"id":42,"login":"reviewer"}, "submitted_at":"2026-11-02T10:00:00Z"
+            }))
+            .unwrap();
+            let comment = review.into_pull_request_comment().unwrap();
+            assert_eq!(comment.body, body.unwrap_or_default());
+            assert_eq!(comment.source, "review");
+            assert_eq!(comment.review_state, Some(expected));
+            assert_eq!(comment.author_id, Some(42));
+            assert_eq!(serde_json::to_value(&comment).unwrap()["authorId"], 42);
+        }
+    }
+    for state in [None, Some("PENDING")] {
+        let review: GithubReviewResponse = serde_json::from_value(serde_json::json!({
+            "id":124, "state":state, "body":"Unsubmitted", "user":{"id":42}
+        }))
+        .unwrap();
+        assert!(review.into_pull_request_comment().is_none());
+    }
+}

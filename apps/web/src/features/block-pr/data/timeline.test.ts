@@ -289,4 +289,127 @@ describe('buildTimeline', () => {
       ]);
     });
   });
+
+  it('retains every submitted decision from one reviewer, including bodyless decisions', () => {
+    const entries = githubEntries(
+      buildTimeline(
+        [
+          comment(100, {
+            source: 'review',
+            authorId: 42,
+            body: '',
+            reviewState: 'approved',
+            createdAt: at(1),
+          }),
+          comment(101, {
+            source: 'review',
+            authorId: 42,
+            body: '',
+            reviewState: 'changes_requested',
+            createdAt: at(2),
+          }),
+          comment(102, {
+            source: 'review',
+            authorId: 42,
+            body: '',
+            reviewState: 'dismissed',
+            createdAt: at(3),
+          }),
+          comment(103, {
+            source: 'review',
+            authorId: 42,
+            body: 'Explanation',
+            reviewState: 'approved',
+            createdAt: at(4),
+          }),
+        ],
+        []
+      )
+    );
+    expect(
+      entries.map(({ item }) => [item.id, item.reviewState, item.authorId])
+    ).toEqual([
+      [100, 'approved', 42],
+      [101, 'changes_requested', 42],
+      [102, 'dismissed', 42],
+      [103, 'approved', 42],
+    ]);
+    expect(entries[3]?.item.body).toBe('Explanation');
+  });
+
+  it('uses an empty commented review only when visible threads need its submission anchor', () => {
+    const review = comment(100, {
+      source: 'review',
+      body: '',
+      reviewState: 'commented',
+      createdAt: at(5),
+    });
+    expect(buildTimeline([review], [])).toEqual([]);
+    const entries = githubEntries(
+      buildTimeline(
+        [
+          reviewComment(1, 0, { pullRequestReviewId: 100 }),
+          comment(2, { createdAt: at(3) }),
+          review,
+        ],
+        []
+      )
+    );
+    expect(entries.map(({ item }) => item.id)).toEqual([2, 100, 1]);
+    expect(entries[2]?.ts).toBeGreaterThan(entries[1]?.ts ?? 0);
+  });
+
+  it('hides bot decisions and drops commented anchors whose only threads are hidden bots', () => {
+    const entries = buildTimeline(
+      [
+        comment(100, {
+          source: 'review',
+          authorLogin: 'automation[bot]',
+          body: '',
+          reviewState: 'approved',
+        }),
+        comment(101, { source: 'review', body: '', reviewState: 'commented' }),
+        reviewComment(1, 0, {
+          authorLogin: 'automation[bot]',
+          pullRequestReviewId: 101,
+        }),
+        comment(102, { source: 'review', body: '', reviewState: 'approved' }),
+      ],
+      [],
+      { hideBots: true }
+    );
+    expect(githubEntries(entries).map(({ item }) => item.id)).toEqual([102]);
+  });
+  it('keeps colliding ids from GitHub source namespaces separate', () => {
+    const entries = githubEntries(
+      buildTimeline(
+        [
+          comment(1, {
+            source: 'review',
+            body: '',
+            reviewState: 'approved',
+            createdAt: at(5),
+          }),
+          comment(1, {
+            source: 'issue_comment',
+            body: 'Conversation',
+            createdAt: at(1),
+          }),
+          reviewComment(1, 0, { body: 'Thread', pullRequestReviewId: 1 }),
+          reviewComment(2, 2, {
+            body: 'Reply',
+            inReplyToId: 1,
+            pullRequestReviewId: 1,
+          }),
+        ],
+        []
+      )
+    );
+    expect(entries.map(({ item }) => item.source)).toEqual([
+      'issue_comment',
+      'review',
+      'review_comment',
+    ]);
+    expect(entries[2]?.replies.map(({ id }) => id)).toEqual([2]);
+  });
 });

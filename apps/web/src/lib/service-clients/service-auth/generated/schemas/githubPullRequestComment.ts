@@ -13,6 +13,7 @@ import type { GithubPullRequestCommentLine } from './githubPullRequestCommentLin
 import type { GithubPullRequestCommentOriginalLine } from './githubPullRequestCommentOriginalLine';
 import type { GithubPullRequestCommentPath } from './githubPullRequestCommentPath';
 import type { GithubPullRequestCommentPullRequestReviewId } from './githubPullRequestCommentPullRequestReviewId';
+import type { GithubPullRequestCommentReviewState } from './githubPullRequestCommentReviewState';
 import type { GithubPullRequestCommentUpdatedAt } from './githubPullRequestCommentUpdatedAt';
 import type { GithubPullRequestCommentUrl } from './githubPullRequestCommentUrl';
 
@@ -65,6 +66,7 @@ Only ever present on `review_comment` sources.
    * @minimum 0
    */
   pullRequestReviewId?: GithubPullRequestCommentPullRequestReviewId;
+  reviewState?: GithubPullRequestCommentReviewState;
   /** The GitHub source for the comment, such as `issue_comment` or `review_comment`. */
   source: string;
   /** When the comment or review was last updated. */

@@ -2,6 +2,7 @@ import { queryClient } from '@queries/client';
 import type { ForeignEntity } from '@service-storage/generated/schemas';
 import { getForeignEntityResponse } from '@service-storage/generated/zod';
 import { pullRequestMentionKeys } from './keys';
+import { invalidateActivePrDetail } from './pr-detail-sync';
 
 export async function handlePullRequestUpdated(
   payload: unknown
@@ -31,6 +32,8 @@ export async function handlePullRequestUpdated(
         : entity
     );
   }
+  // Pushes carry a source record, not the typed PR columns or current people links.
+  await invalidateActivePrDetail(queryClient, entity.id);
 }
 
 export function invalidatePullRequestMentions(): void {

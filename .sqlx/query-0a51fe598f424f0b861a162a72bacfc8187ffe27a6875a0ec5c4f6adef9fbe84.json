@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH visible_team AS MATERIALIZED (\n    SELECT 1 FROM team_user\n    WHERE team_id = $3::uuid AND user_id = $4::text\n), viewer_links AS MATERIALIZED (\n    SELECT github_user_id, macro_id\n    FROM github_links\n    WHERE macro_id = $4::text AND github_user_id = ANY($1::text[])\n      AND (($3::uuid IS NULL AND $2::text = $4::text)\n           OR EXISTS (SELECT 1 FROM visible_team))\n), matched_links AS MATERIALIZED (\n    SELECT github_user_id, macro_id\n    FROM github_links\n    WHERE $3::uuid IS NOT NULL\n      AND EXISTS (SELECT 1 FROM visible_team)\n      AND github_user_id = ANY(ARRAY(\n          SELECT requested.id FROM unnest($1::text[]) requested(id)\n          WHERE NOT EXISTS (\n              SELECT 1 FROM viewer_links viewer WHERE viewer.github_user_id = requested.id\n          )\n      ))\n), linked_users AS MATERIALIZED (\n    SELECT user_id, team_id\n    FROM team_user\n    WHERE user_id = ANY(ARRAY(SELECT DISTINCT macro_id FROM matched_links))\n)\nSELECT DISTINCT ON (scoped.github_user_id)\n    scoped.github_user_id AS \"github_user_id!\", scoped.macro_id AS \"macro_id!\"\nFROM (\n    SELECT github_user_id, macro_id FROM viewer_links\n    UNION ALL\n    SELECT links.github_user_id, links.macro_id\n    FROM matched_links links\n    JOIN linked_users member ON member.user_id = links.macro_id\n    WHERE member.team_id = $3::uuid\n) scoped\nORDER BY scoped.github_user_id, (scoped.macro_id = $4::text) DESC, scoped.macro_id COLLATE \"C\"\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "github_user_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "macro_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Text",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "0a51fe598f424f0b861a162a72bacfc8187ffe27a6875a0ec5c4f6adef9fbe84"
+}

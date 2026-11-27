@@ -1,0 +1,39 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO github_pull_request (\n                github_key,\n                repository_id,\n                number,\n                owner,\n                repo,\n                title,\n                status,\n                draft,\n                author_github_user_id,\n                author_login,\n                requested_reviewer_github_user_ids,\n                participant_github_user_ids,\n                github_updated_at,\n                assignees,\n                labels,\n                reviews,\n                review_decision,\n                base_ref,\n                base_sha,\n                head_ref,\n                head_sha,\n                github_created_at,\n                requested_reviewers,\n                default_branch\n            )\n            VALUES (\n                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,\n                $14::jsonb, $15::jsonb, $16::jsonb, $17, $18, $19, $20, $21,\n                $24, $25::jsonb, $26\n            )\n            ON CONFLICT (github_key) DO UPDATE SET\n                repository_id = COALESCE(EXCLUDED.repository_id, github_pull_request.repository_id),\n                number = EXCLUDED.number,\n                owner = EXCLUDED.owner,\n                repo = EXCLUDED.repo,\n                title = EXCLUDED.title,\n                status = EXCLUDED.status,\n                draft = EXCLUDED.draft,\n                author_github_user_id = EXCLUDED.author_github_user_id,\n                author_login = EXCLUDED.author_login,\n                requested_reviewer_github_user_ids = EXCLUDED.requested_reviewer_github_user_ids,\n                participant_github_user_ids = EXCLUDED.participant_github_user_ids,\n                github_updated_at = EXCLUDED.github_updated_at,\n                github_created_at = EXCLUDED.github_created_at,\n                requested_reviewers = EXCLUDED.requested_reviewers,\n                default_branch = EXCLUDED.default_branch,\n                assignees = EXCLUDED.assignees,\n                labels = EXCLUDED.labels,\n                reviews = EXCLUDED.reviews,\n                review_decision = EXCLUDED.review_decision,\n                base_ref = CASE WHEN $22::bool THEN EXCLUDED.base_ref ELSE github_pull_request.base_ref END,\n                base_sha = CASE WHEN $22::bool THEN EXCLUDED.base_sha ELSE github_pull_request.base_sha END,\n                head_ref = CASE WHEN $23::bool THEN EXCLUDED.head_ref ELSE github_pull_request.head_ref END,\n                head_sha = CASE WHEN $23::bool THEN EXCLUDED.head_sha ELSE github_pull_request.head_sha END,\n                updated_at = NOW()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Int8",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Bool",
+        "Text",
+        "Text",
+        "TextArray",
+        "TextArray",
+        "Timestamptz",
+        "Jsonb",
+        "Jsonb",
+        "Jsonb",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Bool",
+        "Bool",
+        "Timestamptz",
+        "Jsonb",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "84993473d6991cfb054a6365656ff8b88348ef13f740132c532699bc42e9783e"
+}

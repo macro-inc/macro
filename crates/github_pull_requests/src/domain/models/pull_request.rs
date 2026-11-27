@@ -115,6 +115,9 @@ pub struct GithubPullRequestComment {
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
     /// The GitHub source for the comment, such as `issue_comment` or `review_comment`.
     pub source: String,
+    /// The submitted review's state; absent on ordinary comments.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub review_state: Option<GithubPullRequestReviewState>,
     /// The id of the comment this one replies to, when it is part of a review
     /// thread. Only ever present on `review_comment` sources.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -368,6 +371,19 @@ pub struct GithubPullRequestDetails {
     #[cfg_attr(feature = "schema", schema(ignore))]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub github_updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// When GitHub opened the pull request, when available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub github_created_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// The users asked to review, when available.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_optional_array"
+    )]
+    pub requested_reviewers: Option<Vec<GithubPullRequestUser>>,
+    /// The base repository's default branch, when available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_branch: Option<String>,
     /// The users assigned to the pull request, when available.
     #[serde(
         default,
@@ -468,6 +484,15 @@ pub struct EnrichedGithubPullRequest {
     #[cfg_attr(feature = "schema", schema(ignore))]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub github_updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// When GitHub opened the pull request, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub github_created_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// The users asked to review, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub requested_reviewers: Option<Vec<GithubPullRequestUser>>,
+    /// The base repository's default branch, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_branch: Option<String>,
     /// The users assigned to the pull request, when known.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub assignees: Option<Vec<GithubPullRequestUser>>,
@@ -512,6 +537,9 @@ impl EnrichedGithubPullRequest {
             draft: None,
             requested_reviewer_github_user_ids: None,
             github_updated_at: None,
+            github_created_at: None,
+            requested_reviewers: None,
+            default_branch: None,
             assignees: None,
             labels: None,
             reviews: None,
@@ -548,6 +576,9 @@ impl EnrichedGithubPullRequest {
             draft: details.draft,
             requested_reviewer_github_user_ids: details.requested_reviewer_github_user_ids,
             github_updated_at: details.github_updated_at,
+            github_created_at: details.github_created_at,
+            requested_reviewers: details.requested_reviewers,
+            default_branch: details.default_branch,
             assignees: details.assignees,
             labels: details.labels,
             reviews: details.reviews,
@@ -561,8 +592,9 @@ impl EnrichedGithubPullRequest {
     /// Partial refreshes may omit `comments` or `checks`. When an omitted field exists as an array in
     /// `existing_metadata`, the existing array is copied forward so richer metadata is not discarded.
     /// The same applies to `authorLogin`, `authorId`, `description`, `repositoryId`, `draft`,
-    /// `requestedReviewerGithubUserIds`, `githubUpdatedAt`, `assignees`, `labels`, `base`, and
-    /// `head`, which fallback write paths (such as comment webhooks without a `pull_request`
+    /// `requestedReviewerGithubUserIds`, `requestedReviewers`, `githubCreatedAt`,
+    /// `githubUpdatedAt`, `defaultBranch`, `assignees`, `labels`, `base`, and `head`,
+    /// which fallback write paths (such as comment webhooks without a `pull_request`
     /// payload) omit.
     /// `reviews` merges per reviewer, keeping each reviewer's most recently submitted review.
     pub fn foreign_entity_metadata(
@@ -597,6 +629,9 @@ impl EnrichedGithubPullRequest {
             "draft",
             "requestedReviewerGithubUserIds",
             "githubUpdatedAt",
+            "githubCreatedAt",
+            "requestedReviewers",
+            "defaultBranch",
             "assignees",
             "labels",
             "base",
