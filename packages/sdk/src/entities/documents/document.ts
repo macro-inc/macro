@@ -1224,8 +1224,9 @@ export class Document
 
   /**
    * The document's URL in the Macro web app. A native canvas or spreadsheet
-   * whose detail has loaded links to its own editor; use `canvas().webUrl()`
-   * or `documents.spreadsheet()` when it has not.
+   * whose detail has loaded, or whose listing or search hit gave its file
+   * type, links to its own editor; use `canvas().webUrl()` or
+   * `documents.spreadsheet()` otherwise.
    *
    * @readonly
    */
