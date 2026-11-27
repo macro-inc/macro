@@ -387,11 +387,23 @@ export interface CacheTelemetryRecorderLike {
   flush(): void;
 }
 
-/**
- * Longest slow-query template accepted, in UTF-16 code units. The engine caps
- * the text at 8 KiB of UTF-8, which is never more code units than bytes.
- */
-export const SLOW_QUERY_TEMPLATE_LENGTH = 8 * 1024;
+/** Longest slow-query template accepted, in UTF-8 bytes, as the engine caps it. */
+export const SLOW_QUERY_TEMPLATE_BYTES = 8 * 1024;
+
+const utf8 = new TextEncoder();
+
+function slowQueryTemplate(value: unknown): string | undefined {
+  // A code unit is at least one byte, so a longer string is never encoded.
+  if (
+    typeof value !== 'string' ||
+    value.length === 0 ||
+    value.length > SLOW_QUERY_TEMPLATE_BYTES
+  )
+    return undefined;
+  return utf8.encode(value).length <= SLOW_QUERY_TEMPLATE_BYTES
+    ? value
+    : undefined;
+}
 
 const HIGH_VOLUME_NAMES = new Set<CacheTelemetryEventName>([
   'graphql_cache.host_request',
@@ -523,10 +535,8 @@ function sanitizeObservation(
     ...(input.name === 'graphql_cache.slow_query' &&
     typeof input.queryFingerprint === 'string' &&
     /^[0-9a-f]{16}$/.test(input.queryFingerprint) &&
-    typeof input.queryTemplate === 'string' &&
-    input.queryTemplate.length > 0 &&
-    input.queryTemplate.length <= SLOW_QUERY_TEMPLATE_LENGTH
-      ? { queryTemplate: input.queryTemplate }
+    slowQueryTemplate(input.queryTemplate) !== undefined
+      ? { queryTemplate: slowQueryTemplate(input.queryTemplate) }
       : {}),
     ...(boundedNumber(input.bytes) !== undefined
       ? { bytes: boundedNumber(input.bytes) }

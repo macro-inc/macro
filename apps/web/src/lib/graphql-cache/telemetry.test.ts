@@ -11,7 +11,7 @@ import {
   isolateCacheTelemetry,
   operationCategoryForRequest,
   resetReasonForError,
-  SLOW_QUERY_TEMPLATE_LENGTH,
+  SLOW_QUERY_TEMPLATE_BYTES,
 } from './telemetry';
 
 describe('cache telemetry privacy contract', () => {
@@ -350,6 +350,9 @@ describe('cache telemetry sampling and failure isolation', () => {
       emit: (event) => events.push(event),
     });
     const template = 'SELECT value FROM records WHERE id IN (?, ?)';
+    // 13 bytes before the placeholders, 11 UTF-16 code units: the euro sign is
+    // one code unit and three bytes.
+    const atBound = `SELECT '\u20ac' ${'?'.repeat(SLOW_QUERY_TEMPLATE_BYTES - 13)}`;
     const slow = {
       name: 'graphql_cache.slow_query',
       operationCategory: 'storage',
@@ -360,7 +363,14 @@ describe('cache telemetry sampling and failure isolation', () => {
     recorder.record({ ...slow, queryTemplate: template });
     recorder.record({
       ...slow,
-      queryTemplate: '?'.repeat(SLOW_QUERY_TEMPLATE_LENGTH + 1),
+      queryTemplate: '?'.repeat(SLOW_QUERY_TEMPLATE_BYTES + 1),
+    });
+    recorder.record({ ...slow, queryTemplate: atBound });
+    // Within the bound in UTF-16 code units, over it in UTF-8.
+    recorder.record({ ...slow, queryTemplate: `${atBound}?` });
+    recorder.record({
+      ...slow,
+      queryTemplate: '\u20ac'.repeat(SLOW_QUERY_TEMPLATE_BYTES / 2),
     });
     recorder.record({ ...slow, queryTemplate: '' });
     recorder.record({
@@ -376,6 +386,9 @@ describe('cache telemetry sampling and failure isolation', () => {
     recorder.flush();
     expect(events.map((event) => event.queryTemplate)).toEqual([
       template,
+      undefined,
+      atBound,
+      undefined,
       undefined,
       undefined,
       undefined,
