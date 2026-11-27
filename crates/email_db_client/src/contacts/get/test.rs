@@ -291,9 +291,9 @@ async fn fetch_address_book_emails_returns_every_non_automated_contact(
     assert_eq!(
         emails,
         vec![
-            "alice@acme.com",
-            "bob@acme.com",
-            "carol@gmail.com",
+            "alice@example.com",
+            "bob@example.com",
+            "carol@example.net",
             "dave@example.org"
         ]
     );
@@ -304,16 +304,22 @@ async fn fetch_address_book_emails_returns_every_non_automated_contact(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("address_book_and_top_contacts"))
 )]
-async fn fetch_top_sent_contact_emails_ranks_by_messages_sent(pool: Pool<Postgres>) -> Result<()> {
+async fn fetch_top_sent_contact_emails_ranks_by_messages_sent_on_the_domain(
+    pool: Pool<Postgres>,
+) -> Result<()> {
     let link_id = Uuid::parse_str("ab000000-0000-0000-0000-000000000001")?;
 
-    let top = fetch_top_sent_contact_emails_by_link_id(&pool, link_id, 10).await?;
-    // carol: 3 messages, alice: 1. The automated address and the contact only
-    // addressed in a draft are excluded or ranked by actual sends.
-    assert_eq!(top, vec!["carol@gmail.com", "alice@acme.com"]);
+    let top = fetch_top_sent_contact_emails_by_link_id(&pool, link_id, "Example.com", 10).await?;
+    // bob: 2 messages, alice: 1. carol is emailed most but is on another
+    // domain; the automated address and the contact only addressed in a draft
+    // are excluded or ranked by actual sends.
+    assert_eq!(top, vec!["bob@example.com", "alice@example.com"]);
 
-    let capped = fetch_top_sent_contact_emails_by_link_id(&pool, link_id, 1).await?;
-    assert_eq!(capped, vec!["carol@gmail.com"]);
+    let capped = fetch_top_sent_contact_emails_by_link_id(&pool, link_id, "example.com", 1).await?;
+    assert_eq!(capped, vec!["bob@example.com"]);
+
+    let other = fetch_top_sent_contact_emails_by_link_id(&pool, link_id, "example.net", 10).await?;
+    assert_eq!(other, vec!["carol@example.net"]);
     Ok(())
 }
 

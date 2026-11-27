@@ -1,16 +1,16 @@
 -- One inbox with a synced address book of five contacts (one automated) and
--- sent mail that ranks two of them: carol three messages, alice one.
+-- sent mail that ranks three of them: carol three messages, bob two, alice one.
 
 INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active, created_at, updated_at)
 VALUES
-    ('ab000000-0000-0000-0000-000000000001', 'macro|owner@acme.com', 'fa-owner', 'owner@acme.com', 'GMAIL', true, NOW(), NOW());
+    ('ab000000-0000-0000-0000-000000000001', 'macro|owner@example.com', 'fa-owner', 'owner@example.com', 'GMAIL', true, NOW(), NOW());
 
 INSERT INTO email_contacts (id, link_id, email_address, name, created_at, updated_at)
 VALUES
-    ('ac000000-0000-0000-0000-000000000001', 'ab000000-0000-0000-0000-000000000001', 'Alice@Acme.com', 'Alice', NOW(), NOW()),
-    ('ac000000-0000-0000-0000-000000000002', 'ab000000-0000-0000-0000-000000000001', 'bob@acme.com', 'Bob', NOW(), NOW()),
-    ('ac000000-0000-0000-0000-000000000003', 'ab000000-0000-0000-0000-000000000001', 'carol@gmail.com', 'Carol', NOW(), NOW()),
-    ('ac000000-0000-0000-0000-000000000004', 'ab000000-0000-0000-0000-000000000001', 'noreply@acme.com', NULL, NOW(), NOW()),
+    ('ac000000-0000-0000-0000-000000000001', 'ab000000-0000-0000-0000-000000000001', 'Alice@Example.com', 'Alice', NOW(), NOW()),
+    ('ac000000-0000-0000-0000-000000000002', 'ab000000-0000-0000-0000-000000000001', 'bob@example.com', 'Bob', NOW(), NOW()),
+    ('ac000000-0000-0000-0000-000000000003', 'ab000000-0000-0000-0000-000000000001', 'carol@example.net', 'Carol', NOW(), NOW()),
+    ('ac000000-0000-0000-0000-000000000004', 'ab000000-0000-0000-0000-000000000001', 'noreply@example.com', NULL, NOW(), NOW()),
     ('ac000000-0000-0000-0000-000000000005', 'ab000000-0000-0000-0000-000000000001', 'dave@example.org', 'Dave', NOW(), NOW());
 
 INSERT INTO email_threads (id, link_id, inbox_visible, is_read, created_at, updated_at)
@@ -36,5 +36,7 @@ VALUES
     ('ae000000-0000-0000-0000-000000000002', 'ac000000-0000-0000-0000-000000000003', 'TO'),
     ('ae000000-0000-0000-0000-000000000003', 'ac000000-0000-0000-0000-000000000003', 'CC'),
     ('ae000000-0000-0000-0000-000000000003', 'ac000000-0000-0000-0000-000000000001', 'TO'),
+    ('ae000000-0000-0000-0000-000000000001', 'ac000000-0000-0000-0000-000000000002', 'TO'),
+    ('ae000000-0000-0000-0000-000000000002', 'ac000000-0000-0000-0000-000000000002', 'CC'),
     ('ae000000-0000-0000-0000-000000000001', 'ac000000-0000-0000-0000-000000000004', 'TO'),
     ('ae000000-0000-0000-0000-000000000004', 'ac000000-0000-0000-0000-000000000005', 'TO');
