@@ -2041,7 +2041,7 @@ export function createCachedChannelDirectory(
             fromRead,
             lastRead.channels,
             lastRead.incompleteIds,
-            lane.complete
+            publishedLane.complete
           )
         : EMPTY_CHANNEL_DIRECTORY_STATE;
       show(fromRead, NO_IDS);
@@ -2201,9 +2201,12 @@ export function createCachedChannelDirectory(
     }
   };
 
-  const publish = (read: ChannelDirectoryRead) => {
+  /** `readLane` is the lane as it was before `read`'s records were read,
+   * which alone says what the read shows as complete and current: a keys
+   * read only rereads records, so it keeps the lane already shown. */
+  const publish = (read: ChannelDirectoryRead, readLane: LaneProgress) => {
     lastRead = read;
-    publishedLane = lane;
+    publishedLane = readLane;
     // Built once, and only when one of them needs it.
     let byId: Map<string, DirectoryChannel> | undefined;
     const records = () => {
@@ -2213,7 +2216,7 @@ export function createCachedChannelDirectory(
     const removed = observe(read, records);
     restampOlderRecords(records);
     // A finished pass reconciled the cache: it answers alone again.
-    if (lane.complete) stopFallback();
+    if (readLane.complete) stopFallback();
     // `complete` reads both, so it never pairs one with the other's old value.
     batch(() => {
       renewStaleReads(read, removed);
@@ -2337,7 +2340,8 @@ export function createCachedChannelDirectory(
       // Read before the scan: a pass that finishes during it may have
       // written records the scan missed, and its save reads again. Past the
       // first await, calls run in the span only through `span.run`.
-      lane = readLaneProgress(userId, scope, sessionStartedAt);
+      const readLane = readLaneProgress(userId, scope, sessionStartedAt);
+      lane = readLane;
       const read = await span.run(() => index.refresh(scope, signal));
       // The cache may have changed hands while it was read.
       await span.run(() =>
@@ -2348,7 +2352,7 @@ export function createCachedChannelDirectory(
       span.setAttr('channel_directory.reread', read.reread);
       span.setAttr('channel_directory.complete', lane.complete);
       span.setAttr('channel_directory.lane_failed', lane.failed);
-      publish(read);
+      publish(read, readLane);
       fullReads += 1;
     });
 
@@ -2370,7 +2374,9 @@ export function createCachedChannelDirectory(
       await span.run(() =>
         assertContactCacheScope(host, userId, scope, signal)
       );
-      publish(found.read);
+      // A full read that failed since may have taken a newer lane its scan
+      // never showed.
+      publish(found.read, publishedLane);
       return true;
     });
 
