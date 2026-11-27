@@ -111,6 +111,50 @@ async fn an_agent_account_round_trips_and_is_marked_as_an_agent(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn opaque_account_keys_require_one_global_profile(pool: PgPool) {
+    insert_team(&pool).await;
+    let repo = PgTeamAgentsRepo::new(pool.clone());
+    let account = sam();
+    assert_eq!(
+        repo.opaque_key_for_account(&account.user_id).await.unwrap(),
+        None
+    );
+    assert_eq!(
+        repo.account_for_opaque_key(Uuid::nil()).await.unwrap(),
+        None
+    );
+    assert_eq!(
+        repo.account_for_opaque_key(Uuid::now_v7()).await.unwrap(),
+        None
+    );
+
+    repo.create_account(&account).await.unwrap();
+    let key = repo
+        .opaque_key_for_account(&account.user_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        repo.account_for_opaque_key(key).await.unwrap(),
+        Some(account.user_id.clone())
+    );
+
+    sqlx::query!(
+        r#"INSERT INTO "User" (id, email, macro_user_id)
+           VALUES ('macro|prior-profile@example.test', 'prior-profile@example.test', $1)"#,
+        key
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(repo.account_for_opaque_key(key).await.unwrap(), None);
+    assert_eq!(
+        repo.opaque_key_for_account(&account.user_id).await.unwrap(),
+        None
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_repeated_purchase_key_returns_the_first_agent_and_creates_no_account(pool: PgPool) {
     insert_team(&pool).await;
     let repo = PgTeamAgentsRepo::new(pool.clone());
