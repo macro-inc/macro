@@ -155,3 +155,39 @@ export function stickyGate(source: () => boolean, delay = 300): () => boolean {
   onCleanup(() => down.clear());
   return follow;
 }
+
+/**
+ * True once the clock reaches `deadline`; false while the deadline is
+ * undefined or still ahead. Moving the deadline later closes the gate again
+ * until the new time comes.
+ *
+ * deadline  t0 ...... t1 ........ undefined
+ * result    ___####___________####___________
+ *              ^ t0 passes   ^ t1 passes
+ *
+ * @param deadline epoch ms, or undefined for "never"
+ * @returns a derived signal
+ */
+export function deadlineReached(
+  deadline: () => number | undefined
+): () => boolean {
+  const [reached, setReached] = createSignal(false);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const cancel = () => {
+    if (timer !== undefined) clearTimeout(timer);
+    timer = undefined;
+  };
+  createEffect(() => {
+    const at = deadline();
+    cancel();
+    const wait = at === undefined ? undefined : at - Date.now();
+    setReached(wait !== undefined && wait <= 0);
+    if (wait === undefined || wait <= 0) return;
+    timer = setTimeout(() => {
+      timer = undefined;
+      setReached(true);
+    }, wait);
+  });
+  onCleanup(cancel);
+  return reached;
+}

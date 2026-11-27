@@ -5,6 +5,7 @@ import { URL_PARAMS } from '@block-md/constants';
 import { keyNavigationPlugin } from '@block-md/plugins/keyboardNavigation';
 import { SplitBottomPanel } from '@components/app/split-layout/components/SplitBottomPanel';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
+import type { CollabSyncHealth } from '@core/component/LexicalMarkdown/collaboration/syncHealth';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
 import {
   HighlightLayer,
@@ -113,6 +114,7 @@ import {
 } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { createSaveMarkdownDocumentMutation } from '../queries/markdown-document-operations';
+import { CollabSyncMessage } from './CollabSyncMessage';
 import { EditorSystemMessage } from './EditorSystemMessage';
 import { MarkdownCollabProvider } from './MarkdownCollabProvider';
 import { MarkdownPopup } from './MarkdownPopup';
@@ -178,6 +180,7 @@ export function MarkdownEditor(props: {
   const saveBlocked = () => documentState.comments.activeCommentThread === -1;
 
   const IS_SYNC = () => documentSource().type === 'sync';
+  const [syncHealth, setSyncHealth] = createSignal<CollabSyncHealth>();
 
   const debouncedSaveState = debounce(() => {
     const state_ = state();
@@ -691,6 +694,14 @@ export function MarkdownEditor(props: {
           </EditorSystemMessage>
         )}
       </Show>
+      <Show when={!editorError() && syncHealth()?.problem()}>
+        {(problem) => (
+          <CollabSyncMessage
+            problem={problem()}
+            onRetry={() => syncHealth()?.retry()}
+          />
+        )}
+      </Show>
       {/* Note: the mt-1.5 here is to preserve markdown node margin tops. which means this div should avoid padding and border. */}
       <div
         class="relative mt-1.5 text-base"
@@ -732,6 +743,7 @@ export function MarkdownEditor(props: {
             setEditorReady={setEditorReady}
             setEditorError={setEditorError}
             loroManager={props.loroManager}
+            onSyncHealth={setSyncHealth}
           />
         </Show>
 

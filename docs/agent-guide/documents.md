@@ -279,6 +279,19 @@ Embeds hide the dot grid. The bottom-left zoom toolbar has minus and plus button
 around the current zoom percentage. Click the percentage for the shared canvas
 zoom menu: Zoom In/Out, Zoom to fit, and 25%, 50%, 100%, or 200% presets.
 
+## Unsaved edits and lost connection
+
+A Markdown document warns its viewer at the top of the page, and keeps the
+warning in view while they scroll:
+
+- **Changes not saved** (an alert) once an edit has waited 10 s for the server
+  to acknowledge it, including edits left unsent by an earlier session.
+- **Not connected** once the document has been disconnected for 10 s.
+
+Retry reconnects and resends at once. The warning clears as soon as every edit is
+delivered and the connection is back; short reconnects and slow acks never show
+it.
+
 ## Create a document from an editor
 
 Type `/document` in a Markdown slash menu and choose **Document**. The popover

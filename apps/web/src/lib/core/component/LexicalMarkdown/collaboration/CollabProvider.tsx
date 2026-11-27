@@ -72,6 +72,7 @@ import {
   type Setter,
 } from 'solid-js';
 import { FLUSH_COLLABORATION_COMMAND } from './flush';
+import { type CollabSyncHealth, createCollabSyncHealth } from './syncHealth';
 
 type MutatedNodes = UpdateListenerPayload['mutatedNodes'];
 type LoroState = Parameters<LoroManager['syncToLoro']>[0];
@@ -107,6 +108,9 @@ export type CollabProviderProps = {
   statusChrome?: JSX.Element;
   /** Called after the viewer's own content change is written to the session. */
   onLocalEdit?: () => void;
+  /** Receives the session's {@link CollabSyncHealth} once it starts, and
+   *  undefined when it ends, so the host can warn about unsaved edits. */
+  onSyncHealth?: (health: CollabSyncHealth | undefined) => void;
 };
 
 export const FROM_LORO_TAG = 'from-loro';
@@ -163,6 +167,15 @@ export function CollabProvider(props: CollabProviderProps) {
       syncSource()!.documentId
     ),
   });
+  const live = syncSource()!;
+  props.onSyncHealth?.(
+    createCollabSyncHealth({
+      status: () => live.status(),
+      wal: walSyncer,
+      reconnect: () => live.reconnect(),
+    })
+  );
+  onCleanup(() => props.onSyncHealth?.(undefined));
   const writeStateToLoro: typeof syncEngine.syncStateToLoro = async (state) => {
     if (!readOnly()) await syncEngine.syncStateToLoro(state);
   };

@@ -1,5 +1,6 @@
 import { useFlow } from '@app/observability/flow';
 import { CollabProvider } from '@core/component/LexicalMarkdown/collaboration/CollabProvider';
+import type { CollabSyncHealth } from '@core/component/LexicalMarkdown/collaboration/syncHealth';
 import type { MarkdownEditorErrors } from '@core/component/LexicalMarkdown/constants';
 import type { PluginManager } from '@core/component/LexicalMarkdown/plugins';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
@@ -27,6 +28,7 @@ export type MarkdownCollabProviderProps = {
   setEditorReady: Setter<boolean>;
   setEditorError: Setter<MarkdownEditorErrors | null>;
   loroManager: LoroManager;
+  onSyncHealth: (health: CollabSyncHealth | undefined) => void;
 };
 
 /**
@@ -62,6 +64,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
       // The viewer's edit is their touch: Recent moves the document when an
       // editing session starts.
       onLocalEdit={() => recordOwnContentEdit(documentId())}
+      onSyncHealth={props.onSyncHealth}
     />
   );
 }
