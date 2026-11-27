@@ -785,7 +785,8 @@ function api({
       return { ...own, workflow_id: 9 };
     }
     if (path === `${repo}/actions/workflows/9/runs`) {
-      return { workflow_runs: alertRuns };
+      const listed = query.get('status') === 'success' ? alertRuns.filter((run) => run.conclusion === 'success') : alertRuns;
+      return { workflow_runs: listed.slice(0, Number(query.get('per_page'))) };
     }
     if (path === `${repo}/actions/workflows/deploy_on_push.yml/runs`) {
       if (query.get('status') === 'success') {
@@ -858,7 +859,7 @@ describe('main', () => {
   test('this run, started again by hand, reads what its first attempt recorded', async () => {
     const deployed = deployRun(9001, 1, 'd'.repeat(40), 'feat: deployed (#1)', ago(300), { updated_at: ago(280) });
     const failed = deployRun(9002, 2, 'f'.repeat(40), 'feat: failed (#2)', ago(60), { conclusion: 'failure', updated_at: ago(30) });
-    const own = { ...alertRun(100), id: 1, status: 'in_progress', conclusion: null };
+    const own = { ...alertRun(100), id: 1, run_attempt: 2, status: 'in_progress', conclusion: null };
     const earlier = { ...alertRun(99), updated_at: ago(39) };
     const { outputs } = await runMain(
       api({
@@ -872,6 +873,28 @@ describe('main', () => {
         ]),
         alertRuns: [earlier],
         own,
+      }),
+    );
+    assert.deepEqual(outputs, ['shows=failing', 'post=false']);
+  });
+
+  test('a run started again by hand that failed still holds what its first attempt recorded', async () => {
+    const deployed = deployRun(9001, 1, 'd'.repeat(40), 'feat: deployed (#1)', ago(300), { updated_at: ago(280) });
+    const failed = deployRun(9002, 2, 'f'.repeat(40), 'feat: failed (#2)', ago(60), { conclusion: 'failure', updated_at: ago(30) });
+    const earlier = { ...alertRun(98), updated_at: ago(39) };
+    const again = { ...alertRun(99), conclusion: 'failure', run_attempt: 2, updated_at: ago(5) };
+    const replaced = Array.from({ length: 8 }, (_, index) => ({ ...alertRun(100 + index), conclusion: 'cancelled', updated_at: ago(4) }));
+    const { outputs } = await runMain(
+      api({
+        deploys: [failed, deployed],
+        succeeded: [deployed],
+        head: failed,
+        jobs: new Map([
+          [failed.id, [failedJob]],
+          [earlier.id, [alertJob('deploying', ago(40))]],
+          [again.id, [alertJob('failing', ago(29), true), job(2, NAMES.job, { conclusion: 'failure', run_attempt: 2, started_at: ago(6) })]],
+        ]),
+        alertRuns: [...replaced.reverse(), again, earlier],
       }),
     );
     assert.deepEqual(outputs, ['shows=failing', 'post=false']);

@@ -40,12 +40,12 @@
 // records what the channel shows in its last step, "Macro Alerts shows Dev
 // failing" or "Macro Alerts shows Dev deploying", which runs only once a post
 // succeeded or none was needed, so a run of the workflow succeeds only once it
-// recorded. The newest record among its recent successful runs and this one's
-// earlier attempts, read through the jobs API, is what the channel shows, as
-// of when its job started, before it read Dev; with none, it shows Dev
-// deploying. The workflow's runs go one at a time (a concurrency group), so
-// each reads what the one before it left. A failed post records nothing, so
-// the next run posts again.
+// recorded. The newest record among its recent successful runs and the
+// earlier attempts of its recent runs started again by hand, read through the
+// jobs API, is what the channel shows, as of when its job started, before it
+// read Dev; with none, it shows Dev deploying. The workflow's runs go one at a
+// time (a concurrency group), so each reads what the one before it left. A
+// failed post records nothing, so the next run posts again.
 //
 // The step writes the message to DEV_DEPLOY_ALERT_MESSAGE, `post=true` when
 // there is one, and `shows=failing` or `shows=deploying` to its outputs; the
@@ -69,7 +69,7 @@ const LISTED = 100;
 /** How many pages of deploy runs the job lists at most, back to the one Dev last deployed. */
 const PAGES = 10;
 
-/** How many of the alert workflow's newest successful runs the job reads for a record. */
+/** How many of the alert workflow's newest runs, and of its newest successful ones, the job reads for a record. */
 export const LOOK_BACK = 30;
 
 /** How many runs' jobs the job reads at once. */
@@ -96,6 +96,8 @@ const MINUTE = 60 * 1000;
 export type Run = {
   id: number;
   run_number: number;
+  /** Its latest attempt: above 1 once started again by hand. */
+  run_attempt?: number;
   status: string;
   conclusion: string | null;
   created_at: string;
@@ -648,11 +650,13 @@ export async function main() {
     ).workflow_runs as Run[];
 
   const own = await github(`/repos/${repo}/actions/runs/${env('GITHUB_RUN_ID')}`);
-  const [[queried = null, previous = null], alertRuns] = await Promise.all([
+  const alertRunsOf = async (query: Record<string, string>) =>
+    (await github(`/repos/${repo}/actions/workflows/${own.workflow_id}/runs?${new URLSearchParams({ branch: BRANCH, ...query })}`))
+      .workflow_runs as Run[];
+  const [[queried = null, previous = null], recorded, latest] = await Promise.all([
     runsOf({ status: 'success', per_page: '2' }),
-    github(
-      `/repos/${repo}/actions/workflows/${own.workflow_id}/runs?${new URLSearchParams({ branch: BRANCH, status: 'success', per_page: `${LOOK_BACK}` })}`,
-    ).then((listed) => listed.workflow_runs as Run[]),
+    alertRunsOf({ status: 'success', per_page: `${LOOK_BACK}` }),
+    alertRunsOf({ per_page: `${LOOK_BACK}` }),
   ]);
   // Listed after that query, back to the run it found, so the list holds every
   // run since; a run that succeeded in between is the one Dev deployed.
@@ -676,8 +680,11 @@ export async function main() {
     now: context.now,
     jobsOf: read,
   });
-  // This run, when it is started again by hand, holds what its first attempt recorded.
-  const shown = await readShown([own, ...alertRuns.filter((run) => run.id !== own.id)], names, read);
+  // A run started again by hand, this one or one that then failed, holds what
+  // its earlier attempts recorded.
+  const startedAgain = latest.filter((run) => (run.run_attempt ?? 1) > 1);
+  const alertRuns = [...new Map([own, ...startedAgain, ...recorded].map((run) => [run.id, run])).values()];
+  const shown = await readShown(alertRuns, names, read);
   const decision = decide(health, shown);
 
   const outputs = [`shows=${decision.failing ? 'failing' : 'deploying'}`];
