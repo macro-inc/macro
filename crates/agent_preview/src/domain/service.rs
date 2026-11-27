@@ -14,7 +14,7 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
     sync::{
-        Arc, Mutex,
+        Arc, Mutex, PoisonError,
         atomic::{AtomicBool, Ordering},
     },
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -26,6 +26,9 @@ const LEASE: Duration = Duration::from_secs(3600);
 const IDLE: Duration = Duration::from_secs(900);
 const TOKEN_TTL: Duration = Duration::from_secs(120);
 const TICKET_TTL: Duration = Duration::from_secs(30);
+const SSH_TOKEN_PREFIX: &str = "preview_";
+
+mod backoff;
 
 /// Authenticated agent identity, resolved from its session credential.
 #[derive(Clone)]
@@ -239,6 +242,7 @@ pub struct PreviewService {
     peer_slots: Arc<Semaphore>,
     peer_upgrades: Arc<Semaphore>,
     leases: Arc<Mutex<HashMap<AgentSessionId, Arc<Lease>>>>,
+    ssh_backoff: Arc<Mutex<backoff::CredentialBackoff>>,
 }
 use super::storage::{CredentialKind, StoredCredential, StoredPreview};
 impl PreviewService {
@@ -263,6 +267,7 @@ impl PreviewService {
             peer_slots: Arc::new(Semaphore::new(1024)),
             peer_upgrades: Arc::new(Semaphore::new(128)),
             leases: Arc::new(Mutex::new(HashMap::new())),
+            ssh_backoff: Arc::new(Mutex::new(backoff::CredentialBackoff::default())),
         })
     }
     /// Deployment settings for transport adapters.
@@ -334,7 +339,16 @@ impl PreviewService {
         self.authority.agent(token).await
     }
     /// Replace one session preview. The new ID fences every previous transport.
-    #[tracing::instrument(skip_all, fields(session_id = %identity.session), err)]
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            session_id = %identity.session,
+            user_id = %agent_credentials::telemetry_id(identity.owner.as_ref()),
+            preview_id = tracing::field::Empty,
+            credential_id = tracing::field::Empty,
+        ),
+        err
+    )]
     pub async fn share(&self, identity: AgentIdentity, port: u16) -> Result<Share, PreviewError> {
         if port == 0 {
             return Err(PreviewError::Invalid);
@@ -342,7 +356,11 @@ impl PreviewService {
         self.authority.active(identity.session).await?;
         let lifecycle = self.lifecycle.lock().await;
         let id = PreviewId::generate();
-        let token = format!("preview_{}", random());
+        let token = format!("{SSH_TOKEN_PREFIX}{}", random());
+        let hash = digest(&token);
+        let span = tracing::Span::current();
+        span.record("preview_id", tracing::field::display(&id));
+        span.record("credential_id", credential_id(&hash));
         let preview = Preview {
             id: id.clone(),
             agent_session_id: identity.session,
@@ -359,7 +377,7 @@ impl PreviewService {
                     replica: None,
                 },
                 StoredCredential {
-                    hash: digest(&token),
+                    hash,
                     preview: id,
                     user: None,
                     expires: now_ms() + TOKEN_TTL.as_millis() as i64,
@@ -462,11 +480,71 @@ impl PreviewService {
         })
     }
     /// Atomically consume SSH credentials and assign ownership to this accepting replica.
-    #[tracing::instrument(skip_all, fields(replica = %self.replica, preview_id = tracing::field::Empty), err)]
-    pub async fn authenticate_ssh(&self, token: &str) -> Result<Arc<Lease>, PreviewError> {
+    ///
+    /// `None` refuses the username: not a preview token, unknown, already used,
+    /// expired, or backing off after an earlier refusal. Refusals are expected
+    /// (stale scripts, internet scanners on the public port), so they are an
+    /// outcome on the span rather than an error.
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            replica = %self.replica,
+            ssh.client = client,
+            ssh.outcome = tracing::field::Empty,
+            ssh.refusals = tracing::field::Empty,
+            credential_id = tracing::field::Empty,
+            preview_id = tracing::field::Empty,
+            session_id = tracing::field::Empty,
+            user_id = tracing::field::Empty,
+        ),
+        err
+    )]
+    pub async fn authenticate_ssh(
+        &self,
+        token: &str,
+        client: &str,
+    ) -> Result<Option<Arc<Lease>>, PreviewError> {
+        let span = tracing::Span::current();
+        if !is_ssh_token(token) {
+            span.record("ssh.outcome", "malformed");
+            return Ok(None);
+        }
+
+        let hash = digest(token);
+        span.record("credential_id", credential_id(&hash));
+        let waiting = self
+            .ssh_backoff
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .waiting(&hash, tokio::time::Instant::now());
+        if waiting {
+            span.record("ssh.outcome", "backoff");
+            return Ok(None);
+        }
+
         let lifecycle = self.lifecycle.lock().await;
-        let stored = self.repository.claim(digest(token), self.replica).await?;
-        tracing::Span::current().record("preview_id", tracing::field::display(&stored.preview.id));
+        let Some(stored) = self.repository.claim(hash, self.replica).await? else {
+            drop(lifecycle);
+            let refusals = self
+                .ssh_backoff
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .refused(hash, tokio::time::Instant::now());
+            span.record("ssh.outcome", "refused");
+            if let Some(refusals) = refusals {
+                span.record("ssh.refusals", i64::from(refusals));
+            }
+            return Ok(None);
+        };
+        span.record("preview_id", tracing::field::display(&stored.preview.id));
+        span.record(
+            "session_id",
+            tracing::field::display(&stored.preview.agent_session_id),
+        );
+        span.record(
+            "user_id",
+            agent_credentials::telemetry_id(stored.user.as_ref()),
+        );
         let remaining = stored.preview.expires_at.saturating_sub(now_ms() as u64);
         let session = stored.preview.agent_session_id;
         let lease = Arc::new(Lease {
@@ -490,15 +568,18 @@ impl PreviewService {
             self.finish(&old, PreviewStatus::Offline).await;
         }
         if let Err(error) = self.authority.active(session).await {
+            span.record("ssh.outcome", "session_inactive");
             self.finish(&lease, PreviewStatus::Offline).await;
             return Err(error);
         }
         // A replacement/stop racing the SSH handshake cannot install a live obsolete lease.
         if self.repository.preview(&lease.preview().id).await.is_err() {
+            span.record("ssh.outcome", "replaced");
             self.finish(&lease, PreviewStatus::Offline).await;
             return Err(PreviewError::Offline);
         }
-        Ok(lease)
+        span.record("ssh.outcome", "accepted");
+        Ok(Some(lease))
     }
     /// Accept one logical reverse forward, never an arbitrary socket destination.
     pub fn register(
@@ -739,6 +820,18 @@ fn random() -> String {
 }
 fn digest(value: &str) -> [u8; 32] {
     Sha256::digest(value.as_bytes()).into()
+}
+/// Whether a username has the shape `share` mints, so other names never reach storage.
+fn is_ssh_token(username: &str) -> bool {
+    username
+        .strip_prefix(SSH_TOKEN_PREFIX)
+        .and_then(|secret| URL_SAFE_NO_PAD.decode(secret).ok())
+        .is_some_and(|bytes| bytes.len() == 32)
+}
+/// Opaque telemetry id for a credential: a prefix of its stored digest, which
+/// joins a refused retry to the `share` span that minted the credential.
+fn credential_id(hash: &[u8; 32]) -> String {
+    hex::encode(&hash[..8])
 }
 #[cfg(test)]
 mod test;

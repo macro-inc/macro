@@ -205,7 +205,12 @@ async fn two_replicas_route_stock_ssh_browser_http_and_websocket(pool: PgPool) {
     tokio::time::timeout(std::time::Duration::from_secs(15), events.ready.notified())
         .await
         .unwrap();
-    assert!(a.authenticate_ssh(&share.token).await.is_err());
+    assert!(
+        a.authenticate_ssh(&share.token, "OpenSSH_9.6")
+            .await
+            .unwrap()
+            .is_none()
+    );
     assert_eq!(
         a.get(receipt(AccessLevel::View))
             .await
@@ -354,7 +359,11 @@ async fn replacement_stop_stale_owner_and_late_cleanup_are_fenced(pool: PgPool) 
         .await
         .unwrap();
     let first = a.share(identity(), 3000).await.unwrap();
-    let old = b.authenticate_ssh(&first.token).await.unwrap();
+    let old = b
+        .authenticate_ssh(&first.token, "OpenSSH_9.6")
+        .await
+        .unwrap()
+        .unwrap();
     struct TrackedTunnel(Arc<std::sync::atomic::AtomicBool>);
     #[async_trait]
     impl crate::domain::ports::Tunnel for TrackedTunnel {
@@ -379,7 +388,11 @@ async fn replacement_stop_stale_owner_and_late_cleanup_are_fenced(pool: PgPool) 
         .await
         .unwrap();
     let next = a.share(identity(), 3000).await.unwrap();
-    let successor = a.authenticate_ssh(&next.token).await.unwrap();
+    let successor = a
+        .authenticate_ssh(&next.token, "OpenSSH_9.6")
+        .await
+        .unwrap()
+        .unwrap();
     a.ready(&successor).await;
     b.sweep().await;
     assert!(old.cancel.is_cancelled());
@@ -421,7 +434,11 @@ async fn replacement_stop_stale_owner_and_late_cleanup_are_fenced(pool: PgPool) 
         .await
         .unwrap();
     let third = b.share(identity(), 3000).await.unwrap();
-    let lease = a.authenticate_ssh(&third.token).await.unwrap();
+    let lease = a
+        .authenticate_ssh(&third.token, "OpenSSH_9.6")
+        .await
+        .unwrap()
+        .unwrap();
     a.ready(&lease).await;
     events.changes.lock().unwrap().clear();
     sqlx::query!(
@@ -486,14 +503,15 @@ async fn concurrent_credentials_are_single_use_host_bound_and_bounded(pool: PgPo
         .unwrap();
     let share = a.share(identity(), 3000).await.unwrap();
     let (left, right) = tokio::join!(
-        a.authenticate_ssh(&share.token),
-        b.authenticate_ssh(&share.token)
+        a.authenticate_ssh(&share.token, "OpenSSH_9.6"),
+        b.authenticate_ssh(&share.token, "OpenSSH_9.6")
     );
-    assert_ne!(left.is_ok(), right.is_ok());
-    if let Ok(l) = left {
+    let (left, right) = (left.unwrap(), right.unwrap());
+    assert_ne!(left.is_some(), right.is_some());
+    if let Some(l) = left {
         a.ready(&l).await;
     }
-    if let Ok(l) = right {
+    if let Some(l) = right {
         b.ready(&l).await;
     }
     let ticket = a.launch(receipt(AccessLevel::View)).await.unwrap();

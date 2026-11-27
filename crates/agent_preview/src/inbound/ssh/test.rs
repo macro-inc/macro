@@ -293,6 +293,45 @@ async fn gateway_refuses_outbound_relay_and_shell() {
     let _ = server.await;
 }
 
+#[test]
+fn client_software_keeps_only_the_bounded_software_field() {
+    assert_eq!(
+        client_software(b"SSH-2.0-OpenSSH_9.6p1 Ubuntu-3ubuntu13.5\r"),
+        "OpenSSH_9.6p1"
+    );
+    assert_eq!(client_software(b"SSH-2.0-Go\r"), "Go");
+    assert_eq!(client_software(b"SSH-2.0-libssh_0.9.6"), "libssh_0.9.6");
+    assert_eq!(client_software(b"GET / HTTP/1.1\r"), "unknown");
+    assert_eq!(client_software(b"SSH-2.0-\x1b[31m\r"), "[31m");
+    assert_eq!(client_software(b"SSH-2.0-\r"), "unknown");
+    let long = format!("SSH-2.0-{}", "a".repeat(300));
+    assert_eq!(client_software(long.as_bytes()).len(), 64);
+}
+
+#[tokio::test]
+async fn identification_split_across_reads_is_captured_and_passed_through() {
+    let (mut client, server) = tokio::io::duplex(64);
+    let captured = Arc::new(OnceLock::new());
+    let mut server = Identified {
+        stream: server,
+        line: Vec::new(),
+        client: captured.clone(),
+    };
+    let sent = b"SSH-2.0-OpenSSH_9.6p1 Debian\r\n\x00\x00\x01\x0ckex";
+    let mut received = Vec::new();
+    for chunk in [&sent[..5], &sent[5..17], &sent[17..]] {
+        client.write_all(chunk).await.unwrap();
+        let mut buf = [0; 64];
+        let read = server.read(&mut buf).await.unwrap();
+        received.extend_from_slice(&buf[..read]);
+        if received.len() <= 17 {
+            assert!(captured.get().is_none());
+        }
+    }
+    assert_eq!(received, sent);
+    assert_eq!(captured.get().unwrap(), "OpenSSH_9.6p1");
+}
+
 #[tokio::test]
 async fn stop_closes_authenticated_ssh_before_a_forward_is_registered() {
     struct Client {
