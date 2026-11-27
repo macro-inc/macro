@@ -70,6 +70,7 @@ export const bootstrapResponses = new Map<
   ['GET /auth/team', { body: {}, status: 404 }],
   ['GET /auth/team/user/invites', { body: { invites: [] } }],
   ['GET /auth/cursor-api-key', { body: { registered: false } }],
+  ['GET /auth/link/email/providers', { body: { gmail: true, outlook: false } }],
   [
     'GET /auth/link/github/status',
     { body: { reauthentication_required: false } },
@@ -78,6 +79,8 @@ export const bootstrapResponses = new Map<
   ['POST /email/email/links/health-check', { body: {} }],
   ['GET /email/email/labels', { body: EMAIL_LABELS }],
   ['GET /calendar/calendars', { body: { calendars: [] } }],
+  // The fixture user has saved no booking settings.
+  ['GET /calendar/scheduling/settings', { body: {}, status: 404 }],
   ['GET /contacts/contacts', { body: { contacts: [] } }],
   ['GET /dss/bots', { body: [] }],
   ['GET /dss/agents', { body: [] }],
@@ -108,6 +111,15 @@ export const bootstrapResponses = new Map<
   ['GET /cognition/connectors', { body: [] }],
   ['GET /cognition/onboarding/prompts', { body: { dismissed: [] } }],
   ['GET /cognition/import/state', { body: { runs: [], entities: [] } }],
+  [
+    'GET /scheduled-action/suggestions',
+    {
+      body: {
+        counts: { done: 0, failed: 0, open: 0, running: 0 },
+        suggestions: [],
+      },
+    },
+  ],
   ['POST /scheduled-action/suggestions/seen', { body: {} }],
   ['GET /scheduled-action/scheduled-actions', { body: [] }],
   ['GET /scheduled-action/scheduled-actions/catalog', { body: [] }],

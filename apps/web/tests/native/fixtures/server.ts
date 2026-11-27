@@ -227,6 +227,8 @@ export function startFixtureServer(port = 0, filterMatrix = false) {
               watermark: [],
             },
             workFeed: { entries: [], nextCursor: null, nextPosition: null },
+            // The fixture user has no tasks to group.
+            groupSoup: { bins: [] },
             contacts: { nodes: [], nextCursor: null },
             timeTracking: {
               id: USER_ID,
