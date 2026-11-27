@@ -65,6 +65,7 @@ function fillingDirectory(viewsCurrent = true) {
     retry: () => {},
     recordView: () => {},
     viewsCurrent: current,
+    removalsCurrent: current,
   };
   return {
     directory,

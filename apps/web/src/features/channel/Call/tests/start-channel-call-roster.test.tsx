@@ -70,6 +70,7 @@ function directoryOf(channels: readonly DirectoryChannel[]): ChannelDirectory {
     retry: () => {},
     recordView: () => {},
     viewsCurrent: () => true,
+    removalsCurrent: () => true,
   };
 }
 

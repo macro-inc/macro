@@ -48,7 +48,7 @@ it('opens the DM a settled directory answers, as an existing one', async () => {
   const directory = {
     channels: () => [],
     complete: () => true,
-    viewsCurrent: () => true,
+    removalsCurrent: () => true,
   };
   const open = vi.fn();
 

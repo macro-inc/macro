@@ -152,11 +152,12 @@ it('gives up on a lookup that never answers at its deadline, ending the request'
 
 function directoryWith(
   members: string[],
-  { complete = true, viewsCurrent = true } = {}
+  { complete = true, viewsCurrent = true, removalsCurrent = true } = {}
 ) {
   return {
     complete: () => complete,
     viewsCurrent: () => viewsCurrent,
+    removalsCurrent: () => removalsCurrent,
     channels: () => [
       directoryChannel('dm-cached', {
         channelType: 'direct_message',
@@ -192,13 +193,15 @@ it('asks the server while the directory is incomplete', async () => {
   });
 });
 
-it('asks the server until a pass of this page reconciled the cached records', async () => {
-  // A DM deleted while no tab was open stays cached until that pass.
+it('asks the server while the directory may still list a removed DM, though its views are current', async () => {
+  // A DM deleted while no tab was open, or while the soup socket was down,
+  // stays listed until a pass rereads the records; the in-memory directory
+  // hears of no deletion at all.
   answers({ data: { user: { id: VIEWER, directMessageChannelId: 'dm-1' } } });
   const found = await existingDirectMessage(
     VIEWER,
     PERSON,
-    directoryWith([VIEWER, PERSON], { viewsCurrent: false })
+    directoryWith([VIEWER, PERSON], { removalsCurrent: false })
   );
   expect(found._unsafeUnwrap()).toEqual({
     channelId: 'dm-1',

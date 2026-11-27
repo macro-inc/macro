@@ -877,6 +877,15 @@ describe('in-memory channel directory', () => {
     expect(directory.lookup(channelUuid('zzz')).status).toBe('missing');
   });
 
+  it('never vouches that a channel it lists was not removed since', async () => {
+    // No removal reaches it after its pages were read.
+    const network = fakeNetwork([channelRecord('a')]);
+    const directory = mountMemoryDirectory(network);
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    expect(directory.viewsCurrent()).toBe(true);
+    expect(directory.removalsCurrent()).toBe(false);
+  });
+
   it('marks a channel the server does not return as missing before the pages land', async () => {
     const network = fakeNetwork([channelRecord('a')], { holdPages: true });
     const directory = mountMemoryDirectory(network);
@@ -1064,6 +1073,8 @@ type CachedDirectoryOptions = {
   subscribeMembership?: (
     listener: (patch: ChannelMembershipPatch) => void
   ) => () => void;
+  /** Reconnects of the soup socket. */
+  subscribeReconnected?: (listener: () => void) => () => void;
 };
 
 const CACHE_SESSION = 'session-1';
@@ -1182,6 +1193,7 @@ function mountCachedDirectory(
       sessionStartedAt: options.sessionStartedAt,
       departureRechecksMs: options.departureRechecksMs,
       subscribeMembership: options.subscribeMembership,
+      subscribeReconnected: options.subscribeReconnected,
     });
   });
   return {
@@ -1396,6 +1408,33 @@ describe('cached channel directory', () => {
 
       lanePass('g1', '2026-11-21T08:00:01.000Z', 'finished');
       await vi.waitFor(() => expect(directory.viewsCurrent()).toBe(true));
+    });
+
+    it('shows removals as current only after a pass that started since the soup socket last reconnected', async () => {
+      const reconnects = new Set<() => void>();
+      const { cache, directory } = mountCachedDirectory([], {
+        sessionStartedAt: Date.parse(LOADED_AT),
+        subscribeReconnected: (listener) => {
+          reconnects.add(listener);
+          return () => reconnects.delete(listener);
+        },
+      });
+      cache.put(channelRecord('a'));
+      // The last session's pass leaves records this page never reread.
+      lanePass('g1', '2026-11-20T08:00:00.000Z', 'finished');
+      await vi.waitFor(() => expect(directory.complete()).toBe(true));
+      expect(directory.removalsCurrent()).toBe(false);
+
+      lanePass('g1', '2026-11-21T08:00:01.000Z', 'finished');
+      await vi.waitFor(() => expect(directory.removalsCurrent()).toBe(true));
+
+      // Removals published while the socket was down never reached the cache.
+      for (const listener of reconnects) listener();
+      expect(directory.viewsCurrent()).toBe(true);
+      expect(directory.removalsCurrent()).toBe(false);
+
+      lanePass('g1', new Date(Date.now() + 1_000).toISOString(), 'finished');
+      await vi.waitFor(() => expect(directory.removalsCurrent()).toBe(true));
     });
 
     it('is not current again once the storage resets', async () => {

@@ -37,6 +37,7 @@ import {
   getGraphqlSoupCacheHost,
   getGraphqlSoupClient,
   hydrateGraphqlSoup,
+  subscribeGraphqlSoupReconnected,
 } from '@service-storage/graphql-soup';
 import { promiseTimeout, until } from '@solid-primitives/promise';
 import { AsyncQueuer, Batcher } from '@tanstack/pacer';
@@ -238,6 +239,14 @@ export type ChannelDirectory = {
    * page: pages restored from an earlier one keep the views they were read
    * with until they are read again, on mount. */
   viewsCurrent: Accessor<boolean>;
+  /** Whether no channel removed from the viewer's list since this page
+   * loaded can still be listed, so a DM the directory lists still exists.
+   * The cached directory is, once a pass of the channel lane that started
+   * after the page loaded and after the soup socket last reconnected has
+   * finished: a removal published while the socket was down reaches the
+   * cache only when a pass rereads its records. The in-memory one never is:
+   * no removal reaches it after its pages were read. */
+  removalsCurrent: Accessor<boolean>;
 };
 
 export const EMPTY_CHANNEL_DIRECTORY_STATE: ChannelDirectoryState = {
@@ -1584,6 +1593,9 @@ type CachedDirectoryDeps = {
    * lane reread after it show views as current as `ChannelDirectory`
    * promises. `performance.timeOrigin` when left out. */
   sessionStartedAt?: number;
+  /** Subscribes to reconnects of the soup socket, after which only a later
+   * pass of the lane shows removals as current. None when left out. */
+  subscribeReconnected?: (listener: () => void) => () => void;
 };
 
 /** The joined channels paged from the network once the channel lane gave
@@ -1614,17 +1626,21 @@ type FallbackReason =
 
 /** What the channel lane's checkpoint says of the current storage
  * generation. `viewsCurrent`: a pass that started at or after
- * `sessionStartedAt` has finished, so it reread every record. */
+ * `sessionStartedAt` has finished, so it reread every record.
+ * `passStartedAt`: when the last finished pass started, in epoch
+ * milliseconds. */
 type LaneProgress = {
   complete: boolean;
   failed: boolean;
   viewsCurrent: boolean;
+  passStartedAt: number | undefined;
 };
 
 const LANE_NOT_STARTED: LaneProgress = {
   complete: false,
   failed: false,
   viewsCurrent: false,
+  passStartedAt: undefined,
 };
 
 function readLaneProgress(
@@ -1637,27 +1653,31 @@ function readLaneProgress(
     CHANNEL_DIRECTORY_LANE,
     storageGeneration
   );
+  const passStartedAt = complete
+    ? lanePassStartedAt(
+        loadSoupBackfillCheckpoint(userId, CHANNEL_DIRECTORY_LANE)
+      )
+    : undefined;
   return {
     complete,
     failed:
       !complete &&
       soupBackfillLaneFailed(userId, CHANNEL_DIRECTORY_LANE, storageGeneration),
     viewsCurrent:
-      complete &&
-      laneReadSince(
-        loadSoupBackfillCheckpoint(userId, CHANNEL_DIRECTORY_LANE),
-        sessionStartedAt
-      ),
+      passStartedAt !== undefined && passStartedAt >= sessionStartedAt,
+    passStartedAt,
   };
 }
 
-/** Whether the lane's last finished pass started at or after `time`: a
- * finished pass leaves its own start as the watermark. */
-function laneReadSince(checkpoint: SoupBackfillCheckpoint, time: number) {
+/** When the lane's last finished pass started: a finished pass leaves its
+ * own start as the watermark. */
+function lanePassStartedAt(
+  checkpoint: SoupBackfillCheckpoint
+): number | undefined {
   if (checkpoint.completedAt === null || checkpoint.updatedSince === null)
-    return false;
+    return undefined;
   const started = Date.parse(checkpoint.updatedSince);
-  return Number.isFinite(started) && started >= time;
+  return Number.isFinite(started) ? started : undefined;
 }
 
 /** A channel's record as the cache showed it after a change, or null once
@@ -1857,6 +1877,24 @@ export function createCachedChannelDirectory(
   const sessionStartedAt = deps.sessionStartedAt ?? performance.timeOrigin;
   // Written only by `render`, from the read shown.
   const [viewsCurrent, setViewsCurrent] = createSignal(false);
+  // When the pass the shown read follows started, once views are current.
+  const [shownPassStartedAt, setShownPassStartedAt] = createSignal<
+    number | undefined
+  >();
+  // When the soup socket last reconnected: removals may have been missed.
+  const [reconnectedAt, setReconnectedAt] = createSignal(
+    Number.NEGATIVE_INFINITY
+  );
+  const removalsCurrent = () => {
+    const started = shownPassStartedAt();
+    return (
+      viewsCurrent() && started !== undefined && started >= reconnectedAt()
+    );
+  };
+  const unsubscribeReconnected = deps.subscribeReconnected?.(() =>
+    setReconnectedAt(Date.now())
+  );
+  if (unsubscribeReconnected) onCleanup(unsubscribeReconnected);
   // A full read lists every cached record; a keys read rereads only the
   // records a by-id read wrote.
   let wantFull = true;
@@ -1989,7 +2027,9 @@ export function createCachedChannelDirectory(
    * settled (`settle`) reuses the confirmations the last read chose, and
    * the rows too unless a read's outcome adds or removes one. */
   const render = (settle = false) => {
-    setViewsCurrent(lastRead !== undefined && publishedLane.viewsCurrent);
+    const current = lastRead !== undefined && publishedLane.viewsCurrent;
+    setViewsCurrent(current);
+    setShownPassStartedAt(current ? publishedLane.passStartedAt : undefined);
     const network = fallback;
     if (network.status !== 'loaded') {
       fromRead = lastRead
@@ -2425,7 +2465,9 @@ export function createCachedChannelDirectory(
       if (
         next.complete !== lane.complete ||
         next.failed !== lane.failed ||
-        next.viewsCurrent !== lane.viewsCurrent
+        next.viewsCurrent !== lane.viewsCurrent ||
+        // A pass after a reconnect makes removals current again.
+        (next.passStartedAt !== lane.passStartedAt && !untrack(removalsCurrent))
       )
         refreshNow();
     })
@@ -2536,6 +2578,7 @@ export function createCachedChannelDirectory(
       if (views.record(channelId, viewedAt)) stampView(channelId, viewedAt);
     },
     viewsCurrent,
+    removalsCurrent,
   };
 }
 
@@ -2624,6 +2667,7 @@ export function createMemoryChannelDirectory(
     // Until the pages load, the rows read by id stand in, read in this page.
     viewsCurrent: () =>
       !queryReadyGate(pages) || readInThisPage(pages.dataUpdatedAt),
+    removalsCurrent: () => false,
   };
 }
 
@@ -2637,6 +2681,7 @@ const EMPTY_CHANNEL_DIRECTORY: ChannelDirectory = {
   retry: () => {},
   recordView: () => {},
   viewsCurrent: () => true,
+  removalsCurrent: () => true,
 };
 
 /** A complete directory of `channels`, which may change, for tests and
@@ -2654,6 +2699,7 @@ export function staticChannelDirectory(
     retry: () => {},
     recordView: () => {},
     viewsCurrent: () => true,
+    removalsCurrent: () => true,
   };
 }
 
@@ -2712,6 +2758,7 @@ export function createAppChannelDirectory(): ChannelDirectory {
         stampCachedChannelView(cache, channelId, viewedAt),
       ownWrites: ownChannelWrites(queryClient),
       subscribeMembership: subscribeToChannelMembership,
+      subscribeReconnected: subscribeGraphqlSoupReconnected,
       removeUnreadable: (ids, generation, signal) =>
         removeChannelsGoneOnPrimary({
           host: cache,
@@ -2732,5 +2779,6 @@ export function createAppChannelDirectory(): ChannelDirectory {
     recordView: (channelId, viewedAt) =>
       untrack(directory).recordView(channelId, viewedAt),
     viewsCurrent: () => directory().viewsCurrent(),
+    removalsCurrent: () => directory().removalsCurrent(),
   };
 }

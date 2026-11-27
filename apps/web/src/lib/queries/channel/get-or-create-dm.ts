@@ -149,12 +149,12 @@ export type DirectMessageSource = 'directory' | 'server';
  * DMs the viewer is still in, the one the server's get-or-create would reuse,
  * as the joined channel list it replaces showed it. A DM the viewer left is
  * not answered, though get-or-create may still reuse it. A `directory` that
- * is complete and current (a pass of this page reread every cached record,
- * so a DM deleted while no tab was open is gone from it) answers when one of
- * its DMs has just the two of them in it, which the server would rank first
- * (`directMessageWithPerson`); otherwise the server is asked, since the DM
- * may be one the directory cannot rank (only the other person is left in it)
- * or has not received yet. The server
+ * is complete and holds no removed channel (`removalsCurrent`: a DM deleted
+ * while no tab was open, or while the soup socket was down, is gone from it)
+ * answers when one of its DMs has just the two of them in it, which the
+ * server would rank first (`directMessageWithPerson`); otherwise the server
+ * is asked, since the DM may be one the directory cannot rank (only the
+ * other person is left in it) or has not received yet. The server
  * looks up people only; agents are opened through their own DM flow
  * (`openTeamAgentDirectMessage`), so a bot answers none without asking.
  * Fails with `DirectMessageLookupTimedOut` once the server has not answered
@@ -163,14 +163,17 @@ export type DirectMessageSource = 'directory' | 'server';
 export function existingDirectMessage(
   viewerId: string,
   recipientId: string,
-  directory?: Pick<ChannelDirectory, 'channels' | 'complete' | 'viewsCurrent'>
+  directory?: Pick<
+    ChannelDirectory,
+    'channels' | 'complete' | 'removalsCurrent'
+  >
 ): ResultAsync<
   { channelId: string | undefined; source: DirectMessageSource | undefined },
   unknown
 > {
   if (recipientId === viewerId || isBotPrincipalId(recipientId))
     return okAsync({ channelId: undefined, source: undefined });
-  if (directory?.complete() && directory.viewsCurrent()) {
+  if (directory?.complete() && directory.removalsCurrent()) {
     const channelId = directMessageWithPerson(
       directory.channels(),
       viewerId,
