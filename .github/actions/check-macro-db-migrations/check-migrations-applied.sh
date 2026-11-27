@@ -5,7 +5,7 @@ set -euo pipefail
 
 # One line per migration: `<version>/<status> <description>`, where status is
 # `installed`, `pending`, or `installed (different checksum)`. `sqlx`, not
-# `cargo sqlx`: the db-migrator runner has no cargo.
+# `cargo sqlx`: the db-migrator runner has no Rust toolchain.
 migration_statuses=$(sqlx migrate info)
 
 if [[ -z "$migration_statuses" ]]; then
