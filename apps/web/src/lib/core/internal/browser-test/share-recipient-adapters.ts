@@ -228,11 +228,14 @@ const HOST: ContactWindowHost = {
     search: async (request) => {
       setReads((value) => value + 1);
       setPendingReads((value) => value + 1);
-      await answerWhenDue({
-        query: request.query,
-        cursor: request.cursor ?? null,
-      });
-      setPendingReads((value) => value - 1);
+      try {
+        await answerWhenDue({
+          query: request.query,
+          cursor: request.cursor ?? null,
+        });
+      } finally {
+        setPendingReads((value) => value - 1);
+      }
       const { page, next } = search(
         request.query,
         request.cursor ? Number(request.cursor) : 0,
