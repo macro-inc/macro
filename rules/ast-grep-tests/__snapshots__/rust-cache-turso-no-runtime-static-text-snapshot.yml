@@ -1,0 +1,56 @@
+id: rust-cache-turso-no-runtime-static-text
+snapshots:
+  ? |
+    fn f(text: String) -> &'static str { Box::leak(text.into_boxed_str()) }
+  : labels:
+    - source: Box::leak(text.into_boxed_str())
+      style: primary
+      start: 37
+      end: 69
+  ? |
+    fn f(text: String) -> &'static str { String::leak(text) }
+  : labels:
+    - source: String::leak(text)
+      style: primary
+      start: 37
+      end: 55
+  ? |
+    fn f(text: String) -> &'static str { text.leak() }
+  : labels:
+    - source: text.leak()
+      style: primary
+      start: 37
+      end: 48
+  ? |
+    static TEXT: LazyLock<String> = LazyLock::new(|| std::env::args().collect());
+  : labels:
+    - source: 'static TEXT: LazyLock<String> = LazyLock::new(|| std::env::args().collect());'
+      style: primary
+      start: 0
+      end: 77
+    - source: String
+      style: secondary
+      start: 22
+      end: 28
+  ? |
+    static TEXT: OnceLock<String> = OnceLock::new();
+  : labels:
+    - source: 'static TEXT: OnceLock<String> = OnceLock::new();'
+      style: primary
+      start: 0
+      end: 48
+    - source: String
+      style: secondary
+      start: 22
+      end: 28
+  ? |
+    static mut TEXT: String = String::new();
+  : labels:
+    - source: 'static mut TEXT: String = String::new();'
+      style: primary
+      start: 0
+      end: 40
+    - source: String
+      style: secondary
+      start: 17
+      end: 23

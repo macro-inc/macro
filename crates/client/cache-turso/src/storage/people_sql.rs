@@ -1,6 +1,7 @@
 //! Disposable contact facts in the existing predicate index. A query never
 //! decodes a normalized contact: only its bounded final SQL result leaves Turso.
 use super::*;
+use crate::sql::UnreportedSql;
 use cache_core::people::sql::{
     PeopleSqlPlan, PeopleSqlResult, SqlParameter, SqlScalar, projection,
 };
@@ -10,7 +11,9 @@ use cache_core::value::CacheValue;
 mod test;
 
 pub(super) const VERSION_KEY: &str = "people_sql_projection_version";
-fn statement(plan: &PeopleSqlPlan) -> String {
+/// Unreported: the plan's SQL is compiled from a caller's query, so its text is
+/// not this crate's.
+fn statement(plan: &PeopleSqlPlan) -> UnreportedSql {
     let mut sql = "WITH __people AS (SELECT d.id AS __document, NULL AS row_position".to_owned();
     let mut joins = String::new();
     // Attribute names come only from the shared compiler's private plan, never
@@ -27,7 +30,7 @@ fn statement(plan: &PeopleSqlPlan) -> String {
     sql.push_str(&joins);
     sql.push_str(" WHERE d.profile = ? AND d.partition = ? AND d.state = 0)");
     sql.push_str(plan.sql());
-    sql
+    UnreportedSql::new(sql)
 }
 
 pub(super) fn viewer(connection: &Db) -> Result<Option<String>, TursoStorageError> {

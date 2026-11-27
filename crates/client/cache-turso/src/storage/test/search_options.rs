@@ -39,6 +39,7 @@ fn compare_search_scan_options() {
             let (covering, parameters) =
                 search::statement(SearchProfile::QuickAccessV1, "document");
             let sql = covering.replace("search_documents_browse_idx", "search_baseline");
+            let covering = covering.to_owned();
             let plan = driver::query(
                 &connection,
                 &format!("EXPLAIN QUERY PLAN {covering}"),

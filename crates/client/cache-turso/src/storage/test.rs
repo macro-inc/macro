@@ -1,4 +1,5 @@
 use super::*;
+use crate::sql::Template;
 
 mod cold_writes;
 mod conjunction_cost;
@@ -159,11 +160,15 @@ fn token(owner: &str, generation: u64) -> MutationClaimToken {
     }
 }
 
-fn raw_execute(storage: &TursoStorage, sql: &str, values: Vec<Value>) -> i64 {
+fn raw_execute<'s>(
+    storage: &TursoStorage,
+    sql: impl Into<Template<'s>>,
+    values: Vec<Value>,
+) -> i64 {
     driver::execute(&storage.connection(), sql, values).unwrap()
 }
 
-fn raw_scalar(storage: &TursoStorage, sql: &str) -> i64 {
+fn raw_scalar<'s>(storage: &TursoStorage, sql: impl Into<Template<'s>>) -> i64 {
     let rows = driver::query(&storage.connection(), sql, Vec::new()).unwrap();
     required_i64(&rows[0], 0).unwrap()
 }

@@ -5,6 +5,7 @@ mod sql;
 mod test;
 
 use super::*;
+use crate::sql::Sql as SqlTemplate;
 use cache_core::people::name_search::{
     self as names_search, NameSearch, NameStage, prefix_end, projection as names,
     reader::{NameSearchRead, ScanStart},
@@ -77,9 +78,10 @@ fn incomplete(
 ) -> Result<(), TursoStorageError> {
     let mut p = Params::default();
     let scope = sql::scope(&mut p, read, false);
-    let query = format!(
-        "SELECT r.__typename,r.id,r.value FROM index_documents d {} WHERE {scope} AND d.state>0",
-        sql::RECORD_JOIN
+    let query = crate::sql!(
+        "SELECT r.__typename,r.id,r.value FROM index_documents d {join} WHERE {scope} AND d.state>0",
+        join = sql::RECORD_JOIN,
+        scope
     );
     visit(connection, &query, p.values, |key, record| {
         if prior {
@@ -105,10 +107,14 @@ fn stage_read(
         let matching = if matches!(stage, NameStage::Contains | NameStage::Address) {
             sql::seed_filter(&mut p, read, Some(stage), seed)
         } else {
-            "1".into()
+            crate::sql!("1")
         };
-        let query = format!(
-            "SELECT seed.document_id FROM exact_facts seed INDEXED BY exact_facts_lookup_idx CROSS JOIN index_documents d ON d.id=seed.document_id WHERE {restriction} AND {scope} AND {matching} LIMIT {PROBE_LIMIT}"
+        let query = crate::sql!(
+            "SELECT seed.document_id FROM exact_facts seed INDEXED BY exact_facts_lookup_idx CROSS JOIN index_documents d ON d.id=seed.document_id WHERE {restriction} AND {scope} AND {matching} LIMIT {PROBE_LIMIT}",
+            restriction,
+            scope,
+            matching,
+            PROBE_LIMIT = SqlTemplate::constant::<{ PROBE_LIMIT as i64 }>()
         );
         let mut ids = Vec::with_capacity(PROBE_LIMIT);
         driver::query_each(connection, &query, p.values, |row| {
@@ -141,12 +147,14 @@ fn stage_read(
             let ids = selected_ids
                 .into_iter()
                 .map(|id| p.bind(Value::from_i64(id)))
-                .collect::<Vec<_>>()
-                .join(",");
+                .collect::<Vec<_>>();
+            let ids = SqlTemplate::join(ids, ",");
             let scope = sql::scope(&mut p, read, true);
-            let query = format!(
-                "SELECT r.__typename,r.id,r.value FROM index_documents d {} WHERE d.id IN ({ids}) AND {scope}",
-                sql::RECORD_JOIN
+            let query = crate::sql!(
+                "SELECT r.__typename,r.id,r.value FROM index_documents d {join} WHERE d.id IN ({ids}) AND {scope}",
+                join = sql::RECORD_JOIN,
+                ids,
+                scope
             );
             visit(connection, &query, p.values, |key, record| {
                 read.push(key, record, Some(stage))
@@ -184,7 +192,7 @@ fn candidates(
 }
 fn visit(
     connection: &Db,
-    query: &str,
+    query: &SqlTemplate,
     params: driver::Values,
     mut row: impl FnMut(&EntityKey<'_>, &Record),
 ) -> Result<(), TursoStorageError> {
@@ -290,29 +298,30 @@ fn ordered_scan(
         let mut p = Params::default();
         let attr = p.bind(text(attribute));
         let low = p.bind(Value::from_blob(prefix.clone()));
-        let mut range = format!("rank.attribute={attr} AND rank.value>={low}");
+        let mut range = crate::sql!("rank.attribute={attr} AND rank.value>={low}", attr, low);
         if let Some(end) = prefix_end(&prefix) {
             let high = p.bind(Value::from_blob(end));
-            range.push_str(&format!(" AND rank.value<{high}"));
+            range.push(crate::sql!(" AND rank.value<{high}", high));
         }
         if let Some(after) = &after {
             let after = p.bind(Value::from_blob([prefix.as_slice(), after].concat()));
-            range.push_str(&format!(" AND rank.value>{after}"));
+            range.push(crate::sql!(" AND rank.value>{after}", after));
         }
         // Bound the expensive filtered scan by rank position, including all time
         // ties. Exactly one stable identity key crosses this boundary.
         let boundary = driver::query(
             connection,
-            &format!(
-                "SELECT rank.value FROM exact_facts rank INDEXED BY exact_facts_lookup_idx WHERE {range} ORDER BY rank.value LIMIT 1 OFFSET {}",
-                RANK_BUDGET - 1
+            &crate::sql!(
+                "SELECT rank.value FROM exact_facts rank INDEXED BY exact_facts_lookup_idx WHERE {range} ORDER BY rank.value LIMIT 1 OFFSET {offset}",
+                range,
+                offset = SqlTemplate::constant::<{ (RANK_BUDGET - 1) as i64 }>()
             ),
             p.values.clone(),
         )?;
         let complete = boundary.is_empty();
         if let [row] = boundary.as_slice() {
             let end = p.bind(Value::from_blob(required_blob(row, 0)?));
-            range.push_str(&format!(" AND rank.value<={end}"));
+            range.push(crate::sql!(" AND rank.value<={end}", end));
         } else if !complete {
             return Err(invariant());
         }
@@ -320,20 +329,23 @@ fn ordered_scan(
         let filter = sql::matches(&mut p, read, stage);
         if attribute == scan.default_attribute {
             let epoch_param = p.bind(Value::from_blob(epoch.as_bytes().to_vec()));
-            range.push_str(&format!(" AND NOT EXISTS (SELECT 1 FROM exact_facts current INDEXED BY sqlite_autoindex_exact_facts_1 WHERE current.document_id=d.id AND current.attribute='{}' AND current.value={epoch_param})",names::CONTEXT_EPOCH));
+            range.push(crate::sql!(" AND NOT EXISTS (SELECT 1 FROM exact_facts current INDEXED BY sqlite_autoindex_exact_facts_1 WHERE current.document_id=d.id AND current.attribute='{epoch}' AND current.value={epoch_param})", epoch = names::CONTEXT_EPOCH, epoch_param));
         }
         if !scan.excluded_lists.is_empty() {
             let keys = scan
                 .excluded_lists
                 .iter()
                 .map(|key| p.bind(Value::from_blob(key.as_bytes().to_vec())))
-                .collect::<Vec<_>>()
-                .join(",");
-            range.push_str(&format!(" AND NOT EXISTS (SELECT 1 FROM exact_facts listed INDEXED BY sqlite_autoindex_exact_facts_1 WHERE listed.document_id=d.id AND listed.attribute='{}' AND listed.value IN ({keys}))", names::LIST));
+                .collect::<Vec<_>>();
+            let keys = SqlTemplate::join(keys, ",");
+            range.push(crate::sql!(" AND NOT EXISTS (SELECT 1 FROM exact_facts listed INDEXED BY sqlite_autoindex_exact_facts_1 WHERE listed.document_id=d.id AND listed.attribute='{list}' AND listed.value IN ({keys}))", list = names::LIST, keys));
         }
-        let query = format!(
-            "SELECT r.__typename,r.id,r.value,rank.value FROM exact_facts rank INDEXED BY exact_facts_lookup_idx CROSS JOIN index_documents d ON d.id=rank.document_id {} WHERE {range} AND {scope} AND {filter} ORDER BY rank.value",
-            sql::RECORD_JOIN
+        let query = crate::sql!(
+            "SELECT r.__typename,r.id,r.value,rank.value FROM exact_facts rank INDEXED BY exact_facts_lookup_idx CROSS JOIN index_documents d ON d.id=rank.document_id {join} WHERE {range} AND {scope} AND {filter} ORDER BY rank.value",
+            join = sql::RECORD_JOIN,
+            range,
+            scope,
+            filter
         );
         let mut stopped = false;
         let mut key_buffer = String::new();

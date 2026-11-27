@@ -1,0 +1,23 @@
+id: rust-cache-turso-no-runtime-static-text
+valid:
+  - |
+    const TABLE: &str = "records";
+  - |
+    static NAMES: [&str; 2] = ["records", "meta"];
+  - |
+    fn f(sql: &mut Sql) { sql.push("SELECT 1"); }
+  - |
+    fn f(text: String) -> UnreportedSql { UnreportedSql::new(text) }
+invalid:
+  - |
+    fn f(text: String) -> &'static str { text.leak() }
+  - |
+    fn f(text: String) -> &'static str { Box::leak(text.into_boxed_str()) }
+  - |
+    fn f(text: String) -> &'static str { String::leak(text) }
+  - |
+    static TEXT: LazyLock<String> = LazyLock::new(|| std::env::args().collect());
+  - |
+    static TEXT: OnceLock<String> = OnceLock::new();
+  - |
+    static mut TEXT: String = String::new();

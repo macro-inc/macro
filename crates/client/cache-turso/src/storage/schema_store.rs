@@ -27,6 +27,7 @@
 //! ([`dropped_identity`]).
 
 use super::*;
+use crate::sql::{Sql, UnreportedSql};
 use cache_core::calendar::{CALENDAR_TYPENAME, EVENT_TYPENAME, OCCURRENCE_TYPENAME};
 use cache_core::identity::{self, IdentityMap};
 use cache_core::meta::Schema;
@@ -329,8 +330,8 @@ pub(super) fn is_empty(connection: &Db) -> Result<bool, TursoStorageError> {
                 .iter()
                 .flat_map(|store| store.tables.iter().copied()),
         )
-        .map(|table| format!("SELECT 1 FROM {table} LIMIT 1"));
-    for sql in [ANY_RECORD.to_owned(), ANY_QUEUED.to_owned()]
+        .map(|table| crate::sql!("SELECT 1 FROM {table} LIMIT 1", table));
+    for sql in [Sql::from(ANY_RECORD), Sql::from(ANY_QUEUED)]
         .into_iter()
         .chain(derived)
     {
@@ -360,7 +361,7 @@ fn apply(
             // Facts go before the documents, which would otherwise cascade
             // to them one document at a time.
             if *every_document {
-                keep_only_facts(connection, DOCUMENTS_KEEPING_FACTS, Vec::new())?;
+                keep_only_facts(connection, &Sql::from(DOCUMENTS_KEEPING_FACTS), Vec::new())?;
             } else {
                 drop_facts(connection, changed)?;
             }
@@ -505,19 +506,19 @@ fn drop_facts(connection: &Db, changed: &BTreeSet<String>) -> Result<(), TursoSt
         }
         return Ok(());
     }
-    let dropped = (0..ranges.len())
-        .map(|index| {
-            format!(
-                "(d.record_key >= ?{} AND d.record_key < ?{})",
-                2 * index + 1,
-                2 * index + 2
+    let dropped = Sql::join(
+        (0..ranges.len()).map(|index| {
+            crate::sql!(
+                "(d.record_key >= {low} AND d.record_key < {high})",
+                low = Sql::placeholder(2 * index + 1),
+                high = Sql::placeholder(2 * index + 2)
             )
-        })
-        .collect::<Vec<_>>()
-        .join(" OR ");
+        }),
+        " OR ",
+    );
     keep_only_facts(
         connection,
-        &format!("NOT ({dropped})"),
+        &crate::sql!("NOT ({dropped})", dropped),
         ranges.into_iter().flatten().collect(),
     )
 }
@@ -537,13 +538,13 @@ fn drop_types(connection: &Db, changed: &BTreeSet<String>) -> Result<u64, TursoS
     // The Quick Access rows' key leads with their profile, so one statement
     // reads the table once for every changed type.
     if !changed.is_empty() {
-        let names = (1..=changed.len())
-            .map(|index| format!("?{index}"))
-            .collect::<Vec<_>>()
-            .join(", ");
+        let names = Sql::numbered_placeholders(1, changed.len());
         driver::execute(
             connection,
-            &format!("DELETE FROM search_documents WHERE __typename IN ({names})"),
+            &crate::sql!(
+                "DELETE FROM search_documents WHERE __typename IN ({names})",
+                names
+            ),
             changed.iter().map(|typename| text(typename)).collect(),
         )?;
     }
@@ -565,21 +566,27 @@ fn drop_types(connection: &Db, changed: &BTreeSet<String>) -> Result<u64, TursoS
 /// building its indexes writes each page once.
 fn keep_only_facts(
     connection: &Db,
-    kept: &str,
+    kept: &Sql,
     parameters: Vec<Value>,
 ) -> Result<(), TursoStorageError> {
     let mut indexes = Vec::new();
     for table in FACT_TABLES {
-        let waiting = format!("{KEPT_FACTS_PREFIX}{table}");
+        let waiting = crate::sql!("{prefix}{table}", prefix = KEPT_FACTS_PREFIX, table);
         driver::execute(
             connection,
-            &format!("CREATE TABLE {waiting} (document_id, attribute, value)"),
+            &crate::sql!(
+                "CREATE TABLE {waiting} (document_id, attribute, value)",
+                waiting
+            ),
             Vec::new(),
         )?;
         driver::execute(
             connection,
-            &format!(
-                "INSERT INTO {waiting} (document_id, attribute, value) SELECT f.document_id, f.attribute, f.value FROM index_documents d JOIN {table} f ON f.document_id = d.id WHERE {kept}"
+            &crate::sql!(
+                "INSERT INTO {waiting} (document_id, attribute, value) SELECT f.document_id, f.attribute, f.value FROM index_documents d JOIN {table} f ON f.document_id = d.id WHERE {kept}",
+                waiting,
+                table,
+                kept
             ),
             parameters.clone(),
         )?;
@@ -587,30 +594,45 @@ fn keep_only_facts(
             indexes.push((required_text(&row, 0)?, required_text(&row, 1)?));
         }
     }
-    // Without their indexes, the tables are created again bare.
+    // Without their indexes, the tables are created again bare. Index names
+    // and definitions are read back from the file, so they run unreported.
     for (name, _) in &indexes {
-        driver::execute(connection, &format!("DROP INDEX {name}"), Vec::new())?;
+        driver::execute(
+            connection,
+            &UnreportedSql::new(format!("DROP INDEX {name}")),
+            Vec::new(),
+        )?;
     }
     recreate_tables(connection, &FACT_TABLES)?;
     for table in FACT_TABLES {
-        let waiting = format!("{KEPT_FACTS_PREFIX}{table}");
+        let waiting = crate::sql!("{prefix}{table}", prefix = KEPT_FACTS_PREFIX, table);
         driver::execute(
             connection,
-            &format!(
-                "INSERT INTO {table} (document_id, attribute, value) SELECT document_id, attribute, value FROM {waiting} ORDER BY document_id, attribute, value"
+            &crate::sql!(
+                "INSERT INTO {table} (document_id, attribute, value) SELECT document_id, attribute, value FROM {waiting} ORDER BY document_id, attribute, value",
+                table,
+                waiting
             ),
             Vec::new(),
         )?;
-        driver::execute(connection, &format!("DROP TABLE {waiting}"), Vec::new())?;
+        driver::execute(
+            connection,
+            &crate::sql!("DROP TABLE {waiting}", waiting),
+            Vec::new(),
+        )?;
     }
-    for (_, sql) in &indexes {
-        driver::execute(connection, sql, Vec::new())?;
+    for (_, sql) in indexes {
+        driver::execute(connection, &UnreportedSql::new(sql), Vec::new())?;
     }
     Ok(())
 }
 
 /// The one count `sql` selects.
-fn count(connection: &Db, sql: &str, parameters: Vec<Value>) -> Result<u64, TursoStorageError> {
+fn count(
+    connection: &Db,
+    sql: &'static str,
+    parameters: Vec<Value>,
+) -> Result<u64, TursoStorageError> {
     let rows = driver::query(connection, sql, parameters)?;
     let [row] = rows.as_slice() else {
         return Err(invariant());
@@ -991,7 +1013,7 @@ pub(super) fn clear_records(connection: &Db) -> Result<u64, TursoStorageError> {
 /// indexes. Freeing a table's pages reads each once and writes only freelist
 /// pages, where deleting its rows rewrites every page of it and its indexes;
 /// the stored SQL, and so the schema digest, stays as it was.
-fn recreate_tables(connection: &Db, tables: &[&str]) -> Result<(), TursoStorageError> {
+fn recreate_tables(connection: &Db, tables: &[&'static str]) -> Result<(), TursoStorageError> {
     let mut definitions = Vec::with_capacity(tables.len());
     for table in tables {
         let rows = driver::query(connection, TABLE_SQL, vec![text(table)])?;
@@ -1005,11 +1027,16 @@ fn recreate_tables(connection: &Db, tables: &[&str]) -> Result<(), TursoStorageE
         definitions.push(sql);
     }
     for table in tables {
-        driver::execute(connection, &format!("DROP TABLE {table}"), Vec::new())?;
+        driver::execute(
+            connection,
+            &crate::sql!("DROP TABLE {table}", table = *table),
+            Vec::new(),
+        )?;
     }
-    // Referenced tables before the tables that name them.
-    for sql in definitions.iter().rev().flatten() {
-        driver::execute(connection, sql, Vec::new())?;
+    // Referenced tables before the tables that name them. The definitions are
+    // read back from the file, so they run unreported.
+    for sql in definitions.into_iter().rev().flatten() {
+        driver::execute(connection, &UnreportedSql::new(sql), Vec::new())?;
     }
     Ok(())
 }

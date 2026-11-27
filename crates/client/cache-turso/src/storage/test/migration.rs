@@ -275,7 +275,7 @@ fn versions_without_a_chain_and_failing_steps_still_reset() {
             let database = TursoMemoryDatabase::new(format!("no-chain-{name}.db"));
             let mut storage = database.open("scope").unwrap();
             populate(&mut storage).await;
-            raw_execute(&storage, sql, Vec::new());
+            raw_execute(&storage, &sql.to_owned(), Vec::new());
             let before = table_rows(&storage.connection());
             storage.try_close().unwrap();
             expect_reset_reason(database.open("scope"), PhysicalResetReason::Compatibility);

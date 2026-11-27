@@ -1,0 +1,28 @@
+id: rust-cache-turso-no-runtime-static-text
+language: rust
+severity: error
+message: The cache engine must not turn run-time text into a `&'static str`.
+note: |-
+  Slow-query telemetry sends a statement's text because `Sql` templates and
+  `Template`s are built only from `&'static str` fragments, which the
+  compiler then treats as text written in this crate's source (see
+  `crates/client/cache-turso/src/sql.rs`). Leaking a `String` or keeping one
+  in a `static` makes run-time text, such as a record field or a search
+  term, look like source text and lets it reach telemetry. Bind the value as
+  a parameter instead, or run a statement that must embed outside text as an
+  `UnreportedSql`. Tests are exempt.
+files:
+  - crates/client/cache-turso/src/**
+ignores:
+  - '**/test.rs'
+  - '**/test/**'
+rule:
+  any:
+    - pattern: $VALUE.leak()
+    - pattern: Box::leak($$$ARGS)
+    - pattern: String::leak($$$ARGS)
+    - kind: static_item
+      has:
+        stopBy: end
+        kind: type_identifier
+        regex: ^String$

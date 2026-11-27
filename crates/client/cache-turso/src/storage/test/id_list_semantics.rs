@@ -506,5 +506,91 @@ fn a_repeated_id_is_sought_once() {
     })
     .unwrap();
     let (sql, _) = compile_predicate_selection(&query, &[], true);
-    assert!(sql.contains("(VALUES (?), (?))"), "{sql}");
+    assert!(sql.as_str().contains("(VALUES (?), (?))"), "{sql}");
+}
+
+/// Slow-query telemetry for a full channel-list batch: every statement the
+/// engine runs is reported, and no reported template carries an id, a
+/// partition, a profile or any other bound value.
+#[test]
+fn slow_query_templates_carry_no_bound_values() {
+    use crate::query_telemetry::{QueryTelemetry, set_query_telemetry};
+    use std::cell::{Cell, RefCell};
+    use std::rc::Rc;
+
+    #[derive(Default)]
+    struct EverySlow {
+        now: Cell<f64>,
+        templates: RefCell<Vec<(String, Option<String>)>>,
+    }
+    impl QueryTelemetry for EverySlow {
+        fn now_ms(&self) -> f64 {
+            let now = self.now.get();
+            self.now.set(now + 201.0);
+            now
+        }
+        fn slow_query(&self, fingerprint: &str, _: f64, _: bool, template: Option<&str>) {
+            self.templates
+                .borrow_mut()
+                .push((fingerprint.to_owned(), template.map(str::to_owned)));
+        }
+    }
+    struct Reset;
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            set_query_telemetry(None);
+        }
+    }
+
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("id-list-telemetry").unwrap();
+        storage
+            .put_batch_with_projections(
+                Vec::new(),
+                documents()
+                    .into_iter()
+                    .map(ProjectionMutation::Replace)
+                    .collect(),
+            )
+            .await
+            .unwrap();
+        let list = [
+            ids(0..DOCUMENTS),
+            (DOCUMENTS..BATCH).map(|n| format!("canary-{n}")).collect(),
+        ]
+        .concat();
+        let telemetry = Rc::new(EverySlow::default());
+        set_query_telemetry(Some(telemetry.clone()));
+        let _reset = Reset;
+        for partitions in predicates(&list, SortDirection::Desc, SortDirection::Desc) {
+            let query = ValidatedIndexQuery::new(IndexQuery {
+                profile: Profile::new(token(PROFILE)),
+                partitions,
+                sort_attribute: token(SORT),
+                sort_direction: SortDirection::Desc,
+                tie_break_direction: SortDirection::Desc,
+                limit: 10,
+            })
+            .unwrap();
+            storage
+                .reconcile_predicate_index(&query, &[])
+                .await
+                .unwrap();
+        }
+        let templates = telemetry.templates.borrow();
+        let sent = templates
+            .iter()
+            .filter_map(|(hash, text)| Some((hash, text.as_deref()?)))
+            .collect::<Vec<_>>();
+        assert!(
+            sent.iter()
+                .any(|(_, text)| text.matches("(?)").count() > 400),
+            "the 500-id set plan is reported with its placeholders"
+        );
+        for (hash, text) in sent {
+            for bound in ["canary", "id-0", "id-3", PROFILE, SORT, "'thing'", "'me'"] {
+                assert!(!text.contains(bound), "{hash} carries {bound}: {text}");
+            }
+        }
+    });
 }

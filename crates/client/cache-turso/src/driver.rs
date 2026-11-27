@@ -1,3 +1,4 @@
+use crate::sql::{Reportable, Template};
 use crate::{PhysicalResetReason, TursoStorageError};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
@@ -375,6 +376,9 @@ impl StatementCache {
 pub(crate) struct Prepared {
     statement: Option<Statement>,
     sql: String,
+    /// Whether slow-query telemetry may send the text: it was built only from
+    /// this crate's own fragments (see [`crate::sql`]).
+    reportable: Reportable,
     cache: Option<Arc<Mutex<StatementCache>>>,
 }
 
@@ -447,26 +451,30 @@ impl RunFailure {
     }
 }
 
-pub(crate) fn prepare(connection: &Db, sql: &str) -> Result<Prepared, TursoStorageError> {
-    prepare_turso(connection, sql).map_err(TursoStorageError::turso)
+pub(crate) fn prepare<'s>(
+    connection: &Db,
+    sql: impl Into<Template<'s>>,
+) -> Result<Prepared, TursoStorageError> {
+    prepare_turso(connection, sql.into()).map_err(TursoStorageError::turso)
 }
 
 /// Prepares generated SQL that has another plan to fall back on, returning
 /// `None` when Turso's parser refuses it. Turso bounds expression depth by its
 /// parser's recursion and the expression tree's height, so only the parser can
 /// say whether a deep expression fits.
-pub(crate) fn prepare_unless_refused(
+pub(crate) fn prepare_unless_refused<'s>(
     connection: &Db,
-    sql: &str,
+    sql: impl Into<Template<'s>>,
 ) -> Result<Option<Prepared>, TursoStorageError> {
-    match prepare_turso(connection, sql) {
+    match prepare_turso(connection, sql.into()) {
         Ok(prepared) => Ok(Some(prepared)),
         Err(LimboError::LexerError(_)) => Ok(None),
         Err(error) => Err(TursoStorageError::turso(error)),
     }
 }
 
-fn prepare_turso(connection: &Db, sql: &str) -> Result<Prepared, LimboError> {
+fn prepare_turso(connection: &Db, template: Template<'_>) -> Result<Prepared, LimboError> {
+    let sql = template.text();
     let cached = connection
         .statements
         .as_ref()
@@ -478,11 +486,15 @@ fn prepare_turso(connection: &Db, sql: &str) -> Result<Prepared, LimboError> {
     Ok(Prepared {
         statement: Some(statement),
         sql: sql.to_owned(),
+        reportable: template.reportable(),
         cache: connection.statements.clone(),
     })
 }
 
-pub(crate) fn validate(connection: &Db, sql: &str) -> Result<(), TursoStorageError> {
+pub(crate) fn validate<'s>(
+    connection: &Db,
+    sql: impl Into<Template<'s>>,
+) -> Result<(), TursoStorageError> {
     let mut prepared = prepare(connection, sql)?;
     let statement = prepared.statement()?;
     let reset = checked_reset(statement);
@@ -493,29 +505,34 @@ pub(crate) fn validate(connection: &Db, sql: &str) -> Result<(), TursoStorageErr
     reset
 }
 
-pub(crate) fn execute(
+pub(crate) fn execute<'s>(
     connection: &Db,
-    sql: &str,
+    sql: impl Into<Template<'s>>,
     values: Values,
 ) -> Result<i64, TursoStorageError> {
+    let sql = sql.into();
     #[cfg(all(test, not(target_arch = "wasm32")))]
-    if let Some(error) = take_statement_failure(sql) {
+    if let Some(error) = take_statement_failure(sql.text()) {
         return Err(error);
     }
     let mut statement = prepare(connection, sql)?;
     execute_prepared(&mut statement, values)
 }
 
-pub(crate) fn query(connection: &Db, sql: &str, values: Values) -> Result<Rows, TursoStorageError> {
+pub(crate) fn query<'s>(
+    connection: &Db,
+    sql: impl Into<Template<'s>>,
+    values: Values,
+) -> Result<Rows, TursoStorageError> {
     let mut statement = prepare(connection, sql)?;
     query_prepared(&mut statement, values)
 }
 
 /// Visits each row before stepping again, retaining no result collection.
 /// Uses the same checked statement cleanup and telemetry as collected queries.
-pub(crate) fn query_each(
+pub(crate) fn query_each<'s>(
     connection: &Db,
-    sql: &str,
+    sql: impl Into<Template<'s>>,
     values: Values,
     visit: impl FnMut(&Row) -> Result<(), TursoStorageError>,
 ) -> Result<(), TursoStorageError> {
@@ -536,9 +553,9 @@ pub(crate) fn query_each_prepared(
 
 /// Stops a read when the visitor proves later ordered rows cannot improve its
 /// bounded result. The same checked reset runs on both early stop and exhaustion.
-pub(crate) fn query_until(
+pub(crate) fn query_until<'s>(
     connection: &Db,
-    sql: &str,
+    sql: impl Into<Template<'s>>,
     values: Values,
     visit: impl FnMut(&Row) -> Result<bool, TursoStorageError>,
 ) -> Result<(), TursoStorageError> {
@@ -587,8 +604,9 @@ fn visit_prepared(
     values: Values,
     visit: impl FnMut(&Row) -> Result<bool, TursoStorageError>,
 ) -> Result<i64, RunFailure> {
+    let reportable = prepared.reportable;
     let result = match prepared.statement() {
-        Ok(statement) => visit_statement(statement, values, visit),
+        Ok(statement) => visit_statement(statement, reportable, values, visit),
         Err(error) => Err(RunFailure::execution(error)),
     };
     if result.is_err() {
@@ -599,6 +617,7 @@ fn visit_prepared(
 
 fn visit_statement(
     statement: &mut Statement,
+    reportable: Reportable,
     values: Values,
     mut visit: impl FnMut(&Row) -> Result<bool, TursoStorageError>,
 ) -> Result<i64, RunFailure> {
@@ -669,7 +688,7 @@ fn visit_statement(
         (execution, Err(_)) => Err(RunFailure::cleanup(execution.is_ok())),
     };
     if let Some(timer) = timer {
-        timer.finish(statement.get_sql(), result.is_ok());
+        timer.finish(statement.get_sql(), reportable, result.is_ok());
     }
     result
 }
@@ -708,7 +727,7 @@ pub(crate) fn write_transaction<T>(
 
 fn transaction<T>(
     connection: &Db,
-    begin_sql: &str,
+    begin_sql: &'static str,
     operation: impl FnOnce() -> Result<T, TursoStorageError>,
 ) -> Result<T, TursoStorageError> {
     let wal_end = connection.owned_wal_end();
@@ -748,7 +767,11 @@ fn transaction<T>(
     }
 }
 
-fn execute_control(connection: &Db, sql: &str, phase: TestControlPhase) -> Result<i64, RunFailure> {
+fn execute_control(
+    connection: &Db,
+    sql: &'static str,
+    phase: TestControlPhase,
+) -> Result<i64, RunFailure> {
     #[cfg(all(test, not(target_arch = "wasm32")))]
     record_control_phase(phase);
     #[cfg(all(test, not(target_arch = "wasm32")))]

@@ -1,4 +1,5 @@
 use super::*;
+use crate::sql::Template;
 use cache_core::calendar::{CalendarLinkWatermark, CalendarReplacedEvent, CalendarWatermarkUpdate};
 use pollster::block_on;
 use std::collections::BTreeMap;
@@ -119,7 +120,7 @@ fn keys(snapshot: &CalendarRangeSnapshot) -> Vec<String> {
     keys
 }
 
-fn raw_execute(storage: &TursoStorage, sql: &str) {
+fn raw_execute<'s>(storage: &TursoStorage, sql: impl Into<Template<'s>>) {
     driver::execute(&storage.connection(), sql, Vec::new()).unwrap();
 }
 

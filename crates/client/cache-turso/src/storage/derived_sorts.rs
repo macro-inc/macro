@@ -4,6 +4,7 @@
 //! records and queued mutations stay.
 
 use super::*;
+use crate::sql::Sql;
 use item_filter_index::SORT_FACT_DERIVATIONS;
 use predicate_index::SortFactDerivation;
 
@@ -76,11 +77,8 @@ pub(super) fn ensure_version(connection: &Db) -> Result<(), TursoStorageError> {
 }
 
 /// `?start, ?start+1, ...` for `count` parameters.
-fn placeholders(start: usize, count: usize) -> String {
-    (start..start + count)
-        .map(|index| format!("?{index}"))
-        .collect::<Vec<_>>()
-        .join(", ")
+fn placeholders(start: usize, count: usize) -> Sql {
+    Sql::numbered_placeholders(start, count)
 }
 
 /// `first` followed by every profile the derivation applies to.
@@ -106,8 +104,11 @@ fn derive(connection: &Db, derivation: &SortFactDerivation) -> Result<(), TursoS
         } = tables;
         driver::execute(
             connection,
-            &format!(
-                "DELETE FROM {sorts} WHERE attribute = ?1 AND document_id IN (SELECT id FROM {documents} WHERE profile IN ({after_target}))"
+            &crate::sql!(
+                "DELETE FROM {sorts} WHERE attribute = ?1 AND document_id IN (SELECT id FROM {documents} WHERE profile IN ({after_target}))",
+                sorts,
+                documents,
+                after_target
             ),
             with_profiles(vec![text(derivation.target)], derivation),
         )?;
@@ -115,23 +116,27 @@ fn derive(connection: &Db, derivation: &SortFactDerivation) -> Result<(), TursoS
             vec![text(derivation.target), text(derivation.source)],
             derivation,
         );
-        let mut required = String::new();
+        let mut required = Sql::new();
         for (attribute, value) in derivation.required {
             let attribute_parameter = parameters.len() + 1;
             parameters.push(text(attribute));
             parameters.push(Value::from_blob(value.to_vec()));
             let value_parameter = attribute_parameter + 1;
-            required.push_str(&format!(
-                " AND EXISTS (SELECT 1 FROM {exact} AS e WHERE e.document_id = s.document_id AND e.attribute = ?{attribute_parameter} AND e.value = ?{value_parameter})"
-            ));
+            required.push(crate::sql!(" AND EXISTS (SELECT 1 FROM {exact} AS e WHERE e.document_id = s.document_id AND e.attribute = {attribute_parameter} AND e.value = {value_parameter})", exact, attribute_parameter = Sql::placeholder(attribute_parameter), value_parameter = Sql::placeholder(value_parameter)));
         }
-        let eligible = format!(
-            "FROM {sorts} AS s JOIN {documents} AS d ON d.id = s.document_id WHERE s.attribute = ?2 AND d.profile IN ({after_source}){required}"
+        let eligible = crate::sql!(
+            "FROM {sorts} AS s JOIN {documents} AS d ON d.id = s.document_id WHERE s.attribute = ?2 AND d.profile IN ({after_source}){required}",
+            sorts,
+            documents,
+            after_source,
+            required
         );
         driver::execute(
             connection,
-            &format!(
-                "INSERT INTO {sorts} (document_id, attribute, value) SELECT s.document_id, ?1, s.value {eligible}"
+            &crate::sql!(
+                "INSERT INTO {sorts} (document_id, attribute, value) SELECT s.document_id, ?1, s.value {eligible}",
+                sorts,
+                eligible
             ),
             parameters,
         )?;
@@ -150,9 +155,9 @@ fn derive_uncertainty(
 ) -> Result<(), TursoStorageError> {
     let rows = driver::query(
         connection,
-        &format!(
-            "SELECT u.document_id, d.profile, u.attribute FROM optimistic_uncertain_attributes AS u JOIN optimistic_index_documents AS d ON d.id = u.document_id WHERE d.profile IN ({}) ORDER BY u.document_id",
-            placeholders(1, derivation.profiles.len())
+        &crate::sql!(
+            "SELECT u.document_id, d.profile, u.attribute FROM optimistic_uncertain_attributes AS u JOIN optimistic_index_documents AS d ON d.id = u.document_id WHERE d.profile IN ({profiles}) ORDER BY u.document_id",
+            profiles = placeholders(1, derivation.profiles.len())
         ),
         with_profiles(Vec::new(), derivation),
     )?;
@@ -204,8 +209,12 @@ fn mark_over_limit_incomplete(
     let limit = predicate_index::MAX_ATTRIBUTES_PER_DOCUMENT;
     let candidates = driver::query(
         connection,
-        &format!(
-            "SELECT s.document_id FROM {sorts} AS s WHERE s.attribute = ?1 AND (SELECT COUNT(*) FROM {exact} AS c WHERE c.document_id = s.document_id) + (SELECT COUNT(*) FROM {integers} AS c WHERE c.document_id = s.document_id) + (SELECT COUNT(*) FROM {sorts} AS c WHERE c.document_id = s.document_id) > {limit}"
+        &crate::sql!(
+            "SELECT s.document_id FROM {sorts} AS s WHERE s.attribute = ?1 AND (SELECT COUNT(*) FROM {exact} AS c WHERE c.document_id = s.document_id) + (SELECT COUNT(*) FROM {integers} AS c WHERE c.document_id = s.document_id) + (SELECT COUNT(*) FROM {sorts} AS c WHERE c.document_id = s.document_id) > {limit}",
+            sorts = *sorts,
+            exact = *exact,
+            integers = *integers,
+            limit = Sql::constant::<{ predicate_index::MAX_ATTRIBUTES_PER_DOCUMENT as i64 }>()
         ),
         vec![text(derivation.target)],
     )?;
@@ -215,7 +224,10 @@ fn mark_over_limit_incomplete(
         for table in [exact, integers, sorts] {
             for row in driver::query(
                 connection,
-                &format!("SELECT DISTINCT attribute FROM {table} WHERE document_id = ?1"),
+                &crate::sql!(
+                    "SELECT DISTINCT attribute FROM {table} WHERE document_id = ?1",
+                    table = *table
+                ),
                 vec![Value::from_i64(document_id)],
             )? {
                 attributes.insert(required_text(&row, 0)?);
@@ -229,7 +241,10 @@ fn mark_over_limit_incomplete(
         if *optimistic {
             driver::execute(
                 connection,
-                &format!("UPDATE {documents} SET state = ?2, incomplete_kind = ?3 WHERE id = ?1"),
+                &crate::sql!(
+                    "UPDATE {documents} SET state = ?2, incomplete_kind = ?3 WHERE id = ?1",
+                    documents = *documents
+                ),
                 vec![
                     Value::from_i64(document_id),
                     Value::from_i64(OptimisticIndexDocumentState::Incomplete as i64),
@@ -239,14 +254,17 @@ fn mark_over_limit_incomplete(
         } else {
             driver::execute(
                 connection,
-                &format!("UPDATE {documents} SET state = ?2 WHERE id = ?1"),
+                &crate::sql!(
+                    "UPDATE {documents} SET state = ?2 WHERE id = ?1",
+                    documents = *documents
+                ),
                 vec![Value::from_i64(document_id), Value::from_i64(missing)],
             )?;
         }
         for table in [exact, integers, sorts] {
             driver::execute(
                 connection,
-                &format!("DELETE FROM {table} WHERE document_id = ?1"),
+                &crate::sql!("DELETE FROM {table} WHERE document_id = ?1", table = *table),
                 vec![Value::from_i64(document_id)],
             )?;
         }

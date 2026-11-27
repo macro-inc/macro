@@ -49,7 +49,7 @@ fn text_search_scans_only_its_bucket_through_the_covering_index() {
                     .contains("USING COVERING INDEX search_documents_browse_idx")),
                 "{plan:?}"
             );
-            let mut statement = driver::prepare(&storage.connection(), &sql).unwrap();
+            let mut statement = driver::prepare(&storage.connection(), sql).unwrap();
             let rows = driver::query_prepared(&mut statement, parameters).unwrap();
             // The bucket's three documents; the token test runs as rows stream.
             assert_eq!(rows.len(), 3);

@@ -3,6 +3,7 @@
 //! into the 11 to 12 step and each derived rebuild that open also runs. Not a
 //! regular test: it needs a file and runs for minutes, on Linux only.
 use super::*;
+use crate::sql::Template;
 use crate::storage::migration::test_hooks::{self, Storage11DerivedState};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -35,7 +36,7 @@ fn written_bytes() -> u64 {
         .unwrap()
 }
 
-fn count(connection: &Db, sql: &str) -> i64 {
+fn count<'s>(connection: &Db, sql: impl Into<Template<'s>>) -> i64 {
     required_i64(&driver::query(connection, sql, vec![]).unwrap()[0], 0).unwrap()
 }
 

@@ -15,6 +15,7 @@ mod driver;
 mod error;
 mod key;
 pub mod query_telemetry;
+pub mod sql;
 mod storage;
 
 pub use driver::{WalCheckpoint, WalPosition};
