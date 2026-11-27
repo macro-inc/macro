@@ -122,7 +122,17 @@ impl AgentSessionClient {
             .json(command)
             .send()
             .await
-            .map_err(|_| operation.uncertain_error())?;
+            .map_err(|error| {
+                // A request that never connected never reached the harness,
+                // as when nothing listens at its address: it is safe to send
+                // again. Anything later may have taken effect, and a gateway
+                // in front of the harness answers for it with a status.
+                if error.is_connect() {
+                    RoutineSessionError::RuntimeUnavailable
+                } else {
+                    operation.uncertain_error()
+                }
+            })?;
         if response.status().is_success() {
             return Ok(response);
         }
