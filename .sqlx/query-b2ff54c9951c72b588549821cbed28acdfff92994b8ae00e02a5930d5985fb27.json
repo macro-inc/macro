@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT fingerprint, outcome, provider_message_id, provider_thread_id, reserved_at\n            FROM agent_mailbox_sends\n            WHERE mailbox_id = $1 AND idempotency_key = $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "fingerprint",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 1,
+        "name": "outcome",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "provider_message_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "provider_thread_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "reserved_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "b2ff54c9951c72b588549821cbed28acdfff92994b8ae00e02a5930d5985fb27"
+}

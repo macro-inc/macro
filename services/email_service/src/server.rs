@@ -129,6 +129,19 @@ async fn run_server() -> anyhow::Result<()> {
         crate::outlook_flags::posthog(&config)?,
     ));
     let read_receipts = crate::composition::read_receipts(db.clone(), env)?;
+    let agent_mailboxes =
+        std::sync::Arc::new(crate::composition::agent_mailboxes::agent_mailboxes(
+            &config,
+            db.clone(),
+            aws_sdk_kms::Client::new(&aws_config),
+        )?);
+    let background_tracker = TaskTracker::new();
+    let background_cancel = tokio_util::sync::CancellationToken::new();
+    crate::composition::agent_mailboxes::spawn_sweep(
+        agent_mailboxes.clone(),
+        &background_tracker,
+        background_cancel.clone(),
+    );
     // The webhook reads the message a notification names once
     // `enable-outlook-notified-message-reads` is on; without a PostHog key
     // it stays off.
@@ -149,6 +162,7 @@ async fn run_server() -> anyhow::Result<()> {
     ));
     let state = api_context(ApiDependencies {
         read_receipts,
+        agent_mailboxes,
         config,
         db,
         sqs_client,
@@ -170,6 +184,10 @@ async fn run_server() -> anyhow::Result<()> {
     flag_cancellation.cancel();
     flag_tracker.close();
     flag_tracker.wait().await;
+
+    background_cancel.cancel();
+    background_tracker.close();
+    background_tracker.wait().await;
 
     tracing::info!("waiting for event broker publishes to drain");
     event_broker_tracker.close();

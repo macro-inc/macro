@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_mailboxes AS mailbox\n            SET state = 'paused', paused_at = $2, next_sweep_at = NULL, updated_at = $2\n            WHERE id = $1\n              AND state IN ('provisioning', 'active', 'failed')\n              AND NOT EXISTS (\n                  SELECT 1\n                  FROM \"User\" AS account\n                  JOIN team_user ON team_user.user_id = account.id\n                                AND team_user.team_id = mailbox.team_id\n                  WHERE account.id = mailbox.user_id AND account.\"isAgent\"\n              )\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7ac22886c134859740f8d33a06396a65e6e306a8f670902c6049b3c1a3bf3c71"
+}

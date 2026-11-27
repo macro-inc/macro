@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_mailboxes\n            SET state = $3::text,\n                paused_at = CASE WHEN $3::text = 'paused' THEN $4::timestamptz ELSE NULL END,\n                next_sweep_at = NULL,\n                updated_at = $4::timestamptz\n            WHERE id = $1 AND state = ANY($2)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7298e30d4c35c06f93d0d5b8fb32f2b7df5e133313230598320b9e506cf67e47"
+}

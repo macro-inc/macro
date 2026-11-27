@@ -2,6 +2,7 @@ use constants::INTERNAL_AUTH_HEADER_KEY;
 
 pub(crate) mod constants;
 
+pub mod agent_mailboxes;
 mod external;
 pub mod get_message_by_id;
 pub mod get_message_senders;

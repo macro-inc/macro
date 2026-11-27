@@ -63,6 +63,11 @@ use utoipa::OpenApi;
         terms_of_service = "https://macro.com/terms",
     ),
     paths(
+        agent_mailbox::inbound::axum_router::get_own_mailbox,
+        agent_mailbox::inbound::axum_router::list_messages,
+        agent_mailbox::inbound::axum_router::read_message,
+        agent_mailbox::inbound::axum_router::send_message,
+        agent_mailbox::inbound::axum_router::reply_to_message,
         crate::api::calendar_invitations::handler,
         crate::api::calendar_invitations::copy_handler,
         crate::api::calendar_event_forward::handler,
@@ -127,6 +132,13 @@ use utoipa::OpenApi;
     components(
         schemas(
             EmptyResponse,
+            agent_mailbox::wire::AgentMailboxResponse,
+            agent_mailbox::wire::AgentMailboxErrorBody,
+            agent_mailbox::wire::SendAgentMessageRequest,
+            agent_mailbox::wire::ReplyAgentMessageRequest,
+            agent_mailbox::domain::models::MessageList,
+            agent_mailbox::domain::models::MailMessage,
+            agent_mailbox::domain::models::SentMessage,
             // Backfill types
             CancelBackfillParams,
             GetBackfillJobResponse,

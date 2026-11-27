@@ -5,15 +5,20 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+agent_mailbox = { path = "../agent_mailbox", default-features = false, features = ["wire"] }
 anyhow = { workspace = true }
 email = { path = "../email", features = ["axum", "inbound"] }
 macro_tower_layers = { path = "../macro_tower_layers" }
 models_email = { path = "../models_email" }
 reqwest = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
 tracing = { workspace = true }
+urlencoding = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }
+uuid = { workspace = true }
 wiremock = { workspace = true }

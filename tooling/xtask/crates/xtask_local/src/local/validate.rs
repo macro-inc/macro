@@ -10,6 +10,7 @@ mod test;
 use anyhow::{Context, Result, bail};
 use serde_json::Value;
 
+use super::agent_mailbox_fake_vendor;
 use super::build::{BinariesDir, runtime_image_tag};
 use super::computers::{Computers, Fleet};
 use super::google_emulator;
@@ -166,6 +167,18 @@ fn local_compose_flavor(
             Some(_) => {}
         }
     }
+    if sidecars.agent_mailbox_fake_vendor {
+        match services.get(agent_mailbox_fake_vendor::SERVICE) {
+            None => failures.push(
+                "agent_mailbox_fake_vendor sidecar is absent although no real provider key is configured"
+                    .into(),
+            ),
+            Some(node) if !has_app_out_mount(node) => {
+                failures.push("agent_mailbox_fake_vendor is missing the /app/out bind mount".into());
+            }
+            Some(_) => {}
+        }
+    }
     if sidecars.gmail_forwarder {
         match services.get("gmail_forwarder") {
             None => failures.push(
@@ -195,6 +208,10 @@ fn local_compose_flavor(
             (sidecars.gmail_emulator, " + gmail_emulator"),
             (sidecars.outlook_emulator, " + outlook_emulator"),
             (sidecars.model_emulator, " + model_emulator"),
+            (
+                sidecars.agent_mailbox_fake_vendor,
+                " + agent_mailbox_fake_vendor"
+            ),
             (sidecars.gmail_forwarder, " + gmail_forwarder"),
         ]
         .iter()

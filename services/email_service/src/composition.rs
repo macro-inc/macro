@@ -1,5 +1,6 @@
 //! Shared composition for the HTTP API and background workers.
 
+pub(crate) mod agent_mailboxes;
 pub(crate) mod api;
 pub mod workers;
 

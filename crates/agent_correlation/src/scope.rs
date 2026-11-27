@@ -39,6 +39,8 @@ const SENDS: &[(&str, &str)] = &[
     ("POST", "/email/drafts/{id}/transfer"),
     ("POST", "/email/calendar-events/{id}/forward"),
     ("POST", "/email/fusionauth_resend"),
+    ("POST", "/email/agent-mailbox/messages"),
+    ("POST", "/email/agent-mailbox/messages/{id}/reply"),
     ("POST", "/calendar/events/create-confirmed"),
     ("POST", "/events"),
     ("PATCH", "/events/{id}"),

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_mailboxes\n            SET grant_id = NULL,\n                grant_key_ciphertext = NULL,\n                grant_kms_key_id = NULL,\n                grant_encryption_version = NULL,\n                updated_at = now()\n            WHERE id = $1 AND lease_token = $2 AND state = 'releasing'\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "604a7c4173dd5f7ae7acd6178e10dfee32812dfbc0afa53d0014a9df058e54af"
+}

@@ -126,6 +126,9 @@ pub enum Port {
     /// The model emulator's control API, where a test scripts the assistant's
     /// model.
     ModelEmulator = 8482,
+    /// The fake deadsimple.email API agent mailboxes use on a stack without
+    /// a provider key: its outbox and outside-mail delivery for demos.
+    AgentMailboxFakeVendor = 8483,
 }
 
 impl Port {

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_mailboxes\n            SET state = 'active', last_error = NULL, updated_at = now()\n            WHERE id = $1\n              AND lease_token = $2\n              AND state IN ('provisioning', 'failed')\n              AND grant_id IS NOT NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6c2c2ebc946dfd4bca2f85c8a4181a62c03117556f52f14d46a4b1eb30f86363"
+}

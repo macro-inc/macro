@@ -1,0 +1,119 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, request_id, user_id, team_id, provider, requested_local_part, display_name,\n                   provider_mailbox_id, address, grant_id, grant_key_ciphertext,\n                   grant_kms_key_id, grant_encryption_version, state, last_error, paused_at,\n                   NOT EXISTS (\n                       SELECT 1\n                       FROM \"User\" AS account\n                       JOIN team_user ON team_user.user_id = account.id\n                                     AND team_user.team_id = mailbox.team_id\n                       WHERE account.id = mailbox.user_id AND account.\"isAgent\"\n                   ) AS \"orphan!\"\n            FROM agent_mailboxes AS mailbox\n            WHERE state IN ('provisioning', 'active', 'failed')\n              -- A plain key bound (nil for the first page), so a generic\n              -- plan seeks the primary key instead of filtering from its start.\n              AND id > $1\n            ORDER BY id\n            LIMIT $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "request_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "provider",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "requested_local_part",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "display_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "provider_mailbox_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "address",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "grant_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "grant_key_ciphertext",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 11,
+        "name": "grant_kms_key_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "grant_encryption_version",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 13,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "last_error",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "paused_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 16,
+        "name": "orphan!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "b6cf49409bd397bed2337b8fa2aab631d29bf6903a958fd05fc47a23c5a06f17"
+}

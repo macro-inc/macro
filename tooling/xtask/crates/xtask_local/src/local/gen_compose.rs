@@ -26,7 +26,9 @@ use super::build::{BinariesDir, runtime_image_tag};
 use super::computers::{Computers, Fleet};
 use super::instance::{Instance, Port};
 use super::inventory::{OPENBAO_IMAGE, RustService, services_for_mode};
-use super::{Mode, google_emulator, microsoft_emulator, model_emulator, repo_root};
+use super::{
+    Mode, agent_mailbox_fake_vendor, google_emulator, microsoft_emulator, model_emulator, repo_root,
+};
 
 #[cfg(test)]
 mod test;
@@ -86,6 +88,9 @@ pub struct Sidecars {
     /// The model emulator, in place of Gemini. On when the stack is
     /// self-contained and the env names no real Gemini key.
     pub model_emulator: bool,
+    /// The fake deadsimple.email API, in place of the provider. On when the
+    /// stack is self-contained and the env names no real provider key.
+    pub agent_mailbox_fake_vendor: bool,
 }
 
 impl Sidecars {
@@ -98,6 +103,7 @@ impl Sidecars {
             gmail_emulator: google_emulator::stands_in(mode, env),
             outlook_emulator: microsoft_emulator::stands_in(mode, env),
             model_emulator: model_emulator::stands_in(mode, env),
+            agent_mailbox_fake_vendor: agent_mailbox_fake_vendor::stands_in(mode, env),
         }
     }
 }
@@ -221,6 +227,22 @@ pub fn generate(
                 command: Some(dct::Command::Args(model_emulator::command())),
                 ports: dct::Ports::Short(vec![model_emulator::published_port(instance)]),
                 networks: net_aliases(&[("services", &[model_emulator::network_alias()])]),
+                ..Default::default()
+            }),
+        );
+    }
+    if sidecars.agent_mailbox_fake_vendor {
+        services.insert(
+            agent_mailbox_fake_vendor::SERVICE.to_string(),
+            Some(dct::Service {
+                image: Some(runtime_image.clone()),
+                volumes: mounts.iter().cloned().map(dct::Volumes::Simple).collect(),
+                command: Some(dct::Command::Args(agent_mailbox_fake_vendor::command())),
+                ports: dct::Ports::Short(vec![agent_mailbox_fake_vendor::published_port(instance)]),
+                networks: net_aliases(&[(
+                    "services",
+                    &[agent_mailbox_fake_vendor::network_alias()],
+                )]),
                 ..Default::default()
             }),
         );

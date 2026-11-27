@@ -115,6 +115,7 @@ fn swagger_ui() -> Router {
 }
 
 fn api_router(state: ApiContext) -> Router<ApiContext> {
+    let agent_mailboxes = state.agent_mailbox_router_state();
     Router::new()
         .route(
             "/email/threads/{thread_id}/calendar-invitations",
@@ -137,5 +138,11 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
         .nest("/email", email::router(state))
         .nest("/gmail", gmail::router())
         .nest("/outlook", outlook::router())
-        .nest("/internal", internal::router())
+        .nest(
+            "/internal",
+            internal::router().nest(
+                "/agent-mailboxes",
+                agent_mailbox::inbound::axum_router::internal_agent_mailbox_router(agent_mailboxes),
+            ),
+        )
 }

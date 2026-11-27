@@ -180,6 +180,7 @@ pub(crate) type InvitationSvc = email::domain::invitations::InvitationService<
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
     pub gmail_push: Arc<GmailPushSvc>,
+    pub agent_mailboxes: Arc<crate::composition::agent_mailboxes::AgentMailboxSvc>,
     pub user_inbox_deletion: Arc<UserInboxDeletionSvc>,
     pub inbox_connection: Arc<InboxConnectionSvc>,
     pub backfill_jobs: Arc<BackfillJobSvc>,
@@ -248,4 +249,19 @@ pub(crate) struct ApiContext {
         EmailThreadRouterState<EmailSvc, EmailEntityAccessService, AuthorizationService>,
     pub gmail_token_state: GmailTokenState<GmailTokenProviderImpl>,
     pub calendar_service: Arc<CalendarGrantService>,
+}
+
+impl ApiContext {
+    /// The agent mailbox routes' state: its service and request authorization.
+    pub(crate) fn agent_mailbox_router_state(
+        &self,
+    ) -> agent_mailbox::inbound::axum_router::AgentMailboxRouterState<
+        crate::composition::agent_mailboxes::AgentMailboxSvc,
+        AuthorizationService,
+    > {
+        agent_mailbox::inbound::axum_router::AgentMailboxRouterState {
+            service: self.agent_mailboxes.clone(),
+            authorization_state: self.authorization_state.clone(),
+        }
+    }
 }

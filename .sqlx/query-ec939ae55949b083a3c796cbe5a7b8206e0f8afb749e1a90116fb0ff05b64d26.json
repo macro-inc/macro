@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_mailboxes\n            SET state = 'released', updated_at = $3\n            WHERE id = $1 AND lease_token = $2 AND state = 'releasing'\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ec939ae55949b083a3c796cbe5a7b8206e0f8afb749e1a90116fb0ff05b64d26"
+}

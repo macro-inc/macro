@@ -29,6 +29,12 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         .nest("/drafts", drafts::router(state.clone()))
         .nest("/messages", messages::router(state.clone()))
         .nest("/links", links::router())
+        .nest(
+            "/agent-mailbox",
+            agent_mailbox::inbound::axum_router::agent_mailbox_router(
+                state.agent_mailbox_router_state(),
+            ),
+        )
         .nest("/contacts", contacts::router(state.clone()))
         .nest("/filters", filters::router())
         .nest("/backfill", backfill::router(state.clone()))
