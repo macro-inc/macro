@@ -559,127 +559,32 @@ it('keeps nobody listed below a first page read again in a new cache generation'
   client.clear();
 });
 
-it('keeps the people still matching typed text when a server page read again fills the bound', async () => {
-  vi.useFakeTimers();
-  const client = new QueryClient();
-  const [search, setSearch] = createSignal('sam');
-  let changeGeneration = () => {};
-  let changed = false;
-  const host = {
-    clientId: 'client',
-    onCacheChanged: () => () => {},
-    onCacheGenerationChanged: (listener: () => void) => {
-      changeGeneration = listener;
-      return () => {};
-    },
-  } as unknown as NonNullable<
-    ReturnType<Parameters<typeof createContactRecipientSource>[0]>['host']
-  >;
-  const person = (name: string) => {
-    const email = `${name.toLowerCase().replace(' ', '')}@example.com`;
-    return { id: `macro|${email}`, email, name };
-  };
-  // `sam` lists First Sam, then Old Sam on page two. After the generation
-  // changes, the server answers page one naming 500 people, so Old Sam is
-  // kept below the bound but not listed. The read for `sam 1` is slow.
-  const named = Array.from({ length: 500 }, (_, index) =>
-    person(`Sam ${index}`)
-  );
-  const reader = vi
-    .fn<typeof readContactDirectory>()
-    .mockImplementation(async (viewer, _host, request) => {
-      const after = request.cursor?.after;
-      if (request.query !== 'sam') {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        return {
-          query: request.query,
-          source: 'cache',
-          sync: 'snapshot',
-          offline: false,
-          users: [],
-          nextCursor: null,
-        };
-      }
-      if (changed)
-        return {
-          query: request.query,
-          source: 'server',
-          sync: 'unavailable',
-          offline: false,
-          users: named,
-          named: { exact: [], wordStart: named.map((user) => user.id) },
-          nextCursor: null,
-        };
-      return {
-        query: request.query,
-        source: 'cache',
-        sync: 'snapshot',
-        offline: false,
-        users: [person(after === 'second' ? 'Old Sam' : 'First Sam')],
-        nextCursor:
-          after === 'second'
-            ? null
-            : {
-                source: 'people',
-                generation: 'fixture',
-                after: 'second',
-                userId: viewer,
-                query: request.query,
-                policyKey: hashKey([request.policy]),
-              },
-      };
-    });
-  let source: ReturnType<typeof createContactRecipientSource> | undefined;
-  function Harness() {
-    source = createContactRecipientSource(
-      () => ({ userId: 'macro|viewer@example.com', host }),
-      {
-        search,
-        enabled: () => true,
-        selfId: () => undefined,
-        senderDomain: () => undefined,
-        includeSelf: () => true,
-      },
-      () => false,
-      reader
-    );
-    return null;
-  }
-  render(() => (
-    <QueryClientProvider client={client}>
-      <Harness />
-    </QueryClientProvider>
-  ));
-  const listed = () => source!.items().map((item) => item.data.name);
-  await vi.advanceTimersByTimeAsync(300);
-  await source!.next();
-  await vi.advanceTimersByTimeAsync(0);
-  expect(listed()).toEqual(['First Sam', 'Old Sam']);
+function namedRecipient(
+  name: string,
+  local = name.toLowerCase().replace(' ', '')
+) {
+  const email = `${local}@example.com`;
+  return { id: `macro|${email}`, email, name };
+}
 
-  // Every listed row was read in the new generation, so typing keeps the
-  // ones that still match while the read for the text is pending.
-  changed = true;
-  changeGeneration();
-  await vi.advanceTimersByTimeAsync(0);
-  expect(listed()).toHaveLength(500);
-  expect(listed()).not.toContain('Old Sam');
-  setSearch('sam 1');
-  expect(listed()).toContain('Sam 1');
-  expect(listed()).toContain('Sam 21');
-  expect(listed()).not.toContain('Sam 0');
-  await vi.advanceTimersByTimeAsync(1500);
-  client.clear();
-});
+/** 500 teammates, all named by `sam`. */
+const SAM_TEAM = Array.from({ length: 500 }, (_, index) =>
+  namedRecipient(`Sam ${index}`)
+);
 
-it('keeps nobody listed while typing once a page shows a row from an earlier generation again', async () => {
-  vi.useFakeTimers();
+/**
+ * A picker typing `sam`. Without a roster, page one lists First Sam and page
+ * two `older`. With the 500 teammates, the server's page one names all of
+ * them, pushing `older` below the bound; with one, it names only Sam 0. The
+ * read for any other text is slow.
+ */
+function mountRosterSource(older: ReturnType<typeof namedRecipient>) {
   const client = new QueryClient();
   const [search, setSearch] = createSignal('sam');
   const [teammates, setTeammates] = createSignal<ReadonlySet<string>>(
     new Set()
   );
   let changeGeneration = () => {};
-  let changed = false;
   const host = {
     clientId: 'client',
     onCacheChanged: () => () => {},
@@ -690,20 +595,9 @@ it('keeps nobody listed while typing once a page shows a row from an earlier gen
   } as unknown as NonNullable<
     ReturnType<Parameters<typeof createContactRecipientSource>[0]>['host']
   >;
-  const person = (name: string) => {
-    const email = `${name.toLowerCase().replace(' ', '')}@example.com`;
-    return { id: `macro|${email}`, email, name };
-  };
-  // As above, Old Sam is kept below a server page naming 500 people. Once
-  // the roster loads, the same generation's page one names only Sam 0, so
-  // Old Sam, read before the generation changed, is listed again.
-  const named = Array.from({ length: 500 }, (_, index) =>
-    person(`Sam ${index}`)
-  );
   const reader = vi
     .fn<typeof readContactDirectory>()
     .mockImplementation(async (viewer, _host, request) => {
-      const after = request.cursor?.after;
       if (request.query !== 'sam') {
         await new Promise((resolve) => setTimeout(resolve, 1000));
         return {
@@ -715,35 +609,38 @@ it('keeps nobody listed while typing once a page shows a row from an earlier gen
           nextCursor: null,
         };
       }
-      if (changed) {
-        const users = request.teammates?.length ? named.slice(0, 1) : named;
+      if (request.teammates?.length) {
+        // The server looks the roster up by ID; `sam` names each exactly.
+        const team = new Set(request.teammates);
+        const users = SAM_TEAM.filter((user) => team.has(user.id));
+        const named = users.map((user) => user.id);
         return {
           query: request.query,
           source: 'server',
           sync: 'unavailable',
           offline: false,
           users,
-          named: { exact: [], wordStart: users.map((user) => user.id) },
+          named: { exact: named, wordStart: named },
           nextCursor: null,
         };
       }
+      const later = request.cursor?.after === 'second';
       return {
         query: request.query,
         source: 'cache',
         sync: 'snapshot',
         offline: false,
-        users: [person(after === 'second' ? 'Old Sam' : 'First Sam')],
-        nextCursor:
-          after === 'second'
-            ? null
-            : {
-                source: 'people',
-                generation: 'fixture',
-                after: 'second',
-                userId: viewer,
-                query: request.query,
-                policyKey: hashKey([request.policy]),
-              },
+        users: [later ? older : namedRecipient('First Sam')],
+        nextCursor: later
+          ? null
+          : {
+              source: 'people',
+              generation: 'fixture',
+              after: 'second',
+              userId: viewer,
+              query: request.query,
+              policyKey: hashKey([request.policy]),
+            },
       };
     });
   let source: ReturnType<typeof createContactRecipientSource> | undefined;
@@ -769,21 +666,67 @@ it('keeps nobody listed while typing once a page shows a row from an earlier gen
     </QueryClientProvider>
   ));
   const listed = () => source!.items().map((item) => item.data.name);
-  await vi.advanceTimersByTimeAsync(300);
-  await source!.next();
-  await vi.advanceTimersByTimeAsync(0);
-  changed = true;
-  changeGeneration();
-  await vi.advanceTimersByTimeAsync(0);
-  expect(listed()).toHaveLength(500);
+  /** Lists both pages, then reads page one again with the whole team, in
+   * the same generation and then in a new one. */
+  const fillTheBound = async () => {
+    await vi.advanceTimersByTimeAsync(300);
+    await source!.next();
+    await vi.advanceTimersByTimeAsync(0);
+    setTeammates(new Set(SAM_TEAM.map((user) => user.id)));
+    await vi.advanceTimersByTimeAsync(0);
+    changeGeneration();
+    await vi.advanceTimersByTimeAsync(0);
+  };
+  return { client, listed, setSearch, setTeammates, fillTheBound };
+}
 
-  setTeammates(new Set(['macro|teammate@example.com']));
-  await vi.advanceTimersByTimeAsync(0);
-  expect(listed()).toEqual(['Sam 0', 'Old Sam']);
-  setSearch('sam o');
-  expect(listed()).toEqual([]);
+it('keeps the people still matching typed text when a server page read again fills the bound', async () => {
+  vi.useFakeTimers();
+  const view = mountRosterSource(namedRecipient('Old Sam'));
+  await vi.advanceTimersByTimeAsync(300);
+  expect(view.listed()).toEqual(['First Sam']);
+  await view.fillTheBound();
+  // Old Sam, read before the generation changed, is kept below the bound
+  // but not listed, so every listed row is current and typing keeps the
+  // ones that still match while the read for the text is pending.
+  expect(view.listed()).toHaveLength(500);
+  expect(view.listed()).not.toContain('Old Sam');
+  view.setSearch('sam 1');
+  expect(view.listed()).toContain('Sam 1');
+  expect(view.listed()).toContain('Sam 21');
+  expect(view.listed()).not.toContain('Sam 0');
   await vi.advanceTimersByTimeAsync(1500);
-  client.clear();
+  view.client.clear();
+});
+
+it('keeps nobody listed while typing once a page shows a row from an earlier generation again', async () => {
+  vi.useFakeTimers();
+  const view = mountRosterSource(namedRecipient('Old Sam'));
+  await view.fillTheBound();
+  expect(view.listed()).toHaveLength(500);
+  // The roster shrinks in the same generation, so Old Sam is listed again.
+  view.setTeammates(new Set([SAM_TEAM[0].id]));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(view.listed()).toEqual(['Sam 0', 'Old Sam']);
+  view.setSearch('sam 0');
+  expect(view.listed()).toEqual([]);
+  await vi.advanceTimersByTimeAsync(1500);
+  view.client.clear();
+});
+
+it('keeps the people still matching typed text when the only older row listed again is not shown', async () => {
+  vi.useFakeTimers();
+  // The directory lists an automated mailbox; the picker shows it only for
+  // its whole address typed.
+  const view = mountRosterSource(namedRecipient('Sam Updates', 'noreply'));
+  await view.fillTheBound();
+  view.setTeammates(new Set([SAM_TEAM[0].id]));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(view.listed()).toEqual(['Sam 0']);
+  view.setSearch('sam 0');
+  expect(view.listed()).toEqual(['Sam 0']);
+  await vi.advanceTimersByTimeAsync(1500);
+  view.client.clear();
 });
 
 it('lists a typed address, then a typed teammate, first when a recipient picker reads the server', async () => {

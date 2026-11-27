@@ -247,16 +247,18 @@ export function createContactDirectoryList(
     data,
     /** Names the growing list on screen; appending a page keeps it. */
     windowKey: () => (data() ? listKey() : undefined),
-    /** Whether every row listed was read in the current generation. Read
-     * after `data`, which it describes. */
-    readNow: () => {
+    /** Whether every row listed that `shown` keeps was read in the current
+     * generation. Read after `data`, which it describes. */
+    readNow: (shown: (user: IUser) => boolean = () => true) => {
       if (!listed) return false;
       const generation = window.generation();
       // Rows below a first page that fills the bound are kept but not listed.
       const room = Math.max(MAX_LISTED_CONTACTS - listed.first.length, 0);
       return (
         listed.firstReadIn === generation &&
-        listed.later.slice(0, room).every((row) => row.readIn === generation)
+        listed.later
+          .slice(0, room)
+          .every((row) => row.readIn === generation || !shown(row.user))
       );
     },
     loadingMore,

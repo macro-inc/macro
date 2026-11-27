@@ -97,8 +97,9 @@ export function createContactRecipientSource(
       }
       // Only rows read in this generation belong to it: the list keeps
       // earlier rows on screen across a change, while it reads and below a
-      // re-read first page. Each page shown decides afresh.
-      shownFor = directory.readNow() ? owner : undefined;
+      // re-read first page. Each page shown decides afresh, from the rows it
+      // shows.
+      shownFor = directory.readNow(listable) ? owner : undefined;
       return (
         page.users
           .filter(listable)
