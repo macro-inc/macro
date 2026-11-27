@@ -143,6 +143,11 @@ impl LocalEnv {
         env.insert("RUST_MIN_STACK".into(), "67108864".into());
         env.insert("OPENBAO_ADDRESS".into(), "http://openbao:8200".into());
         env.insert("PASSWORDS_JWT_ISSUER".into(), PASSWORDS_JWT_ISSUER.into());
+        // LocalStack's signing key, by alias: its key id changes every run.
+        env.insert(
+            "PASSWORDS_JWT_KMS_KEY_ID".into(),
+            resources::PASSWORDS_JWT_KMS_ALIAS.into(),
+        );
         env.insert("COMPOSE_PROJECT_NAME".into(), self.project_name.clone());
         env.insert("PORT".into(), "8080".into());
         env.insert("FRONTEND_PORT".into(), self.frontend_port.to_string());

@@ -95,6 +95,8 @@ async fn real_import_retries_preserve_provider_version_folder_grants_and_totp(po
                 &public_key_path,
                 "--jwt-issuer",
                 "macro-local-passwords",
+                "--jwt-alg",
+                "ES256",
             ])
             .status()
             .expect("bootstrap")
@@ -104,7 +106,12 @@ async fn real_import_retries_preserve_provider_version_folder_grants_and_totp(po
         OpenBaoProvider::new(
             address,
             "macro-local-passwords".into(),
-            &std::fs::read_to_string(key_path).expect("synthetic key"),
+            Arc::new(
+                crate::outbound::openbao::signer::LocalJwtSigner::from_pkcs8_pem(
+                    &std::fs::read_to_string(key_path).expect("synthetic key"),
+                )
+                .expect("P-256 PKCS#8 signing key"),
+            ),
         )
         .unwrap(),
     );

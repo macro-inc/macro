@@ -41,6 +41,7 @@ fn provisions_every_team_against_the_loopback_vault_in_one_run() {
             ("--init-file", "/fixture/openbao-bootstrap.json"),
             ("--address", address.as_str()),
             ("--jwt-public-key", public_key.to_str().unwrap()),
+            ("--jwt-alg", "ES256"),
             ("--jwt-issuer", "macro-local-passwords"),
             ("--team-id", "019a7000-0000-7000-8000-000000000001"),
             ("--team-id", "019a7000-0000-7000-8000-000000000002"),

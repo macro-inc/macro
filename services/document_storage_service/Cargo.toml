@@ -65,6 +65,7 @@ anyhow = { workspace = true }
 async-graphql = { workspace = true }
 async-graphql-axum = "7.0.17"
 aws-sdk-dynamodb = { workspace = true }
+aws-sdk-kms = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sns = { workspace = true }

@@ -7,17 +7,9 @@ use axum::{
 
 #[tokio::test]
 async fn absent_and_empty_usernames_read_as_empty_but_malformed_values_fail() {
-    let key = Command::new("openssl")
-        .args([
-            "genpkey",
-            "-algorithm",
-            "RSA",
-            "-pkeyopt",
-            "rsa_keygen_bits:2048",
-        ])
-        .output()
-        .expect("synthetic signing key");
-    assert!(key.status.success());
+    let signer = Arc::new(signer::LocalJwtSigner::new(
+        p256::ecdsa::SigningKey::from_bytes(&[7u8; 32].into()).expect("fixed P-256 scalar"),
+    ));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("listener");
@@ -39,7 +31,7 @@ async fn absent_and_empty_usernames_read_as_empty_but_malformed_values_fail() {
     let provider = OpenBaoProvider::new(
         format!("http://{address}"),
         "synthetic-issuer".into(),
-        &String::from_utf8(key.stdout).expect("PEM"),
+        signer,
     )
     .expect("provider");
     let team = TeamId(uuid::Uuid::now_v7());

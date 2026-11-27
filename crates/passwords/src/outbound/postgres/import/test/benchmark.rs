@@ -209,6 +209,8 @@ async fn import_performance() {
                 &team.0.to_string(),
                 "--jwt-public-key",
                 &public_path,
+                "--jwt-alg",
+                "ES256",
                 "--jwt-issuer",
                 "macro-local-passwords",
             ])
@@ -241,7 +243,12 @@ async fn import_performance() {
                     OpenBaoProvider::new(
                         address.clone(),
                         "macro-local-passwords".into(),
-                        &std::fs::read_to_string(&key_path).expect("synthetic key"),
+                        Arc::new(
+                            crate::outbound::openbao::signer::LocalJwtSigner::from_pkcs8_pem(
+                                &std::fs::read_to_string(&key_path).expect("synthetic key"),
+                            )
+                            .expect("P-256 PKCS#8 signing key"),
+                        ),
                     )
                     .expect("provider"),
                 );

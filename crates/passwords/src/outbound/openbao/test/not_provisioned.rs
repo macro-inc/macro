@@ -1,14 +1,11 @@
 use super::*;
 use axum::{Router, http::StatusCode, routing::any};
 
-/// A throwaway RS256 key: the fake server never verifies the login JWT.
-fn signing_key() -> String {
-    use rsa::pkcs1::{EncodeRsaPrivateKey, LineEnding};
-    rsa::RsaPrivateKey::new(&mut rsa::rand_core::OsRng, 2048)
-        .expect("synthetic key")
-        .to_pkcs1_pem(LineEnding::LF)
-        .expect("synthetic key PEM")
-        .to_string()
+/// A fixed P-256 key: the fake server never verifies the login JWT.
+fn signer() -> Arc<dyn signer::JwtSigner> {
+    Arc::new(signer::LocalJwtSigner::new(
+        p256::ecdsa::SigningKey::from_bytes(&[7u8; 32].into()).expect("fixed P-256 scalar"),
+    ))
 }
 
 /// A fake OpenBao answering login with `login` and every other request with
@@ -34,7 +31,7 @@ async fn fake_openbao(
     let provider = OpenBaoProvider::new(
         format!("http://{address}"),
         "macro-local-passwords".into(),
-        &signing_key(),
+        signer(),
     )
     .expect("provider");
     (provider, server)

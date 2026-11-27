@@ -73,6 +73,9 @@ fn bootstrap_args(instance: &Instance, init_file: &Path, teams: &[uuid::Uuid]) -
             .join("passwords-jwt.public.pem")
             .display()
             .to_string(),
+        // LocalStack's P-256 key (`localstack.rs`), so the logins are ES256.
+        "--jwt-alg".into(),
+        "ES256".into(),
         "--jwt-issuer".into(),
         PASSWORDS_JWT_ISSUER.into(),
     ];

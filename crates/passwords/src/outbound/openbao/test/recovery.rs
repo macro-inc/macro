@@ -176,6 +176,8 @@ async fn accepted_create_survives_postwrite_lookup_interruption_and_same_operati
                 &public_key_path,
                 "--jwt-issuer",
                 "macro-local-passwords",
+                "--jwt-alg",
+                "ES256",
             ])
             .output()
             .expect("bootstrap isolated namespace")
@@ -220,7 +222,12 @@ async fn accepted_create_survives_postwrite_lookup_interruption_and_same_operati
         OpenBaoProvider::new(
             proxy.address.clone(),
             "macro-local-passwords".into(),
-            &std::fs::read_to_string(key_path).expect("fixture signing key"),
+            Arc::new(
+                crate::outbound::openbao::signer::LocalJwtSigner::from_pkcs8_pem(
+                    &std::fs::read_to_string(key_path).expect("fixture signing key"),
+                )
+                .expect("P-256 PKCS#8 signing key"),
+            ),
         )
         .expect("provider"),
     );

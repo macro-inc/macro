@@ -5,6 +5,7 @@ use axum::{
     http::{HeaderMap, Method, StatusCode, Uri},
     response::{IntoResponse, Response},
 };
+use p256::pkcs8::EncodePublicKey;
 use std::{
     collections::{HashMap, HashSet},
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -45,6 +46,7 @@ async fn route(
     method: Method,
     uri: Uri,
     headers: HeaderMap,
+    body: axum::body::Bytes,
 ) -> Response {
     let header = |name: &str| {
         headers
@@ -55,6 +57,29 @@ async fn route(
     };
     let path = uri.path();
     if path == "/v1/auth/macro/login" {
+        // Like the real JWT mount, accept only an ES256 JWT that the fixed
+        // key's public half verifies, for this issuer and audience.
+        let jwt = serde_json::from_slice::<serde_json::Value>(&body)
+            .ok()
+            .and_then(|login| login["jwt"].as_str().map(str::to_owned))
+            .unwrap_or_default();
+        let public = p256::ecdsa::SigningKey::from_bytes(&[7u8; 32].into())
+            .expect("fixed P-256 scalar")
+            .verifying_key()
+            .to_public_key_pem(p256::pkcs8::LineEnding::LF)
+            .expect("public key PEM");
+        let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::ES256);
+        validation.set_audience(&["macro-passwords"]);
+        validation.set_issuer(&["synthetic-issuer"]);
+        if jsonwebtoken::decode::<serde_json::Value>(
+            &jwt,
+            &jsonwebtoken::DecodingKey::from_ec_pem(public.as_bytes()).expect("decoding key"),
+            &validation,
+        )
+        .is_err()
+        {
+            return errors(StatusCode::BAD_REQUEST, "invalid JWT");
+        }
         let login = provider.logins.fetch_add(1, Ordering::SeqCst) + 1;
         let token = format!("synthetic-token-{login}");
         provider
@@ -170,17 +195,13 @@ impl Fixture {
 }
 
 async fn fixture() -> Fixture {
-    let key = Command::new("openssl")
-        .args([
-            "genpkey",
-            "-algorithm",
-            "RSA",
-            "-pkeyopt",
-            "rsa_keygen_bits:2048",
-        ])
-        .output()
-        .expect("synthetic RSA key generator");
-    assert!(key.status.success());
+    fixture_signing_with(Arc::new(signer::LocalJwtSigner::new(
+        p256::ecdsa::SigningKey::from_bytes(&[7u8; 32].into()).expect("fixed P-256 scalar"),
+    )))
+    .await
+}
+
+async fn fixture_signing_with(signer: Arc<dyn JwtSigner>) -> Fixture {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("listener");
@@ -191,7 +212,7 @@ async fn fixture() -> Fixture {
     let provider = OpenBaoProvider::new(
         format!("http://{address}"),
         "synthetic-issuer".into(),
-        &String::from_utf8(key.stdout).expect("PEM"),
+        signer,
     )
     .expect("provider");
     Fixture {
@@ -242,6 +263,53 @@ async fn one_login_serves_many_writes_per_team() {
         2,
         "another team never reuses the first team's token"
     );
+}
+
+/// Counts signatures, and holds the first one until the test opens `gate`.
+struct GatedSigner {
+    inner: signer::LocalJwtSigner,
+    gate: tokio::sync::Semaphore,
+    signs: AtomicUsize,
+}
+
+#[async_trait]
+impl JwtSigner for GatedSigner {
+    fn kind(&self) -> &'static str {
+        "test"
+    }
+
+    async fn sign(&self, signing_input: &[u8]) -> Result<[u8; 64], signer::SignError> {
+        self.signs.fetch_add(1, Ordering::SeqCst);
+        let _permit = self.gate.acquire().await.expect("gate open");
+        self.inner.sign(signing_input).await
+    }
+}
+
+#[tokio::test]
+async fn ten_concurrent_cold_callers_share_one_signature_and_one_login() {
+    let signer = Arc::new(GatedSigner {
+        inner: signer::LocalJwtSigner::new(
+            p256::ecdsa::SigningKey::from_bytes(&[7u8; 32].into()).expect("fixed P-256 scalar"),
+        ),
+        gate: tokio::sync::Semaphore::new(0),
+        signs: AtomicUsize::new(0),
+    });
+    let fixture = fixture_signing_with(signer.clone()).await;
+    let team = team();
+
+    // `join!` polls the callers first: the first starts the login and parks
+    // in `sign` behind the closed gate, the other nine wait on that login.
+    // Only then does the second branch open the gate.
+    let (results, ()) = futures::join!(
+        futures::future::join_all((0..10).map(|_| write_item(&fixture, team))),
+        async { signer.gate.add_permits(1) },
+    );
+    for result in results {
+        result.expect("write");
+    }
+    assert_eq!(signer.signs.load(Ordering::SeqCst), 1);
+    assert_eq!(fixture.logins(), 1);
+    assert_eq!(fixture.value_requests(), 10);
 }
 
 #[tokio::test]

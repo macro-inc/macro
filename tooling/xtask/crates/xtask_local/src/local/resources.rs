@@ -52,6 +52,11 @@ pub const MCP_OAUTH_KMS_ALIAS: &str = "alias/macro-local-mcp-oauth";
 /// keys with.
 pub const MICROSOFT_TOKEN_KMS_ALIAS: &str = "alias/macro-local-microsoft-token";
 
+/// Asymmetric P-256 key DSS signs its ES256 OpenBao login JWTs with. Its
+/// public half is written to `passwords-jwt.public.pem` in the instance's
+/// generated directory for `infra/local/openbao/bootstrap.py`.
+pub const PASSWORDS_JWT_KMS_ALIAS: &str = "alias/macro-local-passwords-jwt";
+
 /// The WhatsApp session service's key for per-account data keys. The service
 /// computes this name from `ENVIRONMENT` (`SessionKmsKey` in its `config.rs`).
 pub const WHATSAPP_SESSION_KMS_ALIAS: &str = "alias/whatsapp-session-service-local";
