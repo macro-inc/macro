@@ -26,15 +26,25 @@ class FakeWAL {
 function setup() {
   const wal = new FakeWAL();
   const [status, setStatus] = createSignal(SyncSourceStatus.Connected);
+  const [canEdit, setCanEdit] = createSignal(true);
+  const resyncListeners = new Set<() => void>();
+  const resync = () => {
+    for (const listener of resyncListeners) listener();
+  };
   const reconnect = vi.fn();
   return createRoot((dispose) => {
     const health = createCollabSyncHealth({
       status,
+      onResync: (listener) => {
+        resyncListeners.add(listener);
+        return () => resyncListeners.delete(listener);
+      },
+      canEdit,
       wal,
       reconnect,
       delay: 10_000,
     });
-    return { health, wal, setStatus, reconnect, dispose };
+    return { health, wal, setStatus, setCanEdit, resync, reconnect, dispose };
   });
 }
 
@@ -77,11 +87,12 @@ describe('createCollabSyncHealth', () => {
     dispose();
   });
 
-  it('reports a disconnect that lasts the delay and clears on reconnect', () => {
-    const { health, setStatus, dispose } = setup();
+  it('reports a disconnect that lasts the delay and clears once the document has caught up', () => {
+    const { health, setStatus, resync, dispose } = setup();
     setStatus(SyncSourceStatus.Connecting);
     vi.advanceTimersByTime(5_000);
     setStatus(SyncSourceStatus.Connected);
+    resync();
     vi.advanceTimersByTime(10_000);
     expect(health.problem()).toBeUndefined();
 
@@ -95,8 +106,22 @@ describe('createCollabSyncHealth', () => {
       );
     }
     expect(health.problem()).toBe('offline');
+    // The socket is back, but the document hasn't caught up yet.
     setStatus(SyncSourceStatus.Connected);
+    vi.advanceTimersByTime(30_000);
+    expect(health.problem()).toBe('offline');
+    resync();
     expect(health.problem()).toBeUndefined();
+    dispose();
+  });
+
+  it("doesn't tell a viewer who can't edit about edits they can't send", () => {
+    const { health, wal, setCanEdit, dispose } = setup();
+    setCanEdit(false);
+    wal.set(Date.now() - 60_000);
+    expect(health.problem()).toBeUndefined();
+    setCanEdit(true);
+    expect(health.problem()).toBe('unsaved');
     dispose();
   });
 

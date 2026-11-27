@@ -285,12 +285,13 @@ A Markdown document warns its viewer at the top of the page, and keeps the
 warning in view while they scroll:
 
 - **Changes not saved** (an alert) once an edit has waited 10 s for the server
-  to acknowledge it, including edits left unsent by an earlier session.
+  to acknowledge it, including edits left unsent by an earlier session. A
+  viewer who can't edit doesn't get it.
 - **Not connected** once the document has been disconnected for 10 s.
 
 Retry reconnects and resends at once. The warning clears as soon as every edit is
-delivered and the connection is back; short reconnects and slow acks never show
-it.
+delivered and the document has caught up with the server again (an open socket
+alone isn't enough); short reconnects and slow acks never show it.
 
 ## Create a document from an editor
 

@@ -23,7 +23,8 @@ const DELAY_MS = 10_000;
 /**
  * A sync-service room. A `stalled` peer stays connected but its updates are
  * dropped unanswered, as when the server accepts the socket but never gets the
- * edits to the document. An `offline` peer's socket is refused.
+ * edits to the document. An `offline` peer's socket is refused. A `withheld`
+ * peer's socket opens, but the document's initial sync waits for `release`.
  */
 async function startRoom() {
   const doc = new LoroDoc();
@@ -56,6 +57,7 @@ async function startRoom() {
   if (!address || typeof address === 'string') throw new Error('No room port');
   const peers = new Map<string, WebSocket>();
   const stalled = new Set<string>();
+  const withheld = new Map<string, () => void>();
   const id = randomUUID();
   const send = (peer: WebSocket, message: IFromRemote) => {
     for (const frame of intoFrames(FromRemote.encode(message)))
@@ -107,13 +109,16 @@ async function startRoom() {
         );
       }
     });
-    send(
-      socket,
-      FromRemote.fromRemoteInitialSync({
-        snapshot: doc.export({ mode: 'snapshot' }),
-        awareness: new Uint8Array(),
-      })
-    );
+    const initialSync = () =>
+      send(
+        socket,
+        FromRemote.fromRemoteInitialSync({
+          snapshot: doc.export({ mode: 'snapshot' }),
+          awareness: new Uint8Array(),
+        })
+      );
+    if (withheld.has(name)) withheld.set(name, initialSync);
+    else initialSync();
   });
 
   return {
@@ -132,6 +137,14 @@ async function startRoom() {
     },
     reconnect(peer: string) {
       offline.delete(peer);
+    },
+    withhold(peer: string) {
+      withheld.set(peer, () => {});
+    },
+    release(peer: string) {
+      const initialSync = withheld.get(peer);
+      withheld.delete(peer);
+      initialSync?.();
     },
     async close() {
       for (const socket of server.clients) socket.terminate();
@@ -285,4 +298,28 @@ test('a lost connection raises an offline banner, then an unsaved one once edits
   } finally {
     await second.close();
   }
+});
+
+test('the offline banner stays until the document has caught up, not just until the socket reopens', async ({
+  page,
+  room,
+}) => {
+  await openEditor(page, room.url('writer'));
+  room.disconnect('writer');
+  await page.clock.runFor(DELAY_MS + 1_000);
+  await expect(banner(page)).toHaveAttribute('data-sync-problem', 'offline');
+
+  // The server takes the socket but doesn't send the document yet.
+  room.withhold('writer');
+  const reopened = page.waitForEvent('websocket', {
+    predicate: (socket) => socket.url().endsWith('/writer'),
+  });
+  room.reconnect('writer');
+  await page.clock.runFor(5_000);
+  await reopened;
+  await page.clock.runFor(1_000);
+  await expect(banner(page)).toHaveAttribute('data-sync-problem', 'offline');
+
+  room.release('writer');
+  await expect(banner(page)).toHaveCount(0);
 });

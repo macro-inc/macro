@@ -171,6 +171,11 @@ export function CollabProvider(props: CollabProviderProps) {
   props.onSyncHealth?.(
     createCollabSyncHealth({
       status: () => live.status(),
+      onResync: (listener) =>
+        live.listen((event) => {
+          if (event.type === 'reconnect') listener();
+        }),
+      canEdit: () => !readOnly(),
       wal: walSyncer,
       reconnect: () => live.reconnect(),
     })
