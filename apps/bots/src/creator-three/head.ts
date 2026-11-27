@@ -371,48 +371,47 @@ export function createHead(scan: Scan) {
 
   function hairShell(style: RenderState['hair']['style']) {
     const thickness: Thickness = (i, x, y, z) => {
-      const edge = scalp[i];
+      const edge = scalp[i] * (0.55 + 0.45 * smooth(1.6, 3.2, y));
       const top = smooth(1.8, 3.6, y);
       const side = Math.max(-1, Math.min(1, (x - CX) / 1.2));
+      // Hair that hangs over the ears and neck instead of stopping at the hairline.
+      const drape = (low: number, reach: number) =>
+        front[i] < reach
+          ? smooth(low, low + 0.7, y) *
+            (1 - smooth(1.6, 2.4, y)) *
+            smooth(reach, reach - 0.35, front[i])
+          : 0;
       switch (style) {
         case 'close':
           return 0.03 * edge;
         case 'buzz':
-          return 0.085 * edge;
+          return 0.08 * edge;
         case 'crop':
-          return (0.1 + 0.2 * top) * edge;
+          return (0.07 + 0.13 * top) * edge;
         case 'side':
-          return (0.13 + 0.24 * top) * edge * (1 + 0.4 * side);
+          return (0.08 + 0.26 * top) * edge * (1 + 0.75 * side);
         case 'swept':
-          return (0.16 + 0.34 * top) * edge;
+          return (0.12 + 0.42 * top) * edge;
         case 'waves':
           return (
-            (0.2 + 0.26 * top) *
-            edge *
-            (1 + 0.3 * Math.sin(x * 5 + y * 3) * Math.sin(z * 4 + y * 2))
+            Math.max((0.22 + 0.3 * top) * edge, 0.3 * drape(0.5, 0.25)) *
+            (1 +
+              0.45 * Math.sin(x * 4.2 + y * 2.6) * Math.sin(z * 3.4 + y * 1.8))
           );
-        case 'long': {
-          // Long hair also falls behind the ears and down the neck.
-          const fall =
-            front[i] < 0.3
-              ? smooth(-1.7, -0.9, y) *
-                (1 - smooth(1.2, 2.2, y)) *
-                smooth(0.3, 0, front[i])
-              : 0;
-          return Math.max((0.16 + 0.2 * top) * edge, 0.3 * fall);
-        }
+        case 'long':
+          return Math.max((0.16 + 0.2 * top) * edge, 0.46 * drape(-2.3, 0.5));
       }
     };
     const shift: Shift | undefined =
       style === 'side'
         ? (_i, _x, y, _z, t, out) => {
-            out[0] = 0.5 * t * smooth(2.4, 3.6, y);
+            out[0] = 0.6 * t * smooth(2.4, 3.6, y);
           }
         : style === 'swept'
           ? (i, _x, y, _z, t, out) => {
               const f = Math.max(0, front[i]);
-              out[1] = 0.35 * t * f;
-              out[2] = -0.7 * t * smooth(2.2, 3.4, y) * (1 - f);
+              out[1] = 0.5 * t * f;
+              out[2] = -0.9 * t * smooth(2.0, 3.4, y);
             }
           : undefined;
     return shell(thickness, shift);
@@ -425,8 +424,8 @@ export function createHead(scan: Scan) {
       stubble: 0,
       mustache: 0.05,
       goatee: 0.07,
-      short: 0.07,
-      full: 0.17,
+      short: 0.06,
+      full: 0.12,
     }[style];
     return {
       region,
@@ -473,6 +472,23 @@ export function createHead(scan: Scan) {
     return shell(thickness);
   }
 
+  /** The outermost scan vertex of an ear within a height band, so jewellery can ride the morphed ear. */
+  function earVertex(side: -1 | 1, low: number, high: number) {
+    let best = 0,
+      reach = -Infinity;
+    for (let i = 0; i < count; i++) {
+      const y = base[i * 3 + 1],
+        z = base[i * 3 + 2];
+      if (y < low || y > high || z < -0.3 || z > 0.7) continue;
+      const out = side * (base[i * 3] - CX);
+      if (out > reach) {
+        reach = out;
+        best = i;
+      }
+    }
+    return best;
+  }
+
   return {
     scan,
     count,
@@ -484,5 +500,6 @@ export function createHead(scan: Scan) {
     hairShell,
     beardShell,
     outfitShell,
+    earVertex,
   };
 }

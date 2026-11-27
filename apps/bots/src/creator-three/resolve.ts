@@ -100,8 +100,9 @@ function skinTone(tone: number, under: Look['under']): Rgb {
     warm: [1.05, 1, 0.88],
     olive: [0.95, 1.04, 0.84],
   }[under];
+  // Compress the ramp a little so the lightest tone does not clip and the darkest keeps its modelling.
   return [0, 1, 2].map((i) =>
-    round((a[i] + (b[i] - a[i]) * t) * shift[i])
+    round(((a[i] + (b[i] - a[i]) * t) * 0.72 + 0.014) * shift[i])
   ) as Rgb;
 }
 
@@ -141,7 +142,7 @@ export function resolve(preset: PresetId, look: Look): RenderState {
     }[look.brow],
     browOuterUp: look.brow === 'sharp' ? 0.8 : 0,
     browFurrow: look.expression === 'focused' ? 1 : 0,
-    smile: { composed: 0, warm: 1, focused: -0.15, smirk: 0.15 }[
+    smile: { composed: 0, warm: 1.5, focused: -0.2, smirk: 0.2 }[
       look.expression
     ],
     smirk: look.expression === 'smirk' ? 1 : 0,
@@ -217,7 +218,7 @@ export function resolve(preset: PresetId, look: Look): RenderState {
     earpiece: look.earpiece,
     camera: {
       close: { distance: 13.5, height: 1.5 },
-      standard: { distance: 18, height: 1.4 },
+      standard: { distance: 16, height: 1.5 },
       bust: { distance: 27, height: 0.35 },
     }[look.framing],
     light: look.light,

@@ -7,10 +7,8 @@
  */
 import { animate } from 'motion';
 import {
-  BoxGeometry,
   BufferAttribute,
   BufferGeometry,
-  CircleGeometry,
   DoubleSide,
   Group,
   LinearSRGBColorSpace,
@@ -18,12 +16,9 @@ import {
   NearestFilter,
   OrthographicCamera,
   PerspectiveCamera,
-  PlaneGeometry,
   Scene,
   ShaderMaterial,
-  SphereGeometry,
   type Texture,
-  TorusGeometry,
   Vector2,
   Vector3,
   WebGLRenderer,
@@ -36,6 +31,7 @@ import {
   loadPortraitAssets,
   type PortraitAssets,
 } from './portrait-assets';
+import { createPortraitGear, type PropOptions } from './portrait-gear';
 import { type MorphKey, type RenderState, resolve } from './resolve';
 import { CANON, LIGHTS, MOTION, type V3, YAW_PER_STEP } from './scene-settings';
 import {
@@ -204,15 +200,7 @@ export async function mount(
     const propMaterial = (
       color: V3 | Vector3,
       kind: number,
-      options: {
-        gloss?: number;
-        spec?: number;
-        weight?: number;
-        screen?: number;
-        glow?: number;
-        depth?: number;
-        double?: boolean;
-      } = {}
+      options: PropOptions = {}
     ) =>
       new ShaderMaterial({
         vertexShader: propVertex,
@@ -293,179 +281,7 @@ export async function mount(
       parts.set(slot, { mesh, shell });
     }
 
-    // Eyewear and earpieces: small parametric meshes, built per choice.
-    const gear = new Group();
-    gear.position.set(CX, 0, 0);
-    content.add(gear);
-    const gearItems = new Set<{ dispose(): void }>();
-    function gearMesh(
-      geometry: BufferGeometry,
-      material: ShaderMaterial,
-      position: V3,
-      setup?: (mesh: Mesh) => void
-    ) {
-      // Props have no scan coordinates; give the shader its attributes anyway.
-      const count = geometry.attributes.position.count;
-      geometry.setAttribute(
-        'aBase',
-        new BufferAttribute(new Float32Array(count * 3), 3)
-      );
-      geometry.setAttribute(
-        'aDepth',
-        new BufferAttribute(new Float32Array(count), 1)
-      );
-      const mesh = new Mesh(geometry, material);
-      mesh.position.set(...position);
-      setup?.(mesh);
-      gearItems.add(geometry);
-      gearItems.add(material);
-      gear.add(mesh);
-    }
-    function bar(
-      material: ShaderMaterial,
-      from: V3,
-      to: V3,
-      thickness: number
-    ) {
-      const a = new Vector3(...from),
-        b = new Vector3(...to);
-      const mid = a.clone().add(b).multiplyScalar(0.5);
-      gearMesh(
-        new BoxGeometry(thickness, thickness, a.distanceTo(b)),
-        material,
-        [mid.x, mid.y, mid.z],
-        (mesh) => mesh.lookAt(gear.localToWorld(b.clone()))
-      );
-    }
-    function buildGear(
-      eyewear: RenderState['eyewear'],
-      earpiece: RenderState['earpiece']
-    ) {
-      for (const item of gearItems) item.dispose();
-      gearItems.clear();
-      gear.clear();
-      const eyeY = 1.66,
-        lensZ = 2.3,
-        eyeX = 0.645;
-      if (eyewear !== 'none') {
-        const frame =
-          eyewear === 'rimless' || eyewear === 'wire'
-            ? propMaterial([0.45, 0.4, 0.3], 0, {
-                gloss: 40,
-                spec: 0.9,
-                weight: 0.1,
-              })
-            : propMaterial([0.012, 0.012, 0.016], 0, {
-                gloss: 30,
-                spec: 0.5,
-                weight: 0.1,
-              });
-        const thin = eyewear === 'rimless' || eyewear === 'wire' ? 0.03 : 0.06;
-        for (const side of [-1, 1]) {
-          const x = side * eyeX;
-          if (eyewear === 'wire')
-            gearMesh(
-              new TorusGeometry(0.36, 0.022, 6, 24),
-              frame,
-              [x, eyeY, lensZ],
-              (mesh) => mesh.scale.set(1, 0.86, 1)
-            );
-          if (eyewear === 'rect' || eyewear === 'shades') {
-            const w = 0.8,
-              h = 0.5,
-              t = eyewear === 'shades' ? 0.05 : 0.065;
-            gearMesh(new BoxGeometry(w, t, t), frame, [x, eyeY + h / 2, lensZ]);
-            gearMesh(new BoxGeometry(w, t, t), frame, [x, eyeY - h / 2, lensZ]);
-            gearMesh(new BoxGeometry(t, h + t, t), frame, [
-              x - w / 2,
-              eyeY,
-              lensZ,
-            ]);
-            gearMesh(new BoxGeometry(t, h + t, t), frame, [
-              x + w / 2,
-              eyeY,
-              lensZ,
-            ]);
-          }
-          const lens =
-            eyewear === 'shades'
-              ? propMaterial([0.01, 0.011, 0.014], 0, {
-                  gloss: 60,
-                  spec: 1.6,
-                  weight: 0.05,
-                  double: true,
-                })
-              : propMaterial([0.5, 0.6, 0.68], 0, {
-                  gloss: 60,
-                  spec: 1.2,
-                  weight: 0.05,
-                  screen: eyewear === 'rimless' ? 0.3 : 0.2,
-                  double: true,
-                });
-          gearMesh(
-            eyewear === 'rect' || eyewear === 'shades'
-              ? new PlaneGeometry(0.78, 0.48)
-              : new CircleGeometry(0.35, 20),
-            lens,
-            [x, eyeY, lensZ - 0.01],
-            (mesh) => {
-              if (eyewear === 'wire' || eyewear === 'rimless')
-                mesh.scale.set(1, 0.86, 1);
-            }
-          );
-          bar(
-            frame,
-            [side * (eyeX + 0.4), eyeY + 0.08, lensZ],
-            [side * 1.8, eyeY + 0.12, 0.15],
-            thin
-          );
-        }
-        gearMesh(new BoxGeometry(0.5, thin, thin), frame, [
-          0,
-          eyeY + 0.1,
-          lensZ,
-        ]);
-      }
-      if (earpiece === 'stud' || earpiece === 'ring') {
-        const gold = propMaterial([0.75, 0.5, 0.16], 0, {
-          gloss: 30,
-          spec: 1.4,
-          weight: 0.05,
-          glow: 0.4,
-        });
-        for (const side of [-1, 1]) {
-          if (earpiece === 'stud')
-            gearMesh(new SphereGeometry(0.085, 10, 8), gold, [
-              side * 1.73,
-              0.74,
-              0.88,
-            ]);
-          else
-            gearMesh(
-              new TorusGeometry(0.15, 0.03, 6, 16),
-              gold,
-              [side * 1.75, 0.56, 0.88],
-              (mesh) => {
-                mesh.rotation.y = side * 0.9;
-              }
-            );
-        }
-      }
-      if (earpiece === 'comms') {
-        const shell = propMaterial([0.03, 0.033, 0.04], 0, {
-          gloss: 24,
-          spec: 0.6,
-          weight: 0.1,
-        });
-        const lamp = propMaterial([0.89, 0.65, 0.23], 0, {
-          glow: 1.4,
-          weight: 0,
-        });
-        gearMesh(new BoxGeometry(0.16, 0.62, 0.36), shell, [-1.9, 1.35, 0.05]);
-        bar(shell, [-1.9, 1.1, 0.2], [-0.95, 0.42, 1.95], 0.05);
-        gearMesh(new SphereGeometry(0.075, 10, 8), lamp, [-0.9, 0.42, 1.98]);
-      }
-    }
+    const gear = track(createPortraitGear(content, head, propMaterial));
 
     // Pixel pass.
     const sceneTarget = track(
@@ -502,6 +318,8 @@ export async function mount(
           uCoarse: { value: 1 },
           uGlowCol: { value: glow },
           uOrigin: { value: new Vector2() },
+          uYaw: { value: 0 },
+          uBackdrop: { value: 1 },
         },
       })
     );
@@ -595,7 +413,7 @@ export async function mount(
         mesh.geometry.attributes.position.needsUpdate = true;
         mesh.geometry.attributes.normal.needsUpdate = true;
       }
-      gear.scale.x = 1 + 0.05 * weights.faceWidth;
+      gear.deform(weights.faceWidth);
       dirtyShape = false;
     }
     function applyMaterials(state: RenderState) {
@@ -645,7 +463,8 @@ export async function mount(
       yaw: number,
       open: number,
       aspect: number,
-      origin: [number, number]
+      origin: [number, number],
+      backdrop = 1
     ) {
       pivot.rotation.y = yaw;
       flip.scale.x = target?.mirror ? -1 : 1;
@@ -663,6 +482,8 @@ export async function mount(
       postMaterial.uniforms.uCell.value = cell;
       postMaterial.uniforms.uCoarse.value = coarse;
       postMaterial.uniforms.uOrigin.value.set(origin[0], origin[1]);
+      postMaterial.uniforms.uYaw.value = yaw;
+      postMaterial.uniforms.uBackdrop.value = backdrop;
       renderer.setRenderTarget(out);
       renderer.render(postScene, postCamera);
       renderer.setRenderTarget(null);
@@ -720,8 +541,8 @@ export async function mount(
       if (first || previous.hair.style !== next.hair.style)
         setShell('hair', head.hairShell(next.hair.style), () =>
           propMaterial(next.hair.color, 1, {
-            gloss: 14,
-            spec: 0.22,
+            gloss: 22,
+            spec: 0.05,
             weight: 0.8,
             depth: 5,
             double: true,
@@ -733,8 +554,8 @@ export async function mount(
         beardAttribute.needsUpdate = true;
         setShell('beard', beard.shell, () =>
           propMaterial(next.hair.color, 1, {
-            gloss: 8,
-            spec: 0.08,
+            gloss: 10,
+            spec: 0.012,
             weight: 0.7,
             depth: 12,
             double: true,
@@ -747,7 +568,7 @@ export async function mount(
         setShell('outfit', head.outfitShell(next.outfit.style, 0), () =>
           propMaterial(next.outfit.color, 2, {
             gloss: 6,
-            spec: 0.04,
+            spec: 0.006,
             weight: 0.85,
             depth: 8,
             double: true,
@@ -759,7 +580,7 @@ export async function mount(
           () =>
             propMaterial(next.outfit.color, 2, {
               gloss: 8,
-              spec: 0.06,
+              spec: 0.008,
               weight: 0.85,
               depth: 4,
               double: true,
@@ -771,7 +592,7 @@ export async function mount(
         previous.eyewear !== next.eyewear ||
         previous.earpiece !== next.earpiece
       )
-        buildGear(next.eyewear, next.earpiece);
+        gear.update(next.eyewear, next.earpiece);
       applyMaterials(next);
       dirtyShape = true;
 
@@ -786,7 +607,7 @@ export async function mount(
           light: { ...LIGHTS[next.light] },
         });
         // The first frame resolves in four coarse steps, like the 2D portrait reveal.
-        live.coarse = 1;
+        live.coarse = reduced() ? 1 : 4;
         tween(
           'detail',
           4,
@@ -920,7 +741,8 @@ export async function mount(
           0,
           1,
           w / h,
-          [0, 0]
+          [0, 0],
+          0.45
         );
         renderer.readRenderTargetPixels(captureScene, 0, 0, w, h, meshPixels);
         if (!meshPixels.some((value, index) => index % 4 === 3 && value > 0))
@@ -955,12 +777,6 @@ export async function mount(
       context.putImageData(image, 0, 0);
       return out.toDataURL('image/png');
     }
-
-    disposables.push({
-      dispose() {
-        for (const item of gearItems) item.dispose();
-      },
-    });
 
     return { update, resize, captureCanonical, dispose };
   }

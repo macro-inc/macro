@@ -8,8 +8,10 @@ vec3 shade(vec3 albedo, vec3 N, vec3 V, float spec, float gloss, float ao, float
   vec3 c = albedo * (mix(uGround, uSky, N.y * 0.5 + 0.5) * ao
     + uKeyCol * key * mix(0.55, 1.0, ao)
     + uFillCol * max(dot(N, uFillDir) * 0.5 + 0.5, 0.0) * ao);
+  // A warm band where the key light falls off, standing in for light scattered under the surface.
+  c += albedo * uKeyCol * vec3(0.5, 0.16, 0.08) * wrap * exp(-pow((dot(N, uKeyDir) + 0.05) * 3.2, 2.0)) * ao;
   float edge = pow(1.0 - max(dot(N, V), 0.0), 3.0) * max(dot(N, uRimDir) * 0.5 + 0.5, 0.0);
-  c += uRimCol * edge * (0.25 + albedo);
+  c += uRimCol * edge * (0.04 + albedo);
   c += uKeyCol * spec * pow(max(dot(N, normalize(uKeyDir + V)), 0.0), gloss) * key;
   return c;
 }
@@ -37,6 +39,7 @@ uniform float uScalp; uniform float uBrow; uniform float uBrowCut; uniform float
 uniform float uEyeBright; uniform float uOpen; uniform float uSlope; uniform float uCx;
 varying vec3 vN; varying vec3 vView; varying vec3 vBase; varying vec2 vUv;
 varying float vAO; varying float vScalp; varying float vBeard;
+float gLash;
 
 float segment(vec2 p, vec2 a, vec2 b) {
   vec2 pa = p - a, ba = b - a;
@@ -54,17 +57,19 @@ vec4 eye(vec2 centre, float inner) {
   float ax = clamp(d.x / hw, -1.0, 1.0);
   float mid = -uSlope * d.x * inner;
   float span = pow(max(1.0 - ax * ax, 0.0), 0.6);
-  float up = mid + hw * 0.4 * uOpen * span;
-  float low = mid - hw * 0.24 * uOpen * span;
+  float up = mid + hw * 0.35 * uOpen * span;
+  float low = mid - hw * 0.21 * uOpen * span;
   float inside = step(abs(d.x), hw) * step(low, d.y) * step(d.y, up) * step(1.3, vBase.z);
   vec2 c = vec2(0.0, mid + hw * 0.05);
-  float r = length(d - c) / (hw * 0.45);
-  vec3 sclera = vec3(0.74, 0.70, 0.66) * (0.7 + 0.3 * span) * mix(0.85, 1.1, clamp(uEyeBright - 0.75, 0.0, 0.6) / 0.6);
+  float r = length(d - c) / (hw * 0.6);
+  vec3 sclera = vec3(0.4, 0.36, 0.33) * (0.55 + 0.45 * span) * mix(0.8, 1.2, clamp(uEyeBright - 0.75, 0.0, 0.6) / 0.6);
+  sclera *= 0.5 + 0.5 * smoothstep(0.02, 0.35, dot(uTone, vec3(0.3, 0.6, 0.1)));
   vec3 iris = uIris * uEyeBright * (0.6 + 0.9 * smoothstep(1.0, 0.35, r));
   iris = mix(iris, vec3(0.012), smoothstep(0.46, 0.36, r));
   vec3 ball = mix(iris, sclera, smoothstep(0.9, 1.02, r));
-  ball += vec3(0.85) * uEyeBright * step(length(d - c - vec2(0.045, 0.05)), hw * 0.085);
-  ball *= mix(0.5, 1.0, smoothstep(up, up - hw * 0.16, d.y));
+  ball += vec3(0.6) * uEyeBright * step(length(d - c - vec2(0.045, 0.05)), hw * 0.085);
+  ball *= mix(0.35, 1.0, smoothstep(up, up - hw * 0.2, d.y));
+  gLash = max(gLash, step(abs(d.x), hw * 1.05) * step(up, d.y) * step(d.y, up + hw * 0.1) * step(1.3, vBase.z) * step(0.05, uOpen));
   return vec4(ball, inside);
 }
 void main() {
@@ -104,7 +109,10 @@ void main() {
     float s = 1.0 - smoothstep(1.2, 3.0, segment(px, vec2(596.0, 392.0), vec2(634.0, 446.0)));
     col = mix(col, col * vec3(1.35, 1.05, 1.0) + 0.04, s);
   }
-  if (uMark > 1.5 && uMark < 2.5) col = mix(col, uHair * 0.3 + vec3(0.03, 0.015, 0.01), 1.0 - smoothstep(3.0, 5.0, length(px - vec2(418.0, 452.0))));
+  if (uMark > 1.5 && uMark < 2.5) {
+    float mark = 1.0 - smoothstep(4.5, 7.0, length(px - vec2(418.0, 452.0)));
+    col = mix(col, col * vec3(0.22, 0.17, 0.14), mark);
+  }
 
   // Surface: scan normal map, deeper with age; pores and lines darken the skin.
   vec3 N = normalize(vN);
@@ -120,14 +128,16 @@ void main() {
   col = mix(col, vec3(dot(col, vec3(0.3, 0.6, 0.1))), 0.12 * uAge);
 
   float spec = texture2D(tSpec, vUv).r * 0.35 * (1.0 - vScalp * uScalp);
-  vec3 lit = shade(col, N, V, spec, 18.0, vAO, 0.35);
+  vec3 lit = shade(col, N, V, spec, 18.0, vAO, 0.3);
 
+  gLash = 0.0;
   vec4 left = eye(vec2(-0.73, 1.655), 1.0);
   vec4 right = eye(vec2(0.56, 1.655), -1.0);
   vec4 e = left.a > right.a ? left : right;
   vec3 flat_ = normalize(vN);
   vec3 eyeLit = shade(e.rgb, flat_, V, 0.0, 1.0, 1.0, 0.8) + e.rgb * 0.12;
   lit = mix(lit, eyeLit, e.a);
+  lit = mix(lit, lit * 0.22, gLash * (1.0 - e.a) * 0.85);
   gl_FragColor = vec4(lit, mix(0.22, 0.02, e.a));
 }`;
 
@@ -158,8 +168,10 @@ void main() {
   vec3 col = uColor;
   float ao = 1.0;
   if (uKind > 0.5 && uKind < 1.5) {
-    float strand = hash(floor(vec2(vBase.x * 9.0 + vBase.z * 4.0, vBase.y * 2.0)));
-    col *= 0.7 + 0.6 * strand;
+    float strand = hash(floor(vec2(vBase.x * 11.0 + vBase.z * 5.0, vBase.y * 1.5)));
+    // Strands thin out toward the hairline instead of ending in a clean rim.
+    if (vDepth * uDepthScale < 0.12 + 0.5 * strand) discard;
+    col *= 0.6 + 0.7 * strand;
     ao = mix(0.5, 1.0, smoothstep(0.0, 1.0, vDepth * uDepthScale));
   }
   if (uKind > 1.5) ao = mix(0.72, 1.0, smoothstep(0.0, 1.0, vDepth * uDepthScale));
@@ -176,7 +188,9 @@ void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }`;
  */
 export const postFragment = /* glsl */ `
 uniform sampler2D tScene; uniform vec2 uGrid; uniform float uCell; uniform float uCoarse;
-uniform vec3 uGlowCol; uniform vec2 uOrigin;
+uniform vec3 uGlowCol; uniform vec2 uOrigin; uniform float uYaw; uniform float uBackdrop;
+float rhash(float n) { return fract(sin(n * 91.345) * 47453.5453); }
+float skyline(float x) { float i = floor(x); float split = 0.25 + 0.5 * rhash(i + 7.0); return fract(x) < split ? rhash(i) : rhash(i + 0.5) * 0.7 + 0.15; }
 float bayer(vec2 p) {
   int x = int(mod(p.x, 4.0)), y = int(mod(p.y, 4.0));
   int i = x + y * 4;
@@ -193,15 +207,28 @@ void main() {
   vec3 c = 1.0 - exp(-1.55 * s.rgb);
   c = pow(c, vec3(1.0 / 2.2));
   float weight = s.a;
+  float backdrop = 0.0;
   if (s.a == 0.0) {
-    // Backdrop: a low ember glow behind the shoulders, falling to ink.
-    vec2 p = uv - vec2(0.5, 0.3);
-    float glow = exp(-dot(p * vec2(1.0, 1.25), p * vec2(1.0, 1.25)) * 5.5);
-    c = vec3(0.008) + uGlowCol * glow;
-    weight = 1.0;
+    // Backdrop: an ember horizon behind two stepped ridges that slide with the orbit, falling to ink above.
+    vec2 q = uv - vec2(0.5, 0.36);
+    float glow = uBackdrop * exp(-(q.x * q.x * 3.0 + q.y * q.y * 11.0));
+    c = vec3(0.012, 0.013, 0.02) * (1.0 - uv.y * 0.6) + uGlowCol * glow;
+    // Skylines are flat-topped blocks, like the page terrain, snapped to the pixel grid.
+    float far = 0.34 + 0.16 * skyline((uv.x + uYaw * 0.1) * 13.0 + 3.0);
+    float near = 0.16 + 0.2 * skyline((uv.x + uYaw * 0.22) * 6.0 + 11.0);
+    far = floor(far * uGrid.y / 2.0) * 2.0 / uGrid.y;
+    near = floor(near * uGrid.y / 2.0) * 2.0 / uGrid.y;
+    float line = 1.01 / uGrid.y;
+    if (uv.y < far) c = uv.y > far - line ? uGlowCol * 0.75 * uBackdrop + 0.015 : vec3(0.016, 0.012, 0.014) + uGlowCol * 0.2 * glow;
+    if (uv.y < near) c = uv.y > near - line ? vec3(0.07, 0.085, 0.11) : vec3(0.006, 0.007, 0.011);
+    backdrop = 1.0;
   }
-  float levels = mix(30.0, 7.0, weight);
-  float amount = mix(0.3, 1.0, weight);
+  // Dither fades out in the darks, so ink stays ink and silhouettes stay clean.
+  float luma = dot(c, vec3(0.3, 0.6, 0.1));
+  float levels = mix(32.0, 12.0, weight);
+  float amount = mix(0.3, 1.0, weight) * smoothstep(0.03, 0.3, luma);
+  // The backdrop gets many fine levels: enough dither to hide banding in the glow, too little to sparkle.
+  if (backdrop > 0.5) { levels = 56.0; amount = 1.0; }
   c = floor(c * levels + 0.5 + (bayer(floor(cell / uCoarse)) - 0.5) * amount) / levels;
   gl_FragColor = vec4(c, 1.0);
 }`;
