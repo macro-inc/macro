@@ -6,7 +6,12 @@ import { localAuth } from './scripts/localAuth.ts';
 import { botsConfig } from './vite.config.ts';
 
 export default defineConfig((env) => {
-  if (env.command !== 'serve' || env.isPreview || env.mode !== 'local-auth') {
+  const billing = env.mode === 'local-billing';
+  if (
+    env.command !== 'serve' ||
+    env.isPreview ||
+    (!billing && env.mode !== 'local-auth')
+  ) {
     throw new Error(
       'Bots local auth is available only on the local dev server'
     );
@@ -16,9 +21,14 @@ export default defineConfig((env) => {
   const path = `/bots-local-auth/${randomUUID()}`;
   return {
     ...config,
-    plugins: [botsBoundary(false), solid({ hot: false }), localAuth(path)],
+    plugins: [
+      botsBoundary(false),
+      solid({ hot: false }),
+      localAuth(path, billing),
+    ],
     define: {
       __BOTS_LOCAL_AUTH__: JSON.stringify(path),
+      __BOTS_LOCAL_BILLING__: billing,
       __BOTS_FIXTURES__: false,
     },
     server: {

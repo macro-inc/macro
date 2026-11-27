@@ -2,9 +2,12 @@ import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { Sdk } from '@macro-inc/sdk/generated/auth';
 import type { Plugin } from 'vite';
+import { parseComputerUsage } from '../src/billing/local-read';
 import type { HireAccess } from '../src/hire-access';
 
-const upstream = 'http://127.0.0.1:23011/auth';
+const defaultUpstream = 'http://127.0.0.1:23011/auth';
+const billingUpstream = 'http://127.0.0.1:23211/auth';
+const billingTeamId = '0193a1b2-0000-7000-8000-0000000000aa';
 const reviewer = 'macrobots-reviewer@example.test';
 const fixtureTeam = 'Macro Bots Local Review';
 const cookieName = 'bots-local-session';
@@ -17,7 +20,8 @@ type Viewer = Pick<
 >;
 type Identity = Viewer | Exclude<HireAccess, { status: 'signed-in' }>;
 
-export function localAuth(path: string): Plugin {
+export function localAuth(path: string, billing = false): Plugin {
+  const upstream = billing ? billingUpstream : defaultUpstream;
   const sdk = new Sdk();
   const sessions = new Map<string, Session>();
   let exchanging = false;
@@ -93,6 +97,11 @@ export function localAuth(path: string): Plugin {
       .find((part) => part.startsWith(`${cookieName}=`))
       ?.slice(cookieName.length + 1);
     const session = id ? sessions.get(id) : undefined;
+    const current = () =>
+      id !== undefined &&
+      session !== undefined &&
+      sessions.get(id) === session &&
+      session.expires > Date.now();
     const options = {
       baseUrl: upstream,
       redirect: 'error' as const,
@@ -100,7 +109,9 @@ export function localAuth(path: string): Plugin {
     };
 
     if (req.method === 'GET' && req.url === path) {
-      const viewer = session?.token ? await identity(session.token) : undefined;
+      const viewer = session?.token
+        ? await identity(session.token, billing ? current : undefined)
+        : undefined;
       send(
         res,
         200,
@@ -114,7 +125,78 @@ export function localAuth(path: string): Plugin {
       return;
     }
 
-    if (req.method === 'GET' && req.url === `${path}/hire-access`) {
+    if (
+      billing &&
+      req.method === 'GET' &&
+      req.url === `${path}/compute-usage`
+    ) {
+      const contentLength = req.headers['content-length'];
+      if (
+        req.headers['transfer-encoding'] ||
+        (contentLength && contentLength !== '0')
+      ) {
+        send(res, 400, { status: 'unavailable' });
+        return;
+      }
+
+      if (!id || !session?.token) {
+        send(res, 401, { status: 'signed-out' });
+        return;
+      }
+
+      const prepared = await identity(session.token, current);
+      if (prepared.status !== 'signed-in') {
+        if (prepared.status === 'signed-out') send(res, 401, prepared);
+        else if (prepared.status === 'team-unresolved')
+          send(res, 403, { status: 'denied' });
+        else send(res, 503, { status: 'unavailable' });
+        return;
+      }
+
+      const observation = await sdk.listTeamComputerUsage(
+        signedOptions(session.token)
+      );
+      if (!current()) {
+        send(res, 401, { status: 'signed-out' });
+        return;
+      }
+      if (
+        observation.response?.status === 401 ||
+        observation.response?.status === 403
+      ) {
+        send(res, observation.response.status, { status: 'denied' });
+        return;
+      }
+
+      const verified = await identity(session.token, current);
+      if (verified.status === 'signed-out') {
+        send(res, 401, verified);
+        return;
+      }
+      if (verified.status === 'unavailable') {
+        send(res, 503, verified);
+        return;
+      }
+      if (
+        verified.status !== 'signed-in' ||
+        verified.teamId !== prepared.teamId ||
+        verified.role !== prepared.role
+      ) {
+        send(res, 403, { status: 'denied' });
+        return;
+      }
+
+      const value = parseComputerUsage(observation.data);
+      if (observation.response?.status !== 200 || !value) {
+        send(res, 503, { status: 'unavailable' });
+        return;
+      }
+
+      send(res, 200, { status: 'ready', teamId: verified.teamId, value });
+      return;
+    }
+
+    if (!billing && req.method === 'GET' && req.url === `${path}/hire-access`) {
       if (!id || !session?.token) {
         send(res, 401, { status: 'signed-out' });
         return;
@@ -226,9 +308,14 @@ export function localAuth(path: string): Plugin {
     };
   }
 
-  async function identity(token: string): Promise<Identity> {
+  async function identity(
+    token: string,
+    current?: () => boolean
+  ): Promise<Identity> {
+    if (current && !current()) return { status: 'signed-out' };
     const options = signedOptions(token);
     const user = await sdk.getUserInfo(options);
+    if (current && !current()) return { status: 'signed-out' };
     if (user.response?.status === 401) return { status: 'signed-out' };
     if (
       user.response?.status !== 200 ||
@@ -237,6 +324,7 @@ export function localAuth(path: string): Plugin {
       return { status: 'unavailable' };
     }
     const team = await sdk.getTeam(options);
+    if (current && !current()) return { status: 'signed-out' };
     if (team.response?.status === 401) return { status: 'signed-out' };
     if (team.response?.status === 204) return { status: 'team-unresolved' };
     if (team.response?.status !== 200 || !team.data) {
@@ -247,7 +335,11 @@ export function localAuth(path: string): Plugin {
         member.user_id === user.data?.user_id &&
         member.team_id === team.data?.team.id
     );
-    if (!member || team.data.team.name !== fixtureTeam) {
+    if (
+      !member ||
+      team.data.team.name !== fixtureTeam ||
+      (billing && team.data.team.id !== billingTeamId)
+    ) {
       return { status: 'team-unresolved' };
     }
     return {

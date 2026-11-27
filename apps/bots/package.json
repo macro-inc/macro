@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "vite",
     "dev:auth": "vite --config vite.local-auth.config.ts --mode local-auth",
+    "dev:billing": "vite --config vite.local-auth.config.ts --mode local-billing",
     "preview": "vite preview --mode local-fixture",
     "build:preview": "bun run check:boundary && vite build --mode local-fixture",
     "check:boundary": "bun scripts/verify-bots-boundary.ts",

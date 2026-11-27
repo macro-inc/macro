@@ -98,6 +98,15 @@ payment terms and always disables purchasing. The static preview keeps its
 existing fixtures. Sign-in accepts only exact destinations for Creator, Fleet,
 Passwords, Billing, and same-tab Hire draft return.
 
+For signed Billing, run `bun run --filter @macro-inc/bots dev:billing` only
+against the dedicated seeded review issuer. The bridge pins the current team,
+revalidates its signed session around the SDK's compute usage read, and
+serves a single fixed read path. Keep this bridge in the dedicated
+single-team issuer because the upstream usage response has no team field.
+A broader signed deployment needs an upstream response bound to the
+authorized team. Billing renders CPU and memory observations without
+computing charges. The local fixture stays separate.
+
 For a remote review over an existing SSH connection, preserve both the
 loopback address and the port in the local forward. For example, use
 `ssh -N -L 127.0.0.1:PORT:127.0.0.1:PORT <devbox>` with the port printed by Vite.

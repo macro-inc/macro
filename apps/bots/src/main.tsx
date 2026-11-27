@@ -28,6 +28,14 @@ const Billing = lazy(() => import('./billing'));
 function Shell(props: ParentProps) {
   const location = useLocation();
   const [identity] = createResource(() => session.getSession());
+  const signInUrl = () => {
+    if (__BOTS_LOCAL_BILLING__ && location.pathname === '/billing') {
+      return '/sign-in?return=%2Fbilling';
+    }
+    return buildSignInUrl(
+      location.pathname === '/fleet' ? fleetIntent : editIntent
+    );
+  };
 
   return (
     <>
@@ -63,13 +71,7 @@ function Shell(props: ParentProps) {
               location.pathname !== '/sign-in'
             }
           >
-            <A
-              href={buildSignInUrl(
-                location.pathname === '/fleet' ? fleetIntent : editIntent
-              )}
-            >
-              Sign in with Macro
-            </A>
+            <A href={signInUrl()}>Sign in with Macro</A>
           </Show>
         </nav>
       </header>
