@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 # First-boot bootstrap for the db-migrator GitHub Actions runner. cloud-init
 # runs it once per instance and logs to /var/log/cloud-init-output.log.
-# runner.ts inserts GITHUB_RUNNER_URL and GITHUB_RUNNER_TOKEN after the next line.
+# runner.ts inserts GITHUB_RUNNER_URL, GITHUB_RUNNER_TOKEN and AWS_REGION after
+# the next line.
 set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
+# Files written here are readable by all and writable only by their owner,
+# whatever umask the caller left.
+umask 022
 
 # What the jobs run: the AWS CLI (database URLs from Secrets Manager, S3
 # presigning), jq, git (checkout) and sqlx-cli (migrations). The runners
@@ -50,15 +54,33 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
   --version "$SQLX_CLI_VERSION" --no-default-features --features rustls,postgres sqlx-cli
 unset RUSTUP_HOME CARGO_HOME
 rm -rf "$work"
-# `cargo-sqlx` needs cargo, which this box deliberately lacks; keep `sqlx`.
-rm -f /usr/local/bin/cargo-sqlx
 apt-get purge -y --auto-remove build-essential pkg-config
 sqlx --version
+
+# Deploys of a commit from before the migrations called `sqlx` run
+# `cargo sqlx` (a rollback, a re-run). This `cargo` only forwards that
+# subcommand to sqlx-cli's `cargo-sqlx` and refuses everything else.
+cat >/usr/local/bin/cargo <<'EOF'
+#!/bin/sh
+if [ "${1:-}" = sqlx ]; then
+  exec /usr/local/bin/cargo-sqlx "$@"
+fi
+echo "cargo: the db-migrator runner builds nothing; build on Namespace and pass the binary (docs/runbooks/db-migrator-runner.md)" >&2
+exit 1
+EOF
+chmod 0755 /usr/local/bin/cargo
+cargo sqlx --version
 
 # ─── Runners ──────────────────────────────────────────────────────────────────
 if ! id -u "$RUNNER_USER" &>/dev/null; then
   useradd --create-home --shell /bin/bash "$RUNNER_USER"
 fi
+
+# Jobs call the AWS CLI without --region, and the instance profile gives only
+# credentials.
+install -d -o "$RUNNER_USER" -g "$RUNNER_USER" -m 0700 "/home/${RUNNER_USER}/.aws"
+printf '[default]\nregion = %s\n' "$AWS_REGION" >"/home/${RUNNER_USER}/.aws/config"
+chown "${RUNNER_USER}:${RUNNER_USER}" "/home/${RUNNER_USER}/.aws/config"
 
 tarball=$(mktemp)
 curl -fsSL \

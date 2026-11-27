@@ -14,9 +14,10 @@ operation, recovery and rebuild are in the
 - `runner.ts`: `DbMigratorRunner`, the instance, its role (Session Manager and
   the two database URL secrets), an outbound-only security group, and the
   status-check alarms that reboot or recover it.
-- `user-data.sh`: the first boot. Installs the AWS CLI, `sqlx-cli` (built with
-  a toolchain it then deletes) and two runner processes in a memory-capped
-  systemd slice that restarts them.
+- `user-data.sh`: the first boot. Installs the AWS CLI (with the region set
+  for the runner user), `sqlx-cli` (built with a toolchain it then deletes),
+  a `cargo` that only forwards `cargo sqlx`, and two runner processes in a
+  memory-capped systemd slice that restarts them.
 - `Pulumi.dev.yaml`: the instance type. The registration token is the secret
   `github-runners:runnerToken`, set just before a `pulumi up`.
 
@@ -38,5 +39,7 @@ git checkout Pulumi.dev.yaml
 - Any change to `user-data.sh` or the token replaces the instance, and the
   replacement needs a fresh token: the old one has expired. A newer Ubuntu
   image does not (`ignoreChanges: ['ami']`).
-- Jobs on this runner must not build anything: there is no cargo, rustup or
-  Nix on it, and the slice kills a job that needs more memory than it has.
+- Jobs on this runner must not build anything: there is no Rust toolchain or
+  Nix on it, its `cargo` refuses everything but `cargo sqlx` (which deploys of
+  older commits call), and the slice kills a job that needs more memory than
+  it has.

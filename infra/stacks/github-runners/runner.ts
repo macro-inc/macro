@@ -32,7 +32,8 @@ type DbMigratorRunnerArgs = {
  *
  * - The runners share a memory-capped systemd slice, so a runaway job is
  *   killed and fails instead of starving the machine. Nothing on the box
- *   compiles: there is no cargo, rustup or Nix.
+ *   compiles: there is no Rust toolchain or Nix, and its `cargo` only
+ *   forwards `cargo sqlx` for deploys of older commits.
  * - systemd restarts a runner process that exits.
  * - EC2 reboots the instance when its instance status check fails and
  *   recovers it onto new hardware when the system status check fails. Both
@@ -177,6 +178,7 @@ export class DbMigratorRunner extends pulumi.ComponentResource {
           'set -euo pipefail',
           `GITHUB_RUNNER_URL='${runnerUrl}'`,
           `GITHUB_RUNNER_TOKEN='${token}'`,
+          `AWS_REGION='${awsRegion}'`,
         ].join('\n')
       )
     );
