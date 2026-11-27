@@ -105,7 +105,10 @@ let
   };
 in
 {
-  imports = [ ./_agent.nix ];
+  imports = [
+    ./_agent.nix
+    ./_agent-inbox.nix
+  ];
 
   options.macro.box = {
     macrod = lib.mkOption {
