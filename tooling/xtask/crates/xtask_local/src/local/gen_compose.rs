@@ -26,7 +26,9 @@ use super::build::{BinariesDir, runtime_image_tag};
 use super::computers::{Computers, Fleet};
 use super::instance::{Instance, Port};
 use super::inventory::{OPENBAO_IMAGE, RustService, services_for_mode};
-use super::{Mode, google_emulator, microsoft_emulator, model_emulator, repo_root};
+use super::{
+    Mode, google_emulator, microsoft_emulator, model_emulator, passwords_vault, repo_root,
+};
 
 #[cfg(test)]
 mod test;
@@ -161,6 +163,7 @@ pub fn generate(
     // The rest of the local infra (FusionAuth, Mailpit, per-instance Postgres/
     // Redis/OpenSearch port remaps) only for the self-contained local stacks.
     if mode.spec().runs_local_infra {
+        passwords_vault::stage_config(&passwords_vault::config_dir(instance))?;
         add_local_infra(&mut services, instance, static_frontend)?;
         add_sdk_webhook_relay(&mut services, instance)?;
     }
@@ -505,17 +508,18 @@ fn add_local_infra(
                 "/openbao/config/start.sh".to_string(),
             ])),
             command: Some(dct::Command::Args(vec![])),
-            volumes: vec![
-                dct::Volumes::Simple(format!(
-                    "{}:/openbao/config/macro-local.hcl:ro,z",
-                    repo_root().join("infra/local/openbao/local.hcl").display()
-                )),
-                dct::Volumes::Simple(format!(
-                    "{}:/openbao/config/start.sh:ro,z",
-                    repo_root().join("infra/local/openbao/start.sh").display()
-                )),
-                dct::Volumes::Simple("openbao_data:/openbao/file".to_string()),
-            ],
+            volumes: passwords_vault::CONFIG_FILES
+                .iter()
+                .map(|(name, _)| {
+                    dct::Volumes::Simple(format!(
+                        "{}:/openbao/config/{name}:ro,z",
+                        passwords_vault::config_dir(instance).join(name).display()
+                    ))
+                })
+                .chain([dct::Volumes::Simple(
+                    "openbao_data:/openbao/file".to_string(),
+                )])
+                .collect(),
             environment: kv(&[("BAO_ADDR", "http://127.0.0.1:8200")]),
             restart: Some("unless-stopped".to_string()),
             ports: dct::Ports::Short(vec![format!(
