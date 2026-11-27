@@ -1260,6 +1260,14 @@ export class CoordinatorRouter {
         case 'schedule-reset-activation':
           this.scheduleResetActivation();
           break;
+        case 'await-settlements': {
+          const core = this.coreValue;
+          this.setTimeoutFn(() => {
+            if (this.coreValue === core && core)
+              this.applyActions(core.settlementsOverdue());
+          }, action.ms);
+          break;
+        }
         case 'broadcast-cache-unavailable':
           this.broadcast(
             envelope<CoordinatorToTabEnvelope>({

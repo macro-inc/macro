@@ -8,6 +8,7 @@ import {
 } from '../people/protocol';
 import { unsupportedContactSync } from '../people/test-support';
 import { INITIAL_CACHE_REVISION } from '../protocol';
+import { CacheSettlementUnwrittenError } from './errors';
 import { createNoopCacheHost } from './noop-host';
 import { createRetirableCacheHost, retainCacheHost } from './retirable-host';
 import type { CacheHost } from './types';
@@ -108,8 +109,19 @@ describe('createRetirableCacheHost', () => {
 
   it('forwards retry accounting and permanent-failure codes', async () => {
     const inner = createNoopCacheHost();
-    const defer = vi.spyOn(inner, 'deferOptimisticWrite');
-    const rollback = vi.spyOn(inner, 'rollbackOptimisticWrite');
+    const defer = vi
+      .spyOn(inner, 'deferOptimisticWrite')
+      .mockResolvedValue({ kind: 'deferred' });
+    const rollback = vi
+      .spyOn(inner, 'rollbackOptimisticWrite')
+      .mockResolvedValue({
+        kind: 'rolled-back',
+        revision: INITIAL_CACHE_REVISION,
+        revisionAdvanced: false,
+        changed: [],
+        affectedOps: [],
+        reset: false,
+      });
     const host = createRetirableCacheHost(inner);
     const claim = { owner: 'runner', generation: '2' };
     await host.deferOptimisticWrite('1', claim, 100, 'server failed', true);
@@ -126,6 +138,42 @@ describe('createRetirableCacheHost', () => {
       'exhausted',
       'MUTATION_RETRY_EXHAUSTED'
     );
+  });
+
+  it('refuses a settlement that arrives after retirement, writing nothing', async () => {
+    const commit = vi.fn(async () => ({
+      kind: 'committed' as const,
+      revision: INITIAL_CACHE_REVISION,
+      revisionAdvanced: false,
+      changed: [],
+      affectedOps: [],
+      reset: false,
+    }));
+    const inner = {
+      ...createNoopCacheHost(),
+      disabled: false,
+      commitOptimisticWrite: commit,
+    };
+    const host = createRetirableCacheHost(inner);
+    // The queue runner captured the wrapper when it claimed the head.
+    const settle = host.commitOptimisticWrite;
+    const claim = { owner: 'runner', generation: '2' };
+    const args = {
+      generation: 'g',
+      query: 'mutation M { m }',
+      data: { m: true },
+    };
+    host.dispose();
+    await expect(settle('1', claim, args)).rejects.toBeInstanceOf(
+      CacheSettlementUnwrittenError
+    );
+    await expect(
+      host.deferOptimisticWrite('1', claim, 0, 'retry')
+    ).rejects.toBeInstanceOf(CacheSettlementUnwrittenError);
+    await expect(
+      host.rollbackOptimisticWrite('1', claim, 'failed')
+    ).rejects.toBeInstanceOf(CacheSettlementUnwrittenError);
+    expect(commit).not.toHaveBeenCalled();
   });
 
   it('publishes and searches people through the app wrapper, retiring captured capabilities too', async () => {

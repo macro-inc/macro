@@ -124,6 +124,8 @@ export type CoordinatorAction =
   | { kind: 'drop-tab'; tabId: string }
   | { kind: 'retire-tab'; tabId: string; ownerEpoch: OwnerEpoch }
   | { kind: 'schedule-reset-activation' }
+  /** Calls `settlementsOverdue` after `ms` unless the handover went ahead. */
+  | { kind: 'await-settlements'; ms: number }
   | {
       kind: 'broadcast-cache-unavailable';
       reason: string;
@@ -180,8 +182,54 @@ const STORAGE_BUSY_REASON =
 const SUPERSEDED_REASON =
   'a newer version of the app took over the local cache';
 
+/**
+ * How long a newer build waits for this build's pages to settle the queue heads
+ * they claimed. A queued request gives up after `QUEUE_REQUEST_TIMEOUT_MS`
+ * (60 s) and its page then settles it as a retry; this adds time for that
+ * settlement to reach the engine. Past it the handover goes ahead, and a page
+ * that settles later is refused: its server answer is not kept, and another
+ * page sends the mutation again.
+ */
+export const SETTLEMENT_WAIT_MS = 70_000;
+
+/** The queue head a response hands its page, if it hands one. */
+function claimedTransaction(
+  request: CacheRequest,
+  response: CacheResponse
+): string | undefined {
+  if (!response.ok) return undefined;
+  if (request.kind === 'claim-next-mutation') {
+    const claim = response.result as { transactionId?: unknown } | null;
+    return typeof claim?.transactionId === 'string'
+      ? claim.transactionId
+      : undefined;
+  }
+  if (request.kind === 'enqueue-optimistic-mutation') {
+    const result = response.result as {
+      initialClaim?: {
+        kind?: unknown;
+        mutation?: { transactionId?: unknown };
+      };
+    } | null;
+    const claim = result?.initialClaim;
+    return claim?.kind === 'claimed' &&
+      typeof claim.mutation?.transactionId === 'string'
+      ? claim.mutation.transactionId
+      : undefined;
+  }
+  return undefined;
+}
+
 /** Known outcomes must survive a caller leaving while storage is parked. */
-function isMutationSettlement(request: CacheRequest): boolean {
+function isMutationSettlement(request: CacheRequest): request is Extract<
+  CacheRequest,
+  {
+    kind:
+      | 'commit-optimistic-write'
+      | 'rollback-optimistic-write'
+      | 'defer-optimistic-write';
+  }
+> {
   return (
     request.kind === 'commit-optimistic-write' ||
     request.kind === 'rollback-optimistic-write' ||
@@ -241,6 +289,13 @@ export class CoordinatorCore {
   private supersededReason: string | undefined;
   /** A newer build asked while this engine may still be changing the files. */
   private supersedePending = false;
+  /**
+   * Queue heads tabs claimed and have not settled yet, by transaction id. A
+   * page's request for one may be on its way to the server.
+   */
+  private readonly claims = new Map<string, string>();
+  /** A newer build waits until `claims` settle, or `SETTLEMENT_WAIT_MS`. */
+  private awaitingSettlements = false;
   private readonly queuedRequests: QueuedRequest[] = [];
   private readonly inFlight = new Map<RouteId, InFlightRequest>();
   private readonly cacheChanges = new CacheChangeBatch();
@@ -359,7 +414,12 @@ export class CoordinatorCore {
     }
 
     const queued = { tabId, request, queuedAt };
-    if (this.stateValue.kind !== 'active') {
+    // A head claimed now would be sent with the engine about to go. The
+    // handover refuses the claim as superseded.
+    if (
+      this.stateValue.kind !== 'active' ||
+      (this.awaitingSettlements && request.kind === 'claim-next-mutation')
+    ) {
       this.queuedRequests.push(queued);
       return [];
     }
@@ -614,12 +674,18 @@ export class CoordinatorCore {
     const actions = this.broadcastCacheChanges(
       this.cacheChanges.requestCompleted(this.inFlight.size === 0)
     );
+    const claimed = claimedTransaction(request.request, response);
     if (this.tabs.includes(request.tabId)) {
+      if (claimed !== undefined) this.claims.set(claimed, request.tabId);
       actions.push({
         kind: 'deliver-response',
         tabId: request.tabId,
         response: { ...response, id: request.request.id },
       });
+    }
+    if (isMutationSettlement(request.request)) {
+      this.claims.delete(request.request.transactionId);
+      actions.push(...this.handOverIfSettled());
     }
     return actions;
   }
@@ -778,8 +844,31 @@ export class CoordinatorCore {
       this.supersedePending = true;
       return [];
     }
-    if (state.kind === 'active') return this.drainForNewerBuild(state);
+    if (state.kind === 'active') {
+      if (this.claims.size === 0) return this.drainForNewerBuild(state);
+      // A page may have a claimed head on its way to the server. Its answer
+      // must reach this engine, or another page sends the head again.
+      this.supersedePending = true;
+      this.awaitingSettlements = true;
+      return [{ kind: 'await-settlements', ms: SETTLEMENT_WAIT_MS }];
+    }
     return this.completeSupersede();
+  }
+
+  /** The pages had `SETTLEMENT_WAIT_MS` to settle their claims. */
+  settlementsOverdue(): CoordinatorAction[] {
+    if (!this.awaitingSettlements) return [];
+    this.claims.clear();
+    return this.handOverIfSettled();
+  }
+
+  /** Drains for the newer build once no claimed head is unsettled. */
+  private handOverIfSettled(): CoordinatorAction[] {
+    const state = this.stateValue;
+    if (!this.awaitingSettlements || this.claims.size > 0) return [];
+    this.awaitingSettlements = false;
+    if (state.kind !== 'active') return [];
+    return this.drainForNewerBuild(state);
   }
 
   private drainForNewerBuild({
@@ -793,6 +882,8 @@ export class CoordinatorCore {
 
   private completeSupersede(): CoordinatorAction[] {
     this.supersedePending = false;
+    this.awaitingSettlements = false;
+    this.claims.clear();
     const reason = SUPERSEDED_REASON;
     this.supersededReason = reason;
     const actions: CoordinatorAction[] = [
@@ -877,6 +968,7 @@ export class CoordinatorCore {
     if (this.inFlight.size === 0) {
       actions.push(...this.broadcastCacheChanges(this.cacheChanges.flush()));
     }
+    actions.push(...this.handOverIfSettled());
     this.assertInvariants();
     return actions;
   }
@@ -1079,7 +1171,9 @@ export class CoordinatorCore {
     if (
       state.kind !== 'active' ||
       state.ownerEpoch !== ownerEpoch ||
-      this.visibleTabs.has(state.tabId)
+      this.visibleTabs.has(state.tabId) ||
+      // Its pages' settlements land here; the newer build drains it after.
+      this.awaitingSettlements
     )
       return [];
     this.stateValue = { ...state, kind: 'draining' };
@@ -1141,6 +1235,9 @@ export class CoordinatorCore {
     for (const [routeId, request] of this.inFlight) {
       if (request.tabId === tabId) this.inFlight.delete(routeId);
     }
+    // A page that left settles nothing; another page sends its head.
+    for (const [transactionId, owner] of this.claims)
+      if (owner === tabId) this.claims.delete(transactionId);
   }
 
   private acceptsEngineMessages(ownerEpoch: OwnerEpoch): boolean {

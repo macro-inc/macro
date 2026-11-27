@@ -1,10 +1,13 @@
 import type {
   CommitOptimisticWriteResult,
+  DeferOptimisticWriteResult,
   EnqueueOptimisticMutationResult,
   ReadResult,
+  RollbackOptimisticWriteResult,
   WriteResult,
 } from '../protocol';
 import { INITIAL_CACHE_REVISION } from '../protocol';
+import { CacheSettlementUnwrittenError } from './errors';
 import type { CacheHost } from './types';
 
 const emptyWriteResult = (): WriteResult => ({
@@ -67,14 +70,17 @@ export function createNoopCacheHost(): CacheHost {
     async claimNextMutation() {
       return undefined;
     },
-    async deferOptimisticWrite() {
-      return { kind: 'deferred' } as const;
+    // No claim is ever made here, so a settlement is one made through a host
+    // that retired since: its queue row is still in a database this host
+    // cannot write. Only an engine says a settlement is written.
+    async deferOptimisticWrite(): Promise<DeferOptimisticWriteResult> {
+      throw new CacheSettlementUnwrittenError();
     },
     async commitOptimisticWrite(): Promise<CommitOptimisticWriteResult> {
-      return { kind: 'committed', ...emptyWriteResult() };
+      throw new CacheSettlementUnwrittenError();
     },
-    async rollbackOptimisticWrite() {
-      return { kind: 'rolled-back' as const, ...emptyWriteResult() };
+    async rollbackOptimisticWrite(): Promise<RollbackOptimisticWriteResult> {
+      throw new CacheSettlementUnwrittenError();
     },
     async invalidate() {
       return { revision: INITIAL_CACHE_REVISION, affectedOps: [] };

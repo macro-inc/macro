@@ -1,7 +1,11 @@
 import { match } from 'ts-pattern';
 import { describe, expect, it } from 'vitest';
 import { type CacheRequest, INITIAL_CACHE_REVISION } from '../protocol';
-import { type CoordinatorAction, CoordinatorCore } from './coordinator-core';
+import {
+  type CoordinatorAction,
+  CoordinatorCore,
+  SETTLEMENT_WAIT_MS,
+} from './coordinator-core';
 import type { DatabaseActionProof } from './coordinator-protocol';
 
 const OWNER_LOCK = 'physical-owner-lock';
@@ -304,6 +308,139 @@ describe('CoordinatorCore', () => {
         reason: expect.stringContaining('newer version of the app'),
       },
     ]);
+  });
+
+  describe('a newer build and the queue heads its pages claimed', () => {
+    const claimNext = (id: number): CacheRequest => ({
+      id,
+      kind: 'claim-next-mutation',
+      owner: 'exchange-live:tab-b:1',
+      nowMs: 0,
+      leaseExpiresAtMs: 300_000,
+    });
+    const commit = (id: number): CacheRequest => ({
+      id,
+      kind: 'commit-optimistic-write',
+      transactionId: '7',
+      leaseOwner: 'exchange-live:tab-b:1',
+      leaseGeneration: '1',
+      query: 'mutation M { m }',
+      data: { m: true },
+    });
+    const ok = (result: unknown) => ({ id: 0, ok: true as const, result });
+    /** tab-a's engine serves; tab-b claimed transaction 7. */
+    const claimed = () => {
+      const core = new CoordinatorCore('scope');
+      core.registerTab('tab-a');
+      core.registerTab('tab-b');
+      ready(core, 'tab-a', 1, 'opened-existing');
+      const route = action(
+        core.request('tab-b', claimNext(1)),
+        'route-request'
+      );
+      core.engineResponse(1, route.routeId, ok({ transactionId: '7' }));
+      return core;
+    };
+
+    it('keeps the engine until the claimed head is settled in it', () => {
+      const core = claimed();
+      expect(core.supersede()).toEqual([
+        { kind: 'await-settlements', ms: SETTLEMENT_WAIT_MS },
+      ]);
+      expect(core.handingOver).toBe(true);
+      expect(core.state.kind).toBe('active');
+      // The page's answer arrives and is written by this engine.
+      const route = action(core.request('tab-b', commit(2)), 'route-request');
+      expect(core.state.kind).toBe('active');
+      expect(
+        core.engineResponse(1, route.routeId, ok({ kind: 'committed' }))
+      ).toEqual([
+        expect.objectContaining({ kind: 'deliver-response', tabId: 'tab-b' }),
+        { kind: 'drain-owner', tabId: 'tab-a', ownerEpoch: 1, handoff: true },
+      ]);
+      expect(core.engineDrained('tab-a', 1)).toContainEqual(
+        expect.objectContaining({ kind: 'broadcast-cache-superseded' })
+      );
+    });
+
+    it('claims no other head meanwhile, and refuses that claim at the handover', () => {
+      const core = claimed();
+      core.supersede();
+      expect(core.request('tab-b', claimNext(3))).toEqual([]);
+      core.settlementsOverdue();
+      expect(core.engineDrained('tab-a', 1)).toContainEqual(
+        expect.objectContaining({
+          kind: 'reject-request',
+          requestId: 3,
+          errorCode: 'cache-superseded',
+        })
+      );
+    });
+
+    it('counts the head an enqueue claimed for its live caller', () => {
+      const core = new CoordinatorCore('scope');
+      core.registerTab('tab-a');
+      ready(core, 'tab-a', 1, 'opened-existing');
+      const route = action(
+        core.request('tab-a', {
+          id: 1,
+          kind: 'enqueue-optimistic-mutation',
+        } as unknown as CacheRequest),
+        'route-request'
+      );
+      core.engineResponse(
+        1,
+        route.routeId,
+        ok({
+          transactionId: '7',
+          initialClaim: { kind: 'claimed', mutation: { transactionId: '7' } },
+        })
+      );
+      expect(core.supersede()).toEqual([
+        { kind: 'await-settlements', ms: SETTLEMENT_WAIT_MS },
+      ]);
+    });
+
+    it('drains once the wait runs out, or the claiming page goes', () => {
+      const overdue = claimed();
+      overdue.supersede();
+      expect(overdue.settlementsOverdue()).toEqual([
+        { kind: 'drain-owner', tabId: 'tab-a', ownerEpoch: 1, handoff: true },
+      ]);
+      expect(overdue.settlementsOverdue()).toEqual([]);
+
+      const gone = claimed();
+      gone.supersede();
+      expect(gone.tabLost('tab-b')).toContainEqual({
+        kind: 'drain-owner',
+        tabId: 'tab-a',
+        ownerEpoch: 1,
+        handoff: true,
+      });
+    });
+
+    it('drains at once when no head is claimed, or its claim came back empty', () => {
+      const core = new CoordinatorCore('scope');
+      core.registerTab('tab-a');
+      core.registerTab('tab-b');
+      ready(core, 'tab-a', 1, 'opened-existing');
+      const route = action(
+        core.request('tab-b', claimNext(1)),
+        'route-request'
+      );
+      core.engineResponse(1, route.routeId, ok(null));
+      expect(core.supersede()).toEqual([
+        { kind: 'drain-owner', tabId: 'tab-a', ownerEpoch: 1, handoff: true },
+      ]);
+    });
+
+    it('keeps a hidden owner serving while it waits', () => {
+      const core = claimed();
+      core.supersede();
+      core.setTabVisibility('tab-a', false);
+      expect(core.drainHiddenOwner(1)).toEqual([]);
+      expect(core.state.kind).toBe('active');
+    });
   });
 
   it('completes the handover once no engine is changing the files', () => {
