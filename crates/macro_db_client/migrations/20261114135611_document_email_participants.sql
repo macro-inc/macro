@@ -13,20 +13,27 @@ SET LOCAL lock_timeout = '5s';
 -- their rows (documents_deleted below); a row a racing insert writes for a
 -- document deleted meanwhile stays, and readers join "Document", so it only
 -- costs space.
+--
+-- No unique key either: an insert that met another transaction's
+-- uncommitted duplicate would wait for it, and two transactions recording
+-- rows for one document (it can be linked to several attachments) across
+-- statements could each wait on a pair the other wrote first. Inserts skip
+-- the pairs already committed, so a pair repeats only when two transactions
+-- record it at once; readers deduplicate.
 CREATE TABLE document_email_participants (
     document_id TEXT NOT NULL,
-    address     TEXT NOT NULL,
-    PRIMARY KEY (document_id, address)
+    address     TEXT NOT NULL
 );
 
--- Records the participants of every document linked to these attachments,
--- in key order: two transactions recording rows for one document (it can be
--- linked to several attachments) would otherwise each wait on a key the
--- other inserted first.
+CREATE INDEX idx_document_email_participants_document
+    ON document_email_participants (document_id, address);
+
+-- Records the participants of every document linked to these attachments
+-- that are not recorded yet.
 CREATE FUNCTION record_document_email_participants(attachment_ids uuid[]) RETURNS void
 LANGUAGE sql AS $$
     INSERT INTO document_email_participants (document_id, address)
-    SELECT de.document_id, LOWER(c.email_address)
+    SELECT DISTINCT de.document_id, LOWER(c.email_address)
     FROM document_email de
     JOIN email_attachments ea ON ea.id = de.email_attachment_id
     JOIN email_messages m ON m.id = ea.message_id
@@ -37,8 +44,10 @@ LANGUAGE sql AS $$
     ) participant
     JOIN email_contacts c ON c.id = participant.contact_id
     WHERE de.email_attachment_id = ANY(attachment_ids)
-    ORDER BY 1, 2
-    ON CONFLICT DO NOTHING
+        AND NOT EXISTS (
+            SELECT 1 FROM document_email_participants p
+            WHERE p.document_id = de.document_id AND p.address = LOWER(c.email_address)
+        )
 $$;
 
 -- Two writes in concurrent transactions can complete one chain between them
@@ -193,7 +202,7 @@ BEGIN
     RETURN NULL;
 END $$;
 
--- Deletes the rows of deleted documents, probing the primary key per id
+-- Deletes the rows of deleted documents, probing the document index per id
 -- (an array, like recipients_added, whatever the first statement's size).
 CREATE FUNCTION document_email_participants_documents_deleted() RETURNS trigger
 LANGUAGE plpgsql AS $$
