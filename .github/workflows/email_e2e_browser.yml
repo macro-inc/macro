@@ -519,11 +519,15 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Every scenario runs two services with their own connection pools, and
-          # several scenarios run at once. The setting takes effect when the next step
-          # restarts the server.
+          # Each stack runs services with their own connection pools. The next step
+          # restarts Postgres to apply the limit.
           postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "pgvector/pgvector:pg14" { print $1; exit }')"
-          docker exec "$postgres_container" psql -U user -d macrodb -c "ALTER SYSTEM SET max_connections = 600;"
+          docker exec -i "$postgres_container" psql -X -v ON_ERROR_STOP=1 -U user -d macrodb \
+            -v max_connections="$POSTGRES_MAX_CONNECTIONS" <<'SQL'
+          ALTER SYSTEM SET max_connections = :'max_connections';
+          SQL
+        env:
+          POSTGRES_MAX_CONNECTIONS: '1200'
       - name: configure postgres for concurrent tests
         run: |
           postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "pgvector/pgvector:pg14" { print $1; exit }')"

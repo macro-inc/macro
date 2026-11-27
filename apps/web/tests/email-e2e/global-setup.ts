@@ -59,8 +59,8 @@ export default async function globalSetup(
     // Started stacks, one for every two workers (the server's `pool`): a
     // test takes one and the next is started while the test runs. A stack
     // starts in a fraction of the time a test takes, so half as many as
-    // the workers are enough, and each holds about 40 connections of a
-    // Postgres that CI gives 600. Each also leases one of Redis's
+    // the workers are enough. CI budgets Postgres connections for the warm
+    // stacks as well as the active ones. Each leases one of Redis's
     // databases, 15 by default, which the tests' own stacks come first for.
     env: {
       EMAIL_E2E_BIN_DIR: dirname(binary),
