@@ -506,7 +506,7 @@ export class WALSyncer<T> {
       const undelivered = entries.filter((e) => !e.delivered);
       // With nothing to send, still fall through: an edit appended while the
       // store was read needs the follow-up flush below.
-      if (undelivered.length > 0) succeeded = await this.deliver(undelivered);
+      if (undelivered.length > 0) succeeded = await this.sendUndelivered(undelivered);
     } finally {
       this.isFlushing = false;
     }
@@ -520,7 +520,9 @@ export class WALSyncer<T> {
 
   /** Pushes `undelivered` and marks it delivered once acked; false when the
    *  server didn't ack it. */
-  private async deliver(undelivered: WALEntry<T>[]): Promise<boolean> {
+  private async sendUndelivered(
+    undelivered: WALEntry<T>[]
+  ): Promise<boolean> {
     if (this.label)
       logSyncService({
         documentId: this.label,
