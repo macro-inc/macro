@@ -11,6 +11,7 @@ import {
 } from '@macro-inc/observability';
 import {
   DocumentReconcileEntityDocument,
+  DocumentReconcileEntityFullDocument,
   GraphqlDocumentQuickAccessNameFragmentDoc,
 } from '@service-storage/graphql/generated/graphql';
 import {
@@ -28,12 +29,17 @@ const DOCUMENT_SELECTION = selectRecords(
   GraphqlDocumentQuickAccessNameFragmentDoc
 );
 
+/** Which fields a primary read writes back: the name fields local search
+ * reads, or the whole Soup item lists read. */
+export type DocumentReadSelection = 'name' | 'full';
+
 /** Whether the primary database shows the viewer the document. A readable
- * document is written back to the cache by the read, so its cached name and
+ * document is written back to the cache by the read, so its cached `selection`
  * fields are current again. Throws when the read fails. */
 export type ReadDocumentFromPrimary = (
   documentId: string,
-  signal: AbortSignal | undefined
+  signal: AbortSignal | undefined,
+  selection: DocumentReadSelection
 ) => Promise<'readable' | 'gone'>;
 
 export type DocumentReconcileHost = Pick<
@@ -43,14 +49,17 @@ export type DocumentReconcileHost = Pick<
 
 const readDocumentOnPrimary: ReadDocumentFromPrimary = async (
   documentId,
-  signal
+  signal,
+  selection
 ) => {
   // An abort leaves the query's result source, which is what ends urql's
   // request: urql replaces a `fetchOptions.signal` with its own.
   const settled = await firstOrAborted(
     pipe(
       getGraphqlSoupClient().query(
-        DocumentReconcileEntityDocument,
+        selection === 'full'
+          ? DocumentReconcileEntityFullDocument
+          : DocumentReconcileEntityDocument,
         { input: { entityType: 'DOCUMENT', entityId: documentId } },
         { requestPolicy: 'network-only' }
       ),
@@ -110,6 +119,7 @@ async function goneOnPrimary(
   ids: readonly string[],
   read: ReadDocumentFromPrimary,
   signal: AbortSignal | undefined,
+  selection: DocumentReadSelection,
   trace: TraceContext
 ): Promise<Set<string>> {
   const gone = new Set<string>();
@@ -121,7 +131,7 @@ async function goneOnPrimary(
     signal?.throwIfAborted();
     const batch = ids.slice(offset, offset + PRIMARY_READ_CONCURRENCY);
     const answers = await trace.run(() =>
-      Promise.all(batch.map((id) => read(id, signal)))
+      Promise.all(batch.map((id) => read(id, signal, selection)))
     );
     batch.forEach((id, index) => {
       if (answers[index] === 'gone') gone.add(id);
@@ -212,7 +222,7 @@ async function removeGone(
   );
   const cached = input.ids.filter((id) => before.has(id));
   if (cached.length === 0) return finish([], 'not_cached');
-  const gone = await goneOnPrimary(cached, read, input.signal, span);
+  const gone = await goneOnPrimary(cached, read, input.signal, 'name', span);
   const decided = cached.filter((id) => gone.has(id));
   if (decided.length === 0) return finish([], 'readable');
   const after = await span.run(() => cachedFingerprints(input.host, decided));
@@ -228,8 +238,9 @@ async function removeGone(
   );
   try {
     // Not cancelled with the caller: once a record is deleted, this read is
-    // what writes back a document restored meanwhile.
-    const still = await goneOnPrimary(stale, read, undefined, span);
+    // what writes back a document restored meanwhile, with every field the
+    // lists that hold it read.
+    const still = await goneOnPrimary(stale, read, undefined, 'full', span);
     span.setAttr(
       'soup.documents.restored',
       stale.filter((id) => !still.has(id)).length
@@ -271,29 +282,49 @@ export function createDocumentVerifier(
   const hostOf = options.host ?? getGraphqlSoupCacheHost;
   const now = options.now ?? Date.now;
   const checkedAt = new Map<string, number>();
-  const inFlight = new Set<string>();
+  /** Due ids waiting for the check running now, if any. */
+  const queued = new Set<string>();
+  /** Ids of the running check that a search featured again meanwhile. */
+  const featuredAgain = new Set<string>();
+  let running: readonly string[] | undefined;
   const controller = new AbortController();
 
-  const run = async (host: DocumentReconcileHost, ids: string[]) => {
-    try {
-      const { removed } = await removeDocumentsGoneOnPrimary({
-        host,
-        ids,
-        readFromPrimary: options.readFromPrimary,
-        session: options.session,
-        signal: controller.signal,
-      });
-      // A removed document is no longer listed, so it costs no read; if a
-      // lagging list writes it back, the next search that features it checks
-      // it again instead of waiting out the interval.
-      for (const id of removed) checkedAt.delete(id);
-    } catch (error) {
-      if (controller.signal.aborted) return;
-      // A failed check is tried again on the next search that features it.
-      for (const id of ids) checkedAt.delete(id);
-      throw error;
-    } finally {
-      for (const id of ids) inFlight.delete(id);
+  const isDue = (id: string, at: number) => {
+    const last = checkedAt.get(id);
+    return last === undefined || at - last >= VERIFY_TTL_MS;
+  };
+
+  // One check at a time, so overlapping searches never have more than
+  // PRIMARY_READ_CONCURRENCY documents read at once.
+  const drain = async (host: DocumentReconcileHost) => {
+    while (queued.size > 0 && !controller.signal.aborted) {
+      const ids = [...queued];
+      queued.clear();
+      running = ids;
+      try {
+        const { removed } = await removeDocumentsGoneOnPrimary({
+          host,
+          ids,
+          readFromPrimary: options.readFromPrimary,
+          session: options.session,
+          signal: controller.signal,
+        });
+        // A removed document is no longer listed, so it costs no read; if a
+        // lagging list writes it back, it is checked again when featured,
+        // including by a search made while this check was running.
+        for (const id of removed) {
+          checkedAt.delete(id);
+          if (featuredAgain.has(id)) queued.add(id);
+        }
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        // A failed check is tried again on the next search that features it.
+        for (const id of ids) checkedAt.delete(id);
+        throw error;
+      } finally {
+        running = undefined;
+        featuredAgain.clear();
+      }
     }
   };
 
@@ -305,17 +336,15 @@ export function createDocumentVerifier(
       const host = hostOf();
       if (!host || host.disabled) return;
       const at = now();
-      const due = [...new Set(ids)].filter((id) => {
-        if (inFlight.has(id)) return false;
-        const last = checkedAt.get(id);
-        return last === undefined || at - last >= VERIFY_TTL_MS;
-      });
-      if (due.length === 0) return;
-      for (const id of due) {
-        checkedAt.set(id, at);
-        inFlight.add(id);
+      for (const id of new Set(ids)) {
+        if (running?.includes(id)) featuredAgain.add(id);
+        else if (isDue(id, at)) {
+          checkedAt.set(id, at);
+          queued.add(id);
+        }
       }
-      fireAndForget(run(host, due), 'soup-document-verify');
+      if (running || queued.size === 0) return;
+      fireAndForget(drain(host), 'soup-document-verify');
     },
     dispose: () => controller.abort(),
   };

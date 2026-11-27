@@ -15,3 +15,18 @@ query DocumentReconcileEntity($input: SoupEntityInput!) {
 		}
 	}
 }
+
+# The same read with every Soup item field, made only after a delete: if the
+# document was restored meanwhile, this writes back the whole record the
+# lists it belongs to read, not just its name. A gone document costs nothing
+# more, since the edges resolve only for a readable one.
+query DocumentReconcileEntityFull($input: SoupEntityInput!) {
+	user {
+		id
+		soupEntity(input: $input) {
+			__typename
+			id
+			...SoupItemFields
+		}
+	}
+}

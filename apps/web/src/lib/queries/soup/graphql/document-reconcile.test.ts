@@ -104,11 +104,14 @@ describe('removeDocumentsGoneOnPrimary', () => {
     expect(host.deleteRecords.mock.calls[0]?.[1]).toBe('s1');
     expect([...records.keys()]).toEqual(['live']);
     // Once more after the delete, which would write it back if readable.
-    expect(read.mock.calls.map(([id]) => id)).toEqual([
-      'trashed',
-      'live',
-      'trashed',
-    ]);
+    expect(read.mock.calls.map(([id, , selection]) => [id, selection])).toEqual(
+      [
+        ['trashed', 'name'],
+        ['live', 'name'],
+        // A restored document gets back every field its lists read.
+        ['trashed', 'full'],
+      ]
+    );
   });
 
   it('deletes a shared document a collaborator can no longer read', async () => {
@@ -362,6 +365,61 @@ describe('createDocumentVerifier', () => {
     await vi.waitFor(() => expect(records.has('a')).toBe(false));
     // Two looks for each check: before the delete, and once after it.
     expect(read).toHaveBeenCalledTimes(4);
+  });
+
+  it('checks a document a list wrote back while its check was running', async () => {
+    const { host, records } = fakeDocumentCache({ a: { name: 'A' } });
+    let release: (() => void) | undefined;
+    let reads = 0;
+    const verifier = createDocumentVerifier({
+      host: () => host,
+      readFromPrimary: async () => {
+        reads += 1;
+        // The confirming read waits while a search features the document.
+        if (reads === 2) await new Promise<void>((done) => (release = done));
+        return 'gone';
+      },
+      session: () => 's1',
+    });
+
+    verifier.verify(['a']);
+    await vi.waitFor(() => expect(release).toBeDefined());
+    // A lagging list writes the trashed record back, and a search shows it.
+    records.set('a', { name: 'A' });
+    verifier.verify(['a']);
+    release?.();
+
+    await vi.waitFor(() => expect(reads).toBe(4));
+    await vi.waitFor(() => expect(records.has('a')).toBe(false));
+  });
+
+  it('reads at most a few documents at once across overlapping searches', async () => {
+    const ids = ['a', 'b', 'c', 'd', 'e', 'f'];
+    const { host } = fakeDocumentCache(
+      Object.fromEntries(ids.map((id) => [id, { name: id }]))
+    );
+    let open = 0;
+    let peak = 0;
+    const verifier = createDocumentVerifier({
+      host: () => host,
+      readFromPrimary: async () => {
+        open += 1;
+        peak = Math.max(peak, open);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        open -= 1;
+        return 'readable';
+      },
+      session: () => 's1',
+    });
+
+    verifier.verify(['a', 'b', 'c']);
+    verifier.verify(['d', 'e', 'f']);
+    await vi.waitFor(() =>
+      expect(host.readRecordsByKeys).toHaveBeenCalledTimes(2)
+    );
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(peak).toBe(3);
   });
 
   it('does nothing without a cache, or once disposed', async () => {

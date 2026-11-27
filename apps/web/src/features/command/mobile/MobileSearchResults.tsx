@@ -132,9 +132,6 @@ function MobileNameResults(props: {
   const incoming = createMemo(() =>
     source.rankItems(source.items(), props.query())
   );
-  useVerifiedDocuments(() =>
-    featuredCommandDocumentIds(incoming(), props.query())
-  );
   const itemKey = (item: QuickAccessItem) =>
     commandSearchResultKey(item, props.accountId);
   const results = createSearchResultWindow({
@@ -147,6 +144,10 @@ function MobileNameResults(props: {
     discard: source.hasAuthoritativeError,
   });
   const items = results.items;
+  // The rows shown, which after Back keep their saved order.
+  useVerifiedDocuments(() =>
+    featuredCommandDocumentIds(items(), props.query())
+  );
   const restoration = createSearchScrollRestoration({
     key: 'mobileSearch.nameScroll',
     accountId: () => props.accountId,
