@@ -13,7 +13,6 @@ import { useDocTags, useSoupDocTags } from '@property/tags/useDocTags';
 import { queryClient } from '@queries/client';
 import { buildEntityPropertiesInput } from '@queries/properties/graphql/entity';
 import { useInFlightEntityPropertyOptions } from '@queries/properties/in-flight-options';
-import { propertiesKeys } from '@queries/properties/keys';
 import { buildGraphqlEntitySoupInput } from '@queries/soup/graphql/entity-input';
 import { createGraphqlGroupedSoupAstItemsQuery } from '@queries/soup/graphql/grouped-items';
 import { createGraphqlSoupAstItemsQuery } from '@queries/soup/graphql/items';
@@ -72,7 +71,6 @@ const RenameTitleDocument = gql`
 
 const mode = new URLSearchParams(location.search).get('cache') ?? 'cached';
 disableBrowserTursoCache.override = mode === 'disabled';
-queryClient.setQueryData(propertiesKeys.tags.queryKey, tagSets);
 
 type Snapshot = {
   detail: string[];

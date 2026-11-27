@@ -12,13 +12,13 @@ import {
 } from '@property/tags/TagEditorDialog';
 import { useTagTeamSharingFlag } from '@property/tags/use-tag-team-sharing-flag';
 import {
+  parseTagNameConflict,
   useDeletePropertyOptionMutation,
   useMergeTagMutation,
   usePromoteTagMutation,
   useTagsQuery,
 } from '@queries/properties/tags';
 import { useCurrentTeamQuery } from '@queries/team/teams';
-import { parseTagNameConflict } from '@service-properties/client';
 import type { PropertyOptionResponse } from '@service-properties/generated/schemas/propertyOptionResponse';
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
@@ -272,13 +272,16 @@ export function Tags() {
     promoteTag.mutate(
       { optionId: tag.option.id },
       {
-        onSettled: () => setSharingOptionId(undefined),
-        onSuccess: () => setPendingShare(null),
+        // Closes the confirmation however the share ends, a share dropped
+        // at sign-out or a login change included, which reports no error.
+        onSettled: () => {
+          setSharingOptionId(undefined);
+          setPendingShare(null);
+        },
         onError: (error) => {
           // The mutation stays silent on a name collision so it can be turned
           // into a prompt here; every other failure already toasted.
           const detected = parseTagNameConflict(error);
-          setPendingShare(null);
           if (detected) {
             setConflict({
               tag,
