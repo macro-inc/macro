@@ -533,6 +533,76 @@ it('lists again the rows a longer first page pushed past the bound when page one
   client.clear();
 });
 
+it('counts as read now once the rows from an earlier generation leave the listed rows', async () => {
+  vi.useFakeTimers();
+  // Page two lists Person 1, then, after the generation changes, Person 2.
+  // Once the roster loads, the same generation's page one lists Person 1.
+  let changed = false;
+  const reader = vi
+    .fn<typeof readContactDirectory>()
+    .mockImplementation(async (viewer, _host, request) => {
+      let users = [person(0)];
+      if (request.cursor) users = [person(changed ? 2 : 1)];
+      else if (request.teammates?.length) users = [person(0), person(1)];
+      return {
+        query: request.query,
+        source: 'cache',
+        sync: 'snapshot',
+        offline: false,
+        users,
+        nextCursor: request.cursor
+          ? null
+          : {
+              source: 'people',
+              generation: 'fixture',
+              after: 'next',
+              userId: viewer,
+              query: request.query,
+              policyKey: hashKey([request.policy]),
+            },
+      };
+    });
+  const client = new QueryClient();
+  const [teammates, setTeammates] = createSignal<ReadonlySet<string>>(
+    new Set()
+  );
+  const [search, setSearch] = createSignal('');
+  let list: ReturnType<typeof createContactDirectoryList> | undefined;
+  function Harness() {
+    list = createContactDirectoryList(
+      () => ({ userId: VIEWER }),
+      reader,
+      () => true,
+      { search, debounceMs: 0, teammates }
+    );
+    return null;
+  }
+  render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  setSearch('person');
+  await vi.advanceTimersByTimeAsync(0);
+  await list!.loadNext();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(list!.readNow()).toBe(true);
+
+  changed = true;
+  list!.restart();
+  await vi.advanceTimersByTimeAsync(0);
+  await list!.loadNext();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(ids(list!)).toEqual([person(0).id, person(1).id, person(2).id]);
+  expect(list!.readNow()).toBe(false);
+
+  setTeammates(new Set([person(9).id]));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(ids(list!)).toEqual([person(0).id, person(1).id, person(2).id]);
+  expect(list!.readNow()).toBe(true);
+  client.clear();
+});
+
 it('reads the roster only for a typed search, so browsing keeps its pages when it loads', async () => {
   vi.useFakeTimers();
   const reader = vi
