@@ -9,6 +9,8 @@ import {
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { buildSimpleEntityUrl } from '@core/util/url';
+import { useCopyLink } from '@core/util/useCopyLink';
 import type { GraphicsEditor, TextMeasurer } from '@macro-inc/graphics';
 import {
   createGraphicsEditor,
@@ -21,15 +23,17 @@ import {
 } from '@macro-inc/graphics/loro';
 import { fetchDocumentMetadata } from '@queries/storage/document-metadata';
 import type { LoroDoc } from 'loro-crdt';
-import { createSignal, onCleanup, Show } from 'solid-js';
+import { type Accessor, createSignal, onCleanup, Show } from 'solid-js';
 import { CanvasBlockEmbed } from './block-embed-adapter';
 import { createCanvasClipboard } from './clipboard';
+import { URL_PARAMS } from './constants';
 import {
   ArtifactLibraryContext,
   NO_ARTIFACT_LIBRARY,
 } from './context/artifact-library';
 import { readSharedCanvas } from './core/collaboration';
 import type { CanvasFile } from './core/document-format';
+import type { CanvasFocusRequest } from './core/view';
 import { registerCanvasNextHotkeys } from './hotkeys';
 import { createAssetState } from './primitives/create-asset-state';
 import { createCanvasPresence } from './primitives/create-canvas-presence';
@@ -56,6 +60,7 @@ export function CanvasNextEditor(props: {
   canEdit: boolean;
   isEmbedded?: boolean;
   fitOnLoad?: boolean;
+  focus?: Accessor<CanvasFocusRequest | undefined>;
   onReady?: (editor: GraphicsEditor, finishText: () => void) => void;
 }) {
   const measurement = createCanvasTextMeasurer();
@@ -122,6 +127,7 @@ export function CanvasNextEditor(props: {
                 <CanvasReadOnlyView
                   editor={editor}
                   fitOnLoad={props.fitOnLoad}
+                  focus={props.focus}
                   presence={presence}
                 />
               }
@@ -135,6 +141,7 @@ export function CanvasNextEditor(props: {
                   <MobileCanvasReadOnlyView
                     editor={editor}
                     fitOnLoad={props.fitOnLoad}
+                    focus={props.focus}
                     presence={presence}
                   />
                 }
@@ -142,6 +149,7 @@ export function CanvasNextEditor(props: {
                 <MobileCanvasEmbeddedView
                   editor={editor}
                   fitOnLoad={props.fitOnLoad}
+                  focus={props.focus}
                   presence={presence}
                 />
               </Show>
@@ -154,6 +162,7 @@ export function CanvasNextEditor(props: {
             presence={presence}
             measureText={measurement.measure}
             fitOnLoad={props.fitOnLoad}
+            focus={props.focus}
             canEdit={() => props.canEdit}
             onFinishReady={(finish) => {
               finishText = finish;
@@ -171,6 +180,7 @@ function EditableCanvasNext(props: {
   presence?: GraphicsPresence;
   measureText: TextMeasurer;
   fitOnLoad?: boolean;
+  focus?: Accessor<CanvasFocusRequest | undefined>;
   canEdit: () => boolean;
   onFinishReady: (finish: () => void) => void;
 }) {
@@ -181,6 +191,7 @@ function EditableCanvasNext(props: {
   const insert = createCanvasInsertState(editor.getCamera);
   const { openWithSplit } = useSplitLayout();
   const resolveAppLink = useMacroMentionLinkResolver();
+  const copyLink = useCopyLink();
   let viewport: HTMLElement | undefined;
   const center = () =>
     screenToWorld(editor.getCamera(), {
@@ -234,6 +245,19 @@ function EditableCanvasNext(props: {
     get fitOnLoad() {
       return props.fitOnLoad;
     },
+    get focus() {
+      return props.focus;
+    },
+    onCopyItemLink: (itemId) =>
+      fireAndForget(
+        copyLink(
+          buildSimpleEntityUrl(
+            { type: 'canvas', id: props.documentId },
+            { [URL_PARAMS.item]: itemId }
+          )
+        ),
+        'canvas-copy-link'
+      ),
     state,
     get presence() {
       return props.presence;

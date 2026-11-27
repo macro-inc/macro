@@ -67,6 +67,12 @@ there moves the end. A pen is sent over CDP as a mouse of pointer type pen: one
 test draws with it and checks that a finger under the same tool then pans, until
 Draw with pen only is switched off in the zoom sheet.
 
+`touch.html?item=<id>` opens the touch canvas as a link to that item does, and
+`window.canvasTouchFixture.focus(id)` follows a link while it is open.
+`item-links.browser.e2e.ts` checks in the touch project that the linked item is
+selected and framed on open and on each later link, that an unknown id leaves
+the view alone, and that More's Copy link to element hands over the selected id.
+
 ![Two editors and a viewer sharing a scene and Alice's cursor](multiplayer.png)
 
 

@@ -250,6 +250,12 @@ panel tokens; the dot-grid visibility toggle hides every level.
 The shared context menu exposes clipboard, grouping, layer ordering, select-all,
 and delete actions, with normal keyboard navigation and focus restoration. Active
 embedded editors and text editing retain their own context menus.
+With exactly one item selected, **Copy link to element** (also in the touch
+More sheet) copies the canvas URL with `canvas_item=<id>`. Pasted elsewhere it
+is a document mention carrying that param. Opening the URL, or a mention
+calling `goToLocationFromParams`, selects the item and fits it
+(`frameOnLoad` in `views/shared/canvas-framing.ts`) in editable and read-only
+views, instead of restoring the saved camera. Unknown ids leave the view alone.
 With exactly one image selected, the context menu and inspector also offer
 **Copy image** and **Save image** for the original image, without canvas styling
 or transforms. These reuse the shared image actions (including native mobile

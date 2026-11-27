@@ -378,6 +378,7 @@ function MobileCanvasLayout() {
           fireAndForget(props.clipboard.paste(true), 'canvas-clipboard')
         }
         onDuplicate={state.duplicate}
+        onCopyItemLink={view.copyItemLink()}
         onSelectAll={() => {
           state.chooseTool('select');
           editor.execute(selectAllCommand, undefined);
