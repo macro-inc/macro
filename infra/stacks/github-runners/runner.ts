@@ -10,10 +10,8 @@ type DbMigratorRunnerArgs = {
     privateSubnetIds: string[];
   };
   tags: { [key: string]: string };
-  /** The organization the runner registers with. */
+  /** The organization the runners register with. */
   runnerUrl: string;
-  /** A one-hour registration token, used once on the first boot. */
-  registrationToken: pulumi.Output<string>;
   instanceType: string;
   /** Secrets Manager names of the database URLs the jobs read. */
   databaseSecretNames: string[];
@@ -39,6 +37,9 @@ type DbMigratorRunnerArgs = {
  *   recovers it onto new hardware when the system status check fails. Both
  *   keep the disk, so the runners keep their registration.
  * - No SSH and no public address: reach it with SSM Session Manager.
+ * - The runners register after the first boot, from a Session Manager shell,
+ *   so the registration token is never in the user data, which every job on
+ *   the box can read from the instance metadata service.
  *
  * See `docs/runbooks/db-migrator-runner.md`.
  */
@@ -56,7 +57,6 @@ export class DbMigratorRunner extends pulumi.ComponentResource {
       vpc,
       tags,
       runnerUrl,
-      registrationToken,
       instanceType,
       databaseSecretNames,
       volumeSizeGb = 40,
@@ -165,23 +165,18 @@ export class DbMigratorRunner extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // The token is good for one hour and only the first boot uses it; the
-    // runners keep their registration on disk across reboots and recoveries.
-    const userDataScript = fs.readFileSync(
-      path.join(__dirname, 'user-data.sh'),
-      'utf-8'
-    );
-    const userData = registrationToken.apply((token) =>
-      userDataScript.replace(
+    // No secret: the runners register later (see user-data.sh), and keep
+    // their registration on disk across reboots and recoveries.
+    const userData = fs
+      .readFileSync(path.join(__dirname, 'user-data.sh'), 'utf-8')
+      .replace(
         'set -euo pipefail',
         [
           'set -euo pipefail',
           `GITHUB_RUNNER_URL='${runnerUrl}'`,
-          `GITHUB_RUNNER_TOKEN='${token}'`,
           `AWS_REGION='${awsRegion}'`,
         ].join('\n')
-      )
-    );
+      );
 
     this.instance = new aws.ec2.Instance(
       name,

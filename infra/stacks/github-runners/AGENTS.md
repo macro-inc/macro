@@ -16,29 +16,26 @@ operation, recovery and rebuild are in the
   status-check alarms that reboot or recover it.
 - `user-data.sh`: the first boot. Installs the AWS CLI (with the region set
   for the runner user), `sqlx-cli` (built with a toolchain it then deletes),
-  a `cargo` that only forwards `cargo sqlx`, and two runner processes in a
-  memory-capped systemd slice that restarts them.
-- `Pulumi.dev.yaml`: the instance type. The registration token is the secret
-  `github-runners:runnerToken`, set just before a `pulumi up`.
+  a `cargo` that only forwards `cargo sqlx`, two runner processes and a
+  memory-capped systemd slice for them, and `register-db-migrator-runners`,
+  which an admin runs over Session Manager to register and start them.
+- `Pulumi.dev.yaml`: the instance type and the organization URL. The stack has
+  no secret: the registration token never passes through Pulumi or the user
+  data, where any job on the box could read it.
 
 ## Checks
 
 From `infra/`: `bun run check`, `./node_modules/.bin/biome check stacks/github-runners`.
-`shellcheck user-data.sh`. Preview, from this directory, with a placeholder
-token, which `-c` writes into the stack's config file:
-
-```sh
-pulumi preview --stack macro-inc/dev --diff -c github-runners:runnerToken=preview-only
-git checkout Pulumi.dev.yaml
-```
+`shellcheck user-data.sh`. Preview, from this directory:
+`pulumi preview --stack macro-inc/dev --diff`.
 
 ## Gotchas
 
 - Deploys are manual and need explicit approval; the stack exists only in
   `dev` and is deliberately not in `services-config.json`.
-- Any change to `user-data.sh` or the token replaces the instance, and the
-  replacement needs a fresh token: the old one has expired. A newer Ubuntu
-  image does not (`ignoreChanges: ['ami']`).
+- Any change to `user-data.sh` replaces the instance, and the new one serves
+  no job until an admin registers it (runbook). A newer Ubuntu image does not
+  replace it (`ignoreChanges: ['ami']`).
 - Jobs on this runner must not build anything: there is no Rust toolchain or
   Nix on it, its `cargo` refuses everything but `cargo sqlx` (which deploys of
   older commits call), and the slice kills a job that needs more memory than

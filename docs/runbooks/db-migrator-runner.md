@@ -42,15 +42,19 @@ rebooted on 2026-11-27. The instance now:
   `-system-check`). Both keep the disk, so the runners keep their
   registration.
 - has no SSH and no public address: open a shell with Session Manager.
+- registers its runners after the first boot, from such a shell, so the
+  registration token never sits in the instance's user data, which any job on
+  it could read from the instance metadata service.
 
 Every deploy also runs "Wait for the migration runner" beside the migration
 (`scripts/migration_runner_watchdog.ts`). When no runner has taken the
 migration after 20 minutes, it lets any other job of the run that has started
 or is about to start end (a prod release's website deploy, say), then cancels
 the run and fails with the error **Migration runner unavailable**. No service
-has deployed by then: services deploy only after the migration. If those jobs
-are still running 30 minutes later, it fails with the same error without
-cancelling anything.
+has deployed by then: services deploy only after the migration. A job still
+running 30 minutes later is cancelled with the run; those jobs take under ten
+minutes. If GitHub refuses the cancel five times, the error says the run
+could not be cancelled, and the hourly canceller ends it.
 
 ## When a deploy says "Migration runner unavailable"
 
@@ -86,27 +90,38 @@ The runner is offline, hung, or busy with two other jobs.
 
 ## Rebuild the instance
 
-The runners register once, at first boot, with a registration token that
-lasts an hour. Setting a new token changes the instance's user data, which
-replaces the instance. An organization admin, from
-`infra/stacks/github-runners`, with approval for the deploy:
+Any change to `user-data.sh` replaces the instance. With approval for the
+deploy, from `infra/stacks/github-runners`:
 
 ```sh
-token=$(gh api -X POST orgs/macro-inc/actions/runners/registration-token --jq .token)
-pulumi config set --secret github-runners:runnerToken "$token" --stack macro-inc/dev
 pulumi up --stack macro-inc/dev
 ```
 
-Do it while no deploy runs: a job on the old instance is lost. The new
-instance takes over the runner names (`config.sh --replace`) about ten
-minutes later, once it has built `sqlx-cli`; follow it in
-`/var/log/cloud-init-output.log` over Session Manager, which ends with
-`>>> db-migrator runner bootstrap complete`. A bootstrap that fails registers
-no runner; fix it and rebuild with a fresh token.
+Do it while no deploy runs: a job on the old instance is lost, and no runner
+serves the label until the new one is registered. The first boot takes about
+ten minutes, most of it building `sqlx-cli`; follow it in
+`/var/log/cloud-init-output.log` over Session Manager until it ends with
+`>>> db-migrator runner bootstrap complete`. A bootstrap that fails leaves
+nothing to register: fix it and rebuild.
+
+Then an organization admin creates a registration token, which lasts an hour,
+and registers both runners with it from a Session Manager shell. They take
+over the runner names from the previous instance (`config.sh --replace`) and
+start:
+
+```sh
+gh api -X POST orgs/macro-inc/actions/runners/registration-token --jq .token
+aws ssm start-session --target "$id"
+sudo register-db-migrator-runners    # paste the token at the prompt
+```
+
+It ends with `>>> db-migrator runners registered and started`. A runner that
+is already registered is skipped, so running it again after a failure is
+safe.
 
 ## Replacing the hand-made runner
 
-Once, after this stack's first `pulumi up` (above): when
+Once, after this stack's first `pulumi up` and the registration (above): when
 `db-migrator-runner` and `db-migrator-runner-2` show as idle in the
 `monorepo` group, stop the old instance (`i-0244e64231131a8c9`, in a public
 subnet) and terminate it, with its IAM role and instance profile, a few days

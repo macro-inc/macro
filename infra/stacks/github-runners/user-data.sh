@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 # First-boot bootstrap for the db-migrator GitHub Actions runner. cloud-init
 # runs it once per instance and logs to /var/log/cloud-init-output.log.
-# runner.ts inserts GITHUB_RUNNER_URL, GITHUB_RUNNER_TOKEN and AWS_REGION after
-# the next line.
+# runner.ts inserts GITHUB_RUNNER_URL and AWS_REGION after the next line.
 set -euo pipefail
+
+# It installs everything but registers nothing. Registering takes a one-hour
+# token from an organization admin, which must not be in the user data: any
+# job on the box can read that from the instance metadata service. An admin
+# registers the runners afterwards with `sudo register-db-migrator-runners`
+# over Session Manager (docs/runbooks/db-migrator-runner.md).
 
 export DEBIAN_FRONTEND=noninteractive
 # Files written here are readable by all and writable only by their owner,
@@ -11,8 +16,7 @@ export DEBIAN_FRONTEND=noninteractive
 umask 022
 
 # What the jobs run: the AWS CLI (database URLs from Secrets Manager, S3
-# presigning), jq, git (checkout) and sqlx-cli (migrations). The runners
-# register last, so a box that failed to bootstrap never takes a job.
+# presigning), jq, git (checkout) and sqlx-cli (migrations).
 AWS_CLI_VERSION=2.42.5
 AWS_CLI_SHA256=7694a5b0bdd31ddccdbe9c103849cfe1a2aa4b4768e803a50ae94610aa970800
 # The workspace's sqlx version (Cargo.toml).
@@ -106,37 +110,76 @@ for name in "${RUNNER_NAMES[@]}"; do
   tar -xzf "$tarball" -C "$dir"
   chown -R "${RUNNER_USER}:${RUNNER_USER}" "$dir"
   (cd "$dir" && ./bin/installdependencies.sh)
-
-  sudo -u "$RUNNER_USER" "$dir/config.sh" \
-    --unattended \
-    --url "$GITHUB_RUNNER_URL" \
-    --token "$GITHUB_RUNNER_TOKEN" \
-    --name "$name" \
-    --labels "$RUNNER_LABEL" \
-    --runnergroup "$RUNNER_GROUP" \
-    --work _work \
-    --replace
-
-  (cd "$dir" && ./svc.sh install "$RUNNER_USER")
-  unit=$(cat "$dir/.service")
-
-  # The generated unit neither restarts nor survives a job's OOM kill:
-  # restart it whenever it exits, and keep it running when the kernel kills
-  # one of its processes so the runner can report the failed step.
-  install -d "/etc/systemd/system/${unit}.d"
-  cat >"/etc/systemd/system/${unit}.d/10-db-migrator.conf" <<'EOF'
-[Service]
-Slice=github-runner.slice
-Restart=always
-RestartSec=15s
-OOMPolicy=continue
-EOF
 done
 rm -f "$tarball"
 
-systemctl daemon-reload
-for name in "${RUNNER_NAMES[@]}"; do
-  systemctl enable --now "$(cat "/home/${RUNNER_USER}/${name}/.service")"
-done
+# Registers both runners with a token read from the terminal (or stdin), then
+# starts them. Both register before either starts, so no job runs on the box
+# while the token is on a command line. A runner already registered is left as
+# it is, so a run that failed half-way can be repeated.
+register() {
+  umask 022
+  if [ "$(id -u)" -ne 0 ]; then
+    echo "Run it as root: sudo register-db-migrator-runners" >&2
+    return 1
+  fi
+  local token name dir unit
+  if [ -t 0 ]; then
+    read -r -s -p "Runner registration token: " token
+    echo
+  else
+    IFS= read -r token || true
+  fi
+  if [ -z "$token" ]; then
+    echo "No token given. See docs/runbooks/db-migrator-runner.md." >&2
+    return 1
+  fi
 
-echo ">>> db-migrator runner bootstrap complete"
+  for name in "${RUNNER_NAMES[@]}"; do
+    dir="/home/${RUNNER_USER}/${name}"
+    if [ -e "$dir/.runner" ]; then
+      echo "${name} is already registered."
+      continue
+    fi
+    sudo -u "$RUNNER_USER" "$dir/config.sh" \
+      --unattended \
+      --url "$GITHUB_RUNNER_URL" \
+      --token "$token" \
+      --name "$name" \
+      --labels "$RUNNER_LABEL" \
+      --runnergroup "$RUNNER_GROUP" \
+      --work _work \
+      --replace
+
+    (cd "$dir" && ./svc.sh install "$RUNNER_USER")
+    unit=$(cat "$dir/.service")
+
+    # The generated unit neither restarts nor survives a job's OOM kill:
+    # restart it whenever it exits, and keep it running when the kernel kills
+    # one of its processes so the runner can report the failed step.
+    install -d "/etc/systemd/system/${unit}.d"
+    printf '%s\n' '[Service]' 'Slice=github-runner.slice' 'Restart=always' \
+      'RestartSec=15s' 'OOMPolicy=continue' \
+      >"/etc/systemd/system/${unit}.d/10-db-migrator.conf"
+  done
+
+  systemctl daemon-reload
+  for name in "${RUNNER_NAMES[@]}"; do
+    systemctl enable --now "$(cat "/home/${RUNNER_USER}/${name}/.service")"
+  done
+  echo ">>> db-migrator runners registered and started: ${RUNNER_NAMES[*]}"
+}
+
+{
+  echo '#!/usr/bin/env bash'
+  echo '# Written at first boot by infra/stacks/github-runners/user-data.sh.'
+  echo 'set -euo pipefail'
+  declare -p GITHUB_RUNNER_URL RUNNER_USER RUNNER_GROUP RUNNER_LABEL RUNNER_NAMES
+  declare -f register
+  # shellcheck disable=SC2016 # the generated script expands it
+  echo 'register "$@"'
+} >/usr/local/sbin/register-db-migrator-runners
+chmod 0755 /usr/local/sbin/register-db-migrator-runners
+systemctl daemon-reload
+
+echo ">>> db-migrator runner bootstrap complete; register the runners: sudo register-db-migrator-runners"

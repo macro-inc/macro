@@ -17,7 +17,6 @@ const dbMigrator = new DbMigratorRunner(
     vpc: get_coparse_api_vpc(),
     tags,
     runnerUrl: config.require('runnerUrl'),
-    registrationToken: config.requireSecret('runnerToken'),
     instanceType: config.require('dbMigratorInstanceType'),
     databaseSecretNames: ['macro-db-dev', 'macro-db-prod'],
   }
