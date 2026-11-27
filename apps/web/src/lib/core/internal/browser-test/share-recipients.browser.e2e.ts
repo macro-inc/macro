@@ -22,8 +22,14 @@ const pendingFirstPage = async (page: Page, query: string) => {
  * id; while that same read is still pending after a check, the check saw the
  * list before it landed. */
 const readStarted = async (page: Page, query: string) => {
-  await expect.poll(() => pendingFirstPage(page, query)).not.toBeNull();
-  return pendingFirstPage(page, query);
+  let id = null as number | null;
+  await expect
+    .poll(async () => {
+      id = await pendingFirstPage(page, query);
+      return id;
+    })
+    .not.toBeNull();
+  return id;
 };
 
 test('keeps the people still matching typed text listed until its read lands', async ({
