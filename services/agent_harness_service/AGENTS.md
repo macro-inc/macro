@@ -230,7 +230,8 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   database connection. Set `BOTS_BRAIN_SYNTHETIC_JOURNAL` to an explicit
   one-agent JSON file with an opaque `agent` UUID and `completed` entries
   containing `sourceEvent`, `document`, and `completedAt`. Each result
-  rechecks current document View access. With no source for an agent, Activity
+  rechecks current document View access with fresh membership sources. With
+  no source for an agent, Activity
   is unavailable. Fleet owns runtime status. Mail address comes from the
   separate authorized mailbox surface.
 - `src/voice_gateway.rs`: `GET /voices` and `GET /voices/{model}/sample` for

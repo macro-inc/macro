@@ -93,11 +93,28 @@ async fn signed_loopback_reads_opaque_agent_and_live_document_scope(pool: PgPool
 
     let visible_doc = seed_document(&pool, MEMBER).await;
     let denied_doc = seed_document(&pool, MEMBER).await;
+    let channel = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO comms_channels (id, channel_type, owner_id) VALUES ($1, 'private', $2)",
+        channel,
+        MEMBER,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO comms_channel_participants (channel_id, user_id, role) VALUES ($1, $2, 'member')",
+        channel,
+        OWNER,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     sqlx::query!(
         "INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
-         VALUES ($1, 'document', $2, 'user', 'view')",
+         VALUES ($1, 'document', $2, 'channel', 'view')",
         visible_doc,
-        OWNER,
+        channel.to_string(),
     )
     .execute(&pool)
     .await
@@ -233,8 +250,8 @@ async fn signed_loopback_reads_opaque_agent_and_live_document_scope(pool: PgPool
     }
 
     sqlx::query!(
-        "DELETE FROM entity_access WHERE entity_id = $1 AND entity_type = 'document' AND source_id = $2",
-        visible_doc,
+        "UPDATE comms_channel_participants SET left_at = now() WHERE channel_id = $1 AND user_id = $2",
+        channel,
         OWNER,
     )
     .execute(&pool)
@@ -247,6 +264,10 @@ async fn signed_loopback_reads_opaque_agent_and_live_document_scope(pool: PgPool
         Activity::Ready {
             completed: Vec::new()
         },
+    );
+    assert_eq!(
+        http.read(foreign_team, &agent_path, Some(&owner)).await,
+        (StatusCode::NOT_FOUND, Vec::new())
     );
 
     sqlx::query!(

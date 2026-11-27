@@ -23,7 +23,9 @@ pub(super) struct PgAuthority {
 impl PgAuthority {
     pub(super) fn new(pool: PgPool) -> Self {
         Self {
-            access: EntityAccessServiceImpl::new(PgAccessRepository::new(pool.clone())),
+            access: EntityAccessServiceImpl::new(
+                PgAccessRepository::new(pool.clone()).with_fresh_document_sources(),
+            ),
             agents: PgTeamAgentsRepo::new(pool.clone()),
             pool,
         }
