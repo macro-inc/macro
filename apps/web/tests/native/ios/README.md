@@ -132,7 +132,9 @@ is pending or fails, including the simulator's registration timeout.
 - Android foreground/resume behavior after the Tao/Tauri upgrade.
 - Signed HTTPS universal links from Safari/Mail, cold and warm. Simulator Tao
   unit tests cover `NSUserActivity` extraction/filtering, not domain association.
-- Share-sheet/file import, notification taps, calls, and OAuth return flows.
+- Share-sheet import on a physical device (the simulator handoff is covered;
+  see "iOS Share Extension" in `tauri/src-tauri/README.md`), notification
+  taps, calls, and OAuth return flows.
 - Default-feature production/OTA behavior, including pending-update application
   and retry on resume. The debug smoke build disables automatic updates.
 - Editing, software-keyboard geometry, selections, and composer behavior. Read-only
