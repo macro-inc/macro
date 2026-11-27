@@ -56,8 +56,11 @@ export function Portrait(props: {
   preset: PresetId;
   look: Look;
   pose?: number;
+  capture?: string;
 }) {
-  const artwork = createMemo(() => snapshotPortrait(props.preset, props.look));
+  const artwork = createMemo(
+    () => props.capture ?? snapshotPortrait(props.preset, props.look)
+  );
 
   return (
     <span class="creator-portrait" aria-hidden="true">

@@ -1,6 +1,6 @@
 import type { ComputerSize, Quote } from '@macro-inc/sdk/generated/auth';
 import { A } from '@solidjs/router';
-import { createSignal, For, onMount, Show } from 'solid-js';
+import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
 import { autonomyStops, intelligenceStops, sizeNames } from './creator-profile';
 import { type Draft, draftName } from './draft';
 import { type CheckoutState, createCheckout } from './hire';
@@ -53,7 +53,15 @@ export default function HirePanel(props: {
   draft: Draft;
   onAccepted: () => void;
   onPending: (pending: boolean) => void;
+  capturePortrait?: () => string | undefined;
 }) {
+  const [submittedAvatar, setSubmittedAvatar] = createSignal<string>();
+  const avatar = createMemo(
+    () =>
+      submittedAvatar() ??
+      props.capturePortrait?.() ??
+      snapshotPortrait(props.draft.preset, props.draft.look)
+  );
   const [state, setState] = createSignal<CheckoutState>({ status: 'idle' });
   const [size, setSize] = createSignal<ComputerSize>(props.draft.size);
   const [job, setJob] = createSignal('');
@@ -62,6 +70,7 @@ export default function HirePanel(props: {
   const checkout = createCheckout(fixtureCheckout, (next) => {
     setState(next);
     props.onPending(next.status === 'submitting');
+    if (next.status === 'review') setSubmittedAvatar(undefined);
     if (next.status === 'accepted' && confirmed) {
       saveHireReceipt({
         agent: next.agent,
@@ -101,7 +110,11 @@ export default function HirePanel(props: {
   return (
     <div class="hire-checkout">
       <div class="profile-summary">
-        <Portrait preset={props.draft.preset} look={props.draft.look} />
+        <Portrait
+          preset={props.draft.preset}
+          look={props.draft.look}
+          capture={avatar()}
+        />
         <div>
           <strong>{draftName(props.draft)}</strong>
           <p>
@@ -119,17 +132,16 @@ export default function HirePanel(props: {
               event.preventDefault();
               const choice = selected()?.size;
               if (choice && state().status === 'review') {
+                const portrait = avatar();
                 confirmed = {
                   draft: {
                     ...props.draft,
                     size: choice,
                     look: { ...props.draft.look },
                   },
-                  portrait: snapshotPortrait(
-                    props.draft.preset,
-                    props.draft.look
-                  ),
+                  portrait,
                 };
+                setSubmittedAvatar(portrait);
                 void checkout.confirm(
                   {
                     name: draftName(props.draft),

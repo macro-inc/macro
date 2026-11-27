@@ -11,8 +11,10 @@ and operating choices. The artist preview angle is temporary. Sample
 Intelligence, Autonomy, and hourly estimates illustrate the profile.
 Computer size maps to the generated request type and the review uses the
 adapter's verified offers. Responsibilities and Personality map to the
-corresponding prose fields. The fixture keeps the confirmed appearance and
-operating choices in its receipt.
+corresponding prose fields. Review captures the configured portrait in its
+front-facing pose. It uses the current Three.js scene when available and the
+same SVG portrait as Creator when WebGL2 or the scan cannot load. The fixture
+keeps the exact review image and operating choices in its receipt.
 
 Identity must come from the authenticated PR 7 session seam. The existing generated auth methods `getUserInfo` and `getTeam` return caller identity and current team membership. HTTP 204 for the team is a known signed-in account without a team. An owner or admin needs both teammate and computer rollout. The production identity or eligibility state stays unavailable when the adapter cannot establish it.
 

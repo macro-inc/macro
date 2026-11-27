@@ -8,7 +8,9 @@ screens the links move below the brand and account action.
 Choose from ten presets or three stage examples. Face, Skin, Eyes, Nose, Hair,
 Outfit, Accessories, and Gender update the visible portrait. Use Tab to reach
 the categories and arrow keys to switch between them. Portrait angle supports
-horizontal drag, the Left and Right arrow keys, and the rotation buttons. Edit the name and choose
+horizontal drag, the Left and Right arrow keys, and the rotation buttons.
+The stage renders the head scan with WebGL2 when available and uses the
+editable SVG portrait when the renderer or graphics context is unavailable. Edit the name and choose
 Computer size, Intelligence, and Autonomy in the bot profile. The mix and
 hourly estimates show sample information.
 

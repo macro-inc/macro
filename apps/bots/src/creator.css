@@ -65,12 +65,19 @@
   overflow: hidden;
   background: #020202;
 }
+.creator-scene canvas,
 .creator-scene .creator-portrait {
   position: absolute;
   inset: 0;
   display: block;
   width: 100%;
   height: 100%;
+}
+.creator-scene canvas {
+  image-rendering: pixelated;
+}
+.creator-scene[data-renderer="flat"] canvas {
+  visibility: hidden;
 }
 .creator-pose-handle {
   cursor: grab;
@@ -388,6 +395,9 @@
   flex: 0 0 auto;
   border: 1px solid var(--border);
   border-radius: 3px;
+}
+.creator-portrait-pending {
+  background: #12161d;
 }
 .creator-look-summary,
 .creator-sample-note {
