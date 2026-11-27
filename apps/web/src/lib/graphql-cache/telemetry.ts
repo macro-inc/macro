@@ -193,6 +193,9 @@ export const CACHE_OWNER_EVENTS = [
   'storage-busy',
   'takeover-granted',
   'superseded',
+  // A newer build waits for the queue heads this build's pages claimed.
+  'settlement-wait-started',
+  'settlement-wait-ended',
   'stale-databases-removed',
   'stale-database-kept',
 ] as const;

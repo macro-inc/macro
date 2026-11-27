@@ -382,6 +382,8 @@ export class CoordinatorRouter {
   private answeringOwnerEpoch: number | undefined;
   /** When the engine that now runs, or ran last, had opened the database. */
   private openedAt: number | undefined;
+  /** When a newer build began waiting for claimed heads. */
+  private settlementWaitStartedAt: number | undefined;
   private recoveryRetryTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly now = (): number =>
     globalThis.performance?.now() ?? Date.now();
@@ -1261,11 +1263,35 @@ export class CoordinatorRouter {
           this.scheduleResetActivation();
           break;
         case 'await-settlements': {
+          this.settlementWaitStartedAt = this.now();
+          this.telemetry.record({
+            name: 'graphql_cache.owner',
+            operationCategory: 'lifecycle',
+            outcome: 'success',
+            ownerEvent: 'settlement-wait-started',
+            count: action.claims,
+          });
           const core = this.coreValue;
           this.setTimeoutFn(() => {
             if (this.coreValue === core && core)
               this.applyActions(core.settlementsOverdue());
           }, action.ms);
+          break;
+        }
+        case 'settlement-wait-ended': {
+          const startedAt = this.settlementWaitStartedAt;
+          this.settlementWaitStartedAt = undefined;
+          // Abrupt: a head still out may reach a retired host, and be sent
+          // again by a page of the newer build.
+          this.telemetry.record({
+            name: 'graphql_cache.owner',
+            operationCategory: 'lifecycle',
+            outcome: action.unsettled > 0 ? 'abrupt' : 'graceful',
+            ownerEvent: 'settlement-wait-ended',
+            count: action.unsettled,
+            durationMs:
+              startedAt === undefined ? undefined : this.now() - startedAt,
+          });
           break;
         }
         case 'broadcast-cache-unavailable':

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { INITIAL_CACHE_REVISION } from '../protocol';
+import { SETTLEMENT_WAIT_MS } from './coordinator-core';
 import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
   coordinatorLivenessLockName,
@@ -1592,6 +1593,73 @@ describe('CoordinatorRouter', () => {
     expect(messagesOfKind(tabC, 'cache-unavailable')).toEqual([]);
     ask(3_000);
     expect(channel.posted).toHaveLength(1);
+  });
+
+  it('keeps serving a head a tab claimed until it settles, or for at most the wait', async () => {
+    const { router, observations, tabA, tabB, engine, ask } =
+      await holdTheDatabase(1_000);
+    const claim = async () => {
+      await router.handleTabMessage(tabB as CoordinatorMessagePort, {
+        ...version,
+        kind: 'cache-request',
+        tabId: 'tab-b',
+        request: {
+          id: 7,
+          kind: 'claim-next-mutation',
+          owner: 'exchange-live:tab-b',
+          nowMs: 0,
+          leaseExpiresAtMs: 300_000,
+        },
+      });
+      const route = messagesOfKind(engine, 'engine-request').at(
+        -1
+      ) as unknown as { routeId: number };
+      engine.receive({
+        ...version,
+        kind: 'engine-response',
+        ownerEpoch: 1,
+        routeId: route.routeId,
+        response: {
+          id: route.routeId,
+          ok: true,
+          result: { transactionId: '42' },
+        },
+      });
+    };
+    await claim();
+
+    ask(2_000);
+    expect(messagesOfKind(engine, 'drain-engine')).toEqual([]);
+    expect(
+      observations.filter(
+        ({ ownerEvent }) => ownerEvent === 'settlement-wait-started'
+      )
+    ).toEqual([expect.objectContaining({ count: 1 })]);
+
+    // Nobody settles it: the handover goes ahead when the wait runs out.
+    await vi.advanceTimersByTimeAsync(SETTLEMENT_WAIT_MS - 1);
+    expect(messagesOfKind(engine, 'drain-engine')).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(messagesOfKind(engine, 'drain-engine')).toHaveLength(1);
+    expect(
+      observations.filter(
+        ({ ownerEvent }) => ownerEvent === 'settlement-wait-ended'
+      )
+    ).toEqual([
+      expect.objectContaining({
+        outcome: 'abrupt',
+        count: 1,
+        durationMs: SETTLEMENT_WAIT_MS,
+      }),
+    ]);
+    engine.receive({
+      ...version,
+      kind: 'engine-drained',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+    });
+    for (const tab of [tabA, tabB])
+      expect(messagesOfKind(tab, 'cache-superseded')).toHaveLength(1);
   });
 
   it('answers a newer build while draining and hands over once drained', async () => {

@@ -125,7 +125,9 @@ export type CoordinatorAction =
   | { kind: 'retire-tab'; tabId: string; ownerEpoch: OwnerEpoch }
   | { kind: 'schedule-reset-activation' }
   /** Calls `settlementsOverdue` after `ms` unless the handover went ahead. */
-  | { kind: 'await-settlements'; ms: number }
+  | { kind: 'await-settlements'; ms: number; claims: number }
+  /** The wait for claimed heads is over: they settled, or `unsettled` did not. */
+  | { kind: 'settlement-wait-ended'; unsettled: number }
   | {
       kind: 'broadcast-cache-unavailable';
       reason: string;
@@ -850,7 +852,13 @@ export class CoordinatorCore {
       // must reach this engine, or another page sends the head again.
       this.supersedePending = true;
       this.awaitingSettlements = true;
-      return [{ kind: 'await-settlements', ms: SETTLEMENT_WAIT_MS }];
+      return [
+        {
+          kind: 'await-settlements',
+          ms: SETTLEMENT_WAIT_MS,
+          claims: this.claims.size,
+        },
+      ];
     }
     return this.completeSupersede();
   }
@@ -858,17 +866,22 @@ export class CoordinatorCore {
   /** The pages had `SETTLEMENT_WAIT_MS` to settle their claims. */
   settlementsOverdue(): CoordinatorAction[] {
     if (!this.awaitingSettlements) return [];
+    const unsettled = this.claims.size;
     this.claims.clear();
-    return this.handOverIfSettled();
+    return this.handOverIfSettled(unsettled);
   }
 
   /** Drains for the newer build once no claimed head is unsettled. */
-  private handOverIfSettled(): CoordinatorAction[] {
+  private handOverIfSettled(unsettled = 0): CoordinatorAction[] {
     const state = this.stateValue;
     if (!this.awaitingSettlements || this.claims.size > 0) return [];
     this.awaitingSettlements = false;
-    if (state.kind !== 'active') return [];
-    return this.drainForNewerBuild(state);
+    const ended: CoordinatorAction = {
+      kind: 'settlement-wait-ended',
+      unsettled,
+    };
+    if (state.kind !== 'active') return [ended];
+    return [ended, ...this.drainForNewerBuild(state)];
   }
 
   private drainForNewerBuild({

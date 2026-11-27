@@ -345,7 +345,7 @@ describe('CoordinatorCore', () => {
     it('keeps the engine until the claimed head is settled in it', () => {
       const core = claimed();
       expect(core.supersede()).toEqual([
-        { kind: 'await-settlements', ms: SETTLEMENT_WAIT_MS },
+        { kind: 'await-settlements', ms: SETTLEMENT_WAIT_MS, claims: 1 },
       ]);
       expect(core.handingOver).toBe(true);
       expect(core.state.kind).toBe('active');
@@ -356,6 +356,7 @@ describe('CoordinatorCore', () => {
         core.engineResponse(1, route.routeId, ok({ kind: 'committed' }))
       ).toEqual([
         expect.objectContaining({ kind: 'deliver-response', tabId: 'tab-b' }),
+        { kind: 'settlement-wait-ended', unsettled: 0 },
         { kind: 'drain-owner', tabId: 'tab-a', ownerEpoch: 1, handoff: true },
       ]);
       expect(core.engineDrained('tab-a', 1)).toContainEqual(
@@ -397,7 +398,7 @@ describe('CoordinatorCore', () => {
         })
       );
       expect(core.supersede()).toEqual([
-        { kind: 'await-settlements', ms: SETTLEMENT_WAIT_MS },
+        { kind: 'await-settlements', ms: SETTLEMENT_WAIT_MS, claims: 1 },
       ]);
     });
 
@@ -405,18 +406,19 @@ describe('CoordinatorCore', () => {
       const overdue = claimed();
       overdue.supersede();
       expect(overdue.settlementsOverdue()).toEqual([
+        { kind: 'settlement-wait-ended', unsettled: 1 },
         { kind: 'drain-owner', tabId: 'tab-a', ownerEpoch: 1, handoff: true },
       ]);
       expect(overdue.settlementsOverdue()).toEqual([]);
 
       const gone = claimed();
       gone.supersede();
-      expect(gone.tabLost('tab-b')).toContainEqual({
-        kind: 'drain-owner',
-        tabId: 'tab-a',
-        ownerEpoch: 1,
-        handoff: true,
-      });
+      expect(gone.tabLost('tab-b')).toEqual(
+        expect.arrayContaining([
+          { kind: 'settlement-wait-ended', unsettled: 0 },
+          { kind: 'drain-owner', tabId: 'tab-a', ownerEpoch: 1, handoff: true },
+        ])
+      );
     });
 
     it('drains at once when no head is claimed, or its claim came back empty', () => {
