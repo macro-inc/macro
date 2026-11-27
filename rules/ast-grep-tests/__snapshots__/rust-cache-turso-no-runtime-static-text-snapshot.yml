@@ -28,10 +28,32 @@ snapshots:
       style: primary
       start: 0
       end: 77
-    - source: String
+    - source: LazyLock
       style: secondary
-      start: 22
-      end: 28
+      start: 13
+      end: 21
+  ? |
+    static TEXT: Mutex<Option<Cow<'static, str>>> = Mutex::new(None);
+  : labels:
+    - source: 'static TEXT: Mutex<Option<Cow<''static, str>>> = Mutex::new(None);'
+      style: primary
+      start: 0
+      end: 65
+    - source: Mutex
+      style: secondary
+      start: 13
+      end: 18
+  ? |
+    static TEXT: OnceLock<Box<str>> = OnceLock::new();
+  : labels:
+    - source: 'static TEXT: OnceLock<Box<str>> = OnceLock::new();'
+      style: primary
+      start: 0
+      end: 50
+    - source: OnceLock
+      style: secondary
+      start: 13
+      end: 21
   ? |
     static TEXT: OnceLock<String> = OnceLock::new();
   : labels:
@@ -39,10 +61,21 @@ snapshots:
       style: primary
       start: 0
       end: 48
-    - source: String
+    - source: OnceLock
       style: secondary
-      start: 22
-      end: 28
+      start: 13
+      end: 21
+  ? |
+    static mut TEXT: &str = "";
+  : labels:
+    - source: 'static mut TEXT: &str = "";'
+      style: primary
+      start: 0
+      end: 27
+    - source: mut
+      style: secondary
+      start: 7
+      end: 10
   ? |
     static mut TEXT: String = String::new();
   : labels:
@@ -50,7 +83,7 @@ snapshots:
       style: primary
       start: 0
       end: 40
-    - source: String
+    - source: mut
       style: secondary
-      start: 17
-      end: 23
+      start: 7
+      end: 10

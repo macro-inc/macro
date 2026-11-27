@@ -5,6 +5,8 @@ valid:
   - |
     static NAMES: [&str; 2] = ["records", "meta"];
   - |
+    static NEXT: AtomicU64 = AtomicU64::new(1);
+  - |
     fn f(sql: &mut Sql) { sql.push("SELECT 1"); }
   - |
     fn f(text: String) -> UnreportedSql { UnreportedSql::new(text) }
@@ -21,3 +23,9 @@ invalid:
     static TEXT: OnceLock<String> = OnceLock::new();
   - |
     static mut TEXT: String = String::new();
+  - |
+    static TEXT: OnceLock<Box<str>> = OnceLock::new();
+  - |
+    static TEXT: Mutex<Option<Cow<'static, str>>> = Mutex::new(None);
+  - |
+    static mut TEXT: &str = "";

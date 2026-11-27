@@ -6,8 +6,9 @@ note: |-
   Slow-query telemetry sends a statement's text because `Sql` templates and
   `Template`s are built only from `&'static str` fragments, which the
   compiler then treats as text written in this crate's source (see
-  `crates/client/cache-turso/src/sql.rs`). Leaking a `String` or keeping one
-  in a `static` makes run-time text, such as a record field or a search
+  `crates/client/cache-turso/src/sql.rs`). Leaking a `String`, or keeping text
+  in a `static` that can be set at run time (`static mut`, or a lock or cell
+  such as `OnceLock` or `LazyLock`), makes run-time text, such as a record field or a search
   term, look like source text and lets it reach telemetry. Bind the value as
   a parameter instead, or run a statement that must embed outside text as an
   `UnreportedSql`. Tests are exempt.
@@ -21,8 +22,13 @@ rule:
     - pattern: $VALUE.leak()
     - pattern: Box::leak($$$ARGS)
     - pattern: String::leak($$$ARGS)
+    # A plain static is initialized at compile time; only a mutable one, or one
+    # with interior mutability, can hold text made while the program runs.
+    - kind: static_item
+      has:
+        kind: mutable_specifier
     - kind: static_item
       has:
         stopBy: end
         kind: type_identifier
-        regex: ^String$
+        regex: ^(OnceLock|LazyLock|OnceCell|Lazy|LazyCell|Mutex|RwLock|Cell|RefCell|UnsafeCell|ArcSwap|ArcSwapOption)$
