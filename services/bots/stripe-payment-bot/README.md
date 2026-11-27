@@ -4,10 +4,10 @@ Posts to every Macro channel containing the bot when Stripe reports a new
 payment or a subscription cancellation. It can be deployed from any Cloudflare
 account; it has no dependency on a Macro-owned Worker or domain.
 
-The bot handles paid Checkout sessions, delayed payment methods, the first
-successful invoice after a free trial, `customer.subscription.deleted`, and
-`customer.subscription.updated` when `cancel_at_period_end` flips from false to
-true. Unpaid sessions and unrelated Stripe events are acknowledged and ignored.
+A positive `invoice.paid` for a subscription posts the amount Stripe collected
+(`amount_paid`) and its billing reason. Checkout announces one-off payments
+(including delayed methods) and free trial starts. Cancellation events announce
+scheduled and ended subscriptions.
 
 ## How it works
 
@@ -56,9 +56,9 @@ printf '%s' 'https://your-storage-api.example.com' | \
   wrangler secret put MACRO_STORAGE_URL
 ```
 
-`STRIPE_API_KEY` can be a restricted key with read access to subscriptions and
-customers. The Worker uses it to confirm that a paid invoice is the first one
-after a trial, and to resolve customer name and email on cancellation events.
+`STRIPE_API_KEY` can be a restricted key with read access to invoices, subscriptions and
+customers. It reads remaining invoice lines when checking a multi-page invoice for proration. The Worker reads subscription trial dates for free Checkout sessions
+and customer details for cancellation events.
 
 Wrangler prints the URL assigned to the Worker in the deploying Cloudflare
 account. In Stripe Workbench, create a webhook destination pointing to:
@@ -98,9 +98,7 @@ stripe listen \
 Use the `whsec_...` printed by `stripe listen` as
 `STRIPE_WEBHOOK_SECRET`.
 
-Stripe can occasionally deliver the same event more than once. This bot
-intentionally accepts the small risk of duplicate channel notifications rather
-than adding a database solely for deduplication.
+Stripe may redeliver an event. A retry can post the same payment again.
 
 ## Checks
 
