@@ -598,7 +598,8 @@ titles or private event metadata.
 The in-view desktop Calendar header uses one responsive top bar. The viewed
 month and year stay on the left in a heading that scales from 16px in narrow
 splits to a maximum of 24px, with a compact `New` menu at the right end of the controls.
-An outlined `Search events` icon button sits before the other controls. All
+In a pane 1040px or wider a `Search events` field sits after the period
+controls; narrower, it collapses to an outlined `Search events` icon button. All
 desktop controls are 32px tall and use the shared button surface: Today and the
 previous/next arrows share a navigation group, the period selector has its own
 view group, and Booking links and New have separate outlined buttons. Adjacent
@@ -611,8 +612,9 @@ sits on another control; opened on its own row, it leaves the controls above it
 in view.
 Click Search or press Cmd/Ctrl+F to expand and focus the wider inline search field.
 The field slides out with a short width transition and focuses immediately.
-The results popup stays hidden until the field contains non-whitespace text,
-then fades and slides in once expansion is nearly complete. Clearing the field
+The results popup stays hidden, letting clicks through to the controls under
+it, until the field contains non-whitespace text, then fades and slides in once
+expansion is nearly complete. Clearing the field
 hides the popup without collapsing search. Reduced-motion preferences skip
 both transitions.
 Close search, Escape, selecting a result, or clicking outside collapses it back
