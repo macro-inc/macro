@@ -60,7 +60,13 @@ fn only_a_role_deserializes_and_a_refusal_never_repeats_the_value() {
         json!("macro|owner@example.com"),
         json!("owner@example.com"),
         json!("Owner"),
-        json!(1),
+        json!(15551234567_u64),
+        json!(-15551234567_i64),
+        json!(1555.5),
+        json!(true),
+        json!(null),
+        json!(["owner@example.com"]),
+        json!({"id": "owner@example.com"}),
     ] {
         let message = serde_json::from_value::<ToolActor>(refused.clone())
             .unwrap_err()
@@ -70,9 +76,19 @@ fn only_a_role_deserializes_and_a_refusal_never_repeats_the_value() {
             "{refused}: {message}"
         );
         assert!(!message.contains("example.com"), "{refused}: {message}");
+        assert!(!message.contains("1555"), "{refused}: {message}");
     }
-    assert_eq!(
-        serde_json::to_value(ToolActor::Owner).unwrap(),
-        json!("owner")
-    );
+    // Every role serializes to a name the schema lists and reads back as itself.
+    let schema = schemars::schema_for!(Input).to_value();
+    for actor in [ToolActor::Requester, ToolActor::Owner] {
+        let name = serde_json::to_value(actor).unwrap();
+        assert!(
+            schema["properties"]["acting_as"]["enum"]
+                .as_array()
+                .unwrap()
+                .contains(&name),
+            "{name}"
+        );
+        assert_eq!(serde_json::from_value::<ToolActor>(name).unwrap(), actor);
+    }
 }

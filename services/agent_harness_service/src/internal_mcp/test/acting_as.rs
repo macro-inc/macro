@@ -122,7 +122,7 @@ async fn execute_code_takes_only_a_role_as_acting_as() {
         json!("macro|someone-else@example.com"),
         json!("Owner"),
         json!(""),
-        json!(1),
+        json!(15551234567_u64),
         json!(null),
     ] {
         for withheld in [false, true] {
@@ -134,6 +134,7 @@ async fn execute_code_takes_only_a_role_as_acting_as() {
                 "{refused}: {message}"
             );
             assert!(!message.contains("example.com"), "{refused}: {message}");
+            assert!(!message.contains("1555"), "{refused}: {message}");
         }
     }
     assert!(code_mode.actors.lock().unwrap().is_empty());

@@ -34,13 +34,23 @@ pub enum ToolActor {
 
 /// What a refused `acting_as` is told it should be. It is in serde's own
 /// shape (no quotes) so the refusal keeps it when the call's content is
-/// withheld, and it never repeats the value sent, often a person's id.
-pub const EXPECTED_ACTOR: &str = "requester or owner (a role, never a person id)";
+/// withheld.
+const EXPECTED_ACTOR: &str = "requester or owner (a role, never a person id)";
 
+/// Reads only the two role strings. Every other value, of any type, is refused
+/// without repeating it: it is often a person's id, or a number such as a phone.
 impl<'de> Deserialize<'de> for ToolActor {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct Role;
-        impl serde::de::Visitor<'_> for Role {
+        impl Role {
+            fn refuse<E: serde::de::Error>(self) -> Result<ToolActor, E> {
+                Err(E::invalid_value(
+                    serde::de::Unexpected::Other("a value that is not a role"),
+                    &self,
+                ))
+            }
+        }
+        impl<'de> serde::de::Visitor<'de> for Role {
             type Value = ToolActor;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -51,14 +61,39 @@ impl<'de> Deserialize<'de> for ToolActor {
                 match value {
                     "requester" => Ok(ToolActor::Requester),
                     "owner" => Ok(ToolActor::Owner),
-                    _ => Err(E::invalid_value(
-                        serde::de::Unexpected::Other("a string that is not a role"),
-                        &self,
-                    )),
+                    _ => self.refuse(),
                 }
             }
+
+            fn visit_bool<E: serde::de::Error>(self, _: bool) -> Result<ToolActor, E> {
+                self.refuse()
+            }
+
+            fn visit_i64<E: serde::de::Error>(self, _: i64) -> Result<ToolActor, E> {
+                self.refuse()
+            }
+
+            fn visit_u64<E: serde::de::Error>(self, _: u64) -> Result<ToolActor, E> {
+                self.refuse()
+            }
+
+            fn visit_f64<E: serde::de::Error>(self, _: f64) -> Result<ToolActor, E> {
+                self.refuse()
+            }
+
+            fn visit_unit<E: serde::de::Error>(self) -> Result<ToolActor, E> {
+                self.refuse()
+            }
+
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(self, _: A) -> Result<ToolActor, A::Error> {
+                self.refuse()
+            }
+
+            fn visit_map<A: serde::de::MapAccess<'de>>(self, _: A) -> Result<ToolActor, A::Error> {
+                self.refuse()
+            }
         }
-        deserializer.deserialize_str(Role)
+        deserializer.deserialize_any(Role)
     }
 }
 
