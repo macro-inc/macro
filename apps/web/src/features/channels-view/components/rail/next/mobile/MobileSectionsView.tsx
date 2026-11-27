@@ -1,6 +1,6 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
-import { beginInteraction, usePending } from '@app/observability/flow';
+import { beginInteraction, useFlow, usePending } from '@app/observability/flow';
 import { PickerSheet } from '@components/app/mobile/PickerSheet';
 import { PillTabs } from '@components/app/mobile/PillTabs';
 import { enableChannelTags } from '@core/constant/featureFlags';
@@ -8,16 +8,18 @@ import type { ChannelEntity } from '@entity';
 import FunnelIcon from '@icon/system/regular/funnel.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import { createChannelNotificationSettings } from '@notifications/primitives/create-channel-notification-settings';
-import { useCachedChannelsByIds } from '@queries/channel/by-ids';
+import { useChannelWindow } from '@queries/channel/window';
 import { useChannelLabelsQuery } from '@queries/channel-labels/channel-labels';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import { queryReadyGate } from '@queries/gate';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import {
   type Accessor,
+  createEffect,
   createMemo,
   createSignal,
   getOwner,
+  on,
   Show,
 } from 'solid-js';
 import { useChannelsView } from '../../../../channels-view-context';
@@ -30,6 +32,7 @@ import { MobileSectionOptions } from './MobileSectionOptions';
 import {
   channelsForMobileSection,
   type MobileSectionTab,
+  mobileSectionMemberWindow,
   mobileSectionTabKeys,
   resolveMobileSectionTab,
 } from './mobile-section-tabs';
@@ -70,11 +73,21 @@ export function MobileSectionsView(props: {
     };
   };
   const localChannels = props.localChannels;
-  const members = useCachedChannelsByIds(
-    () => selectedLabel()?.channelIds ?? [],
-    sectionsEnabled
+  const memberIds = createMemo(() =>
+    mobileSectionMemberWindow(selectedLabel(), [
+      localChannels(),
+      props.sources.recents.items(),
+    ])
   );
+  const members = useChannelWindow(memberIds, sectionsEnabled);
   usePending('channels.section.members', members.isLoading);
+  const flow = useFlow();
+  createEffect(
+    on(memberIds, (window) => {
+      flow.span.setAttr('channels.section.members.ids', window.size);
+      flow.span.setAttr('channels.section.members.dropped', window.dropped);
+    })
+  );
   const base = () =>
     selected() === 'direct_messages'
       ? props.sources.direct_messages
@@ -87,6 +100,7 @@ export function MobileSectionsView(props: {
             members.channels(),
             props.sources.recents.items(),
             localChannels(),
+            members.retained(),
           ])
         : base().items(),
       labels: labels(),
@@ -152,6 +166,7 @@ export function MobileSectionsView(props: {
           members.channels(),
           props.sources.recents.items(),
           localChannels(),
+          members.retained(),
         ]).map((channel) => [channel.id, channel])
       )
   );

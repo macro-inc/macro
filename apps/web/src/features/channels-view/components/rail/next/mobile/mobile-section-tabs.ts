@@ -1,4 +1,9 @@
 import type { ChannelEntity } from '@entity';
+import {
+  type ChannelIdWindow,
+  channelIdWindow,
+  EMPTY_CHANNEL_WINDOW,
+} from '@queries/channel/window';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import type { ChannelSectionKey } from '../../../../types';
 
@@ -47,4 +52,23 @@ export function channelsForMobileSection(options: {
   // both the work and Solid subscriptions for large name-matched sections.
   const memberIds = new Set(label?.channelIds);
   return options.channels.filter((channel) => memberIds.has(channel.id));
+}
+
+/**
+ * The selected section's members to look up by ID: those no loaded list holds,
+ * at most a window's worth. Phone rows show the directory's records, so once
+ * it has filled only members it lacks are fetched.
+ */
+export function mobileSectionMemberWindow(
+  label: ChannelLabel | undefined,
+  loaded: readonly (readonly ChannelEntity[])[]
+): ChannelIdWindow {
+  if (!label) return EMPTY_CHANNEL_WINDOW;
+  const held = new Set(loaded.flat().map((channel) => channel.id));
+  return channelIdWindow([
+    {
+      key: `label:${label.id}`,
+      ids: label.channelIds.filter((id) => !held.has(id)),
+    },
+  ]);
 }
