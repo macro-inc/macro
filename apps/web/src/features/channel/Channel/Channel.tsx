@@ -120,6 +120,7 @@ import {
   type InputSnapshot,
 } from '../Input';
 import { ChannelInputContainer } from '../Input/ChannelInputContainer';
+import { hasStoredDraft } from '../Input/stored-draft';
 import { hasSendableInputContent } from '../Input/utils/sendable-content';
 import {
   decodeSystemActivityRow,
@@ -151,6 +152,7 @@ import {
 } from './create-target-message-controller';
 import { DirectMessageEmptyState } from './DirectMessageEmptyState';
 import { buildChannelMessageListMeta } from './message-list-meta';
+import { replyTargetStorage } from './reply-target-storage';
 import { ScrollToBottomOverlay } from './ScrollToBottomOverlay';
 import {
   ThreadList,
@@ -213,6 +215,16 @@ export type ChannelHandle = {
 /** A composer that stays where it is, for a surface with no floating chrome. */
 function InPlaceRegion(props: ParentProps) {
   return <>{props.children}</>;
+}
+
+/** Where a channel's reply binding is kept. A call's panel keeps its binding to the call's thread instead. */
+function channelReplyTargetStorage(
+  channelId: string,
+  inCallPanel: boolean,
+  hasReplyDraft: (threadId: string) => boolean
+) {
+  if (inCallPanel) return undefined;
+  return replyTargetStorage(channelId, hasReplyDraft);
 }
 
 export function Channel(props: ChannelProps) {
@@ -424,8 +436,18 @@ export function Channel(props: ChannelProps) {
     callPanel.onViewChannel();
   };
 
+  // A reply's draft is stored by thread, under the same key in both input
+  // modes; an open reply comes back with it when the channel opens again.
+  const hasReplyDraft = (threadId: string) =>
+    hasStoredDraft({ channelId: `channel:${props.channelId}`, threadId });
+
   const unifiedInput = createUnifiedInputManager({
     initialReplyTarget: props.initialMessagesStateSnapshot?.replyTarget,
+    storage: channelReplyTargetStorage(
+      props.channelId,
+      !!callPanel,
+      hasReplyDraft
+    ),
     defaultThreadId: callPanel?.rootId,
     // Clear any highlight left by tapping the reply flag's navigate action.
     onReplyThreadReleased: (threadId) => releaseSelectionAndTarget(threadId),
@@ -442,7 +464,11 @@ export function Channel(props: ChannelProps) {
   };
 
   const threadManager = createThreadManager(
-    props.initialMessagesStateSnapshot?.threads
+    props.initialMessagesStateSnapshot?.threads,
+    {
+      hasReplyDraft: (threadId) =>
+        !usesUnifiedInput() && hasReplyDraft(threadId),
+    }
   );
   if (callPanel) {
     threadManager.getOrCreateThreadState(callPanel.rootId).setIsExpanded(true);

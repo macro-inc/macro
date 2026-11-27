@@ -17,6 +17,7 @@ it('clears scoped and legacy drafts and attachments while retaining preferences'
     'task-composer-draft:channel-1',
     'routine-composer-draft',
     'attachment-tracker-agents-new-conversation-persist-v0:alice',
+    'channel-reply-target:channel-1',
   ];
   for (const key of keys) localStorage.setItem(key, 'private draft');
   localStorage.setItem('macro-selected-theme', 'dark');

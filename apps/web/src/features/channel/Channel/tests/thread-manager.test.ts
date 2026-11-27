@@ -69,4 +69,50 @@ describe('createThreadManager', () => {
       dispose();
     });
   });
+
+  it('opens the reply of a thread with a stored draft', () => {
+    createRoot((dispose) => {
+      const manager = createThreadManager(undefined, {
+        hasReplyDraft: (threadId) => threadId === 'drafted',
+      });
+
+      const drafted = manager.getOrCreateThreadState('drafted');
+      const other = manager.getOrCreateThreadState('other');
+
+      expect(drafted.isReplying()).toBe(true);
+      expect(drafted.isExpanded()).toBe(true);
+      expect(other.isReplying()).toBe(false);
+      expect(other.isExpanded()).toBe(false);
+      expect(manager.getSnapshot()).toEqual({
+        drafted: { isExpanded: true, isReplying: true },
+      });
+
+      dispose();
+    });
+  });
+
+  it('keeps a history snapshot that says replying, without a draft', () => {
+    createRoot((dispose) => {
+      const asked: string[] = [];
+      const manager = createThreadManager(
+        { replying: { isReplying: true }, expanded: { isExpanded: true } },
+        {
+          hasReplyDraft: (threadId) => {
+            asked.push(threadId);
+            return false;
+          },
+        }
+      );
+
+      expect(manager.getOrCreateThreadState('replying').isReplying()).toBe(
+        true
+      );
+      expect(manager.getOrCreateThreadState('expanded').isReplying()).toBe(
+        false
+      );
+      expect(asked).toEqual(['expanded']);
+
+      dispose();
+    });
+  });
 });

@@ -13,12 +13,25 @@ export type ThreadStateSnapshot = {
 
 export type ThreadManagerSnapshot = Record<string, ThreadStateSnapshot>;
 
-export function createThreadManager(initialSnapshot?: ThreadManagerSnapshot) {
+export type ThreadManagerOptions = {
+  /**
+   * Whether a thread has an unsent reply stored. A thread the history
+   * snapshot doesn't say is replying opens its reply box when it has one, so
+   * coming back to the channel any other way shows the reply still open.
+   */
+  hasReplyDraft?: (threadId: string) => boolean;
+};
+
+export function createThreadManager(
+  initialSnapshot?: ThreadManagerSnapshot,
+  options?: ThreadManagerOptions
+) {
   const [threadStore, setThreadStore] = createStore<ThreadStore>({});
 
   function initThreadState(threadId: string): ThreadState {
     const snapshot = initialSnapshot?.[threadId];
-    const initialIsReplying = snapshot?.isReplying ?? false;
+    const initialIsReplying =
+      snapshot?.isReplying ?? options?.hasReplyDraft?.(threadId) ?? false;
     const [isExpanded, setIsExpanded] = createSignal<boolean>(
       snapshot?.isExpanded || initialIsReplying
     );
