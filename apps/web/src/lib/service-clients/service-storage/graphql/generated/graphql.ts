@@ -1554,8 +1554,12 @@ export type GraphqlEmailView =
   | 'OTHER'
   /** The sent option. */
   | 'SENT'
+  /** Threads in the spam folder, newest folder message first. */
+  | 'SPAM'
   /** The starred option. */
-  | 'STARRED';
+  | 'STARRED'
+  /** Threads in the trash folder, newest folder message first. */
+  | 'TRASH';
 
 /** Item access level resolved for the current viewer. */
 export type GraphqlEntityAccessLevel =

@@ -392,3 +392,32 @@ fn channel_reads_default_to_the_replica_and_follow_each_page() {
         SoupChannelReads::Primary
     );
 }
+
+#[test]
+fn maps_spam_and_trash_email_views_to_their_folders() {
+    for (view, expected) in [
+        (GraphqlEmailView::Spam, "spam"),
+        (GraphqlEmailView::Trash, "trash"),
+    ] {
+        let request = SoupInput::Continuation(SoupContinuationInput {
+            cursor: Base64Str::encode_json(CursorWithValAndFilter {
+                id: uuid::Uuid::from_u128(1),
+                limit: 25,
+                val: CursorVal {
+                    sort_type: SimpleSortMethod::UpdatedAt,
+                    last_val: chrono::DateTime::default(),
+                },
+                filter: item_filters::ast::EntityFilterAst::default(),
+            })
+            .to_string(),
+            expand: None,
+            email_view: Some(view),
+            sort_direction: None,
+            channel_reads: None,
+        })
+        .into_request(test_macro_user_id(), vec![])
+        .unwrap();
+
+        assert_eq!(request.email_preview_view.to_string(), expected);
+    }
+}

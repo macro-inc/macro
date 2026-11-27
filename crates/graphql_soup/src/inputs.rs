@@ -463,6 +463,10 @@ enum GraphqlEmailView {
     Important,
     /// The other option.
     Other,
+    /// Threads in the spam folder, newest folder message first.
+    Spam,
+    /// Threads in the trash folder, newest folder message first.
+    Trash,
 }
 
 impl GraphqlEmailView {
@@ -476,6 +480,8 @@ impl GraphqlEmailView {
             Self::Starred => "starred",
             Self::Important => "important",
             Self::Other => "other",
+            Self::Spam => "spam",
+            Self::Trash => "trash",
         }
     }
 }

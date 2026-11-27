@@ -5458,6 +5458,14 @@ enum GraphqlEmailView {
 	The other option.
 	"""
 	OTHER
+	"""
+	Threads in the spam folder, newest folder message first.
+	"""
+	SPAM
+	"""
+	Threads in the trash folder, newest folder message first.
+	"""
+	TRASH
 }
 
 """
