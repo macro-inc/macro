@@ -140,6 +140,20 @@ it('folds a sealed run to a summary that opens to its steps, without the session
   expect(view.container.querySelector('.text-failure')).toBeNull();
 });
 
+it('shows nothing for a sealed run whose only program named no step', () => {
+  const view = render(() => (
+    <AgentActivity
+      agentSessionId="session"
+      turn={2}
+      segment={1}
+      rows={[{ id: 't1', label: 'A step failed', status: 'failed' }]}
+      sealed
+    />
+  ));
+  expect(view.queryByRole('button')).toBeNull();
+  expect(view.container.textContent).toBe('');
+});
+
 it('shows an open run as one line naming the step it is on, live from the session', () => {
   const view = render(() => (
     <AgentActivity

@@ -13,19 +13,11 @@ export function CodeExecutionPart(props: {
   common: ToolCallCommon;
   context: ToolCallContext;
 }) {
-  const {
-    receipt,
-    requestedExecutionId,
-    executionId,
-    query,
-    source,
-    record,
-    error,
-  } = useCodeExecutionRecord(
-    () => props.part,
-    () => props.context.sessionId,
-    () => props.context.inFlight
-  );
+  const { receipt, requestedExecutionId, executionId, query, source, record } =
+    useCodeExecutionRecord(
+      () => props.part,
+      () => props.context.sessionId
+    );
 
   if (import.meta.env.DEV) {
     let loggedCall: string | undefined;
@@ -79,7 +71,6 @@ export function CodeExecutionPart(props: {
         common={common()}
         context={props.context}
         record={record()}
-        error={error()}
         loading={Boolean(executionId()) && query.isPending}
         unavailable={
           query.isError || (query.isSuccess && query.data.source !== source())

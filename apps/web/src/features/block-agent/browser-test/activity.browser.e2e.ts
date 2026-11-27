@@ -95,12 +95,13 @@ test('a long run of calls and thoughts is one live line, then one settled row', 
   );
   expect(seen.said.length).toBeGreaterThan(5);
 
-  // Settled: each run is one row that counts its steps, failed or not.
+  // Settled: each run is one row that counts its steps, failed or not. The
+  // program that timed out before naming a step is not one.
   await expect(session.locator('.agent-working-twirl')).toHaveCount(0);
   const runs = session.getByRole('button', { name: /^Used \d+ tools?/ });
   await expect(runs).toHaveCount(2);
   await expect(runs.nth(0)).toHaveText('Used 1 tool');
-  await expect(runs.nth(1)).toHaveText('Used 74 tools');
+  await expect(runs.nth(1)).toHaveText('Used 73 tools');
   await expect(runs.nth(1).locator('.text-failure')).toHaveCount(0);
   await expect(session.getByText('nothing has been sent')).toBeVisible();
 

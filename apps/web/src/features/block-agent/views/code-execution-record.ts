@@ -4,10 +4,7 @@ import type { ToolUsePart } from '../component/parts/shared';
 import {
   codeExecutionInput,
   codeExecutionReceipt,
-  programEnded,
-  programSteps,
 } from '../state/code-execution';
-import { isToolActive } from '../ui/types';
 
 /**
  * A program call's saved record, and the steps it shows. Its tool group reads
@@ -16,8 +13,7 @@ import { isToolActive } from '../ui/types';
  */
 export function useCodeExecutionRecord(
   part: Accessor<ToolUsePart>,
-  sessionId: Accessor<string>,
-  inFlight: Accessor<boolean>
+  sessionId: Accessor<string>
 ) {
   const receipt = createMemo(() => codeExecutionReceipt(part()));
   const requestedExecutionId = () => codeExecutionInput(part())?.executionId;
@@ -31,26 +27,9 @@ export function useCodeExecutionRecord(
   // A rejected duplicate ID must not display the previous program's results.
   const record = () =>
     query.isSuccess && query.data.source === source() ? query.data : undefined;
-  const error = () => {
-    const detail = part().detail;
-    return (
-      record()?.error ??
-      receipt()?.error ??
-      ('error' in detail ? detail.error : undefined)
-    );
-  };
-  const ended = () =>
-    programEnded({
-      error: error(),
-      recordRunning: record()?.status === 'running',
-      active: inFlight() && isToolActive(part().status),
-    });
+  // A program that ended without a step shows nothing, so counts nothing.
   const steps = () =>
-    programSteps({
-      operations: record()?.activity?.length ?? 0,
-      calls: record()?.calls.length ?? 0,
-      ended: ended(),
-    });
+    (record()?.activity?.length ?? 0) + (record()?.calls.length ?? 0);
 
   return {
     receipt,
@@ -59,8 +38,6 @@ export function useCodeExecutionRecord(
     query,
     source,
     record,
-    error,
-    ended,
     steps,
   };
 }

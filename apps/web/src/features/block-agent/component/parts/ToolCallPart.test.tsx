@@ -1515,6 +1515,24 @@ describe('code execution results', () => {
     );
   });
 
+  it('shows no row for a failed program that recorded no step', () => {
+    codeQuery.record = {
+      ...codeQuery.record!,
+      error: 'ReferenceError: macro is not defined',
+      calls: [],
+      activity: [],
+    };
+    const part = codePart('macro_internal');
+    part.status = 'failed';
+    const rendered = render(() => (
+      <ToolCallPart part={part} context={context(false)} />
+    ));
+    expect(codeQuery.read).toHaveBeenCalledWith('session', executionId);
+    expect(rendered.queryByTestId('tool-card')).toBeNull();
+    expect(rendered.queryByTestId('macro-tool')).toBeNull();
+    expect(rendered.container.textContent).toBe('');
+  });
+
   it('lists live steps without a group of its own', () => {
     codeQuery.record = {
       ...codeQuery.record!,

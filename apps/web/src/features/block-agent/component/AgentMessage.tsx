@@ -206,18 +206,26 @@ function ToolGroupPart(props: {
       id: part.id,
       ...useCodeExecutionRecord(
         () => part,
-        () => props.message.agentSessionId,
-        () => props.inFlight
+        () => props.message.agentSessionId
       ),
     })
   );
   const rows = () => props.message.segments.flatMap((segment) => segment.rows);
   // Until a program's saved record loads (or when it can't), the fold's rows
   // from its receipt stand for its steps, so the run folds the same either way.
+  // The program's own row names no step. Its working placeholder counts only
+  // while the run is live (a settled run can keep a stale one), and a failed
+  // or interrupted one never does: the transcript shows nothing for it.
   const receiptRows = (callId: string) =>
-    rows().filter(
-      (row) => row.id === callId || row.id.startsWith(`${callId}:`)
-    );
+    rows().filter((row) => {
+      if (row.id.startsWith(`${callId}:`)) return true;
+      if (row.id !== callId) return false;
+      return match(row.status)
+        .with('running', () => props.live)
+        .with('failed', 'interrupted', () => false)
+        .with('completed', () => true)
+        .exhaustive();
+    });
   const programSteps = (program: ReturnType<typeof programs>[number]) =>
     program.steps() || receiptRows(program.id).length;
   const count = () =>

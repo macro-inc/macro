@@ -50,7 +50,7 @@ describe('CodeExecutionToolCall', () => {
     );
   });
 
-  it('shows one failed row for a program that ended before any step', () => {
+  it('shows nothing for a program that ended before any step', () => {
     const view = render(() => (
       <CodeExecutionToolCall
         common={{
@@ -76,16 +76,57 @@ describe('CodeExecutionToolCall', () => {
           calls: [],
           activity: [],
         }}
-        error="ReferenceError: macro is not defined"
         loading={false}
         unavailable={false}
       />
     ));
 
-    expect(view.container.textContent).toContain('Workspace activity');
-    expect(view.container.textContent).toContain('Failed');
-    expect(view.container.textContent).not.toContain('ReferenceError');
+    expect(view.container.querySelector('[data-tool-status]')).toBeNull();
+    expect(view.container.textContent).toBe('');
+    // The failure stays in the record and telemetry, not the transcript.
+    expect(
+      view.container.querySelector('[data-code-execution]')
+    ).not.toBeNull();
   });
+
+  it.each([
+    { loading: true, unavailable: false, notice: 'Loading tool results…' },
+    {
+      loading: false,
+      unavailable: true,
+      notice: 'Tool results are unavailable.',
+    },
+  ])(
+    'still says "$notice" for a program with no row',
+    ({ loading, unavailable, notice }) => {
+      const view = render(() => (
+        <CodeExecutionToolCall
+          common={{
+            id: 'execute-code',
+            label: 'ExecuteCode',
+            status: 'failed',
+            unsuccessful: true,
+            stopped: false,
+            trailing: undefined,
+          }}
+          context={{
+            sessionId: 'session',
+            messageId: 'session:turn-1',
+            partIndex: 0,
+            inFlight: false,
+            followedBy: () => false,
+          }}
+          loading={loading}
+          unavailable={unavailable}
+        />
+      ));
+
+      expect(view.container.querySelector('[data-tool-status]')).toBeNull();
+      expect(view.getAllByRole('status').map((row) => row.textContent)).toEqual(
+        [notice]
+      );
+    }
+  );
 
   it('keeps a step failure on its own row when other steps ran', () => {
     const view = render(() => (
