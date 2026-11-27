@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashSet, sync::Mutex};
+use std::{collections::HashSet, sync::Mutex};
 
 use loro::{
     Container, ContainerID, ExportMode, Frontiers, ID, IdSpan, JsonMapOp, JsonMovableListOp,
@@ -8,7 +8,7 @@ use tracing::debug;
 use web_time::Instant;
 use worker::Result;
 
-use crate::error::ResultExt;
+use crate::{domain::compact_snapshot, error::ResultExt};
 
 #[cfg(test)]
 mod test;
@@ -282,11 +282,11 @@ impl DocumentState {
             .context("failed to export snapshot")
     }
 
-    pub fn export_shallow_snapshot(&self) -> Result<Vec<u8>> {
-        self.loro_doc
-            .export(ExportMode::ShallowSnapshot(Cow::Borrowed(
-                &self.loro_doc.state_frontiers(),
-            )))
+    /// The current state for a peer or reader to load: shallow when that is
+    /// cheap to export, otherwise full ([`compact_snapshot::export`]).
+    pub fn export_compact_snapshot(&self) -> Result<Vec<u8>> {
+        compact_snapshot::export(&self.loro_doc)
+            .map(|(snapshot, _)| snapshot)
             .context("failed to export snapshot")
     }
     pub fn version_id(&self) -> String {
