@@ -74,7 +74,9 @@ test.describe("the agent card's preview of a drafted event", () => {
     await expect(
       page.getByText('14:00', { exact: true }).first()
     ).toBeVisible();
-    await expect(page.getByText('14:00–15:00', { exact: true })).toBeVisible();
+    await expect(
+      page.getByText('14:00 – 15:00', { exact: true })
+    ).toBeVisible();
     await expect(page.getByText(/^\d{1,2}(:\d{2})?\s?(am|pm)$/i)).toHaveCount(
       0
     );

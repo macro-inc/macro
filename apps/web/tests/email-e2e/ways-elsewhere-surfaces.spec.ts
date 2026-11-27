@@ -6,6 +6,7 @@ import type { Page } from '@playwright/test';
 import type { Mailbox } from './harness/fixtures';
 import { expect, test } from './harness/linking';
 import { anInbox, PROVIDERS } from './harness/providers';
+import { calendarSetup } from './harness/states-elsewhere';
 import {
   disconnectInbox,
   lapseGrant,
@@ -25,11 +26,9 @@ async function turnCalendarOff(mailbox: Mailbox) {
   );
 }
 
-/** The button of the calendar's setup status, which lies over the grid. */
+/** The button of the calendar's setup status, above the grid. */
 function setupButton(page: Page, name: string) {
-  return page
-    .getByRole('region', { name: 'Calendar periods' })
-    .getByRole('button', { name, exact: true });
+  return calendarSetup(page).getByRole('button', { name, exact: true });
 }
 
 for (const provider of PROVIDERS) {
@@ -78,7 +77,7 @@ for (const provider of PROVIDERS) {
 }
 
 test.describe('the calendar setup status, with a Gmail inbox', () => {
-  // When this fails, the button the calendar shows over an empty grid does
+  // When this fails, the button the calendar shows above an empty grid does
   // not start the connection its state calls for: nothing is asked of the
   // provider, calendar access is asked for a second inbox instead of the one
   // that lacks it, or a reconnection leaves the mail permission out.

@@ -12,6 +12,7 @@ import {
   relayUploads,
   routeDraftId,
 } from './harness/drafts';
+import { guestSummary } from './harness/event-composer';
 import { expect, type Mailbox, test } from './harness/fixtures';
 import { sentMessages } from './harness/send';
 import { openComposer, sentCopy } from './harness/ways-compose1';
@@ -207,7 +208,5 @@ test('Escape leaves the subject, and b then opens an event with the subject and 
   await expect(composer.getByRole('textbox', { name: 'Title' })).toHaveValue(
     'Harbour lunch'
   );
-  await expect(composer.getByRole('button', { name: 'Guests' })).toHaveText(
-    GRACE
-  );
+  await expect(guestSummary(composer, [GRACE])).toBeVisible();
 });

@@ -59,6 +59,13 @@ export function createCalendarComposer(options: CalendarComposerOptions) {
     const original = controller.initialConferenceChoice();
     return original === 'microsoft_teams' || original === 'existing';
   };
+  // Outlook refuses to remove the meeting from an existing event, so once the
+  // person turns it off only a replacement saves the draft.
+  const conferenceRemovalPending = () =>
+    conferenceLocked() &&
+    state().conference !== controller.initialConferenceChoice();
+  const undoConferenceRemoval = () =>
+    controller.setField('conference', controller.initialConferenceChoice());
   const isOutOfOffice = controller.isOutOfOffice;
   const timeZoneRelevant = () => !state().allDay || isOutOfOffice();
   const metadata = createComposerMetadata({
@@ -232,7 +239,7 @@ export function createCalendarComposer(options: CalendarComposerOptions) {
     return { values, scope, changes };
   };
   const submitWithScope = (scope?: CalendarUpdateScope) => {
-    if (formIsDisabled() || !canSave()) return;
+    if (formIsDisabled() || !canSave() || conferenceRemovalPending()) return;
     if (options.showRecurringEditNotice) {
       if (!scope) {
         setSaveMenuOpen(true);
@@ -250,7 +257,8 @@ export function createCalendarComposer(options: CalendarComposerOptions) {
   };
   const submit = () => submitWithScope();
   const changeSaveMenuOpen = (open: boolean) => {
-    if (open && (formIsDisabled() || !canSave())) return;
+    if (open && (formIsDisabled() || !canSave() || conferenceRemovalPending()))
+      return;
     setSaveMenuOpen(open);
   };
 
@@ -295,6 +303,8 @@ export function createCalendarComposer(options: CalendarComposerOptions) {
       controller.selectedCalendarOption()?.color ??
       DEFAULT_CALENDAR_SOURCE.color,
     conferenceLocked,
+    conferenceRemovalPending,
+    undoConferenceRemoval,
     isOutOfOffice,
     outOfOfficeNotice,
     showsDeclineMessage,

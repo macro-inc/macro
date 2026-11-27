@@ -41,6 +41,8 @@ import { ComposerSubmit } from './actions/ComposerSubmit';
 import { createCalendarEventFormController } from './create-calendar-event-form-controller';
 import { EventForm } from './EventForm';
 import type { EventEditorCalendarOption } from './event-form-model';
+import { ComposerConference } from './parts/ComposerConference';
+import { ComposerNotices } from './parts/ComposerNotices';
 import { ComposerRoot } from './parts/ComposerRoot';
 
 class ObserverStub {
@@ -666,4 +668,115 @@ it('saves a non-recurring edit directly without requesting a scope', async () =>
   expect(onSubmit).toHaveBeenCalledTimes(1);
   expect(onSubmit.mock.calls[0][1]).toBeUndefined();
   expect(screen.queryByRole('menu')).toBeNull();
+});
+
+/** Opens the active composer on a saved event that holds the calendar's own meeting. */
+function showComposerMeetingEdit(calendarOption: EventEditorCalendarOption) {
+  const onSubmit = vi.fn();
+  let model!: ReturnType<typeof createCalendarComposer>;
+  render(() => {
+    const controller = createCalendarEventFormController({
+      initialValue: {
+        title: 'Customer demo',
+        allDay: false,
+        start: '2030-01-01T12:00',
+        end: '2030-01-01T13:00',
+        recurrenceLines: [],
+        guests: '',
+        location: '',
+        description: '',
+        conference:
+          calendarOption.capabilities?.conferenceProvider === 'google_meet'
+            ? 'google_meet'
+            : 'microsoft_teams',
+        calendarId: calendarOption.id,
+      },
+      isEdit: true,
+      calendarOptions: () => [calendarOption],
+      guestOptions: () => [],
+    });
+    model = createCalendarComposer({
+      controller,
+      isEdit: true,
+      pending: false,
+      onSubmit,
+    });
+    return (
+      <ComposerRoot model={model}>
+        <ComposerConference
+          provider={model.capabilities()?.conferenceProvider}
+          value={model.state().conference}
+          canKeepExisting={false}
+          keepOrRemoveOnly={model.conferenceLocked()}
+          onChange={(value) => controller.setField('conference', value)}
+        />
+        <ComposerNotices />
+        <ComposerSubmit />
+      </ComposerRoot>
+    );
+  });
+  const form = document.getElementById(model.ids.form);
+  if (!(form instanceof HTMLFormElement))
+    throw new Error('missing composer form');
+  return { onSubmit, form };
+}
+
+async function turnOffComposerMeeting(
+  user: ReturnType<typeof userEvent.setup>
+) {
+  await user.click(screen.getByRole('button', { name: 'Video conferencing' }));
+  await user.click(
+    screen.getByRole('menuitemradio', { name: 'No meeting link' })
+  );
+}
+
+it('holds the composer’s Save while Teams is off on an Outlook event, until Undo', async () => {
+  // The menu's modal layer keeps pointer events off the page while it closes.
+  const user = userEvent.setup({ pointerEventsCheck: 0 });
+  const { onSubmit, form } = showComposerMeetingEdit(OUTLOOK_CALENDAR);
+  const save = screen.getByRole<HTMLButtonElement>('button', { name: 'Save' });
+  expect(save.disabled).toBe(false);
+  // Before Teams is off, the note names the action that removes it.
+  expect(screen.getByText(/use “Replace without meeting”/)).toBeTruthy();
+
+  await user.click(screen.getByRole('button', { name: 'Video conferencing' }));
+  expect(
+    screen.queryByRole('menuitemradio', { name: 'Macro call' })
+  ).toBeNull();
+  await user.click(
+    screen.getByRole('menuitemradio', { name: 'No meeting link' })
+  );
+
+  expect(screen.getByText(TEAMS_REMOVAL_NOTICE)).toBeTruthy();
+  expect(
+    screen.getByRole('button', { name: 'Video conferencing' }).textContent
+  ).toContain('No meeting link');
+  expect(save.disabled).toBe(true);
+  fireEvent.submit(form);
+  expect(onSubmit).not.toHaveBeenCalled();
+
+  await user.click(screen.getByRole('button', { name: 'Undo' }));
+
+  expect(screen.queryByText(TEAMS_REMOVAL_NOTICE)).toBeNull();
+  expect(
+    screen.getByRole('button', { name: 'Video conferencing' }).textContent
+  ).toContain('Microsoft Teams');
+  expect(save.disabled).toBe(false);
+  await user.click(save);
+  expect(onSubmit).toHaveBeenCalledTimes(1);
+});
+
+it('lets the composer save a removed Google Meet with no notice', async () => {
+  // The menu's modal layer keeps pointer events off the page while it closes.
+  const user = userEvent.setup({ pointerEventsCheck: 0 });
+  const { onSubmit } = showComposerMeetingEdit(MEET_CALENDAR);
+
+  await turnOffComposerMeeting(user);
+
+  expect(screen.queryByText(TEAMS_REMOVAL_NOTICE)).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Save' }));
+  expect(onSubmit).toHaveBeenCalledWith(
+    expect.objectContaining({ conference: 'none' }),
+    undefined
+  );
 });

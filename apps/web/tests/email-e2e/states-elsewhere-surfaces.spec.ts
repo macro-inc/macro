@@ -11,7 +11,7 @@ import { expect, test } from './harness/linking';
 import { anInbox, PROVIDERS } from './harness/providers';
 import { notice } from './harness/send';
 import {
-  calendarPeriods,
+  calendarSetup,
   holdDraftSaves,
   openPhoneSearch,
   phoneSearchField,
@@ -74,23 +74,23 @@ for (const provider of PROVIDERS) {
     test.use({ provider });
 
     // When this fails, a calendar with no events no longer says why it is
-    // empty: the setup status over the grid is gone, or names another state
+    // empty: the setup status above the grid is gone, or names another state
     // than the inbox is in (a lapsed grant read as a calendar never granted);
     // or Home, with no inbox left, no longer invites to connect email.
     test('the calendar says what its setup lacks as the inbox loses its calendar, and Home asks to connect email once no inbox is left', async ({
       page,
       mailbox,
     }) => {
-      const grid = calendarPeriods(page);
+      const setup = calendarSetup(page);
       for (const state of SETUP_STATES[provider]) {
         await state.arrange(mailbox);
         await mailbox.open('/app/calendar');
         await expect(
-          grid.getByText(state.title, { exact: true })
+          setup.getByText(state.title, { exact: true })
         ).toBeVisible();
-        await expect(grid.getByText(state.description)).toBeVisible();
+        await expect(setup.getByText(state.description)).toBeVisible();
         await expect(
-          grid.getByRole('button', { name: state.action, exact: true })
+          setup.getByRole('button', { name: state.action, exact: true })
         ).toBeVisible();
         saw('STX-316');
       }

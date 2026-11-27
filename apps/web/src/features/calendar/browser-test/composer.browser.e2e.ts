@@ -1,4 +1,4 @@
-import { expect, type Page, test } from '@playwright/test';
+import { expect, type Locator, type Page, test } from '@playwright/test';
 import {
   answerCalendar,
   designReview,
@@ -18,6 +18,17 @@ async function editWeeklyReview(page: Page) {
 
 const saves = (page: Page) => page.getByRole('status', { name: 'Saves' });
 
+/** Opens the summary the desktop composer folds the dates, times and repeat into. */
+async function openWhen(composer: Locator) {
+  await composer.getByRole('button', { name: /^Wed, Jan 2, / }).click();
+}
+
+/** Saves an edit of the weekly series, which asks which events it applies to. */
+async function saveSeries(composer: Locator) {
+  await composer.getByRole('button', { name: 'Save' }).click();
+  await composer.getByRole('menuitem', { name: 'Apply to all events' }).click();
+}
+
 test.describe('editing an event in the composer', () => {
   // Class web-cal-composer-logic: when this fails, a weekly series with no
   // weekday in its rule shows as plain "Weekly" instead of naming the day it
@@ -28,20 +39,22 @@ test.describe('editing an event in the composer', () => {
   }) => {
     const calendar = await answerCalendar(page, { events: [weeklyReview()] });
     const composer = await editWeeklyReview(page);
+    await openWhen(composer);
 
-    await expect(
-      composer.getByRole('button', { name: 'Repeats Weekly on Wednesday' })
-    ).toBeVisible();
+    await expect(composer.getByRole('button', { name: 'Repeats' })).toHaveText(
+      'Weekly on Wednesday'
+    );
 
+    // The field holds the clock time; its am or pm is a separate label.
     const start = composer.getByRole('combobox', { name: 'event start time' });
     await start.click();
-    await page.getByRole('option', { name: '12:30 PM' }).click();
-    await expect(start).toHaveValue('12:30 PM');
+    await page.getByRole('option', { name: '12:30 pm', exact: true }).click();
+    await expect(start).toHaveValue('12:30');
     await expect(
       composer.getByRole('combobox', { name: 'event end time' })
-    ).toHaveValue('1:30 PM');
+    ).toHaveValue('1:30');
 
-    await composer.getByRole('button', { name: 'Save' }).click();
+    await saveSeries(composer);
     await expect(saves(page)).toHaveText('Saved 1');
     expect(calendar.patches).toHaveLength(1);
     const time = calendar.patches[0].body.time as {
@@ -68,7 +81,7 @@ test.describe('editing an event in the composer', () => {
     await composer.getByLabel('Title').fill('Weekly sync');
 
     const reload = calendar.holdReads();
-    await composer.getByRole('button', { name: 'Save' }).click();
+    await saveSeries(composer);
 
     await expect(saves(page)).toHaveText('Saved 1');
     await expect(composer).toBeHidden();
@@ -90,7 +103,7 @@ test.describe('editing an event in the composer', () => {
     const calendar = await answerCalendar(page, { events: [weeklyReview()] });
     const composer = await editWeeklyReview(page);
     await composer.getByLabel('Title').fill('Weekly sync');
-    await composer.getByRole('button', { name: 'Save' }).click();
+    await saveSeries(composer);
     await expect(saves(page)).toHaveText('Saved 1');
 
     expect(calendar.patches.map((patch) => patch.path)).toEqual([
@@ -112,15 +125,31 @@ async function capture(page: Page, name: string) {
 }
 
 /** Opens the Teams design review in the composer and turns Teams off. */
-async function turnOffTeams(page: Page) {
+async function turnOffTeams(page: Page, device: 'desktop' | 'phone') {
   await openFixture(page, '/composer.html');
   await page.getByRole('button', { name: 'Design review' }).click();
   const composer = page.getByRole('region', { name: 'Event composer' });
   await expect(composer.getByLabel('Title')).toHaveValue('Design review');
-  const meeting = composer.getByRole('button', { name: /Video conferencing/ });
+  const meeting = composer.getByRole('button', { name: 'Video conferencing' });
   await expect(meeting).toContainText('Microsoft Teams');
   await meeting.click();
-  await page.getByRole('option', { name: 'No meeting link' }).click();
+  // Outlook keeps the meeting or drops it with a replacement; no other link.
+  // The desktop lists the choices in a menu, the phone as buttons in its sheet.
+  if (device === 'desktop') {
+    await expect(page.getByRole('menuitemradio')).toHaveText([
+      'Microsoft Teams',
+      'No meeting link',
+    ]);
+    await page.getByRole('menuitemradio', { name: 'No meeting link' }).click();
+  } else {
+    await expect(
+      composer.getByRole('button', { name: 'Microsoft Teams', pressed: true })
+    ).toBeVisible();
+    await expect(
+      composer.getByRole('button', { name: 'Macro call' })
+    ).toHaveCount(0);
+    await composer.getByRole('button', { name: 'No meeting link' }).click();
+  }
   await expect(meeting).toContainText('No meeting link');
   return composer;
 }
@@ -136,7 +165,7 @@ test.describe('removing Teams from an Outlook meeting', () => {
       events: [designReview()],
       calendars: [outlookCalendar()],
     });
-    const composer = await turnOffTeams(page);
+    const composer = await turnOffTeams(page, 'desktop');
     const save = composer.getByRole('button', { name: 'Save' });
     const notice = composer.getByText(TEAMS_REMOVAL_NOTICE);
 
@@ -146,14 +175,17 @@ test.describe('removing Teams from an Outlook meeting', () => {
     await composer.getByRole('button', { name: 'Undo' }).click();
     await expect(notice).toHaveCount(0);
     await expect(
-      composer.getByRole('button', { name: /Video conferencing/ })
+      composer.getByRole('button', { name: 'Video conferencing' })
     ).toContainText('Microsoft Teams');
     await expect(save).toBeEnabled();
 
     await composer.getByLabel('Title').fill('Design review, moved');
-    await composer.getByRole('button', { name: /Video conferencing/ }).click();
-    await page.getByRole('option', { name: 'No meeting link' }).click();
-    await composer.getByRole('button', { name: 'Replace event…' }).click();
+    await composer.getByRole('button', { name: 'Video conferencing' }).click();
+    await page.getByRole('menuitemradio', { name: 'No meeting link' }).click();
+    await expect(notice).toBeVisible();
+    await composer
+      .getByRole('button', { name: 'Replace without meeting' })
+      .click();
 
     const dialog = page.getByRole('dialog');
     await expect(
@@ -161,7 +193,7 @@ test.describe('removing Teams from an Outlook meeting', () => {
     ).toBeVisible();
     // The time reads as the event card writes it.
     await expect(
-      dialog.getByText('Fri, January 4 · 10:00 AM–11:00 AM', { exact: true })
+      dialog.getByText('Fri, Jan 4 @ 10 – 11am', { exact: true })
     ).toBeVisible();
     await capture(page, 'desktop-dialog');
     expect(calendar.replacements).toEqual([
@@ -208,7 +240,7 @@ test.describe('removing Teams from an Outlook meeting', () => {
         events: [designReview()],
         calendars: [outlookCalendar()],
       });
-      const composer = await turnOffTeams(page);
+      const composer = await turnOffTeams(page, 'phone');
       const notice = composer.getByRole('status').filter({
         hasText: TEAMS_REMOVAL_NOTICE,
       });
@@ -216,8 +248,11 @@ test.describe('removing Teams from an Outlook meeting', () => {
       await notice.scrollIntoViewIfNeeded();
       const box = await notice.boundingBox();
       expect(box && box.x >= 0 && box.x + box.width <= 390).toBe(true);
-      for (const name of ['Replace event…', 'Undo']) {
-        const action = notice.getByRole('button', { name });
+      for (const action of [
+        notice.getByRole('button', { name: 'Undo' }),
+        composer.getByRole('button', { name: 'Replace without meeting' }),
+      ]) {
+        await action.scrollIntoViewIfNeeded();
         await expect(action).toBeVisible();
         const actionBox = await action.boundingBox();
         expect(actionBox && actionBox.x + actionBox.width <= 390).toBe(true);
@@ -246,6 +281,7 @@ test.describe('a calendar set to the 24-hour clock', () => {
   }) => {
     await answerCalendar(page, { events: [weeklyReview()] });
     const composer = await editWeeklyReview(page);
+    await openWhen(composer);
     const start = composer.getByRole('combobox', { name: 'event start time' });
     const end = composer.getByRole('combobox', { name: 'event end time' });
     await expect(start).toHaveValue('12:00');
@@ -257,7 +293,8 @@ test.describe('a calendar set to the 24-hour clock', () => {
     await expect(end).toHaveValue('13:30');
     await end.click();
     await expect(page.getByRole('option', { name: /^14:30/ })).toBeVisible();
-    await expect(page.getByRole('option', { name: /PM/ })).toHaveCount(0);
+    await expect(page.getByRole('option', { name: /[ap]m/i })).toHaveCount(0);
+    await expect(composer.getByText(/^[ap]m$/i)).toHaveCount(0);
     await capture(page, 'desktop-24-hour');
   });
 
@@ -271,12 +308,13 @@ test.describe('a calendar set to the 24-hour clock', () => {
     test('the editor shows its times on that clock', async ({ page }) => {
       await answerCalendar(page, { events: [weeklyReview()] });
       const composer = await editWeeklyReview(page);
+      // The phone composer's times are buttons that open a wheel.
       await expect(
-        composer.getByRole('combobox', { name: 'event start time' })
-      ).toHaveValue('12:00');
+        composer.getByRole('button', { name: 'event start time' })
+      ).toHaveText('12:00');
       await expect(
-        composer.getByRole('combobox', { name: 'event end time' })
-      ).toHaveValue('13:00');
+        composer.getByRole('button', { name: 'event end time' })
+      ).toHaveText('13:00');
       await capture(page, 'phone-24-hour');
     });
   });

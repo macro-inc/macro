@@ -224,6 +224,7 @@ export function DesktopComposerFields(props: {
                 canKeepExisting={
                   controller.initialConferenceChoice() === 'existing'
                 }
+                keepOrRemoveOnly={model.conferenceLocked()}
                 onChange={(value) => controller.setField('conference', value)}
                 disabled={model.fieldIsDisabled('conference')}
               />

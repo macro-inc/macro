@@ -44,9 +44,16 @@ export async function turnCalendarOff(mailbox: Mailbox): Promise<void> {
   );
 }
 
-/** The calendar's grid, which the setup status lies over. */
-export function calendarPeriods(page: Page) {
-  return page.getByRole('region', { name: 'Calendar periods' });
+/**
+ * The calendar's setup status: the notice above the grid that says what the
+ * calendar lacks, with the button that starts its connection. (Sync errors
+ * are a status too, without a button.)
+ */
+export function calendarSetup(page: Page) {
+  return page
+    .getByRole('main')
+    .getByRole('status')
+    .filter({ has: page.getByRole('button') });
 }
 
 /**

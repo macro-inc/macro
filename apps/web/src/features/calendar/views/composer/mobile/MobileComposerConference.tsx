@@ -15,6 +15,7 @@ export function MobileComposerConference() {
     value: () => model.state().conference,
     canKeepExisting: () =>
       model.controller.initialConferenceChoice() === 'existing',
+    keepOrRemoveOnly: model.conferenceLocked,
     disabled: () => model.fieldIsDisabled('conference'),
     onChange: (value) => model.controller.setField('conference', value),
   });
@@ -24,7 +25,7 @@ export function MobileComposerConference() {
       title={t('calendar.conferencing')}
       icon={<VideoIcon class="size-4" />}
       value={
-        model.state().conference === 'none'
+        model.state().conference === 'none' && !model.conferenceLocked()
           ? t('calendar.addMeetingLink')
           : conference.selected()?.label
       }

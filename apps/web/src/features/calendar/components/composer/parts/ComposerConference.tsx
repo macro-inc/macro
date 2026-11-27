@@ -11,6 +11,7 @@ export interface ComposerConferenceProps {
   provider?: CalendarCapabilities['conferenceProvider'];
   value: EventEditorConferenceChoice;
   canKeepExisting: boolean;
+  keepOrRemoveOnly?: boolean;
   onChange: (value: EventEditorConferenceChoice) => void;
   disabled?: boolean;
   size?: 'sm' | 'md';
@@ -21,11 +22,13 @@ export function ComposerConference(props: ComposerConferenceProps) {
     provider: () => props.provider,
     value: () => props.value,
     canKeepExisting: () => props.canKeepExisting,
+    keepOrRemoveOnly: () => props.keepOrRemoveOnly ?? false,
     disabled: () => props.disabled ?? false,
     onChange: (value) => props.onChange(value),
   });
+  // A meeting that can only be kept or removed reads as removed, not as one to add.
   const label = () =>
-    props.value === 'none'
+    props.value === 'none' && !props.keepOrRemoveOnly
       ? t('calendar.addMeetingLink')
       : (conference.selected()?.label ?? t('calendar.addMeetingLink'));
   return (
