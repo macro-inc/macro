@@ -504,39 +504,9 @@ export class WALSyncer<T> {
       await this.ready();
       const entries = await this.readEntries();
       const undelivered = entries.filter((e) => !e.delivered);
-      if (undelivered.length === 0) return; // nothing to do
-
-      if (this.label)
-        logSyncService({
-          documentId: this.label,
-          level: 'debug',
-          context: { wal: await this.summary() },
-          message: `WAL flush: pushing ${undelivered.length} entries`,
-        });
-
-      let delivered: boolean;
-      try {
-        delivered = await this.push(undelivered.map((e) => e.update));
-      } catch (e) {
-        this.recordDeliveryFailure('push_error', undelivered.length, e);
-        throw e;
-      }
-
-      if (delivered) {
-        await this.store.markDelivered(undelivered.map((e) => e.id));
-        await this.refreshPending();
-        this.recordDeliveryRecovery(undelivered.length);
-        if (this.label)
-          logSyncService({
-            documentId: this.label,
-            level: 'debug',
-            context: { wal: await this.summary() },
-            message: `WAL flush: delivered ${undelivered.length} entries`,
-          });
-      } else {
-        this.recordDeliveryFailure('not_acked', undelivered.length);
-        succeeded = false;
-      }
+      // With nothing to send, still fall through: an edit appended while the
+      // store was read needs the follow-up flush below.
+      if (undelivered.length > 0) succeeded = await this.deliver(undelivered);
     } finally {
       this.isFlushing = false;
     }
@@ -546,6 +516,42 @@ export class WALSyncer<T> {
       this.pendingFlush = this.doFlush();
       return this.pendingFlush;
     }
+  }
+
+  /** Pushes `undelivered` and marks it delivered once acked; false when the
+   *  server didn't ack it. */
+  private async deliver(undelivered: WALEntry<T>[]): Promise<boolean> {
+    if (this.label)
+      logSyncService({
+        documentId: this.label,
+        level: 'debug',
+        context: { wal: await this.summary() },
+        message: `WAL flush: pushing ${undelivered.length} entries`,
+      });
+
+    let delivered: boolean;
+    try {
+      delivered = await this.push(undelivered.map((e) => e.update));
+    } catch (e) {
+      this.recordDeliveryFailure('push_error', undelivered.length, e);
+      throw e;
+    }
+
+    if (!delivered) {
+      this.recordDeliveryFailure('not_acked', undelivered.length);
+      return false;
+    }
+    await this.store.markDelivered(undelivered.map((e) => e.id));
+    await this.refreshPending();
+    this.recordDeliveryRecovery(undelivered.length);
+    if (this.label)
+      logSyncService({
+        documentId: this.label,
+        level: 'debug',
+        context: { wal: await this.summary() },
+        message: `WAL flush: delivered ${undelivered.length} entries`,
+      });
+    return true;
   }
 
   private recordDeliveryFailure(

@@ -549,6 +549,32 @@ describe('WALSyncer', () => {
     }
   });
 
+  it('delivers an edit appended while a flush reads an empty store', async () => {
+    const live = new MockLiveSyncSource();
+    const { wal, walStore } = makeWAL(live);
+    await wal.ready();
+    // The flush's read sees the store before the append but answers after.
+    const getAll = walStore.getAll.bind(walStore);
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => (release = resolve));
+    let read!: () => void;
+    const wasRead = new Promise<void>((resolve) => (read = resolve));
+    vi.spyOn(walStore, 'getAll').mockImplementationOnce(async () => {
+      const entries = await getAll();
+      read();
+      await released;
+      return entries;
+    });
+    const flushed = wal.flush();
+    await wasRead;
+    await wal.append(new Uint8Array([1]));
+    release();
+    await flushed;
+    await vi.waitFor(async () =>
+      expect(await undeliveredCount(walStore)).toBe(0)
+    );
+  });
+
   it('prunes expired entries on construction so cold-start replay skips them', async () => {
     const live = new MockLiveSyncSource();
     const walStore = new MockWALStore<RawUpdate>();
