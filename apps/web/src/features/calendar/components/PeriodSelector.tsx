@@ -1,6 +1,4 @@
-import { MobileFilterDrawer } from '@app/components/view-shell/MobileFilterDrawer';
 import { t } from '@app/lib/i18n';
-import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
@@ -13,7 +11,7 @@ import {
   Hotkey,
   Calendar as MiniCalendar,
 } from '@ui';
-import { createMemo, createUniqueId, For, Show } from 'solid-js';
+import { createMemo, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { useCalendarNavigation } from '../context/calendar-navigation-context';
 import { CALENDAR_PERIODS } from '../core/periods';
@@ -187,37 +185,5 @@ export function PeriodSelector(props: {
         </Show>
       </Dropdown.Content>
     </Dropdown>
-  );
-}
-
-/** Period controls embedded in the mobile settings drawer. */
-export function MobilePeriodControls(props: { onSelect: () => void }) {
-  const controls = createCalendarPeriodControls(props.onSelect);
-  const labelId = createUniqueId();
-
-  return (
-    <>
-      <MobileDrawer.Label id={labelId}>
-        {t('calendar.periodLabel')}
-      </MobileDrawer.Label>
-      <MobileDrawer.Section
-        role="radiogroup"
-        aria-labelledby={labelId}
-        class="flex shrink-0 flex-col"
-      >
-        <For each={calendarViews()}>
-          {(view) => (
-            <MobileFilterDrawer.Option
-              selectionMode="single"
-              checked={controls.activeView() === view.value}
-              onChange={() => controls.changeView(view.value)}
-            >
-              {view.label}
-            </MobileFilterDrawer.Option>
-          )}
-        </For>
-      </MobileDrawer.Section>
-      <div class="mt-4" />
-    </>
   );
 }
