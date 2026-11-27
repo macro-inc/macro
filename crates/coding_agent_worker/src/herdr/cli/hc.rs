@@ -14,7 +14,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::sync::OnceCell;
 
-use super::{AgentInfo, AgentLaunch, HerdrError, Window, run};
+use super::{AgentInfo, AgentLaunch, HerdrError, Window, run, run_command};
 
 /// The labels the herdr app adopts terminals by.
 const SPACE_LABEL: &str = "herdr.space";
@@ -35,6 +35,11 @@ const SETTLED_POLLS: u32 = 8;
 /// seconds, so this outlasts its window.
 const SETTLE_TIMEOUT: Duration = Duration::from_secs(30);
 const SETTLE_RETRY: Duration = Duration::from_millis(500);
+
+enum SendMode {
+    ShellInput,
+    AgentPrompt,
+}
 
 #[derive(Debug, Clone)]
 pub(super) struct Core {
@@ -141,7 +146,9 @@ impl Core {
         command.extend(launch.args.iter().cloned());
         line.push_str("exec ");
         line.push_str(&shell_words::join(&command));
-        self.send(&terminal.address, &line).await?;
+        self.send(&terminal.address, &line, SendMode::ShellInput)
+            .await?;
+        tracing::debug!(terminal = %terminal.address, plain = true, "agent launch sent to herdr-core");
         self.wait_ready(launch).await?;
         tracing::debug!(terminal = %terminal.address, agent = launch.kind, "agent ready in herdr-core");
         self.app("space.rename", json!({"id": space, "name": launch.label}))
@@ -178,16 +185,21 @@ impl Core {
     }
 
     pub(super) async fn prompt_agent(&self, name: &str, text: &str) -> Result<(), HerdrError> {
-        self.send(name, text).await
+        self.send(name, text, SendMode::AgentPrompt).await
     }
 
     /// Type `text` into a terminal, waiting out herdr-core's refusal while
     /// a new terminal's output is still settling.
-    async fn send(&self, terminal: &str, text: &str) -> Result<(), HerdrError> {
+    async fn send(&self, terminal: &str, text: &str, mode: SendMode) -> Result<(), HerdrError> {
         let deadline = tokio::time::Instant::now() + SETTLE_TIMEOUT;
         let mut refusals = 0u32;
         loop {
-            match self.run(&["send", terminal, text]).await {
+            let mut command = tokio::process::Command::new(&self.bin);
+            if matches!(mode, SendMode::ShellInput) {
+                // Without a sender, hc pastes the launch command without an <hc> tag.
+                command.env_remove("HC_TERMINAL_ID");
+            }
+            match run_command(command, &["send", terminal, text]).await {
                 Err(error) if error.still_starting() && tokio::time::Instant::now() < deadline => {
                     refusals += 1;
                     tracing::debug!(terminal, refusals, "terminal still starting; retrying send");

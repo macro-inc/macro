@@ -71,15 +71,53 @@ case "$1 $2" in
   "get t1") echo '{{"address":"t1","state":"live","cwd":"/","labels":{{"herdr.space":"space-1"}}}}' ;;
   "get macro-abc") echo '{{"address":"t9","state":"live","cwd":"/work","labels":{{"macro.agent":"codex"}},"status":{{"state":"idle"}}}}' ;;
   run*) echo '{{"address":"t9","state":"live","cwd":"/work"}}' ;;
+  send*) printf '%s %s %s %s\n' "$2" "${{HC_TERMINAL_ID-unset}}" "$HC_TERMINAL_SOCKET" "$HC_SCOPE" >> {send_env} ;;
   *) echo '{{}}' ;;
 esac
 "#,
             calls = shell_words::quote(&calls.to_string_lossy()),
+            send_env = shell_words::quote(&root.join("send-env").to_string_lossy()),
         ),
     )
     .unwrap();
     std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
     script
+}
+
+#[tokio::test]
+async fn only_the_launch_send_omits_hc_sender_identity() {
+    const CHILD: &str = "MACROD_TEST_HC_SEND_ENV";
+    if std::env::var_os(CHILD).is_none() {
+        // Set the sender on a fresh test process so other tests keep their environment.
+        let (_, module) = module_path!().split_once("::").unwrap();
+        let test = format!("{module}::only_the_launch_send_omits_hc_sender_identity");
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", &test])
+            .env(CHILD, "1")
+            .env("HC_TERMINAL_ID", "t1")
+            .env("HC_TERMINAL_SOCKET", "/fixture/core.sock")
+            .env("HC_SCOPE", "fixture-scope")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("1 passed"),
+            "{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        return;
+    }
+
+    let root = tempfile::tempdir().unwrap();
+    let herdr = HerdrCli::core(fake_hc(root.path()), "t1");
+    herdr.launch_agent(&launch("macro-abc", &[])).await.unwrap();
+    herdr.prompt_agent("macro-abc", "hello").await.unwrap();
+
+    let sends = std::fs::read_to_string(root.path().join("send-env")).unwrap();
+    assert_eq!(
+        sends,
+        "t9 unset /fixture/core.sock fixture-scope\nmacro-abc t1 /fixture/core.sock fixture-scope\n"
+    );
 }
 
 #[tokio::test]

@@ -278,9 +278,16 @@ impl HerdrCli {
 }
 
 async fn run<Arg: AsRef<str>>(bin: &Path, args: &[Arg]) -> Result<String, HerdrError> {
+    run_command(tokio::process::Command::new(bin), args).await
+}
+
+async fn run_command<Arg: AsRef<str>>(
+    mut command: tokio::process::Command,
+    args: &[Arg],
+) -> Result<String, HerdrError> {
     let output = tokio::time::timeout(
         std::time::Duration::from_secs(150),
-        tokio::process::Command::new(bin)
+        command
             .args(args.iter().map(AsRef::as_ref))
             .stdin(std::process::Stdio::null())
             .kill_on_drop(true)
@@ -289,7 +296,7 @@ async fn run<Arg: AsRef<str>>(bin: &Path, args: &[Arg]) -> Result<String, HerdrE
     .await
     .map_err(|_| HerdrError::Timeout)?
     .map_err(|source| HerdrError::Spawn {
-        bin: bin.to_owned(),
+        bin: PathBuf::from(command.as_std().get_program()),
         source,
     })?;
     if !output.status.success() {
