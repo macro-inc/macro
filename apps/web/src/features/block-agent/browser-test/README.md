@@ -8,6 +8,10 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chrome \
 bunx playwright test --config src/features/block-agent/browser-test/playwright.config.ts
 ```
 
+`pr-chip.html` renders the session header's PR chip for a PR GitHub never
+synced and for synced PRs that are open, merged, closed or have no status;
+`pr-chip.browser.e2e.ts` checks that only a synced status gets a status word.
+
 `queued.html` renders the queued-message rows over the real composer
 (`?count=N` entries, `?light` for the light theme) with an in-page log of
 edits, removals and steers; `queued.browser.e2e.ts` checks that an open row

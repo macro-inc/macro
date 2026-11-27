@@ -2,8 +2,9 @@
  * Compact header chip for the session's linked pull request: `#N` plus
  * status, opening the PR on GitHub. Once GitHub has synced the PR the chip
  * follows its status and previews it on hover. Cloud runtimes can report the
- * URL before the webhook entity exists; until then this is a GitHub link with
- * the same face.
+ * URL before the webhook entity exists, and some stacks never sync it; until
+ * then the status is unknown, so the chip is a GitHub link showing only `#N`
+ * with a neutral icon, never a guessed status.
  */
 
 import { GithubPullRequestStatusIcon } from '@app/features/block-pr/side-panel/github-pull-request';
@@ -16,6 +17,7 @@ import { HoverCard } from '@core/component/HoverCard';
 import { PullRequestPreviewCard } from '@core/component/LexicalMarkdown/component/decorator/PullRequestMention';
 import { openExternalUrl } from '@core/util/url';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
+import GitPullRequest from '@icon/system/regular/git-pull-request.svg';
 import { usePullRequestByGithubKeyQuery } from '@queries/storage/pr-mention';
 import type { ForeignEntity } from '@service-storage/generated/schemas';
 import { cn, Layer } from '@ui';
@@ -34,11 +36,10 @@ function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value : undefined;
 }
 
-function pullRequestStatus(entity: ForeignEntity | undefined): string {
-  if (!entity || entity.foreignEntitySource !== 'github_pull_request') {
-    return 'open';
-  }
-  return optionalString(metadataRecord(entity.metadata).status) ?? 'open';
+/** The PR's status from its synced entity, or `undefined` when unknown. */
+function pullRequestStatus(entity: ForeignEntity): string | undefined {
+  if (entity.foreignEntitySource !== 'github_pull_request') return undefined;
+  return optionalString(metadataRecord(entity.metadata).status);
 }
 
 function pullRequestTitle(
@@ -62,7 +63,7 @@ function capitalize(value: string): string {
 }
 
 function ChipFace(props: {
-  status: string;
+  status?: string;
   number?: number;
   title?: string;
 }): JSX.Element {
@@ -71,19 +72,30 @@ function ChipFace(props: {
 
   return (
     <>
-      <GithubPullRequestStatusIcon
-        status={props.status}
-        class="size-3 shrink-0"
-      />
+      <Show
+        when={props.status}
+        fallback={<GitPullRequest class="size-3 shrink-0 text-ink-muted" />}
+      >
+        {(status) => (
+          <GithubPullRequestStatusIcon
+            status={status()}
+            class="size-3 shrink-0"
+          />
+        )}
+      </Show>
       <span
         class="min-w-0 truncate tabular-nums"
         title={props.title ?? label()}
       >
         {label()}
       </span>
-      <span class={cn('shrink-0', statusTextClass(props.status))}>
-        {capitalize(props.status)}
-      </span>
+      <Show when={props.status}>
+        {(status) => (
+          <span class={cn('shrink-0', statusTextClass(status()))}>
+            {capitalize(status())}
+          </span>
+        )}
+      </Show>
     </>
   );
 }
@@ -103,7 +115,7 @@ function GithubFallback(props: { url: string; number?: number }): JSX.Element {
       onClick={(event) => event.stopPropagation()}
     >
       <ChipShell>
-        <ChipFace status="open" number={props.number} />
+        <ChipFace number={props.number} />
       </ChipShell>
     </a>
   );
