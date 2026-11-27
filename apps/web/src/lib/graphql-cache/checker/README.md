@@ -14,7 +14,7 @@ its host (`Page` in `world.ts`; keep the two the same).
 | --- | --- |
 | `sim.ts` | Contexts, message delivery, Web Locks, BroadcastChannel, timers and the clock. Nothing happens unless the checker says so. |
 | `world.ts` | Pages, coordinators and engine workers on the sim; the faults. |
-| `properties.ts` | What must hold, S1–S6 over the run and L1–L3 after it. |
+| `properties.ts` | What must hold, S1–S8 over the run and L1–L3 after it. |
 | `explore.ts` | Runs one schedule, every schedule within a bound, or a script. |
 | `scenarios.ts` | The scenarios with their bounds, and the scripts. |
 | `known-violations.ts` | What is known to break, and why. Nothing today. |
@@ -29,6 +29,12 @@ page that is not frozen comes online and is shown, six minutes pass (longer than
 any timeout in the cache; a stretch of nothing but answered heartbeats is
 skipped, so a fault in one of those heartbeats goes unseen), and each page makes
 one more draft and read. The properties are checked last.
+
+A script can also have a page send the head of the queue (`{ send: page }`):
+claim it, wait `SERVER_MS` for the server, and settle it through the host it
+claimed it from, as the queue runner does. The fake engine keeps the claim's
+lease and takes a head out of the queue only for a settlement under it. The
+explored scenarios send nothing.
 
 ## What a bound covers
 
@@ -77,8 +83,8 @@ longer matches the code it stands for.
 ## What it does not cover
 
 The account and generation fences around a session, Safari's and Firefox's own
-timing, the WASM engine and real OPFS, the native host, requests the handover
-does not depend on, and more tabs, faults or delays than the bound. An end of a
+timing, the WASM engine and real OPFS, the native host, the queue runner itself
+(scripts stand in for it), requests the handover does not depend on, and more tabs, faults or delays than the bound. An end of a
 whole browser process takes the page and its build's coordinator
 (`crash-process`), not other pages of that process. A coordinator's name that
 answers nobody (`lose-coordinator`) does so until every page of its build closes,

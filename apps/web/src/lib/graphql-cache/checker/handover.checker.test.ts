@@ -88,6 +88,16 @@ describe('handover checker', () => {
       });
       expect(unknown(result.violations)).toEqual([]);
       expect(result.cutShort, 'the run hit a step cap').toBe(false);
+      // A head the script sent was answered, and written by an engine.
+      const sends = script.filter((step) => 'send' in step).length;
+      expect(
+        result.deliveries?.map(({ settled, written }) => ({ settled, written }))
+      ).toEqual(
+        Array.from({ length: sends }, () => ({
+          settled: 'committed',
+          written: true,
+        }))
+      );
     }, 60_000);
   }
 

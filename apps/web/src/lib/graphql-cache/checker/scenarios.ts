@@ -162,6 +162,28 @@ const repeat = (times: number, steps: ScriptStep[]): ScriptStep[] =>
   Array.from({ length: times }, () => steps).flat();
 
 export const SCRIPTS: ScriptedScenario[] = [
+  // The server answers a head `SERVER_MS` after it was sent, long after the
+  // newer build asked for the database.
+  {
+    name: 'an older tab is sending a write when a newer build opens',
+    pages: [1, 1],
+    script: [
+      { waitMs: 5_000 },
+      { send: 'tab2' },
+      { kind: 'open-newer' },
+      { waitMs: 120_000 },
+    ],
+  },
+  {
+    name: 'the owner is sending a write when a newer build opens',
+    pages: [1, 1],
+    script: [
+      { waitMs: 5_000 },
+      { send: 'tab1' },
+      { kind: 'open-newer' },
+      { waitMs: 120_000 },
+    ],
+  },
   {
     name: "a database that cannot be read, when its owner's engine dies",
     pages: [1, 1],

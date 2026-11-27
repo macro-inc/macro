@@ -51,7 +51,7 @@ const NOOP_TELEMETRY = { record() {}, flush() {} };
 /** What a page asked of its cache and how each request ended. */
 export type CallOutcome = {
   page: string;
-  kind: 'read' | 'draft';
+  kind: 'read' | 'draft' | 'send';
   uuid?: string;
   /** Made by the quiet phase, to see whether the cache is back. */
   probe?: boolean;
@@ -63,6 +63,23 @@ export type CallOutcome = {
   /** The page had ended, or its session had, by the time it settled. */
   moot?: boolean;
 };
+
+/** A queue head a page sent to the server, and what its cache said of it. */
+export type Delivery = {
+  page: string;
+  uuid: string;
+  sentAt: number;
+  /** What the host answered its settlement with. */
+  settled?: string;
+  /** Whether an engine took it out of the queue by then. */
+  written?: boolean;
+};
+
+/** `QUEUE_LEASE_MS`: how long a claim keeps a head from the next sender. */
+const LEASE_MS = 5 * 60_000;
+
+/** How long the server takes to answer a sent head. */
+export const SERVER_MS = 10_000;
 
 /** Each time a page dropped its host and went to the network. */
 export type Retirement = { page: string; at: number; error: unknown };
@@ -463,6 +480,57 @@ export class Page {
     );
   }
 
+  /**
+   * The queue runner sending the head: claim it, send it, and settle it
+   * through the host it claimed it from, as `settle` does however long the
+   * server took.
+   */
+  send(): void {
+    const host = this.host;
+    if (!host || host.disabled) return;
+    const call: CallOutcome = {
+      page: this.id,
+      kind: 'send',
+      issuedAt: this.world.sim.now,
+      issuedTick: this.world.sim.nextTick(),
+    };
+    this.world.calls.push(call);
+    this.track(call, () => this.sendHead(host));
+  }
+
+  private async sendHead(host: CacheHost): Promise<void> {
+    const owner = `exchange-live:${this.id}`;
+    const now = this.world.sim.now;
+    const head = await host.claimNextMutation(owner, now, now + LEASE_MS);
+    if (!head) return;
+    const delivery: Delivery = {
+      page: this.id,
+      uuid: head.uuid,
+      sentAt: this.world.sim.now,
+    };
+    this.world.deliveries.push(delivery);
+    await new Promise<void>((answered) => {
+      this.world.sim.setTimeout(answered, SERVER_MS);
+    });
+    const settled = await host.commitOptimisticWrite(
+      head.transactionId,
+      { owner, generation: head.leaseGeneration },
+      {
+        generation: '00000000-0000-4000-8000-000000000098',
+        query: DRAFT_MUTATION,
+        variables: draftVariables(head.uuid),
+        data: {
+          saveEmailDraft: {
+            __typename: 'SaveEmailDraftPayload',
+            draftId: head.uuid,
+          },
+        },
+      }
+    );
+    delivery.settled = settled.kind;
+    delivery.written = this.world.storage.settled.has(head.uuid);
+  }
+
   private track(call: CallOutcome, request: () => Promise<unknown>): void {
     fireAndForget(this.settle(call, request), 'handover-checker');
   }
@@ -614,6 +682,7 @@ export class World {
   readonly engines: EngineWorker[] = [];
   readonly calls: CallOutcome[] = [];
   readonly retirements: Retirement[] = [];
+  readonly deliveries: Delivery[] = [];
   readonly reloadRequests: string[] = [];
   /** What the code under test wrote to the console, kept off the test log. */
   readonly consoleLines: string[] = [];
@@ -1079,6 +1148,14 @@ export class World {
       return;
     for (const [name, build] of this.lostNames)
       if (build === buildTime) this.lostNames.delete(name);
+  }
+
+  /** A page sends the head of the queue (a scripted step). */
+  async send(id: string): Promise<void> {
+    this.steps.push({ kind: 'fault', fault: `send:${id}` });
+    const page = this.pages.find((candidate) => candidate.id === id);
+    if (page) this.sim.runIn(page.context, () => page.send());
+    await this.sim.settle();
   }
 
   /** A page of a build newer than every open one. */

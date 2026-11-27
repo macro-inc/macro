@@ -10,13 +10,17 @@
  * S1 one engine has a database open at a time.
  * S2 a live page never drops its host, short of a newer build taking over, and
  *    never asks to reload without one.
- * S3 a write that reached the durable queue stays in it, unless the database
+ * S3 a write that reached the durable queue stays in it until an engine
+ *    settles it, unless the database
  *    could not be read: then the page that queued it is told. No page is told
  *    otherwise, and the database is wiped only after an engine died in a page
  *    that went on, failed to open it or stopped answering.
  * S4 no older build opens the database after a newer one.
  * S5 a refused request says why, with an error code.
  * S6 nothing throws out of an event handler or a timer.
+ * S7 a host says a queue settlement was written only when an engine wrote it.
+ * S8 a head the server answered is out of the queue, so no page sends it again,
+ *    unless the page that sent it went away first.
  * L1 every live page has its cache back: its host answers a read and takes a draft.
  * L2 an engine of the newest build is active while any page is live.
  * L3 every request a live page made has settled.
@@ -131,8 +135,12 @@ function lostWrites(world: World): Violation[] {
       symptom: 'S3:accepted write never stored',
       detail: page,
     }));
+  const { settled, unreadable } = world.storage;
   const lost = [...world.storage.admitted]
-    .filter(([uuid]) => !queue.has(uuid) && !world.storage.unreadable.has(uuid))
+    .filter(
+      ([uuid]) =>
+        !queue.has(uuid) && !unreadable.has(uuid) && !settled.has(uuid)
+    )
     .map(([uuid, admittedTo]) => ({
       symptom: `S3:queued write lost (${lostBecause(world, admittedTo, scope)})`,
       detail: uuid,
@@ -197,6 +205,25 @@ function needlessWipes(world: World): Violation[] {
     .map(([scope]) => ({
       symptom: 'S3:database wiped though no engine failed',
       detail: scope,
+    }));
+}
+
+function falseAcks(world: World): Violation[] {
+  return world.deliveries
+    .filter(({ settled, written }) => settled === 'committed' && !written)
+    .map(({ page, uuid }) => ({
+      symptom: 'S7:settlement acknowledged, nothing written',
+      detail: `${page} ${uuid}`,
+    }));
+}
+
+function sentAgain(world: World): Violation[] {
+  const { queue } = world.storage.database(getOrCreateCacheScope());
+  return world.deliveries
+    .filter(({ page, uuid }) => queue.has(uuid) && !exempt(pageOf(world, page)))
+    .map(({ page, uuid, settled }) => ({
+      symptom: `S8:answered head still queued (${settled ?? 'unsettled'})`,
+      detail: `${page} ${uuid}`,
     }));
 }
 
@@ -303,6 +330,8 @@ export function check(world: World): Violation[] {
     ...needlesslyTold(world),
     ...needlessWipes(world),
     ...olderOpens(world),
+    ...falseAcks(world),
+    ...sentAgain(world),
     ...uncodedRefusals(world),
     ...world.sim.uncaught.map((error) => ({
       symptom: `S6:uncaught ${errorClass(error)}`,

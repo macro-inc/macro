@@ -33,7 +33,12 @@ export const draftVariables = (draftId: string) => ({
   input: { draftId, subject: 'Draft' },
 });
 
-export type StoredMutation = { uuid: string; enqueuedBy: string };
+export type StoredMutation = {
+  uuid: string;
+  enqueuedBy: string;
+  /** The queue attempt allowed to settle it, once one claimed it. */
+  lease?: { owner: string; generation: string };
+};
 
 type Database = {
   queue: Map<string, StoredMutation>;
@@ -53,6 +58,10 @@ export class DurableStorage {
   readonly openConflicts: string[] = [];
   /** Every mutation that reached a durable queue, with where it went. */
   readonly admitted = new Map<string, string>();
+  /** Mutations an engine settled, and so took out of the queue. */
+  readonly settled = new Set<string>();
+  /** How many leases have been handed out, for each claim's generation. */
+  leases = 0;
   /** The tick of each mutation's wipe, for those whose queue could not be read. */
   readonly unreadable = new Map<string, number>();
   /** By scope: settles when the context that has its files open lets go. */
@@ -271,8 +280,71 @@ export class FakeEngineCore {
           initialClaim: { kind: 'not-runnable' },
         };
       })
+      .with({ kind: 'claim-next-mutation' }, ({ owner }) => {
+        const head = [...this.database().queue.values()][0];
+        if (!head || head.lease) return null;
+        this.storage.leases += 1;
+        head.lease = { owner, generation: String(this.storage.leases) };
+        return {
+          transactionId: head.uuid,
+          uuid: head.uuid,
+          superseded: false,
+          requiresConfirmation: false,
+          leaseGeneration: head.lease.generation,
+          query: DRAFT_MUTATION,
+          variables: draftVariables(head.uuid),
+          attemptCount: 0,
+          serverFailureCount: 0,
+        };
+      })
+      .with(
+        { kind: 'commit-optimistic-write' },
+        { kind: 'rollback-optimistic-write' },
+        (settlement) => {
+          const written = this.leased(settlement);
+          if (written) {
+            this.database().queue.delete(written.uuid);
+            this.storage.settled.add(written.uuid);
+          }
+          const kind =
+            settlement.kind === 'commit-optimistic-write'
+              ? 'committed'
+              : 'rolled-back';
+          return {
+            kind: written ? kind : 'failed',
+            ...(written ? {} : { error: 'the lease was lost' }),
+            revision: '1',
+            revisionAdvanced: false,
+            changed: [],
+            affectedOps: [],
+            reset: false,
+          };
+        }
+      )
+      .with({ kind: 'defer-optimistic-write' }, (settlement) => {
+        const deferred = this.leased(settlement);
+        if (deferred) deferred.lease = undefined;
+        return { kind: 'deferred' };
+      })
       // The requests the handover does not depend on.
       .otherwise(() => null);
+  }
+
+  /** The queued mutation a settlement's lease still holds. */
+  private leased({
+    transactionId,
+    leaseOwner,
+    leaseGeneration,
+  }: {
+    transactionId: string;
+    leaseOwner: string;
+    leaseGeneration: string;
+  }): StoredMutation | undefined {
+    const mutation = this.database().queue.get(transactionId);
+    return mutation?.lease?.owner === leaseOwner &&
+      mutation.lease.generation === leaseGeneration
+      ? mutation
+      : undefined;
   }
 
   /** A note of what was lost stays in the side file until then. */
