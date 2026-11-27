@@ -27,7 +27,10 @@ export function ComposerSubmit(
     model.isEdit() ? t('calendar.saveEvent') : t('calendar.createEvent');
   const size = () =>
     props.fullWidth ? 'sheet' : props.f3 ? 'field' : undefined;
-  const disabled = () => model.formIsDisabled() || !model.canSave();
+  const disabled = () =>
+    model.formIsDisabled() ||
+    !model.canSave() ||
+    model.conferenceRemovalPending();
   const content = () => (
     <Show when={model.options.pending} fallback={label()}>
       <SpinnerIcon class="size-4 animate-spin" />

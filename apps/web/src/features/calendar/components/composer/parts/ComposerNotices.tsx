@@ -1,4 +1,6 @@
 import { t } from '@app/lib/i18n';
+import InfoIcon from '@icon/system/regular/info.svg';
+import { Button } from '@ui';
 import { Show } from 'solid-js';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
 
@@ -13,7 +15,33 @@ export function ComposerNotices() {
         {(reason) => <p class="text-xs text-ink-muted">{reason()}</p>}
       </Show>
       <Show when={model.conferenceLocked()}>
-        <p class="text-xs text-ink-muted">{t('calendar.conferenceLocked')}</p>
+        <Show
+          when={model.conferenceRemovalPending()}
+          fallback={
+            <p class="text-xs text-ink-muted">
+              {t('calendar.conferenceLocked')}
+            </p>
+          }
+        >
+          <div
+            role="status"
+            class="flex min-w-0 gap-3 rounded-lg border border-accent/30 bg-accent-bg p-3 text-xs text-ink"
+          >
+            <InfoIcon class="mt-px size-4 shrink-0 text-accent" />
+            <div class="flex min-w-0 flex-col items-start gap-2.5">
+              <p>{t('calendar.conferenceRemovalPending')}</p>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={model.formIsDisabled()}
+                onClick={model.undoConferenceRemoval}
+              >
+                {t('calendar.undoConferenceRemoval')}
+              </Button>
+            </div>
+          </div>
+        </Show>
       </Show>
       <Show when={model.controller.conferenceError()}>
         {(error) => (

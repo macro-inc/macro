@@ -30,12 +30,16 @@ export function createComposerConference(options: {
   provider: Accessor<CalendarCapabilities['conferenceProvider'] | undefined>;
   value: Accessor<EventEditorConferenceChoice>;
   canKeepExisting: Accessor<boolean>;
+  /** Offers only keeping the event's meeting or none, as on an Outlook Teams meeting. */
+  keepOrRemoveOnly: Accessor<boolean>;
   disabled: Accessor<boolean>;
   onChange: (value: EventEditorConferenceChoice) => void;
 }) {
   const provider = createMemo(options.provider);
   const keepExisting = createMemo(options.canKeepExisting);
+  const keepOrRemoveOnly = createMemo(options.keepOrRemoveOnly);
   const choices = createMemo(() => {
+    if (keepOrRemoveOnly()) return [keepExisting() ? EXISTING : TEAMS, NONE];
     const choices: ConferenceChoice[] = [];
     choices.push(MACRO);
     const currentProvider = provider();

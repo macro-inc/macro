@@ -226,6 +226,9 @@ export default {
   visibilityUnsupported: 'This action does not support visibility changes',
   conferenceLocked:
     'Microsoft keeps the online meeting link on an existing event. To remove it, use “Replace event” after saving or discarding your edits without a meeting link.',
+  conferenceRemovalPending:
+    'Outlook can’t remove Teams from an existing event. To drop it, replace the event: guests get a new invitation with your changes and respond again.',
+  undoConferenceRemoval: 'Undo',
   providerDeclinesWarning:
     'Macro checks for conflicts in the background while this calendar is connected. Replies already sent cannot be undone by changing this event.',
   declineReply: 'Auto-decline reply: “{{message}}”',
