@@ -1,6 +1,6 @@
 import type { ComputerSize, Quote } from '@macro-inc/sdk/generated/auth';
 import { A } from '@solidjs/router';
-import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
+import { createSignal, For, onMount, Show } from 'solid-js';
 import { autonomyStops, intelligenceStops, sizeNames } from './creator-profile';
 import { type Draft, draftName } from './draft';
 import { type CheckoutState, createCheckout } from './hire';
@@ -55,13 +55,12 @@ export default function HirePanel(props: {
   onPending: (pending: boolean) => void;
   capturePortrait?: () => string | undefined;
 }) {
-  const [submittedAvatar, setSubmittedAvatar] = createSignal<string>();
-  const avatar = createMemo(
-    () =>
-      submittedAvatar() ??
-      props.capturePortrait?.() ??
-      snapshotPortrait(props.draft.preset, props.draft.look)
-  );
+  const avatar =
+    props.capturePortrait?.() ??
+    snapshotPortrait(props.draft.preset, props.draft.look);
+  const [portraitStatus, setPortraitStatus] = createSignal<
+    'loading' | 'ready' | 'unavailable'
+  >('loading');
   const [state, setState] = createSignal<CheckoutState>({ status: 'idle' });
   const [size, setSize] = createSignal<ComputerSize>(props.draft.size);
   const [job, setJob] = createSignal('');
@@ -70,7 +69,6 @@ export default function HirePanel(props: {
   const checkout = createCheckout(fixtureCheckout, (next) => {
     setState(next);
     props.onPending(next.status === 'submitting');
-    if (next.status === 'review') setSubmittedAvatar(undefined);
     if (next.status === 'accepted' && confirmed) {
       saveHireReceipt({
         agent: next.agent,
@@ -113,7 +111,9 @@ export default function HirePanel(props: {
         <Portrait
           preset={props.draft.preset}
           look={props.draft.look}
-          capture={avatar()}
+          capture={avatar}
+          onLoad={() => setPortraitStatus('ready')}
+          onError={() => setPortraitStatus('unavailable')}
         />
         <div>
           <strong>{draftName(props.draft)}</strong>
@@ -125,23 +125,28 @@ export default function HirePanel(props: {
         </div>
       </div>
       <p class="creator-sample-note">Sample data. No service purchases.</p>
+      <Show when={portraitStatus() === 'unavailable'}>
+        <p role="status">The portrait could not load. Reopen Hire to retry.</p>
+      </Show>
       <Show when={review()}>
         {(current) => (
           <form
             onSubmit={(event) => {
               event.preventDefault();
               const choice = selected()?.size;
-              if (choice && state().status === 'review') {
-                const portrait = avatar();
+              if (
+                choice &&
+                state().status === 'review' &&
+                portraitStatus() === 'ready'
+              ) {
                 confirmed = {
                   draft: {
                     ...props.draft,
                     size: choice,
                     look: { ...props.draft.look },
                   },
-                  portrait,
+                  portrait: avatar,
                 };
-                setSubmittedAvatar(portrait);
                 void checkout.confirm(
                   {
                     name: draftName(props.draft),
@@ -216,7 +221,11 @@ export default function HirePanel(props: {
             <Show when={current().notice}>
               {(notice) => <p role="status">{notices[notice()]}</p>}
             </Show>
-            <button type="submit" class="primary" disabled={!selected()}>
+            <button
+              type="submit"
+              class="primary"
+              disabled={!selected() || portraitStatus() !== 'ready'}
+            >
               Confirm preview Hire
             </button>
             <button type="button" onClick={() => void checkout.load()}>

@@ -900,6 +900,7 @@ export async function mount(
       const [w, h] = CANON.grid;
       const W = w * CANON.cell;
       const H = h * CANON.cell;
+      const meshPixels = new Uint8Array(w * h * 4);
       const pixels = new Uint8Array(W * H * 4);
       try {
         Object.assign(weights, target.morph);
@@ -921,6 +922,9 @@ export async function mount(
           w / h,
           [0, 0]
         );
+        renderer.readRenderTargetPixels(captureScene, 0, 0, w, h, meshPixels);
+        if (!meshPixels.some((value, index) => index % 4 === 3 && value > 0))
+          return undefined;
         renderer.readRenderTargetPixels(captureOut, 0, 0, W, H, pixels);
       } finally {
         Object.assign(weights, saved.weights);
