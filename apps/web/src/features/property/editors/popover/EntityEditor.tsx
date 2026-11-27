@@ -1,5 +1,6 @@
 import { t } from '@app/lib/i18n';
 import { PickerSheet } from '@components/app/mobile/PickerSheet';
+import { useUserId } from '@core/context/user';
 import { peopleBeforeAgents } from '@core/user/people-before-agents';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
@@ -139,6 +140,7 @@ function EntityEditorSelector(
   });
   const agents = useAgentAssignees(() => isAssignees);
   const team = useTeamMembers(() => isCompanyOwner || isAssignees);
+  const viewerId = useUserId();
   const { items: people } = useQuickAccessEntities(() => 'USER');
   const users = createMemo(() => {
     if (!isAssignees) return team.users();
@@ -146,7 +148,8 @@ function EntityEditorSelector(
       scopedUserOptions(
         [...team.users(), ...agents()],
         people().map((item) => item.data),
-        propertiesContext?.retainedAssigneeIds() ?? []
+        propertiesContext?.retainedAssigneeIds() ?? [],
+        viewerId()
       ),
       (user) => user.id
     );

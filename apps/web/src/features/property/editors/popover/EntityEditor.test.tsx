@@ -29,7 +29,8 @@ import { EntityEditor, EntitySheetEditor } from './EntityEditor';
 const agentId = 'bot|00000000-0000-0000-0000-000000000123';
 const userId = 'macro|alice@example.com';
 const TEAM = ['macro|alice@example.com', 'macro|teammate@example.com'];
-const team = vi.hoisted(() => ({ members: [] as string[] }));
+// `null` is an account without a team: `GET /team` answers 204.
+const team = vi.hoisted(() => ({ members: [] as string[] | null }));
 
 // jsdom has no layout, so the virtualized list would render no rows.
 vi.mock('virtua/solid', async () => {
@@ -156,9 +157,9 @@ vi.mock('@queries/team/teams', () => ({
   useCurrentTeamQuery: () => ({
     isPending: false,
     isError: false,
-    data: {
-      members: team.members.map((user_id) => ({ user_id })),
-    },
+    data: team.members
+      ? { members: team.members.map((user_id) => ({ user_id })) }
+      : null,
   }),
 }));
 vi.mock('../../queries/agent-assignees', () => ({
@@ -698,6 +699,92 @@ describe('team-first assignees', () => {
     expect(screen.queryByRole('button', { name: 'Find contacts' })).toBeNull();
   });
 });
+describe('assigning yourself', () => {
+  const unassigned: EntityProperty = { ...property, value: null };
+  const editors = [
+    { name: 'popover', Editor: EntityEditor, close: 'Dismiss' },
+    { name: 'sheet', Editor: EntitySheetEditor, close: 'Done' },
+  ];
+  const owners = [
+    { owner: 'new task', selfFilter: undefined },
+    {
+      owner: 'existing task',
+      selfFilter: { entityType: 'TASK' as const, blockId: 'task-id' },
+    },
+    { owner: 'new project', selfFilter: { entityType: 'INITIATIVE' as const } },
+    {
+      owner: 'existing project',
+      selfFilter: { entityType: 'INITIATIVE' as const, blockId: 'project-id' },
+    },
+  ];
+
+  it.each(
+    editors.flatMap((editor) =>
+      owners.map((owner) => ({ ...editor, ...owner }))
+    )
+  )(
+    'lists you without a team and saves you in a $owner ($name)',
+    async ({ Editor, close, selfFilter }) => {
+      team.members = null;
+      const onSave = setup(selfFilter, unassigned, Editor);
+      expect(screen.getAllByText('Alice')).toHaveLength(1);
+      expect(screen.queryByRole('status')).toBeNull();
+
+      fireEvent.click(screen.getByText('Alice'));
+      fireEvent.click(screen.getByText(close));
+      await waitFor(() =>
+        expect(onSave).toHaveBeenCalledExactlyOnceWith(
+          unassigned,
+          {
+            valueType: 'ENTITY',
+            refs: [{ entity_id: userId, entity_type: 'USER' }],
+          },
+          new Map([[userId, 'Alice']])
+        )
+      );
+    }
+  );
+
+  it.each(editors)(
+    'finds you by name without a team ($name)',
+    async ({ Editor }) => {
+      team.members = null;
+      setup(undefined, unassigned, Editor);
+      fireEvent.input(screen.getByRole('textbox'), {
+        target: { value: 'ali' },
+      });
+      await waitFor(() =>
+        expect(screen.queryByText('Research assistant')).toBeNull()
+      );
+      expect(screen.getAllByText('Alice')).toHaveLength(1);
+    }
+  );
+
+  it.each(editors)(
+    'lists you once, first, beside your team ($name)',
+    ({ Editor }) => {
+      team.members = ['macro|teammate@example.com', 'macro|alice@example.com'];
+      setup(undefined, unassigned, Editor);
+      const rows = [...document.querySelectorAll('[data-entity-index]')].map(
+        (row) => row.textContent
+      );
+      expect(rows.filter((text) => text?.includes('Alice'))).toHaveLength(1);
+      expect(rows[0]).toContain('Alice');
+      expect(rows.filter((text) => text?.includes('Teammate'))).toHaveLength(1);
+    }
+  );
+
+  it('keeps company owners strictly team-only without a team', () => {
+    team.members = null;
+    setup(undefined, {
+      ...property,
+      value: null,
+      propertyDefinitionId: SYSTEM_PROPERTY_IDS.COMPANY_OWNER,
+    });
+    expect(screen.queryByText('Alice')).toBeNull();
+  });
+});
+
 describe('people in a picker sheet', () => {
   it('drops the picks on Escape and saves them on Done', async () => {
     const dropped = setup(undefined, property, EntitySheetEditor);

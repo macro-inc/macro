@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { useUserId } from '@core/context/user';
 import { peopleBeforeAgents } from '@core/user/people-before-agents';
 import type { ListNavActions } from '@core/util/useListKeyBindings';
 import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
@@ -170,6 +171,7 @@ export function EntityPropertyEditor(props: {
     propertiesContext?.retainedAssigneeIds ?? (() => []),
     isAssignees
   );
+  const viewerId = useUserId();
   const users = createMemo(() => {
     if (!isCompanyOwner() && !isAssignees()) return undefined;
     const pool = [...team.users(), ...agents()];
@@ -178,7 +180,8 @@ export function EntityPropertyEditor(props: {
       scopedUserOptions(
         pool,
         people(),
-        propertiesContext?.retainedAssigneeIds() ?? []
+        propertiesContext?.retainedAssigneeIds() ?? [],
+        viewerId()
       ),
       (user) => user.id
     );

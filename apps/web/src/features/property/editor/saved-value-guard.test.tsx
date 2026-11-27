@@ -44,6 +44,9 @@ vi.mock('@queries/properties/tags', () => ({
   useTagsQuery: () => ({ isLoading: false, data: mocks.tagSets }),
   useEnsureTagSetMutation: () => ({}),
 }));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => undefined,
+}));
 vi.mock('@queries/team/teams', () => ({
   useCurrentTeamQuery: () => ({ data: undefined }),
 }));

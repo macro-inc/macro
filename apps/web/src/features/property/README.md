@@ -220,7 +220,8 @@ place of the generic create error.
 ## Assignee selection
 
 The system Assignees property uses the existing selected-first ordering at opening
-with available agents and the current team roster. Row positions stay stable while
+with the viewer, available agents and the current team roster. The viewer is listed
+once, also without a team, whose roster is empty. Row positions stay stable while
 selecting. Search uses these options without contact discovery; preserve the
 existing Add/Change property and command-menu search placeholders.
 Initially selected outsiders remain visible and removable, including references

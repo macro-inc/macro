@@ -1,6 +1,14 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { SYSTEM_PROPERTY_IDS } from '../constants';
 import { PropertiesProvider } from '../context/PropertiesContext';
 import { PropertyRootContext } from '../core/context';
@@ -8,6 +16,9 @@ import type { EntityProperty } from '../types';
 import { EntityPropertyEditor } from './entity-property-editor';
 
 const outsiderId = 'macro|former@example.com';
+const viewerId = 'macro|viewer@example.com';
+const teammateId = 'macro|teammate@example.com';
+const team = vi.hoisted(() => ({ users: [] as string[] }));
 
 vi.mock('@core/context/user', () => ({
   useEmail: () => () => 'viewer@example.com',
@@ -30,11 +41,20 @@ vi.mock('@core/user', () => ({
 }));
 vi.mock('@core/user/util', () => ({
   idToEmail: (id: string) => id.replace('macro|', ''),
-  idToDisplayName: () => 'former',
+  idToDisplayName: (id: string) => {
+    if (id === 'macro|viewer@example.com') return 'Viewer';
+    if (id === 'macro|teammate@example.com') return 'Teammate';
+    return 'former';
+  },
 }));
 vi.mock('@queries/team/members', () => ({
   useTeamMembers: () => ({
-    users: () => [],
+    users: () =>
+      team.users.map((id) => ({
+        id,
+        email: id.replace('macro|', ''),
+        name: id === 'macro|viewer@example.com' ? 'Viewer' : 'Teammate',
+      })),
     isLoading: () => false,
     isError: () => false,
   }),
@@ -94,52 +114,89 @@ afterEach(() => {
   cleanup();
 });
 
-describe('removed assignee lookup', () => {
-  it('keeps a removed outsider searchable by their resolved display name', async () => {
-    const [searchValue, setSearchValue] = createSignal('');
-    const [selectedIndex, setSelectedIndex] = createSignal(0);
-    render(() => (
-      <PropertiesProvider
-        entityType="TASK"
-        canEdit
-        properties={() => [property]}
-        onRefresh={() => {}}
-        onPropertyAdded={() => {}}
-        onPropertyDeleted={() => {}}
-        saveHandler={{
-          saveProperty: async () => {},
-          saveDate: async () => {},
+function renderEditor(value: EntityProperty) {
+  const [searchValue, setSearchValue] = createSignal('');
+  const [selectedIndex, setSelectedIndex] = createSignal(0);
+  const onSave = vi.fn();
+  render(() => (
+    <PropertiesProvider
+      entityType="TASK"
+      canEdit
+      properties={() => [value]}
+      onRefresh={() => {}}
+      onPropertyAdded={() => {}}
+      onPropertyDeleted={() => {}}
+      saveHandler={{
+        saveProperty: async () => {},
+        saveDate: async () => {},
+      }}
+    >
+      <PropertyRootContext.Provider
+        value={{
+          property: () => value,
+          pickedEntityName: () => undefined,
+          canEdit: () => true,
+          editorOpen: () => true,
+          openEditor: () => {},
+          closeEditor: () => {},
         }}
       >
-        <PropertyRootContext.Provider
-          value={{
-            property: () => property,
-            pickedEntityName: () => undefined,
-            canEdit: () => true,
-            editorOpen: () => true,
-            openEditor: () => {},
-            closeEditor: () => {},
-          }}
-        >
-          <EntityPropertyEditor
-            property={property}
-            searchValue={searchValue}
-            selectedIndex={selectedIndex}
-            setSelectedIndex={setSelectedIndex}
-            onSubmit={vi.fn()}
-            onSave={vi.fn()}
-            setKeybindings={() => {}}
-            setPlaceholder={() => {}}
-            selectedEntityCount={1}
-            savedValueState="known"
-          />
-        </PropertyRootContext.Provider>
-      </PropertiesProvider>
-    ));
+        <EntityPropertyEditor
+          property={value}
+          searchValue={searchValue}
+          selectedIndex={selectedIndex}
+          setSelectedIndex={setSelectedIndex}
+          onSubmit={vi.fn()}
+          onSave={onSave}
+          setKeybindings={() => {}}
+          setPlaceholder={() => {}}
+          selectedEntityCount={1}
+          savedValueState="known"
+        />
+      </PropertyRootContext.Provider>
+    </PropertiesProvider>
+  ));
+  return { onSave, setSearchValue };
+}
+
+beforeEach(() => {
+  team.users = [];
+});
+
+describe('removed assignee lookup', () => {
+  it('keeps a removed outsider searchable by their resolved display name', async () => {
+    const { setSearchValue } = renderEditor(property);
 
     fireEvent.click(screen.getByText('Former Name'));
     setSearchValue('Former Name');
 
     expect(await screen.findByText('Former Name')).toBeTruthy();
+  });
+});
+
+describe('assigning yourself', () => {
+  const unassigned: EntityProperty = { ...property, value: [] };
+
+  it('lists you without a team and saves you as the assignee', () => {
+    const { onSave } = renderEditor(unassigned);
+
+    expect(screen.getAllByText('Viewer')).toHaveLength(1);
+    fireEvent.click(screen.getByText('Viewer'));
+
+    expect(onSave).toHaveBeenCalledExactlyOnceWith(
+      {
+        valueType: 'ENTITY',
+        refs: [{ entity_id: viewerId, entity_type: 'USER' }],
+      },
+      expect.anything()
+    );
+  });
+
+  it('lists you once beside your team', () => {
+    team.users = [teammateId, viewerId];
+    renderEditor(unassigned);
+
+    expect(screen.getAllByText('Viewer')).toHaveLength(1);
+    expect(screen.getAllByText('Teammate')).toHaveLength(1);
   });
 });
