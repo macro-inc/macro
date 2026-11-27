@@ -3,8 +3,10 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { Sdk } from '@macro-inc/sdk/generated/auth';
 import type { Plugin } from 'vite';
 import type { HireAccess } from '../src/hire-access';
+import { type localVault, vaultOperation, vaultTeam } from './localVault';
 
-const upstream = 'http://127.0.0.1:23011/auth';
+const defaultUpstream = 'http://127.0.0.1:23011/auth';
+const vaultUpstream = 'http://127.0.0.1:23211/auth';
 const reviewer = 'macrobots-reviewer@example.test';
 const fixtureTeam = 'Macro Bots Local Review';
 const cookieName = 'bots-local-session';
@@ -17,7 +19,11 @@ type Viewer = Pick<
 >;
 type Identity = Viewer | Exclude<HireAccess, { status: 'signed-in' }>;
 
-export function localAuth(path: string): Plugin {
+export function localAuth(
+  path: string,
+  vault?: ReturnType<typeof localVault>
+): Plugin {
+  const upstream = vault ? vaultUpstream : defaultUpstream;
   const sdk = new Sdk();
   const sessions = new Map<string, Session>();
   let exchanging = false;
@@ -74,11 +80,13 @@ export function localAuth(path: string): Plugin {
     res: ServerResponse,
     origin: string
   ) {
+    const operation = vault && vaultOperation(req, path);
     if (
       (req.headers.origin !== undefined && req.headers.origin !== origin) ||
       (req.headers['sec-fetch-site'] !== undefined &&
         req.headers['sec-fetch-site'] !== 'same-origin') ||
-      (req.method === 'POST' && req.headers.origin !== origin)
+      ((req.method === 'POST' || (operation && operation.method !== 'GET')) &&
+        req.headers.origin !== origin)
     ) {
       send(res, 403, { status: 'unavailable' });
       return;
@@ -99,8 +107,17 @@ export function localAuth(path: string): Plugin {
       signal: AbortSignal.timeout(10_000),
     };
 
+    const current = () =>
+      !!id &&
+      !!session &&
+      sessions.get(id) === session &&
+      session.expires > Date.now();
     if (req.method === 'GET' && req.url === path) {
       const viewer = session?.token ? await identity(session.token) : undefined;
+      if (vault && !current()) {
+        send(res, 200, { status: 'signed-out' });
+        return;
+      }
       send(
         res,
         200,
@@ -114,7 +131,35 @@ export function localAuth(path: string): Plugin {
       return;
     }
 
-    if (req.method === 'GET' && req.url === `${path}/hire-access`) {
+    if (vault && operation) {
+      const token = session?.token;
+      if (!token || !current()) {
+        send(res, 401, { status: 'signed-out' });
+        return;
+      }
+      if (req.headers.authorization) {
+        send(res, 403, { code: 'forbidden' });
+        return;
+      }
+      const recheck = async () => {
+        if (!current()) return false;
+        const viewer = await identity(token);
+        return current() && viewer.status === 'signed-in';
+      };
+      if (!(await recheck())) {
+        send(res, 403, { code: 'forbidden' });
+        return;
+      }
+      const result = await vault(req, operation, token, recheck);
+      send(
+        res,
+        current() ? result.status : 401,
+        current() ? result.data : { status: 'signed-out' }
+      );
+      return;
+    }
+
+    if (!vault && req.method === 'GET' && req.url === `${path}/hire-access`) {
       if (!id || !session?.token) {
         send(res, 401, { status: 'signed-out' });
         return;
@@ -247,7 +292,11 @@ export function localAuth(path: string): Plugin {
         member.user_id === user.data?.user_id &&
         member.team_id === team.data?.team.id
     );
-    if (!member || team.data.team.name !== fixtureTeam) {
+    if (
+      !member ||
+      team.data.team.name !== fixtureTeam ||
+      (vault && (team.data.team.id !== vaultTeam || member.role !== 'owner'))
+    ) {
       return { status: 'team-unresolved' };
     }
     return {

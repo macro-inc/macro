@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "vite",
     "dev:auth": "vite --config vite.local-auth.config.ts --mode local-auth",
+    "dev:passwords": "vite --config vite.local-auth.config.ts --mode local-passwords",
     "preview": "vite preview --mode local-fixture",
     "build:preview": "bun run check:boundary && vite build --mode local-fixture",
     "check:boundary": "bun scripts/verify-bots-boundary.ts",
@@ -17,7 +18,8 @@
     "@kobalte/core": "0.13.11",
     "@macro-inc/sdk": "workspace:*",
     "@solidjs/router": "^0.15.3",
-    "solid-js": "^1.9.7"
+    "solid-js": "^1.9.7",
+    "uuid": "^11.1.1"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.6",

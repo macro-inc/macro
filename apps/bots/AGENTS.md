@@ -31,7 +31,8 @@ generated SDK storage schemas.
   the viewer, team, and agent. `src/brain-access-fixture.ts` provides the local
   simulation for an explicitly selected viewer role.
 - `src/passwords/` owns the Tower vault, local role and setup fixtures, and
-  storage projections. The default build excludes this fixture route module.
+  storage projections. The default build excludes both the fixture and
+  separately enabled signed vault route modules.
 - `src/billing/` owns the read-only Tower Billing route and its typed,
   team-scoped reader. The default reader is unavailable. The local fixture
   supplies the sample cycle and can exercise pending, denied, empty, and zero
@@ -93,7 +94,22 @@ payment terms and always disables purchasing. The static preview keeps its
 existing fixtures. Sign-in accepts only exact destinations for Creator, Fleet,
 Passwords, Billing, and same-tab Hire draft return.
 
+The isolated Team Passwords review uses a separate local server composition
+that sets the signed vault flag and forwards only the team's list, detail,
+create, replace, and metadata patch operations. Saved values remain masked.
+Replacing values requires explicit entry of the full replacement.
+
 For a remote review over an existing SSH connection, preserve both the
 loopback address and the port in the local forward. For example, use
 `ssh -N -L 127.0.0.1:PORT:127.0.0.1:PORT <devbox>` with the port printed by Vite.
 Forward only the app. Auth and Mailpit remain on the devbox loopback.
+
+## Local signed Passwords bridge
+
+Run `BOTS_VAULT_ORIGIN_FILE=/tmp/bots-vault-storage.PROOF/storage-origin bun run --filter @macro-inc/bots dev:passwords` after the reviewed local Storage fixture
+writes its owner-only origin receipt. Use the assigned loopback address. This
+mode verifies the signed synthetic owner's current team with the dedicated local
+issuer and sends only the catalog and item operations to the recorded Storage
+listener. Storage applies its normal item permissions and version checks. The
+bridge returns team-scoped metadata and fixed error codes. It leaves reveal,
+sharing, folders, and selected-agent access outside the local surface.
