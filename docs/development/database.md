@@ -129,39 +129,54 @@ compatible with the service code currently deployed, not just the code in its PR
 
 4. **Update affected tests/fixtures and run package tests** from the root with
    `SQLX_OFFLINE` unset. Test between batches of query changes, not just at the end.
+   For an owned test container, pin the URL after entering the dev shell:
+
+   ```bash
+   nix develop --command env DATABASE_URL="$TASK_DATABASE_URL" cargo test -p <package>
+   ```
+
+   The dev shell may replace an inherited `DATABASE_URL`. Before migrations,
+   preparation or DB tests, check the resolved host and port match your own
+   container; never fall through to the shared localhost:5432 database.
 
 5. **Refresh the workspace SQLx cache** when non-test queries or schema
    change, or when required metadata is missing. Before any preparation, copy
    `.sqlx` to a separate snapshot outside the checkout, whether using the default
-   database or a dedicated test database. From the repository root:
+   database or a dedicated test database. Even a failed preparation can truncate
+   the cache. From the repository root:
 
    ```bash
-   nix develop --command just prepare_db
+   sqlx_cache_snapshot="$(mktemp -d)"
+   cp -a .sqlx/. "$sqlx_cache_snapshot/"
+   nix develop --command just --dry-run --set DATABASE_URL "$TASK_DATABASE_URL" prepare_db
    ```
 
-   The root recipe uses Just's `DATABASE_URL` variable, which defaults to the
-   database on localhost:5432; exporting the environment variable does not
-   override it. For a dedicated test database, verify the container and port
-   with `docker ps`. Set the Just variable explicitly and
-   inspect the resolved command before executing it:
+   Inspect the dry-run's resolved host and port before running it. Root Just
+   DB recipes use their own `DATABASE_URL` variable, defaulting to localhost:5432,
+   and ignore an environment override. For a dedicated database, verify the
+   container and port with `docker ps`, then pass `--set` on the actual command too:
 
    ```bash
-   nix develop --command just --dry-run --set DATABASE_URL "$DATABASE_URL" prepare_db
-   nix develop --command just --set DATABASE_URL "$DATABASE_URL" prepare_db
+   nix develop --command just --set DATABASE_URL "$TASK_DATABASE_URL" prepare_db
    ```
 
-   A failed prepare can delete most cached entries. For either target, restore
-   only `.sqlx` from the snapshot made before that preparation, then check the
-   resolved target again before retrying. This recovers the cache, not the database.
+   If preparation fails, stop and inspect its error, then restore only `.sqlx`
+   from the snapshot made before that preparation. Check the resolved target
+   again before retrying; this recovers the cache, not the database:
 
-   Inspect `git status` after preparation and restore unrelated `.sqlx`
-   deletions before committing; workspace preparation can omit entries for
-   unbuilt or excluded targets.
+   ```bash
+   mkdir -p .sqlx
+   cp -a "$sqlx_cache_snapshot/." .sqlx/
+   ```
 
-   Commit generated `.sqlx` changes with the query/schema change. Never manually
-   create or edit `.sqlx/query-*.json`, and never generate a crate-local cache.
-   Unrelated Rust-only DB-crate edits still need appropriate tests, but do not
-   require cache preparation when queries/schema are unchanged and metadata is present.
+   After success, inspect `git status` and restore unrelated `.sqlx` deletions
+   from the snapshot; workspace preparation can omit unbuilt or excluded targets.
+   Scoped `cargo sqlx prepare` still needs the owned URL inside the dev-shell
+   command. Keep only cache entries for queries added or changed in this work.
+   Commit generated metadata with the query/schema change. Never hand-edit
+   `.sqlx/query-*.json` or generate a crate-local cache. Rust-only DB-crate edits
+   need tests, but no cache preparation when queries/schema are unchanged and
+   metadata is present.
 
 6. **Rerun the affected tests** after preparation or fixes. Cache preparation is
    not a substitute for `cargo test -p <package>` against the live local database.

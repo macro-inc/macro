@@ -134,6 +134,21 @@ pub struct MacroAccessToken {
     pub root_macro_id: Option<String>,
 }
 
+/// Signs a synthetic personal-session token for isolated test stacks.
+#[cfg(feature = "testing")]
+pub fn encode_test_session(
+    claims: &MacroAccessToken,
+    secret: &str,
+) -> Result<String, jsonwebtoken::errors::Error> {
+    let mut header = jsonwebtoken::Header::new(Algorithm::HS256);
+    header.kid = Some("fromFusionauth".into());
+    jsonwebtoken::encode(
+        &header,
+        claims,
+        &jsonwebtoken::EncodingKey::from_secret(secret.as_bytes()),
+    )
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
 pub enum JwtToken {
     MacroAccessToken(MacroAccessToken),

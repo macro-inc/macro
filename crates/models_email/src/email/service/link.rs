@@ -52,6 +52,9 @@ impl Link {
     }
 }
 
+/// User rollout shared by the chooser and IMAP account enrollment.
+pub const IMAP_CONNECTIONS_FLAG: &str = "enable-imap-connections";
+
 #[derive(Debug, Clone, Copy, ToSchema, Serialize, Deserialize, PartialEq, Eq)]
 pub enum UserProvider {
     Gmail,
@@ -66,4 +69,29 @@ impl UserProvider {
             UserProvider::Outlook => "OUTLOOK",
         }
     }
+}
+
+/// Sanitized mailbox health independent of provider authentication.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    ToSchema,
+    strum::AsRefStr,
+    strum::EnumString,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum MailboxIssue {
+    /// This snapshot exceeds the engine's bounded sync capacity.
+    SnapshotTooLarge,
+    /// Saved mailbox credentials must be replaced by an owner reconnect.
+    CredentialsUnreadable,
+    /// An issue introduced by a newer server; retain generic guidance.
+    #[serde(other)]
+    Unknown,
 }

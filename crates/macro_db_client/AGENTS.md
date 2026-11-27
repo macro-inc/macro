@@ -55,6 +55,31 @@ only canonical lowercase `macro|` ids in `COLLATE "C"` keys. Inbox rows cascade
 with their `email_links` row; `user_id` and `list_key` on them repeat the link's
 owner and provider on purpose, so reads never join `email_links`. List rows have no
 foreign key: the contacts worker removes them on account deletion.
+Per-list paging uses partial indexes for the literal list key; migration
+`20261124231124` adds the IMAP member-page index before the contacts route uses it.
+
+`email_imap_connection_attempts` keeps recovery leases and the effective-deadline
+index in its initial migration. While the migrations are unreleased, edit them in
+place and reset only disposable local databases that applied the previous versions.
+
+Keep `email_mailbox_work_quarantine` free of message content and provider
+responses. Its partial index serves pending command-overlay cleanup only.
+
+Mailbox mutation claims use forward migrations 20261123181255–181268. The
+command live-lease index narrows by link, generation and lease expiry before
+target lookup; it adds no child writes or copied lease state. Keep its live-lease
+predicate aligned with the draft exclusion query and retain the old indexes for
+rolling binaries. Migrations 181267–181268 add nullable command action IDs and
+a concurrent partial group lookup index. Legacy writers leave the action ID
+NULL; grouped receipt readers must precede the default-off chunking flag flip.
+Legacy draft routing is derived from the parent link on a real draft or
+schedule write and in the bounded claim window. Keep the legacy lane until a
+one-off backfill has drained the remaining rows.
+
+`imap_state_entries` location rows require a 32-byte `fingerprint` bytea value,
+indexed by `(link_id, fingerprint)` for the literal location kind. The engine
+owns canonical hashing and candidate selection; location writes must supply the
+indexed digest without retaining a document copy.
 
 `agent_runtime_update` stores leased dev operator requests for one
 Firecracker teammate. Unfinished rows hold the computer and keep the
@@ -283,6 +308,46 @@ its membership, mailbox and thread foreign keys cascade deletion. The CRM domain
 owns writes and owner-only listing; `crm_email_thread_excluded` is the independent
 veto used by the shared eligibility function and mirrored in set-based ingestion
 and the inline Team reader, including selected contribution.
+
+
+Mailbox stream and reconciliation rows derive routing metadata from their
+immutable link provider, including inserts from older binaries. Existing link-id
+foreign keys retain ownership; do not add composite provider keys, cascading
+provider updates or runtime constraint validation. Provider-prefixed claim
+indexes retain old unprefixed indexes during rolling updates. An interrupted
+concurrent build needs its INVALID index inspected and removed before retry.
+
+`email_links.mailbox_issue` and `mailbox_retry_at` are nullable sync-health
+projections, separate from `needs_reauth`; old binaries ignore them. Migration
+259 installs these and the three ordered IMAP-notification fields in one
+nullable, metadata-only ALTER, so the parent queues one exclusive lock.
+
+Work provider columns use a constant Outlook default without a heap rewrite.
+Streams were Outlook-only; legacy reconciliation may include Gmail cleanup.
+Claims relabel legacy reconciliation routing in bounded due windows; no
+background repair table, completion marker or runtime DDL is needed. Keep
+provider derivation active for old inserts and rollback.
+
+Migration 20261123181251 builds the IMAP-only non-null provider-retry index concurrently for reconnect’s maximum-wait lookup. Inspect and drop an interrupted INVALID index before retrying; old binaries and the original query remain compatible.
+
+Migrations 20261123181255–181263 add nullable routing/local parking fields and
+concurrent finite-deadline indexes for draft and command claims. Legacy NULL
+routing has its own bounded lane: do not add a blocking rollout backfill. Preserve
+old indexes until rolling readers retire, and inspect/drop interrupted INVALID
+new builds before retrying. Re-arm metadata hooks must cover old writers and
+schedule edits/cancels without changing real retries or lease deadlines; routing
+is copied metadata, and acquisition must still check the current parent.
+
+Migrations 20261123181264–181265 add target index facts and the partial unfinished
+predecessor index. Parent-first locking protects installation and one atomic
+in-flight-only fill; the metadata migration bounds lock acquisition and each
+statement at five seconds. It keeps retained terminal history unchanged and
+aborts atomically on timeout. New/old target inserts and parent terminal or
+generation changes derive facts through DB triggers; nonterminal status changes
+must not rewrite children. Measure the expected live backlog before deployment;
+hosted-dev counts are only a proxy and do not establish production size. The
+predecessor index is a separate concurrent, no-transaction build with invalid
+index/rollback handling; no applied migration changes.
 
 `import_entity_notion_review_sources_idx` bounds review dependency reconciliation
 by `(review_id, user_id)` for staged Notion data sources. Keep those literal
