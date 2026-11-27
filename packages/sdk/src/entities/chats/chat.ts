@@ -230,7 +230,8 @@ export class Chat extends PropertiedEntity<ChatDetail> implements Mentionable {
   static search = entitySearch({
     filters: { chat_filters: {} },
     type: 'chat',
-    make: (client, hit) => new Chat(client, hit.chat_id),
+    make: (client, hit) =>
+      new Chat(client, hit.chat_id).withListed({ name: hit.name }),
   });
 
   /**
@@ -242,7 +243,8 @@ export class Chat extends PropertiedEntity<ChatDetail> implements Mentionable {
     return {
       tag: wrapXml('m-document-mention', {
         documentId: this.id,
-        documentName: this.detail.peek()?.name ?? '',
+        documentName:
+          this.detail.peek()?.name ?? this.detail.listedField('name') ?? '',
         blockName: 'chat',
         blockParams: {},
       }),

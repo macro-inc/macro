@@ -1,4 +1,5 @@
 import type { PropertyTargetEntityType as PropertyEntityType } from '../../../generated/properties/types.gen';
+import type { DocumentSearchResponseItem } from '../../../generated/search/types.gen';
 import type {
   DocumentTeamShareResponse,
   EntityAppearance,
@@ -75,6 +76,20 @@ import {
 import { DocumentVersion } from './version';
 
 type DocumentDetail = GetDocumentResponses[200]['data']['documentMetadata'];
+
+/**
+ * The detail fields a document search hit carries, for seeding its handle:
+ * the name it matched on, its owner and its file type.
+ */
+export function searchHitDetail(
+  hit: DocumentSearchResponseItem,
+): Partial<DocumentDetail> {
+  return {
+    documentName: hit.document_name,
+    owner: hit.owner_id,
+    fileType: hit.file_type,
+  };
+}
 
 /** Thread reads in flight at once while `comments()` expands a document's roots. */
 const THREAD_FETCH_CONCURRENCY = 8;
@@ -1209,8 +1224,9 @@ export class Document
 
   /**
    * The document's URL in the Macro web app. A native canvas or spreadsheet
-   * whose detail has loaded links to its own editor; use `canvas().webUrl()`
-   * or `documents.spreadsheet()` when it has not.
+   * whose detail has loaded, or whose listing or search hit gave its file
+   * type, links to its own editor; use `canvas().webUrl()` or
+   * `documents.spreadsheet()` otherwise.
    *
    * @readonly
    */
@@ -1230,7 +1246,8 @@ export class Document
   static search = entitySearch({
     filters: { document_filters: {} },
     type: 'document',
-    make: (client, hit) => new Document(client, hit.document_id),
+    make: (client, hit) =>
+      new Document(client, hit.document_id).withListed(searchHitDetail(hit)),
   });
 
   /**
