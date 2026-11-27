@@ -789,6 +789,7 @@ fn initiative_name_literals_are_escaped_and_not_like_patterns() {
 
 mod bounded_access;
 mod counted_grants;
+mod many_sources;
 mod name_sort;
 mod option_filter;
 mod property_sort;
