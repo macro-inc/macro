@@ -10,6 +10,7 @@
  */
 
 import '../../../../../index.css';
+import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import type { CollabSurfaceLoroManager } from '@core/collab-surface/createCollabSurface';
@@ -49,6 +50,7 @@ import {
 } from '@macro-inc/lexical-core';
 import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
 import { markdownToLoroSnapshot } from '@macro-inc/lexical-core/markdown-loro-snapshot';
+import { MemoryRouter, Route } from '@solidjs/router';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { DragDropProvider } from '@thisbeyond/solid-dnd';
 import {
@@ -94,6 +96,7 @@ import type {
   FuzzWire,
   LexFuzzApi,
 } from './bridge';
+import { $insertEveryDecorator, missingDecoratorTypes } from './decorators';
 
 const fuzzWindow: FuzzWindow = window;
 
@@ -427,6 +430,19 @@ function Peer() {
         { discrete: true }
       );
     },
+    insertEveryDecorator: (prefix) => {
+      let inserted: string[] = [];
+      editor().update(
+        () => {
+          const block = $getRoot()
+            .getChildren()
+            .find((child) => child.getTextContent().startsWith(prefix));
+          if ($isElementNode(block)) inserted = $insertEveryDecorator(block);
+        },
+        { discrete: true }
+      );
+      return { inserted, missing: missingDecoratorTypes() };
+    },
     toMarkdown: stateToMarkdown,
     roundTrip: markdownRoundTrip,
     selection: () => editor().getEditorState().read($caret),
@@ -562,9 +578,14 @@ render(
       <PosthogProvider>
         <QueryClientProvider client={client}>
           <UserContextProvider>
-            <DragDropProvider>
-              <Peer />
-            </DragDropProvider>
+            <MobileSettingsProvider>
+              <DragDropProvider>
+                {/* Some decorators (a theme mention) reach for the router. */}
+                <MemoryRouter>
+                  <Route path="*" component={Peer} />
+                </MemoryRouter>
+              </DragDropProvider>
+            </MobileSettingsProvider>
           </UserContextProvider>
         </QueryClientProvider>
       </PosthogProvider>

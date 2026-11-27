@@ -17,6 +17,18 @@ import fc from 'fast-check';
 import { FuzzModel, FuzzSystem, fuzzCommand } from './commands';
 import { openPeers, type Peer } from './harness';
 import {
+  IGNORE,
+  MINUTES,
+  PATH,
+  PEERS,
+  REPLAY_PATH,
+  RUNS,
+  SEED,
+  SHRINK,
+  STEPS,
+  UNDO,
+} from './knobs';
+import {
   check,
   type Finding,
   FindingsError,
@@ -24,28 +36,6 @@ import {
 } from './oracles';
 import { Relay } from './relay';
 
-const number = (name: string, fallback: number) => {
-  const value = process.env[name];
-  if (value === undefined) return fallback;
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed))
-    throw new Error(`${name}=${value} is not a number`);
-  return parsed;
-};
-
-const RUNS = number('FUZZ_RUNS', 3);
-const PEERS = number('FUZZ_PEERS', 3);
-const STEPS = number('FUZZ_STEPS', 150);
-const MINUTES = number('FUZZ_MINUTES', 15);
-const SEED =
-  process.env.FUZZ_SEED === undefined ? undefined : number('FUZZ_SEED', 0);
-const PATH = process.env.FUZZ_PATH;
-const REPLAY_PATH = process.env.FUZZ_REPLAY_PATH;
-const SHRINK = process.env.FUZZ_SHRINK !== '0';
-/** Undo everything everyone did, check, then redo it all and check again. */
-const UNDO = process.env.FUZZ_UNDO;
-/** Finding kinds that go in the report without failing the run. */
-const IGNORE = new Set(process.env.FUZZ_IGNORE?.split(',').filter(Boolean));
 const REPORTS = fileURLToPath(new URL('./reports/', import.meta.url));
 
 const NAMES = 'ABCDEFGH'.slice(0, PEERS).split('');

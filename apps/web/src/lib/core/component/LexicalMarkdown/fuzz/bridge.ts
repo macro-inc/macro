@@ -40,6 +40,14 @@ export type LexFuzzApi = {
   insertImageBefore: (prefix: string, url: string) => void;
   /** Resizes every top-level image, as dragging its handle does. */
   scaleImages: (scale: number) => void;
+  /**
+   * Adds one of every rendered decorator type after the top-level block whose
+   * text starts with `prefix`; `missing` lists the types it has no factory for.
+   */
+  insertEveryDecorator: (prefix: string) => {
+    inserted: string[];
+    missing: string[];
+  };
   /** Internal markdown of any serialized state (the server's, say). */
   toMarkdown: (json: string) => string;
   /** Internal markdown → state → internal markdown. */

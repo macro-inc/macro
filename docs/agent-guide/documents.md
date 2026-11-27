@@ -428,6 +428,11 @@ refresh when referenced tables change. See
 [Databases](databases.md#ai-questions-and-live-answers) for the question box, source
 picker, displays, and editing.
 
+The question box opens, with focus in it, only on the page that inserted the
+answer. Collaborators see the unanswered question closed, so their focus stays
+where they were typing. Check with a second person typing in another split
+while the first inserts **Query**.
+
 ## Spreadsheets
 
 Spreadsheets are available to everyone. Ordinary document permissions control

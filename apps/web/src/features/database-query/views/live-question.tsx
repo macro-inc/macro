@@ -34,8 +34,17 @@ export function LiveQuestion(props: {
   editor?: (onClose: () => void) => JSX.Element;
   /** Leaving the editor of an answer that was never saved drops the answer. */
   onDiscard?: () => void;
+  /**
+   * Open a draft's editor on mount. Only the page that just inserted the
+   * draft does: opening it moves focus into its prompt, and on a
+   * collaborator's page or a reopened document that would take the keyboard
+   * from wherever the person is typing.
+   */
+  openDraft?: boolean;
 }) {
-  const [open, setOpen] = createSignal(!props.source.queryId && !!props.editor);
+  const [open, setOpen] = createSignal(
+    !props.source.queryId && !!props.editor && !!props.openDraft
+  );
   let content: HTMLDivElement | undefined;
   const title = () =>
     props.source.title ||
