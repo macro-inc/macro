@@ -5,7 +5,8 @@
 The AWS side of the observability EKS cluster (us-east-2): subnets, EKS, nodes,
 add-ons, Pod Identity roles, buckets, Grafana's RDS, ALB target groups, and the listener rules and alarms that the
 switch adds. In us-east-1 (provider `aws.production`), the Firehose stream that
-production's CloudWatch Logs subscribe to. OpenTofu written in Nix with terranix, in its own
+production's CloudWatch Logs subscribe to, and the Grafana subscription filters
+on the production log groups no Pulumi stack owns. OpenTofu written in Nix with terranix, in its own
 flake. `README.md` has what each module creates and the apply steps.
 
 ## Start here
@@ -17,7 +18,9 @@ flake. `README.md` has what each module creates and the apply steps.
 
 ## Scope
 
-- Owns: AWS resources the cluster needs. Kubernetes objects → `../cluster`.
+- Owns: AWS resources the cluster needs, and the `grafana` subscription filter
+  on each log group in `settings.firehose.unownedLogGroups` (never their
+  Datadog filters). Kubernetes objects → `../cluster`.
 - Not here: the VPC, ALB, listener, zone, alarm topic and host →
   `infra/stacks/observability` (Pulumi). Read them as data sources; never
   import, change or replace them.

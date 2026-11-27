@@ -22,6 +22,7 @@ approval, with the steps under [First apply](#first-apply).
 | `modules/edge.nix` | IP target groups `obs-k8s-grafana`, `obs-k8s-otlp` and `obs-k8s-argocd` and the security group rules ALB → pods on port 8080. At the switch (`settings.switched`), listener rules for `grafana.`, `otlp.` and `argo.macro-internal.com` (priorities 10, 11 and 12). `argo.` is new, not the stack's (`own`), so this layer also makes its alias record and a DNS-validated certificate added to the stack's listener by SNI. |
 | `modules/alarms.nix` | At the switch (`settings.switched`), per target group: no healthy target, and target 5xx, to the stack's alarm topic. |
 | `modules/firehose.nix` | In us-east-1 (production's region, provider `aws.production`): the Amazon Data Firehose stream `observability-cloudwatch-logs`, which posts CloudWatch Logs subscription data to `https://otlp.macro-internal.com/awsfirehose/api/v1/push` (gzip, at least every 60 s, retried 5 minutes), its access key secret `observability/firehose-access-key` (value set by hand, "Secrets"), the failed-records bucket `macro-observability-k8s-firehose-failed` (14 days) and its error log group; the delivery role, and the role CloudWatch Logs passes in a subscription filter (`observability-k8s-cloudwatch-logs`). |
+| `modules/log-subscriptions.nix` | In us-east-1: a second subscription filter, `grafana`, to the Firehose stream on each production log group no Pulumi stack owns (`settings.firehose.unownedLogGroups`: Lambdas deployed outside this repository). Datadog's filter on each stays. |
 | `modules/outputs.nix` | Names and ARNs the cluster layer needs; `nix run .#tofu -- main output`. |
 
 `settings.nix` holds every value; change it there, not in the modules.
@@ -111,6 +112,9 @@ doppler secrets get OTLP_TOKEN --project observability --config prd --plain |
     --secret-id observability/firehose-access-key --secret-string file:///dev/stdin
 nix run .#tofu -- main apply
 ```
+
+The second apply also creates the subscription filters
+(`modules/log-subscriptions.nix`), so they send only once the secret is set.
 
 Alloy accepts one token at a time, and Firehose rereads this secret only now
 and then. When the OTLP token changes, put the new one here first, wait several
