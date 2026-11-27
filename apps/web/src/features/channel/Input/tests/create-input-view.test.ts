@@ -143,4 +143,23 @@ describe('createInputView', () => {
       dispose();
     });
   });
+
+  it('opens empty over a stored draft that is not text', () => {
+    const persistenceKey = makeInputValuePersistenceKey({
+      channelId: 'channel-1',
+    });
+    localStorage.setItem(persistenceKey, '{}');
+
+    createRoot((dispose) => {
+      const view = createInputView({
+        initialInput: { mode: 'channel', value: '' },
+        mentions: () => [],
+        attachmentTracker: createInputAttachmentTracker(),
+        persistenceKey,
+      });
+      expect(view.value()).toBe('');
+      expect(view.snapshot().value).toBe('');
+      dispose();
+    });
+  });
 });

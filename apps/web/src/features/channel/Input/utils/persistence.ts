@@ -3,7 +3,8 @@ import {
   type PersistenceKey,
 } from '@queries/persistence';
 
-type PersistenceProps = {
+/** Where a draft is stored: a channel, or one thread in it. */
+export type PersistenceProps = {
   channelId: string;
   threadId?: string;
 };

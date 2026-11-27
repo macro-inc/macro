@@ -1,3 +1,7 @@
+import {
+  makePersistedState,
+  type PersistenceStorage,
+} from '@app/lib/persistence';
 import { createSignal } from 'solid-js';
 import type { MessageData } from '../Message';
 
@@ -25,6 +29,11 @@ export function createUnifiedInputManager(options?: {
   /** Binding restored from a history snapshot. */
   initialReplyTarget?: UnifiedReplyTargetSnapshot;
   /**
+   * Keeps the binding past this mount, for when the channel is opened again
+   * without a history snapshot. It restores only over no snapshot binding.
+   */
+  storage?: PersistenceStorage<UnifiedReplyTarget | undefined>;
+  /**
    * The thread the input returns to when no reply is bound. Without one, the
    * input is free to post to the channel itself.
    */
@@ -37,9 +46,12 @@ export function createUnifiedInputManager(options?: {
    */
   onReplyThreadReleased?: (threadId: string) => void;
 }) {
-  const [boundReplyTarget, setReplyTarget] = createSignal<
-    UnifiedReplyTarget | undefined
-  >(options?.initialReplyTarget);
+  const bindingState = createSignal<UnifiedReplyTarget | undefined>(
+    options?.initialReplyTarget
+  );
+  const [boundReplyTarget, setReplyTarget] = options?.storage
+    ? makePersistedState(bindingState, { storages: options.storage })
+    : bindingState;
   const replyTarget = (): UnifiedReplyTarget | undefined => {
     const bound = boundReplyTarget();
     if (bound) return bound;

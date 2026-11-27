@@ -315,3 +315,11 @@ export function conversations(page: Page): Locator {
 export function conversationRow(page: Page, name: string): Locator {
   return conversations(page).getByRole('treeitem').filter({ hasText: name });
 }
+
+/** A conversation's row in the phone's list of conversations, by its name. */
+export function phoneConversationRow(page: Page, name: string): Locator {
+  return page
+    .getByRole('tree', { name: 'Recent conversations' })
+    .getByRole('button')
+    .filter({ hasText: name });
+}
