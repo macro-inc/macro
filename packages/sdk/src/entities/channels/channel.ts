@@ -698,6 +698,8 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
 
   /** Search channels by content, most relevant first, auto-paginated; `maxItems` caps the total. */
   static search = entitySearch({
+    method: 'channels.search',
+    listing: 'macro.channels.list()',
     type: 'channel',
     filters: onlyType('channel'),
     make: (client, hit) =>

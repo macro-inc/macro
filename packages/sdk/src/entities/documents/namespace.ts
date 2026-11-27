@@ -399,7 +399,8 @@ export class DocumentNamespace {
   }
 
   /**
-   * Search documents by name and content, most relevant first, auto-paginated; `maxItems` caps the total.
+   * Search documents by words in their name and content, most relevant first, auto-paginated; `maxItems` caps the total; a blank query throws.
+   * List recent documents without a query with `macro.documents.recent()`.
    *
    * @readonly
    */

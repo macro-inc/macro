@@ -229,6 +229,8 @@ export class Chat extends PropertiedEntity<ChatDetail> implements Mentionable {
   /** Search chats by name and content, most relevant first, auto-paginated; `maxItems` caps the total. */
   static search = entitySearch({
     filters: { chat_filters: {} },
+    method: 'chats.search',
+    listing: "macro.workspace.list({ includeTypes: ['ai_chat'] })",
     type: 'chat',
     make: (client, hit) => new Chat(client, hit.chat_id),
   });

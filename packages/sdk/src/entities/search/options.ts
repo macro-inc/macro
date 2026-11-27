@@ -11,6 +11,7 @@ import type {
 } from '../../../generated/search/types.gen';
 import { type IterationOptions, iterate, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import { MacroError } from '../../utils/unwrap';
 
 type Hit = UnifiedSearchResponseItem;
 
@@ -35,8 +36,14 @@ export function searchTimeZone(timeZone?: string): string | undefined {
  * Build a `search(client, query, opts?)` function for one entity type: unified
  * search hits narrowed to `type`, each mapped through `make`.
  * Most relevant first, auto-paginated; `maxItems` caps the total.
+ * A blank query throws at the call, before any request: the server refuses
+ * one, and the error names `listing` for listing the items without a query.
  */
 export function entitySearch<T, K extends Hit['type']>(opts: {
+  /** The public method, such as `projects.search`, for error messages. */
+  method: string;
+  /** The call that lists these items without a query, when one exists. */
+  listing?: string;
   filters?: EntityFilters;
   type: K;
   make: (client: MacroClient, hit: Extract<Hit, { type: K }>) => T;
@@ -47,14 +54,13 @@ export function entitySearch<T, K extends Hit['type']>(opts: {
   query: string,
   searchOpts?: SearchOpts,
 ) => AsyncGenerator<T> {
-  const { filters, type, make, includeCrm } = opts;
-  return (client, query, searchOpts) =>
-    iterate(
-      `${type} search`,
-      searchOpts,
-      { searchOn: true, pageSize: true },
-      () => pages(client, query, searchOpts),
+  const { method, listing, filters, type, make, includeCrm } = opts;
+  return (client, query, searchOpts) => {
+    if (!query.trim()) throw blankQuery(method, listing);
+    return iterate(method, searchOpts, { searchOn: true, pageSize: true }, () =>
+      pages(client, query, searchOpts),
     );
+  };
 
   function pages(
     client: MacroClient,
@@ -90,4 +96,13 @@ export function entitySearch<T, K extends Hit['type']>(opts: {
       };
     });
   }
+}
+
+function blankQuery(method: string, listing: string | undefined): MacroError {
+  const instead = listing
+    ? `To list them without a query, use ${listing}.`
+    : 'There is no listing to use instead.';
+  return new MacroError(
+    `${method} needs words to search for; it refuses a blank query. ${instead}`,
+  );
 }

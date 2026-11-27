@@ -201,6 +201,8 @@ export class Project extends PropertiedEntity<ProjectDetail> {
   /** Search projects by name and content, most relevant first, auto-paginated; `maxItems` caps the total. */
   static search = entitySearch({
     filters: { project_filters: {} },
+    method: 'projects.search',
+    listing: "macro.workspace.list({ includeTypes: ['project'] })",
     type: 'project',
     make: (client, hit) => new Project(client, hit.id),
   });

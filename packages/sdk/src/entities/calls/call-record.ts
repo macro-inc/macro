@@ -400,6 +400,8 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
   /** Search calls by name and transcript, most relevant first, auto-paginated; `maxItems` caps the total. */
   static search = entitySearch({
     filters: { call_filters: {} },
+    method: 'calls.search',
+    listing: "macro.workspace.list({ includeTypes: ['call'] })",
     type: 'call',
     make: (client, hit) => new CallRecord(client, hit.call_id),
   });

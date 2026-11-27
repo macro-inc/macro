@@ -107,7 +107,9 @@ export class TaskNamespace {
   }
 
   /**
-   * Search tasks by name and content, most relevant first, auto-paginated; `maxItems` caps the total.
+   * Search tasks by words in their name and content, most relevant first, auto-paginated; `maxItems` caps the total; a blank query throws.
+   * List tasks without a query with
+   * `macro.workspace.list({ includeTypes: ['document'], df: { l: { dst: 'task' } } })`.
    *
    * @readonly
    */

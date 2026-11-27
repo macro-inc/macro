@@ -31,7 +31,8 @@ export class ChatNamespace {
   }
 
   /**
-   * Search AI chats by name and content, most relevant first, auto-paginated; `maxItems` caps the total.
+   * Search AI chats by words in their name and content, most relevant first, auto-paginated; `maxItems` caps the total; a blank query throws.
+   * List chats without a query with `macro.workspace.list({ includeTypes: ['ai_chat'] })`.
    *
    * @readonly
    */

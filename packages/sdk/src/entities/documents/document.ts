@@ -1229,6 +1229,8 @@ export class Document
   /** Search documents by name and content, most relevant first, auto-paginated; `maxItems` caps the total. */
   static search = entitySearch({
     filters: { document_filters: {} },
+    method: 'documents.search',
+    listing: 'macro.documents.recent()',
     type: 'document',
     make: (client, hit) => new Document(client, hit.document_id),
   });
