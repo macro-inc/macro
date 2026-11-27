@@ -368,6 +368,15 @@ describe('$reconcileLexicalState', () => {
         prompt: 'Count open items',
         displayMode: 'table',
       },
+      remote: { title: 'Literal &lt;', prompt: 'Count literal &amp; values' },
+    },
+    {
+      type: 'database-query',
+      before: {
+        queryId: 'answer-1',
+        prompt: 'Count open items',
+        displayMode: 'table',
+      },
       remote: { queryId: null, displayMode: 'bar' },
       local: { queryId: 'answer-1', displayMode: 'table' },
     },

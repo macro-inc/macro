@@ -109,8 +109,8 @@ export function parseDatabaseQueryChart(
   };
 }
 
-/** Only query source is serialized. Results belong to the current viewer. */
-export function parseDatabaseQueryData(
+/** Validate saved query fields while preserving literal title and prompt text. */
+export function validateDatabaseQueryData(
   value: unknown
 ): DatabaseQueryData | undefined {
   if (!value || typeof value !== 'object') return;
@@ -136,15 +136,27 @@ export function parseDatabaseQueryData(
   const parsedChart =
     chart === undefined ? undefined : parseDatabaseQueryChart(chart);
   if (chart !== undefined && !parsedChart) return;
-  // Models write `&` in a title as `&amp;`, as they do in prose, which reads it as `&`.
   return {
     queryId,
     ...(databaseId ? { databaseId } : {}),
     ...(tableId ? { tableId } : {}),
-    ...(title ? { title: decodeHtmlEntities(title) } : {}),
-    prompt: decodeHtmlEntities(prompt),
+    ...(title ? { title } : {}),
+    prompt,
     displayMode,
     ...(parsedChart ? { chart: parsedChart } : {}),
     ...(typeof height === 'number' ? { height } : {}),
+  };
+}
+
+/** Read query data that may contain HTML entities emitted by a model. */
+export function parseDatabaseQueryData(
+  value: unknown
+): DatabaseQueryData | undefined {
+  const data = validateDatabaseQueryData(value);
+  if (!data) return;
+  return {
+    ...data,
+    ...(data.title ? { title: decodeHtmlEntities(data.title) } : {}),
+    prompt: decodeHtmlEntities(data.prompt),
   };
 }

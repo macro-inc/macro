@@ -18,6 +18,7 @@ import {
   type DatabaseQueryData,
   type DatabaseQueryDisplayMode,
   parseDatabaseQueryData,
+  validateDatabaseQueryData,
 } from './databaseQueryData';
 import { $createUnknownMentionNode } from './UnknownMentionNode';
 
@@ -87,7 +88,7 @@ export class DatabaseQueryNode extends DecoratorNode<
     return true;
   }
   static importJSON(serialized: SerializedDatabaseQueryNode): LexicalNode {
-    const data = parseDatabaseQueryData(serialized);
+    const data = validateDatabaseQueryData(serialized);
     // An unreadable answer degrades like its markdown form instead of failing the document.
     if (!data) {
       const fallback = $createUnknownMentionNode({
@@ -106,7 +107,7 @@ export class DatabaseQueryNode extends DecoratorNode<
     serializedNode: LexicalUpdateJSON<SerializedDatabaseQueryNode>
   ): this {
     const self = super.updateFromJSON(serializedNode);
-    const data = parseDatabaseQueryData(serializedNode);
+    const data = validateDatabaseQueryData(serializedNode);
     // Keep the last usable answer if an in-place payload is malformed.
     if (data) self.setQuery(data);
     return self;
