@@ -16,6 +16,9 @@ const config: KnipConfig = {
     'src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/browser-test/*.{ts,tsx}',
     'src/lib/core/component/LexicalMarkdown/fuzz/{fixture.tsx,*.browser.e2e.ts}',
     'src/features/billing-lab/entry.tsx',
+    // Headless cache harnesses run under their own vitest config.
+    'src/**/*.harness.{ts,tsx}',
+    'src/lib/graphql-cache/headless/setup.ts',
     // Native test runners are invoked by scripts, not the application graph.
     'tests/native/{runner,links-runner,notifications-runner}.ts',
   ],
