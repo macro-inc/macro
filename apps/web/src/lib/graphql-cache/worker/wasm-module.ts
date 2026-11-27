@@ -357,7 +357,9 @@ export interface CacheWasmModule {
     callback: (
       fingerprint: string,
       durationMs: number,
-      success: boolean
+      success: boolean,
+      /** The template text, the first time this worker reports the fingerprint. */
+      template: string | undefined
     ) => void
   ): void;
   schemaHash(): string;
@@ -412,11 +414,12 @@ export function loadCacheWasm(): Promise<CacheWasmModule> {
           }
           wasmMemory = exports.memory;
           mod.setSlowQueryCallback?.(
-            (queryFingerprint, durationMs, success) => {
+            (queryFingerprint, durationMs, success, queryTemplate) => {
               telemetry.record({
                 name: 'graphql_cache.slow_query',
                 operationCategory: 'storage',
                 queryFingerprint,
+                queryTemplate,
                 durationMs,
                 outcome: success ? 'success' : 'error',
               });

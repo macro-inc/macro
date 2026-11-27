@@ -335,8 +335,15 @@ export type CacheTelemetryObservation = {
   revisionCategory?: CacheRevisionCategory;
   resetAttempt?: 'wipe-before-open';
   durationMs?: number;
-  /** FNV-1a of the unexpanded SQL template; never SQL text or bound values. */
+  /** FNV-1a of the unexpanded SQL template text; never of bound values. */
   queryFingerprint?: string;
+  /**
+   * The slow statement's template text, sent by the engine the first time a
+   * worker reports its fingerprint: SQL written in the engine's source, with
+   * `?` placeholders for every value. The engine never sends a statement that
+   * embeds other text, nor any bound value.
+   */
+  queryTemplate?: string;
   bytes?: number;
   highWaterBytes?: number;
   usageBytes?: number;
@@ -379,6 +386,12 @@ export interface CacheTelemetryRecorderLike {
   record(observation: CacheTelemetryObservation): void;
   flush(): void;
 }
+
+/**
+ * Longest slow-query template accepted, in UTF-16 code units. The engine caps
+ * the text at 8 KiB of UTF-8, which is never more code units than bytes.
+ */
+export const SLOW_QUERY_TEMPLATE_LENGTH = 8 * 1024;
 
 const HIGH_VOLUME_NAMES = new Set<CacheTelemetryEventName>([
   'graphql_cache.host_request',
@@ -506,6 +519,14 @@ function sanitizeObservation(
     typeof input.queryFingerprint === 'string' &&
     /^[0-9a-f]{16}$/.test(input.queryFingerprint)
       ? { queryFingerprint: input.queryFingerprint }
+      : {}),
+    ...(input.name === 'graphql_cache.slow_query' &&
+    typeof input.queryFingerprint === 'string' &&
+    /^[0-9a-f]{16}$/.test(input.queryFingerprint) &&
+    typeof input.queryTemplate === 'string' &&
+    input.queryTemplate.length > 0 &&
+    input.queryTemplate.length <= SLOW_QUERY_TEMPLATE_LENGTH
+      ? { queryTemplate: input.queryTemplate }
       : {}),
     ...(boundedNumber(input.bytes) !== undefined
       ? { bytes: boundedNumber(input.bytes) }
@@ -975,6 +996,7 @@ export function isCacheTelemetryObservation(
       'resetAttempt',
       'durationMs',
       'queryFingerprint',
+      'queryTemplate',
       'bytes',
       'highWaterBytes',
       'usageBytes',

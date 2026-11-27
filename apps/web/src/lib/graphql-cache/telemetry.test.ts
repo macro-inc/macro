@@ -11,6 +11,7 @@ import {
   isolateCacheTelemetry,
   operationCategoryForRequest,
   resetReasonForError,
+  SLOW_QUERY_TEMPLATE_LENGTH,
 } from './telemetry';
 
 describe('cache telemetry privacy contract', () => {
@@ -341,6 +342,48 @@ describe('cache telemetry sampling and failure isolation', () => {
       queryFingerprint: 'SELECT private-data',
     });
     expect(events[3]).not.toHaveProperty('queryFingerprint');
+  });
+
+  it('keeps a bounded query template only on a fingerprinted slow query', () => {
+    const events: CacheTelemetryObservation[] = [];
+    const recorder = new CacheTelemetryRecorder({
+      emit: (event) => events.push(event),
+    });
+    const template = 'SELECT value FROM records WHERE id IN (?, ?)';
+    const slow = {
+      name: 'graphql_cache.slow_query',
+      operationCategory: 'storage',
+      durationMs: 201,
+      queryFingerprint: 'a430d84680aabd0b',
+      outcome: 'success',
+    } as const;
+    recorder.record({ ...slow, queryTemplate: template });
+    recorder.record({
+      ...slow,
+      queryTemplate: '?'.repeat(SLOW_QUERY_TEMPLATE_LENGTH + 1),
+    });
+    recorder.record({ ...slow, queryTemplate: '' });
+    recorder.record({
+      ...slow,
+      queryFingerprint: 'not-a-fingerprint',
+      queryTemplate: template,
+    });
+    recorder.record({
+      name: 'graphql_cache.wal_checkpoint',
+      operationCategory: 'storage',
+      queryTemplate: template,
+    });
+    recorder.flush();
+    expect(events.map((event) => event.queryTemplate)).toEqual([
+      template,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ]);
+    expect(
+      isCacheTelemetryObservation({ ...slow, queryTemplate: template })
+    ).toBe(true);
   });
 
   it('never samples or aggregates slow requests and drops an invalid queue wait', () => {

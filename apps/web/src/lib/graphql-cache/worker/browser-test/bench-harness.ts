@@ -411,6 +411,7 @@ function telemetry() {
       count,
       at,
       queryFingerprint,
+      queryTemplate,
       operationCategory,
       aggregatedEventName,
     }) => ({
@@ -422,6 +423,7 @@ function telemetry() {
       count,
       outcome,
       queryFingerprint,
+      queryTemplate,
       at,
     })
   );

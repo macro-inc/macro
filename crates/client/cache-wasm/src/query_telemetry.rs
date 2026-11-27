@@ -22,19 +22,28 @@ impl QueryTelemetry for BrowserQueryTelemetry {
         now_ms()
     }
 
-    fn slow_query(&self, fingerprint: &str, duration_ms: f64, success: bool) {
+    fn slow_query(
+        &self,
+        fingerprint: &str,
+        duration_ms: f64,
+        success: bool,
+        template: Option<&str>,
+    ) {
         // A broken/throwing JS telemetry sink must never change SQL results.
-        let _ = self.0.call3(
+        let _ = self.0.call4(
             &JsValue::UNDEFINED,
             &JsValue::from_str(fingerprint),
             &JsValue::from_f64(duration_ms),
             &JsValue::from_bool(success),
+            &template.map_or(JsValue::UNDEFINED, JsValue::from_str),
         );
     }
 }
 
-/// Install the worker's payload-free slow SQL callback before opening the cache.
-/// Called only for statement executions strictly longer than 200 milliseconds.
+/// Install the worker's slow SQL callback before opening the cache. Called
+/// only for statement executions strictly longer than 200 milliseconds, with
+/// the statement's fingerprint, duration, outcome and, the first time the
+/// fingerprint is reported, its template text (never bound values).
 #[wasm_bindgen(js_name = setSlowQueryCallback)]
 pub fn set_slow_query_callback(callback: Function) {
     set_query_telemetry(Some(Rc::new(BrowserQueryTelemetry(callback))));

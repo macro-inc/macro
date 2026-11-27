@@ -125,6 +125,34 @@ describe('cache OpenTelemetry sink', () => {
     expect(span.end).toHaveBeenCalledOnce();
   });
 
+  it('exports the first report of a template as db.query.text', () => {
+    createOtelCacheTelemetrySink().emit({
+      browserFamily: 'chromium',
+      browserVersion: '142',
+      appVersion: '0.1',
+      backend: 'turso-wasm-opfs',
+      rolloutCohort: 'unknown',
+      name: 'graphql_cache.slow_query',
+      operationCategory: 'storage',
+      queryFingerprint: '92389d1ea869911c',
+      queryTemplate: 'COMMIT',
+      durationMs: 640,
+      outcome: 'success',
+    });
+
+    expect(Object.fromEntries(span.setAttr.mock.calls)).toMatchObject({
+      'db.query.fingerprint': '92389d1ea869911c',
+      'db.query.text': 'COMMIT',
+    });
+    expect(warn).toHaveBeenCalledExactlyOnceWith(
+      'graphql_cache.slow_query',
+      expect.objectContaining({
+        'db.query.fingerprint': '92389d1ea869911c',
+        'db.query.text': 'COMMIT',
+      })
+    );
+  });
+
   it('ends the slow-query span even if logging throws', () => {
     warn.mockImplementationOnce(() => {
       throw new Error('logger unavailable');
