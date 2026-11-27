@@ -9,6 +9,9 @@ const [selectedAnchor, setSelectedAnchor] = createSignal<HTMLElement>();
 export function useCalendarPager() {
   return { gotoDate: () => {}, activeDateInfo: () => undefined };
 }
+export function useCalendarNavigation() {
+  return { gotoDate: () => {} };
+}
 export function useCalendarView() {
   return {
     selectedEvent,

@@ -33,6 +33,9 @@ const STUBS: Record<string, string> = {
   [source('features/calendar/components/CalendarViewContext.tsx')]: stub(
     'calendar-contexts.ts'
   ),
+  [source('features/calendar/context/calendar-navigation-context.tsx')]: stub(
+    'calendar-contexts.ts'
+  ),
   [source('features/calendar-view/calendar-focus-target.ts')]: stub(
     'calendar-contexts.ts'
   ),
