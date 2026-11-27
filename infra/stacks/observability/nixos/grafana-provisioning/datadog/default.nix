@@ -92,6 +92,9 @@ let
         model = {
           inherit expression region;
           period = "60";
+          # Grafana refuses a query without a statistic, though an
+          # expression's SEARCH names its own.
+          statistic = "Average";
           metricQueryType = 0;
           metricEditorMode = 1;
           queryMode = "Metrics";
@@ -111,6 +114,8 @@ let
           sqlExpression = sql;
           inherit region;
           period = "60";
+          # Required by Grafana; the SQL's aggregate is what CloudWatch uses.
+          statistic = "Average";
           metricQueryType = 1;
           metricEditorMode = 1;
           queryMode = "Metrics";
