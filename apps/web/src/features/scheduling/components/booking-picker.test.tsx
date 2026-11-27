@@ -399,6 +399,78 @@ describe('BookingPicker', () => {
     expect(second?.[1]).toBe('event-intro');
   });
 
+  it('offers the next month from the current month near the month boundary', async () => {
+    vi.setSystemTime(new Date('2026-11-25T15:54:59Z'));
+    const user = userEvent.setup();
+    const slots = vi.fn(
+      async (_profile: string, _event: string, date: string) => [
+        {
+          startsAt: `${date}T15:00:00Z`,
+          endsAt: `${date}T15:30:00Z`,
+        },
+      ]
+    );
+    const source: BookingSource = {
+      slots,
+      book: vi.fn(),
+    };
+    render(() => (
+      <BookingPicker
+        profile={profile}
+        event={intro}
+        source={source}
+        onReceipt={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByText('November 2026')).toBeTruthy();
+    expect(
+      (screen.getByRole('button', { name: 'Next month' }) as HTMLButtonElement)
+        .disabled
+    ).toBe(false);
+    // The week of Nov 30 continues into December, on this month's grid.
+    for (const name of [
+      'Monday, November 30, 2026',
+      'Tuesday, December 1, 2026',
+      'Friday, December 4, 2026',
+    ]) {
+      expect(
+        (screen.getByRole('button', { name }) as HTMLButtonElement).disabled
+      ).toBe(false);
+    }
+    await user.click(
+      screen.getByRole('button', { name: 'Friday, December 4, 2026' })
+    );
+    expect(slots).toHaveBeenCalledWith(
+      'profile-ada',
+      'event-intro',
+      '2026-12-04',
+      'UTC'
+    );
+    expect(
+      await screen.findByRole('button', { name: /^3:00\sPM$/ })
+    ).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: 'Next month' }));
+    expect(screen.getByText('December 2026')).toBeTruthy();
+    expect(
+      (
+        screen.getByRole('button', {
+          name: 'Thursday, December 31, 2026',
+        }) as HTMLButtonElement
+      ).disabled
+    ).toBe(false);
+    await user.click(
+      screen.getByRole('button', { name: 'Thursday, December 31, 2026' })
+    );
+    expect(slots).toHaveBeenLastCalledWith(
+      'profile-ada',
+      'event-intro',
+      '2026-12-31',
+      'UTC'
+    );
+  });
+
   it('in preview shows real availability but cannot book', async () => {
     const user = userEvent.setup();
     const source: BookingSource = {

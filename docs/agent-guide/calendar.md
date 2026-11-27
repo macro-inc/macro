@@ -475,10 +475,14 @@ because they do not expose that sidebar. The calendar automatically sets up a
 default personal link for a new profile. Public
 `/app/book/:profile/:slug?` pages accept bookings without Macro sign-in. Guests
 choose an event on the profile landing page, then choose their timezone, date,
-and time before entering attendee details. Date & time and Your details steps
-show progress; the event summary and selected time stay visible. Choose another
-time preserves attendee input. Event booking pages do not show an All meetings
-link back to the profile chooser.
+and time before entering attendee details. The month is a full set of weeks in
+the guest's time zone, including days from the neighboring months, so a week
+that crosses the month boundary stays on the page and can be booked. Past days
+are unavailable. Changing the time zone rebuilds the month around that zone's
+current date. Date & time and Your details steps show progress; the event
+summary and selected time stay visible. Choose another time preserves attendee
+input. Event booking pages do not show an All meetings link back to the profile
+chooser.
 The private confirmation shows the meeting, date, timezone, location, and guest.
 In the native desktop, iOS and Android apps, standalone booking and receipt pages keep a
 sticky **Back to Macro** button below the device's top safe-area inset. It returns to
