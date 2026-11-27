@@ -1,6 +1,10 @@
 import { match } from 'ts-pattern';
 import { describe, expect, it } from 'vitest';
-import { type CacheRequest, INITIAL_CACHE_REVISION } from '../protocol';
+import {
+  type CacheRequest,
+  type CacheResponse,
+  INITIAL_CACHE_REVISION,
+} from '../protocol';
 import {
   type CoordinatorAction,
   CoordinatorCore,
@@ -318,7 +322,9 @@ describe('CoordinatorCore', () => {
       nowMs: 0,
       leaseExpiresAtMs: 300_000,
     });
-    const commit = (id: number): CacheRequest => ({
+    const commit = (
+      id: number
+    ): Extract<CacheRequest, { kind: 'commit-optimistic-write' }> => ({
       id,
       kind: 'commit-optimistic-write',
       transactionId: '7',
@@ -434,6 +440,188 @@ describe('CoordinatorCore', () => {
       expect(core.supersede()).toEqual([
         { kind: 'drain-owner', tabId: 'tab-a', ownerEpoch: 1, handoff: true },
       ]);
+    });
+
+    it('waits for a claim still on its way to the engine', () => {
+      const core = new CoordinatorCore('scope');
+      core.registerTab('tab-a');
+      core.registerTab('tab-b');
+      ready(core, 'tab-a', 1, 'opened-existing');
+      const claim = action(
+        core.request('tab-b', claimNext(1)),
+        'route-request'
+      );
+      expect(core.supersede()).toEqual([
+        { kind: 'await-settlements', ms: SETTLEMENT_WAIT_MS, claims: 0 },
+      ]);
+      // The claim lands during the wait, which starts over for it.
+      expect(
+        core.engineResponse(
+          1,
+          claim.routeId,
+          ok({ transactionId: '7', leaseGeneration: '1' })
+        )
+      ).toEqual([
+        { kind: 'await-settlements', ms: SETTLEMENT_WAIT_MS, claims: 1 },
+        expect.objectContaining({ kind: 'deliver-response', tabId: 'tab-b' }),
+      ]);
+      const settle = action(core.request('tab-b', commit(2)), 'route-request');
+      expect(
+        core.engineResponse(1, settle.routeId, ok({ kind: 'committed' }))
+      ).toContainEqual({
+        kind: 'drain-owner',
+        tabId: 'tab-a',
+        ownerEpoch: 1,
+        handoff: true,
+      });
+    });
+
+    it('waits for a head an enqueue claims during the wait', () => {
+      const core = claimed();
+      core.supersede();
+      const enqueue = action(
+        core.request('tab-b', {
+          id: 3,
+          kind: 'enqueue-optimistic-mutation',
+        } as unknown as CacheRequest),
+        'route-request'
+      );
+      const settle = action(core.request('tab-b', commit(2)), 'route-request');
+      // Transaction 7 is written, but the enqueue is still out.
+      expect(
+        core.engineResponse(1, settle.routeId, ok({ kind: 'committed' }))
+      ).not.toContainEqual(expect.objectContaining({ kind: 'drain-owner' }));
+      core.engineResponse(
+        1,
+        enqueue.routeId,
+        ok({
+          initialClaim: {
+            kind: 'claimed',
+            mutation: { transactionId: '8', leaseGeneration: '1' },
+          },
+        })
+      );
+      expect(core.state.kind).toBe('active');
+      const eight = action(
+        core.request('tab-b', { ...commit(4), transactionId: '8' }),
+        'route-request'
+      );
+      expect(
+        core.engineResponse(1, eight.routeId, ok({ kind: 'committed' }))
+      ).toContainEqual(expect.objectContaining({ kind: 'drain-owner' }));
+    });
+
+    it('keeps waiting when a settlement was not written, or settles an older lease', () => {
+      const core = new CoordinatorCore('scope');
+      core.registerTab('tab-a');
+      core.registerTab('tab-b');
+      ready(core, 'tab-a', 1, 'opened-existing');
+      const claim = action(
+        core.request('tab-b', claimNext(1)),
+        'route-request'
+      );
+      core.engineResponse(
+        1,
+        claim.routeId,
+        ok({ transactionId: '7', leaseGeneration: '2' })
+      );
+      core.supersede();
+      const settle = (
+        id: number,
+        leaseGeneration: string,
+        response: CacheResponse
+      ) => {
+        const route = action(
+          core.request('tab-b', { ...commit(id), leaseGeneration }),
+          'route-request'
+        );
+        return core.engineResponse(1, route.routeId, response);
+      };
+      const drained = expect.objectContaining({ kind: 'drain-owner' });
+      expect(
+        settle(2, '2', { id: 0, ok: false, error: 'storage failed' })
+      ).not.toContainEqual(drained);
+      expect(
+        settle(3, '2', ok({ kind: 'failed', error: 'the lease was lost' }))
+      ).not.toContainEqual(drained);
+      expect(settle(4, '1', ok({ kind: 'committed' }))).not.toContainEqual(
+        drained
+      );
+      expect(settle(5, '2', ok({ kind: 'committed' }))).toContainEqual(drained);
+    });
+
+    it('drains once a clear leaves no claimed head', () => {
+      const core = claimed();
+      core.supersede();
+      const clear = action(
+        core.request('tab-b', { id: 2, kind: 'clear' }),
+        'route-request'
+      );
+      expect(core.engineResponse(1, clear.routeId, ok(null))).toContainEqual(
+        expect.objectContaining({ kind: 'drain-owner' })
+      );
+    });
+
+    it('elects another engine when the owner goes while a head is out', () => {
+      const core = new CoordinatorCore('scope');
+      for (const tab of ['tab-a', 'tab-b', 'tab-c']) core.registerTab(tab);
+      ready(core, 'tab-a', 1, 'opened-existing');
+      const claim = action(
+        core.request('tab-b', claimNext(1)),
+        'route-request'
+      );
+      core.engineResponse(1, claim.routeId, ok({ transactionId: '7' }));
+      core.supersede();
+      const left = core.tabLost('tab-a');
+      expect(left).not.toContainEqual(
+        expect.objectContaining({ kind: 'broadcast-cache-superseded' })
+      );
+      expect(core.state).toMatchObject({ kind: 'activating', ownerEpoch: 2 });
+      const next = core.state as { tabId: string };
+      // The new engine serves the waiting settlement, then hands over.
+      expect(ready(core, next.tabId, 2, 'opened-existing')).not.toContainEqual(
+        expect.objectContaining({ kind: 'drain-owner' })
+      );
+      const settle = action(core.request('tab-b', commit(2)), 'route-request');
+      expect(
+        core.engineResponse(2, settle.routeId, ok({ kind: 'committed' }))
+      ).toContainEqual(
+        expect.objectContaining({ kind: 'drain-owner', ownerEpoch: 2 })
+      );
+    });
+
+    it('keeps waiting through a drain that was under way at the takeover', () => {
+      const core = claimed();
+      core.setTabVisibility('tab-a', false);
+      expect(core.drainHiddenOwner(1)).toContainEqual(
+        expect.objectContaining({ kind: 'drain-owner' })
+      );
+      expect(core.supersede()).toEqual([
+        { kind: 'await-settlements', ms: SETTLEMENT_WAIT_MS, claims: 1 },
+      ]);
+      expect(core.engineDrained('tab-a', 1)).not.toContainEqual(
+        expect.objectContaining({ kind: 'broadcast-cache-superseded' })
+      );
+      expect(core.state).toMatchObject({ kind: 'activating', tabId: 'tab-b' });
+      // Nobody settles: the wait runs out while tab-b's engine opens, and
+      // the handover follows once it is open.
+      expect(core.settlementsOverdue()).toEqual([
+        { kind: 'settlement-wait-ended', unsettled: 1 },
+      ]);
+      expect(ready(core, 'tab-b', 2, 'opened-existing')).toContainEqual(
+        expect.objectContaining({ kind: 'drain-owner', ownerEpoch: 2 })
+      );
+    });
+
+    it('hands over at once when the next engine would reset the database', () => {
+      const core = claimed();
+      core.supersede();
+      // An engine lost mid-write leaves a database its successor wipes,
+      // queue and all, so no engine of this build opens it again.
+      core.ownerLost('tab-a', 1, 'the engine crashed');
+      expect(core.resumeAfterLoss()).toContainEqual(
+        expect.objectContaining({ kind: 'broadcast-cache-superseded' })
+      );
     });
 
     it('keeps a hidden owner serving while it waits', () => {

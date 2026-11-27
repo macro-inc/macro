@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { INITIAL_CACHE_REVISION } from '../protocol';
-import { SETTLEMENT_WAIT_MS } from './coordinator-core';
+import {
+  SETTLEMENT_WAIT_LIMIT_MS,
+  SETTLEMENT_WAIT_MS,
+} from './coordinator-core';
 import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
   coordinatorLivenessLockName,
@@ -1660,6 +1663,60 @@ describe('CoordinatorRouter', () => {
     });
     for (const tab of [tabA, tabB])
       expect(messagesOfKind(tab, 'cache-superseded')).toHaveLength(1);
+  });
+
+  it('gives a head claimed during the wait a wait of its own, up to a limit', async () => {
+    const { router, tabB, engine, ask } = await holdTheDatabase(1_000);
+    const claim = async (id: number) => {
+      await router.handleTabMessage(tabB as CoordinatorMessagePort, {
+        ...version,
+        kind: 'cache-request',
+        tabId: 'tab-b',
+        request: {
+          id,
+          kind: 'enqueue-optimistic-mutation',
+          uuid: `mutation-${id}`,
+          query: 'mutation M { m }',
+          data: { m: true },
+          createdAtMs: 0,
+          owner: 'exchange-live:tab-b',
+          nowMs: 0,
+          leaseExpiresAtMs: 300_000,
+        },
+      });
+      return messagesOfKind(engine, 'engine-request').at(-1) as unknown as {
+        routeId: number;
+      };
+    };
+    const answer = (routeId: number, transactionId: string) =>
+      engine.receive({
+        ...version,
+        kind: 'engine-response',
+        ownerEpoch: 1,
+        routeId,
+        response: {
+          id: routeId,
+          ok: true,
+          result: {
+            initialClaim: { kind: 'claimed', mutation: { transactionId } },
+          },
+        },
+      });
+    // The first enqueue is still out when the newer build asks.
+    const first = await claim(7);
+    ask(2_000);
+    await vi.advanceTimersByTimeAsync(60_000);
+    answer(first.routeId, '42');
+    await vi.advanceTimersByTimeAsync(SETTLEMENT_WAIT_MS - 1);
+    expect(messagesOfKind(engine, 'drain-engine')).toEqual([]);
+    // Another claim near the end gets no more than the limit.
+    answer((await claim(8)).routeId, '43');
+    await vi.advanceTimersByTimeAsync(
+      SETTLEMENT_WAIT_LIMIT_MS - 60_000 - SETTLEMENT_WAIT_MS
+    );
+    expect(messagesOfKind(engine, 'drain-engine')).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(messagesOfKind(engine, 'drain-engine')).toHaveLength(1);
   });
 
   it('answers a newer build while draining and hands over once drained', async () => {

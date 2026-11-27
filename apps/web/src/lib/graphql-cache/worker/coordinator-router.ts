@@ -17,6 +17,7 @@ import {
   CoordinatorCore,
   type CoordinatorSnapshot,
   type OwnerLockUnavailableReason,
+  SETTLEMENT_WAIT_LIMIT_MS,
   startupPhaseMayTouchStorage,
 } from './coordinator-core';
 import {
@@ -384,6 +385,7 @@ export class CoordinatorRouter {
   private openedAt: number | undefined;
   /** When a newer build began waiting for claimed heads. */
   private settlementWaitStartedAt: number | undefined;
+  private settlementWaitTimer: ReturnType<typeof setTimeout> | undefined;
   private recoveryRetryTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly now = (): number =>
     globalThis.performance?.now() ?? Date.now();
@@ -1263,24 +1265,38 @@ export class CoordinatorRouter {
           this.scheduleResetActivation();
           break;
         case 'await-settlements': {
-          this.settlementWaitStartedAt = this.now();
-          this.telemetry.record({
-            name: 'graphql_cache.owner',
-            operationCategory: 'lifecycle',
-            outcome: 'success',
-            ownerEvent: 'settlement-wait-started',
-            count: action.claims,
-          });
+          // A head claimed during the wait extends it, up to the limit.
+          const now = this.now();
+          if (this.settlementWaitStartedAt === undefined) {
+            this.settlementWaitStartedAt = now;
+            this.telemetry.record({
+              name: 'graphql_cache.owner',
+              operationCategory: 'lifecycle',
+              outcome: 'success',
+              ownerEvent: 'settlement-wait-started',
+              count: action.claims,
+            });
+          }
+          const ms = Math.min(
+            action.ms,
+            this.settlementWaitStartedAt + SETTLEMENT_WAIT_LIMIT_MS - now
+          );
+          if (this.settlementWaitTimer !== undefined)
+            this.clearTimeoutFn(this.settlementWaitTimer);
           const core = this.coreValue;
-          this.setTimeoutFn(() => {
+          this.settlementWaitTimer = this.setTimeoutFn(() => {
+            this.settlementWaitTimer = undefined;
             if (this.coreValue === core && core)
               this.applyActions(core.settlementsOverdue());
-          }, action.ms);
+          }, ms);
           break;
         }
         case 'settlement-wait-ended': {
           const startedAt = this.settlementWaitStartedAt;
           this.settlementWaitStartedAt = undefined;
+          if (this.settlementWaitTimer !== undefined)
+            this.clearTimeoutFn(this.settlementWaitTimer);
+          this.settlementWaitTimer = undefined;
           // Abrupt: a head still out may reach a retired host, and be sent
           // again by a page of the newer build.
           this.telemetry.record({
