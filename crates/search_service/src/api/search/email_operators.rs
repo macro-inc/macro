@@ -10,7 +10,7 @@
 //! Every operator becomes an [`EmailFilters`] field, so the same typed text
 //! searches the same way from every caller of the search service.
 
-use super::terms::left_out;
+use super::terms::{left_out, names_something};
 use chrono::{DateTime, Days, Months, NaiveDate, NaiveDateTime, TimeZone, Timelike, Utc};
 use chrono_tz::Tz;
 use item_filters::{
@@ -167,11 +167,18 @@ fn calendar_span(value: &str) -> Option<CalendarSpan> {
 /// The operator `term` names, if it is one with a valid value.
 fn operator(term: &str) -> Option<Operator> {
     let (name, value) = name_and_value(term).ok()?;
-    if !value.chars().any(char::is_alphanumeric) {
+    if !names_something(value) {
         return None;
     }
     let lowered = value.to_lowercase();
-    let text = |part| Some(Operator::Text(part, value.to_string()));
+    // Text is matched by its words, so an emoji alone (`subject:🔥`) stays a
+    // word; a label or tag can be named by one.
+    let text = |part| {
+        value
+            .chars()
+            .any(char::is_alphanumeric)
+            .then(|| Operator::Text(part, value.to_string()))
+    };
     match name.to_ascii_lowercase().as_str() {
         "subject" => text(EmailTextPart::Subject),
         "from" => text(EmailTextPart::From),

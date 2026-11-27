@@ -1,3 +1,4 @@
+import { nameAsTyped } from '@app/components/view-shell/search-terms';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { PROPERTY_OPTION_IDS } from '../../property/identifiers';
 import {
@@ -14,7 +15,6 @@ import {
   type SearchIndexId,
 } from './search-filters';
 import {
-  nameAsTyped,
   SEARCH_OPERATOR_TYPES,
   type SearchOperatorBinding,
   type SearchOperatorCallStatus,

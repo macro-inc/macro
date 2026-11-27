@@ -934,6 +934,108 @@ async fn a_label_name_matches_tags_and_inbox_labels_ignoring_case() {
 }
 
 #[tokio::test]
+async fn a_label_name_matches_with_its_quotes_left_out() {
+    let plan = Uuid::from_u128(42);
+    let hot = Uuid::from_u128(43);
+    let source = Source {
+        tags: vec![
+            TagOption {
+                label: "Q3 \"Plan\"".to_string(),
+                option_id: plan,
+            },
+            TagOption {
+                label: "🔥".to_string(),
+                option_id: hot,
+            },
+        ],
+        labels: vec!["“Waiting”".to_string()],
+        ..Source::default()
+    };
+    let service = EmailSearchService(source);
+    let filters = EmailFilters {
+        label_names: ["q3 plan", "🔥", "waiting"]
+            .into_iter()
+            .map(|name| EmailLabelMatch {
+                name: name.to_string(),
+                exclude: false,
+            })
+            .collect(),
+        ..EmailFilters::default()
+    };
+
+    let scope = threads(
+        service
+            .scope(&viewer(), &filters, &inboxes())
+            .await
+            .unwrap(),
+    );
+
+    assert_eq!(
+        scope.label_conditions,
+        vec![
+            LabelCondition {
+                labels: Vec::new(),
+                tag_option_ids: vec![plan],
+                exclude: false,
+            },
+            LabelCondition {
+                labels: Vec::new(),
+                tag_option_ids: vec![hot],
+                exclude: false,
+            },
+            LabelCondition {
+                labels: vec!["“Waiting”".to_string()],
+                tag_option_ids: Vec::new(),
+                exclude: false,
+            },
+        ]
+    );
+}
+
+#[tokio::test]
+async fn a_name_left_out_leaves_out_each_name_it_is_typed_as() {
+    let plain = Uuid::from_u128(44);
+    let quoted = Uuid::from_u128(45);
+    let source = Source {
+        tags: vec![
+            TagOption {
+                label: "Plan".to_string(),
+                option_id: plain,
+            },
+            TagOption {
+                label: "\"Plan\"".to_string(),
+                option_id: quoted,
+            },
+        ],
+        ..Source::default()
+    };
+    let service = EmailSearchService(source);
+    let filters = EmailFilters {
+        label_names: vec![EmailLabelMatch {
+            name: "plan".to_string(),
+            exclude: true,
+        }],
+        ..EmailFilters::default()
+    };
+
+    let scope = threads(
+        service
+            .scope(&viewer(), &filters, &inboxes())
+            .await
+            .unwrap(),
+    );
+
+    assert_eq!(
+        scope.label_conditions,
+        vec![LabelCondition {
+            labels: Vec::new(),
+            tag_option_ids: vec![plain, quoted],
+            exclude: true,
+        }]
+    );
+}
+
+#[tokio::test]
 async fn a_label_that_names_nothing_matches_nothing() {
     let service = EmailSearchService(Source::default());
     let filters = EmailFilters {

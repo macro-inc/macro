@@ -55,6 +55,7 @@ describe('isUnfinishedEmailSearchOperator', () => {
       'newer_than:3',
       '-in:',
       '-in:se',
+      'label:“',
     ]) {
       expect(isUnfinishedEmailSearchOperator(typed), typed).toBe(true);
     }
@@ -174,6 +175,25 @@ describe('emailSearchCompletionText for people and labels', () => {
       })
     ).toBe('in:travel ');
   });
+
+  it('writes a name without its quote marks, and an emoji name as it is', () => {
+    expect(
+      emailSearchCompletionText({
+        kind: 'label',
+        key: 'label',
+        exclude: false,
+        label: { name: 'Q3 "Plan"', kind: 'tag' },
+      })
+    ).toBe('label:"Q3 Plan" ');
+    expect(
+      emailSearchCompletionText({
+        kind: 'label',
+        key: 'label',
+        exclude: true,
+        label: { name: '🔥', kind: 'tag' },
+      })
+    ).toBe('-label:🔥 ');
+  });
 });
 
 describe('matchEmailSearchLabels', () => {
@@ -198,13 +218,30 @@ describe('matchEmailSearchLabels', () => {
     ]);
   });
 
-  it('leaves out a name with a quote mark, which the search cannot name', () => {
-    expect(
-      matchEmailSearchLabels(
-        [...labels, { name: 'Re "urgent"', kind: 'label' }],
-        're'
-      ).map((l) => l.name)
-    ).toEqual(['Receipts/Travel', 'Respond']);
+  it('matches a name with its quote marks left out, as the search reads it', () => {
+    const quoted = [
+      ...labels,
+      { name: 'Q3 "Plan"', kind: 'tag' as const },
+      { name: '“Waiting”', kind: 'label' as const },
+    ];
+    expect(matchEmailSearchLabels(quoted, 'q3 p').map((l) => l.name)).toEqual([
+      'Q3 "Plan"',
+    ]);
+    expect(matchEmailSearchLabels(quoted, 'wait').map((l) => l.name)).toEqual([
+      '“Waiting”',
+    ]);
+  });
+
+  it('offers a name an emoji makes, not one of ASCII punctuation alone', () => {
+    const marked = [
+      ...labels,
+      { name: '🔥', kind: 'tag' as const },
+      { name: '-', kind: 'tag' as const },
+    ];
+    expect(matchEmailSearchLabels(marked, '🔥').map((l) => l.name)).toEqual([
+      '🔥',
+    ]);
+    expect(matchEmailSearchLabels(marked, '-')).toEqual([]);
   });
 
   it('needs two letters before matching inside a name', () => {

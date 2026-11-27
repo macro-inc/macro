@@ -1,5 +1,6 @@
 import type { ListSearchSuggestions } from '@app/components/view-shell/list-search-keys';
 import { searchTextRuns } from '@app/components/view-shell/search-operator-text';
+import { nameAsTyped } from '@app/components/view-shell/search-terms';
 import { foldName } from '@core/util/name-match-score';
 import {
   type Accessor,
@@ -202,7 +203,8 @@ export function createEmailSearchSuggestions(options: {
     matchEmailSearchLabels(options.labels?.() ?? [], typed)
       .filter(
         (label) =>
-          key !== 'in' || emailSearchScopesStartingWith(label.name).length === 0
+          key !== 'in' ||
+          emailSearchScopesStartingWith(nameAsTyped(label.name)).length === 0
       )
       .slice(0, MAX_LISTED)
       .map((label) => ({ kind: 'label' as const, key, exclude, label }));

@@ -181,7 +181,9 @@ per-entity-type search plus a unified search across them — mounted into
   (`api/search/email_operators.rs`, after `split_search_terms`): `subject:`,
   `from:`, `to:` (To, Cc and Bcc), `cc:`, `bcc:`, `in:<view>` (the last one
   wins; `in:focus` is the web app's and stays a word here), `in:<name>` and
-  `label:` (a tag or inbox label of that name), `is:unread|read|starred|shared`,
+  `label:` (a tag or inbox label of that name, matched with its phrase quotes
+  left out through `as_typed`, so `label:"Q3 Plan"` finds a tag named
+  Q3 "Plan"), `is:unread|read|starred|shared`,
   `has:attachment`, `after:`/`before:` (a day, from its midnight in the
   request's `time_zone`) and `newer_than:`/`older_than:` (`3d`, `2w`, `1m`,
   `1y` back on that zone's calendar), each with a minus to leave matches out.
@@ -237,7 +239,10 @@ per-entity-type search plus a unified search across them — mounted into
   `MAX_CHANNEL_NAMES` channel names. An unknown name or invalid value stays
   a word. A `tag:` or `in:#` value needs a letter, a digit or another
   non-ASCII character such as an emoji (`tag:🔥`); ASCII punctuation alone
-  (`tag:-`) stays a word. Tag and channel names match with their phrase
+  (`tag:-`) stays a word. `terms::names_something` is that rule, and Mail's
+  reader applies it to every value, so `label:🔥` and `in:🔥` name a tag or label,
+  while its text operators (`subject:`, `from:` and the rest) still need a
+  letter or digit, since text is matched by its words. Tag and channel names match with their phrase
   quotes left out (`domain/operator_names.rs` `as_typed`, and
   `outbound/operator_names.rs` for channels), since a typed term drops them. `search_operators/typed_operators.json` lists typed queries
   and how many operators each holds; change it with the parser.
