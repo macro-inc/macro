@@ -1194,8 +1194,10 @@ input, personal suggestions are recent-first rather than domain/brevity-weighted
 While the contact read for newly typed text is pending, the contacts already
 listed who still match it stay listed and no other contact shows before it
 lands (thread participants and a typed address can). Pasting a listed
-contact's address and pressing Enter then adds that contact's chip; if the
-contact cache changed generation in between, Enter adds the address alone.
+contact's address and pressing Enter then adds that contact's chip. If the
+contact cache changed generation in between, the contact is no longer listed
+until the read lands, so Enter adds the address alone unless a thread
+participant has it.
 A chip shows the name followed by the address in muted ink.
 A quick click or tap in the message body moves the caret where it lands; check
 it by tapping mid-word and on another line of a two-line body, then typing.
