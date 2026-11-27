@@ -101,6 +101,11 @@ Do not add plaintext values to any metadata record, errors or tracing fields.
   eviction. `passwords.openbao.authenticate` spans mark real logins only;
   operation spans carry `cache_hit` and `token_retry`. Lifecycle (namespace
   purge) logins are never cached.
+- Card advisory text belongs to the protected provider envelope. Human service
+  methods validate it and recheck item access after reading it. List, reveal,
+  and agent calls exclude it. A metadata PATCH that changes into or out of the
+  Card kind preserves credentials and advances the provider version to fence
+  delayed advisory writes.
 - Nothing here creates namespaces. A missing one at team login (and only there) is
   `Error::NotProvisioned`: HTTP 409 `vault_not_provisioned` (agent routes too), import item code
   `vault_not_provisioned`, authenticate span `outcome=not_provisioned`. Locally,

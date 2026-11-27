@@ -193,7 +193,27 @@ pub trait SecretProvider: Send + Sync {
         expected_version: i32,
         operation: uuid::Uuid,
         values: &SecretValues,
+    ) -> Result<i32, Error> {
+        self.write_with_use_when(team, item, expected_version, operation, values, None)
+            .await
+    }
+    /// Write a protected version with its optional Card advisory under the same CAS guard.
+    async fn write_with_use_when(
+        &self,
+        team: TeamId,
+        item: ItemId,
+        expected_version: i32,
+        operation: uuid::Uuid,
+        values: &SecretValues,
+        use_when: Option<&SecretString>,
     ) -> Result<i32, Error>;
+    /// Resolve only the advisory for a pinned value version.
+    async fn use_when(
+        &self,
+        team: TeamId,
+        item: ItemId,
+        version: i32,
+    ) -> Result<Option<SecretString>, Error>;
     /// Resolve one explicit private value version.
     async fn read(&self, team: TeamId, item: ItemId, version: i32) -> Result<SecretValues, Error>;
     /// Resolve only the account identifier, without exposing other fields to the caller.

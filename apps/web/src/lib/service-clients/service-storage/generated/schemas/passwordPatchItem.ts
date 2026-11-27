@@ -10,7 +10,7 @@ import type { PasswordPatchItemFolderId } from './passwordPatchItemFolderId';
 import type { PasswordPatchItemUrl } from './passwordPatchItemUrl';
 
 /**
- * A metadata-only change never reads or writes a secret value.
+ * A display-field change. Card kind transitions fence earlier protected writes.
  */
 export interface PasswordPatchItem {
   /** Version observed by the editor; absent only for creation. */

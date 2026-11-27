@@ -39,6 +39,33 @@ pub struct SecretString(
     pub String,
 );
 
+/// An explicit change to the protected Card advisory. Omission preserves it.
+pub enum UseWhenChange {
+    /// Replace the advisory with bounded plain text.
+    Set(SecretString),
+    /// Remove the current advisory.
+    Clear,
+}
+
+impl UseWhenChange {
+    pub(super) fn validated(self) -> Result<Self, Error> {
+        let Self::Set(value) = self else {
+            return Ok(Self::Clear);
+        };
+        let text = value.0.trim();
+        if text.is_empty()
+            || value.0.encode_utf16().count() > 240
+            || value
+                .0
+                .chars()
+                .any(|c| c.is_control() && !matches!(c, '\n' | '\r' | '\t'))
+        {
+            return Err(Error::Invalid);
+        }
+        Ok(Self::Set(SecretString(text.to_owned())))
+    }
+}
+
 /// Secret payload; never persisted in the metadata database or traced.
 #[derive(Clone, Serialize, Deserialize, Zeroize, ZeroizeOnDrop, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -369,7 +396,7 @@ pub enum Error {
     NotProvisioned,
 }
 
-/// A metadata-only change never reads or writes a secret value.
+/// A display-field change. Card kind transitions fence earlier protected writes.
 #[derive(Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[schema(as=PasswordPatchItem)]

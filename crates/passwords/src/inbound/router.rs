@@ -398,7 +398,7 @@ pub async fn update<A: MacroAuthorizationService>(
     ))
 }
 #[utoipa::path(operation_id = "passwords_patch",patch,path="/passwords/teams/{team}/items/{item}",params(("team"=Uuid,Path),("item"=Uuid,Path),("X-Macro-Passwords"=String,Header,description="Required CSRF header; send 1")),request_body=PatchItem,responses((status=200,body=ItemView),(status=403,body=Failure),(status=409,body=Failure,description="`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up")),tag="passwords")]
-/// Change metadata without resolving private values.
+/// Change display fields. Card kind transitions may advance the protected value version.
 pub async fn patch<A: MacroAuthorizationService>(
     State(state): State<PasswordRouterState<A>>,
     user: MacroAuthorizationExtractor<A, UserOnly>,

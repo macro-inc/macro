@@ -4578,7 +4578,7 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * Change metadata without resolving private values.
+     * Change display fields. Card kind transitions may advance the protected value version.
      */
     public passwordsPatch<ThrowOnError extends boolean = false>(options: Options<PasswordsPatchData, ThrowOnError>): RequestResult<PasswordsPatchResponses, PasswordsPatchErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PasswordsPatchResponses, PasswordsPatchErrors, ThrowOnError>({

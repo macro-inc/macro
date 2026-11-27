@@ -13,10 +13,34 @@ use openbao_client::{Cause, OpenBaoClient, Session};
 mod token_cache;
 use token_cache::TokenCache;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 struct StoredSecret {
     operation_id: uuid::Uuid,
     values: SecretValues,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    use_when: Option<SecretString>,
+}
+
+#[derive(Deserialize)]
+struct StoredCredential {
+    operation_id: uuid::Uuid,
+    values: SecretValues,
+}
+
+#[derive(Deserialize)]
+struct StoredUseWhen {
+    #[serde(rename = "operation_id")]
+    _operation_id: uuid::Uuid,
+    #[serde(rename = "values")]
+    _values: StoredUseWhenValues,
+    #[serde(default)]
+    use_when: Option<SecretString>,
+}
+
+#[derive(Deserialize)]
+struct StoredUseWhenValues {
+    #[serde(rename = "password")]
+    _password: serde::de::IgnoredAny,
 }
 
 #[derive(Clone, Copy)]
@@ -275,7 +299,7 @@ impl SecretProvider for OpenBaoProvider {
             };
             // Pin the operation ID to the observed fence: an independent provider
             // writer must not pair a newer operation with the previous version.
-            let stored: StoredSecret = self
+            let stored: StoredCredential = self
                 .api
                 .read(
                     &session,
@@ -293,13 +317,14 @@ impl SecretProvider for OpenBaoProvider {
     }
 
     #[tracing::instrument(skip_all, err, name = "passwords.openbao.write")]
-    async fn write(
+    async fn write_with_use_when(
         &self,
         team: TeamId,
         item: ItemId,
         expected_version: i32,
         operation: uuid::Uuid,
         values: &SecretValues,
+        use_when: Option<&SecretString>,
     ) -> Result<i32, Error> {
         let cas = u64::try_from(expected_version).map_err(|_| Error::Invalid)?;
         let path = item.0.to_string();
@@ -309,6 +334,7 @@ impl SecretProvider for OpenBaoProvider {
         let stored = StoredSecret {
             operation_id: operation,
             values: values.clone(),
+            use_when: use_when.cloned(),
         };
         let stored = &stored;
         let version = self
@@ -329,7 +355,7 @@ impl SecretProvider for OpenBaoProvider {
         let path = path.as_str();
         let audit_id = audit_id();
         let audit_id = audit_id.as_str();
-        let stored: StoredSecret = self
+        let stored: StoredCredential = self
             .with_session(team, |session| async move {
                 Ok(self
                     .api
@@ -338,6 +364,29 @@ impl SecretProvider for OpenBaoProvider {
             })
             .await?;
         Ok(stored.values)
+    }
+
+    #[tracing::instrument(skip_all,err,name="passwords.openbao.use_when",fields(team_id=%team.0,item_id=%item.0))]
+    async fn use_when(
+        &self,
+        team: TeamId,
+        item: ItemId,
+        version: i32,
+    ) -> Result<Option<SecretString>, Error> {
+        let version = u64::try_from(version).map_err(|_| Error::Invalid)?;
+        let path = item.0.to_string();
+        let path = path.as_str();
+        let audit_id = audit_id();
+        let audit_id = audit_id.as_str();
+        let stored: StoredUseWhen = self
+            .with_session(team, |session| async move {
+                Ok(self
+                    .api
+                    .read(&session, path, Some(version), Some(audit_id))
+                    .await?)
+            })
+            .await?;
+        Ok(stored.use_when)
     }
 
     #[tracing::instrument(skip_all,err,name="passwords.openbao.username",fields(team_id=%team.0,item_id=%item.0))]
@@ -389,6 +438,7 @@ impl SecretProvider for OpenBaoProvider {
                 };
                 let tombstone = StoredSecret {
                     operation_id: uuid::Uuid::now_v7(),
+                    use_when: None,
                     values: SecretValues {
                         username: SecretString(String::new()),
                         password: SecretString(String::new()),
@@ -518,14 +568,18 @@ impl SecretProvider for UnavailableProvider {
     async fn status(&self, _: TeamId, _: ItemId) -> Result<Option<(i32, uuid::Uuid)>, Error> {
         Err(Error::Unavailable)
     }
-    async fn write(
+    async fn write_with_use_when(
         &self,
         _: TeamId,
         _: ItemId,
         _: i32,
         _: uuid::Uuid,
         _: &SecretValues,
+        _: Option<&SecretString>,
     ) -> Result<i32, Error> {
+        Err(Error::Unavailable)
+    }
+    async fn use_when(&self, _: TeamId, _: ItemId, _: i32) -> Result<Option<SecretString>, Error> {
         Err(Error::Unavailable)
     }
     async fn read(&self, _: TeamId, _: ItemId, _: i32) -> Result<SecretValues, Error> {

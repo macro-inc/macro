@@ -166,7 +166,7 @@ fn insert(
         .stored
         .lock()
         .unwrap()
-        .insert(item.0, (1, Uuid::now_v7(), values));
+        .insert(item.0, (1, Uuid::now_v7(), values, None));
     item
 }
 
@@ -600,7 +600,7 @@ async fn update_replaces_one_slot_and_preserves_everything_else() {
     assert_eq!(updated.version, 2);
     {
         let stored = vault.provider.stored.lock().unwrap();
-        let (version, _, values) = stored.get(&item.0).unwrap();
+        let (version, _, values, _) = stored.get(&item.0).unwrap();
         assert_eq!(*version, 2);
         assert_eq!(values.username.0, "ünïcode user");
         assert_eq!(values.password.0, "new");

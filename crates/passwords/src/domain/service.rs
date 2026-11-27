@@ -5,6 +5,8 @@ use password_import::vault;
 use std::sync::Arc;
 use uuid::Uuid;
 
+mod use_when;
+
 const CLEANUP_ATTEMPT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// Provider-independent vault use cases with current membership and item grant enforcement.
@@ -342,7 +344,6 @@ impl PasswordService {
             version: record.metadata.version,
         })
     }
-    #[tracing::instrument(skip_all,err,name="passwords.create",fields(team_id=%team.0))]
     /// Create a credential using a stable operation ID and durable metadata intent.
     pub async fn create(
         &self,
@@ -350,10 +351,22 @@ impl PasswordService {
         team: TeamId,
         command: WriteItem,
     ) -> Result<ItemView, Error> {
-        let _lock = self
+        self.create_with_use_when(actor, team, command, None).await
+    }
+
+    /// Create a credential and optionally set its protected Card advisory.
+    #[tracing::instrument(skip_all,err,name="passwords.create",fields(team_id=%team.0))]
+    pub async fn create_with_use_when(
+        &self,
+        actor: &Actor,
+        team: TeamId,
+        command: WriteItem,
+        use_when: Option<UseWhenChange>,
+    ) -> Result<ItemView, Error> {
+        let lock = self
             .admit(actor, team, ItemId(command.operation_id))
             .await?;
-        self.create_under_lease(actor, team, command, _lock.as_ref())
+        self.create_under_lease(actor, team, command, use_when, lock.as_ref())
             .await
             .map(|(item, _)| item)
     }
@@ -363,10 +376,18 @@ impl PasswordService {
         actor: &Actor,
         team: TeamId,
         command: WriteItem,
+        use_when: Option<UseWhenChange>,
         _lease: &dyn ItemLock,
     ) -> Result<(ItemView, bool), Error> {
         let id = ItemId(command.operation_id);
         command.validate()?;
+        if use_when.is_some() && !matches!(command.kind, ItemKind::Card) {
+            return Err(Error::Invalid);
+        }
+        let use_when = match use_when.map(UseWhenChange::validated).transpose()? {
+            Some(UseWhenChange::Set(value)) => Some(value),
+            Some(UseWhenChange::Clear) | None => None,
+        };
         if command.expected_version.is_some() || command.operation_id.get_version_num() != 7 {
             return Err(Error::Invalid);
         }
@@ -429,7 +450,14 @@ impl PasswordService {
             .stage(command.operation_id, &record, &actor.user_id)
             .await?;
         self.provider
-            .write(team, id, 0, command.operation_id, &command.values)
+            .write_with_use_when(
+                team,
+                id,
+                0,
+                command.operation_id,
+                &command.values,
+                use_when.as_ref(),
+            )
             .await?;
         self.reconcile(team, id).await?;
         self.repository
@@ -437,8 +465,7 @@ impl PasswordService {
             .await?;
         Ok((self.metadata(actor, record).await?, true))
     }
-    #[tracing::instrument(skip_all,err,name="passwords.update",fields(team_id=%team.0,item_id=%item.0))]
-    /// Update an editable credential with provider CAS and retry recovery.
+    /// Update an editable credential, preserving any current Card advisory.
     pub async fn update(
         &self,
         actor: &Actor,
@@ -446,11 +473,31 @@ impl PasswordService {
         item: ItemId,
         command: WriteItem,
     ) -> Result<ItemView, Error> {
+        self.update_with_use_when(actor, team, item, command, None)
+            .await
+    }
+
+    /// Update a credential and its optional protected advisory under the same CAS guard.
+    #[tracing::instrument(skip_all,err,name="passwords.update",fields(team_id=%team.0,item_id=%item.0))]
+    pub async fn update_with_use_when(
+        &self,
+        actor: &Actor,
+        team: TeamId,
+        item: ItemId,
+        command: WriteItem,
+        use_when: Option<UseWhenChange>,
+    ) -> Result<ItemView, Error> {
         let _lock = self.admit(actor, team, item).await?;
         self.access(actor, team, item, true).await?;
         self.reconcile(team, item).await?;
         let mut record = self.access(actor, team, item, true).await?;
         command.validate()?;
+        let keep_card = matches!(record.metadata.kind, ItemKind::Card)
+            && matches!(command.kind, ItemKind::Card);
+        if use_when.is_some() && !keep_card {
+            return Err(Error::Invalid);
+        }
+        let use_when = use_when.map(UseWhenChange::validated).transpose()?;
         if command.expected_version != Some(record.metadata.version) {
             if let Some((version, operation)) = self.provider.status(team, item).await?
                 && operation == command.operation_id
@@ -473,27 +520,67 @@ impl PasswordService {
             return Err(Error::Conflict);
         }
         self.validate_folder(team, command.folder_id).await?;
-        let expected = record.metadata.version;
-        record.metadata.version = expected.checked_add(1).ok_or(Error::Invalid)?;
+        let use_when = match use_when {
+            Some(UseWhenChange::Set(value)) => Some(value),
+            Some(UseWhenChange::Clear) => None,
+            None if keep_card => {
+                let text = self
+                    .provider
+                    .use_when(team, item, record.metadata.version)
+                    .await?;
+                self.require_same_record(actor, &record, true).await?;
+                text
+            }
+            None => None,
+        };
         record.metadata.name = command.name;
         record.metadata.kind = command.kind;
         record.metadata.url = command.url;
         record.metadata.folder_id = command.folder_id;
         record.metadata.updated_at = Utc::now();
-        self.repository
-            .stage(command.operation_id, &record, &actor.user_id)
-            .await?;
-        self.provider
-            .write(team, item, expected, command.operation_id, &command.values)
-            .await?;
-        self.reconcile(team, item).await?;
-        self.repository
-            .audit(team, item, actor, Action::Update, command.operation_id)
+        let record = self
+            .write_version(
+                actor,
+                record,
+                command.operation_id,
+                &command.values,
+                use_when.as_ref(),
+            )
             .await?;
         self.metadata(actor, record).await
     }
+
+    async fn write_version(
+        &self,
+        actor: &Actor,
+        mut record: Record,
+        operation: Uuid,
+        values: &SecretValues,
+        use_when: Option<&SecretString>,
+    ) -> Result<Record, Error> {
+        let team = record.metadata.team_id;
+        let item = record.metadata.id;
+        let expected = record.metadata.version;
+        record.metadata.version = expected.checked_add(1).ok_or(Error::Invalid)?;
+        self.repository
+            .stage(operation, &record, &actor.user_id)
+            .await?;
+        let published = self
+            .provider
+            .write_with_use_when(team, item, expected, operation, values, use_when)
+            .await?;
+        if published != record.metadata.version {
+            return Err(Error::Unavailable);
+        }
+        self.reconcile(team, item).await?;
+        self.repository
+            .audit(team, item, actor, Action::Update, operation)
+            .await?;
+        Ok(record)
+    }
+
     #[tracing::instrument(skip_all,err,name="passwords.metadata.update",fields(team_id=%team.0,item_id=%item.0))]
-    /// Update display fields without resolving or replacing secret values.
+    /// Update display fields. Card type transitions also fence protected advisory writes.
     pub async fn patch(
         &self,
         actor: &Actor,
@@ -510,11 +597,45 @@ impl PasswordService {
             return Err(Error::Invalid);
         }
         self.validate_folder(team, command.folder_id).await?;
+        let crosses_card = matches!(record.metadata.kind, ItemKind::Card)
+            != matches!(command.kind, ItemKind::Card);
+        let values = if crosses_card {
+            // A kind transition must fence a delayed advisory write even when the
+            // current version has no advisory.
+            self.reconcile(team, item).await?;
+            record = self.access(actor, team, item, true).await?;
+            if record.metadata.version != command.expected_version {
+                return Err(Error::Conflict);
+            }
+            let values = self
+                .provider
+                .read(team, item, record.metadata.version)
+                .await?;
+            self.require_same_record(actor, &record, true).await?;
+            Some(values)
+        } else {
+            None
+        };
         record.metadata.name = command.name;
         record.metadata.kind = command.kind;
         record.metadata.url = command.url;
         record.metadata.folder_id = command.folder_id;
         record.metadata.updated_at = Utc::now();
+        if let Some(values) = values {
+            let staged = self
+                .write_version(actor, record, Uuid::now_v7(), &values, None)
+                .await?;
+            let committed = self.access(actor, team, item, true).await?;
+            // Recovery preserves a newer metadata revision. A lost lease can
+            // therefore accept the provider fence without applying the retype.
+            if committed.metadata.version != staged.metadata.version
+                || std::mem::discriminant(&committed.metadata.kind)
+                    != std::mem::discriminant(&staged.metadata.kind)
+            {
+                return Err(Error::Conflict);
+            }
+            return self.metadata(actor, committed).await;
+        }
         let version = record.metadata.version;
         self.repository.save(&record, Some(version)).await?;
         self.repository

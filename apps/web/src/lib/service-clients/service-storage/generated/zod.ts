@@ -82698,7 +82698,7 @@ export const passwordsRemoveHeader = zod.object({
 });
 
 /**
- * @summary Change metadata without resolving private values.
+ * @summary Change display fields. Card kind transitions may advance the protected value version.
  */
 export const passwordsPatchParams = zod.object({
   team: zod.uuid(),
@@ -82742,7 +82742,9 @@ export const passwordsPatchBody = zod
       ])
       .optional(),
   })
-  .describe('A metadata-only change never reads or writes a secret value.');
+  .describe(
+    'A display-field change. Card kind transitions fence earlier protected writes.'
+  );
 
 export const passwordsPatchResponseShareCountMin = 0;
 
