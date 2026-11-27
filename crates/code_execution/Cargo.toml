@@ -11,6 +11,7 @@ macro_tower_layers = { path = "../macro_tower_layers" }
 opentelemetry = { workspace = true, features = ["trace"] }
 tracing-opentelemetry = { workspace = true }
 reqwest = { workspace = true, features = ["stream"] }
+strum = { workspace = true }
 rustix = { workspace = true }
 async-trait = { workspace = true }
 code_mode_assets = { path = "../code_mode_assets" }
