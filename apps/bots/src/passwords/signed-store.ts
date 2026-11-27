@@ -20,6 +20,13 @@ export type SignedItem = Pick<
   | 'canManage'
 >;
 
+export function canWriteSignedKind(kind: unknown) {
+  return kinds.some(
+    (known) =>
+      known === kind && known !== 'card' && known !== 'verification_code'
+  );
+}
+
 export type SignedVaultResult<T> =
   | { status: 'ready'; value: T }
   | { status: 'signed-out' | 'denied' | 'stale' | 'unavailable' };
@@ -35,7 +42,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-function itemFor(value: unknown, team: string): SignedItem | undefined {
+export function itemFor(value: unknown, team: string): SignedItem | undefined {
   if (!isObject(value) || value.teamId !== team) return;
   const { id, name, kind, url, folderId, version, favorite } = value;
   const { sharedWithTeam, canEdit, canManage } = value;

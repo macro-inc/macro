@@ -3,10 +3,16 @@ import { defineConfig } from 'vite';
 import solid from 'vite-plugin-solid';
 import { botsBoundary } from './scripts/botsBoundary.ts';
 import { localAuth } from './scripts/localAuth.ts';
+import { localVault } from './scripts/localVault.ts';
 import { botsConfig } from './vite.config.ts';
 
 export default defineConfig((env) => {
-  if (env.command !== 'serve' || env.isPreview || env.mode !== 'local-auth') {
+  const passwords = env.mode === 'local-passwords';
+  if (
+    env.command !== 'serve' ||
+    env.isPreview ||
+    (!passwords && env.mode !== 'local-auth')
+  ) {
     throw new Error(
       'Bots local auth is available only on the local dev server'
     );
@@ -16,10 +22,15 @@ export default defineConfig((env) => {
   const path = `/bots-local-auth/${randomUUID()}`;
   return {
     ...config,
-    plugins: [botsBoundary(false), solid({ hot: false }), localAuth(path)],
+    plugins: [
+      botsBoundary(false),
+      solid({ hot: false }),
+      localAuth(path, passwords ? localVault() : undefined),
+    ],
     define: {
       __BOTS_LOCAL_AUTH__: JSON.stringify(path),
       __BOTS_FIXTURES__: false,
+      __BOTS_SIGNED_VAULT__: passwords,
     },
     server: {
       host: '127.0.0.1',

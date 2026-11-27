@@ -11,6 +11,7 @@ import {
 import { session } from '../session';
 import { type SignedEditorMode, SignedPasswordEditor } from './signed-editor';
 import {
+  canWriteSignedKind,
   type SignedItem,
   type SignedSave,
   signedPasswordStorage,
@@ -127,7 +128,7 @@ export default function SignedPasswords() {
                     (name) => name === event.currentTarget.value
                   );
                   event.currentTarget.value = '';
-                  if (!kind || kind === 'verification_code') return;
+                  if (!kind || !canWriteSignedKind(kind)) return;
                   setNotice('');
                   setEditor({ kind });
                 }}
@@ -135,10 +136,7 @@ export default function SignedPasswords() {
                 <option value="">+ Add item</option>
                 <For each={kinds}>
                   {(kind) => (
-                    <option
-                      value={kind}
-                      disabled={kind === 'verification_code'}
-                    >
+                    <option value={kind} disabled={!canWriteSignedKind(kind)}>
                       {layouts[kind].label}
                       {kind === 'verification_code'
                         ? ' (enrollment unavailable)'
@@ -220,7 +218,12 @@ export default function SignedPasswords() {
                               <h2>{item().name}</h2>
                               <p>{layouts[item().kind].label}</p>
                             </div>
-                            <Show when={item().canEdit}>
+                            <Show
+                              when={
+                                item().canEdit &&
+                                canWriteSignedKind(item().kind)
+                              }
+                            >
                               <button
                                 type="button"
                                 onClick={() => {

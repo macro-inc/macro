@@ -103,3 +103,13 @@ For a remote review over an existing SSH connection, preserve both the
 loopback address and the port in the local forward. For example, use
 `ssh -N -L 127.0.0.1:PORT:127.0.0.1:PORT <devbox>` with the port printed by Vite.
 Forward only the app. Auth and Mailpit remain on the devbox loopback.
+
+## Local signed Passwords bridge
+
+Run `BOTS_VAULT_ORIGIN_FILE=/tmp/bots-vault-storage.PROOF/storage-origin bun run --filter @macro-inc/bots dev:passwords` after the reviewed local Storage fixture
+writes its owner-only origin receipt. Use the assigned loopback address. This
+mode verifies the signed synthetic owner's current team with the dedicated local
+issuer and sends only the catalog and item operations to the recorded Storage
+listener. Storage applies its normal item permissions and version checks. The
+bridge returns team-scoped metadata and fixed error codes. It leaves reveal,
+sharing, folders, and selected-agent access outside the local surface.

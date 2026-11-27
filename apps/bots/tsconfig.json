@@ -16,7 +16,7 @@
         "../../packages/sdk/generated/auth/index.ts"
       ],
       "@macro-inc/sdk/generated/storage": [
-        "../../packages/sdk/generated/storage/types.gen.ts"
+        "../../packages/sdk/generated/storage/index.ts"
       ]
     }
   }

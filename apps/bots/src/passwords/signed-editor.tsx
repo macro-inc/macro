@@ -100,7 +100,7 @@ export function SignedPasswordEditor(props: {
       ...metadata,
       operationId: v7(),
       expectedVersion: item?.version,
-      private: !input.has('share'),
+      private: true,
       values: values(kind, input),
     };
     for (const entry of form.querySelectorAll<HTMLInputElement>(
@@ -175,11 +175,6 @@ export function SignedPasswordEditor(props: {
               </label>
             )}
           </For>
-        </Show>
-        <Show when={!editing()}>
-          <label class="password-share">
-            <input type="checkbox" name="share" /> Let team members edit
-          </label>
         </Show>
       </fieldset>
       <div class="password-actions">
