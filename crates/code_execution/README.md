@@ -169,8 +169,8 @@ child before deleting scratch. API writes already accepted by a service may
 complete afterward and must not be blindly retried. SDK operation events carry only an operation name, request identity and status.
 They are bounded diagnostics, not proof of a committed action. Console output
 and progress are program-authored and may be incomplete. W3C trace context and
-`x-macro-code-execution: 1` are sent on every request to a configured service
-origin, whatever credential the request carries. That header is how an API tells a program's
+`x-macro-code-execution: 1` are sent on every request to a configured service's
+host and port, under any scheme, whatever credential the request carries. That header is how an API tells a program's
 request from the person's, so in every run `fetch` is the only way out. Raw
 sockets, listeners and servers (`Deno.connect`, `listen`, `serve` and the like),
 WebSocket and EventSource, `Deno[Deno.internal]` and `process`'s
@@ -178,15 +178,24 @@ WebSocket and EventSource, `Deno[Deno.internal]` and `process`'s
 built-in to a module that throws, except a short list that neither connects,
 starts processes nor loads other built-ins (`NODE_ALLOWED` in
 `src/outbound/deno.rs`); a test fails when the pinned Deno lists a built-in the
-map doesn't know. Like a dry run, this is held inside the process: the
-sandbox's `--allow-net` still reaches the API origins directly.
+map doesn't know. The program's `fetch` hands each request, as plain data, to
+a worker the bootstrap starts before the program loads (`fetcher.mjs`), which
+sets the header and trace context, holds back a dry run's writes and sends
+it. The program can reach the channel to that worker but never its realm, and the worker checks every message, so rewriting built-ins,
+Deno's own fetch internals included, changes only what its request says, not
+whether it is marked or checked. Like a dry run, this is still held inside
+the process: the sandbox's `--allow-net` reaches the API origins directly,
+so an API must not rely on the header alone.
 
 A proxied run (`Egress::Proxied`) is the exception: `--allow-net` names only
 a loopback forwarder the runner starts for that run. The program keeps the
 real hosts for its links, its fetch sends their requests to the forwarder,
 and the forwarder, outside the realm, sets the mark and
 the trace context (a child of the run's span) on every request, dropping
-the ones the program set. It follows no redirects and stops with the run.
+the ones the program set. It follows no redirects, forwards no dry run's
+write, and stops with the run. In a proxied run a program's request that
+isn't under a service's own URL is refused, whatever spelling of the
+forwarder's address it uses.
 
 Deno shares the harness container. The heap setting does not hard-limit native
 memory, ArrayBuffers, or CPU; a container OOM can affect the harness and other

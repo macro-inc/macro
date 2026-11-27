@@ -12,6 +12,54 @@ const decoder = new TextDecoder();
 const isArray = Array.isArray;
 const entries = Object.entries;
 const hasOwn = Object.hasOwn;
+// The program runs in this realm and can rewrite any built-in, Deno's own
+// fetch internals included (they read prototype accessors and plain objects'
+// inherited fields), so nothing here sends a request. fetcher.mjs does, in a
+// worker started before the program loads: its realm is one the program never
+// reaches, and it marks each request, holds back a dry run's writes and picks
+// the forwarder itself. This realm only reads the program's request into plain
+// data for it, with copies of the built-ins taken now; a program that rewrites
+// them changes only what its own request says, never whether it is checked.
+const uncurry = (method) => Function.prototype.call.bind(method);
+const getter = (prototype, name) => uncurry(Object.getOwnPropertyDescriptor(prototype, name).get);
+const NativeRequest = Request;
+const NativeResponse = Response;
+const NativeWorker = Worker;
+const NativeError = Error;
+const NativeTypeError = TypeError;
+const NativeDOMException = DOMException;
+const denoErrors = {__proto__: null, ...Deno.errors};
+const NativePromise = Promise;
+const defineProperty = Object.defineProperty;
+const requestUrl = getter(Request.prototype, "url");
+const requestMethod = getter(Request.prototype, "method");
+const requestHeaders = getter(Request.prototype, "headers");
+const requestSignal = getter(Request.prototype, "signal");
+const requestBody = getter(Request.prototype, "body");
+const requestArrayBuffer = uncurry(Request.prototype.arrayBuffer);
+// Request options the worker's fetch takes, besides method, headers and body.
+const requestOptions = ["redirect", "cache", "credentials", "integrity", "keepalive", "mode", "referrer", "referrerPolicy"]
+  .map(name => [name, getter(Request.prototype, name)]);
+const headersForEach = uncurry(Headers.prototype.forEach);
+const appendHeader = uncurry(Headers.prototype.append);
+const responseHeaders = getter(Response.prototype, "headers");
+const responseClone = uncurry(Response.prototype.clone);
+const NativeTransformStream = TransformStream;
+const relayReadable = getter(TransformStream.prototype, "readable");
+const relayWritable = getter(TransformStream.prototype, "writable");
+const pipeTo = uncurry(ReadableStream.prototype.pipeTo);
+const cancelStream = uncurry(ReadableStream.prototype.cancel);
+const promiseCatch = uncurry(Promise.prototype.catch);
+const signalAborted = getter(AbortSignal.prototype, "aborted");
+const signalReason = getter(AbortSignal.prototype, "reason");
+const addEventListener = uncurry(EventTarget.prototype.addEventListener);
+const NativeMessageChannel = MessageChannel;
+const postMessage = uncurry(MessagePort.prototype.postMessage);
+const mapGet = uncurry(Map.prototype.get);
+const mapSet = uncurry(Map.prototype.set);
+const mapDelete = uncurry(Map.prototype.delete);
+const mapForEach = uncurry(Map.prototype.forEach);
+const mapClear = uncurry(Map.prototype.clear);
 // Each search is heavy for the search cluster's few threads, so a program that
 // fans searches out makes every other user's search wait behind it. Four at once
 // still lets a program with dozens of searches finish inside its deadline.
@@ -109,10 +157,6 @@ try {
   // program would do. Operations missing from the catalog count as writes.
   const dryRun = unattended?.dryRun === true;
   const catalog = new Map((operations ?? []).map(operation => [operation.key, operation]));
-  const routes = (operations ?? []).map(operation => ({
-    ...operation,
-    pattern: new RegExp(`${operation.path.replace(/[.*+?^$()|[\]\\]/g, "\\$&").replace(/\{[^}]+\}/g, "[^/]+")}$`),
-  }));
   // A program stuck in a loop (reading the same thread over and over, walking
   // every page of a search for a match that never comes) would call one API
   // until the deadline and end with only "timed out", which tells the agent
@@ -133,12 +177,12 @@ try {
   };
   gateRequests(({service, operation}) => {
     const key = `${service}.${operation}`;
-    const count = (calls.get(key) ?? 0) + 1;
+    const count = (mapGet(calls, key) ?? 0) + 1;
     if (count > maxCallsPerOperation) {
       stop(`Stopped: this program called ${key} more than ${maxCallsPerOperation} times, so it is probably looping. ${advice} A job that truly needs more calls of one operation must be split into smaller jobs.`);
     }
-    calls.set(key, count);
-    if (dryRun && catalog.get(key)?.write !== false) return {skip: {data: {}}};
+    mapSet(calls, key, count);
+    if (dryRun && mapGet(catalog, key)?.write !== false) return {skip: {data: {}}};
     return undefined;
   });
   if (remainingMs > 0) {
@@ -150,46 +194,112 @@ try {
     }, remainingMs - Math.min(1500, remainingMs / 4));
     Deno.unrefTimer(timer);
   }
-  const originalFetch = globalThis.fetch.bind(globalThis);
   sendVerbHeaders(true);
-  // `--allow-net` lets `host.` through as `host`, but the URL keeps the dot.
-  const originOf = (url) => {
-    const parsed = new URL(url);
-    parsed.hostname = parsed.hostname.replace(/\.$/, "");
-    return parsed.origin;
+  // Requests and answers go over a channel, not the worker's own messages:
+  // Deno's loop for those stops for good once the program rewrites
+  // `Function.prototype.call` while one is awaited.
+  const {port1: fetcher, port2} = new NativeMessageChannel();
+  // The worker takes its first message as the run's settings and ignores any
+  // later one, and this is posted before the program loads.
+  const sender = new NativeWorker(new URL("./fetcher.mjs", import.meta.url), {type: "module"});
+  // The program may get hold of this worker (its events go through
+  // `EventTarget.prototype.dispatchEvent`), but never the class: a worker it
+  // started would have a realm of its own, with Deno's fetch unmarked. The
+  // program's `Worker` is the timer refusal above, or nothing.
+  for (const prototype of [NativeWorker.prototype, MessagePort.prototype]) {
+    Object.defineProperty(prototype, "constructor", {value: undefined, writable: false, configurable: false});
+  }
+  sender.postMessage({
+    port: port2, hosts: context.hosts, operations: operations ?? [], dryRun,
+    traceHeaders: context.traceHeaders ?? {}, forwarder: context.forwarder ?? {},
+  }, [port2]);
+  const pending = new Map();
+  // A worker that fails fails every fetch, waiting or later, instead of
+  // leaving them unanswered.
+  let senderFailed;
+  sender.onerror = (event) => {
+    event.preventDefault();
+    senderFailed = {name: "TypeError", message: `fetch is unavailable: ${event.message}`};
+    mapForEach(pending, (settle) => settle({error: senderFailed}));
+    mapClear(pending);
   };
-  const origins = new Set(Object.values(context.hosts).map(originOf));
-  // A proxied run reaches only its forwarder: a request to a host's base is
-  // sent to that service under the forwarder, longest base first. The
-  // forwarder, not this, marks it.
-  const forwarded = Object.entries(context.forwarder ?? {})
-    .map(([service, local]) => [context.hosts[service].replace(/\/$/, ""), local])
-    .sort(([left], [right]) => right.length - left.length);
-  globalThis.fetch = (input, init) => {
-    const request = new Request(input, init);
-    // Every request to an SDK origin, whatever credential it carries.
-    if (origins.has(originOf(request.url))) {
-      for (const [name, value] of Object.entries(context.traceHeaders ?? {})) {
-        if (name === "traceparent" || name === "tracestate") request.headers.set(name, value);
-      }
-      // Marks the request as a program's, not a person's in the app, so an API
-      // can ask it to confirm what a person would have chosen by opening it.
-      request.headers.set("x-macro-code-execution", "1");
-      // A dry run's backstop: a request to an SDK origin that didn't come
-      // through the gate is sent only if a read matches its route.
-      if (dryRun && request.method !== "GET" && request.method !== "HEAD") {
-        const path = new URL(request.url).pathname;
-        const read = routes.some(route => route.method === request.method && route.pattern.test(path) && !route.write);
-        if (!read) return Promise.reject(new Error("A dry run doesn't send changes."));
-      }
+  let nextRequest = 0;
+  // `data` is the event's own property, which no prototype rewrite reaches.
+  fetcher.onmessage = ({data}) => {
+    const settle = mapGet(pending, data.id);
+    if (settle === undefined) return;
+    mapDelete(pending, data.id);
+    settle(data);
+  };
+  const failure = ({name, message}) => {
+    if (name === "AbortError") return new NativeDOMException(message, name);
+    if (name === "TypeError") return new NativeTypeError(message);
+    // A permission error keeps its class, `Deno.errors.NotCapable`.
+    if (denoErrors[name] !== undefined) return new denoErrors[name](message);
+    return new NativeError(message);
+  };
+  // What a constructed Response can't say itself, on it and on its clones.
+  // Its headers stay mutable, unlike a fetched response's.
+  const dress = (response, url, redirected, type) => {
+    defineProperty(response, "url", {value: url});
+    defineProperty(response, "redirected", {value: redirected});
+    defineProperty(response, "type", {value: type});
+    defineProperty(response, "clone", {value: () => dress(responseClone(response), url, redirected, type)});
+    return response;
+  };
+  // Async, so a refusal or a throw in here rejects like a failed fetch.
+  globalThis.fetch = async (input, init) => {
+    const request = new NativeRequest(input, init);
+    const signal = requestSignal(request);
+    if (signalAborted(signal)) throw signalReason(signal);
+    const headers = [];
+    headersForEach(requestHeaders(request), (value, name) => {
+      headers[headers.length] = [name, value];
+    });
+    const options = {__proto__: null};
+    for (let index = 0; index < requestOptions.length; index++) {
+      options[requestOptions[index][0]] = requestOptions[index][1](request);
     }
-    for (const [base, local] of forwarded) {
-      const url = request.url;
-      if (url === base || url.startsWith(`${base}/`) || url.startsWith(`${base}?`)) {
-        return originalFetch(new Request(`${local}${url.slice(base.length)}`, request));
-      }
+    // A Request keeps no priority; it is read from the options it was given.
+    if (init !== null && typeof init === "object" && typeof init.priority === "string") options.priority = init.priority;
+    // Read whole, so the request keeps its length, as a direct fetch sends it.
+    const body = requestBody(request) === null ? null : await requestArrayBuffer(request);
+    // An abort while the body was read fired before the listener below.
+    if (signalAborted(signal)) throw signalReason(signal);
+    if (senderFailed !== undefined) throw failure(senderFailed);
+    const id = nextRequest++;
+    const answer = await new NativePromise((resolve, reject) => {
+      mapSet(pending, id, resolve);
+      // Also after the answer, to stop the body. Only the id crosses: the
+      // reason is the program's, and the worker never sees its values.
+      addEventListener(signal, "abort", () => {
+        postMessage(fetcher, {abort: id});
+        if (mapGet(pending, id) === undefined) return;
+        mapDelete(pending, id);
+        reject(signalReason(signal));
+      }, {__proto__: null, once: true});
+      postMessage(fetcher, {
+        id, request: {url: requestUrl(request), method: requestMethod(request), headers, body, options},
+      }, body === null ? [] : [body]);
+    });
+    if (answer.error !== undefined) throw failure(answer.error);
+    const {status, statusText, headers: received, url, redirected, type, body: stream} = answer.response;
+    // Piped with the signal, so an abort errors the body with its reason.
+    let relayed = null;
+    if (stream !== null) {
+      const relay = new NativeTransformStream();
+      // The source, which crosses to the worker, is cancelled without the
+      // program's reason: only the request's id reaches the worker.
+      promiseCatch(pipeTo(stream, relayWritable(relay), {__proto__: null, signal, preventCancel: true}), () => {
+        promiseCatch(cancelStream(stream), () => {});
+      });
+      relayed = relayReadable(relay);
     }
-    return originalFetch(request);
+    const response = new NativeResponse(relayed, {__proto__: null, status, statusText});
+    // Appended one by one: an init's headers are read through iterators.
+    const answered = responseHeaders(response);
+    for (let index = 0; index < received.length; index++) appendHeader(answered, received[index][0], received[index][1]);
+    return dress(response, url, redirected, type);
   };
   const activeRequests = new Set();
   let observedRequests = 0;
@@ -214,7 +324,9 @@ try {
   // program's and holds back a dry run's writes. Nothing else may reach the
   // network (raw sockets, listeners, websockets), start a realm with its own
   // fetch (workers), or reach Node's or Deno's internals past the import map.
-  for (const name of ["connect", "connectTls", "startTls", "listen", "listenTls", "serve", "serveHttp", "upgradeWebSocket"]) {
+  // A client from `createHttpClient` can proxy a request to an API under a
+  // URL the fetch above doesn't recognize.
+  for (const name of ["connect", "connectTls", "startTls", "listen", "listenTls", "serve", "serveHttp", "upgradeWebSocket", "createHttpClient", "HttpClient"]) {
     Object.defineProperty(Deno, name, {value: undefined});
   }
   delete Deno[Deno.internal];
