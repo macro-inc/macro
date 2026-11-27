@@ -14,6 +14,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
+use crate::mailbox::{BodyType, normalize_html};
 use crate::seed::{NewMessage, Seed, SeedContact, SeedError, SeedMailbox};
 
 use crate::{EmulatorError, Fault, LifecycleEvent, OutlookEmulator};
@@ -65,6 +66,9 @@ pub struct MessageChange {
     /// Replaces its categories.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub categories: Option<Vec<String>>,
+    /// Replaces its body, in the format it has.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub body: Option<String>,
     /// Moves it to a folder: a well-known name, a display name or an id.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub folder: Option<String>,
@@ -146,6 +150,12 @@ impl OutlookEmulator {
             if let Some(categories) = &change.categories {
                 message.categories = categories.clone();
             }
+            if let Some(body) = &change.body {
+                message.body = match message.body_type {
+                    BodyType::Html => normalize_html(body),
+                    BodyType::Text => body.clone(),
+                };
+            }
             match &change.folder {
                 Some(folder) => mailbox
                     .move_message(message_id, folder, now)
@@ -213,6 +223,7 @@ pub(crate) fn router() -> Router<OutlookEmulator> {
             "/mailboxes/{email}/messages/{id}",
             patch(update_message).delete(delete_message),
         )
+        .route("/mailboxes/{email}/folders/{id}", delete(delete_folder))
         .route("/mailboxes/{email}/access-tokens", post(access_token))
         .route("/mailboxes/{email}/revoke", post(revoke_grant))
         .route("/mailboxes/{email}/links/{link_id}", post(link_mailbox))
@@ -304,6 +315,13 @@ async fn delete_message(
     Path((email, id)): Path<(String, String)>,
 ) -> Response {
     done(emulator.delete_message(&email, &id))
+}
+
+async fn delete_folder(
+    AxumState(emulator): Emulator,
+    Path((email, id)): Path<(String, String)>,
+) -> Response {
+    done(emulator.delete_folder(&email, &id))
 }
 
 async fn access_token(AxumState(emulator): Emulator, Path(email): Path<String>) -> Response {

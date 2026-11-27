@@ -6,6 +6,7 @@ use crate::domain::code_upgrade::CodeUpgrade;
 use crate::domain::drafts::InvalidDraft;
 use crate::domain::drafts::jobs::DraftJobError;
 use crate::domain::event_trigger::ActionTrigger;
+use crate::domain::knob_entities::UnusableKnob;
 use crate::domain::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionPolicyError,
     AlreadyRunningError, CreatedItem, CreatedRoutine, InProgressExecution, ListScope, ListedAction,
@@ -16,12 +17,13 @@ use crate::domain::ports::{SavedAction, ScheduledActionService};
 use crate::domain::target_validation::TargetValidationError;
 use crate::domain::templates::TemplateInputError;
 use agent_session::domain::routines::RoutineSessionError;
-use ai_billing::{AiAdmissionError, inbound::admission::AiAdmissionErrorBody};
+use ai_billing::{AiAdmissionError, PlanTier, inbound::admission::AiAdmissionErrorBody};
 use axum::extract::{FromRef, Path, Query, State, rejection::JsonRejection};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
+use bots::domain::models::AgentMcpServer;
 use chrono_tz::Tz;
 use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
@@ -98,6 +100,11 @@ pub struct CheckRoutineRequest {
     /// the database it writes to; kept with its draft for the person to see.
     #[serde(default)]
     pub created: Vec<CreatedItem>,
+    /// Apps a routine draft's session found the routine needs that its owner
+    /// hasn't connected, for the person to connect before saving. The routine
+    /// itself requires only connected ones.
+    #[serde(default)]
+    pub missing_apps: Vec<AgentMcpServer>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -226,12 +233,20 @@ where
             post(execute_action::<S, Svc, Auth>),
         )
         .route(
+            "/scheduled-actions/{id}/stop",
+            post(stop_run::<S, Svc, Auth>),
+        )
+        .route(
             "/scheduled-actions/{id}/history",
             get(list_history::<S, Svc, Auth>),
         )
         .route(
             "/scheduled-actions/{id}/code-upgrades",
             get(list_code_upgrades::<S, Svc, Auth>),
+        )
+        .route(
+            "/scheduled-actions/{id}/unusable-items",
+            get(list_unusable_items::<S, Svc, Auth>),
         )
         .route(
             "/scheduled-actions/check",
@@ -338,15 +353,18 @@ where
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let Json(CheckRoutineRequest { routine, created }) =
-        body.map_err(ScheduledActionApiError::InvalidRequest)?;
+    let Json(CheckRoutineRequest {
+        routine,
+        created,
+        missing_apps,
+    }) = body.map_err(ScheduledActionApiError::InvalidRequest)?;
     // The code-mode invocation the credential names, already validated
     // against its session at the router's boundary.
     let correlation = agent_correlation::context::current();
     Ok(Json(
         state
             .service
-            .check_action(&principal, routine, created, correlation)
+            .check_action(&principal, routine, created, missing_apps, correlation)
             .await?,
     ))
 }
@@ -363,6 +381,7 @@ where
         (status = 200, body = ScheduledActionResponse, description = "The sub-routine its key already named, updated"),
         (status = 400, body = String),
         (status = 401, body = String),
+        (status = 402, body = RoutineLimitErrorBody, description = "The owner's plan allows no more active routines"),
         (status = 403, body = String),
         (status = 409, body = String, description = "The routine already has the most active sub-routines it can"),
         (status = 500, body = String),
@@ -516,6 +535,7 @@ where
     responses(
         (status = 200, body = ScheduledActionResponse),
         (status = 400, body = String),
+        (status = 402, body = RoutineLimitErrorBody, description = "The owner's plan allows no more active routines"),
         (status = 409, body = String, description = "Configuration changed or execution is active"),
         (status = 401, body = String),
         (status = 404, body = String),
@@ -611,6 +631,7 @@ where
     responses(
         (status = 200, body = ScheduledActionResponse),
         (status = 400, body = String),
+        (status = 402, body = RoutineLimitErrorBody, description = "The owner's plan allows no more active routines"),
         (status = 409, body = String, description = "Configuration changed or execution is active"),
         (status = 401, body = String),
         (status = 404, body = String),
@@ -745,6 +766,36 @@ where
 }
 
 #[utoipa::path(
+    post,
+    path = "/scheduled-actions/{id}/stop",
+    tag = "scheduled actions",
+    operation_id = "stop_scheduled_action_run",
+    description = "Stop the routine's run in progress. It ends as stopped shortly after; with no run in progress, nothing changes.",
+    params(("id" = String, Path, description = "ID of the scheduled action")),
+    responses(
+        (status = 204, description = "The stop was sent, or nothing was running"),
+        (status = 401, body = String),
+        (status = 404, body = String),
+        (status = 500, body = String),
+    )
+)]
+pub async fn stop_run<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    ScheduledActionAccessExtractor {
+        entity_access_receipt,
+        ..
+    }: ScheduledActionAccessExtractor<OwnerAccessLevel, Svc, Auth>,
+) -> Result<StatusCode, ScheduledActionApiError>
+where
+    S: ScheduledActionService + Send + Sync + 'static,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    state.service.stop_run(entity_access_receipt).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
     get,
     path = "/scheduled-actions/{id}/history",
     tag = "scheduled actions",
@@ -813,6 +864,38 @@ where
     Ok(Json(upgrades))
 }
 
+#[utoipa::path(
+    get,
+    path = "/scheduled-actions/{id}/unusable-items",
+    tag = "scheduled actions",
+    operation_id = "list_scheduled_action_unusable_items",
+    params(("id" = String, Path, description = "ID of the scheduled action")),
+    responses(
+        (status = 200, body = Vec<UnusableKnob>, description = "The routine's entity knobs whose item its owner can't use now: deleted, trashed, out of their reach, or not picked"),
+        (status = 401, body = String),
+        (status = 404, body = String),
+        (status = 500, body = String),
+    )
+)]
+pub async fn list_unusable_items<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    ScheduledActionAccessExtractor {
+        entity_access_receipt,
+        ..
+    }: ScheduledActionAccessExtractor<ViewAccessLevel, Svc, Auth>,
+) -> Result<impl IntoResponse, ScheduledActionApiError>
+where
+    S: ScheduledActionService + Send + Sync + 'static,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let knobs = state
+        .service
+        .get_unusable_knobs(entity_access_receipt)
+        .await?;
+    Ok(Json(knobs))
+}
+
 /// Which zone the catalog's schedules are written in.
 #[derive(Debug, Deserialize, IntoParams)]
 #[into_params(parameter_in = Query)]
@@ -858,6 +941,25 @@ impl From<anyhow::Error> for ScheduledActionApiError {
     }
 }
 
+/// A write that would activate more routines than the owner's plan allows.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct RoutineLimitErrorBody {
+    /// Human-readable explanation.
+    pub error: String,
+    pub code: RoutineLimitCode,
+    /// How many routines the plan allows to be active at once.
+    pub limit: u32,
+    /// The plan the limit comes from.
+    pub plan: PlanTier,
+}
+
+/// Stable code clients match on, distinct from AI allowance codes.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RoutineLimitCode {
+    RoutineLimitReached,
+}
+
 impl IntoResponse for ScheduledActionApiError {
     fn into_response(self) -> axum::response::Response {
         let error = match self {
@@ -877,6 +979,18 @@ impl IntoResponse for ScheduledActionApiError {
         }
         if let Some(policy) = error.downcast_ref::<ActionPolicyError>() {
             let status = match policy {
+                ActionPolicyError::RoutineLimitReached(limit) => {
+                    return (
+                        StatusCode::PAYMENT_REQUIRED,
+                        Json(RoutineLimitErrorBody {
+                            error: policy.to_string(),
+                            code: RoutineLimitCode::RoutineLimitReached,
+                            limit: limit.max_active(),
+                            plan: limit.plan(),
+                        }),
+                    )
+                        .into_response();
+                }
                 ActionPolicyError::NotFound => StatusCode::NOT_FOUND,
                 ActionPolicyError::UpdateConflict
                 | ActionPolicyError::TooManySubRoutines
@@ -886,9 +1000,11 @@ impl IntoResponse for ScheduledActionApiError {
                 }
                 ActionPolicyError::NoFutureFirings
                 | ActionPolicyError::EventManagementDisabled
+                | ActionPolicyError::EmailLabelsDisabled
                 | ActionPolicyError::ConditionsDisabled
                 | ActionPolicyError::InvalidAppearance(_)
                 | ActionPolicyError::GithubNotLinked
+                | ActionPolicyError::UnknownInboxes
                 | ActionPolicyError::DescriptionTooLong
                 | ActionPolicyError::KeyOutsideRun
                 | ActionPolicyError::InvalidKey
@@ -920,7 +1036,9 @@ impl IntoResponse for ScheduledActionApiError {
             let status = match validation {
                 TargetValidationError::InvalidTask
                 | TargetValidationError::InvalidProgram(_)
-                | TargetValidationError::SessionsUnavailable => StatusCode::BAD_REQUEST,
+                | TargetValidationError::SessionsUnavailable
+                | TargetValidationError::UnusableItems(_)
+                | TargetValidationError::ItemsUnavailable => StatusCode::BAD_REQUEST,
                 TargetValidationError::ExplicitAgentRequired
                 | TargetValidationError::ExplicitAppsRequired
                 | TargetValidationError::ExplicitStepsRequired => StatusCode::CONFLICT,

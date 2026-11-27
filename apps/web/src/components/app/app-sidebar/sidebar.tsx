@@ -55,6 +55,7 @@ import PaperPlaneTiltIcon from '@icon/system/regular/paper-plane-tilt.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
 import ActivityIcon from '@icon/system/regular/pulse.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import { crmAccessAllowed } from '@service-storage/crm-access-authority';
 import { cn } from '@ui';
 import {
   type Component,
@@ -118,6 +119,17 @@ const SIDEBAR_LINKS = [
     icon: getIconConfig('agent').icon,
     hotkey: 'a',
     hotkeyToken: TOKENS.sidebar.goTo.agents,
+  },
+  {
+    id: 'routines',
+    get label() {
+      return t('agentWork.routines');
+    },
+    href: '/routines',
+    // Opens the list, as the Agents sidebar does, even from an open routine.
+    search: {},
+    icon: getIconConfig('routine').icon,
+    hotkeyToken: TOKENS.sidebar.goTo.routines,
   },
   {
     id: 'mail',
@@ -278,7 +290,8 @@ export const GoToHotkeys = () => {
       recentViewEnabled(),
       reviews().enabled,
       notificationsEnabled(),
-      external().enabled
+      external().enabled,
+      crmAccessAllowed()
     )
   );
 
@@ -447,7 +460,8 @@ export const buildSidebarLinks = (
   showRecent: boolean,
   showReviews: boolean,
   showNotifications: boolean,
-  showExternal: boolean
+  showExternal: boolean,
+  canAccessCrm: boolean
 ): SidebarItem[] => {
   let links: SidebarItem[] = SIDEBAR_LINKS;
 
@@ -474,14 +488,16 @@ export const buildSidebarLinks = (
     links = [...links.slice(0, idx + 1), CALLS_LINK, ...links.slice(idx + 1)];
   }
 
-  // Customers sits just after Channels (and Calls when present).
-  const customersAnchorId = ENABLE_CALLS ? 'calls' : 'channels';
-  const customersIdx = links.findIndex((l) => l.id === customersAnchorId);
-  links = [
-    ...links.slice(0, customersIdx + 1),
-    COMPANIES_LINK,
-    ...links.slice(customersIdx + 1),
-  ];
+  if (canAccessCrm) {
+    // Customers sits just after Channels (and Calls when present).
+    const customersAnchorId = ENABLE_CALLS ? 'calls' : 'channels';
+    const customersIdx = links.findIndex((l) => l.id === customersAnchorId);
+    links = [
+      ...links.slice(0, customersIdx + 1),
+      COMPANIES_LINK,
+      ...links.slice(customersIdx + 1),
+    ];
+  }
 
   if (showReviews) {
     // Reviews sits at the end (accessed via More menu but has a hotkey).

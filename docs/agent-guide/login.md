@@ -68,7 +68,7 @@ Microsoft's place (see [running locally](../development/running-locally.md#micro
 
 `/app/signup/agent` is the agent signup page: Google or an emailed code, without
 the opening slides. The first slide of `/app/signup` links to it (`Sign up as
-agent`), as does `/mobile-signup`, and the marketing site's HTML carries a hidden
+agent`), and the marketing site's HTML carries a hidden
 notice pointing agents there. A new account made there, or by redeeming an invite
 sent with `team.invite(email, { agent: true })`, is an agent. An existing account keeps its
 type. An agent invite email links to `/app/signup/agent?team_invite=<id>`; a signed-in
@@ -278,11 +278,20 @@ Use browser Back to return from GitHub: when the page is restored from BFCache,
 it refreshes link status and restores the retry prompt only if reconnection is
 still needed.
 
-## Desktop onboarding
+## Web onboarding
 
-New desktop users enter the same flow from
-`/app/signup`, `/app/login`, or `/app/onboarding`. Marketing Get Started links
-open `/app/signup`. Existing members and native mobile keep their existing routes.
+New web users, on desktop and in phone browsers (including social apps'
+in-app browsers), enter the same flow from `/app/signup`, `/app/login`, or
+`/app/onboarding`. Marketing Get Started links open `/app/signup` on every
+device; the retired `/mobile-signup`, `/mobile-signup-sent`, and
+`/app/mobile-email-signup` paths forward there with their query. Existing
+members and the native apps keep their existing routes. Check the flow at
+390px with touch emulation and a short (about 660px) in-app-browser height.
+In a phone browser, finishing onboarding (Free, the trial's return from
+Stripe, or the routines step) ends on **Macro is better on desktop.** with
+**Download app** (the App Store, or Google Play on Android) and **Continue in
+browser**, which enters the app where desktop would have gone. Computers and
+the native apps skip it.
 
 Signed-out `/app/signup` starts at the workspace color picker, followed by feature
 interests and security. No account is required for these slides. The signed-out
@@ -332,32 +341,32 @@ restores the correct step, shows the connected address, and allows continuation.
 
 Tools show a stable featured list: Linear, Notion, Slack, then startup tools
 such as PostHog and Stripe, followed by small-business tools such as QuickBooks.
-The featured Pipedream metadata is checked in; the remaining catalog uses one
-live paginated query. Search still covers the full directory. Verify load more,
-search, cancel/retry connection, and state persistence on return. Paging and
-Slack aliases must not duplicate cards. New Slack connections use `slack_v2`;
-existing `slack` accounts remain recognized. Production release requires a real
-Slack authorization and a successful read-only tool call, not just fixture tests.
-Cards use the Pipedream logo, with bundled icons and a generic plug as fallbacks.
+The featured catalog metadata is checked in; the remaining catalog uses one
+live paginated query (`GET /connectors/catalog`). Search still covers the full
+directory. Verify load more, search, cancel/retry connection, and state
+persistence on return. Paging must not duplicate cards; the server lists Slack
+once as `slack`. Production release requires a real Slack authorization and a
+successful read-only tool call, not just fixture tests.
+Cards use the catalog logo, with bundled icons and a generic plug as fallbacks.
 The catalog scrolls with the page; Continue stays visible in a sticky footer.
 At desktop and phone widths, verify scrolling over the cards moves the page,
 the last row remains reachable, and Continue stays fully visible after searching.
 
-GitHub uses Macro's native OAuth/re-authorization flow and returns to the tools
-step. It shows **Account linked**, distinct from agent-tool readiness. A
-**Configure GitHub repositories** action opens native GitHub App installation;
-repository access must not be inferred from the account link. No Pipedream
-GitHub card is offered. The same setup remains available in Settings.
+GitHub connects like any other tool: the server answers how (the Macro
+GitHub account link through `/app/connect/github`, or Macro Connect's consent
+page for someone on Connect), and the tile reads **Connected** only when the
+server says GitHub is. Once it is, a **Configure GitHub repositories** action
+opens native GitHub App installation; repository access must not be inferred
+from the connection. No catalog GitHub card is offered. The same setup remains
+available in Settings.
 
 Gmail and Google Calendar are hidden, including search and later pages. Google
-Drive and Google Sheets remain available in browse and search, with separate
-Pipedream connection state. Native Gmail and Calendar consent does not request
-Drive or Sheets scopes. Enabled native MCP and Pipedream connections show
-Connected. Disabled existing connections show Enable and reuse their stored
-authorization. Native and hosted tools coexist in both chat and sandbox agents,
-with native preference for known overlapping providers and Slack alias deduplication.
-Connection status failures have an explicit retry; they must not prevent
-independent providers such as native GitHub from connecting. Verify unknown
+Drive and Google Sheets remain available in browse and search, with their own
+connection state. Native Gmail and Calendar consent does not request Drive or
+Sheets scopes. Every tile's state is the server's (`GET /connectors`):
+connected apps show Connected, disabled ones show Enable and reuse their stored
+authorization, and a connection that no longer counts shows Connect.
+A failed connection-status read disables every tile until its explicit retry. Verify unknown
 status never launches a duplicate OAuth flow and continuation remains possible.
 Someone already on a team when they leave the tools step (joined by invite
 link or by domain) never sees the team step: Continue goes to the plan step, or
@@ -432,7 +441,12 @@ Cancellation returns to this step. A successful return polls the server's licens
 state, completes onboarding, and enters the app without an extra confirmation
 click. A pending webhook shows a retryable confirmation state. If the catalog
 cannot load, Free remains available, Pro still returns to its offer, and
-Max checkout stays disabled until prices can be loaded with the retry action.
+Business and Max checkout stay disabled until prices can be loaded with the
+retry action. The comparison shows Business and Max at their annual rates with
+the monthly rate noted (Pro is monthly only), includes an `Active routines` row
+(`10` / `1,000` / `3,000` / `10,000`), and clicking `Continue with Business` or
+`Continue with Max` opens a compact billing-cycle dialog to choose Annual
+(default) or Monthly before Stripe Checkout.
 Both completion paths preserve an original `next` destination and otherwise land on Home (`/app/home`). Old saved email,
 connector, building, and summary step names are migrated on resume. A lifecycle
 email can open a specific step with `/app/onboarding?step=<step>` (see

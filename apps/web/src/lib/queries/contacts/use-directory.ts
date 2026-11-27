@@ -2,6 +2,7 @@ import { tryMacroId } from '@core/user/macroId';
 import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
 import { type Accessor, createMemo } from 'solid-js';
 import { useQueryAccount } from '../auth/use-query-account';
+import { useTeammateIds } from '../team/roster';
 import { createContactDirectoryWindow } from './directory-query';
 import {
   type ContactFilterSourceFactory,
@@ -23,7 +24,15 @@ export function useContactDirectoryScope() {
 export const useContactFilterSource: ContactFilterSourceFactory = (
   selected,
   enabled
-) => createContactFilterSource(useContactDirectoryScope(), selected, enabled);
+) =>
+  createContactFilterSource(
+    useContactDirectoryScope(),
+    selected,
+    enabled,
+    undefined,
+    undefined,
+    useTeammateIds(enabled)
+  );
 
 export function useContactIdFilterSource(
   selected: Accessor<readonly string[]>,
@@ -32,7 +41,10 @@ export function useContactIdFilterSource(
   return createContactIdFilterSource(
     useContactDirectoryScope(),
     selected,
-    enabled
+    enabled,
+    undefined,
+    undefined,
+    useTeammateIds(enabled)
   );
 }
 

@@ -90,17 +90,11 @@ fn block_filter(email_address: &str) -> Filter {
         id: None,
         criteria: FilterCriteria {
             from: Some(email_address.to_string()),
-            to: None,
-            subject: None,
-            query: None,
-            negated_query: None,
-            has_attachment: None,
-            exclude_chats: None,
+            ..FilterCriteria::default()
         },
         action: FilterAction {
             add_label_ids: Some(vec![TRASH_LABEL_ID.to_string()]),
-            remove_label_ids: None,
-            forward: None,
+            ..FilterAction::default()
         },
     }
 }

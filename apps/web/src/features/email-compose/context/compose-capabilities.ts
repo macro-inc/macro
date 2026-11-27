@@ -481,7 +481,7 @@ export interface ComposeNoticeOptions {
   }[];
 }
 export interface EmailComposeHost {
-  focusSibling?: (direction: 'next' | 'prev') => boolean | void;
+  focusSibling?: (direction: 'next' | 'prev') => boolean;
   showThread?: (id: string) => void;
   showDraft?: (id: string) => void;
   /** A From switch moved the draft to a new id and thread; the old ones are gone. */

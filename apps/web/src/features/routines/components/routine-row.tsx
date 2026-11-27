@@ -70,14 +70,16 @@ export function RoutineListRow(props: {
 }) {
   const toggleDisabled = () => !canToggleRoutine(props.row, props.pending);
   const toggleDescription = () => {
-    if (props.pending) return 'Saving…';
+    if (props.pending) return t('routinesList.saving');
     if (!props.row.enabled && props.row.status === 'Completed')
-      return 'Update the schedule before turning this routine on';
+      return t('routinesList.updateScheduleFirst');
     if (!props.row.enabled && props.row.status === 'Running')
-      return 'Wait for the current run to finish before turning this routine on';
+      return t('routinesList.waitForRun');
     if (!props.row.enabled && props.row.pausedByParent)
       return t('subRoutines.pausedWithParent');
-    return `Turn ${props.row.enabled ? 'off' : 'on'}`;
+    return props.row.enabled
+      ? t('routinesList.turnOff')
+      : t('routinesList.turnOn');
   };
   const doesLabel = () =>
     props.row.ai ? `${props.row.ai} · ${props.row.does}` : props.row.does;
@@ -85,6 +87,7 @@ export function RoutineListRow(props: {
   return (
     <div
       role="row"
+      data-press-surface
       class={cn(
         // Highlighted while its context menu is open, as when focused.
         'soup-list-entity @container/entity mx-1 min-w-[760px] rounded-xl hover:bg-list-hover focus-within:bg-list-highlighted group-data-expanded/routine-menu:bg-list-highlighted @max-[760px]/routines:min-w-0',
@@ -156,7 +159,10 @@ export function RoutineListRow(props: {
             </Show>
           </span>
         </EntitySlot>
-        <Cell label={props.row.when} class="@max-[760px]/routines:hidden">
+        <Cell
+          label={props.row.whenDetails ?? props.row.when}
+          class="@max-[760px]/routines:hidden"
+        >
           <span class="truncate">{props.row.when}</span>
         </Cell>
         <Cell label={doesLabel()} class="@max-[760px]/routines:hidden">
@@ -176,7 +182,7 @@ export function RoutineListRow(props: {
               role="cell"
               class="min-w-0 text-[13px] text-ink-extra-muted"
             >
-              Not run yet
+              {t('routinesList.notRunYet')}
             </EntitySlot>
           }
         >
@@ -192,6 +198,7 @@ export function RoutineListRow(props: {
                     .with('failed', () => 'bg-failure')
                     .with(
                       'skipped',
+                      'stopped',
                       'nothing',
                       'running',
                       () => 'bg-ink-extra-muted'
@@ -218,7 +225,7 @@ export function RoutineListRow(props: {
         >
           <Tooltip label={toggleDescription()}>
             <ToggleSwitch
-              label={`Enabled for ${props.row.name}`}
+              label={t('routinesList.enabledFor', { name: props.row.name })}
               labelClass="sr-only"
               aria-busy={props.pending}
               checked={props.row.enabled}

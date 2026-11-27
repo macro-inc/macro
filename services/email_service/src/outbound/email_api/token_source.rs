@@ -7,7 +7,7 @@ use authentication_service_client::{AuthServiceClient, error::AuthServiceClientE
 use email_api_client::domain::models::{AccessToken, TokenError, TokenFreshness};
 use email_api_client::domain::ports::ProviderTokenSource;
 use models_email::email::service::cache::TokenCacheKey;
-use models_email::email::service::pubsub::LinkManagerMessage;
+use models_email::email::service::pubsub::{LinkManagerMessage, LinkManagerSender};
 use models_email::service::link::Link;
 use redis::aio::MultiplexedConnection;
 use sqlx::PgPool;
@@ -170,6 +170,7 @@ impl EmailServiceTokenSource {
                         self.sqs_client
                             .enqueue_link_manager_notification(
                                 LinkManagerMessage::NotifyReauthRequired { link_id: link.id },
+                                LinkManagerSender::Event,
                             )
                             .await
                             .inspect_err(|enqueue_error| {

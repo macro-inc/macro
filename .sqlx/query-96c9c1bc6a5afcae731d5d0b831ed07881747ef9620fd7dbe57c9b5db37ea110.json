@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE email_links l SET grant_id = $2,grant_generation = $3,\n                fusionauth_user_id = $4,email_address = $5,is_sync_active = true,needs_reauth = false,\n                last_sync_error_at = NULL,mailbox_unavailable_at = NULL,updated_at = now(),\n                sync_generation = l.sync_generation + CASE WHEN $6 AND $7 THEN 1 ELSE 0 END\n            FROM (SELECT id,mailbox_unavailable_at FROM email_links WHERE id = $1 FOR UPDATE) previous\n            WHERE l.id = previous.id\n            RETURNING l.sync_generation,previous.mailbox_unavailable_at IS NOT NULL AS \"had_no_mailbox!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sync_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "had_no_mailbox!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Text",
+        "Varchar",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "96c9c1bc6a5afcae731d5d0b831ed07881747ef9620fd7dbe57c9b5db37ea110"
+}

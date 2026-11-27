@@ -7,6 +7,7 @@
   "macro.calendar",
   "macro.call_notifications",
   "macro.calls",
+  "macro.channel_timeline",
   "macro.channels",
   "macro.chats",
   "macro.databases",
@@ -25,6 +26,7 @@
   "macro.properties",
   "macro.soup",
   "macro.teams",
+  "macro.time_entries",
   "macro.users",
   "macro.webhooks"
 ]

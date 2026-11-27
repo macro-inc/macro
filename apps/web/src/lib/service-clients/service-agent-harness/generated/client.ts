@@ -30,6 +30,7 @@ import type {
   ClaudeModeResponse,
   ClaudeSignedIn,
   ClaudeSignInComplete,
+  ClaudeSignInError,
   ClaudeSignInStarted,
   CodingAgentsResponse,
   CodingPreferencesBody,
@@ -74,6 +75,8 @@ import type {
   ReviewDecision,
   ReviewRecord,
   SandboxSizeBody,
+  ScreenTicket,
+  ScreenTicketRequest,
   SearchConnectedAppToolsParams,
   SessionAutoArchiveResponse,
   SessionPullRequestsResponse,
@@ -1566,7 +1569,7 @@ export const deleteAgentSession = async (
 };
 
 /**
- * @summary Read activity using the same visibility capability as the session transcript.
+ * @summary Read session-visible activity after filtering CRM rows for the requester.
  */
 export type getAgentSessionActivityResponse200 = {
   data: AgentActivityPage;
@@ -4429,6 +4432,79 @@ export const listCodingAgents = async (
 };
 
 /**
+ * @summary Issue a ticket to watch, or drive, a computer's screen.
+ */
+export type createComputerScreenTicketResponse200 = {
+  data: ScreenTicket;
+  status: 200;
+};
+
+export type createComputerScreenTicketResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type createComputerScreenTicketResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type createComputerScreenTicketResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type createComputerScreenTicketResponse429 = {
+  data: void;
+  status: 429;
+};
+
+export type createComputerScreenTicketResponseSuccess =
+  createComputerScreenTicketResponse200 & {
+    headers: Headers;
+  };
+export type createComputerScreenTicketResponseError = (
+  | createComputerScreenTicketResponse400
+  | createComputerScreenTicketResponse403
+  | createComputerScreenTicketResponse404
+  | createComputerScreenTicketResponse429
+) & {
+  headers: Headers;
+};
+
+export type createComputerScreenTicketResponse =
+  | createComputerScreenTicketResponseSuccess
+  | createComputerScreenTicketResponseError;
+
+export const getCreateComputerScreenTicketUrl = (harnessId: string) => {
+  return `/computers/${harnessId}/screen/tickets`;
+};
+
+export const createComputerScreenTicket = async (
+  harnessId: string,
+  screenTicketRequest: ScreenTicketRequest,
+  options?: RequestInit
+): Promise<createComputerScreenTicketResponse> => {
+  const res = await fetch(getCreateComputerScreenTicketUrl(harnessId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(screenTicketRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createComputerScreenTicketResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createComputerScreenTicketResponse;
+};
+
+/**
  * @summary How Claude Code on the computer is paid for.
  */
 export type getClaudeModeResponse200 = {
@@ -4498,42 +4574,42 @@ export type startClaudeSignInResponse200 = {
 };
 
 export type startClaudeSignInResponse400 = {
-  data: void;
+  data: ClaudeSignInError;
   status: 400;
 };
 
 export type startClaudeSignInResponse403 = {
-  data: void;
+  data: ClaudeSignInError;
   status: 403;
 };
 
 export type startClaudeSignInResponse404 = {
-  data: void;
+  data: ClaudeSignInError;
   status: 404;
 };
 
 export type startClaudeSignInResponse409 = {
-  data: void;
+  data: ClaudeSignInError;
   status: 409;
 };
 
 export type startClaudeSignInResponse410 = {
-  data: void;
+  data: ClaudeSignInError;
   status: 410;
 };
 
 export type startClaudeSignInResponse422 = {
-  data: void;
+  data: ClaudeSignInError;
   status: 422;
 };
 
 export type startClaudeSignInResponse503 = {
-  data: void;
+  data: ClaudeSignInError;
   status: 503;
 };
 
 export type startClaudeSignInResponse504 = {
-  data: void;
+  data: ClaudeSignInError;
   status: 504;
 };
 
@@ -4589,42 +4665,42 @@ export type completeClaudeSignInResponse200 = {
 };
 
 export type completeClaudeSignInResponse400 = {
-  data: void;
+  data: ClaudeSignInError;
   status: 400;
 };
 
 export type completeClaudeSignInResponse403 = {
-  data: void;
+  data: ClaudeSignInError;
   status: 403;
 };
 
 export type completeClaudeSignInResponse404 = {
-  data: void;
+  data: ClaudeSignInError;
   status: 404;
 };
 
 export type completeClaudeSignInResponse409 = {
-  data: void;
+  data: ClaudeSignInError;
   status: 409;
 };
 
 export type completeClaudeSignInResponse410 = {
-  data: void;
+  data: ClaudeSignInError;
   status: 410;
 };
 
 export type completeClaudeSignInResponse422 = {
-  data: void;
+  data: ClaudeSignInError;
   status: 422;
 };
 
 export type completeClaudeSignInResponse503 = {
-  data: void;
+  data: ClaudeSignInError;
   status: 503;
 };
 
 export type completeClaudeSignInResponse504 = {
-  data: void;
+  data: ClaudeSignInError;
   status: 504;
 };
 

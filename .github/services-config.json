@@ -195,6 +195,21 @@
         "organization_retention_trigger"
       ]
     },
+    "search-freshness-probe": {
+      "source_paths": [
+        "services/search_freshness_probe/**",
+        "crates/channels/**",
+        "crates/item_filters/**",
+        "crates/messages/**",
+        "crates/model/**",
+        "crates/models_properties/**",
+        "crates/models_search/**"
+      ],
+      "stack_path": "infra/stacks/search-freshness-probe/**",
+      "deploy_binaries": [
+        "search_freshness_probe"
+      ]
+    },
     "search-processing-service": {
       "source_paths": [
         "services/search_processing_service/**",

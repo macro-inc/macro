@@ -1,3 +1,4 @@
+import { ScreenLinkChips } from '@app/features/agent-screen/screen-chip';
 import {
   decodePane,
   decodePanes,
@@ -10,6 +11,8 @@ import {
 import { PaneContext } from '@app/lib/split-router/solid/context';
 import { NOT_FOUND_ROUTE_ID } from '@app/routes/app-route';
 import {
+  type AppLinkDescriber,
+  AppLinkDescriberContext,
   type AppLinkOpener,
   AppLinkOpenerContext,
 } from '@core/component/LexicalMarkdown/component/core/app-link-opener';
@@ -61,9 +64,11 @@ function appLinkLocation(
  * links take the mention path, so an open entity is reused and its location
  * applied; any other app route opens at its full location.
  */
-function useAgentReplyLinkOpener(): AppLinkOpener | undefined {
+function useAgentReplyLinkOpener(
+  openOther: AppLinkOpener | undefined
+): AppLinkOpener | undefined {
   const router = useOptionalSplitRouter();
-  if (!router) return;
+  if (!router) return openOther;
 
   const resolveMention = createMacroMentionLinkResolver(router.routes);
   const pane = useContext(PaneContext);
@@ -78,7 +83,7 @@ function useAgentReplyLinkOpener(): AppLinkOpener | undefined {
     }
 
     const location = appLinkLocation(router.routes, url);
-    if (!location) return false;
+    if (!location) return openOther?.(url) ?? false;
 
     const target = { location };
     const source = pane?.pane();
@@ -91,11 +96,25 @@ function useAgentReplyLinkOpener(): AppLinkOpener | undefined {
   });
 }
 
-/** Macro app links inside open in the app, in a new split, instead of a browser tab. */
-export function AgentReplyLinks(props: ParentProps) {
+/**
+ * Macro app links inside open in the app, in a new split, instead of a browser
+ * tab; a link to an agent's screen is drawn as a chip that opens it to watch. `openOther` is offered every other link first, such as a link to code,
+ * and `describeOther` names those links in their hover cards.
+ */
+export function AgentReplyLinks(
+  props: ParentProps<{
+    openOther?: AppLinkOpener;
+    describeOther?: AppLinkDescriber;
+  }>
+) {
   return (
-    <AppLinkOpenerContext.Provider value={useAgentReplyLinkOpener()}>
-      {props.children}
+    <AppLinkOpenerContext.Provider
+      value={useAgentReplyLinkOpener(props.openOther)}
+    >
+      <AppLinkDescriberContext.Provider value={props.describeOther}>
+        {/* A link to an agent's screen reads as its chip. */}
+        <ScreenLinkChips>{props.children}</ScreenLinkChips>
+      </AppLinkDescriberContext.Provider>
     </AppLinkOpenerContext.Provider>
   );
 }

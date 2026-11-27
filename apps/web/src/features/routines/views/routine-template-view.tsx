@@ -3,7 +3,7 @@ import ClockCounterIcon from '@icon/system/regular/clock-counter-clockwise.svg';
 import LightningIcon from '@icon/system/regular/lightning.svg';
 import PlayIcon from '@icon/system/regular/play.svg';
 import type { RoutineTemplate } from '@service-scheduled-action/generated/schemas';
-import { Badge, Button, Layer } from '@ui';
+import { Badge, Button, Card } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
 import { TemplateReferenceChip } from '../components/template-reference';
 import { formatDateTime } from '../core/routine-draft';
@@ -15,6 +15,7 @@ import type { TemplateReference } from '../primitives/template-activation';
  */
 export function RoutineTemplateView(props: {
   template: RoutineTemplate;
+  mobile?: boolean;
   authorName: string;
   /** False for the template's author, who already has the routine. */
   canActivate: boolean;
@@ -61,26 +62,28 @@ export function RoutineTemplateView(props: {
         )}
       </ViewBreadcrumbs.Item>
       <div class="flex size-full min-h-0 min-w-0 flex-col text-ink">
-        <ViewShell.TopBar
-          class="touch:flex"
-          aria-label="Routine template toolbar"
-        >
-          <ViewBreadcrumbs.Outlet
-            aria-label="Routine template location"
-            class="min-w-0"
-          />
-          <Show when={props.canActivate}>
-            <Button
-              variant="primary"
-              size="md"
-              class="ml-auto shrink-0"
-              onClick={() => props.onActivate()}
-            >
-              <PlayIcon class="size-4" />
-              Activate for me
-            </Button>
-          </Show>
-        </ViewShell.TopBar>
+        <Show when={!props.mobile}>
+          <ViewShell.TopBar
+            class="touch:flex"
+            aria-label="Routine template toolbar"
+          >
+            <ViewBreadcrumbs.Outlet
+              aria-label="Routine template location"
+              class="min-w-0"
+            />
+            <Show when={props.canActivate}>
+              <Button
+                variant="primary"
+                size="md"
+                class="ml-auto shrink-0"
+                onClick={() => props.onActivate()}
+              >
+                <PlayIcon class="size-4" />
+                Activate for me
+              </Button>
+            </Show>
+          </ViewShell.TopBar>
+        </Show>
         <div class="min-h-0 flex-1 overflow-y-auto px-6 pb-8 pt-12 touch:pt-6">
           <div class="mx-auto flex max-w-3xl flex-col gap-6">
             <div>
@@ -103,30 +106,25 @@ export function RoutineTemplateView(props: {
                 </Badge>
               </div>
             </div>
-            <Layer depth={1}>
-              <section
-                aria-label="Template triggers"
-                class="rounded-xl border border-edge-muted bg-surface"
-              >
-                <div class="flex flex-col gap-2 p-4">
-                  <For each={props.triggers}>
-                    {(trigger) => (
-                      <div class="flex items-center gap-2 text-sm">
-                        <LightningIcon class="size-4 shrink-0 text-ink-muted" />
-                        {trigger}
-                      </div>
-                    )}
-                  </For>
-                </div>
-                <div class="flex items-center gap-2 border-t border-edge-muted px-4 py-3 text-xs text-ink-muted">
-                  <span
-                    aria-hidden="true"
-                    class="size-1.5 rounded-full bg-ink-extra-muted"
-                  />
-                  Doesn't run until you activate it
-                </div>
-              </section>
-            </Layer>
+            <Card variant="raised" role="region" aria-label="Template triggers">
+              <div class="flex flex-col gap-2 p-4">
+                <For each={props.triggers}>
+                  {(trigger) => (
+                    <div class="flex items-center gap-2 text-sm">
+                      <LightningIcon class="size-4 shrink-0 text-ink-muted" />
+                      {trigger}
+                    </div>
+                  )}
+                </For>
+              </div>
+              <div class="flex items-center gap-2 border-t border-edge-divider px-4 py-3 text-xs text-ink-muted">
+                <span
+                  aria-hidden="true"
+                  class="size-1.5 rounded-full bg-ink-extra-muted"
+                />
+                Doesn't run until you activate it
+              </div>
+            </Card>
             <section aria-label="Template instructions">
               {props.instructions}
             </section>

@@ -20,7 +20,7 @@ export async function main({ macro, run, trigger }: StepContext) {
     }
   }
   const { outcome } = await macro.ai.structuredCompletion({
-    model: 'google/gemini-3.8-flash',
+    model: 'google/gemini-4-hydrogen',
     thinking: 'low',
     toolset: { type: 'none' },
     prompt: JSON.stringify({

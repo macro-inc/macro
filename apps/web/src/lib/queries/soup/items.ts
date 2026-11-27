@@ -1,4 +1,3 @@
-import { filterSoupItemByRequestBody } from '@app/features/next-soup/filters/query-filters';
 import { throwOnErr } from '@core/util/result';
 import type { EntityData } from '@entity';
 import {
@@ -24,7 +23,6 @@ import type { PostSoupRequest } from '@service-storage/generated/schemas/postSou
 import {
   type InfiniteData,
   infiniteQueryOptions,
-  keepPreviousData,
   type StaleTime,
   useInfiniteQuery,
 } from '@tanstack/solid-query';
@@ -33,9 +31,14 @@ import type { QueryRevalidation } from '../../graphql-cache/exchange/optimistic'
 import { queryClient } from '../client';
 import { registerActiveGraphqlSoupQuery } from './graphql/active-queries';
 import type { PredicateQueryStatus } from './graphql/create-predicate-query';
+import type { SoupProjection } from './graphql/create-soup-live-query';
 import type { SoupEntityRef } from './graphql/entity-input';
 import { createGraphqlGroupedSoupAstItemsQuery } from './graphql/grouped-items';
 import { createGraphqlSoupAstItemsQuery } from './graphql/items';
+import {
+  soupRestFallback,
+  traceSoupRestFallback,
+} from './graphql/rest-fallback';
 import { soupPageTimestamp } from './page-timestamp';
 import {
   createSoupRequestSignal,
@@ -47,11 +50,6 @@ export type SoupParams = Params;
 export type SoupBody = Omit<PostSoupRequest, keyof SoupParams>;
 
 export type SoupItemsQueryFilters = EntityFilters;
-
-export type SoupItemsQueryArgs = {
-  params: SoupParams;
-  body: SoupBody;
-};
 
 export type SoupAstParams = Params;
 
@@ -66,13 +64,13 @@ export type SoupAstItemsQueryArgs = {
 
 export type SoupApiItemFilter = (item: SoupApiItem) => boolean;
 
-interface SoupItemsQueryOptions {
+export interface SoupItemsQueryOptions {
   networkPaused?: boolean;
   keepPreviousData?: boolean;
   enabled?: boolean;
   staleTime?: StaleTime;
   /** Channel navigation reads bounded unread evidence, not notification history. */
-  graphqlProjection?: 'channel-list';
+  graphqlProjection?: SoupProjection;
   /** Known entity identities for cache-first lookups. */
   graphqlCacheFirstEntities?: readonly SoupEntityRef[];
   /** Seed mixed lists from indexed non-email members; keep the full server query. */
@@ -89,7 +87,17 @@ interface SoupItemsQueryOptions {
   showSupportedForeignEntities?: boolean;
   /** Resets view-owned GraphQL state before a mutation-driven network refresh. */
   onBeforeGraphqlRefresh?: () => void;
+  /**
+   * The reader neither shows nor filters or sorts by notification or read
+   * state, so writes that change only that state skip reading it again.
+   */
+  ignoresNotifications?: boolean;
 }
+
+/** Quick Access and menu feeds list entities by name; they show no unread state. */
+export const QUICK_ACCESS_FEED_OPTIONS: SoupItemsQueryOptions = {
+  ignoresNotifications: true,
+};
 
 /**
  * Cached page for `useSoupAstItemsQuery`. Discriminated by `kind`:
@@ -124,57 +132,28 @@ export type SoupAstItemsData = {
   itemsById?: SoupAstItemsGroupedPage['items'];
 };
 
-// Cached options outlive the view. Keep its accessors and query proxies out.
-function soupItemsQueryOptions(
-  args: SoupItemsQueryArgs,
-  enabled: boolean | undefined,
-  staleTime: StaleTime | undefined,
-  showSupportedForeignEntities: boolean | undefined
-) {
-  const { params, body } = args;
-  return infiniteQueryOptions({
-    queryKey: soupKeys.items(args).queryKey,
-    queryFn: (ctx) =>
-      throwOnErr(() =>
-        storageServiceClient.getSoupItems({
-          params: { cursor: ctx.pageParam },
-          body: { ...body, ...params },
-        })
-      ),
-    initialPageParam: null as string | null,
-    getNextPageParam: (lastPage) => lastPage.next_cursor,
-    select: (data) =>
-      data.pages.flatMap((page) =>
-        mapSoupPageToEntityList(page, { showSupportedForeignEntities })
-      ),
-    enabled,
-    staleTime,
-    placeholderData: keepPreviousData,
-    meta: {
-      itemFilter: (item: SoupApiItem) =>
-        !body || filterSoupItemByRequestBody(item, body),
-      normalize: true,
-    },
-  });
-}
-
-export const useSoupItemsQuery = (
-  args: Accessor<SoupItemsQueryArgs>,
-  options?: Accessor<SoupItemsQueryOptions>
-) => {
-  return useInfiniteQuery(() =>
-    soupItemsQueryOptions(
-      args(),
-      options?.().enabled,
-      options?.().staleTime,
-      options?.().showSupportedForeignEntities
-    )
-  );
-};
-
 type RestSoupAstItemsMeta = SoupItemsQueryOptions['meta'];
 
 async function fetchRestSoupAstItemsPage(
+  args: SoupAstItemsQueryArgs,
+  cursor: string | null,
+  requestSignal: AbortSignal
+): Promise<SoupAstItemsPage> {
+  // An explicit REST transport is a choice, not a fallback; everything else
+  // reads REST only because GraphQL had no translation.
+  const fallback =
+    args.transport === 'rest' ? undefined : soupRestFallback(args);
+  const read = () => readRestSoupAstItemsPage(args, cursor, requestSignal);
+  if (!fallback) return await read();
+  return await traceSoupRestFallback(
+    fallback,
+    args.groupBy ? 'grouped' : 'flat',
+    read,
+    requestSignal
+  );
+}
+
+async function readRestSoupAstItemsPage(
   { params, body, groupBy }: SoupAstItemsQueryArgs,
   cursor: string | null,
   requestSignal: AbortSignal
@@ -245,7 +224,8 @@ function restSoupAstItemsQueryOptions(
   staleTime: StaleTime | undefined,
   meta: RestSoupAstItemsMeta,
   showSupportedForeignEntities: boolean | undefined,
-  keepPrevious: boolean | undefined
+  keepPrevious: boolean | undefined,
+  gcTime?: number
 ) {
   const { params, body, groupBy, transport } = args;
 
@@ -313,6 +293,7 @@ function restSoupAstItemsQueryOptions(
     // A timed-out native request should reach the view's load-error state.
     // Retry remains available explicitly from that state.
     staleTime,
+    ...(gcTime !== undefined ? { gcTime } : {}),
     placeholderData: (prev, prevQuery) => {
       if (keepPrevious === false) return undefined;
       // Keep the previous rows on screen while params/filters change, but
@@ -339,7 +320,7 @@ function restSoupAstItemsQueryOptions(
 /** REST implementation kept private behind {@link useSoupAstItemsQuery}. */
 const useRestSoupAstItemsQuery = (
   args: Accessor<SoupAstItemsQueryArgs>,
-  options?: Accessor<SoupItemsQueryOptions>
+  options?: Accessor<SoupItemsQueryOptions & { gcTime?: number }>
 ) => {
   return useInfiniteQuery(() =>
     restSoupAstItemsQueryOptions(
@@ -348,7 +329,8 @@ const useRestSoupAstItemsQuery = (
       options?.().staleTime,
       options?.().meta,
       options?.().showSupportedForeignEntities,
-      options?.().keepPreviousData
+      options?.().keepPreviousData,
+      options?.().gcTime
     )
   );
 };
@@ -375,6 +357,8 @@ export type SoupAstItemsQuery = {
   readonly isFetchNextPageError: boolean;
   readonly isEnabled: boolean;
   readonly hasNextPage: boolean;
+  /** A cached or fetched page answered; a local predicate alone is not a page. */
+  readonly hasPageData: boolean;
   readonly transport: SoupAstItemsQueryTransport;
   readonly cacheStatus?: PredicateQueryStatus;
   /** GraphQL reads used by transport-specific revalidation subscribers. */
@@ -392,6 +376,21 @@ export type SoupAstItemsQuery = {
  * translation. Unsupported requests retain the REST behavior. An explicit
  * `rest` transport forces REST.
  */
+/** Lists that show no unread state read their rows without notifications. */
+function graphqlProjection(
+  options: SoupItemsQueryOptions | undefined
+): SoupProjection | undefined {
+  if (options?.graphqlProjection) return options.graphqlProjection;
+  if (options?.ignoresNotifications) return 'preview';
+  return undefined;
+}
+
+/** The GraphQL list takes a fixed window; a per-query function always fetches. */
+function graphqlStaleTime(staleTime: StaleTime | undefined) {
+  if (staleTime === 'static') return Number.POSITIVE_INFINITY;
+  return typeof staleTime === 'number' ? staleTime : undefined;
+}
+
 export function useSoupAstItemsQuery(
   args: Accessor<SoupAstItemsQueryArgs>,
   options?: Accessor<SoupItemsQueryOptions>
@@ -406,10 +405,11 @@ export function useSoupAstItemsQuery(
         graphqlRequested() && queryEnabled() && args().groupBy === undefined,
       networkPaused: options?.().networkPaused,
       keepPreviousData: options?.().keepPreviousData,
-      projection: options?.().graphqlProjection,
+      projection: graphqlProjection(options?.()),
       cacheFirstEntities: options?.().graphqlCacheFirstEntities,
       localReconciliation: options?.().graphqlLocalReconciliation,
       showSupportedForeignEntities: options?.().showSupportedForeignEntities,
+      staleTime: graphqlStaleTime(options?.().staleTime),
     })
   );
   const graphqlGroupedQuery = createGraphqlGroupedSoupAstItemsQuery(
@@ -434,9 +434,13 @@ export function useSoupAstItemsQuery(
 
   const restQuery = useRestSoupAstItemsQuery(args, () => {
     const currentOptions = options?.();
+    const usingGraphql = usesGraphql();
     return {
       ...currentOptions,
-      enabled: queryEnabled() && !usesGraphql(),
+      enabled: queryEnabled() && !usingGraphql,
+      // Do not retain disabled REST query entries (and large filter AST keys)
+      // in TanStack Query once GraphQL serves the request.
+      gcTime: usingGraphql ? 0 : undefined,
     };
   });
 
@@ -461,6 +465,7 @@ export function useSoupAstItemsQuery(
       }),
       // Grouped lists don't report it yet, so writes still read them again.
       cacheMaintained: () => activeGraphqlQuery().cacheMaintained?.() ?? false,
+      ignoresNotifications: () => options?.().ignoresNotifications ?? false,
     })
   );
 
@@ -495,6 +500,15 @@ export function useSoupAstItemsQuery(
       if (!usesGraphql()) return restQuery.error ?? null;
       const query = activeGraphqlQuery();
       return query.fetchError?.() ?? query.error() ?? null;
+    },
+    get hasPageData() {
+      if (!usesGraphql())
+        return (
+          !restQuery.isPending &&
+          !restQuery.isPlaceholderData &&
+          restQuery.data !== undefined
+        );
+      return activeGraphqlQuery().hasPageData();
     },
     get isPending() {
       if (!usesGraphql()) return restQuery.isPending;

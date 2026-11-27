@@ -35,6 +35,9 @@ pub(in crate::domain::service) struct TriageItem {
     pub path: Vec<String>,
     /// How many planned objects sit directly under it.
     pub children: usize,
+    /// The user explicitly selected this page as a root.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub explicitly_selected: bool,
     /// For a data source: its columns and rows.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub table: Option<TriageTable>,

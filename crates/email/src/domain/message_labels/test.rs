@@ -28,11 +28,14 @@ struct Repository {
     label: Option<MessageLabelDefinition>,
     messages: Vec<MessageLabelTarget>,
     provider_messages: Vec<(Uuid, String)>,
+    gaining: Vec<GainingThread>,
     restored: Result<Vec<Uuid>, TestError>,
     staged: Mutex<Vec<StagedLabelWrite>>,
     /// Each Outlook message's facts beside its thread.
     facts: Vec<(Uuid, MailboxActionMessage)>,
     command_fails: bool,
+    /// A failed command found the inbox locked past the lock timeout.
+    command_contended: bool,
     commands: Mutex<Vec<Command>>,
 }
 
@@ -46,6 +49,10 @@ struct Command {
 
 impl MessageLabelRepository for Repository {
     type Err = TestError;
+
+    fn is_contended(&self, _: &TestError) -> bool {
+        self.command_contended
+    }
 
     async fn inbox_for_message(
         &self,
@@ -80,10 +87,13 @@ impl MessageLabelRepository for Repository {
         Ok(self.messages.clone())
     }
 
-    async fn stage(&self, write: StagedLabelWrite) -> Result<Vec<(Uuid, String)>, StageFailure> {
+    async fn stage(&self, write: StagedLabelWrite) -> Result<StagedMessageLabels, StageFailure> {
         self.calls.lock().unwrap().push(Call::Stage);
         self.staged.lock().unwrap().push(write);
-        Ok(self.provider_messages.clone())
+        Ok(StagedMessageLabels {
+            provider_messages: self.provider_messages.clone(),
+            gaining: self.gaining.clone(),
+        })
     }
 
     async fn revert_unsent(
@@ -232,10 +242,12 @@ fn service() -> MessageLabelService<Repository, Enqueuer, Broker> {
             }),
             messages: Vec::new(),
             provider_messages: Vec::new(),
+            gaining: Vec::new(),
             restored: Ok(Vec::new()),
             staged: Mutex::default(),
             facts: Vec::new(),
             command_fails: false,
+            command_contended: false,
             commands: Mutex::default(),
         },
         enqueuer: Enqueuer {
@@ -440,14 +452,29 @@ async fn enqueue_failure_reports_only_restored_messages_as_failed() {
     assert_eq!(outcome.successful_ids, vec![Uuid::from_u128(4)]);
     assert_eq!(outcome.failed_ids, vec![Uuid::from_u128(3)]);
     let write_id = service.repository.staged.lock().unwrap()[0].write_id;
+    let calls = service.repository.calls.lock().unwrap();
+    let reverted = calls
+        .iter()
+        .position(|call| {
+            *call
+                == Call::Revert(
+                    Uuid::from_u128(1),
+                    vec![Uuid::from_u128(9)],
+                    vec![Uuid::from_u128(3)],
+                    write_id,
+                )
+        })
+        .unwrap();
+    // The change was published before the write was undone, so the thread is
+    // reindexed once the old labels are back.
+    assert_eq!(calls[reverted + 1..], [Call::Event]);
+    let events = service.broker.events.lock().unwrap();
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0]["event_type"], "email.thread_labels_updated");
+    assert_eq!(events[1]["event_type"], "email.threads_reindex_requested");
     assert_eq!(
-        service.repository.calls.lock().unwrap().last(),
-        Some(&Call::Revert(
-            Uuid::from_u128(1),
-            vec![Uuid::from_u128(9)],
-            vec![Uuid::from_u128(3)],
-            write_id
-        ))
+        events[1]["metadata"]["thread_ids"],
+        serde_json::json!([Uuid::from_u128(9)])
     );
 }
 
@@ -587,6 +614,19 @@ async fn outlook_command_that_cannot_be_queued_fails_the_request() {
 }
 
 #[tokio::test]
+async fn outlook_command_behind_a_busy_inbox_is_a_retryable_failure() {
+    let mut service = outlook();
+    service.repository.messages = vec![message(3, 9)];
+    service.repository.facts = vec![(Uuid::from_u128(9), fact(3, true))];
+    service.repository.command_fails = true;
+    service.repository.command_contended = true;
+    assert!(matches!(
+        service.change(request(vec![Uuid::from_u128(3)])).await,
+        Err(MessageLabelError::Contended)
+    ));
+}
+
+#[tokio::test]
 async fn outlook_messages_the_inbox_no_longer_holds_queue_no_command() {
     let mut service = outlook();
     service.repository.messages = vec![message(3, 9)];
@@ -598,4 +638,50 @@ async fn outlook_messages_the_inbox_no_longer_holds_queue_no_command() {
     assert_eq!(outcome.failed_ids, vec![Uuid::from_u128(3)]);
     assert!(outcome.successful_ids.is_empty());
     assert!(service.repository.commands.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_thread_that_gains_the_label_is_told_and_a_programs_write_is_marked() {
+    let gaining = |service: &mut MessageLabelService<Repository, Enqueuer, Broker>| {
+        service.repository.messages = vec![message(3, 9), message(4, 8)];
+        service.repository.gaining = vec![GainingThread {
+            thread_id: Uuid::from_u128(9),
+            message_id: Uuid::from_u128(3),
+            label_id: Uuid::from_u128(2),
+        }];
+    };
+    let ids = || vec![Uuid::from_u128(3), Uuid::from_u128(4)];
+
+    let mut by_person = service();
+    gaining(&mut by_person);
+    by_person.change(request(ids())).await.unwrap();
+    let mut by_agent = service();
+    gaining(&mut by_agent);
+    agent_correlation::context::as_program(by_agent.change(request(ids())))
+        .await
+        .unwrap();
+
+    for (service, automated) in [(&by_person, None), (&by_agent, Some(true))] {
+        let events = service.broker.events.lock().unwrap();
+        let metadata = |thread: u128| {
+            events
+                .iter()
+                .map(|event| &event["metadata"])
+                .find(|metadata| metadata["thread_id"] == Uuid::from_u128(thread).to_string())
+                .unwrap()
+                .clone()
+        };
+        let gained = metadata(9);
+        assert_eq!(
+            gained["labels_gained"],
+            serde_json::json!([Uuid::from_u128(2)])
+        );
+        assert_eq!(gained["message_id"], Uuid::from_u128(3).to_string());
+        assert_eq!(
+            gained.get("automated").and_then(|flag| flag.as_bool()),
+            automated
+        );
+        // The other thread already had the label.
+        assert!(metadata(8).get("labels_gained").is_none());
+    }
 }

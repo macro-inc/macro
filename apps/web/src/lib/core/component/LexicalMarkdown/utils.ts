@@ -34,6 +34,10 @@ import {
 } from '@macro-inc/lexical-core';
 import { SKIP_SCROLL_INTO_VIEW_TAG } from '@macro-inc/lexical-core/constants';
 import {
+  DocumentCardNode,
+  type SerializedDocumentCardNode,
+} from '@macro-inc/lexical-core/nodes/DocumentCardNode';
+import {
   $getId,
   INITIALIZE_DOCUMENT_IDS,
 } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
@@ -83,6 +87,11 @@ import {
   $applyDocumentMetadataFromSerialized,
   $getDocumentMetadata,
 } from './plugins';
+import {
+  preserveStoredLocalStatus,
+  withoutLocalStatus,
+} from './preserveStoredLocalStatus';
+import { projectSharedMarkdownState } from './projectSharedMarkdownState';
 import { MARKDOWN_VERSION_COUNTER } from './version';
 
 /**
@@ -880,6 +889,49 @@ type SerializedBlock = SerializedLexicalNode & {
   $?: Record<string, unknown>;
 };
 
+function isCanvasCard(
+  node: SerializedLexicalNode | undefined
+): node is SerializedDocumentCardNode {
+  return (
+    node?.type === DocumentCardNode.getType() &&
+    'blockName' in node &&
+    node.blockName === 'canvas'
+  );
+}
+
+function isEmptyCanvasPreview(value: unknown): boolean {
+  return (
+    value == null ||
+    (typeof value === 'object' &&
+      !Array.isArray(value) &&
+      Object.keys(value).length === 0)
+  );
+}
+
+function preserveStoredCanvasView(
+  current: SerializedLexicalNode,
+  stored: SerializedLexicalNode | undefined
+) {
+  if (
+    !isCanvasCard(current) ||
+    !isCanvasCard(stored) ||
+    current.documentId !== stored.documentId
+  )
+    return;
+
+  const prior = stored.previewData;
+  const next = current.previewData;
+  if (
+    (prior && typeof prior === 'object' && 'view' in prior) ||
+    (next && typeof next === 'object' && 'view' in next) ||
+    (isEmptyCanvasPreview(prior) && isEmptyCanvasPreview(next))
+  ) {
+    // An older peer may have changed or removed this seed while a local
+    // edit was queued. Keep the stored seed and its representation when unset.
+    current.previewData = prior;
+  }
+}
+
 /**
  * Transform a serialized editor state into one that is safe to the LORO sync plugin.
  */
@@ -896,6 +948,14 @@ export function loroSyncState(
         return node;
       },
     ]
+  );
+  projectSharedMarkdownState(
+    serializedState.root,
+    options.stored?.root,
+    (current, stored) => {
+      preserveStoredLocalStatus(current, stored);
+      preserveStoredCanvasView(current, stored);
+    }
   );
   addDerivedFields(
     state,
@@ -995,6 +1055,14 @@ function addDerivedFields(
 }
 
 function sameExceptSearchText(a: SerializedBlock, b: SerializedBlock) {
+  // Historical siblings sharing an ID may have different local values. Only
+  // their shared content should affect the document stamp and search text.
+  return (
+    sameBlock(a, b) || sameBlock(withoutLocalStatus(a), withoutLocalStatus(b))
+  );
+}
+
+function sameBlock(a: SerializedBlock, b: SerializedBlock) {
   const { $: aMeta, ...aContent } = a;
   const { $: bMeta, ...bContent } = b;
   const { searchText: _a, ...aRest } = aMeta ?? {};
@@ -1404,6 +1472,20 @@ function _pendingEditorState(editor: LexicalEditor): Promise<EditorState> {
       resolve(editorState);
     });
   });
+}
+
+/**
+ * Focuses `editor` for a click on its container, unless focus is already inside
+ * the editor. A click in the text has already focused the editor and put the
+ * caret where it landed, and `editor.focus()` writes Lexical's stored selection
+ * back to the page. That selection is still the previous caret when the click
+ * arrives before Lexical reads the browser's selectionchange (a quick click, a
+ * trackpad or touch tap, or a busy main thread), so the click would be lost. A
+ * click beside the text, on the container's padding, still focuses the editor.
+ */
+export function focusEditorFromClick(editor: LexicalEditor): void {
+  if (editor.getRootElement()?.contains(document.activeElement)) return;
+  editor.focus();
 }
 
 /**

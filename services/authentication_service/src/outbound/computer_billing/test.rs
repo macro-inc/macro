@@ -640,6 +640,16 @@ async fn refunding_a_team_with_no_subscription_is_typed() {
     assert!(matches!(refused, Err(BillingError::NoSubscription)));
 }
 
+#[test]
+fn a_change_still_in_flight_is_its_own_billing_error() {
+    assert!(matches!(
+        billing_error(TeamSubscriptionItemsError::Customer(
+            CustomerError::ItemChangeInFlight
+        )),
+        BillingError::ChangeInFlight
+    ));
+}
+
 #[tokio::test]
 async fn purchase_terms_read_the_subscription_once_and_preview_once() {
     let teams = FakeTeams::new(BillingCadence::Month);

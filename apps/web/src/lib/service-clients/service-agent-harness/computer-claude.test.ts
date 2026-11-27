@@ -29,6 +29,9 @@ describe('computer Claude errors', () => {
       expect((await handler(response(403, { message: 'no' }))).code).toBe(
         'FORBIDDEN'
       );
+      expect((await handler(response(403, { code: 'future_code' }))).code).toBe(
+        'FORBIDDEN'
+      );
     }
   });
 });

@@ -113,7 +113,7 @@ describe('routine creation state without app providers', () => {
     }));
     await composer.create();
     expect(composer.formError()).toBe(
-      'Connect every app this routine requires.'
+      'Connect Linear, which this routine requires.'
     );
     expect(source.create).not.toHaveBeenCalled();
 

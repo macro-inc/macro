@@ -1,3 +1,7 @@
+mod agent_dm;
+mod interactions;
+mod mention_fallback;
+
 use super::*;
 use crate::domain::{
     events::ReactionNotificationContext,
@@ -19,6 +23,7 @@ struct FakeContext {
     bot_profile: Option<BotSenderProfile>,
     bot_profile_lookup_count: Arc<Mutex<usize>>,
     thread_context: ThreadNotificationContext,
+    agent_dm: bool,
 }
 
 impl Default for FakeContext {
@@ -34,6 +39,7 @@ impl Default for FakeContext {
             }),
             bot_profile_lookup_count: Arc::new(Mutex::new(0)),
             thread_context: ThreadNotificationContext::default(),
+            agent_dm: false,
         }
     }
 }
@@ -84,6 +90,9 @@ impl ChannelSideEffectContext for FakeContext {
         *self.bot_profile_lookup_count.lock().unwrap() += 1;
         self.bot_profile.clone()
     }
+    async fn is_agent_dm(&self, _channel_id: Uuid) -> Result<bool, Self::Err> {
+        Ok(self.agent_dm)
+    }
 }
 
 #[derive(Clone, Default)]
@@ -121,6 +130,7 @@ impl ChannelNotificationSender for FakeNotifications {
 #[derive(Clone, Default)]
 struct FakeContacts {
     users: Arc<Mutex<Vec<HashSet<MacroUserIdStr<'static>>>>>,
+    interactions: Arc<Mutex<Vec<Interactions>>>,
 }
 
 impl ChannelContactsDispatcher for FakeContacts {
@@ -131,6 +141,18 @@ impl ChannelContactsDispatcher for FakeContacts {
         users: HashSet<MacroUserIdStr<'static>>,
     ) -> Result<(), Self::Err> {
         self.users.lock().unwrap().push(users);
+        Ok(())
+    }
+
+    async fn record_interactions(
+        &self,
+        users: Vec<MacroUserIdStr<'static>>,
+        peers: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<(), Self::Err> {
+        self.interactions
+            .lock()
+            .unwrap()
+            .push(Interactions { users, peers });
         Ok(())
     }
 }

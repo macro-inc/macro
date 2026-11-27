@@ -124,12 +124,13 @@ impl CalendarReplacementProvider for FakeProvider {
         _: &str,
         _: Option<&str>,
         remove: bool,
+        changes: &CalendarEventPatch,
     ) -> Result<ReplacementSnapshot, CalendarProviderError> {
         self.calls.lock().unwrap().push("inspect".into());
         Ok(ReplacementSnapshot {
             source_id: "original".into(),
             is_organizer: !matches!(self.behavior, FakeProviderBehavior::NotAttendee),
-            title: "Reviewed".into(),
+            title: changes.title.clone().unwrap_or_else(|| "Reviewed".into()),
             time: timed_time(),
             attendee_count: 2,
             is_series: false,
@@ -213,7 +214,14 @@ fn fixture(behavior: FakeProviderBehavior) -> (TestMutationService, FakeRepo, Fa
 async fn preview_is_read_only_and_confirmation_replays_after_old_event_retirement() {
     let (service, repo, provider, event) = fixture(FakeProviderBehavior::Echo);
     let preview = service
-        .prepare_replacement("owner", event, None, None, true)
+        .prepare_replacement(
+            "owner",
+            event,
+            None,
+            None,
+            true,
+            CalendarEventPatch::default(),
+        )
         .await
         .unwrap();
     assert_eq!(preview.status, ReplacementStatus::NeedsConfirmation);
@@ -247,7 +255,14 @@ async fn dropped_creation_response_is_read_back_by_background_recovery_without_r
         CalendarProviderErrorKind::Transient,
     ));
     let preview = service
-        .prepare_replacement("owner", event, None, None, true)
+        .prepare_replacement(
+            "owner",
+            event,
+            None,
+            None,
+            true,
+            CalendarEventPatch::default(),
+        )
         .await
         .unwrap();
     assert!(
@@ -287,7 +302,14 @@ async fn dropped_creation_response_is_read_back_by_background_recovery_without_r
 async fn unconfirmed_creation_never_releases_the_original_or_sends_again() {
     let (service, repo, provider, event) = fixture(FakeProviderBehavior::Gone);
     let preview = service
-        .prepare_replacement("owner", event, None, None, true)
+        .prepare_replacement(
+            "owner",
+            event,
+            None,
+            None,
+            true,
+            CalendarEventPatch::default(),
+        )
         .await
         .unwrap();
     repo.start_replacement_step(preview.operation_id, 0, &json!({"step":0}))
@@ -318,14 +340,28 @@ async fn replacement_denies_nonorganizers_other_actors_and_revoked_calendar_acce
     let (service, _, provider, event) = fixture(FakeProviderBehavior::NotAttendee);
     assert!(
         service
-            .prepare_replacement("owner", event, None, None, true)
+            .prepare_replacement(
+                "owner",
+                event,
+                None,
+                None,
+                true,
+                CalendarEventPatch::default()
+            )
             .await
             .is_err()
     );
     assert_eq!(*provider.calls.lock().unwrap(), vec!["inspect"]);
     let (service, mut repo, provider, event) = fixture(FakeProviderBehavior::Echo);
     let preview = service
-        .prepare_replacement("owner", event, None, None, true)
+        .prepare_replacement(
+            "owner",
+            event,
+            None,
+            None,
+            true,
+            CalendarEventPatch::default(),
+        )
         .await
         .unwrap();
     assert!(matches!(
@@ -350,16 +386,107 @@ async fn paused_writes_and_read_only_calendars_reject_before_provider_calls() {
     assert!(
         service
             .with_outlook_writes_enabled(false)
-            .prepare_replacement("owner", event, None, None, true)
+            .prepare_replacement(
+                "owner",
+                event,
+                None,
+                None,
+                true,
+                CalendarEventPatch::default()
+            )
             .await
             .is_err()
     );
     repo.mutation_target.as_mut().unwrap().is_read_only = true;
     assert!(
         super::service(repo, provider.clone(), FakeTokens::ok())
-            .prepare_replacement("owner", event, None, None, true)
+            .prepare_replacement(
+                "owner",
+                event,
+                None,
+                None,
+                true,
+                CalendarEventPatch::default()
+            )
             .await
             .is_err()
     );
+    assert!(provider.calls.lock().unwrap().is_empty());
+}
+#[tokio::test]
+async fn an_unconfirmed_preview_gives_way_to_newer_changes_and_a_started_one_resumes() {
+    let (service, repo, provider, event) = fixture(FakeProviderBehavior::Echo);
+    let titled = |title: &str| CalendarEventPatch {
+        title: Some(title.into()),
+        ..CalendarEventPatch::default()
+    };
+    let first = service
+        .prepare_replacement("owner", event, None, None, true, titled("First"))
+        .await
+        .unwrap();
+    let second = service
+        .prepare_replacement("owner", event, None, None, true, titled("Second"))
+        .await
+        .unwrap();
+    assert_ne!(first.operation_id, second.operation_id);
+    assert_eq!(second.title, "Second");
+    assert_eq!(repo.replacements.lock().unwrap().len(), 1);
+
+    repo.start_replacement_step(second.operation_id, 0, &json!({"step":0}))
+        .await
+        .unwrap();
+    let resumed = service
+        .prepare_replacement("owner", event, None, None, true, titled("Third"))
+        .await
+        .unwrap();
+    assert_eq!(resumed.operation_id, second.operation_id);
+    assert_eq!(resumed.title, "Second");
+    assert_eq!(resumed.status, ReplacementStatus::InProgress);
+    assert_eq!(*provider.calls.lock().unwrap(), vec!["inspect", "inspect"]);
+}
+#[tokio::test]
+async fn replacement_changes_refuse_a_conference_an_occurrence_repeat_rule_and_a_reversed_time() {
+    let (service, _, provider, event) = fixture(FakeProviderBehavior::Echo);
+    let conference = CalendarEventPatch {
+        conference: Some(ConferenceChange::MicrosoftTeams),
+        ..CalendarEventPatch::default()
+    };
+    assert!(matches!(
+        service
+            .prepare_replacement("owner", event, None, None, true, conference)
+            .await,
+        Err(CalendarMutationError::InvalidInput(_))
+    ));
+    let repeat = CalendarEventPatch {
+        recurrence_lines: Some(vec!["RRULE:FREQ=DAILY".into()]),
+        ..CalendarEventPatch::default()
+    };
+    assert!(matches!(
+        service
+            .prepare_replacement(
+                "owner",
+                event,
+                None,
+                Some("2026-11-02T17:00:00+00:00".into()),
+                true,
+                repeat
+            )
+            .await,
+        Err(CalendarMutationError::InvalidInput(_))
+    ));
+    let reversed = CalendarEventPatch {
+        time: Some(EventTime::Timed {
+            starts_at: "2026-11-02T18:00:00Z".parse().unwrap(),
+            ends_at: "2026-11-02T17:00:00Z".parse().unwrap(),
+            time_zone: None,
+        }),
+        ..CalendarEventPatch::default()
+    };
+    assert!(matches!(
+        service
+            .prepare_replacement("owner", event, None, None, true, reversed)
+            .await,
+        Err(CalendarMutationError::InvalidInput(_))
+    ));
     assert!(provider.calls.lock().unwrap().is_empty());
 }

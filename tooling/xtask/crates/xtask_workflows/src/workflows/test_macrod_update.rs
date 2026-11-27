@@ -10,6 +10,7 @@
 use gh_workflow::{Event, Job, Level, Permissions, Run, Step, Workflow, WorkflowCall};
 use xtask_paths::RepoGlob;
 
+use crate::workflows::actions::ActionsSetupNode;
 use crate::workflows::{runners, steps, vars};
 
 #[cfg(test)]
@@ -122,9 +123,9 @@ fn windows_job() -> Job {
                 ))
                 .shell("pwsh"),
         )        .add_step(
-            Step::new("Setup Node")
-                .uses("actions", "setup-node", "v4")
-                .add_with(("node-version", "24")),
+            ActionsSetupNode::new("Setup Node")
+                .node_version("24")
+                .step(),
         )
         .add_step(
             Step::new("Claude Code from npm")

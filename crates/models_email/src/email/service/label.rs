@@ -203,4 +203,13 @@ pub mod system_labels {
     pub const IMPORTANT: &str = "IMPORTANT";
     pub const SENT: &str = "SENT";
     pub const DRAFT: &str = "DRAFT";
+
+    /// Whether a provider label id is Gmail's own rather than a label someone
+    /// made: the system labels above and the inbox category tabs.
+    pub fn is_system(provider_label_id: &str) -> bool {
+        matches!(
+            provider_label_id,
+            INBOX | SPAM | TRASH | UNREAD | STARRED | IMPORTANT | SENT | DRAFT
+        ) || provider_label_id.starts_with("CATEGORY_")
+    }
 }

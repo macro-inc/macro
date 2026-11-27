@@ -93,9 +93,8 @@ for (const provider of PROVIDERS) {
 }
 
 test.describe('a scheduled reply the provider refuses', () => {
-  // Gmail only: an Outlook inbox reports the refusal in the recovery notice
-  // instead, and cancelling from under it is the known bug
-  // outlook-cancelled-failed-schedule-stays-locked (scheduled-failure.spec.ts).
+  // Gmail only: scheduled-failure.spec.ts covers the Outlook recovery notice
+  // and cancellation.
   test.use({ provider: 'GMAIL' });
   test.beforeEach(({ page }) => loadAppSteadily(page));
 

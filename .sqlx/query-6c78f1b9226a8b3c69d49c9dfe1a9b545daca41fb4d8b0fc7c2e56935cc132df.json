@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_runtime_update\n            SET settle_failures = settle_failures + 1,\n                lease_until = now() + interval '1 minute',\n                outcome = CASE WHEN settle_failures >= 2 THEN 'needs_operator' END,\n                source_url = CASE WHEN settle_failures < 2 THEN source_url END\n            WHERE id = $1 AND lease_holder = $2 AND lease_until > now() AND outcome IS NULL\n              AND deadline_at <= now()\n            RETURNING (outcome = 'needs_operator') AS terminal\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "terminal",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6c78f1b9226a8b3c69d49c9dfe1a9b545daca41fb4d8b0fc7c2e56935cc132df"
+}

@@ -8,7 +8,8 @@ export type AppearanceEntityType =
   | 'initiative'
   | 'form'
   | 'database'
-  | 'scheduled_action';
+  | 'scheduled_action'
+  | 'saved_view';
 
 /** Owning services authorize the same shared, atomic appearance payload. */
 export function setEntityAppearance(
@@ -22,6 +23,7 @@ export function setEntityAppearance(
     form: 'forms',
     database: 'databases',
     scheduled_action: 'scheduled-actions',
+    saved_view: 'saved_views/definitions',
   }[type];
   const request = { method: 'PUT' as const, body: JSON.stringify(appearance) };
   const url = `/${path}/${encodeURIComponent(id)}/appearance`;

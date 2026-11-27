@@ -1,15 +1,16 @@
 // Boot a candidate AMI on a throwaway host and check every service comes up,
 // before the production host is touched. The run creates the smoke host's own
-// blank volume, buckets, secret of throwaway values and IAM role, and deletes
-// them all afterwards. Never production storage: Loki and Tempo compactors
-// delete blocks they consider expired.
+// blank volume, backup bucket, secret of throwaway values and IAM role, and
+// deletes them all afterwards. Never production storage or paging: the smoke
+// host's GoAlert pages only its own relay, which has nowhere to post.
 import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { backupStatements } from '../host-policy';
 import { renderUserData } from '../render';
-import { ACCOUNT, REGION, aws, sleep, waitFor } from './aws';
+import { REGION, aws, sleep, waitFor } from './aws';
 
 export const SMOKE_PROJECT_TAG = 'observability-smoke';
 // The same type as production, so the check covers its boot and drivers.
@@ -33,8 +34,7 @@ export interface SmokeTarget {
 export interface SmokeResources {
   instanceProfile: string;
   secretArn: string;
-  logsBucket: string;
-  tracesBucket: string;
+  backupBucket: string;
 }
 
 export function smokeNames(runId: string) {
@@ -42,47 +42,20 @@ export function smokeNames(runId: string) {
   const name = `${SMOKE_PREFIX}${runId}`;
   return {
     role: name,
-    logsBucket: `${name}-logs`,
-    tracesBucket: `${name}-traces`,
+    backupBucket: `${name}-backup`,
     secret: `${SMOKE_SECRET_PREFIX}${runId}`,
   };
 }
 
 /**
- * The smoke host's only permissions: its own buckets and secret. No CloudWatch,
- * SNS or production storage, so it cannot delete telemetry or page anyone.
+ * The smoke host's only permissions: production's backup statements on its own
+ * bucket, and its own secret. No CloudWatch, SNS or production storage.
  */
-export function smokeHostPolicy(
-  logsBucket: string,
-  tracesBucket: string,
-  secretArn: string
-) {
-  const buckets = [logsBucket, tracesBucket].map(
-    (bucket) => `arn:aws:s3:::${bucket}`
-  );
+export function smokeHostPolicy(backupBucket: string, secretArn: string) {
   return {
     Version: '2012-10-17',
     Statement: [
-      {
-        Effect: 'Allow',
-        Action: [
-          's3:ListBucket',
-          's3:GetBucketLocation',
-          's3:ListBucketMultipartUploads',
-        ],
-        Resource: buckets,
-      },
-      {
-        Effect: 'Allow',
-        Action: [
-          's3:GetObject',
-          's3:PutObject',
-          's3:DeleteObject',
-          's3:AbortMultipartUpload',
-          's3:ListMultipartUploadParts',
-        ],
-        Resource: buckets.map((arn) => `${arn}/*`),
-      },
+      ...backupStatements(`arn:aws:s3:::${backupBucket}`),
       {
         Effect: 'Allow',
         Action: 'secretsmanager:GetSecretValue',
@@ -98,40 +71,38 @@ const smokeTagList = (runId: string) => [
   { Key: 'SmokeRun', Value: runId },
 ];
 
-/** Create this run's buckets, secret and instance profile. */
+/** Create this run's bucket, secret and instance profile. */
 export async function createSmokeResources(
   runId: string
 ): Promise<SmokeResources> {
   const names = smokeNames(runId);
-  for (const bucket of [names.logsBucket, names.tracesBucket]) {
-    aws(
-      REGION,
-      's3api',
-      'create-bucket',
-      '--bucket',
-      bucket,
-      '--create-bucket-configuration',
-      `LocationConstraint=${REGION}`
-    );
-    aws(
-      REGION,
-      's3api',
-      'put-public-access-block',
-      '--bucket',
-      bucket,
-      '--public-access-block-configuration',
-      'BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true'
-    );
-    aws(
-      REGION,
-      's3api',
-      'put-bucket-tagging',
-      '--bucket',
-      bucket,
-      '--tagging',
-      JSON.stringify({ TagSet: smokeTagList(runId) })
-    );
-  }
+  aws(
+    REGION,
+    's3api',
+    'create-bucket',
+    '--bucket',
+    names.backupBucket,
+    '--create-bucket-configuration',
+    `LocationConstraint=${REGION}`
+  );
+  aws(
+    REGION,
+    's3api',
+    'put-public-access-block',
+    '--bucket',
+    names.backupBucket,
+    '--public-access-block-configuration',
+    'BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true'
+  );
+  aws(
+    REGION,
+    's3api',
+    'put-bucket-tagging',
+    '--bucket',
+    names.backupBucket,
+    '--tagging',
+    JSON.stringify({ TagSet: smokeTagList(runId) })
+  );
   const secretArn = aws<{ ARN: string }>(
     REGION,
     'secretsmanager',
@@ -176,9 +147,7 @@ export async function createSmokeResources(
     '--policy-name',
     'smoke-storage',
     '--policy-document',
-    JSON.stringify(
-      smokeHostPolicy(names.logsBucket, names.tracesBucket, secretArn)
-    )
+    JSON.stringify(smokeHostPolicy(names.backupBucket, secretArn))
   );
   aws(
     REGION,
@@ -218,19 +187,19 @@ export async function createSmokeResources(
   return {
     instanceProfile: names.role,
     secretArn,
-    logsBucket: names.logsBucket,
-    tracesBucket: names.tracesBucket,
+    backupBucket: names.backupBucket,
   };
 }
 
+// None of these resolve, so nothing a smoke host sends reaches production.
 export const SMOKE_HOSTS = {
-  grafanaHost: 'grafana-smoke.macro-internal.com',
   otlpHost: 'otlp-smoke.macro-internal.com',
   oncallHost: 'oncall-smoke.macro-internal.com',
 };
-// No such topic exists, and the smoke role cannot publish anyway: a smoke
-// host's alerts must never page anyone.
-export const SMOKE_ALARM_TOPIC = `arn:aws:sns:${REGION}:${ACCOUNT}:observability-smoke-unused`;
+// The cluster serves Grafana; the host must answer its name 404.
+const SMOKE_GRAFANA_HOST = 'grafana-smoke.macro-internal.com';
+// GoAlert's webhook to the Macro Alerts relay (`relayUrl` in goalert.nix).
+export const RELAY_URL = 'http://127.0.0.1:8090/goalert';
 
 export function smokeUserData(
   resources: SmokeResources,
@@ -240,10 +209,8 @@ export function smokeUserData(
     region: REGION,
     ...SMOKE_HOSTS,
     secretArn: resources.secretArn,
-    alarmTopicArn: SMOKE_ALARM_TOPIC,
     volumeId,
-    logsBucket: resources.logsBucket,
-    tracesBucket: resources.tracesBucket,
+    backupBucket: resources.backupBucket,
   });
 }
 
@@ -253,7 +220,6 @@ export function smokeSecret(): Record<string, string> {
   return {
     google_client_id: 'observability-smoke.apps.googleusercontent.com',
     google_client_secret: random(),
-    grafana_secret_key: random(),
     otlp_token: random(),
     goalert_encryption_key: random(),
     goalert_admin_password: random(),
@@ -267,72 +233,99 @@ export function smokeSecret(): Record<string, string> {
 export const UNITS = [
   'observability-bootstrap',
   'observability-secrets',
-  'grafana',
-  'loki',
-  'tempo',
-  'prometheus',
-  'alloy',
-  'alloy-ingest',
   'nginx',
   'postgresql',
   'goalert',
   'macro-alerts-relay',
+  'alloy',
 ];
+
+/**
+ * Paging through nginx as production pages. As GoAlert's break-glass admin,
+ * make a service whose escalation posts to the relay, with a generic key
+ * (Datadog's), a Grafana key (the cluster's) and a heartbeat monitor; page
+ * through each, and wait for GoAlert to post to the relay. The caller defines
+ * `failed`, `relay_received` and `$admin_password_file`, so a lab can run this
+ * against its own `base`.
+ */
+export function pagingCheckScript(
+  marker: string,
+  base = 'http://127.0.0.1:8080'
+): string {
+  const oncall = SMOKE_HOSTS.oncallHost;
+  const create = JSON.stringify({
+    query: `mutation { createService(input: { name: "smoke-${marker}", newEscalationPolicy: { name: "smoke-${marker}", repeat: 0, steps: [{ delayMinutes: 1, targets: [{ type: chanWebhook, id: "${RELAY_URL}" }] }] }, newIntegrationKeys: [{ type: generic, name: "datadog" }, { type: grafana, name: "grafana" }], newHeartbeatMonitors: [{ name: "watchdog", timeoutMinutes: 60 }] }) { integrationKeys { href } heartbeatMonitors { href } } }`,
+  });
+  // The body infra/stacks/monitoring/goalert.ts has Datadog send.
+  const datadogAlert = JSON.stringify({
+    summary: `${marker}-datadog`,
+    details: `https://app.datadoghq.com/monitors/0\n\nsmoke ${marker}`,
+    // Not the marker: the Grafana page dedups on its fingerprint, which is.
+    dedup: `${marker}-datadog`,
+  });
+  const grafanaAlert = JSON.stringify({
+    version: '1',
+    alerts: [
+      {
+        status: 'firing',
+        labels: { alertname: `${marker}-grafana` },
+        fingerprint: marker,
+      },
+    ],
+  });
+  const search = JSON.stringify({
+    query: `{ alerts(input: { search: "${marker}" }) { nodes { summary } } }`,
+  });
+  return `oncall='Host: ${oncall}'
+code() { curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$@"; }
+expect() {
+  local want=$1 what=$2 got
+  shift 2
+  got=$(code "$@")
+  [ "$got" = "$want" ] || failed "$what answered $got, not $want"
+  echo "$what: $got"
+}
+expect 200 "on-call /health" -H "$oncall" ${base}/health
+expect 200 "the GoAlert UI" -H "$oncall" ${base}/
+expect 404 "Grafana's hostname" -H 'Host: ${SMOKE_GRAFANA_HOST}' ${base}/
+expect 404 "OTLP on the ingest hostname" -X POST -H 'Host: ${SMOKE_HOSTS.otlpHost}' -d '{}' ${base}/v1/logs
+expect 404 "an unused GoAlert integration" -X POST -H "$oncall" -d '{}' ${base}/api/v2/site24x7/incoming
+expect 401 "Grafana paging without a key" -X POST -H "$oncall" -H 'Content-Type: application/json' -d '{}' ${base}/api/v2/grafana/incoming
+session=$(curl -s -D - -o /dev/null --max-time 10 -H "$oncall" -H 'Referer: https://${oncall}/' \\
+    --data-urlencode username=admin --data-urlencode "password=$(cat "$admin_password_file")" \\
+    ${base}/api/v2/identity/providers/basic | sed -n 's/^Set-Cookie: goalert_session\\.2=\\([^;]*\\);.*/\\1/p')
+[ -n "$session" ] || failed "GoAlert refused the admin login"
+graphql() { curl -s --max-time 10 -H "$oncall" -H "Cookie: goalert_session.2=$session" -H 'Content-Type: application/json' -d "$1" ${base}/api/graphql; }
+created=$(graphql '${create}')
+generic=$(printf '%s' "$created" | grep -o 'generic/incoming?token=[0-9a-f-]*' | cut -d= -f2)
+grafana=$(printf '%s' "$created" | grep -o 'grafana/incoming?token=[0-9a-f-]*' | cut -d= -f2)
+heartbeat=$(printf '%s' "$created" | grep -o 'heartbeat/[0-9a-f-]*' | cut -d/ -f2)
+[ -n "$generic" ] && [ -n "$grafana" ] && [ -n "$heartbeat" ] || failed "GoAlert did not make the smoke service: $created"
+expect 204 "a generic page (Datadog)" -X POST -H "$oncall" -H 'Content-Type: application/json' -d '${datadogAlert}' "${base}/api/v2/generic/incoming?token=$generic"
+expect 200 "a Grafana page (the cluster)" -X POST -H "$oncall" -H 'Content-Type: application/json' -d '${grafanaAlert}' "${base}/api/v2/grafana/incoming?token=$grafana"
+expect 200 "a heartbeat" -X POST -H "$oncall" "${base}/api/v2/heartbeat/$heartbeat"
+stored=$(graphql '${search}' | grep -o '"summary":"${marker}[^"]*"' | wc -l)
+[ "$stored" -eq 2 ] || failed "GoAlert stored $stored of the 2 pages"
+echo "GoAlert stored both pages"
+deadline=$((SECONDS + 120))
+until relay_received; do
+  [ "$SECONDS" -lt "$deadline" ] || failed "GoAlert never posted a page to the relay"
+  sleep 5
+done
+echo "GoAlert posted the pages to the relay"
+`;
+}
 
 /** The on-host check, run as root over SSM. Exits non-zero with the failing units' logs. */
 export function hostCheckScript(marker: string): string {
-  const traceId = marker.padEnd(32, '0').slice(0, 32);
-  const otlp = `-H 'Host: ${SMOKE_HOSTS.otlpHost}' -H "Authorization: Bearer $(cat /run/macro-observability/otlp_token)" -H 'Content-Type: application/json'`;
-  const log = JSON.stringify({
-    resourceLogs: [
-      {
-        resource: {
-          attributes: [
-            {
-              key: 'service.name',
-              value: { stringValue: 'observability-smoke' },
-            },
-          ],
-        },
-        scopeLogs: [{ logRecords: [{ body: { stringValue: marker } }] }],
-      },
-    ],
-  });
-  const span = JSON.stringify({
-    resourceSpans: [
-      {
-        resource: {
-          attributes: [
-            {
-              key: 'service.name',
-              value: { stringValue: 'observability-smoke' },
-            },
-          ],
-        },
-        scopeSpans: [
-          {
-            spans: [
-              {
-                traceId,
-                spanId: traceId.slice(0, 16),
-                name: 'smoke',
-                kind: 1,
-                startTimeUnixNano: 'START',
-                endTimeUnixNano: 'END',
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  });
+  const otlpOrigin = `https://${SMOKE_HOSTS.otlpHost}`;
   return `set -uo pipefail
 units="${UNITS.join(' ')}"
 failed() {
   echo "SMOKE FAILED: $1"
   systemctl --no-pager --failed || true
   for unit in $units; do
-    systemctl is-active --quiet "$unit" || journalctl --no-pager -u "$unit" -n 40 --since boot
+    systemctl is-active --quiet "$unit" || journalctl --no-pager -b -u "$unit" -n 40
   done
   exit 1
 }
@@ -340,8 +333,7 @@ ready() {
   for unit in $units; do
     systemctl is-active --quiet "$unit" || { echo "waiting for $unit: $(systemctl is-active "$unit")"; return 1; }
   done
-  for url in http://127.0.0.1:8080/healthz http://127.0.0.1:8080/goalert-healthz \\
-      http://127.0.0.1:3100/ready http://127.0.0.1:3200/ready http://127.0.0.1:9090/-/ready; do
+  for url in http://127.0.0.1:8080/goalert-healthz http://127.0.0.1:12346/-/ready; do
     curl -fsS -o /dev/null --max-time 5 "$url" || { echo "waiting for $url"; return 1; }
   done
 }
@@ -353,27 +345,25 @@ done
 echo "All units active and health endpoints answer"
 uname -r; cat /etc/os-release | grep PRETTY_NAME
 findmnt --noheadings --output SOURCE,FSTYPE /srv/observability
-now=$(date +%s%N)
-span=$(printf '%s' '${span}' | sed "s/START/$now/; s/END/$((now + 1000000))/")
-curl -fsS --max-time 10 ${otlp} -d '${log}' http://127.0.0.1:8080/v1/logs > /dev/null || failed "OTLP logs rejected"
-curl -fsS --max-time 10 ${otlp} -d "$span" http://127.0.0.1:8080/v1/traces > /dev/null || failed "OTLP traces rejected"
-deadline=$((SECONDS + 180))
-until curl -fsS -G --max-time 5 http://127.0.0.1:3100/loki/api/v1/query_range \\
-    --data-urlencode 'query={service_name="observability-smoke"} |= "${marker}"' | grep -q '${marker}'; do
-  [ "$SECONDS" -lt "$deadline" ] || failed "the OTLP log never reached Loki"
+admin_password_file=/run/macro-observability/goalert_admin_password
+# The relay forwards to an unroutable webhook, so a post it received logs a failed forward.
+relay_received() { journalctl --no-pager -b -u macro-alerts-relay | grep -q 'forward source=/goalert'; }
+${pagingCheckScript(marker)}
+# The nightly dump, with the production policy's statements on the smoke bucket.
+bucket=$(sed -n 's/^BACKUP_BUCKET="\\(.*\\)"$/\\1/p' /opt/observability/runtime.env)
+[ -n "$bucket" ] || failed "runtime.env has no BACKUP_BUCKET"
+systemctl start goalert-backup || { journalctl --no-pager -b -u goalert-backup -n 40; failed "the GoAlert backup failed"; }
+aws --region ${REGION} s3 ls "s3://$bucket/goalert/" | grep -q 'goalert-[A-Z][a-z][a-z]\\.dump$' || failed "the GoAlert backup is not in s3://$bucket/goalert/"
+echo "GoAlert backed up to s3://$bucket/goalert/"
+# Host telemetry goes to the cluster's edge, which does not resolve from here.
+deadline=$((SECONDS + 120))
+until metrics=$(curl -fsS --max-time 5 http://127.0.0.1:12346/metrics) &&
+    grep -q 'url="${otlpOrigin}/api/v1/write"' <<<"$metrics" &&
+    grep -q 'component_id="loki.write.cluster".*host="${SMOKE_HOSTS.otlpHost}"' <<<"$metrics"; do
+  [ "$SECONDS" -lt "$deadline" ] || failed "Alloy does not send to ${otlpOrigin}"
   sleep 5
 done
-echo "OTLP log reached Loki"
-until curl -fsS -o /dev/null --max-time 5 http://127.0.0.1:3200/api/traces/${traceId}; do
-  [ "$SECONDS" -lt "$deadline" ] || failed "the OTLP span never reached Tempo"
-  sleep 5
-done
-echo "OTLP span reached Tempo"
-curl -fsS --max-time 5 'http://127.0.0.1:9090/api/v1/query?query=up' | grep -q '"result":\\[{' || failed "Prometheus has no scraped series"
-echo "Prometheus is scraping"
-# The ingestion endpoint must refuse a missing token.
-code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: ${SMOKE_HOSTS.otlpHost}' -H 'Content-Type: application/json' -d '{}' http://127.0.0.1:8080/v1/logs)
-[ "$code" = 401 ] || failed "ingestion without a token answered $code"
+echo "Alloy sends metrics and logs to ${otlpOrigin}"
 echo "SMOKE PASSED"
 `;
 }

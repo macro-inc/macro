@@ -1,5 +1,5 @@
 import type { DatabaseOp } from '@core/database-sql/generated/types';
-import { errAsync, ok, ResultAsync } from 'neverthrow';
+import { errAsync, ok, okAsync, ResultAsync } from 'neverthrow';
 import {
   type Accessor,
   createEffect,
@@ -94,14 +94,33 @@ export function createDatabaseController(args: {
           .orElse(() => ok(undefined))
           .map(() => applied)
       );
+  const forbidden = () =>
+    errAsync({
+      code: 'FORBIDDEN' as const,
+      refusal: null,
+      message: 'You cannot edit columns.',
+    });
   const schemaApply: typeof apply = (ops, version) =>
     args.capabilities().editColumns
       ? ready().andThen(() => apply(ops, version))
-      : errAsync({
-          code: 'FORBIDDEN',
-          refusal: null,
-          message: 'You cannot edit columns.',
-        });
+      : forbidden();
+  /** Waits until no column creation is pending, including ones started while waiting. */
+  const settled = (): ReturnType<typeof ready> =>
+    creating.size === 0 ? okAsync(undefined) : ready().andThen(settled);
+  /**
+   * Builds the ops once column creations settle: an op that names every
+   * column, or the version it is based on, must include them. Column
+   * creation itself goes through `schemaApply`, or it would wait on itself.
+   */
+  const schemaApplyAfterCreates = (
+    build: () => { ops: DatabaseOp[]; version?: number }
+  ) =>
+    args.capabilities().editColumns
+      ? settled().andThen(() => {
+          const { ops, version } = build();
+          return apply(ops, version);
+        })
+      : forbidden();
   const change = (
     column: string,
     change: Extract<DatabaseOp, { kind: 'column' }>['change'],
@@ -163,24 +182,38 @@ export function createDatabaseController(args: {
     rename: (column: string, name: string, previousName: string) =>
       change(column, { kind: 'rename', name, previousName }),
     remove: (column: string) =>
-      change(column, { kind: 'delete' }, data.table()?.version),
-    reorder: (columns: string[]) =>
-      schemaApply(
-        [
+      schemaApplyAfterCreates(() => ({
+        ops: [
+          {
+            kind: 'column',
+            table: tableId,
+            column,
+            change: { kind: 'delete' },
+          },
+        ],
+        version: data.table()?.version,
+      })).map(() => {
+        setCreatedColumns((columns) =>
+          columns.filter((current) => current.id !== column)
+        );
+      }),
+    reorder: (order: string[]) =>
+      schemaApplyAfterCreates(() => ({
+        ops: [
           {
             kind: 'table',
             table: tableId,
             change: {
               kind: 'reorder_columns',
               order: mergeDatabaseColumnOrder(
-                data.rows.columns().map((column) => column.id),
-                columns
+                columns().map((column) => column.id),
+                order
               ),
             },
           },
         ],
-        data.table()?.version
-      ).map(() => undefined),
+        version: data.table()?.version,
+      })).map(() => undefined),
     changeType: (column: string, request: DatabaseColumnTypeChange) => {
       const table = data.table();
       if (!table)
@@ -213,28 +246,32 @@ export function createDatabaseController(args: {
           ...(replace ? {} : { after: beside }),
         },
       };
-      const ops: DatabaseOp[] = replace
-        ? [
-            {
-              kind: 'column',
-              table: tableId,
-              column: beside,
-              change: { kind: 'delete' },
-            },
-            create,
-            {
-              kind: 'table',
-              table: tableId,
-              change: {
-                kind: 'reorder_columns',
-                order: (data.table()?.columns ?? []).map((existing) =>
-                  existing.id === beside ? column : existing.id
-                ),
+      const ops = (): DatabaseOp[] =>
+        replace
+          ? [
+              {
+                kind: 'column',
+                table: tableId,
+                column: beside,
+                change: { kind: 'delete' },
               },
-            },
-          ]
-        : [create];
-      return schemaApply(ops, data.table()?.version).map(() => column);
+              create,
+              {
+                kind: 'table',
+                table: tableId,
+                change: {
+                  kind: 'reorder_columns',
+                  order: columns().map((existing) =>
+                    existing.id === beside ? column : existing.id
+                  ),
+                },
+              },
+            ]
+          : [create];
+      return schemaApplyAfterCreates(() => ({
+        ops: ops(),
+        version: data.table()?.version,
+      })).map(() => column);
     },
   };
   const optionEditing: OptionEditing = {

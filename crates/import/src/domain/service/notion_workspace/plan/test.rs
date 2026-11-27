@@ -21,6 +21,65 @@ fn page(hex: char, title: &str, parent: NotionParent) -> NotionPage {
 }
 
 #[test]
+fn explicitly_requested_page_overrides_template_skip_but_its_child_does_not() {
+    let template = id('a');
+    let child = id('b');
+    let inventory = Inventory {
+        pages: vec![
+            page('a', "Workspace template", NotionParent::Workspace),
+            page(
+                'b',
+                "Sample page",
+                NotionParent::Page {
+                    id: template.clone(),
+                },
+            ),
+        ],
+        ..Inventory::default()
+    };
+    let tree =
+        PlanTree::new(&inventory).for_scope(&import_notion::domain::model::ImportScope::Roots {
+            ids: vec![template.clone()],
+        });
+    let mut verdicts: HashMap<_, _> = [template.clone(), child]
+        .into_iter()
+        .map(|id| {
+            let key = id.to_string();
+            let verdict = Verdict {
+                key: key.clone(),
+                decision: NotionDecision::Skip,
+                reason: Some("Onboarding template".into()),
+                task_fields: None,
+                shared: None,
+                shared_reason: None,
+            };
+            (key, verdict)
+        })
+        .collect();
+
+    let items = serde_json::to_value(tree.triage_items(&HashMap::new())).unwrap();
+    assert_eq!(items[0]["explicitlySelected"], true);
+    assert!(items[1].get("explicitlySelected").is_none());
+    let workspace = PlanTree::new(&inventory);
+    assert_eq!(
+        workspace.decided_rows(&verdicts, NotionSharing::Personal, false)[0].metadata["plan"]["decision"],
+        "skip"
+    );
+
+    let rows = tree.decided_rows(&verdicts, NotionSharing::Personal, false);
+    assert_eq!(rows[0].metadata["plan"]["decision"], "copy");
+    assert_eq!(rows[1].metadata["plan"]["decision"], "skip");
+    assert_eq!(rows[1].metadata["plan"]["reason"], "Onboarding template");
+
+    let root = verdicts.get_mut(template.as_str()).unwrap();
+    root.decision = NotionDecision::Hand;
+    root.reason = Some("Requires manual setup".into());
+    let rows = tree.decided_rows(&verdicts, NotionSharing::Personal, false);
+    assert_eq!(rows[0].metadata["plan"]["decision"], "hand");
+    assert_eq!(rows[0].metadata["plan"]["reason"], "Requires manual setup");
+}
+
+#[test]
 fn the_tree_puts_parents_first_and_plans_every_object_under_its_page() {
     let inventory = Inventory {
         pages: vec![
@@ -217,5 +276,116 @@ fn objects_a_teammate_already_imported_skip_the_model_and_link_to_their_copy() {
         plans[1].decision,
         Some(NotionDecision::Copy),
         "decided as soon as it is staged"
+    );
+}
+
+#[test]
+fn unreadable_dependencies_are_visible_but_cannot_be_included_or_shared() {
+    use super::super::databases::discovery::{Dependency, Discovery};
+    use import_notion::domain::databases::ReadFailure;
+    let discovery = Discovery {
+        inventory: Inventory {
+            pages: vec![page('a', "Project", NotionParent::Workspace)],
+            data_sources: vec![],
+        },
+        dependencies: [(
+            id('d'),
+            Dependency {
+                title: "Linked work".into(),
+                url: id('d').url(),
+                referenced_by: vec![id('a')],
+                unavailable: Some(ReadFailure::Forbidden),
+            },
+        )]
+        .into(),
+        warnings: HashMap::new(),
+        inline_on: HashMap::new(),
+    };
+    let tree = PlanTree::with_databases(&discovery);
+    assert_eq!(
+        tree.triage_items(&HashMap::new()).len(),
+        1,
+        "the model sees only the readable page"
+    );
+    let rows = tree.staged_rows(NotionSharing::Team, true, &HashMap::new());
+    let dependency = rows
+        .iter()
+        .find(|row| row.foreign_id == id('d').as_str())
+        .unwrap();
+    let meta: NotionDocMeta = serde_json::from_value(dependency.metadata.clone()).unwrap();
+    let plan = meta.plan.unwrap();
+    assert_eq!(plan.dependency_of, vec![id('a').to_string()]);
+    assert_eq!(plan.decision, Some(NotionDecision::Hand));
+    assert!(!plan.shareable);
+    assert!(!plan.shared);
+    assert!(plan.reason.unwrap().contains("access"));
+}
+
+#[test]
+fn readable_dependencies_default_to_copy_even_when_triage_prefers_tasks() {
+    let mut tree = PlanTree::new(&Inventory {
+        pages: vec![page('a', "Project", NotionParent::Workspace)],
+        data_sources: vec![DataSourceSummary {
+            source: NotionDataSource {
+                id: id('d'),
+                database_id: id('f'),
+                title: "Work".into(),
+                database_parent: NotionParent::Workspace,
+                in_trash: false,
+                properties: vec![],
+            },
+            row_count: 2,
+            sample_titles: vec![],
+        }],
+    });
+    let node = tree
+        .nodes
+        .iter_mut()
+        .find(|node| node.id == id('d'))
+        .unwrap();
+    node.inline_on = vec![id('a')];
+    let mut verdict = default_verdict(&triage_item(node, id('d').as_str()), "Task shaped table");
+    verdict.decision = NotionDecision::Tasks;
+    let rows = tree.decided_rows(
+        &[(id('d').to_string(), verdict)].into(),
+        NotionSharing::Personal,
+        false,
+    );
+    let meta: NotionDocMeta = serde_json::from_value(rows[0].metadata.clone()).unwrap();
+    assert_eq!(meta.plan.unwrap().decision, Some(NotionDecision::Copy));
+}
+
+#[test]
+fn audit_snapshot_warnings_use_titles_without_raw_notion_ids() {
+    let summary = DataSourceSummary {
+        source: NotionDataSource {
+            id: id('d'),
+            database_id: id('a'),
+            title: "Budget".into(),
+            database_parent: NotionParent::Workspace,
+            in_trash: false,
+            properties: vec![
+                NotionPropertySchema {
+                    id: "formula".into(),
+                    name: "Cost".into(),
+                    kind: NotionPropertyKind::Formula,
+                },
+                NotionPropertySchema {
+                    id: "rollup".into(),
+                    name: "Total".into(),
+                    kind: NotionPropertyKind::Rollup,
+                },
+            ],
+        },
+        row_count: 0,
+        sample_titles: vec![],
+    };
+    let node = data_source_node(&summary);
+    assert_eq!(node.warnings.len(), 2);
+    assert!(
+        node.warnings
+            .iter()
+            .all(|warning| warning.render().contains("Budget")
+                && !warning.render().contains(id('d').as_str()))
     );
 }

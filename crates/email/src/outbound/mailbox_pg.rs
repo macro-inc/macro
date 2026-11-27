@@ -1,7 +1,9 @@
 //! Postgres implementation of durable mailbox stream and reconciliation leases.
 
+use crate::domain::mailbox::claim::StreamClaim;
 use crate::domain::mailbox::live_pass::{FolderPass, StreamKind};
 use crate::domain::mailbox::progress::ImportCompleted;
+use crate::domain::mailbox::schedule::PollIntervals;
 use crate::domain::mailbox::*;
 use email_api_client::domain::models::{
     MailFolder, MailboxChangePage, ProviderId, StreamPosition, StreamToken,
@@ -47,13 +49,25 @@ impl PgMailboxSync {
         self
     }
 
+    /// Every mailbox transaction gives up on a lock it cannot get within 5 s
+    /// (SQLSTATE 55P03), so a write queued behind a long lock holder, such as a
+    /// CRM population share-locking its link, goes back to its caller's retry
+    /// instead of holding a pooled connection.
+    async fn begin(&self) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, sqlx::Error> {
+        let mut tx = self.db.begin().await?;
+        sqlx::query!("SET LOCAL lock_timeout = '5s'")
+            .execute(&mut *tx)
+            .await?;
+        Ok(tx)
+    }
+
     // Serialize only the brief lease-acquisition transactions. Draft and
     // organization workers must atomically observe each other's active leases;
     // no provider IO runs while this lock is held.
     async fn mutation_claim_transaction(
         &self,
     ) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         sqlx::query!("SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended('email.outlook.mutation-claims',0))")
             .fetch_one(&mut *tx).await.map_err(db_error)?;
         Ok(tx)
@@ -96,6 +110,22 @@ impl From<&sqlx::Error> for DatabaseFailure {
     }
 }
 
+/// The stream row a claim returns, from either kind's claim.
+struct ClaimedStream {
+    id: Uuid,
+    link_id: Uuid,
+    generation: i64,
+    grant_generation: i64,
+    scope_id: String,
+    position: Option<String>,
+    initial_complete: bool,
+    fence: i64,
+    next_run_at: chrono::DateTime<chrono::Utc>,
+    notified_at: Option<chrono::DateTime<chrono::Utc>>,
+    notified_traceparent: Option<String>,
+    import_started_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
 impl MailboxSyncRepository for PgMailboxSync {
     async fn renew(&self, lease: SyncLease<'_>) -> Result<(), MailboxError> {
         let updated = match lease {
@@ -129,17 +159,56 @@ impl MailboxSyncRepository for PgMailboxSync {
     async fn release_catalog(&self, lease: &CatalogLease, delay: u32) -> Result<(), MailboxError> {
         self.release_catalog_lease(lease, delay).await
     }
+    async fn mark_no_mailbox(&self, lease: &CatalogLease) -> Result<u32, MailboxError> {
+        self.mark_catalog_without_mailbox(lease).await
+    }
     // Sync claims skip a link flagged `needs_reauth`: its token requests can
     // only fail until a reconnect, or a token that works again, clears the flag.
     async fn claim_stream(
         &self,
         lease_id: Uuid,
-        kind: StreamKind,
+        claim: StreamClaim,
     ) -> Result<Option<StreamLease>, MailboxError> {
-        let row = sqlx::query!(r#"
+        let kind = match claim {
+            StreamClaim::LivePass => StreamKind::LivePass,
+            StreamClaim::LongestDue | StreamClaim::ImportFirst => StreamKind::MailFolder,
+        };
+        let row = match claim {
+            // The longest-due import round, else the longest-due folder. Each
+            // candidate is one row off its own index.
+            StreamClaim::ImportFirst => sqlx::query_as!(ClaimedStream, r#"
+                WITH import_round AS (
+                    SELECT s.id, s.notified_traceparent, 0 AS preference
+                    FROM email_sync_streams s JOIN email_links l ON l.id = s.link_id
+                    WHERE l.is_sync_active AND NOT l.needs_reauth AND l.mailbox_unavailable_at IS NULL AND l.provider = 'OUTLOOK' AND s.generation = l.sync_generation
+                        AND s.kind = 'mail_folder' AND NOT s.initial_complete AND s.next_run_at <= now()
+                        AND (s.lease_until IS NULL OR s.lease_until < now())
+                    ORDER BY s.next_run_at, s.id LIMIT 1 FOR UPDATE OF s SKIP LOCKED
+                ), longest_due AS (
+                    SELECT s.id, s.notified_traceparent, 1 AS preference
+                    FROM email_sync_streams s JOIN email_links l ON l.id = s.link_id
+                    WHERE l.is_sync_active AND NOT l.needs_reauth AND l.mailbox_unavailable_at IS NULL AND l.provider = 'OUTLOOK' AND s.generation = l.sync_generation
+                        AND s.kind = 'mail_folder' AND s.next_run_at <= now()
+                        AND (s.lease_until IS NULL OR s.lease_until < now())
+                    ORDER BY s.next_run_at, s.id LIMIT 1 FOR UPDATE OF s SKIP LOCKED
+                ), candidate AS (
+                    SELECT c.id, c.notified_traceparent FROM (
+                        SELECT * FROM import_round UNION ALL SELECT * FROM longest_due
+                    ) c ORDER BY c.preference LIMIT 1
+                )
+                -- The trace context is handed over once: retries get traces of
+                -- their own, so a long deferral can't grow the webhook's trace.
+                UPDATE email_sync_streams s SET lease_id = $1, lease_until = now() + interval '3 minutes', lease_started_at = clock_timestamp(), fence = fence + 1,
+                    notified_traceparent = NULL
+                FROM candidate c, email_links l WHERE s.id = c.id AND l.id = s.link_id
+                RETURNING s.id, s.link_id, s.generation, l.grant_generation, s.scope_id,
+                    s.position, s.initial_complete, s.fence, s.next_run_at, s.notified_at, c.notified_traceparent,
+                    s.import_started_at
+            "#, lease_id).fetch_optional(&self.db).await,
+            StreamClaim::LongestDue | StreamClaim::LivePass => sqlx::query_as!(ClaimedStream, r#"
             WITH candidate AS (
                 SELECT s.id, s.notified_traceparent FROM email_sync_streams s JOIN email_links l ON l.id = s.link_id
-                WHERE l.is_sync_active AND NOT l.needs_reauth AND l.provider = 'OUTLOOK' AND s.generation = l.sync_generation
+                WHERE l.is_sync_active AND NOT l.needs_reauth AND l.mailbox_unavailable_at IS NULL AND l.provider = 'OUTLOOK' AND s.generation = l.sync_generation
                     AND s.kind = $2 AND s.next_run_at <= now()
                     AND (s.lease_until IS NULL OR s.lease_until < now())
                 ORDER BY s.next_run_at, s.id LIMIT 1 FOR UPDATE OF s SKIP LOCKED
@@ -150,9 +219,11 @@ impl MailboxSyncRepository for PgMailboxSync {
                 notified_traceparent = NULL
             FROM candidate c, email_links l WHERE s.id = c.id AND l.id = s.link_id
             RETURNING s.id, s.link_id, s.generation, l.grant_generation, s.scope_id,
-                s.position, s.initial_complete, s.fence, s.notified_at, c.notified_traceparent,
+                s.position, s.initial_complete, s.fence, s.next_run_at, s.notified_at, c.notified_traceparent,
                 s.import_started_at
-        "#, lease_id, kind.as_str()).fetch_optional(&self.db).await.map_err(db_error)?;
+        "#, lease_id, kind.as_str()).fetch_optional(&self.db).await,
+        }
+        .map_err(db_error)?;
         row.map(|row| {
             let pass = match kind {
                 StreamKind::MailFolder => FolderPass::Folder,
@@ -173,6 +244,7 @@ impl MailboxSyncRepository for PgMailboxSync {
                 initial_complete: row.initial_complete,
                 lease_id,
                 fence: row.fence,
+                due_at: row.next_run_at,
                 notification: notification(row.notified_at, row.notified_traceparent),
             })
         })
@@ -183,6 +255,7 @@ impl MailboxSyncRepository for PgMailboxSync {
         &self,
         lease: &StreamLease,
         page: &MailboxChangePage,
+        polls: PollIntervals,
     ) -> Result<CommittedPage, MailboxError> {
         let (position, complete) = match &page.position {
             StreamPosition::Continue(position) => (position, false),
@@ -196,10 +269,23 @@ impl MailboxSyncRepository for PgMailboxSync {
             .collect();
         ids.sort_unstable();
         ids.dedup();
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         Self::lock_attachment_completion(&mut tx, lease.mailbox).await?;
+        // A working subscription passes the webhook's test
+        // (`notification_binding`: the mailbox's current generation, not
+        // expired), was registered with Graph, and its upkeep has not failed
+        // since: Graph notifies its changes, so a checkpoint's next poll is
+        // only a safety net.
         let advanced = sqlx::query!(
             r#"
+            WITH subscribed AS (
+                SELECT EXISTS (
+                    SELECT 1 FROM email_provider_subscriptions p
+                    JOIN email_mailbox_watch_work w ON w.link_id = p.link_id
+                    WHERE p.link_id = $8 AND p.generation = $9 AND p.provider_id IS NOT NULL
+                        AND p.expires_at > now() AND w.failures = 0
+                ) AS working
+            )
             UPDATE email_sync_streams s SET position = $4,
                 initial_complete = s.initial_complete OR $5,
                 -- A round's first page records the reader revision it started at,
@@ -208,14 +294,16 @@ impl MailboxSyncRepository for PgMailboxSync {
                 round_started_at = CASE WHEN s.position IS NULL THEN s.lease_started_at ELSE s.round_started_at END,
                 last_completed_at = CASE WHEN $5 THEN now() ELSE last_completed_at END,
                 next_run_at = CASE WHEN $5 AND (s.notified_at IS NULL OR s.notified_at <= s.lease_started_at)
-                    THEN now() + interval '2 minutes' ELSE now() END,
+                    THEN now() + make_interval(secs => CASE WHEN subscribed.working THEN $10::float8 ELSE $11::float8 END)
+                    ELSE now() END,
                 -- A checkpoint that started reading after the notification has
                 -- answered it; a deferred or partial read leaves it pending.
                 notified_at = CASE WHEN $5 AND s.notified_at <= s.lease_started_at THEN NULL ELSE s.notified_at END,
                 lease_id = NULL, lease_until = NULL
-            FROM email_links l WHERE s.id = $1 AND s.lease_id = $2 AND s.fence = $3
+            FROM email_links l, subscribed WHERE s.id = $1 AND s.lease_id = $2 AND s.fence = $3
                 AND s.lease_until > now() AND s.link_id = l.id AND s.generation = l.sync_generation
                 AND l.is_sync_active AND l.grant_generation = $6
+            RETURNING s.next_run_at > now() AS "scheduled!", subscribed.working AS "subscribed!"
         "#,
             lease.id,
             lease.lease_id,
@@ -223,14 +311,21 @@ impl MailboxSyncRepository for PgMailboxSync {
             position.expose(),
             complete,
             lease.mailbox.grant_generation,
-            page.reader_revision
+            page.reader_revision,
+            lease.mailbox.link_id,
+            lease.mailbox.sync_generation,
+            f64::from(polls.subscribed),
+            f64::from(polls.unsubscribed)
         )
-        .execute(&mut *tx)
+        .fetch_optional(&mut *tx)
         .await
-        .map_err(db_error)?;
-        if advanced.rows_affected() != 1 {
-            return Err(MailboxError::Stale);
-        }
+        .map_err(db_error)?
+        .ok_or(MailboxError::Stale)?;
+        let next_poll_seconds = advanced.scheduled.then_some(if advanced.subscribed {
+            polls.subscribed
+        } else {
+            polls.unsubscribed
+        });
         // The round's checkpoint lists everything its live pass was there
         // for, and the folder's later rounds read new mail themselves.
         if complete && !lease.initial_complete && lease.pass == FolderPass::Folder {
@@ -243,6 +338,9 @@ impl MailboxSyncRepository for PgMailboxSync {
             ON CONFLICT (link_id,generation,provider_id) DO UPDATE SET
                 revision = email_message_reconciliation.revision + 1,
                 is_import = email_message_reconciliation.is_import AND EXCLUDED.is_import,
+                -- A folder page lists the message, so it is read as a folder
+                -- page's message, wherever it has moved since.
+                from_notification = false,
                 notified_at = COALESCE(EXCLUDED.notified_at, email_message_reconciliation.notified_at),
                 notified_traceparent = CASE WHEN EXCLUDED.notified_at IS NULL
                     THEN email_message_reconciliation.notified_traceparent ELSE EXCLUDED.notified_traceparent END,
@@ -267,11 +365,12 @@ impl MailboxSyncRepository for PgMailboxSync {
         Ok(CommittedPage {
             queued,
             import_completed,
+            next_poll_seconds,
         })
     }
 
     async fn reset_stream(&self, lease: &StreamLease) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         Self::lock_attachment_completion(&mut tx, lease.mailbox).await?;
         let result = sqlx::query!(r#"
             UPDATE email_sync_streams s SET position = NULL,initial_complete = false,attachments_rechecked = false,next_run_at = now(),lease_id = NULL,lease_until = NULL
@@ -297,7 +396,7 @@ impl MailboxSyncRepository for PgMailboxSync {
     }
 
     async fn open_live_pass(&self, lease: &StreamLease) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         // Under the link lock, as the round's checkpoint commit is: either the
         // checkpoint retires this pass, or the pass sees the round has ended
         // and opens none.
@@ -380,17 +479,23 @@ impl MailboxSyncRepository for PgMailboxSync {
             WITH candidate AS (
                 SELECT q.link_id,q.generation,q.provider_id,q.notified_traceparent FROM email_message_reconciliation q
                 JOIN email_links l ON l.id = q.link_id
-                WHERE q.generation = l.sync_generation AND l.is_sync_active AND NOT l.needs_reauth AND l.provider = 'OUTLOOK'
+                WHERE q.generation = l.sync_generation AND l.is_sync_active AND NOT l.needs_reauth AND l.mailbox_unavailable_at IS NULL AND l.provider = 'OUTLOOK'
                     AND q.is_import IN (false,$2)
                     AND q.available_at <= now() AND (q.lease_until IS NULL OR q.lease_until < now())
                 ORDER BY q.is_import,q.available_at,q.link_id,q.provider_id LIMIT 1 FOR UPDATE OF q SKIP LOCKED
             )
-            -- Only the first attempt joins the notification's trace.
+            -- Only the first attempt joins the notification's trace. Every
+            -- recorded outcome deletes the row or clears its lease, so a lease
+            -- still set here expired under a worker that stopped; a revision
+            -- newer than the last claim read starts the count over.
             UPDATE email_message_reconciliation q SET lease_id = $1, lease_until = now() + interval '3 minutes', attempts = attempts + 1,
+                unfinished_claims = CASE WHEN q.lease_id IS NULL OR q.revision <> q.claimed_revision THEN 0
+                    ELSE q.unfinished_claims + 1 END,
+                claimed_revision = q.revision,
                 notified_traceparent = NULL
             FROM candidate c,email_links l
             WHERE q.link_id = c.link_id AND q.generation = c.generation AND q.provider_id = c.provider_id AND l.id = q.link_id
-            RETURNING q.link_id,q.generation,l.grant_generation,q.provider_id,q.revision,q.is_import,q.attempts,q.notified_at,c.notified_traceparent
+            RETURNING q.link_id,q.generation,l.grant_generation,q.provider_id,q.revision,q.is_import,q.attempts,q.unfinished_claims,q.notified_at,c.notified_traceparent,q.from_notification
         "#,lease_id,!self.imports_paused).fetch_optional(&self.db).await.map_err(db_error)?;
         row.map(|row| {
             Ok(MessageLease {
@@ -404,7 +509,9 @@ impl MailboxSyncRepository for PgMailboxSync {
                 lease_id,
                 is_import: row.is_import,
                 attempts: row.attempts,
+                unfinished_claims: row.unfinished_claims,
                 notification: notification(row.notified_at, row.notified_traceparent),
+                from_notification: row.from_notification,
             })
         })
         .transpose()
@@ -439,7 +546,7 @@ impl MailboxSyncRepository for PgMailboxSync {
         &self,
         lease: &MessageLease,
     ) -> Result<Option<ImportCompleted>, MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         Self::lock_attachment_completion(&mut tx, lease.mailbox).await?;
         sqlx::query!(r#"
             DELETE FROM email_message_reconciliation WHERE link_id = $1 AND generation = $2 AND provider_id = $3

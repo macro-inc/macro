@@ -103,11 +103,11 @@ export function CalendarColorPicker(props: {
       <Popover.Trigger
         aria-label={props.label}
         title={props.label}
-        class="flex size-8 shrink-0 items-center justify-center rounded-full outline-none hover:bg-ink/5 focus-visible:ring-2 focus-visible:ring-accent data-expanded:bg-ink/5"
+        class="flex size-8 shrink-0 items-center justify-center rounded-full outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-accent data-expanded:bg-active"
       >
         <span
           ref={swatch}
-          class="size-5 rounded-full border border-ink/10 transition-transform hover:scale-110"
+          class="size-5 rounded-full border border-border-secondary transition-transform hover:scale-110"
           style={{ 'background-color': props.color }}
         />
       </Popover.Trigger>
@@ -191,13 +191,11 @@ export function CalendarColorPicker(props: {
             }}
           >
             <span
-              class="pointer-events-none absolute size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 shadow-md"
+              class="pointer-events-none absolute size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-border-secondary shadow-md"
               style={{
                 left: `${color().saturation * 100}%`,
                 top: `${(1 - color().brightness) * 100}%`,
                 'background-color': hex(),
-                'border-color': '#fff',
-                'box-shadow': '0 0 0 1px #0003, 0 2px 5px #0004',
               }}
             />
           </div>
@@ -219,11 +217,9 @@ export function CalendarColorPicker(props: {
             >
               <Slider.Thumb
                 aria-label="Hue"
-                class="top-1/2 size-4 -translate-y-1/2 rounded-full border-2 outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                class="top-1/2 size-4 -translate-y-1/2 rounded-full border-2 border-border-secondary shadow-md outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 style={{
                   'background-color': hueColor(),
-                  'border-color': '#fff',
-                  'box-shadow': '0 1px 4px #0006',
                 }}
               >
                 <Slider.Input />
@@ -232,7 +228,7 @@ export function CalendarColorPicker(props: {
           </Slider>
           <div class="flex items-center gap-3 rounded-lg border border-edge-muted px-3 py-2 focus-within:border-accent">
             <span
-              class="size-5 shrink-0 rounded-md border border-ink/10"
+              class="size-5 shrink-0 rounded-md border border-border-secondary"
               style={{ 'background-color': hex() }}
             />
             <span class="text-xs text-ink-muted">HEX</span>
@@ -268,7 +264,7 @@ export function CalendarColorPicker(props: {
                   title={item.name}
                   aria-pressed={hex().toLowerCase() === item.color}
                   onClick={() => changeHex(item.color)}
-                  class="flex size-8 items-center justify-center justify-self-center rounded-full border border-ink/10 outline-none transition-transform hover:scale-110 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 ring-offset-menu aria-pressed:ring-2 aria-pressed:ring-ink/40 aria-pressed:ring-offset-2"
+                  class="flex size-8 items-center justify-center justify-self-center rounded-full border border-border-secondary outline-none transition-transform hover:scale-110 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 ring-offset-menu aria-pressed:ring-2 aria-pressed:ring-accent aria-pressed:ring-offset-2"
                 >
                   <span
                     class="flex size-full items-center justify-center rounded-full"

@@ -24,6 +24,7 @@ mod purchase_offers;
 mod quarantine;
 pub(crate) mod rollout;
 mod sold_resources;
+mod status;
 
 /// What the fake subscription does with a removal.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -56,6 +57,8 @@ pub(crate) struct FakeBilling {
     pub decline: AtomicBool,
     /// The add fails before it reaches the provider.
     pub provider_error: AtomicBool,
+    /// Another change to the team's subscription is still in flight.
+    pub change_in_flight: AtomicBool,
     /// The add is charged but its answer is lost.
     pub lose_response: AtomicBool,
     pub remove_outcome: Mutex<RemoveOutcome>,
@@ -180,6 +183,9 @@ impl Billing for FakeBilling {
             return Err(BillingError::Provider(rootcause::report!(
                 "billing timed out"
             )));
+        }
+        if self.change_in_flight.load(Ordering::SeqCst) {
+            return Err(BillingError::ChangeInFlight);
         }
         if self.decline.load(Ordering::SeqCst) {
             return Err(BillingError::PaymentFailed);
@@ -414,6 +420,7 @@ pub(crate) fn computer(id: ComputerId, phase: Phase, billing: BillingState) -> C
         created_by: admin(),
         created_at: now() - chrono::Duration::days(30),
         enrolled_at: Some(now() - chrono::Duration::days(30)),
+        hibernated_at: None,
         setup_completed_at: None,
         default_agent_id: None,
         image: None,
@@ -1013,6 +1020,25 @@ async fn released_with_removal(
     (service, clock, removal_id)
 }
 
+use super::billing::removal_key;
+
+/// The computer [`released_with_removal`] releases.
+const RELEASED: ComputerId = ComputerId::new_from_uuid(Uuid::from_u128(1));
+
+/// Effect ids come from each database's own sequence, so two environments
+/// sharing one Stripe account reuse them: a removal key carries the computer
+/// id too, unique everywhere, so their keys never collide.
+#[test]
+fn removal_keys_of_two_computers_with_the_same_effect_id_differ() {
+    let other = ComputerId::new_from_uuid(Uuid::from_u128(2));
+
+    assert_ne!(removal_key(RELEASED, 15, 0), removal_key(other, 15, 0));
+    assert_eq!(
+        removal_key(RELEASED, 15, 0),
+        format!("computer-remove:{RELEASED}:15:0")
+    );
+}
+
 /// A retried removal sends its own key again, so the subscription guard
 /// lets it replay its change instead of refusing it as another one in flight.
 #[tokio::test]
@@ -1028,7 +1054,10 @@ async fn a_retried_removal_reuses_its_own_key() {
 
     assert_eq!(
         *service.billing.removals.lock().unwrap(),
-        vec![(item("si_1"), format!("computer-remove:{removal_id}:0"))]
+        vec![(
+            item("si_1"),
+            format!("computer-remove:{RELEASED}:{removal_id}:0")
+        )]
     );
 }
 
@@ -1057,7 +1086,10 @@ async fn a_pool_timeout_never_spends_a_removal_attempt() {
     assert_eq!(service.run_billing_effects().await.unwrap(), 1);
     assert_eq!(
         *service.billing.removals.lock().unwrap(),
-        vec![(item("si_1"), format!("computer-remove:{removal_id}:0"))]
+        vec![(
+            item("si_1"),
+            format!("computer-remove:{RELEASED}:{removal_id}:0")
+        )]
     );
 }
 
@@ -1074,7 +1106,7 @@ async fn a_removal_moves_past_an_abandoned_key_and_stops_once_one_landed() {
         .abandoned_keys
         .lock()
         .unwrap()
-        .push(format!("computer-remove:{removal_id}:0"));
+        .push(format!("computer-remove:{RELEASED}:{removal_id}:0"));
 
     *service.billing.remove_outcome.lock().unwrap() = RemoveOutcome::Removed;
     clock.advance(chrono::Duration::hours(1));
@@ -1082,7 +1114,10 @@ async fn a_removal_moves_past_an_abandoned_key_and_stops_once_one_landed() {
 
     assert_eq!(
         *service.billing.removals.lock().unwrap(),
-        vec![(item("si_1"), format!("computer-remove:{removal_id}:1"))]
+        vec![(
+            item("si_1"),
+            format!("computer-remove:{RELEASED}:{removal_id}:1")
+        )]
     );
     assert!(
         service

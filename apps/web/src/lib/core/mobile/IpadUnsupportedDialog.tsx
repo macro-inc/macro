@@ -35,6 +35,8 @@ export function IpadUnsupportedDialog() {
     <Show when={DEBUG_FORCE_OPEN || (onIpad() && !dismissed())}>
       <Dialog
         open
+        // Dismissing marks this one-time notice as seen.
+        keepOpenOnNavigation
         onOpenChange={(open) => {
           if (!open) setDismissed(true);
         }}

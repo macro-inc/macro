@@ -476,6 +476,20 @@ impl GmailEmulator {
         })
     }
 
+    /// Renames a user label, as the mailbox's owner would in Gmail. Gmail
+    /// records no change to any message for it.
+    pub fn rename_label(
+        &self,
+        email: &str,
+        label_id: &str,
+        name: &str,
+    ) -> Result<(), EmulatorError> {
+        self.with_state(|state| {
+            state.mailbox_mut(email)?.rename_label(label_id, name)?;
+            Ok(())
+        })
+    }
+
     /// Deletes a message for good, as the mailbox's owner would in Gmail.
     pub fn delete_message(&self, email: &str, message_id: &str) -> Result<(), EmulatorError> {
         self.with_state(|state| {

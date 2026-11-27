@@ -226,14 +226,21 @@ impl<
         &self,
         team_id: Uuid,
         computer_id: ComputerId,
-    ) -> Result<(ComputerStatus, crate::domain::models::FleetAttachment), ComputerError> {
-        let availability = self
+    ) -> Result<crate::domain::models::RosterStatus, ComputerError> {
+        let attachment = self
             .attachment
             .attachment(self.clock.now())
             .await
             .map_err(internal)?;
         let record = self.team_record(team_id, computer_id).await?;
-        Ok((self.status_of(&record).await?, availability))
+        let awaiting_agent = record
+            .healthy()
+            .is_some_and(|computer| computer.state.awaiting_agent);
+        Ok(crate::domain::models::RosterStatus {
+            status: self.status_of(&record).await?,
+            attachment,
+            awaiting_agent,
+        })
     }
 
     /// Release an agent teammate's computer when the agent is removed: the
@@ -261,7 +268,10 @@ impl<
         self.rollout.enabled(user_id).await
     }
 
-    async fn require_rollout(
+    /// Refuse a buyer the computers rollout doesn't include, before anything
+    /// is reserved: callers that create other things for a purchase (an agent
+    /// teammate's account) ask first, so a refusal leaves nothing to undo.
+    pub async fn require_rollout(
         &self,
         user_id: &MacroUserIdStr<'static>,
     ) -> Result<(), ComputerError> {

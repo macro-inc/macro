@@ -1,7 +1,9 @@
 import type { LocalDraft } from '@app/features/email-compose/core/local-draft';
 import { toast } from '@core/component/Toast/Toast';
+import { StaleCacheAuthorityError } from '@graphql-cache/authority';
 import { optimisticContextOf } from '@graphql-cache/exchange/optimistic';
 import type { MutationSettlement } from '@graphql-cache/protocol';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry } from '@macro-inc/observability';
 import type {
   DeleteEmailDraftMutation,
@@ -22,6 +24,7 @@ import {
   beginDraftAttempt,
   emailSendOwnsDraft,
   localDraftMessage,
+  markDraftAttemptQueued,
   readLocalDraft,
   readLocalEmailSends,
   restoreLocalAttachments,
@@ -36,7 +39,11 @@ const mocks = vi.hoisted(() => ({
   client: undefined as Client | undefined,
   queueBlocked: false,
   cacheEnabled: true,
+  proofCurrent: true,
   assertQueueAvailable: vi.fn(),
+}));
+vi.mock('@service-storage/crm-access-authority', () => ({
+  crmAccessAuthority: { hasCurrentProof: () => mocks.proofCurrent },
 }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
 vi.mock('@macro-inc/observability', () => ({
@@ -64,6 +71,7 @@ vi.mock('./thread', () => ({ fetchAndCacheThread: vi.fn() }));
 import {
   deleteEmailDraftQueued,
   draftQueueActive,
+  readCachedDraftAndThread,
   readEmailDraft,
   saveEmailDraftQueued,
   watchEmailDrafts,
@@ -90,6 +98,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.queueBlocked = false;
   mocks.cacheEnabled = true;
+  mocks.proofCurrent = true;
   vi.mocked(queryClient.invalidateQueries).mockResolvedValue(undefined);
   vi.mocked(refetchSoupEntity).mockResolvedValue(undefined);
   vi.mocked(beginDraftAttempt).mockResolvedValue({
@@ -103,7 +112,7 @@ beforeEach(() => {
   });
 });
 
-async function setup(committed = false) {
+async function setup(committed = false, retired = false) {
   const operations: Operation[] = [];
   const client = createClient({
     url: 'http://example.test/graphql',
@@ -117,7 +126,7 @@ async function setup(committed = false) {
               operation,
               stale: false,
               hasNext: false,
-              ...(committed
+              ...(committed && !retired
                 ? { data: optimisticContextOf(operation)?.optimisticResponse }
                 : {}),
               extensions: {
@@ -191,6 +200,31 @@ it('keeps active thread messages intact after a committed draft save', async () 
     'emailThread'
   );
 });
+
+it.each(['save', 'delete'] as const)(
+  'enqueues an authored %s using the offline cache without CRM proof',
+  async (operation) => {
+    const { operations } = await setup();
+    mocks.proofCurrent = false;
+    vi.mocked(readLocalDraft).mockResolvedValue(workingCopy('dirty'));
+    await expect(
+      operation === 'save'
+        ? saveEmailDraftQueued({ args: { ...args, draftId: serverId } })
+        : deleteEmailDraftQueued({
+            draftId: serverId,
+            threadId: 'local-thread',
+          })
+    ).resolves.toEqual({ kind: 'queued' });
+    expect(mocks.readRecordsByKeys).toHaveBeenCalled();
+    expect(operations).toHaveLength(1);
+    expect(optimisticContextOf(operations[0])?.uuid).toBe(handle);
+    expect(operations[0].variables?.input).toMatchObject({
+      draftId: handle,
+    });
+    if (operation === 'save')
+      expect(operations[0].variables?.input.threadDbId).toBe('server-thread');
+  }
+);
 
 it.each(['save', 'delete'] as const)(
   'blocks an uncached fallback %s before changing local intent or sending a request',
@@ -269,6 +303,19 @@ it('retries a draft and thread snapshot spanning identity settlement', async () 
   expect(
     response.saveEmailDraft.thread.mailDraftState?.drafts.map((d) => d.id)
   ).toEqual([serverId]);
+});
+
+it('queues an authored draft while its optional cached thread cannot be authorized', async () => {
+  const { operations } = await setup();
+  mocks.readRecordsByKeys.mockRejectedValue(new StaleCacheAuthorityError());
+  await expect(saveEmailDraftQueued({ args })).resolves.toEqual({
+    kind: 'queued',
+  });
+  expect(operations).toHaveLength(1);
+  expect(operations[0].variables?.input).toMatchObject({ subject: 'Draft' });
+  expect(
+    JSON.stringify(optimisticContextOf(operations[0])?.optimisticResponse)
+  ).not.toContain('Previously saved');
 });
 
 it('rejects a continually changing snapshot instead of enqueuing mixed identities', async () => {
@@ -395,6 +442,26 @@ const workingCopy = (status: LocalDraft['status']): LocalDraft => ({
   attachments: [],
   status,
   updatedAt: 1,
+});
+
+it('returns the durable working copy while CRM proof is unavailable', async () => {
+  await setup();
+  mocks.proofCurrent = false;
+  const local = workingCopy('dirty');
+  vi.mocked(readLocalDraft).mockResolvedValue(local);
+  expect(await readEmailDraft(serverId)).toMatchObject({ local });
+  expect(mocks.readRecordsByKeys).toHaveBeenCalled();
+  expect(localDraftMessage).toHaveBeenCalledWith(local);
+  expect(restoreLocalAttachments).toHaveBeenCalledWith(local);
+});
+
+it('propagates an unavailable cache when no working copy exists', async () => {
+  await setup();
+  mocks.proofCurrent = false;
+  const denied = new StaleCacheAuthorityError();
+  mocks.readRecordsByKeys.mockRejectedValue(denied);
+  await expect(readEmailDraft(serverId)).rejects.toBe(denied);
+  expect(mocks.readRecordsByKeys).toHaveBeenCalledOnce();
 });
 
 it('drops a synced working copy from its cached thread when the discard is enqueued', async () => {
@@ -632,3 +699,86 @@ it('queues nothing for a draft that is being discarded', async () => {
     { 'email_draft.draft_id': handle }
   );
 });
+
+it('discards a copied thread when a cached draft read crosses revocation', async () => {
+  const { draftResult, threadResult } = await setup();
+  const releases: Array<() => void> = [];
+  mocks.readRecordsByKeys.mockImplementation(
+    ({ keys }: { keys: string[] }) =>
+      new Promise((resolve) => {
+        releases.push(() =>
+          resolve(
+            keys[0].startsWith('GraphqlSoupEmailMessage:')
+              ? draftResult()
+              : threadResult()
+          )
+        );
+      })
+  );
+  const read = readCachedDraftAndThread(handle, 'local-thread');
+  await vi.waitFor(() => expect(releases).toHaveLength(2));
+  const retirement = Promise.withResolvers<void>();
+  const transition = cacheSessionGeneration.transition(
+    () => retirement.promise
+  );
+  try {
+    releases.forEach((release) => release());
+    expect(await read).toMatchObject({
+      existingThread: undefined,
+      existingDraft: undefined,
+    });
+  } finally {
+    retirement.resolve();
+    await transition;
+  }
+});
+
+it('does not reuse a pre-save thread binding when committed content is unavailable', async () => {
+  const { operations } = await setup(true, true);
+  const local = { ...workingCopy('dirty'), serverThreadId: 'previous-thread' };
+  vi.mocked(readLocalDraft).mockResolvedValue(local);
+  await expect(saveEmailDraftQueued({ args })).resolves.toEqual({
+    kind: 'queued',
+  });
+  // The draft moved since the journal recorded its last thread. This save's
+  // accepted result has no payload confirming where it finally landed.
+  expect(operations[0].variables?.input.threadDbId).toBe('server-thread');
+  expect(markDraftAttemptQueued).toHaveBeenCalledWith(
+    expect.objectContaining({ id: 'attempt' })
+  );
+  await expect(
+    saveEmailDraftQueued({ args: { ...args, subject: 'Next authored edit' } })
+  ).resolves.toEqual({ kind: 'queued' });
+  expect(operations).toHaveLength(2);
+  expect(refetchSoupEntity).not.toHaveBeenCalled();
+  expect(toast.failure).not.toHaveBeenCalled();
+});
+
+it('keeps legacy saves accepted and completes deletes when committed content is unavailable', async () => {
+  await setup(true, true);
+  await expect(saveEmailDraftQueued({ args })).resolves.toEqual({
+    kind: 'queued',
+  });
+  await expect(
+    deleteEmailDraftQueued({ draftId: handle, threadId: 'local-thread' })
+  ).resolves.toEqual({ kind: 'committed' });
+  expect(toast.failure).not.toHaveBeenCalled();
+});
+
+it.each([false, true])(
+  'keeps a committed save accepted without rereading its journal (journal: %s)',
+  async (hasJournal) => {
+    const { operations } = await setup(true, true);
+    const failure = new Error('Draft journal unavailable');
+    vi.mocked(readLocalDraft)
+      .mockResolvedValueOnce(hasJournal ? workingCopy('dirty') : undefined)
+      .mockRejectedValueOnce(failure);
+    mocks.readRecordsByKeys.mockRejectedValue(new StaleCacheAuthorityError());
+    await expect(saveEmailDraftQueued({ args })).resolves.toEqual({
+      kind: 'queued',
+    });
+    expect(readLocalDraft).toHaveBeenCalledTimes(1);
+    expect(toast.failure).not.toHaveBeenCalled();
+    expect(operations).toHaveLength(1);
+  }
+);

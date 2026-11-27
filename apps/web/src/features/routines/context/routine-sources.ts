@@ -3,6 +3,7 @@ import type { Accessor } from 'solid-js';
 import type { CodeReview } from '../core/code-review';
 import type { ScheduleDraft } from '../core/draft';
 import type { HistoryRecord } from '../core/history';
+import type { UnusableItem } from '../core/knobs';
 import type { RoutineSnapshot } from '../core/routine';
 
 export type RoutineDetailSource = {
@@ -10,6 +11,11 @@ export type RoutineDetailSource = {
   entity: Accessor<RoutineEntity | undefined>;
   loading: Accessor<boolean>;
   error: Accessor<boolean>;
+  /**
+   * The server won't read this routine to the viewer, which it does only for
+   * its owner: it is someone else's routine (or gone).
+   */
+  readRefused: Accessor<boolean>;
   update(draft: ScheduleDraft): Promise<RoutineSnapshot>;
   run(): void;
   runPending: Accessor<boolean>;
@@ -26,6 +32,11 @@ export type RoutineDetailSource = {
   /** Save the proposed code update and resume the routine. */
   approveCodeUpdate(): Promise<void>;
   codeUpdatePending: Accessor<boolean>;
+  /**
+   * Picked items its owner can't use now, as the scheduler checked them;
+   * their knobs need a new pick. Empty for anyone but its owner.
+   */
+  unusableItems: Accessor<readonly UnusableItem[]>;
   /** The routines this routine's runs created, finished ones included. */
   subRoutines: Accessor<readonly RoutineSnapshot[]>;
   /** The routine whose run created this one, when it is still there. */
@@ -60,6 +71,10 @@ export type RoutineRowOperations = {
   run(id: string): void;
   /** Its "Run now" was chosen and the server hasn't answered yet. */
   runPending(id: string): boolean;
+  /** Stop its run in progress. */
+  stop(id: string): void;
+  /** Its Stop was chosen and the server hasn't answered yet. */
+  stopPending(id: string): boolean;
   duplicate(id: string): void;
   /** Make a sub-routine the owner's own: it stops following its parent. */
   keepAsOwn(id: string): void;

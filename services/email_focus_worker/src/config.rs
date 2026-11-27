@@ -14,7 +14,8 @@ env_vars! {
     /// worker polls.
     pub struct PosthogApiKey;
     /// PostHog feature flags secure API key: lets the worker poll the
-    /// `enable-email-focus` definition and evaluate it for each inbox owner.
+    /// `enable-email-focus` definition and evaluate it for each inbox's owner
+    /// and the users it is linked to.
     pub struct PosthogFeatureFlagsSecureApiKey;
 }
 
@@ -40,8 +41,9 @@ pub struct Config {
     pub typesafe_api_key: jev::outbound::TypesafeApiKey,
     /// The PostHog project the Focus rollout's flag is in.
     pub posthog_api_key: PosthogApiKey,
-    /// Reads the Focus rollout: an inbox is classified while its owner's
-    /// `enable-email-focus` flag is on.
+    /// Reads the Focus rollout: an inbox is classified while the
+    /// `enable-email-focus` flag of its owner, or of a user it is linked to,
+    /// is on.
     pub posthog_feature_flags_secure_api_key: PosthogFeatureFlagsSecureApiKey,
     /// PostHog host (optional).
     pub posthog_host: PosthogHost,
@@ -51,6 +53,14 @@ pub struct Config {
     /// Days of mail the backfill and the sweep cover, at most 90.
     #[macro_config_default(30)]
     pub focus_window_days: u16,
+    /// Days a person in the rollout may go without using Macro before Focus
+    /// stops working the inboxes their tab shows.
+    #[macro_config_default(7)]
+    pub focus_active_days: u16,
+    /// Seconds an answer about whether someone is active is kept: how long a
+    /// returning person waits, plus a look, for their inbox to fill.
+    #[macro_config_default(300)]
+    pub focus_activity_cache_secs: u64,
 }
 
 impl Config {

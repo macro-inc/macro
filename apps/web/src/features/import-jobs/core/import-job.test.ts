@@ -73,7 +73,7 @@ describe('importJob', () => {
       },
       { report: undefined, slackChannelsImporting: 0 }
     );
-    expect(done.phase).toEqual({ kind: 'completed' });
+    expect(done.phase).toEqual({ kind: 'completed', outcome: { kind: 'all' } });
     expect(done.dismissable).toBe(true);
   });
 
@@ -93,6 +93,26 @@ describe('importJob', () => {
     );
     expect(job.phase).toEqual({ kind: 'importingChannels', channels: 4 });
     expect(job.dismissable).toBe(false);
+  });
+
+  it('says why a run failed, by its kind', () => {
+    const failed = importJob(
+      {
+        source: 'notion',
+        status: 'failed',
+        updated_at: '2026-11-06T11:00:00Z',
+        error: 'raw proxy detail',
+        error_kind: 'access_lost',
+      },
+      { report: undefined, slackChannelsImporting: 0 }
+    );
+    expect(failed.phase).toEqual({ kind: 'failed', errorKind: 'access_lost' });
+
+    const unexplained = importJob(
+      { source: 'jira', status: 'failed', updated_at: '2026-11-06T11:00:00Z' },
+      { report: undefined, slackChannelsImporting: 0 }
+    );
+    expect(unexplained.phase).toEqual({ kind: 'failed', errorKind: null });
   });
 });
 
@@ -129,5 +149,68 @@ describe('visibleImportRuns', () => {
     );
 
     expect(visible.map((run) => run.source)).toEqual(['jira', 'notion']);
+  });
+});
+
+describe('a finished import', () => {
+  const finished = (report: NotionImportReport | undefined) =>
+    importJob(
+      {
+        source: 'notion',
+        status: 'completed',
+        error:
+          '2 objects could not be fully imported. See the report for details.',
+        updated_at: '2026-11-06T12:00:00Z',
+      },
+      { report, slackChannelsImporting: 0 }
+    ).phase;
+  const failure = (title: string) => ({
+    importId: title,
+    title,
+    kind: 'page' as const,
+    reason: "Notion couldn't be reached.",
+  });
+
+  it('that wrote nothing says so', () => {
+    expect(
+      finished({
+        ...WRITING,
+        status: 'completed',
+        imported: 0,
+        failures: [failure('Roadmap'), failure('Spec')],
+      })
+    ).toEqual({ kind: 'completed', outcome: { kind: 'nothing' } });
+  });
+
+  it('that wrote some counts its problems', () => {
+    expect(
+      finished({
+        ...WRITING,
+        status: 'completed',
+        imported: 3,
+        failures: [failure('Roadmap'), failure('Spec')],
+      })
+    ).toEqual({ kind: 'completed', outcome: { kind: 'some', problems: 2 } });
+  });
+
+  it('whose failures are only a sample does not count them', () => {
+    // The report lists at most 50 failures, so 50 may mean more.
+    expect(
+      finished({
+        ...WRITING,
+        status: 'completed',
+        imported: 3,
+        failures: Array.from({ length: 50 }, (_, index) =>
+          failure(`Page ${index}`)
+        ),
+      })
+    ).toEqual({ kind: 'completed', outcome: { kind: 'some', problems: null } });
+  });
+
+  it('with problems but no report yet does not count them', () => {
+    expect(finished(undefined)).toEqual({
+      kind: 'completed',
+      outcome: { kind: 'some', problems: null },
+    });
   });
 });

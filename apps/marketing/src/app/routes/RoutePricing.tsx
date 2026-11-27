@@ -13,20 +13,40 @@ import {
   ProductPage,
 } from '../../features/marketing/components/product/ProductPage';
 import { APP_BASE_URL } from '../utils/utilBaseUrl';
-import { ctaHref, handleCtaClick } from '../utils/utilCta';
+import {
+  ctaHref,
+  demoHref,
+  handleCtaClick,
+  handleDemoClick,
+} from '../utils/utilCta';
 import { setPageSeo } from '../utils/utilSeo';
 import './RoutePricing.css';
 
-const plans = [
+type Plan = {
+  key: 'free' | 'pro' | 'business' | 'max';
+  name: string;
+  /** Per seat per month, showing the annual rate for plans sold annually. */
+  price: string;
+  terms: string;
+  note: string;
+  service: 'Self-serve' | 'White-glove' | null;
+  cta: string;
+  event: string;
+  features: readonly string[];
+};
+
+const plans: readonly Plan[] = [
   {
     key: 'free',
     name: 'Free',
     price: '$0',
+    terms: 'per seat / month',
     note: 'Start here.',
+    service: null,
     cta: 'Start for free',
     event: 'pricing_free_connect_google',
     features: [
-      'Gemini Flash · Limited AI usage',
+      'Gemini 4 Hydrogen · Limited AI usage',
       '2 email accounts · 5 GB storage',
     ],
   },
@@ -34,7 +54,9 @@ const plans = [
     key: 'pro',
     name: 'Pro',
     price: '$40',
+    terms: 'per seat / month, billed monthly',
     note: '30 days free',
+    service: 'Self-serve',
     cta: 'Try Pro',
     event: 'pricing_paid_connect_google',
     features: [
@@ -44,19 +66,37 @@ const plans = [
     ],
   },
   {
+    key: 'business',
+    name: 'Business',
+    price: '$80',
+    terms: 'per seat / month, billed annually · $90 monthly',
+    note: '3× Pro usage',
+    service: 'White-glove',
+    cta: 'Get Business',
+    event: 'pricing_business_connect_google',
+    features: [
+      'All AI models · 3× Pro usage · 3,000 active routines',
+      'SSO/SAML, signed DPA, security and IT reviews',
+      'Annual contracts, invoicing, and priority support',
+    ],
+  },
+  {
     key: 'max',
     name: 'Max',
     price: '$200',
+    terms: 'per seat / month, billed annually · $220 monthly',
     note: '10× Pro usage',
+    service: 'White-glove',
     cta: 'Get Max',
     event: 'pricing_max_connect_google',
     features: [
       'All AI models · 10× Pro usage',
       'Unlimited email accounts · 1 TB storage',
-      'Calls, transcription, and priority support',
+      'Everything in Business',
     ],
   },
-] as const;
+];
+
 type CellValue = boolean | string;
 
 const comparisonGroups: Array<{
@@ -65,19 +105,40 @@ const comparisonGroups: Array<{
     label: string;
     free: CellValue;
     pro: CellValue;
+    business: CellValue;
     max: CellValue;
   }>;
 }> = [
   {
     group: 'AI and agents',
     rows: [
-      { label: 'AI usage', free: 'Limited', pro: 'Standard', max: '10× Pro' },
-      { label: 'AI models', free: 'Gemini Flash', pro: 'All', max: 'All' },
+      {
+        label: 'AI usage',
+        free: 'Limited',
+        pro: 'Standard',
+        business: '3× Pro',
+        max: '10× Pro',
+      },
+      {
+        label: 'AI models',
+        free: 'Gemini 4 Hydrogen',
+        pro: 'All',
+        business: 'All',
+        max: 'All',
+      },
       {
         label: 'Agents with workspace context',
         free: true,
         pro: true,
+        business: true,
         max: true,
+      },
+      {
+        label: 'Active routines',
+        free: '10',
+        pro: '1,000',
+        business: '3,000',
+        max: '10,000',
       },
     ],
   },
@@ -88,13 +149,21 @@ const comparisonGroups: Array<{
         label: 'Connected email accounts',
         free: 'Up to 2',
         pro: 'Unlimited',
+        business: 'Unlimited',
         max: 'Unlimited',
       },
-      { label: 'Storage', free: '5 GB', pro: '100 GB', max: '1 TB' },
+      {
+        label: 'Storage',
+        free: '5 GB',
+        pro: '100 GB',
+        business: '500 GB',
+        max: '1 TB',
+      },
       {
         label: 'Calls, recording, and transcription',
         free: false,
         pro: true,
+        business: true,
         max: true,
       },
     ],
@@ -106,15 +175,77 @@ const comparisonGroups: Array<{
         label: '"Sent with Macro" email footer',
         free: 'Added',
         pro: 'Removed',
+        business: 'Removed',
         max: 'Removed',
       },
       {
         label: 'Team-level memory for your agents',
         free: true,
         pro: true,
+        business: true,
         max: true,
       },
-      { label: 'Priority support', free: false, pro: false, max: true },
+      {
+        label: 'Subteams',
+        free: false,
+        pro: false,
+        business: 'Coming soon',
+        max: 'Coming soon',
+      },
+    ],
+  },
+  {
+    group: 'Security and billing',
+    rows: [
+      {
+        label: 'SSO/SAML',
+        free: false,
+        pro: false,
+        business: true,
+        max: true,
+      },
+      {
+        label: 'Signed DPA',
+        free: false,
+        pro: false,
+        business: true,
+        max: true,
+      },
+      {
+        label: 'Security and IT reviews',
+        free: false,
+        pro: false,
+        business: true,
+        max: true,
+      },
+      {
+        label: 'Billing',
+        free: '—',
+        pro: 'Monthly',
+        business: 'Annual or monthly',
+        max: 'Annual or monthly',
+      },
+      {
+        label: 'Annual contract, invoice, PO, net-30',
+        free: false,
+        pro: false,
+        business: true,
+        max: true,
+      },
+      {
+        label: 'Onboarding',
+        free: 'Self-serve',
+        pro: 'Self-serve',
+        business: 'White-glove',
+        max: 'White-glove',
+      },
+      {
+        label: 'Priority support',
+        free: false,
+        pro: false,
+        business: true,
+        max: true,
+      },
     ],
   },
 ];
@@ -223,7 +354,8 @@ const faqItems: Array<{ q: string; a: JSX.Element }> = [
         Teams share email, tasks, documents, and calls through workspace
         permissions. Agents can search and read the work you have access to, and
         use memory built from your workspace activity. Team subscriptions
-        require a paid seat for every member, and each seat can be Pro or Max.
+        require a paid seat for every member, and each seat can be Pro,
+        Business, or Max.
       </>
     ),
   },
@@ -232,12 +364,13 @@ const faqItems: Array<{ q: string; a: JSX.Element }> = [
     a: (
       <>
         Every plan includes a monthly amount of AI usage. Free has a limited
-        allowance for trying Macro, Pro covers standard everyday use, and Max
-        includes 10× Pro's usage for heavy agent work. If you reach your limit,
-        upgrade from billing settings: Free to Pro, or Pro to Max. Paid plans
-        can also continue with prepaid credits or usage billing, priced at
-        provider list price plus 25%. Included usage resets each billing period
-        and does not roll over; each team seat has its own allowance.
+        allowance for trying Macro, Pro covers standard everyday use, Business
+        includes 3× Pro's usage, and Max includes 10× Pro's usage for heavy
+        agent work. If you reach your limit, upgrade from billing settings to a
+        larger plan. Paid plans can also continue with prepaid credits or usage
+        billing, priced at provider list price plus 25%. Included usage resets
+        every month, also on annual plans, and does not roll over; each team
+        seat has its own allowance.
       </>
     ),
   },
@@ -259,12 +392,33 @@ const faqItems: Array<{ q: string; a: JSX.Element }> = [
     q: 'Can my team mix plans?',
     a: (
       <>
-        Yes. Paid teams can mix Pro and Max seats. Manage each member’s plan
+        Yes. Paid teams can mix Pro, Business, and Max seats; annual teams mix
+        Business and Max, since Pro is billed monthly. Manage each member’s plan
         from the Seat plan menu in Settings → Team. Plan changes are prorated
         for the remaining billing period, and upgrades take effect immediately.
         Each seat has its own included AI allowance; unused allowance does not
         transfer between seats. Prepaid credits and usage billing are shared.
         Free teams can include unpaid members.
+      </>
+    ),
+  },
+  {
+    q: 'What is the difference between Business and Max?',
+    a: (
+      <>
+        Both are for larger teams and come with white-glove onboarding:
+        SSO/SAML, a signed DPA, security and IT reviews, annual contracts with
+        invoicing, and priority support. Business includes 3× Pro’s AI usage;
+        Max includes 10× for heavy agent work. Both are $80 and $200 per seat
+        per month billed annually, or $90 and $220 billed monthly. Pro is
+        self-serve and billed monthly. To set up SSO or a contract,{' '}
+        <a
+          href={demoHref()}
+          onClick={() => handleDemoClick('pricing_faq_sales')}
+        >
+          talk to our team
+        </a>
+        .
       </>
     ),
   },
@@ -313,7 +467,7 @@ function PlanComparison() {
       </summary>
       <table>
         <caption class="pricing-visually-hidden">
-          Free, Pro, and Max plan comparison
+          Free, Pro, Business, and Max plan comparison
         </caption>
         <thead>
           <tr>
@@ -325,7 +479,7 @@ function PlanComparison() {
           {(group) => (
             <tbody>
               <tr class="pricing-comparison-group">
-                <th colSpan={4} scope="colgroup">
+                <th colSpan={plans.length + 1} scope="colgroup">
                   {group.group}
                 </th>
               </tr>
@@ -417,7 +571,7 @@ export function RoutePricing() {
   setPageSeo({
     title: 'Pricing — Macro',
     description:
-      'Start free. Pro is $40 per seat per month with every AI model and standard usage. Max is $200 per seat per month with 10× Pro usage.',
+      'Start free. Pro is $40 per seat per month, self-serve. Business is $80 per seat per month billed annually with 3× Pro usage, SSO/SAML, and a signed DPA. Max is $200 per seat per month billed annually with 10× Pro usage.',
     path: '/pricing',
   });
   return (
@@ -425,8 +579,8 @@ export function RoutePricing() {
       <div class="pricing-page">
         <ProductHero
           product="Pricing"
-          title="One plan for all your work."
-          description="Start free. Upgrade for more AI usage and storage."
+          title="A plan for every team."
+          description="Start free. Pro is self-serve; Business and Max add more AI, security reviews, and white-glove onboarding for larger teams."
         />
         <section class="pricing-plan-list" aria-label="Choose a plan">
           <For each={plans}>
@@ -439,24 +593,42 @@ export function RoutePricing() {
                 <div class="pricing-plan-name">
                   <h2 id={`pricing-plan-${plan.key}`}>{plan.name}</h2>
                   <p>{plan.note}</p>
+                  <Show when={plan.service}>
+                    {(service) => (
+                      <p class="pricing-plan-service">{service()}</p>
+                    )}
+                  </Show>
                 </div>
                 <div class="pricing-plan-price">
                   <strong>{plan.price}</strong>
-                  <span>per seat / month</span>
+                  <span>{plan.terms}</span>
                 </div>
                 <ul>
                   <For each={plan.features}>
                     {(feature) => <li>{feature}</li>}
                   </For>
                 </ul>
-                <a
-                  class={`pricing-plan-cta ${plan.key === 'pro' ? 'site-nav-start' : ''}`}
-                  href={ctaHref()}
-                  onClick={(event) => handleCtaClick(event, plan.event)}
-                >
-                  {plan.cta}
-                  <ArrowRight aria-hidden="true" />
-                </a>
+                <div class="pricing-plan-actions">
+                  <a
+                    class={`pricing-plan-cta ${plan.key === 'pro' ? 'site-nav-start' : ''}`}
+                    href={ctaHref()}
+                    onClick={(event) => handleCtaClick(event, plan.event)}
+                  >
+                    {plan.cta}
+                    <ArrowRight aria-hidden="true" />
+                  </a>
+                  <Show when={plan.service === 'White-glove'}>
+                    <a
+                      class="pricing-plan-sales"
+                      href={demoHref()}
+                      onClick={() =>
+                        handleDemoClick(`pricing_${plan.key}_talk_to_sales`)
+                      }
+                    >
+                      Talk to sales
+                    </a>
+                  </Show>
+                </div>
               </article>
             )}
           </For>
@@ -464,6 +636,13 @@ export function RoutePricing() {
             Email, chat, docs, tasks, and agents on every plan.
           </p>
           <PlanComparison />
+          <p class="pricing-open-source">
+            Paid plans support Macro’s{' '}
+            <a href="https://github.com/macro-inc/macro">
+              open-source development
+            </a>
+            .
+          </p>
         </section>
         <section
           class="pricing-calculator-section"
@@ -485,13 +664,6 @@ export function RoutePricing() {
           title="Questions about pricing"
           items={faqItems}
         />
-        <p class="pricing-open-source">
-          Paid plans support Macro’s{' '}
-          <a href="https://github.com/macro-inc/macro">
-            open-source development
-          </a>
-          .
-        </p>
       </div>
       <HomepageClosing />
     </ProductPage>

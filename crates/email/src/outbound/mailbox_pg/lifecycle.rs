@@ -9,8 +9,13 @@ use models_email::service::pubsub::DeletionReason;
 mod test;
 use sqlx::{PgConnection, Postgres, Transaction};
 
-fn failed<E>(_: E) -> InboxLifecycleError {
-    InboxLifecycleError::Unavailable
+/// A lock timeout is the inbox being busy, which the caller can retry.
+fn failed(error: sqlx::Error) -> InboxLifecycleError {
+    if DatabaseFailure::from(&error).is_lock_timeout() {
+        InboxLifecycleError::Contended
+    } else {
+        InboxLifecycleError::Unavailable
+    }
 }
 
 async fn snapshot(
@@ -48,7 +53,7 @@ async fn enqueue(
     link: Uuid,
     effect: InboxLifecycleEffect,
 ) -> Result<(), InboxLifecycleError> {
-    let payload = serde_json::to_value(effect).map_err(failed)?;
+    let payload = serde_json::to_value(effect).map_err(|_| InboxLifecycleError::Unavailable)?;
     sqlx::query!(
         "INSERT INTO email_mailbox_lifecycle_outbox(id,link_id,payload) VALUES ($1,$2,$3)",
         macro_uuid::generate_uuid_v7(),
@@ -63,7 +68,10 @@ async fn enqueue(
 
 impl InboxLifecycleRepository for PgMailboxSync {
     async fn snapshot(&self, link: Uuid) -> Result<InboxLifecycleSnapshot, InboxLifecycleError> {
-        snapshot(&mut *self.db.acquire().await.map_err(failed)?, link).await
+        let mut tx = self.begin().await.map_err(failed)?;
+        let current = snapshot(&mut tx, link).await?;
+        tx.commit().await.map_err(failed)?;
+        Ok(current)
     }
     async fn remove(
         &self,
@@ -72,7 +80,7 @@ impl InboxLifecycleRepository for PgMailboxSync {
         decision: &InboxRemoval,
         reason: DeletionReason,
     ) -> Result<(), InboxLifecycleError> {
-        let mut tx = self.db.begin().await.map_err(failed)?;
+        let mut tx = self.begin().await.map_err(failed)?;
         let current = snapshot(&mut tx, expected.link_id).await?;
         if &current != expected {
             return Err(InboxLifecycleError::Changed);
@@ -218,7 +226,8 @@ impl InboxLifecycleRepository for PgMailboxSync {
                     } else {
                         ProjectionEvent::LinkChanged
                     };
-                    let payload = serde_json::to_value(event).map_err(failed)?;
+                    let payload = serde_json::to_value(event)
+                        .map_err(|_| InboxLifecycleError::Unavailable)?;
                     sqlx::query!("INSERT INTO email_projection_outbox(id,link_id,generation,payload) VALUES ($1,$2,$3,$4)",macro_uuid::generate_uuid_v7(),link,row.sync_generation,payload)
                         .execute(&mut *tx).await.map_err(failed)?;
                 }
@@ -246,7 +255,7 @@ impl InboxLifecycleRepository for PgMailboxSync {
         _actor: &InboxActor,
         expected: &InboxLifecycleSnapshot,
     ) -> Result<InboxResync, InboxLifecycleError> {
-        let mut tx = self.db.begin().await.map_err(failed)?;
+        let mut tx = self.begin().await.map_err(failed)?;
         let current = snapshot(&mut tx, expected.link_id).await?;
         if &current != expected {
             return Err(InboxLifecycleError::Changed);
@@ -334,7 +343,7 @@ impl InboxLifecycleRepository for PgMailboxSync {
                 Ok(DeletedUserBinding {
                     actor: InboxActor {
                         macro_id: macro_user_id::user_id::MacroUserIdStr::try_from(row.actor_id)
-                            .map_err(failed)?,
+                            .map_err(|_| InboxLifecycleError::Unavailable)?,
                         credential_owner: owner.into(),
                     },
                     link_id: row.link_id,
@@ -401,7 +410,7 @@ async fn rebind_work(
     old: i64,
     new: i64,
 ) -> Result<(), InboxLifecycleError> {
-    sqlx::query!("UPDATE email_mailbox_watch_work SET next_run_at=now(),revision=revision+1 WHERE link_id=$1",link)
+    sqlx::query!("UPDATE email_mailbox_watch_work SET next_run_at=now(),revision=revision+1,failures=0 WHERE link_id=$1",link)
         .execute(&mut **tx).await.map_err(failed)?;
     // The import run continues in the new generation, so it keeps its stamps.
     sqlx::query!(r#"INSERT INTO email_sync_streams(id,link_id,generation,kind,scope_id,position,initial_complete,scan_id,import_started_at,import_completed_at,reader_revision,round_started_at)

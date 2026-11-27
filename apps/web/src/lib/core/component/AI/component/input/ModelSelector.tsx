@@ -32,12 +32,11 @@ const ALL_AVAILABLE: ModelOption[] = PAID_MODELS.map((id) => ({
 const MODEL_DESCRIPTION: Record<TModel, string> = {
   [Model.sonnet55]: 'Everyday writing, coding, and questions',
   [Model.opus55]: 'Complex tasks and deeper analysis',
-  [Model.haiku45]: 'Quick answers and lighter tasks',
+  [Model.haiku55]: 'Quick answers and lighter tasks',
   [Model.gpt6Astra]: 'Frontier reasoning for the hardest problems',
-  [Model.gpt61Sol]: 'Balanced reasoning, coding, and speed',
-  [Model.gpt56]: 'Reasoning, writing, and problem solving',
-  [Model.gpt56Mini]: 'Fast help with everyday tasks',
-  [Model.gemini38Flash]: 'Fast answers over data and documents',
+  [Model.gpt62Sol]: 'Balanced reasoning, coding, and speed',
+  [Model.gpt6Luna]: 'Fast help with everyday tasks',
+  [Model.gemini4Hydrogen]: 'Fast answers over data and documents',
 };
 
 const isModel = (id: string): id is TModel =>

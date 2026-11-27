@@ -7,6 +7,8 @@ import { cn } from '@ui/utils/classname';
 import { Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
+  canCopySkippedPage,
+  type ImportDraft,
   type ImportPlanDecision,
   type ImportPlanNode,
   type ImportTaskFields,
@@ -27,14 +29,17 @@ function decisionLabel(decision: ImportPlanDecision | null): string {
 }
 
 /** e.g. "2,365 tasks — Fix login redirect, Q3 pricing page, …". */
-function rowsLine(node: ImportPlanNode): string {
+function rowsLine(node: ImportPlanNode, showEstimate: boolean): string {
+  const titles = node.sampleTitles.map((title) => title || 'Untitled');
+  if (!showEstimate) {
+    return titles.length > 0 ? `Plan sample — ${titles.join(', ')}` : '';
+  }
   const count = (node.rows ?? node.sampleTitles.length).toLocaleString('en-US');
   const noun = node.decision === 'tasks' ? 'tasks' : 'rows';
   const more =
     (node.rows ?? 0) > node.sampleTitles.length && node.sampleTitles.length > 0
       ? ', …'
       : '';
-  const titles = node.sampleTitles.map((title) => title || 'Untitled');
   return titles.length > 0
     ? `${count} ${noun} — ${titles.join(', ')}${more}`
     : `${count} ${noun}`;
@@ -53,6 +58,7 @@ function taskFieldsLine(fields: ImportTaskFields): string {
 }
 
 function DecisionBadge(props: {
+  link: boolean;
   decision: ImportPlanDecision | null;
   reason: string | null;
 }) {
@@ -67,7 +73,7 @@ function DecisionBadge(props: {
           'text-ink-extra-muted'
       )}
     >
-      {decisionLabel(props.decision)}
+      {props.link ? 'Link' : decisionLabel(props.decision)}
     </Badge>
   );
   return (
@@ -148,10 +154,12 @@ function RowStatus(props: { node: ImportPlanNode; excluded: boolean }) {
           {match(props.node.status)
             .with('imported', () => 'Imported')
             .with('importing', () => 'Writing…')
-            .with('discarded', () => 'Left out')
+            .with('discarded', () =>
+              props.node.decision === 'hand' ? 'Needs you' : 'Left out'
+            )
             .with('staged', () =>
               props.node.decision === 'hand'
-                ? 'Left for the agent'
+                ? 'Needs you'
                 : isWritten(props.node.decision) && !props.excluded
                   ? 'Waiting'
                   : ''
@@ -160,7 +168,14 @@ function RowStatus(props: { node: ImportPlanNode; excluded: boolean }) {
         </span>
       }
     >
-      <span class="shrink-0 text-xs text-failure">Failed</span>
+      {(error) => (
+        <span
+          class="shrink-0 text-xs text-failure"
+          aria-label={`Failed: ${error()}`}
+        >
+          Failed
+        </span>
+      )}
     </Show>
   );
 }
@@ -177,29 +192,39 @@ export function ImportPlanRow(props: {
   /** Show the checkbox that leaves the object out, and the sharing toggle. */
   choosing: boolean;
   disabled: boolean;
+  /** Source determines whether skipping can be overridden in review. */
+  source?: ImportDraft['source'];
   /** Show how the write went instead of the plan. */
   showStatus: boolean;
+  /** Keep plan samples without their estimate after confirmed counts arrive. */
+  showRowEstimate?: boolean;
   onToggleExpanded: () => void;
   onToggleRows: () => void;
   onIncludedChange: (included: boolean) => void;
   onSharedChange: (shared: boolean) => void;
 }) {
   const written = () => isWritten(props.node.decision);
+  const showRowEstimate = () => props.showRowEstimate !== false;
   const included = () => written() && !props.excluded;
   const hasRows = () =>
     props.node.kind === 'database' &&
     (props.node.sampleTitles.length > 0 || props.node.taskFields !== null);
+  const linkedFrom = () =>
+    props.node.linkedFrom?.length ? props.node.linkedFrom : props.node.inlineOn;
   const indent = () => `${Math.min(props.node.depth, MAX_INDENT_LEVEL) * 12}px`;
   return (
     <li
       class={cn(
         'flex min-w-0 flex-col',
         !included() && !props.showStatus && 'text-ink-muted',
-        props.showStatus && props.node.status === 'discarded' && 'opacity-60'
+        props.showStatus &&
+          props.node.status === 'discarded' &&
+          props.node.decision !== 'hand' &&
+          'opacity-60'
       )}
     >
       <div
-        class="flex min-w-0 items-center gap-1.5 py-1 pr-1 touch:min-h-[44px]"
+        class="flex min-w-0 items-center gap-1.5 py-1 pr-1 touch:min-h-[44px] mobile:flex-wrap"
         style={{ 'padding-left': indent() }}
       >
         <Show
@@ -246,7 +271,11 @@ export function ImportPlanRow(props: {
         <Show when={props.choosing}>
           <Checkbox
             checked={included()}
-            disabled={props.disabled || !written()}
+            disabled={
+              props.disabled ||
+              (!written() &&
+                !canCopySkippedPage(props.node, props.source ?? 'notion'))
+            }
             onChange={(checked) => props.onIncludedChange(checked)}
           >
             <Checkbox.Control />
@@ -261,55 +290,92 @@ export function ImportPlanRow(props: {
             .with('task', () => 'task' as const)
             .with('project', () => 'initiative' as const)
             .with('page', () => 'md' as const)
+            .with('pipeline', () => 'pipeline' as const)
+            .with('company', () => 'crm_company' as const)
+            .with('contact', () => 'contact' as const)
+            .with('deal', () => 'pipeline' as const)
             .exhaustive()}
           size="xs"
         />
-        <span class="flex min-w-0 flex-1 flex-col">
-          <span class="truncate text-sm" title={props.node.title}>
+        <span class="flex min-w-0 flex-1 flex-col mobile:contents">
+          <span
+            class="truncate text-sm mobile:min-w-0 mobile:flex-1 mobile:whitespace-normal mobile:wrap-break-word"
+            title={props.node.title}
+          >
             {props.node.title || 'Untitled'}
           </span>
-          {/* The agent picks these up, so their reason is worth reading. */}
+          <Show when={linkedFrom()?.length}>
+            <span
+              class="truncate text-xs text-ink-muted mobile:order-last mobile:basis-full mobile:whitespace-normal mobile:wrap-break-word"
+              title={linkedFrom()?.join(', ')}
+            >
+              Linked from {linkedFrom()?.join(', ')}
+            </span>
+          </Show>
           <Show when={props.node.decision === 'hand' && props.node.reason}>
-            <span class="truncate text-xs text-ink-muted">
+            <span class="truncate text-xs text-ink-muted mobile:order-last mobile:basis-full mobile:whitespace-normal mobile:wrap-break-word">
               {props.node.reason}
             </span>
           </Show>
+          {/* Why it failed, readable on touch too (no tooltip there). */}
+          <Show when={props.showStatus && props.node.error}>
+            {(error) => (
+              <span class="min-w-0 text-xs text-ink-muted wrap-break-word">
+                {error()}
+              </span>
+            )}
+          </Show>
         </span>
-        <Show when={props.node.kind === 'database' && props.node.rows !== null}>
-          <span class="shrink-0 text-xs text-ink-muted">
-            {props.node.rows} rows
-          </span>
-        </Show>
-        <Show when={written()}>
-          <SharingBadge
-            title={props.node.title || 'Untitled'}
-            shared={props.shared}
-            reason={props.node.sharedReason}
-            toggleable={
-              props.node.shareable && props.choosing && !props.disabled
+        <span class="contents mobile:order-1 mobile:flex mobile:basis-full mobile:flex-wrap mobile:items-center mobile:justify-end mobile:gap-1.5">
+          <Show
+            when={
+              showRowEstimate() &&
+              props.node.kind === 'database' &&
+              props.node.rows !== null
             }
-            muted={props.excluded}
-            onSharedChange={(shared) => props.onSharedChange(shared)}
-          />
-        </Show>
-        <Show
-          when={props.showStatus}
-          fallback={
-            <DecisionBadge
-              decision={props.node.decision}
-              reason={props.node.reason}
+          >
+            <span class="shrink-0 text-xs text-ink-muted">
+              {props.node.rows} rows
+            </span>
+          </Show>
+          <Show when={written()}>
+            <SharingBadge
+              title={props.node.title || 'Untitled'}
+              shared={props.shared}
+              reason={props.node.sharedReason}
+              toggleable={
+                props.node.shareable && props.choosing && !props.disabled
+              }
+              muted={props.excluded}
+              onSharedChange={(shared) => props.onSharedChange(shared)}
             />
-          }
-        >
-          <RowStatus node={props.node} excluded={props.excluded} />
-        </Show>
+          </Show>
+          <Show
+            when={props.showStatus}
+            fallback={
+              <DecisionBadge
+                link={
+                  isWritten(props.node.decision) &&
+                  Boolean(props.node.linkedFrom?.length) &&
+                  props.excluded
+                }
+                decision={props.node.decision}
+                reason={props.node.reason}
+              />
+            }
+          >
+            <RowStatus node={props.node} excluded={props.excluded} />
+          </Show>
+        </span>
       </div>
       <Show when={hasRows() && props.showingRows}>
         <div
           class="flex min-w-0 flex-col gap-0.5 pb-1.5 pr-1 text-xs text-ink-muted"
           style={{ 'padding-left': `calc(${indent()} + 1.375rem)` }}
         >
-          <p class="wrap-break-word">{rowsLine(props.node)}</p>
+          <Show when={rowsLine(props.node, showRowEstimate())}>
+            {(line) => <p class="wrap-break-word">{line()}</p>}
+          </Show>
           <Show
             when={
               props.node.decision === 'tasks' ? props.node.taskFields : null

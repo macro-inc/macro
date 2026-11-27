@@ -1,5 +1,5 @@
 //! Bounded search facts appended to the existing authorized people projection.
-use super::RecentKey;
+use super::{RecentKey, contact_lists, list_prefix};
 use crate::{
     people::{CONTEXT_FIELD, StoredFacts},
     value::{CacheValue, Record},
@@ -30,6 +30,14 @@ pub const COMMAND_RANK: &str = "people_rank_command";
 pub const DM: &str = "people_dm";
 /// Epoch of a connected secondary-inbox exclusion.
 pub const SECONDARY: &str = "people_secondary";
+/// One fact per list key the contact belongs to.
+pub const LIST: &str = "people_list";
+/// `DEFAULT_RANK` scoped to one list: the list prefix, then the rank key.
+pub const LIST_DEFAULT_RANK: &str = "people_list_rank_default";
+/// `USER_RANK` scoped to one list: the list prefix, then the epoch-prefixed key.
+pub const LIST_USER_RANK: &str = "people_list_rank_user";
+/// `COMMAND_RANK` scoped to one list: the list prefix, then the epoch-prefixed key.
+pub const LIST_COMMAND_RANK: &str = "people_list_rank_command";
 /// Malformed flags must never silently disable an exclusion.
 pub const INVALID_CONTEXT: &str = "people_context_invalid";
 
@@ -56,9 +64,23 @@ pub(crate) fn derive(
         }
     }
     let overflow = indexed.len() > MAX_NAME_WORDS;
-    let mut facts = Vec::with_capacity(indexed.len() + 8);
+    // List-scoped rank keys let storage walk one list in recency order, so a
+    // small group (a few teammates) fills its window without scanning everyone.
+    let lists = contact_lists(record)
+        .into_iter()
+        .map(|key| (key, list_prefix(key)))
+        .collect::<Vec<_>>();
+    let mut facts = Vec::with_capacity(indexed.len() + 8 + 4 * lists.len());
     facts.push(fact(NAME, normalized.as_bytes())?);
-    facts.push(fact(DEFAULT_RANK, RecentKey::new(None, user).as_bytes())?);
+    let default_rank = RecentKey::new(None, user);
+    facts.push(fact(DEFAULT_RANK, default_rank.as_bytes())?);
+    for (key, prefix) in &lists {
+        facts.push(fact(LIST, key.as_bytes())?);
+        facts.push(fact(
+            LIST_DEFAULT_RANK,
+            [prefix.as_slice(), default_rank.as_bytes()].concat(),
+        )?);
+    }
     for word in indexed.into_iter().take(MAX_NAME_WORDS) {
         facts.push(fact(WORD, word.as_bytes())?);
     }
@@ -75,20 +97,26 @@ pub(crate) fn derive(
         return Ok(facts);
     };
     facts.push(fact(CONTEXT_EPOCH, context.epoch.as_bytes().as_slice())?);
-    facts.push(fact(
-        USER_RANK,
-        RecentKey::new(context.facts.last_interaction_ms, user).in_epoch(context.epoch),
-    )?);
+    let user_rank = RecentKey::new(context.facts.last_interaction_ms, user).in_epoch(context.epoch);
     let command_time = context
         .facts
         .direct_message
         .as_ref()
         .map(|dm| dm.timestamp_ms)
         .or(context.facts.last_interaction_ms);
-    facts.push(fact(
-        COMMAND_RANK,
-        RecentKey::new(command_time, user).in_epoch(context.epoch),
-    )?);
+    let command_rank = RecentKey::new(command_time, user).in_epoch(context.epoch);
+    for (_, prefix) in &lists {
+        facts.push(fact(
+            LIST_USER_RANK,
+            [prefix.as_slice(), &user_rank].concat(),
+        )?);
+        facts.push(fact(
+            LIST_COMMAND_RANK,
+            [prefix.as_slice(), &command_rank].concat(),
+        )?);
+    }
+    facts.push(fact(USER_RANK, user_rank)?);
+    facts.push(fact(COMMAND_RANK, command_rank)?);
     if let Some(dm) = context.facts.direct_message {
         facts.push(fact(
             DM,

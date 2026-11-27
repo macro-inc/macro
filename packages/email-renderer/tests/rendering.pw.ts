@@ -117,28 +117,91 @@ test('preserves namespace, layer and scope styling in the browser', async ({
   );
 });
 
-test('preserves nested and body theme rules while stripping top-level head overrides', async ({
+test('sender color-scheme rules follow the app theme, not the OS', async ({
   page,
 }) => {
+  const html =
+    '<head><style>@media(prefers-color-scheme:dark){.wrap{background-color:#111}.head{color:red}}@media screen{@media(prefers-color-scheme:dark){.nested{color:green}}}@media(prefers-color-scheme:light){.light{color:purple}}</style></head><body><style>@media(prefers-color-scheme:dark){.body{color:blue}}</style><div class="wrap"><p class="head">Head</p><p class="nested">Nested</p><p class="body">Body</p><p class="light">Light</p></div></body>';
   await page.emulateMedia({ colorScheme: 'dark' });
-  const host = await mountHtml(
-    page,
-    'theme-rule-scope',
-    '<head><style>@media(prefers-color-scheme:dark){.head{color:red}}@media screen{@media(prefers-color-scheme:dark){.nested{color:green}}}</style></head><body><style>@media(prefers-color-scheme:dark){.body{color:blue}}</style><p class="head">Head</p><p class="nested">Nested</p><p class="body">Body</p></body>',
-    { theme: 'dark' }
-  );
-  await expect(host.getByText('Head', { exact: true })).toHaveCSS(
+  const light = await mountHtml(page, 'light-app', html, { theme: 'light' });
+  for (const text of ['Head', 'Nested', 'Body'])
+    await expect(light.getByText(text, { exact: true })).toHaveCSS(
+      'color',
+      'rgb(0, 0, 0)'
+    );
+  await expect(light.getByText('Light', { exact: true })).toHaveCSS(
     'color',
-    'rgb(0, 0, 0)'
+    'rgb(128, 0, 128)'
   );
-  await expect(host.getByText('Nested', { exact: true })).toHaveCSS(
+
+  await page.emulateMedia({ colorScheme: 'light' });
+  const dark = await mountHtml(page, 'dark-app', html, { theme: 'dark' });
+  await expect(dark.getByText('Head', { exact: true })).toHaveCSS(
+    'color',
+    'rgb(255, 0, 0)'
+  );
+  await expect(dark.getByText('Nested', { exact: true })).toHaveCSS(
     'color',
     'rgb(0, 128, 0)'
   );
-  await expect(host.getByText('Body', { exact: true })).toHaveCSS(
+  await expect(dark.getByText('Body', { exact: true })).toHaveCSS(
     'color',
     'rgb(0, 0, 255)'
   );
+  await expect(dark.getByText('Light', { exact: true })).not.toHaveCSS(
+    'color',
+    'rgb(128, 0, 128)'
+  );
+});
+
+test('an email with its own dark design keeps it in a dark theme, off the white panel', async ({
+  page,
+}) => {
+  const html =
+    '<style>@media (prefers-color-scheme: dark){.canvas{background-color:#121212 !important}.copy{color:#eeeeee !important}}</style><table class="canvas" bgcolor="#ffffff"><tr><td><p class="copy" style="color:#222222">Designed for dark</p><p id="plain" style="color:#333333">Left as sent</p></td></tr></table>';
+  const results = await page.evaluate(async (html) => {
+    const { prepareEmailBody, mountEmailBody, themes } = window.emailRenderer;
+    const read = async (theme: 'light' | 'dark', adaptColors: boolean) => {
+      const host = document.createElement('div');
+      document.body.append(host);
+      const renderer = mountEmailBody(host, prepareEmailBody({ html }), {
+        theme: themes[theme],
+        adaptColors,
+        normalizeFonts: false,
+      });
+      await new Promise(requestAnimationFrame);
+      const root = host.shadowRoot!;
+      const style = (selector: string) =>
+        getComputedStyle(root.querySelector(selector)!);
+      const result = {
+        panel: (root.lastElementChild as HTMLElement).style.backgroundColor,
+        canvas: style('.canvas').backgroundColor,
+        copy: style('.copy').color,
+        plain: style('#plain').color,
+      };
+      renderer.dispose();
+      host.remove();
+      return result;
+    };
+    return {
+      darkPanel: await read('dark', false),
+      darkAdapted: await read('dark', true),
+      lightPanel: await read('light', false),
+    };
+  }, html);
+  for (const dark of [results.darkPanel, results.darkAdapted])
+    expect(dark).toEqual({
+      panel: '',
+      canvas: 'rgb(18, 18, 18)',
+      copy: 'rgb(238, 238, 238)',
+      plain: 'rgb(51, 51, 51)',
+    });
+  expect(results.lightPanel).toEqual({
+    panel: 'white',
+    canvas: 'rgb(255, 255, 255)',
+    copy: 'rgb(34, 34, 34)',
+    plain: 'rgb(51, 51, 51)',
+  });
 });
 
 test('keeps custom-property names consistent with selectors and container queries', async ({
@@ -608,4 +671,83 @@ test('background adaptation preserves designed buttons and removes nested page b
     face: 'rgb(228, 236, 242)',
     dark: 'rgb(126, 130, 201)',
   });
+});
+
+test('background adaptation removes light gradients and leaves text on images or dark gradients alone', async ({
+  page,
+}) => {
+  const styles = await page.evaluate(async () => {
+    const { prepareEmailBody, mountEmailBody, themes } = window.emailRenderer;
+    const host = document.createElement('div');
+    document.body.append(host);
+    const image =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aL1sAAAAASUVORK5CYII=';
+    const renderer = mountEmailBody(
+      host,
+      prepareEmailBody({
+        html: `<div id="light" style="background:linear-gradient(#ffffff,#f4f4f4);color:#222222">Light gradient</div><div id="layered" style="background-color:#111111;background-image:linear-gradient(#ffffff,#ffffff)">Layered</div><div id="dark" style="background-image:linear-gradient(#1a1a2e,#16213e)"><p id="dark-text" style="color:#ffffff">Dark hero</p></div><table id="photo" background="${image}"><tr><td id="photo-text" style="color:#222222">Text on a photo<div id="photo-card" style="background-color:#ffffff">Card</div></td></tr></table>`,
+      }),
+      { theme: themes.dark, adaptColors: true, normalizeFonts: false }
+    );
+    await new Promise(requestAnimationFrame);
+    const style = (id: string) =>
+      getComputedStyle(host.shadowRoot!.querySelector(`#${id}`)!);
+    const result = {
+      lightImage: style('light').backgroundImage,
+      lightColor: style('light').color,
+      layeredImage: style('layered').backgroundImage,
+      darkImage: style('dark').backgroundImage,
+      darkTextColor: style('dark-text').color,
+      photoImage: style('photo').backgroundImage,
+      photoTextColor: style('photo-text').color,
+      photoCard: style('photo-card').backgroundColor,
+    };
+    renderer.dispose();
+    return result;
+  });
+  expect(styles.lightImage).toBe('none');
+  expect(styles.lightColor).toMatch(/^oklch/);
+  expect(styles.layeredImage).toContain('linear-gradient');
+  expect(styles.darkImage).toContain('linear-gradient');
+  expect(styles.darkTextColor).toBe('rgb(255, 255, 255)');
+  expect(styles.photoImage).toContain('url(');
+  expect(styles.photoTextColor).toBe('rgb(34, 34, 34)');
+  expect(styles.photoCard).toBe('rgb(255, 255, 255)');
+});
+
+test('dark-mode tweaks without a dark background leave the usual light rendering', async ({
+  page,
+}) => {
+  const html =
+    '<style>@media (prefers-color-scheme: dark){a{color:#99ccff !important}}</style><table><tr><td><p style="color:#222222">Hello <a href="https://example.com">link</a></p></td></tr></table>';
+  const results = await page.evaluate(async (html) => {
+    const { prepareEmailBody, mountEmailBody, themes } = window.emailRenderer;
+    const read = async (adaptColors: boolean) => {
+      const host = document.createElement('div');
+      document.body.append(host);
+      const renderer = mountEmailBody(host, prepareEmailBody({ html }), {
+        theme: themes.dark,
+        adaptColors,
+        normalizeFonts: false,
+      });
+      await new Promise(requestAnimationFrame);
+      const root = host.shadowRoot!;
+      const result = {
+        panel: (root.lastElementChild as HTMLElement).style.backgroundColor,
+        text: getComputedStyle(root.querySelector('p')!).color,
+        link: getComputedStyle(root.querySelector('a')!).color,
+      };
+      renderer.dispose();
+      host.remove();
+      return result;
+    };
+    return { panel: await read(false), adapted: await read(true) };
+  }, html);
+  // The white panel is a light canvas, so the sender's dark link color
+  // doesn't apply there.
+  expect(results.panel.panel).toBe('white');
+  expect(results.panel.link).not.toBe('rgb(153, 204, 255)');
+  // Adapted, the dark text is recolored for the dark theme as usual.
+  expect(results.adapted.panel).toBe('');
+  expect(results.adapted.text).not.toBe('rgb(34, 34, 34)');
 });

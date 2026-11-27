@@ -13,6 +13,11 @@ pub enum Event {
     InstanceStopped,
     /// The guest connected to the harness service.
     MacrodConnected,
+    /// The guest connected with a macrod that can't take an agent teammate
+    /// (it declared no apply-agent capability): an agent computer gives up
+    /// at once rather than at [`AGENT_START_DEADLINE`]; any other computer
+    /// treats it as [`Self::MacrodConnected`].
+    MacrodConnectedWithoutAgentHandOff,
     /// The guest disconnected from the harness service.
     MacrodDisconnected,
     /// Timer: macrod has been gone for [`MACROD_GRACE`], with a fresh fleet observation.
@@ -107,9 +112,15 @@ pub enum Event {
     /// The agent teammate the computer was bought for reported itself
     /// online.
     AgentOnline,
+    /// macrod took the agent teammate handed to it: the
+    /// [`Effect::DeliverAgent`] hand-off finished.
+    AgentDelivered,
     /// Timer: [`AGENT_START_DEADLINE`] after macrod connected; an agent that
     /// still hasn't reported online failed its start.
     AgentStartDue,
+    /// Timer: hand the agent over again, every [`AGENT_REDELIVERY`] until it
+    /// reports online.
+    AgentRedeliver,
     /// The purchase of a computer released after failing its first start
     /// was refunded.
     PurchaseRefunded {
@@ -165,6 +176,9 @@ pub enum Rejected {
     /// The purchase's charge has not settled yet.
     #[error("this computer's payment is still being confirmed")]
     PaymentPending,
+    /// A service-only update or its recovery currently holds the guest.
+    #[error("a runtime update or recovery is holding this computer")]
+    RuntimeUpdateInProgress,
     /// Only a computer whose guest exists can move to another host.
     #[error("this computer cannot move to another host now")]
     NotMovable,
@@ -209,6 +223,8 @@ pub enum TimerKind {
     AgentStartDue,
     /// The purchase request's time to answer its charge is up.
     ChargeUnsettled,
+    /// Send the agent teammate's hand-off again.
+    AgentRedeliver,
 }
 
 impl TimerKind {
@@ -224,6 +240,7 @@ impl TimerKind {
             Self::RetentionExpired => Event::RetentionExpired,
             Self::AgentStartDue => Event::AgentStartDue,
             Self::ChargeUnsettled => Event::ChargeUnsettled,
+            Self::AgentRedeliver => Event::AgentRedeliver,
         }
     }
 }

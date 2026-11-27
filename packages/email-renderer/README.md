@@ -95,10 +95,11 @@ There is no implicit fetch client or native-platform detection in this package.
   boundaries: a malformed declaration must not erase unrelated valid styling.
   Keep supported grouping rules, custom-property names, values, and fallbacks.
   The normal browser cascade, including inherited variables, still applies.
-  Reader preparation removes only top-level `prefers-color-scheme` media rules
-  in head styles, matching the previous reader. Nested rules and body styles
-  remain. Shared sanitization used by replies/forwards preserves safe theme rules;
-  display policy must not modify outgoing quoted HTML. Shared sanitization also
+  Reader preparation keeps the sender's `prefers-color-scheme` media rules;
+  mounting evaluates them against the app theme, not the operating system
+  (`applySenderColorScheme`), wherever they appear. Shared sanitization used by
+  replies/forwards preserves safe theme rules; display policy must not modify
+  outgoing quoted HTML. Shared sanitization also
   preserves inert `data-*` metadata needed to reimport authored quotes into the
   editor (mentions, indentation and scaled media). Reader preparation strips
   those attributes before mounting; active markup and event handlers are removed
@@ -127,7 +128,19 @@ There is no implicit fetch client or native-platform detection in this package.
   not an iframe security boundary; sanitization remains essential.
 - The app decides when to adapt colors and normalize fonts. Its current policy
   adapts personal/table-less email and preserves designed newsletters on a white
-  background. Sender classification and Macro-specific rendering stay in the app.
+  background. `hasTable` (and the browser's `hasLayoutTable`) ignores tables
+  inside the signature. Sender classification and Macro-specific rendering
+  stay in the app.
+- In a dark theme, an email whose dark-scheme rules paint a background is
+  shown in that dark design and adapted for contrast, never on the white
+  panel. Dark rules that paint no background (a link color, say) apply only
+  when the email is adapted; the white panel gets the sender's light rules.
+  The backend sanitizer drops `<meta>`, so a `color-scheme` meta tag alone is
+  not a signal.
+- Color adaptation removes light background colors and light gradients that sit
+  on no other background, and recolors text for the theme. It keeps colored
+  backgrounds and background images, and leaves text on any remaining
+  background in the sender's colors.
 
 The app sends ordinary HTML through this package. Plaintext and Macro Markdown
 retain the app's existing Markdown renderer, including document mentions and

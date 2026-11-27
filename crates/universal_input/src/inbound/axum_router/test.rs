@@ -145,6 +145,7 @@ impl ThreadFactExtractor for Facts {
                     .unwrap(),
                 }],
                 closures: vec![],
+                events: vec![],
             },
             usage: None,
         })

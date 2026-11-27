@@ -1,0 +1,86 @@
+apiVersion: v1
+data:
+  grafana.ini: |
+    [analytics]
+    check_for_updates = false
+    reporting_enabled = false
+    [auth]
+    disable_login_form = true
+    login_maximum_inactive_lifetime_duration = 1h
+    login_maximum_lifetime_duration = 8h
+    [auth.anonymous]
+    enabled = false
+    [auth.basic]
+    enabled = false
+    [auth.google]
+    allow_assign_grafana_admin = true
+    allow_sign_up = true
+    allowed_domains = macro.com
+    api_url = https://openidconnect.googleapis.com/v1/userinfo
+    auth_url = https://accounts.google.com/o/oauth2/v2/auth
+    client_id = $__file{/etc/grafana/secrets/google_client_id}
+    client_secret = $__file{/etc/grafana/secrets/google_client_secret}
+    enabled = true
+    hosted_domain = macro.com
+    jwk_set_url = https://www.googleapis.com/oauth2/v3/certs
+    role_attribute_path = "'GrafanaAdmin'"
+    role_attribute_strict = true
+    scopes = openid email profile
+    skip_org_role_sync = false
+    token_url = https://oauth2.googleapis.com/token
+    use_pkce = true
+    use_refresh_token = true
+    validate_hd = true
+    validate_id_token = true
+    [database]
+    ca_cert_path = /etc/grafana/rds/ca.pem
+    host = observability-grafana.c7laebw90i5d.us-east-2.rds.amazonaws.com:5432
+    name = grafana
+    password = $__file{/etc/grafana/database/password}
+    ssl_mode = verify-full
+    type = postgres
+    user = $__file{/etc/grafana/database/username}
+    [log]
+    mode = console
+    [paths]
+    data = /var/lib/grafana/
+    logs = /var/log/grafana
+    plugins = /var/lib/grafana/plugins
+    provisioning = /etc/grafana/provisioning
+    [plugins]
+    preinstall_auto_update = false
+    preinstall_disabled = false
+    preinstall_sync = grafana-exploretraces-app@2.0.3,grafana-lokiexplore-app@2.0.4,grafana-metricsdrilldown-app@2.0.3
+    [security]
+    content_security_policy = true
+    cookie_samesite = lax
+    cookie_secure = true
+    disable_initial_admin_creation = true
+    secret_key = $__file{/etc/grafana/secrets/grafana_secret_key}
+    strict_transport_security = true
+    [server]
+    domain = grafana.macro-internal.com
+    enforce_domain = true
+    http_addr = 0.0.0.0
+    root_url = https://grafana.macro-internal.com/
+    [unified_alerting]
+    enabled = true
+    ha_advertise_address = $__env{POD_IP}:9094
+    ha_listen_address = $__env{POD_IP}:9094
+    ha_peers = grafana-headless.observability.svc.cluster.local:9094
+    ha_reconnect_timeout = 2m
+    [unified_storage]
+    index_path = /var/lib/grafana-search/bleve
+    [users]
+    allow_org_create = false
+    allow_sign_up = false
+    viewers_can_edit = false
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/instance: grafana
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/version: 13.0.9
+    helm.sh/chart: grafana-14.4.2
+  name: grafana
+  namespace: observability

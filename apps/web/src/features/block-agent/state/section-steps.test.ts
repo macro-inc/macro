@@ -48,7 +48,7 @@ describe('sectionSteps', () => {
   it("reads a program as its observed operations, else its receipt's rows", () => {
     const parts = [program('p'), program('q')];
     const rows = [
-      row('p', 'Working in your workspace', 'running'),
+      row('p', 'Working on it', 'running'),
       row('q:0', 'Listed tasks'),
       row('q:1', 'Update task failed', 'failed'),
     ];
@@ -72,6 +72,25 @@ describe('sectionSteps', () => {
       { id: 'p:2', label: 'Opening a link', status: 'interrupted' },
       { id: 'q:0', label: 'Listed tasks', status: 'completed' },
       { id: 'q:1', label: 'Update task failed', status: 'failed' },
+    ]);
+  });
+
+  it("leaves out a program's unnamed failure, keeping the step before it", () => {
+    expect(
+      sectionSteps({
+        parts: [call('a'), program('p'), program('q'), program('r')],
+        rows: [
+          row('a', 'Read', 'completed', 'a.rs'),
+          row('p', 'A step failed', 'failed'),
+          row('q:0', 'Update draft', 'failed'),
+          row('r', 'Step interrupted', 'interrupted'),
+        ],
+        observed: () => undefined,
+        thinking: false,
+      })
+    ).toEqual([
+      { id: 'a', label: 'Read a.rs', status: 'completed' },
+      { id: 'q:0', label: 'Update draft', status: 'failed' },
     ]);
   });
 

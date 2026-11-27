@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO import_entity_written AS shared_folder (import_id, kind, object, macro_id)\n            SELECT entity.id, 'folder', 'shared', $3\n            FROM import_entity AS entity\n            WHERE entity.id = $2 AND (SELECT entity.user_id OFFSET 0) = $1\n            ON CONFLICT (import_id, kind, object) DO UPDATE SET macro_id = EXCLUDED.macro_id\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "681215cae122b7bd95aeadf2f0acf628273ab7b93e4aa0c82ed0fccc6b82a5a1"
+}

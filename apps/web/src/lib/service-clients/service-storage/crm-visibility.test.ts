@@ -1,5 +1,6 @@
 import { externalWriteVersion } from '@graphql-cache/exchange/external-writes';
 import type { CacheHost } from '@graphql-cache/host/types';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { prepareCrmVisibilityWrite } from './crm-visibility';
 
@@ -25,6 +26,7 @@ beforeEach(() => {
 });
 
 it('writes confirmed company and contact flags with the generated normalized subscription document', async () => {
+  const generation = cacheSessionGeneration.capture();
   const writer = prepareCrmVisibilityWrite();
   const host = mocks.host as unknown as CacheHost;
   const before = externalWriteVersion(host);
@@ -36,6 +38,7 @@ it('writes confirmed company and contact flags with the generated normalized sub
   expect(externalWriteVersion(host)).toBeGreaterThan(before);
   expect(mocks.host.writeQuery).toHaveBeenCalledWith(
     expect.objectContaining({
+      generation,
       operationName: 'CrmVisibilityCacheWrite',
       query: expect.stringContaining('... on GraphqlSoupCrmContact'),
       data: {
@@ -98,9 +101,9 @@ it('removes only affected stale records if a confirmed cache write fails, withou
       hidden: true,
     })
   ).resolves.toBeUndefined();
-  expect(mocks.host.deleteRecords).toHaveBeenCalledWith([
-    'GraphqlSoupCrmContact:contact-1',
-    'GraphqlSoupCrmCompany:company-1',
-  ]);
+  expect(mocks.host.deleteRecords).toHaveBeenCalledWith(
+    ['GraphqlSoupCrmContact:contact-1', 'GraphqlSoupCrmCompany:company-1'],
+    cacheSessionGeneration.capture()
+  );
   expect(mocks.error).toHaveBeenCalledOnce();
 });

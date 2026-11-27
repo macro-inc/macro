@@ -120,7 +120,7 @@ export function createCallSounds(options: {
         span.setAttr('call.presence.event', message.event);
         span.setAttr(
           'call.presence.played',
-          presence.receive(message, sender) === true
+          span.run(() => presence.receive(message, sender)) === true
         );
       } finally {
         span.end();

@@ -41,6 +41,10 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
 
     Router::new()
         .nest("/passwords", passwords::inbound::router::internal_router(state.passwords_state.clone()))
+        .nest(
+            "/crm",
+            crm::inbound::axum_router::crm_internal_router(state.crm_state.clone()),
+        )
         // User routes
         .route(
             "/users/{user_id}",

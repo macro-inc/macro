@@ -1,6 +1,7 @@
 /** File-type mutations used by document entities. */
 import { setFileType } from '@core/component/FileList/itemOperations';
 import { toast } from '@core/component/Toast/Toast';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { setHistoryItemFileType } from '@queries/history/history';
 import { setPreviewFileType } from '@queries/preview';
 import {
@@ -52,7 +53,7 @@ export function createUpdateFileTypeMutation() {
     boolean,
     Error,
     FileTypeUpdateVariables,
-    { soupTransaction: SoupTransaction }
+    { generation: string; soupTransaction: SoupTransaction }
   >(() => ({
     mutationFn: async ({ id, fileType }) => {
       const success = await setFileType({ id, fileType });
@@ -62,12 +63,14 @@ export function createUpdateFileTypeMutation() {
       return true;
     },
     onMutate: ({ id, fileType }) => {
-      return performOptimisticFileTypeUpdate(id, fileType);
+      const generation = cacheSessionGeneration.capture();
+      return { generation, ...performOptimisticFileTypeUpdate(id, fileType) };
     },
     onError: (_error, { id, oldFileType }, context) => {
       toast.failure('Failed to update file type');
       if (context) {
-        rollbackFileTypeUpdate(id, oldFileType, context.soupTransaction);
+        if (cacheSessionGeneration.isCurrent(context.generation))
+          rollbackFileTypeUpdate(id, oldFileType, context.soupTransaction);
         return false;
       }
       return true;

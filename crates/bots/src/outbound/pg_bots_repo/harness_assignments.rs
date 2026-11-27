@@ -1,7 +1,7 @@
 //! Runtime-routing assignment reads owned by bots, and deleting the agents
 //! of a harness that is going away.
 use super::{PgBotsRepo, principal_id, require_persisted_owner};
-use crate::domain::models::BotOwner;
+use crate::domain::models::DeletedHarnessAgents;
 use crate::domain::ports::HarnessAssignments;
 use anyhow::Context;
 use bot_id::BotId;
@@ -11,7 +11,7 @@ impl PgBotsRepo {
     pub(super) async fn delete_harness_agents_inner(
         &self,
         harness: HarnessId,
-    ) -> anyhow::Result<Vec<(BotId, BotOwner)>> {
+    ) -> anyhow::Result<DeletedHarnessAgents> {
         let mut tx = self.pool.begin().await?;
         let rows = sqlx::query!(
             r#"
@@ -40,21 +40,27 @@ impl PgBotsRepo {
             .iter()
             .map(|(bot_id, _)| principal_id(*bot_id))
             .collect();
-        sqlx::query!(
+        let mut left_channel_ids = sqlx::query_scalar!(
             r#"
             UPDATE comms_channel_participants
             SET left_at = now()
             WHERE user_id = ANY($1)
               AND left_at IS NULL
+            RETURNING channel_id
             "#,
             &principals,
         )
-        .execute(&mut *tx)
+        .fetch_all(&mut *tx)
         .await
         .context("failed to remove the harness's deleted agents from channels")?;
 
         tx.commit().await?;
-        Ok(deleted)
+        left_channel_ids.sort_unstable();
+        left_channel_ids.dedup();
+        Ok(DeletedHarnessAgents {
+            bots: deleted,
+            left_channel_ids,
+        })
     }
 }
 

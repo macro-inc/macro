@@ -563,11 +563,19 @@ queue! {
             dev: "static-file-s3-event-notification-queue-dev",
             prod: "static-file-s3-event-notification-queue-prod",
         },
-        /// Queue for the email link manager / refresh handler.
+        /// The email link manager's interactive lane: what a person waits on, such
+        /// as their inbox removal (`LinkManagerMessage::lane` in `models_email`).
         pub LinkManagerQueue {
             local: "email-service-refresh-queue",
             dev: "email-service-refresh-queue-dev",
             prod: "email-service-refresh-queue-prod",
+        },
+        /// The email link manager's maintenance lane: the refresh handler's
+        /// periodic work and its bulk removals, on consumers of their own.
+        pub LinkMaintenanceQueue {
+            local: "email-service-link-maintenance-queue",
+            dev: "email-service-link-maintenance-queue-dev",
+            prod: "email-service-link-maintenance-queue-prod",
         },
         /// Queue for Gmail inbox update processing.
         ///
@@ -601,6 +609,16 @@ queue! {
             local: "email-service-crm-cleanup-queue",
             dev: "email-service-crm-cleanup-queue-dev",
             prod: "email-service-crm-cleanup-queue-prod",
+        },
+        /// FIFO queue for CRM contact population (email_service), grouped by
+        /// mailbox so each mailbox runs one population at a time. That holds
+        /// only while a consumer receives one message per request and keeps
+        /// it hidden until it finishes: one receive can return several
+        /// messages of the same group.
+        pub EmailCrmPopulationQueue {
+            local: "email-service-crm-population-queue.fifo",
+            dev: "email-service-crm-population-queue-dev.fifo",
+            prod: "email-service-crm-population-queue-prod.fifo",
         },
         /// Queue for the bulk upload extractor lambda
         /// (upload_extractor_lambda_trigger `UPLOAD_EXTRACTOR_QUEUE`).

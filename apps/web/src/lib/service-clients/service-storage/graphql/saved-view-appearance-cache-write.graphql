@@ -1,0 +1,9 @@
+# Cache-only identity patch; never dispatched to the server.
+fragment SavedViewAppearanceFields on GraphqlSavedView {
+  __typename
+  id
+  appearance
+}
+mutation SavedViewAppearanceCacheWrite($input: UpdateSavedViewInput!) {
+  updateSavedView(input: $input) { ...SavedViewAppearanceFields }
+}

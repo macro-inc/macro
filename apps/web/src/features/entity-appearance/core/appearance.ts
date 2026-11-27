@@ -10,6 +10,7 @@ const APPEARANCE_ENTITY_TYPES = [
   'routine',
   'form',
   'database',
+  'saved_view',
 ] as const;
 export type AppearanceEntityType = (typeof APPEARANCE_ENTITY_TYPES)[number];
 

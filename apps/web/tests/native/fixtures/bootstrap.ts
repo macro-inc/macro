@@ -1,5 +1,8 @@
 import type { AiUsageSnapshot } from '../../../src/lib/service-clients/service-auth/ai-billing-types';
 import type { Link } from '../../../src/lib/service-clients/service-email/generated/schemas/link';
+import type { ListLabelsResponse } from '../../../src/lib/service-clients/service-email/generated/schemas/listLabelsResponse';
+import type { ListChannelNotificationSettingsResponse } from '../../../src/lib/service-clients/service-notification/generated/schemas/listChannelNotificationSettingsResponse';
+import type { ListSectionNotificationSettingsResponse } from '../../../src/lib/service-clients/service-notification/generated/schemas/listSectionNotificationSettingsResponse';
 import { accounts, EMAIL, identity, USER_ID } from './mail';
 
 const link: Link = {
@@ -40,6 +43,15 @@ const aiBilling: AiUsageSnapshot = {
   uncovered_cents: 0,
   remaining_cents: 0,
 };
+// No channel or section has notification settings, so every channel uses the defaults.
+const CHANNEL_NOTIFICATION_SETTINGS: ListChannelNotificationSettingsResponse = {
+  channels: [],
+};
+const SECTION_NOTIFICATION_SETTINGS: ListSectionNotificationSettingsResponse = {
+  sections: [],
+};
+// The fixture inbox has no labels of its own, so Mail rows show none.
+const EMAIL_LABELS: ListLabelsResponse = { labels: [] };
 const name = { id: USER_ID, first_name: 'Offline', last_name: 'Fixture' };
 
 /** Empty, unrelated app-chrome resources. Unlisted requests remain errors. */
@@ -64,10 +76,9 @@ export const bootstrapResponses = new Map<
   ],
   ['GET /email/email/links', { body: { links: [link] } }],
   ['POST /email/email/links/health-check', { body: {} }],
+  ['GET /email/email/labels', { body: EMAIL_LABELS }],
   ['GET /calendar/calendars', { body: { calendars: [] } }],
   ['GET /contacts/contacts', { body: { contacts: [] } }],
-  ['GET /dss/comms/channels', { body: { items: [], next_cursor: null } }],
-  ['GET /dss/channels/activity', { body: [] }],
   ['GET /dss/bots', { body: [] }],
   ['GET /dss/agents', { body: [] }],
   ['GET /dss/harnesses', { body: [] }],
@@ -82,6 +93,8 @@ export const bootstrapResponses = new Map<
   ['GET /dss/call/meetings/active', { body: { meetings: [] } }],
   ['GET /dss/instructions', { body: {}, status: 404 }],
   ['GET /dss/crm/settings', { body: {}, status: 403 }],
+  // The fixture user has no team, so the CRM access proof names none.
+  ['GET /dss/crm/member-access', { body: { allowed: false, team_id: null } }],
   ['GET /dss/crm/contacts', { body: { contacts: [] } }],
   [
     'POST /agent-harness/agent-models/load',
@@ -92,8 +105,7 @@ export const bootstrapResponses = new Map<
     { body: { configOptions: [] } },
   ],
   ['POST /agent-harness/agent-sessions/warm', { body: {} }],
-  ['GET /cognition/mcp/servers', { body: [] }],
-  ['GET /cognition/pipedream/mcp/connections', { body: [] }],
+  ['GET /cognition/connectors', { body: [] }],
   ['GET /cognition/onboarding/prompts', { body: { dismissed: [] } }],
   ['GET /cognition/import/state', { body: { runs: [], entities: [] } }],
   ['POST /scheduled-action/suggestions/seen', { body: {} }],
@@ -109,6 +121,14 @@ export const bootstrapResponses = new Map<
     { body: { disabled_types: [] } },
   ],
   ['GET /notification/unsubscribe', { body: [] }],
+  [
+    'GET /notification/notification_settings/channels',
+    { body: CHANNEL_NOTIFICATION_SETTINGS },
+  ],
+  [
+    'GET /notification/notification_settings/sections',
+    { body: SECTION_NOTIFICATION_SETTINGS },
+  ],
   ['POST /dss/items/soup', { body: { items: [], next_cursor: null } }],
   ['POST /dss/items/soup/ast', { body: { items: [], next_cursor: null } }],
 ]);

@@ -77,6 +77,9 @@ export function installCacheCoordinatorWorker(
     stop();
   };
 
+  // Before Effect's own listener, which closes the port: while the router can
+  // still tell the page.
+  options.endpoint.addEventListener('messageerror', () => disconnectAll());
   runner = createEffectWorkerRunnerTransport<
     TabToCoordinatorEnvelope,
     CoordinatorToTabEnvelope
@@ -105,8 +108,11 @@ export function installCacheCoordinatorWorker(
 /** Give each client its own runner scope. Closing its last port must not call
  * SharedWorkerGlobalScope.close() while another client is reconnecting. */
 export function installSharedCacheCoordinatorWorker(
-  scope: { onconnect: ((event: MessageEvent) => void) | null },
-  router = new CoordinatorRouter()
+  scope: {
+    onconnect: ((event: MessageEvent) => void) | null;
+    close(): void;
+  },
+  router = new CoordinatorRouter({ endCoordinator: () => scope.close() })
 ): void {
   scope.onconnect = (event) => {
     for (const endpoint of event.ports) {

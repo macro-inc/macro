@@ -3,7 +3,7 @@
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
-use entity_access::domain::ports::EntityAccessService;
+use entity_access::domain::{models::ViewAccessLevel, ports::EntityAccessService};
 use properties::PropertiesService;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::domain::service::CrmService;
 
-use super::{CrmToolContext, caller_team_receipt, company_view_receipt, crm_error};
+use super::{CrmToolContext, caller_team_receipt, company_receipt, crm_error};
 
 /// The created contact.
 #[derive(Debug, Serialize, JsonSchema)]
@@ -32,12 +32,12 @@ pub struct CreateContactResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "CreateContact",
-    description = "Add a contact person to the user's team CRM, as New contact does. The company and the email are both optional. Personal email and addresses with a different domain are accepted; selecting a company is an explicit association. Find the company with ListCompanies, or add it first with CreateCompany."
+    description = "Add a contact person to the user's team CRM, as New contact does. The company and the email are both optional. Without a company, a work email links the contact to the company for its domain, adding that company when the team does not have it; a personal email, an address at a generic provider or vendor, a domain the team blocks or an archived company leaves the contact without a company, so check companyId in the result. With a company, any email is accepted, whatever its domain. Find the company with ListCompanies, or add it first with CreateCompany."
 )]
 pub struct CreateContact {
     /// Company to add the contact to, if any.
     #[schemars(
-        description = "The CRM company id to add the contact to. Omit it for a person with no company."
+        description = "The CRM company id to add the contact to. Omit it to file the contact by its email domain, or for a person with no company."
     )]
     #[serde(default)]
     pub company_id: Option<Uuid>,
@@ -75,7 +75,7 @@ where
         let email = self.email.as_deref();
         let contact = match self.company_id {
             Some(company_id) => {
-                let (company, _) = company_view_receipt(
+                let (company, _) = company_receipt::<ViewAccessLevel, _>(
                     &*service_context.entity_access_service,
                     &request_context,
                     company_id,

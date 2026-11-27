@@ -720,6 +720,7 @@ impl IntoResponse for ComputersHttpError {
                 StatusCode::UNPROCESSABLE_ENTITY
             }
             ComputerError::Billing(BillingError::TeamOnTrial) => StatusCode::FORBIDDEN,
+            ComputerError::Billing(BillingError::ChangeInFlight) => StatusCode::CONFLICT,
             ComputerError::Billing(BillingError::Provider(_)) => StatusCode::BAD_GATEWAY,
             ComputerError::Internal(report) => {
                 tracing::error!(error = ?report, "computer request failed");

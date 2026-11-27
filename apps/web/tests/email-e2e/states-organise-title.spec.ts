@@ -1,6 +1,6 @@
 // What the menu after a thread's subject, and the subject itself, show:
 // Delete's notices and the thread closing, the touch sheet the menu becomes
-// on a phone, and Copy subject.
+// on a phone, Copy subject, and the rest of a long subject.
 //
 // The notices answer the app's own request to the email service, which
 // refuses the same way whichever mailbox the thread is in; what the mailbox
@@ -9,8 +9,10 @@
 // subject Macro holds, the same whichever mailbox: Gmail on the desktop,
 // Outlook on the phone.
 
+import type { Locator } from '@playwright/test';
 import { loadAppSteadily } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
+import { trashFolder } from './harness/journeys';
 import { openThreadId, rowIds } from './harness/list';
 import { notice } from './harness/send';
 import {
@@ -24,6 +26,7 @@ import {
 import { PHONE } from './harness/ways-list1';
 import {
   deliverAll,
+  held,
   openFromList,
   row,
   titleMenu,
@@ -32,6 +35,28 @@ import { openedOnPhone, phoneHeaderSubject } from './harness/ways-thread-more';
 import { saw } from './ledger/record';
 
 const MAIL_LIST = /\/app\/mail(\?|$)/;
+/** More than three lines of any layout's title. */
+const longSubject = (first: string): string =>
+  `${first} ${'of the planning meeting '.repeat(16)}and the end`;
+
+/** How many lines of a thread's subject show, and whether its end does. */
+function shownOf(title: Locator): Promise<{ lines: number; end: boolean }> {
+  return title.evaluate((heading) => {
+    const text = document
+      .createTreeWalker(heading, NodeFilter.SHOW_TEXT)
+      .nextNode();
+    const box = heading.firstElementChild?.getBoundingClientRect();
+    if (!(text instanceof Text) || !box) return { lines: 0, end: false };
+    const range = document.createRange();
+    range.selectNodeContents(text);
+    // The line an ellipsis cuts is two rects.
+    const lines = new Set(
+      [...range.getClientRects()].map((line) => Math.round(line.bottom))
+    );
+    const inBox = [...lines].filter((bottom) => bottom <= box.bottom + 1);
+    return { lines: inBox.length, end: inBox.length === lines.size };
+  });
+}
 
 test.describe('the title menu of a thread on a desktop', () => {
   test.use({ provider: 'GMAIL' });
@@ -127,6 +152,46 @@ test.describe('the title menu of a thread on a desktop', () => {
     await heading.hover();
     await expect(copy).toHaveCount(0);
     saw('STL-108');
+  });
+
+  // When this fails, a long subject takes more than three lines above the
+  // messages, its rest can't be shown or hidden again, or showing it leaves
+  // the next thread's shown too.
+  test('a long subject shows three lines, and the rest when asked', async ({
+    page,
+    mailbox,
+  }) => {
+    const minutes = longSubject('Minutes');
+    const agenda = longSubject('Agenda');
+    const ids = await deliverAll(mailbox, [minutes, agenda]);
+    const title = (subject: string) =>
+      page.getByRole('heading', { level: 1 }).filter({ hasText: subject });
+    const showRest = page.getByRole('button', { name: 'Show full subject' });
+
+    await mailbox.open();
+    await openFromList(page, ids[minutes], `About ${minutes}.`);
+    await expect(showRest).toBeVisible();
+    await expect
+      .poll(() => shownOf(title(minutes)))
+      .toEqual({ lines: 3, end: false });
+    saw('STL-997');
+
+    await showRest.click();
+    await expect
+      .poll(async () => (await shownOf(title(minutes))).end)
+      .toBe(true);
+    await page.getByRole('button', { name: 'Show less' }).click();
+    await expect
+      .poll(() => shownOf(title(minutes)))
+      .toEqual({ lines: 3, end: false });
+    saw('STL-997');
+
+    await showRest.click();
+    await page.getByRole('button', { name: 'Previous item' }).click();
+    await expect
+      .poll(() => shownOf(title(agenda)))
+      .toEqual({ lines: 3, end: false });
+    saw('STL-997');
   });
 });
 
@@ -235,13 +300,30 @@ test.describe('the title menu of a thread on a phone', () => {
     saw('STL-108');
   });
 
-  // When this fails, Delete from a phone's title menu leaves the deleted
-  // thread on screen instead of going back to the list it was opened
-  // from. Today the phone's thread is a block with nothing to close it
-  // (handoff phone-title-menu-delete-leaves-thread-open).
-  test('known bug: phone-title-menu-delete-leaves-thread-open: Delete goes back to the list @known-bug', {
-    tag: '@known-bug',
-  }, async ({ page, mailbox }) => {
+  // When this fails, a phone's thread shows more than three lines of a long
+  // subject, or its rest can't be shown.
+  test('a long subject shows three lines, and the rest when asked', async ({
+    page,
+    mailbox,
+  }) => {
+    const minutes = longSubject('Minutes');
+    const ids = await deliverAll(mailbox, [minutes]);
+    const title = page
+      .getByRole('heading', { level: 1 })
+      .filter({ hasText: minutes });
+
+    await mailbox.open(`/app/email/${ids[minutes]}`);
+    const showRest = page.getByRole('button', { name: 'Show full subject' });
+    await expect(showRest).toBeVisible();
+    await expect.poll(() => shownOf(title)).toEqual({ lines: 3, end: false });
+    await showRest.tap();
+    await expect.poll(async () => (await shownOf(title)).end).toBe(true);
+    saw('STL-997');
+  });
+
+  // Delete from the title menu trashes the thread and returns to the list
+  // that opened the phone's email block.
+  test('Delete goes back to the list', async ({ page, mailbox }) => {
     const ids = await deliverAll(mailbox, ['Agenda', 'Minutes']);
     await mailbox.open();
     await expect
@@ -255,7 +337,10 @@ test.describe('the title menu of a thread on a phone', () => {
     await sheetIn(sheet);
     await sheet.getByRole('button', { name: 'Delete', exact: true }).tap();
     await expect(notice(page, 'Moved to Trash')).toBeVisible();
-    await expect(page).not.toHaveURL(openedOnPhone(ids.Agenda));
+    await expect
+      .poll(async () => (await held(mailbox, 'Agenda'))?.labels)
+      .toContain(trashFolder('OUTLOOK'));
+    await expect(page).toHaveURL(MAIL_LIST);
     await expect(page.getByText('About Agenda.')).toHaveCount(0);
     await expect(row(page, ids.Minutes)).toBeVisible();
     saw('STL-617', 'F-075');

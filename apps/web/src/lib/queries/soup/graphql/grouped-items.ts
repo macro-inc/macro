@@ -18,6 +18,7 @@ import type { CombinedError } from '@urql/core';
 import {
   type Accessor,
   createComputed,
+  createEffect,
   createMemo,
   createSignal,
   on,
@@ -61,8 +62,17 @@ export function createGraphqlGroupedSoupAstItemsQuery(
   const projectDone = createGraphqlSoupDoneProjection();
   const excludesDone = createMemo(() => soupQueryExcludesDone([args().body]));
   const [now, setNow] = createSignal(new Date());
-  const dateTimer = setInterval(() => setNow(new Date()), 60_000);
-  onCleanup(() => clearInterval(dateTimer));
+  createEffect(
+    on(
+      () => options().enabled,
+      (enabled) => {
+        if (!enabled) return;
+        setNow(new Date());
+        const dateTimer = setInterval(() => setNow(new Date()), 60_000);
+        onCleanup(() => clearInterval(dateTimer));
+      }
+    )
+  );
   const [networkRevision, setNetworkRevision] = createSignal<CacheRevision>();
   const [networkInput, setNetworkInput] = createSignal<unknown>();
   const offline = createBrowserOfflineSignal();
@@ -226,6 +236,8 @@ export function createGraphqlGroupedSoupAstItemsQuery(
     isEnabled: () => query.isEnabled,
     isLoading: () => !cachedMail() && query.isLoading,
     isFetching: () => query.isFetching,
+    hasPageData: () =>
+      query.data?.inputKey === inputKey() && query.data?.data !== undefined,
     isFetchingNextPage: () => !!cachedMail() && local.isFetchingNextPage(),
     isFetchNextPageError: () => !!cachedMail() && local.isFetchNextPageError(),
     isPlaceholderData: () => false,

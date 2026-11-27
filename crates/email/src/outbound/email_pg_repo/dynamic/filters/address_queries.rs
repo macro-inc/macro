@@ -1,5 +1,8 @@
 use super::*;
 
+#[cfg(test)]
+mod test;
+
 /// The mailbox check each `matching_threads` branch applies to its messages.
 #[derive(Clone, Copy)]
 pub(in super::super) enum BranchFacts<'a> {
@@ -49,6 +52,30 @@ pub(super) fn contacts_recipient_branch(
     kinds: &AddressKinds,
     facts: BranchFacts,
 ) -> SqlFragment {
+    // Drive capped probes and sparse pages from the group's deduplicated
+    // contact IDs. Fence both lookups: generic joins can otherwise scan
+    // either whole table. A rare role on a dense contact needs the original
+    // role-first or parallel plan, as do dense and checked reads.
+    if let BranchFacts::Skipped {
+        probe_limit: Some(_),
+    } = facts
+        && kinds.to
+        && kinds.cc
+        && kinds.bcc
+    {
+        let mut f = SqlFragment::raw("SELECT m.thread_id FROM unnest(");
+        f.extend(SqlFragment::bind_uuid_array(contact_ids.to_vec()));
+        f.push_raw(
+            "::uuid[]) c(id) CROSS JOIN LATERAL (\
+                 SELECT mr.message_id FROM email_message_recipients mr \
+                 WHERE mr.contact_id = c.id OFFSET 0\
+             ) mr CROSS JOIN LATERAL (\
+                 SELECT thread_id FROM email_messages \
+                 WHERE id = mr.message_id OFFSET 0\
+             ) m WHERE TRUE",
+        );
+        return f;
+    }
     let mut f = SqlFragment::raw(
         "SELECT m.thread_id FROM email_message_recipients mr \
          JOIN email_messages m ON m.id = mr.message_id \

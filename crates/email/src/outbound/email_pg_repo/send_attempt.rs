@@ -227,9 +227,38 @@ impl EmailSendRepo for EmailPgRepo {
         actor: &MacroUserIdStr<'_>,
         link: Uuid,
         attempt: SendAttemptId,
+        prepared: PreparedSend,
+    ) -> Result<SendAttempt, EmailErr> {
+        self.admit(actor, link, attempt, prepared)
+            .await
+            .map_err(super::contended)
+    }
+
+    async fn cancel_send(
+        &self,
+        actor: &MacroUserIdStr<'_>,
+        link: Uuid,
+        attempt: SendAttemptId,
+    ) -> Result<SendAttempt, EmailErr> {
+        self.cancel(actor, link, attempt)
+            .await
+            .map_err(super::contended)
+    }
+}
+
+/// The admission and cancellation bodies; their trait methods report a lock
+/// timeout as a busy inbox.
+impl EmailPgRepo {
+    async fn admit(
+        &self,
+        actor: &MacroUserIdStr<'_>,
+        link: Uuid,
+        attempt: SendAttemptId,
         mut prepared: PreparedSend,
     ) -> Result<SendAttempt, EmailErr> {
-        let mut tx = self.pool.begin().await.map_err(anyhow::Error::from)?;
+        let mut tx = super::begin(&self.pool)
+            .await
+            .map_err(anyhow::Error::from)?;
         lock_attempt(&mut tx, actor, link, attempt).await?;
         if let Some(existing) =
             read_attempt(&mut tx, actor, link, attempt, Some(&prepared.snapshot)).await?
@@ -330,7 +359,24 @@ impl EmailSendRepo for EmailPgRepo {
             prepared_content,
             prepared.snapshot.message.db_id, prepared.source_inbox.map(|source| source.link_id),
         ).execute(&mut *tx).await.map_err(anyhow::Error::from)?;
+        let stopped = sqlx::query!(
+            "SELECT state, error_code FROM email_mailbox_drafts WHERE message_id = $1 AND link_id = $2 AND state IN ('conflict','unknown')",
+            ids.message_db_id, link,
+        ).fetch_optional(&mut *tx).await.map_err(anyhow::Error::from)?;
         tx.commit().await.map_err(anyhow::Error::from)?;
+        if let Some(stopped) = stopped {
+            // The draft stopped before this send, so no worker takes the send
+            // up and logs its failure.
+            tracing::warn!(
+                event = "email_send.admitted_stopped",
+                link_id = %link,
+                message_id = %ids.message_db_id,
+                attempt_id = %attempt.0,
+                state = stopped.state,
+                code = stopped.error_code,
+                "send admitted onto a draft that had already stopped"
+            );
+        }
         Ok(SendAttempt {
             transitioned: true,
             message: None,
@@ -342,13 +388,15 @@ impl EmailSendRepo for EmailPgRepo {
         })
     }
 
-    async fn cancel_send(
+    async fn cancel(
         &self,
         actor: &MacroUserIdStr<'_>,
         link: Uuid,
         attempt: SendAttemptId,
     ) -> Result<SendAttempt, EmailErr> {
-        let mut tx = self.pool.begin().await.map_err(anyhow::Error::from)?;
+        let mut tx = super::begin(&self.pool)
+            .await
+            .map_err(anyhow::Error::from)?;
         lock_attempt(&mut tx, actor, link, attempt).await?;
         let existing = read_attempt(&mut tx, actor, link, attempt, None).await?;
         if let Some(existing) = &existing {
@@ -364,7 +412,7 @@ impl EmailSendRepo for EmailPgRepo {
                 // Outlook workers lock mailbox, message, then schedule. Match
                 // that order while revoking their pending draft revision.
                 sqlx::query!(
-                    "SELECT id FROM email_links WHERE id = $1 AND provider = 'OUTLOOK' FOR UPDATE",
+                    "SELECT id FROM email_links WHERE id = $1 AND provider = 'OUTLOOK' FOR SHARE",
                     link,
                 )
                 .fetch_optional(&mut *tx)

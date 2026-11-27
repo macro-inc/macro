@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE computer_screen_sessions\n            SET ended_at = now(), end_reason = $2, bytes_to_viewer = $3, bytes_from_viewer = $4\n            WHERE id = $1 AND ended_at IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "002201860dcf256eb1f920cbe159cb1f8cf3ee3b3b6beeb60bac54313416fd7e"
+}

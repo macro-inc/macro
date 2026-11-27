@@ -223,6 +223,10 @@
       "name": "search-event-queue-stack",
       "version": "0.0.0",
     },
+    "stacks/search-freshness-probe": {
+      "name": "search-freshness-probe-stack",
+      "version": "0.0.0",
+    },
     "stacks/search-processing-service": {
       "name": "search-processing-service-stack",
       "version": "0.0.0",
@@ -858,6 +862,8 @@
     "safer-buffer": ["safer-buffer@2.1.2", "", {}, "sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg=="],
 
     "search-event-queue-stack": ["search-event-queue-stack@workspace:stacks/search-event-queue"],
+
+    "search-freshness-probe-stack": ["search-freshness-probe-stack@workspace:stacks/search-freshness-probe"],
 
     "search-processing-service-stack": ["search-processing-service-stack@workspace:stacks/search-processing-service"],
 

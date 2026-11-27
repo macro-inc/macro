@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tempo-query-frontend
+  namespace: observability
+spec:
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              observability.macro.com/telemetry-read: "true"
+      ports:
+        - port: 3200
+          protocol: TCP
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: query-frontend
+      app.kubernetes.io/instance: tempo
+      app.kubernetes.io/name: tempo
+  policyTypes:
+    - Ingress

@@ -81,6 +81,7 @@ export {
   getTaskPriorityOptionId,
   getTaskReferencedEntityIds,
   getTaskStatusOptionId,
+  taskCustomPropertyReferences,
 } from './utils/task-properties';
 export {
   formatDateAndTime,

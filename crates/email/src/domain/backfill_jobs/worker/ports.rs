@@ -6,7 +6,7 @@ use super::{
 };
 use crate::domain::backfill_jobs::BackfillJobRepository;
 use crate::domain::mailbox::connection::ConnectionSourceError;
-use crate::domain::mailbox::inbox_sync::CrmContactRecipient;
+use crate::domain::mailbox::inbox_sync::{CrmContactRecipient, ThreadReindexQueue};
 use crm::domain::{
     email_privacy::EmailContributionMailbox,
     model::{CrmError, DepopulateContactOutcome},
@@ -16,7 +16,6 @@ use futures::future::BoxFuture;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service::{backfill::*, link::Link, pubsub::ProcessingError};
-use std::collections::HashSet;
 use uuid::Uuid;
 
 /// A database error's original value and ordered SQLSTATE facts.
@@ -149,7 +148,7 @@ pub trait BackfillGmail: Send + Sync + 'static {
 }
 
 /// Backfill publication without queue transport types.
-pub trait BackfillQueue: Send + Sync + 'static {
+pub trait BackfillQueue: ThreadReindexQueue {
     /// Original queue failure.
     type Err: ConnectionSourceError;
     /// Send an ordinary operation.
@@ -204,12 +203,15 @@ pub trait BackfillEffects:
         link: &Link,
         payload: &BackfillAttachmentPayload,
     ) -> impl Future<Output = Result<(), BackfillUploadError>> + Send;
-    /// Enqueue the existing two-user contact set.
+    /// Record the recipients of a sent message as known to the owner through
+    /// this inbox.
     fn connect(
         &self,
-        users: HashSet<MacroUserIdStr<'static>>,
+        link: &Link,
+        recipients: Vec<MacroUserIdStr<'static>>,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
-    /// Acquire a team's existing CRM write lease.
+    /// One of a team's CRM population slots if one is free now, without
+    /// waiting.
     fn acquire_crm(
         &self,
         team: Uuid,

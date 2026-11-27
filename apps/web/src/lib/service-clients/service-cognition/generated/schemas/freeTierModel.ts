@@ -12,5 +12,5 @@ export type FreeTierModel = (typeof FreeTierModel)[keyof typeof FreeTierModel];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const FreeTierModel = {
-  'google/gemini-38-flash': 'google/gemini-3.8-flash',
+  'google/gemini-4-hydrogen': 'google/gemini-4-hydrogen',
 } as const;

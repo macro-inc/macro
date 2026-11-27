@@ -27,6 +27,7 @@ try {
   );
   if (!guarded) throw new Error('Missing contact admission');
   await host.hydrateQuery({
+    generation: (await host.authority!.current()).generation,
     query:
       '{ user { id contacts(limit: 2) { nodes { __typename id userId name email } nextCursor } } }',
     data: {

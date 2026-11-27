@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO user_channel_notification_setting AS s\n                   (user_id, channel_id, disabled_event_types, section_mute_override)\n               VALUES ($1, $2, $3::text[], COALESCE($5, FALSE))\n               ON CONFLICT (user_id, channel_id) DO UPDATE\n               SET disabled_event_types = CASE WHEN $4 THEN EXCLUDED.disabled_event_types\n                                               ELSE s.disabled_event_types END,\n                   section_mute_override = COALESCE($5, s.section_mute_override),\n                   updated_at = NOW()\n               RETURNING disabled_event_types, section_mute_override",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "disabled_event_types",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 1,
+        "name": "section_mute_override",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "TextArray",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "97b9054b7b8e9d17142ff8a97bced56aa3da47b76101fadc79480c0cf94d8407"
+}

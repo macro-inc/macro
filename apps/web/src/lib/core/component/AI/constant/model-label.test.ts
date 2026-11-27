@@ -22,8 +22,8 @@ describe('modelLabel', () => {
     expect(modelLabel('fireworks/nemotron-lightning-3p5-30b-a3b')).toBe(
       'Nemotron Lightning 3.5 30B A3B'
     );
-    expect(modelLabel('google/gemini-3.8-flash')).toBe('Gemini 3.8 Flash');
-    expect(modelLabel('gemini-3.8-flash')).toBe('Gemini 3.8 Flash');
+    expect(modelLabel('google/gemini-4-hydrogen')).toBe('Gemini 4 Hydrogen');
+    expect(modelLabel('gemini-4-hydrogen')).toBe('Gemini 4 Hydrogen');
   });
 
   it('reads an unknown slug as a name rather than showing it raw', () => {

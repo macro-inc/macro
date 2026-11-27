@@ -16,7 +16,9 @@ use serde::Deserialize;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-/// Link or switch a contact with a known personal-provider email.
+/// Link a contact without a company, or switch the company of a contact
+/// whose primary email is at a known personal provider. A contact with an
+/// address on its current company's domain cannot switch.
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SetContactCompanyRequest {
@@ -53,9 +55,19 @@ pub async fn handler<
     Path(contact_id): Path<Uuid>,
     Json(req): Json<SetContactCompanyRequest>,
 ) -> Result<Json<CrmContactResponse>, CrmError> {
+    // A merged company's old id names the company it was merged into.
+    let merged = state
+        .entity_access_service
+        .merged_crm_company_ids(&[req.company_id])
+        .await
+        .map_err(|error| CrmError::StorageLayerError(error.into()))?;
+    let company_id = merged
+        .get(&req.company_id)
+        .copied()
+        .unwrap_or(req.company_id);
     let contact = state
         .service
-        .set_contact_company(&access.receipt, req.company_id)
+        .set_contact_company(&access.receipt, company_id)
         .await?;
     Ok(Json(contact.into()))
 }

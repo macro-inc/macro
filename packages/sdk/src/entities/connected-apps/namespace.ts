@@ -17,7 +17,7 @@ export type { ConnectMcpServerResponse };
  * @agent
  * ## Connected apps
  *
- * Connected apps are reached only from an agent session's ExecuteCode program: pass the `execution` that `main` receives. `macro.connectedApps.list(execution)` returns the apps this agent was given (every app the user connected, or the agent's own selection); an app missing from it is not connected for this agent. Find a tool across every app with `macro.connectedApps.searchTools(execution, 'linear issue')`, or read one app's tools with `app.tools()`; pick one by name and description, read its `inputSchema`, then `tool.call(args)`.
+ * Connected apps are reached only from an agent session's ExecuteCode program: pass the `execution` that `main` receives. `macro.connectedApps.list(execution)` returns the apps this agent was given (every app the user connected, or the agent's own selection); an app missing from it is not connected for this agent. Find a tool across every app with `macro.connectedApps.searchTools(execution, 'linear issue')`, or read one app's tools with `app.tools()`; pick one by name and description, read its `inputSchema`, then `tool.call(args)`. Find a Macro Connect app (`kind: 'app'`) by its `key` slug, e.g. `linear`; a custom MCP server's `key` is an opaque id, so find it by `name`.
  *
  * Calls run in the user's real account through Macro's server, as the account this execution acts as, and take effect at once; the program never sees a credential. In a turn someone other than the session's owner prompted, each call that uses the owner's account waits for the owner to approve it, so make few such calls and expect a long wait or a refusal. Read before writing, and never repeat a write whose outcome is unknown: check the app's state first. A result with `isError` explains itself: when it says an app is not connected, tell the user and include the connect markup it gives you in your reply verbatim, then stop.
  *
@@ -25,13 +25,14 @@ export type { ConnectMcpServerResponse };
  *
  * When an app the work needs is missing, find it with `macro.connectedApps.discover(execution, appName)` and `connector.inspect()` its advertised actions and connection status. Recommend connecting only when an advertised action supports the task; an app's name is not evidence. For a suitable unconnected app, put the inspection's `connectMarkup` in your reply verbatim and say what connecting enables. To add a remote MCP server the user gives you the URL of, use `macro.connectedApps.addServer(execution, {url, serverName})`; never guess a URL, and tell the user to sign in under Settings → Connections when its summary says so.
  *
- * ```javascript
- * export async function main({macro, execution}) {
+ * ```typescript
+ * export async function main({macro, execution}: CodeContext) {
  *   const apps = await macro.connectedApps.list(execution);
  *   const linear = apps.find((app) => app.key === 'linear');
  *   if (!linear) return {data: {error: 'Linear is not connected', available: apps.map((app) => app.name)}};
  *   const tools = await linear.tools();
  *   const search = tools.find((tool) => tool.name === 'list_issues');
+ *   if (!search) return {data: {error: 'Linear has no list_issues tool'}};
  *   const result = await search.call({query: 'login bug', limit: 5});
  *   return {data: result.isError ? {error: result.content} : result.structuredContent ?? result.content};
  * }
@@ -56,8 +57,9 @@ export class ConnectedAppNamespace {
   /**
    * Find tools across every connected app the execution's agent was given,
    * by keywords matched against tool names and descriptions (e.g. `linear
-   * issue`), best first, at most 20. Apps whose tools could not be read come
-   * back in `unsearched`, not as an error.
+   * issue`), best first, at most 20. Apps whose tools could not be read, or
+   * not within 5 seconds, come back in `unsearched`, not as an error; read
+   * one of those with `app.tools()` if the task needs it.
    *
    * @readonly
    * @openworld

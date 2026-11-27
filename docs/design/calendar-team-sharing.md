@@ -253,6 +253,38 @@ not a promise of complete event coverage in this release. Google may restrict or
 omit guests and event fields; another source must never be used to reconstruct
 those hidden fields.
 
+### Outlook calendars
+
+Outlook calendars follow the same certification, with Microsoft Graph's
+`canEdit` as the access role: the calendar's role is `writer` when Graph says
+the mailbox can edit it and `reader` otherwise, and each source records the
+role its read observed, as Google's do. Graph has no other access level to
+compare, so a `canEdit` change is the role change: discovery reads every
+calendar every five minutes, clears the calendar's coverage and restarts its
+scan, so every event is read again under the new role.
+
+An Outlook calendar is read in rounds of many steps, and its discovery runs
+apart from them, so discovery does not clear an uncertified calendar's
+coverage as Google's calendar-list sync does. It schedules a full scan instead:
+the primary calendar's next round reads every event rather than its delta,
+and a secondary calendar, which reads every event each round, needs none. The
+round that finishes a full scan certifies the calendar, a delta round keeps a
+certificate it had, and a source written since the last round under another
+role (an edit's echo carrying the role from before a change) schedules another
+full scan, from discovery or from the round that finishes before it. A first
+import certifies nothing until its whole window is in.
+
+The Outlook sync skips an event or a recurring occurrence it cannot normalize,
+so the user's own calendar keeps syncing, where Google's fails the calendar.
+Team reads stay closed to what it skipped: a round that leaves a listed event
+without a stored copy does not certify its calendar, and a series read,
+by the sync or by an edit's echo, without one of its occurrences is stored
+under no role, even when it matches the stored copy. Discovery schedules no
+full scan for such a calendar, since one would skip the event again; it counts
+for teammates once the event is readable or gone and one full scan has read
+the calendar since. A calendar removed from the mailbox loses its sources,
+coverage and certificate, and is imported anew if it is listed again.
+
 ## Rollout
 
 The server gate is `CALENDAR_TEAM_SHARING_ENABLED`, default `false`. It must be
@@ -284,7 +316,11 @@ in the rollout.
    until it changes at Google instead of rebuilding its calendar on every poll.
    Let scheduler/watch recovery
    drive this verification while the gate is off; monitor Google quotas and
-   catch-up progress before activation.
+   catch-up progress before activation. Outlook calendars synced before Outlook
+   certified its snapshots (November 2026) start at version 0 too: each
+   secondary calendar is certified at the end of its next round, and each
+   primary calendar reads every event once, in the full scan its next discovery
+   schedules: the same Graph reads as a first import's whole window.
 2. Verify disclosures and the busy-only default in the sharing settings. Confirm
    that switching to details clearly covers subscribed/shared calendars too, and
    that availability inclusion is a separate setting.

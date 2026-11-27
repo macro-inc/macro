@@ -16,6 +16,7 @@ vi.mock('@ui', async () => ({
   ButtonGroup: (await import('@app/components/ui/components/ButtonGroup'))
     .ButtonGroup,
   cn: (await import('@app/components/ui/utils/classname')).cn,
+  CountBadge: (await import('@app/components/ui/components/Badge')).CountBadge,
 }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
 vi.mock('@core/constant/featureFlags', () => ({ ENABLE_EMAIL_SHARING: true }));

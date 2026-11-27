@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH carried AS MATERIALIZED (\n            SELECT ml.label_id\n            FROM email_effective_message_labels ml\n            WHERE ml.message_id = ANY(ARRAY(\n                SELECT m.id FROM email_messages m WHERE m.thread_id = $3 AND NOT m.is_draft\n            ))\n        )\n        SELECT l.id\n        FROM email_labels l\n        WHERE l.link_id = $1 AND l.provider_label_id = ANY($2) AND l.type = 'User'\n            AND NOT EXISTS (SELECT 1 FROM carried c WHERE c.label_id = l.id)\n        ORDER BY l.id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "953334dfe599a87aad85e23e24c8fccc50ce63dc54a88d0d3d7769ffc2fefda5"
+}

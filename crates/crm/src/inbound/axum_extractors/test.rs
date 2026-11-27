@@ -44,16 +44,16 @@ use crate::{
     inbound::axum_router::CrmRouterState,
 };
 
-const USER_ID: &str = "macro|user@example.com";
+pub(crate) const USER_ID: &str = "macro|user@example.com";
 const INTERNAL_USER_ID: &str = "macro|acting@example.com";
-const VALID_TOKEN: &str = "valid";
-const INTERNAL_KEY: &str = "valid-internal-key";
+pub(crate) const VALID_TOKEN: &str = "valid";
+pub(crate) const INTERNAL_KEY: &str = "valid-internal-key";
 const COMPANY_ID: &str = "11111111-1111-4111-8111-111111111111";
 const CONTACT_ID: &str = "22222222-2222-4222-8222-222222222222";
-const TEAM_ID: &str = "55555555-5555-4555-8555-555555555555";
+pub(crate) const TEAM_ID: &str = "55555555-5555-4555-8555-555555555555";
 
 #[derive(Clone, Default)]
-struct FakeJwtValidator;
+pub(crate) struct FakeJwtValidator;
 
 impl JwtValidator for FakeJwtValidator {
     fn validate_credential(
@@ -94,17 +94,33 @@ struct EntityAccessCall {
 }
 
 #[derive(Clone)]
-struct FakeEntityAccessService {
+pub(crate) struct FakeEntityAccessService {
     result: PermissionResult,
     calls: Arc<Mutex<Vec<EntityAccessCall>>>,
+    /// A company merged away, and the company it was merged into.
+    merged: Option<(Uuid, Uuid)>,
+    /// A contact merged away, and the contact it was merged into.
+    merged_contact: Option<(Uuid, Uuid)>,
 }
 
 impl FakeEntityAccessService {
-    fn with_access_level(access_level: AccessLevel) -> Self {
+    pub(crate) fn with_access_level(access_level: AccessLevel) -> Self {
         Self {
             result: PermissionResult::Allowed(EntityPermission::AccessLevel { access_level }),
             calls: Arc::new(Mutex::new(Vec::new())),
+            merged: None,
+            merged_contact: None,
         }
+    }
+
+    pub(crate) fn with_merged_company(mut self, retired_id: Uuid, survivor_id: Uuid) -> Self {
+        self.merged = Some((retired_id, survivor_id));
+        self
+    }
+
+    fn with_merged_contact(mut self, retired_id: Uuid, survivor_id: Uuid) -> Self {
+        self.merged_contact = Some((retired_id, survivor_id));
+        self
     }
 
     fn calls(&self) -> Vec<EntityAccessCall> {
@@ -200,6 +216,20 @@ impl EntityAccessService for FakeEntityAccessService {
                 Ok((permission, uuid(TEAM_ID), team_role))
             }
         }
+    }
+
+    async fn merged_crm_company_ids(
+        &self,
+        _company_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, Uuid>, AccessError> {
+        Ok(self.merged.into_iter().collect())
+    }
+
+    async fn merged_crm_contact_ids(
+        &self,
+        _contact_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, Uuid>, AccessError> {
+        Ok(self.merged_contact.into_iter().collect())
     }
 
     async fn get_users_by_entity(
@@ -443,6 +473,26 @@ impl CrmService for FakeCrmService {
         Err(CrmError::ContactNotFoundForTeam)
     }
 
+    async fn add_company_domain(
+        &self,
+        _access: &crate::domain::auth::CrmCompanyReceipt<
+            entity_access::domain::models::EditAccessLevel,
+        >,
+        _domain: &str,
+    ) -> Result<crate::domain::model::CrmCompanyWithContacts, CrmError> {
+        Err(CrmError::CompanyNotFoundForTeam)
+    }
+
+    async fn remove_company_domain(
+        &self,
+        _access: &crate::domain::auth::CrmCompanyReceipt<
+            entity_access::domain::models::EditAccessLevel,
+        >,
+        _domain: &str,
+    ) -> Result<crate::domain::model::CrmCompanyWithContacts, CrmError> {
+        Err(CrmError::CompanyNotFoundForTeam)
+    }
+
     async fn unlink_contact_company(
         &self,
         _access: &crate::domain::auth::CrmContactReceipt<
@@ -527,6 +577,14 @@ impl CrmService for FakeCrmService {
         _email: &str,
     ) -> Result<Option<CrmContact>, CrmError> {
         panic!("unexpected get_contact_by_email call")
+    }
+
+    async fn get_company_by_domain(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _domain: &str,
+    ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
+        panic!("unexpected get_company_by_domain call")
     }
 
     async fn get_company_for_team(
@@ -657,7 +715,7 @@ fn test_router(
     (router, entity_access, crm_service)
 }
 
-fn uuid(value: &str) -> Uuid {
+pub(crate) fn uuid(value: &str) -> Uuid {
     Uuid::parse_str(value).expect("test UUID should be valid")
 }
 
@@ -726,6 +784,43 @@ async fn valid_company_and_contact_receipts_contain_the_entity_and_owning_team()
             },
         ]
     );
+}
+
+#[tokio::test]
+async fn the_receipt_for_a_merged_company_is_for_the_company_it_was_merged_into() {
+    let retired_id = Uuid::now_v7();
+    let access = FakeEntityAccessService::with_access_level(AccessLevel::Edit)
+        .with_merged_company(retired_id, uuid(COMPANY_ID));
+    let (router, access, _crm) = test_router(access);
+
+    let (status, body) = send(
+        &router,
+        bearer_request(&format!("/companies/{retired_id}"), VALID_TOKEN),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["entity_id"], COMPANY_ID);
+    assert_eq!(access.calls()[0].entity_id, COMPANY_ID);
+}
+
+#[tokio::test]
+async fn the_receipt_for_a_merged_contact_is_for_the_contact_it_was_merged_into() {
+    let retired_id = Uuid::now_v7();
+    let access = FakeEntityAccessService::with_access_level(AccessLevel::Edit)
+        .with_merged_contact(retired_id, uuid(CONTACT_ID));
+    let (router, access, _crm) = test_router(access);
+
+    let (status, body) = send(
+        &router,
+        bearer_request(&format!("/contacts/{retired_id}"), VALID_TOKEN),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["entity_id"], CONTACT_ID);
+    assert_eq!(body["entity_type"], EntityType::CrmContact.to_string());
+    assert_eq!(access.calls()[0].entity_id, CONTACT_ID);
 }
 
 #[tokio::test]
@@ -942,17 +1037,6 @@ async fn contact_mutation_http_contract_covers_addresses_and_company_links(
         );
     }
     assert_eq!(
-        edit.clone()
-            .oneshot(request(
-                contact.id,
-                "company",
-                json!({"companyId": company.company.id})
-            ))
-            .await?
-            .status(),
-        StatusCode::BAD_REQUEST
-    );
-    assert_eq!(
         router(AccessLevel::View)
             .oneshot(request(
                 contact.id,
@@ -1032,23 +1116,33 @@ async fn contact_mutation_http_contract_covers_addresses_and_company_links(
             .status(),
         StatusCode::UNAUTHORIZED
     );
-    assert_eq!(
-        edit.clone()
-            .oneshot(request(
-                contact.id,
-                "company",
-                json!({"companyId": company.company.id})
-            ))
-            .await?
-            .status(),
-        StatusCode::BAD_REQUEST
-    );
+    // A work address without a company takes a first company, and cannot
+    // then switch to another.
+    let other = repo
+        .create_company_for_team(&team, None, "Other company", Utc::now())
+        .await?;
+    for (destination, status) in [
+        (company.company.id, StatusCode::OK),
+        (other.company.id, StatusCode::BAD_REQUEST),
+    ] {
+        assert_eq!(
+            edit.clone()
+                .oneshot(request(
+                    contact.id,
+                    "company",
+                    json!({"companyId": destination})
+                ))
+                .await?
+                .status(),
+            status
+        );
+    }
     let persisted = repo
         .get_contact_for_team(&team, &contact.id, true)
         .await?
         .unwrap();
     assert_eq!(persisted.email.as_deref(), Some("contact@example.com"));
-    assert_eq!(persisted.company_id, None);
+    assert_eq!(persisted.company_id, Some(company.company.id));
     let blank = repo
         .create_contact_for_team(&team, None, "Second", Utc::now())
         .await?;

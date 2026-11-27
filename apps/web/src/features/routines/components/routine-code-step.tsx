@@ -3,6 +3,7 @@ import {
   type Knob,
   knobsOutsideSentence,
   sentenceParts,
+  unusableInStep,
   withKnobValue,
 } from '../core/knobs';
 import type { CodeStepDraft } from '../core/routine-steps';
@@ -40,6 +41,10 @@ export function CodeStepBody(props: {
       : undefined;
   };
   const settings = () => knobsOutsideSentence(sentence(), props.step.knobs);
+  // This step's own, by its saved id: a knob of another step can have the
+  // same name, and unsaved edits can move the step.
+  const unusable = () =>
+    unusableInStep(steps.unusableItems(), props.step.output);
   const setKnob = (name: string, value: Knob['value']) =>
     props.onChange({
       ...props.step,
@@ -74,13 +79,18 @@ export function CodeStepBody(props: {
               sentence={sentence()}
               knobs={props.step.knobs}
               onKnob={setKnob}
+              unusable={unusable()}
             />
           )}
         </Show>
         <Show when={settings().length ? settings() : undefined}>
           {(knobs) => (
             <Field label="Settings">
-              <KnobSettings knobs={knobs()} onKnob={setKnob} />
+              <KnobSettings
+                knobs={knobs()}
+                onKnob={setKnob}
+                unusable={unusable()}
+              />
             </Field>
           )}
         </Show>
@@ -99,7 +109,7 @@ export function CodeStepBody(props: {
               </span>
               <For each={problems()}>
                 {(problem) => (
-                  <pre class="min-w-0 overflow-auto whitespace-pre-wrap font-mono text-xs text-ink-muted">
+                  <pre class="min-w-0 select-text select-children overflow-auto whitespace-pre-wrap font-mono text-xs text-ink-muted">
                     {problem}
                   </pre>
                 )}
@@ -125,7 +135,7 @@ export function CodeStepBody(props: {
         <div class="grid min-w-0 gap-1.5">
           <pre
             aria-label="Code"
-            class="max-h-80 min-w-0 overflow-auto rounded-xl border border-edge-frame bg-control px-3 py-2 font-mono text-xs leading-relaxed text-ink"
+            class="max-h-80 min-w-0 select-text select-children overflow-auto rounded-xl border border-edge-frame bg-control px-3 py-2 font-mono text-xs leading-relaxed text-ink"
           >
             <code>{props.step.source}</code>
           </pre>

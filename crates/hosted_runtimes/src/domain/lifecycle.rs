@@ -18,6 +18,8 @@ use crate::domain::enrollment::EnrollmentGeneration;
 
 mod backoff;
 pub use backoff::{BILLING_BACKOFF, Backoff, CAPACITY_BACKOFF, RESTART_BACKOFF, Retry, backoff};
+mod billing;
+pub use billing::{restore_allowed, undo_allowed};
 mod capacity;
 use capacity::{power_on, wait_for_room};
 mod event;
@@ -41,6 +43,10 @@ pub type SubscriptionItemId = stripe::SubscriptionItemId;
 /// How long an agent teammate has to report itself online after its
 /// computer's macrod connects, before its start counts as failed.
 pub const AGENT_START_DEADLINE: Duration = Duration::minutes(3);
+/// How often an agent's hand-off is sent again while it hasn't reported
+/// online: the runtime bus carries no acknowledgement, so a lost hand-off
+/// must not cost the agent its start.
+pub const AGENT_REDELIVERY: Duration = Duration::seconds(20);
 /// Failed first starts after which a computer is released and its purchase
 /// refunded: one failure leaves it for the team to retry.
 pub const MAX_FIRST_START_FAILURES: u8 = 2;
@@ -111,7 +117,8 @@ pub enum Phase {
     Running,
     /// The guest crashed. With a `retry` it restarts when that is due; with
     /// none it gave up (too many crashes, a failed effect or a lost host),
-    /// paged an operator, and waits for an operator retry.
+    /// paged an operator, and waits for a retry, or for a sign of life when
+    /// its cause can pass.
     Crashed {
         /// Crashes inside the current [`CRASH_WINDOW`].
         restarts: u8,
@@ -299,6 +306,9 @@ pub enum Failure {
     /// The agent teammate didn't report itself online within
     /// [`AGENT_START_DEADLINE`] of macrod connecting.
     AgentNotStarted,
+    /// The computer's macrod can't take an agent teammate: its image
+    /// predates agent hand-off.
+    AgentUnsupported,
     /// The purchase's charge was refused, so the computer was released.
     Payment,
 }
@@ -313,19 +323,44 @@ impl Failure {
             Self::HostLost => "The computer's host stopped responding.",
             Self::SetupExhausted => "The computer couldn't be set up again.",
             Self::AgentNotStarted => "The agent teammate didn't start on its computer.",
+            Self::AgentUnsupported => "The computer's software can't run an agent teammate.",
             Self::Payment => "The payment for the computer didn't go through, so it was released.",
+        }
+    }
+
+    /// Whether `sign` shows this give-up's cause has passed. A guest that
+    /// kept crashing or that the host couldn't power is running if macrod
+    /// connects; an agent that missed its deadline is running only once it
+    /// reports online, since macrod was already connected when it missed.
+    /// The rest can't pass by themselves and wait for a retry.
+    fn ended_by(self, sign: SignOfLife) -> bool {
+        match self {
+            Self::Power | Self::KeptCrashing => true,
+            Self::AgentNotStarted => sign == SignOfLife::AgentOnline,
+            Self::Create
+            | Self::HostLost
+            | Self::SetupExhausted
+            | Self::AgentUnsupported
+            | Self::Payment => false,
         }
     }
 }
 
+/// Evidence that a computer which gave up is running after all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SignOfLife {
+    MacrodConnected,
+    AgentOnline,
+}
+
 impl ComputerState {
-    /// The purchase context to parent work under while first setup is running.
-    /// Completed or untimed setups return `None`; their work links instead.
+    /// The purchase context to parent work under during the first start,
+    /// including handing an agent teammate over until it reports online.
+    /// Later work returns `None` and links instead.
     pub fn setup_traceparent(&self) -> Option<&str> {
-        self.setup
-            .as_ref()
-            .filter(|setup| !setup.complete())
-            .and(self.provision_traceparent.as_deref())
+        self.provision_traceparent
+            .as_deref()
+            .filter(|_| self.first_start())
     }
 
     /// Whether the computer is still on its first start: setup hasn't
@@ -542,9 +577,15 @@ pub fn transition(
         Event::MacrodConnected => {
             next.macrod_connected = true;
             next.macrod_misses = 0;
+            let recovered = recover(state, &mut next, SignOfLife::MacrodConnected);
             // An agent's credentials are handed over only once its
-            // computer is paid for: a charging one waits for the charge.
-            if state.awaiting_agent && !state.macrod_connected && !state.billing.is_charging() {
+            // computer is paid for: a charging one waits for the charge, and
+            // one that gave up waits for a retry or a recovery.
+            if state.awaiting_agent
+                && (recovered || !state.macrod_connected)
+                && !gave_up(&next.phase)
+                && !state.billing.is_charging()
+            {
                 deliver_agent(&mut effects, now);
             }
             if let Phase::Booting = state.phase {
@@ -556,6 +597,26 @@ pub fn transition(
                     stop(&mut next, &mut effects, host);
                 }
             }
+        }
+
+        Event::MacrodConnectedWithoutAgentHandOff => {
+            // A give-up this connection would end still can't hand the agent
+            // over: it fails for the macrod instead of recovering.
+            let would_recover = gave_up(&state.phase)
+                && state
+                    .failure
+                    .is_some_and(|failure| failure.ended_by(SignOfLife::MacrodConnected));
+            if !state.awaiting_agent || (gave_up(&state.phase) && !would_recover) {
+                return transition(state, &Event::MacrodConnected, context);
+            }
+            give_up(
+                &mut next,
+                &mut effects,
+                Failure::AgentUnsupported,
+                "macrod on this computer declared no apply-agent capability: its image \
+                 predates agent hand-off"
+                    .to_owned(),
+            );
         }
 
         Event::MacrodDisconnected => {
@@ -674,6 +735,30 @@ pub fn transition(
 
         Event::AgentOnline => {
             next.awaiting_agent = false;
+            if recover(state, &mut next, SignOfLife::AgentOnline) && !next.macrod_connected {
+                // Watch for the connection the agent's report implies.
+                effects.push(Effect::ScheduleTimer {
+                    kind: TimerKind::MacrodMissing,
+                    at: now + MACROD_GRACE,
+                });
+            }
+        }
+
+        // Only timed: see `SetupTimeline::advance_agent`.
+        Event::AgentDelivered => {}
+
+        Event::AgentRedeliver => {
+            if state.awaiting_agent
+                && state.macrod_connected
+                && !gave_up(&state.phase)
+                && !state.billing.is_charging()
+            {
+                effects.push(Effect::DeliverAgent);
+                effects.push(Effect::ScheduleTimer {
+                    kind: TimerKind::AgentRedeliver,
+                    at: now + AGENT_REDELIVERY,
+                });
+            }
         }
 
         Event::AgentStartDue => {
@@ -727,198 +812,21 @@ pub fn transition(
             }
         }
 
-        Event::CancelAtPeriodEnd { at } => match &state.billing {
-            Billing::Active { subscription_item } => {
-                effects.push(Effect::RemoveBillingItem {
-                    subscription_item: subscription_item.clone(),
-                });
-                if *at > now {
-                    next.billing = Billing::EndsAt { at: *at };
-                    effects.push(Effect::ScheduleTimer {
-                        kind: TimerKind::BillingEnds,
-                        at: *at,
-                    });
-                } else {
-                    end_billing(&mut next, &mut effects, host, now, policy);
-                }
-            }
-            // An unpaid period is not owed any more running time.
-            Billing::PastDue {
-                subscription_item, ..
-            } => {
-                effects.push(Effect::RemoveBillingItem {
-                    subscription_item: subscription_item.clone(),
-                });
-                end_billing(&mut next, &mut effects, host, now, policy);
-            }
-            Billing::Comped { .. } => end_billing(&mut next, &mut effects, host, now, policy),
-            Billing::EndsAt { .. } => return Err(Rejected::AlreadyCanceled),
-            Billing::Charging { .. } => return Err(Rejected::PaymentPending),
-        },
-
-        Event::UndoCancel { subscription_item } => {
-            undo_allowed(state, now)?;
-            next.billing = Billing::Active {
-                subscription_item: subscription_item.clone(),
-            };
-        }
-
-        Event::Restore { billing } => {
-            restore_allowed(state, now)?;
-            match billing {
-                Billing::Active { .. } | Billing::Comped { .. } => next.billing = billing.clone(),
-                Billing::PastDue { .. } | Billing::EndsAt { .. } | Billing::Charging { .. } => {
-                    return Err(Rejected::InvalidRestore);
-                }
-            }
-        }
-
-        Event::ReleaseNow => {
-            if let Some(subscription_item) = state.billing.subscription_item() {
-                effects.push(Effect::RemoveBillingItem {
-                    subscription_item: subscription_item.clone(),
-                });
-            }
-            if state.billing.is_charging() {
-                effects.push(Effect::SettleCharge {
-                    landed: LandedCharge::Remove,
-                });
-            }
-            // A released computer is never billed again.
-            if !matches!(state.billing, Billing::EndsAt { at } if at <= now) {
-                next.billing = Billing::EndsAt { at: now };
-            }
-            destroy(&mut next, &mut effects, host);
-        }
-
-        Event::PaymentLapsed { observed_at } => {
-            if let Billing::Active { subscription_item } = &state.billing
-                && *observed_at >= state.billing_changed_at
-            {
-                next.billing = Billing::PastDue {
-                    since: now,
-                    subscription_item: subscription_item.clone(),
-                };
-                effects.push(Effect::ScheduleTimer {
-                    kind: TimerKind::PastDueGrace,
-                    at: now + policy.past_due_grace,
-                });
-            }
-        }
-
-        Event::PaymentRecovered { observed_at } => {
-            if let Billing::PastDue {
-                subscription_item, ..
-            } = &state.billing
-                && *observed_at >= state.billing_changed_at
-            {
-                next.billing = Billing::Active {
-                    subscription_item: subscription_item.clone(),
-                };
-            }
-        }
-
-        Event::BillingItemMissing { observed_at } => {
-            if state.billing.subscription_item().is_some()
-                && *observed_at >= state.billing_changed_at
-            {
-                end_billing(&mut next, &mut effects, host, now, policy);
-            }
-        }
-
-        Event::BillingItemMoved {
-            subscription_item,
-            observed_at,
-        } => {
-            if *observed_at >= state.billing_changed_at {
-                match &state.billing {
-                    Billing::Active { .. } => {
-                        next.billing = Billing::Active {
-                            subscription_item: subscription_item.clone(),
-                        };
-                    }
-                    Billing::PastDue { since, .. } => {
-                        next.billing = Billing::PastDue {
-                            since: *since,
-                            subscription_item: subscription_item.clone(),
-                        };
-                    }
-                    Billing::EndsAt { .. } | Billing::Comped { .. } | Billing::Charging { .. } => {}
-                }
-            }
-        }
-
-        Event::BillingEnds => {
-            if let Billing::EndsAt { at } = state.billing
-                && now >= at
-            {
-                end_billing(&mut next, &mut effects, host, at, policy);
-            }
-        }
-
-        Event::PastDueGrace => {
-            if state.past_due_expired(now, policy) {
-                next.power = Power::Off;
-                power_down(&mut next, &mut effects, host);
-            }
-        }
-
-        Event::RetentionExpired => {
-            if let Billing::EndsAt { at } = state.billing
-                && now >= at + policy.retention
-            {
-                destroy(&mut next, &mut effects, host);
-            }
-        }
-
-        Event::ChargeSucceeded { subscription_item } => {
-            if state.billing.is_charging() {
-                next.billing = Billing::Active {
-                    subscription_item: subscription_item.clone(),
-                };
-                // macrod connected before the charge settled: hand the agent
-                // over now.
-                if state.awaiting_agent && state.macrod_connected && !gave_up(&state.phase) {
-                    deliver_agent(&mut effects, now);
-                }
-            }
-        }
-
-        Event::ChargeUnsettled => {
-            if let Billing::Charging {
-                extra_items,
-                charger: Charger::Request,
-            } = &state.billing
-            {
-                next.billing = Billing::Charging {
-                    extra_items: extra_items.clone(),
-                    charger: Charger::Worker,
-                };
-                effects.push(Effect::Charge);
-            }
-        }
-
-        // Nothing was charged, so there is no item to remove.
-        Event::ChargeFailed { seen } => {
-            if state.billing.is_charging() {
-                next.billing = Billing::EndsAt { at: now };
-                next.failure = Some(Failure::Payment);
-                next.power = Power::Off;
-                next.awaiting_agent = false;
-                destroy(&mut next, &mut effects, host);
-                match seen {
-                    DeclineSeen::ByBuyer => {}
-                    DeclineSeen::Later => {
-                        effects.push(Effect::UndoAgentInvite);
-                        effects.push(Effect::NotifySetup {
-                            outcome: SetupOutcome::Failed {
-                                failure: Failure::Payment,
-                                failed_at: now,
-                            },
-                        });
-                    }
-                }
-            }
+        Event::CancelAtPeriodEnd { .. }
+        | Event::UndoCancel { .. }
+        | Event::Restore { .. }
+        | Event::ReleaseNow
+        | Event::PaymentLapsed { .. }
+        | Event::PaymentRecovered { .. }
+        | Event::BillingItemMissing { .. }
+        | Event::BillingItemMoved { .. }
+        | Event::BillingEnds
+        | Event::PastDueGrace
+        | Event::RetentionExpired
+        | Event::ChargeSucceeded { .. }
+        | Event::ChargeUnsettled
+        | Event::ChargeFailed { .. } => {
+            billing::transition(state, event, context, &mut next, &mut effects)?;
         }
     }
 
@@ -1010,34 +918,6 @@ fn setup_outcome(
     None
 }
 
-/// Whether a cancellation can still be undone at `now`: before its paid
-/// period ends. Callers check this before re-adding a billing item.
-pub fn undo_allowed(state: &ComputerState, now: DateTime<Utc>) -> Result<(), Rejected> {
-    match state.billing {
-        _ if state.phase == Phase::Destroying => Err(Rejected::Released),
-        Billing::EndsAt { at } if now < at => Ok(()),
-        Billing::EndsAt { .. } => Err(Rejected::BillingEnded),
-        Billing::Active { .. } | Billing::PastDue { .. } | Billing::Comped { .. } => {
-            Err(Rejected::NotCanceled)
-        }
-        Billing::Charging { .. } => Err(Rejected::PaymentPending),
-    }
-}
-
-/// Whether the computer can be restored at `now`: its paid period ended and
-/// it is not destroyed yet. Callers check this before re-adding a billing item.
-pub fn restore_allowed(state: &ComputerState, now: DateTime<Utc>) -> Result<(), Rejected> {
-    match state.billing {
-        _ if state.phase == Phase::Destroying => Err(Rejected::Released),
-        Billing::EndsAt { at } if now >= at => Ok(()),
-        Billing::EndsAt { .. } => Err(Rejected::BillingNotEnded),
-        Billing::Active { .. } | Billing::PastDue { .. } | Billing::Comped { .. } => {
-            Err(Rejected::NotCanceled)
-        }
-        Billing::Charging { .. } => Err(Rejected::PaymentPending),
-    }
-}
-
 /// Hand the agent teammate to the connected macrod and give it
 /// [`AGENT_START_DEADLINE`] to report online.
 fn deliver_agent(effects: &mut Vec<Effect>, now: DateTime<Utc>) {
@@ -1045,6 +925,10 @@ fn deliver_agent(effects: &mut Vec<Effect>, now: DateTime<Utc>) {
     effects.push(Effect::ScheduleTimer {
         kind: TimerKind::AgentStartDue,
         at: now + AGENT_START_DEADLINE,
+    });
+    effects.push(Effect::ScheduleTimer {
+        kind: TimerKind::AgentRedeliver,
+        at: now + AGENT_REDELIVERY,
     });
 }
 
@@ -1100,11 +984,32 @@ fn crash(next: &mut ComputerState, effects: &mut Vec<Effect>, now: DateTime<Utc>
     });
 }
 
-fn gave_up(phase: &Phase) -> bool {
+pub(crate) fn gave_up(phase: &Phase) -> bool {
     matches!(phase, Phase::Crashed { retry: None, .. })
 }
 
-/// Stop restarting and page an operator; [`Event::OperatorRetry`] resumes.
+/// End a give-up that `sign` shows has passed: the guest never stopped
+/// (a give-up stops nothing), so it is running again, and the failure and
+/// crash count are cleared. A computer the team turned off stays as it is.
+/// Returns whether it recovered.
+fn recover(state: &ComputerState, next: &mut ComputerState, sign: SignOfLife) -> bool {
+    let passed = state.failure.is_some_and(|failure| failure.ended_by(sign));
+    if !gave_up(&state.phase) || state.power != Power::On || !passed {
+        return false;
+    }
+    tracing::info!(failure = ?state.failure, sign = ?sign, "a computer that gave up is running again");
+    next.phase = Phase::Running;
+    next.failure = None;
+    next.recent_crashes.clear();
+    next.macrod_misses = 0;
+    next.power_on_requested = false;
+    next.retried_by_team = false;
+    true
+}
+
+/// Stop restarting and page an operator; a retry resumes, and so does a
+/// sign of life when the cause can pass ([`Failure::ended_by`]). Whether
+/// macrod is connected is presence, not lifecycle, and stays as observed.
 fn give_up(next: &mut ComputerState, effects: &mut Vec<Effect>, failure: Failure, reason: String) {
     next.failure = Some(failure);
     next.phase = Phase::Crashed {
@@ -1112,7 +1017,6 @@ fn give_up(next: &mut ComputerState, effects: &mut Vec<Effect>, failure: Failure
         retry: None,
     };
     next.power_on_requested = false;
-    next.macrod_connected = false;
     if next.retried_by_team {
         tracing::warn!(reason = %reason, "a computer the team retried gave up again; not paging");
     } else {
@@ -1139,24 +1043,6 @@ fn power_down(next: &mut ComputerState, effects: &mut Vec<Effect>, host: HostId)
         }
         Phase::Provisioning { .. } | Phase::Stopping | Phase::Stopped | Phase::Destroying => {}
     }
-}
-
-/// The paid period ended at `at`: turn off and keep the disk for the
-/// configured retention.
-fn end_billing(
-    next: &mut ComputerState,
-    effects: &mut Vec<Effect>,
-    host: HostId,
-    at: DateTime<Utc>,
-    policy: BillingPolicy,
-) {
-    next.billing = Billing::EndsAt { at };
-    next.power = Power::Off;
-    power_down(next, effects, host);
-    effects.push(Effect::ScheduleTimer {
-        kind: TimerKind::RetentionExpired,
-        at: at + policy.retention,
-    });
 }
 
 fn destroy(next: &mut ComputerState, effects: &mut Vec<Effect>, host: HostId) {

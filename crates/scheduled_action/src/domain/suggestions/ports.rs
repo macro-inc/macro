@@ -17,7 +17,55 @@ use super::model::{
     RoutineSuggestions, StoredSuggestion, SuggestOutcome, SuggestRequest, SuggestionReview,
 };
 use super::state::Transition;
+use super::work::WorkList;
 use crate::domain::models::ActionConfiguration;
+
+/// Which part of the work a routines session does.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum BriefPart<'a> {
+    /// Catalog picks and drafts, in one session.
+    Whole,
+    /// Catalog picks only; another session drafts.
+    Picks,
+    /// Drafts only; another session picks. From the streams of work found in
+    /// their month of mail, or from their newest mail alone when none were
+    /// found.
+    Drafts(Option<&'a WorkList>),
+}
+
+impl BriefPart<'_> {
+    /// Its name on spans.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Whole => "whole",
+            Self::Picks => "picks",
+            Self::Drafts(_) => "drafts",
+        }
+    }
+
+    /// Whether its brief carries the list of work found in the month's mail,
+    /// which the session holds and its traces record none of.
+    pub fn carries_work_list(self) -> bool {
+        matches!(self, Self::Drafts(Some(_)))
+    }
+}
+
+/// The model call that finds a person's work in their mail, recorded with a
+/// generation session's usage and never billed. Object-safe
+/// (`async_trait`): the service holds it erased.
+#[async_trait::async_trait]
+pub trait WorkModel: Send + Sync + 'static {
+    /// `model`'s answer to `prompt` in the shape of `schema`, for
+    /// `user`, recorded with session `session`.
+    async fn complete(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        session: Uuid,
+        model: &str,
+        prompt: String,
+        schema: serde_json::Value,
+    ) -> Result<serde_json::Value>;
+}
 
 /// What AI suggested for each person, and what became of it.
 pub trait SuggestionRepo: Send + Sync + 'static {
@@ -133,11 +181,36 @@ pub trait SuggestionSources: Send + Sync + 'static {
         limit: u16,
     ) -> impl Future<Output = Result<Vec<InboxMessage>>> + Send;
 
+    /// The person's mail of the last `days` days across their own inboxes,
+    /// newest first: up to `limit` messages, with text (the snippet) only on
+    /// the newest `texts`. Read from the provider, like [`Self::inbox`].
+    fn inbox_window(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        days: u16,
+        limit: u16,
+        texts: u16,
+    ) -> impl Future<Output = Result<Vec<InboxMessage>>> + Send;
+
+    /// What the person sent in the last `days` days from their own
+    /// accounts, newest first, read like [`Self::inbox_window`].
+    fn sent_window(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        days: u16,
+        limit: u16,
+        texts: u16,
+    ) -> impl Future<Output = Result<Vec<InboxMessage>>> + Send;
+
     /// The apps the person connected for tool use, by slug.
     fn apps(
         &self,
         user: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Vec<String>>> + Send;
+
+    /// Whether the person may add companies to a team's CRM: they are in a
+    /// team, and its CRM is open to them.
+    fn crm(&self, user: &MacroUserIdStr<'static>) -> impl Future<Output = Result<bool>> + Send;
 }
 
 /// Routine suggestions as the API serves them.
@@ -151,15 +224,26 @@ pub trait RoutineSuggestionApi: Send + Sync + 'static {
     ) -> impl Future<Output = Result<RoutineSuggestions>> + Send;
 
     /// What a routines session suggesting for `surfaces`, of a generation
-    /// started by `trigger`, is told: the person's newest mail and apps as
-    /// untrusted data, the catalog, and what they dismissed.
+    /// started by `trigger`, is told for its `part` of the work: the
+    /// person's newest mail and apps as untrusted data, the catalog, and
+    /// what they dismissed.
     fn brief(
         &self,
         user: &MacroUserIdStr<'static>,
         surfaces: &[Surface],
         trigger: GenerationTrigger,
         timezone: chrono_tz::Tz,
+        part: BriefPart<'_>,
     ) -> impl Future<Output = Result<String>> + Send;
+
+    /// The streams of work in the person's last month of mail, found in one
+    /// model call recorded with routines session `session`'s usage. Hidden:
+    /// stored nowhere.
+    fn find_work(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        session: Uuid,
+    ) -> impl Future<Output = Result<WorkList>> + Send;
 
     /// How the person's suggestions `ids` that drafted a routine read on
     /// their cards in the Suggestions feed, with one-off times in

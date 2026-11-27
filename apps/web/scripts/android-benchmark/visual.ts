@@ -15,9 +15,16 @@ import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { Device } from './device';
-import { launchFresh, measureStep, prepare, sleep } from './harness';
-import { SCENARIOS, type Targets } from './scenarios';
+import {
+  launchFresh,
+  measureStep,
+  prepare,
+  sleep,
+  waitForBootFlow,
+} from './harness';
+import { SCENARIOS } from './scenarios';
 import { summarize } from './stats';
+import { parseTargets } from './targets';
 import { parseCpuThrottle } from './throttle';
 
 const { values: options } = parseArgs({
@@ -58,9 +65,10 @@ const SCALE = 8;
 const REMOTE = '/sdcard/macro-benchmark.mp4';
 
 const device = new Device(options.serial);
-const targets = JSON.parse(
-  await readFile(options.targets, 'utf8').catch(() => '{}')
-) as Targets;
+const targetsFile = parseTargets(
+  await readFile(options.targets, 'utf8').catch(() => '{}'),
+  options.targets
+);
 const scenarioId = Object.keys(SCENARIOS).find((id) =>
   SCENARIOS[id].steps?.some((step) => step.id === options.step)
 );
@@ -185,11 +193,12 @@ const height = Math.round(Number(size?.[2] ?? 2400) / SCALE);
 const rows: { iteration: number; spanMs: number; visualMs: number | undefined }[] = [];
 try {
   for (let iteration = 0; iteration < Number(options.iterations); iteration++) {
-    const { session } = await launchFresh(device, Number(options.port));
+    const { session, launched } = await launchFresh(device, Number(options.port));
     try {
       await session.throttleCpu(cpuThrottle);
+      await waitForBootFlow(session, launched);
       await sleep(5000);
-      await prepare(session, scenario, targets, 3000);
+      const { targets } = await prepare(session, scenario, targetsFile, 3000);
       // Cold: the steps before this one. Warm: those, this one, and then a
       // step that leaves it (its back step, or another view).
       const leave = steps[stepIndex + 1] ?? steps.find((_, index) => index !== stepIndex);

@@ -11,6 +11,11 @@ env_vars! {
 maybe_env_vars! {
     pub struct ContactsQueueMaxMessages;
     pub struct ContactsQueueWaitTimeSeconds;
+    /// PostHog project key for the per-viewer `contacts-list-reads` flag.
+    /// Unset or blank, every viewer reads the legacy directory.
+    pub struct PosthogApiKey;
+    /// PostHog host; PostHog's US origin when unset.
+    pub struct PosthogHost;
 }
 
 #[derive(macro_config::MacroConfig)]
@@ -32,9 +37,21 @@ pub struct Config {
     pub contacts_queue_wait_time_seconds: ContactsQueueWaitTimeSeconds,
     /// The internal api key value.
     pub internal_api_key: InternalApiKey,
+    /// PostHog project key for backend feature flags (optional).
+    pub posthog_api_key: PosthogApiKey,
+    /// PostHog host (optional).
+    pub posthog_host: PosthogHost,
 }
 
 impl Config {
+    /// The PostHog project key, when one is configured. A blank value counts
+    /// as none.
+    pub fn posthog_api_key(&self) -> Option<&str> {
+        self.posthog_api_key
+            .value()
+            .filter(|value| !value.trim().is_empty())
+    }
+
     pub fn from_env() -> anyhow::Result<Self> {
         macro_config::ConfigLoader::load::<Config>()
             .context("failed to load contacts service config")
@@ -51,6 +68,8 @@ impl Config {
             contacts_queue_max_messages: ContactsQueueMaxMessages::new_unset(),
             contacts_queue_wait_time_seconds: ContactsQueueWaitTimeSeconds::new_unset(),
             internal_api_key: InternalApiKey::Comptime(""),
+            posthog_api_key: PosthogApiKey::new_unset(),
+            posthog_host: PosthogHost::new_unset(),
         }
     }
 }

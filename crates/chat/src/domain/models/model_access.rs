@@ -5,26 +5,48 @@
 
 /// The chat models offered to users, best-first.
 ///
-/// The current Anthropic generation is Sonnet 5.5 and Opus 5.5. Haiku 4.5
-/// stays as the fast model; older Sonnet, Opus, and Fable ids are absent.
+/// The current Anthropic generation is Sonnet 5.5, Opus 5.5 and Haiku 5.5;
+/// the current OpenAI one is GPT-6 Astra, GPT-6.2 Sol and GPT-6 Luna; Google's
+/// is Gemini 4 Hydrogen. A model taken out of this list gets a row in
+/// [`RETIRED_MODELS`].
 pub const CHAT_MODELS: &[&str] = &[
     "anthropic/claude-sonnet-5-5",
     "anthropic/claude-opus-5-5",
-    "anthropic/claude-haiku-4-5",
+    "anthropic/claude-haiku-5-5",
     "openai/gpt-6-astra",
-    "openai/gpt-6.1-sol",
-    "openai/gpt-5.6",
-    "openai/gpt-5.6-mini",
-    "openai/gpt-5.5",
-    "openai/gpt-5-mini",
-    "google/gemini-3.8-flash",
+    "openai/gpt-6.2-sol",
+    "openai/gpt-6-luna",
+    "google/gemini-4-hydrogen",
 ];
+
+/// Models taken out of [`CHAT_MODELS`], each with the current model of its
+/// tier that replaces it wherever it is still selected: a saved agent, a
+/// routine, an open session, or a client that has not reloaded since.
+pub const RETIRED_MODELS: &[(&str, &str)] = &[
+    ("anthropic/claude-haiku-4-5", "anthropic/claude-haiku-5-5"),
+    ("openai/gpt-6.1-sol", "openai/gpt-6.2-sol"),
+    ("openai/gpt-5.6", "openai/gpt-6.2-sol"),
+    ("openai/gpt-5.5", "openai/gpt-6.2-sol"),
+    ("openai/gpt-5.6-mini", "openai/gpt-6-luna"),
+    ("openai/gpt-5-mini", "openai/gpt-6-luna"),
+    ("google/gemini-3.8-flash", "google/gemini-4-hydrogen"),
+];
+
+/// The model a selection runs on: a retired model's replacement, otherwise
+/// the selected `provider/model` id itself.
+#[must_use]
+pub fn current_model(model: &str) -> &str {
+    RETIRED_MODELS
+        .iter()
+        .find_map(|(retired, replacement)| (*retired == model).then_some(*replacement))
+        .unwrap_or(model)
+}
 
 /// The default model for professional (paid) users.
 pub const PAID_DEFAULT_MODEL: &str = "anthropic/claude-sonnet-5-5";
 
 /// The only model available to free (non-professional) users.
-pub const FREE_MODEL: &str = "google/gemini-3.8-flash";
+pub const FREE_MODEL: &str = "google/gemini-4-hydrogen";
 
 /// OpenAPI schema publishing [`FREE_MODEL`] as a string enum, so the web
 /// client generates its free-tier model list from this crate instead of

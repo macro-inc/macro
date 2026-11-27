@@ -142,17 +142,60 @@ export const pushed = <Item>(
 });
 
 const recent = 20;
+/** How many delivered message ids are remembered to keep catch-ups from repeating one. */
+const rememberedIds = 1_000;
+/** A catch-up starts this long before the newest message delivered, or the drop. */
+const catchUpMarginMs = 60_000;
+/** A catch-up waits up to this long first, so agents reconnecting together after a deploy don't all read at once. */
+const catchUpSpreadMs = 5_000;
 const directMessage = 'direct_message';
+
+const failureOf = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
 
 /** A name for someone with no display name: the front of their id's email. */
 export const nameFromId = (id: string): string =>
   id.replace(/^macro\|/, '').replace(/@.*/, '');
 
+/** What a catch-up after a dropped stream did, for the agent's log. */
+export type CatchUpReport =
+  | {
+      readonly kind: 'caught-up';
+      readonly after: string;
+      readonly channels: number;
+      readonly messages: number;
+    }
+  /** One channel's, thread's or message's history couldn't be read: skipped, the rest still caught up. */
+  | {
+      readonly kind: 'skipped';
+      readonly channelId: string;
+      readonly root?: string;
+      readonly message?: string;
+      readonly error: string;
+    }
+  /** The whole pass failed (the backend still coming back): tried again after `retryInMs`. */
+  | {
+      readonly kind: 'retrying';
+      readonly error: string;
+      readonly retryInMs: number;
+    };
+
+const warnUnlessCaughtUp = (report: CatchUpReport): void => {
+  if (report.kind !== 'caught-up')
+    console.warn(`chat catch-up: ${JSON.stringify(report)}`);
+};
+
 /** Chat over Macro's SDK, as the account the client is signed in as. */
 export const sdkChat = ({
   macro: connect,
+  report = warnUnlessCaughtUp,
+  sleep = (ms) => Bun.sleep(ms),
 }: {
   readonly macro: () => Promise<Macro>;
+  /** Told what each catch-up after a dropped stream did. Must not throw. By default, what was skipped or retried goes to stderr. */
+  readonly report?: (report: CatchUpReport) => void;
+  /** Waits between catch-up attempts. */
+  readonly sleep?: (ms: number) => Promise<void>;
 }): Chat => {
   let me: Promise<string> | undefined;
   const myId = () => {
@@ -265,29 +308,57 @@ export const sdkChat = ({
       const mine = await myId();
       const channelNames = new Map<string, string>();
       const senderNames = new Map<string, string>();
+      type Channel = ReturnType<Macro['channels']['byId']>;
+      const channelFacts = async (channel: Channel) => {
+        const name =
+          channelNames.get(channel.id) ??
+          (await channel.name().catch(() => channel.id)).trim();
+        channelNames.set(channel.id, name);
+        const type = await channel.type().catch(() => undefined);
+        return { name, dm: type === directMessage };
+      };
+      const senderName = async (
+        sender: string,
+        name: () => Promise<string | undefined>
+      ) => {
+        const known =
+          senderNames.get(sender) ??
+          (await name().catch(() => undefined)) ??
+          nameFromId(sender);
+        senderNames.set(sender, known);
+        return known;
+      };
+      // What was delivered, by id, so a message caught up from history and
+      // also redelivered live reaches the agent once; and the newest one's
+      // time, where a catch-up starts.
+      const delivered = new Set<string>();
+      let newest: string | undefined;
+      const deliver = (message: Message): void => {
+        if (delivered.has(message.id)) return;
+        delivered.add(message.id);
+        if (delivered.size > rememberedIds) {
+          const [oldest] = delivered;
+          if (oldest !== undefined) delivered.delete(oldest);
+        }
+        if (newest === undefined || Date.parse(message.at) > Date.parse(newest))
+          newest = message.at;
+        emit(message);
+      };
+
       macro.events.on('message.posted', async (event) => {
         if (event.target.type !== 'channel') return;
         const { channel } = event.target;
         const { metadata } = event;
-        const channelName =
-          channelNames.get(channel.id) ??
-          (await channel.name().catch(() => channel.id)).trim();
-        channelNames.set(channel.id, channelName);
+        const facts = await channelFacts(channel);
         const sender = metadata.sender;
-        const senderName =
-          senderNames.get(sender) ??
-          (await event.sender?.name().catch(() => undefined)) ??
-          nameFromId(sender);
-        senderNames.set(sender, senderName);
-        const type = await channel.type().catch(() => undefined);
-        emit({
+        deliver({
           id: metadata.message_id,
           channelId: channel.id,
-          channel: channelName,
+          channel: facts.name,
           root: metadata.root_id,
           thread: metadata.thread_id ?? null,
-          dm: type === directMessage,
-          from: senderName,
+          dm: facts.dm,
+          from: await senderName(sender, async () => event.sender?.name()),
           senderId: sender,
           mine: sender === mine,
           at: metadata.created_at,
@@ -301,7 +372,169 @@ export const sdkChat = ({
           ),
         });
       });
-      await macro.events.listen();
+
+      type Posted = ReturnType<Channel['message']>;
+      const fromHistory = async (
+        channel: Channel,
+        message: Posted,
+        at: string
+      ): Promise<Message> => {
+        const facts = await channelFacts(channel);
+        const author = await message.author();
+        // History carries the record; its thread and attachments are read
+        // from it, the rest through the handle.
+        const record = message.toJSON().detail;
+        const thread = record?.thread_id ?? null;
+        return {
+          id: message.id,
+          channelId: channel.id,
+          channel: facts.name,
+          root: thread ?? message.id,
+          thread,
+          dm: facts.dm,
+          from: await senderName(author.id, () => author.name()),
+          senderId: author.id,
+          mine: author.id === mine,
+          at,
+          text: await message.content(),
+          mentions: message.mentions.map(({ entity_id }) => entity_id),
+          attachments: (record?.attachments ?? []).map(
+            ({ entity_type, entity_id }) => ({
+              type: entity_type,
+              id: entity_id,
+            })
+          ),
+        };
+      };
+
+      // Messages posted while the stream was down (a backend restart or
+      // deploy ends it; it reconnects on its own) are never replayed: read
+      // the history of each channel active since, after the newest one
+      // delivered. A root is
+      // listed when it was posted or replied to since, so its replies are
+      // read too.
+      const catchUpFrom = async (after: string): Promise<void> => {
+        const since = Date.parse(after);
+        let channels = 0;
+        let messages = 0;
+        // Listing the channels failing fails the pass, which is tried again;
+        // one channel or thread failing is skipped and reported, so a bad
+        // one can't stop every later catch-up.
+        for await (const channel of macro.channels.activeSince(after)) {
+          const missed: Message[] = [];
+          try {
+            for await (const root of channel.messagesAfter(after)) {
+              let replies: readonly Posted[] = [];
+              try {
+                replies = await root.thread().replies();
+              } catch (error) {
+                report({
+                  kind: 'skipped',
+                  channelId: channel.id,
+                  root: root.id,
+                  error: failureOf(error),
+                });
+              }
+              for (const message of [root, ...replies]) {
+                if (delivered.has(message.id)) continue;
+                // A root deleted in the gap is still listed for its live
+                // replies; the stream would never have delivered it.
+                if (message.toJSON().detail?.deleted_at) continue;
+                // One message that can't be read is skipped, not the rest
+                // of its channel.
+                try {
+                  const at = await message.createdAt();
+                  if (Date.parse(at) < since) continue;
+                  missed.push(await fromHistory(channel, message, at));
+                } catch (error) {
+                  report({
+                    kind: 'skipped',
+                    channelId: channel.id,
+                    root: root.id,
+                    message: message.id,
+                    error: failureOf(error),
+                  });
+                }
+              }
+            }
+          } catch (error) {
+            report({
+              kind: 'skipped',
+              channelId: channel.id,
+              error: failureOf(error),
+            });
+          }
+          channels += 1;
+          missed.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+          messages += missed.length;
+          for (const message of missed) deliver(message);
+        }
+        report({ kind: 'caught-up', after, channels, messages });
+      };
+      // Where the next catch-up starts: the earliest drop not caught up yet.
+      // It runs once the stream is open again, since a message posted
+      // between a read and the reconnect would reach neither; a drop during
+      // a catch-up leaves this set, for another pass after it.
+      let pending: string | undefined;
+      let open = true;
+      // Nothing before the stream first opened is caught up: the margin is
+      // for events late within this listen, not for what a previous process
+      // may have answered.
+      let firstOpened: number | undefined;
+      let catchingUp = false;
+      const catchUp = async (): Promise<void> => {
+        if (catchingUp) return;
+        catchingUp = true;
+        try {
+          while (open && pending !== undefined) {
+            const after = pending;
+            pending = undefined;
+            await sleep(Math.random() * catchUpSpreadMs);
+            for (let attempt = 0; ; attempt += 1) {
+              try {
+                await catchUpFrom(after);
+                break;
+              } catch (error) {
+                // The backend is still coming back: try again.
+                const retryInMs = Math.min(1_000 * 2 ** attempt, 30_000);
+                report({
+                  kind: 'retrying',
+                  error: failureOf(error),
+                  retryInMs,
+                });
+                await sleep(retryInMs);
+              }
+            }
+          }
+        } finally {
+          catchingUp = false;
+        }
+      };
+      await macro.events.listen({
+        onDrop: (droppedAt) => {
+          open = false;
+          // A margin before the newest message delivered too: one posted
+          // just before it whose event hadn't arrived yet (commits out of
+          // order, another channel's event lagging) is read; the ids
+          // delivered drop the overlap.
+          const from = new Date(
+            Math.max(
+              Math.min(
+                newest === undefined ? droppedAt.getTime() : Date.parse(newest),
+                droppedAt.getTime()
+              ) - catchUpMarginMs,
+              firstOpened ?? Number.NEGATIVE_INFINITY
+            )
+          ).toISOString();
+          if (pending === undefined || Date.parse(from) < Date.parse(pending))
+            pending = from;
+        },
+        onOpen: (at) => {
+          firstOpened ??= at.getTime();
+          open = true;
+          catchUp().catch(() => undefined);
+        },
+      });
     }),
   };
 };
@@ -646,7 +879,7 @@ export const chatting = module({
  * another implementation, e.g. a fake in tests.
  */
 export const chat = (
-  from: { readonly macro: () => Promise<Macro> } | { readonly chat: Chat }
+  from: Parameters<typeof sdkChat>[0] | { readonly chat: Chat }
 ) => {
   const port = 'chat' in from ? from.chat : sdkChat(from);
   // One set of indicators for the process: replies' typing and anything else

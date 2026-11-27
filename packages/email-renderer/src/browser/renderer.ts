@@ -1,4 +1,5 @@
 import type { PreparedEmailBody } from '../core/html';
+import { applySenderColorScheme } from './color-scheme';
 import { processEmailColors, type ThemeColorParams } from './colors';
 import { EMAIL_BODY_CONTAINMENT_CSS } from './email-body-containment-css';
 
@@ -59,6 +60,11 @@ export function mountEmailBody(
     style.textContent = `:host{display:block;contain:content}${EMAIL_BODY_CONTAINMENT_CSS}${font}`;
     const content = document.createElement('div');
     content.innerHTML = prepared.html;
+    const adaptColors = applySenderColorScheme(
+      content,
+      settings.theme,
+      settings.adaptColors
+    );
     for (const anchor of content.querySelectorAll<
       HTMLAnchorElement | HTMLAreaElement
     >('a, area')) {
@@ -83,7 +89,7 @@ export function mountEmailBody(
       // unavailable while detached; retry on attachment via ResizeObserver.
       if (abort.signal.aborted || !host.isConnected) return;
       if (!colorsPrepared) {
-        if (settings.adaptColors) processEmailColors(shadow, settings.theme);
+        if (adaptColors) processEmailColors(shadow, settings.theme);
         colorsPrepared = true;
       }
       content.style.overflowX = '';
@@ -118,7 +124,7 @@ export function mountEmailBody(
     // Cover synchronous framework insertion without depending on a paint frame
     // (which can be suspended in a background tab or embedded browser).
     queueMicrotask(refresh);
-    if (!settings.adaptColors) {
+    if (!adaptColors) {
       content.style.setProperty('background-color', 'white', 'important');
       content.style.color = 'black';
     }

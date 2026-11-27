@@ -110,6 +110,25 @@ describe('GraphQL mutation retries', () => {
       }
     );
 
+    it('retries a busy inbox on a draft write within the same budget', () => {
+      const mutation = write();
+      expect(shouldRetryGraphqlMutation(fault('INBOX_BUSY'), mutation)).toBe(
+        true
+      );
+      expect(shouldRetryGraphqlMutation(fault('INTERNAL'), mutation)).toBe(
+        true
+      );
+      expect(shouldRetryGraphqlMutation(fault('INBOX_BUSY'), mutation)).toBe(
+        false
+      );
+      expect(
+        shouldRetryGraphqlMutation(
+          fault('INBOX_BUSY'),
+          write('SetEmailThreadArchived')
+        )
+      ).toBe(false);
+    });
+
     it('counts each write by itself', () => {
       const first = write();
       shouldRetryGraphqlMutation(fault('INTERNAL'), first);

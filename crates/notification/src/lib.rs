@@ -11,3 +11,5 @@ pub mod domain;
 pub mod inbound;
 /// Outbound adapters (database, queue, Redis, WebSocket gateway, SNS, SES).
 pub mod outbound;
+/// W3C trace context carried across the ingress queue.
+pub(crate) mod trace_context;

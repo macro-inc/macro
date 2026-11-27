@@ -117,7 +117,9 @@ impl From<CommandTarget> for RuntimeCommandTarget {
     }
 }
 
-fn current_trace_context() -> HashMap<String, String> {
+/// The current span's W3C trace context, to carry on a runtime bus message.
+#[must_use]
+pub fn current_trace_context() -> HashMap<String, String> {
     let context = tracing::Span::current().context();
     let mut carrier = HashMap::new();
     opentelemetry::global::get_text_map_propagator(|propagator| {
@@ -136,11 +138,16 @@ fn runtime_command_span(request: &RuntimeCommandRequest) -> tracing::Span {
         messaging.message.id = %request.request_id,
         agent.session.id = %request.session,
     );
+    adopt_trace_context(&span, &request.trace_context);
+    span
+}
+
+/// Parent `span` on the sender's context a runtime bus message carried.
+pub fn adopt_trace_context(span: &tracing::Span, trace_context: &HashMap<String, String>) {
     let parent = opentelemetry::global::get_text_map_propagator(|propagator| {
-        propagator.extract(&request.trace_context)
+        propagator.extract(trace_context)
     });
     let _ = span.set_parent(parent);
-    span
 }
 
 fn forward_error(operation: &'static str, error: impl std::fmt::Display) -> HarnessError {

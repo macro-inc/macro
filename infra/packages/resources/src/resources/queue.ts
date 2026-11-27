@@ -10,8 +10,15 @@ type Args = {
   maxReceiveCount?: number;
   tags: { [key: string]: string };
   fifoQueue?: boolean;
+  // FIFO only: deduplicate and throttle per message group instead of per
+  // queue, raising the queue's throughput limit (SQS high throughput mode)
+  fifoHighThroughput?: boolean;
   // Optional param for how long you have to process a message
   visibilityTimeoutSeconds?: number;
+  // How long every new message stays hidden before its first delivery
+  delaySeconds?: number;
+  // How long SQS keeps a message after it was sent (default 4 days)
+  messageRetentionSeconds?: number;
 };
 
 /**
@@ -27,7 +34,25 @@ export class Queue extends pulumi.ComponentResource {
     opts?: pulumi.ComponentResourceOptions
   ) {
     super('my:components:Queue', name, {}, opts);
-    const { tags, maxReceiveCount, fifoQueue, visibilityTimeoutSeconds } = args;
+    const {
+      tags,
+      maxReceiveCount,
+      fifoQueue,
+      fifoHighThroughput,
+      visibilityTimeoutSeconds,
+      delaySeconds,
+      messageRetentionSeconds,
+    } = args;
+    if (fifoHighThroughput && !fifoQueue) {
+      throw new Error(`${name}: fifoHighThroughput needs fifoQueue`);
+    }
+    const highThroughput =
+      fifoQueue && fifoHighThroughput
+        ? {
+            deduplicationScope: 'messageGroup',
+            fifoThroughputLimit: 'perMessageGroupId',
+          }
+        : {};
 
     this.tags = tags;
     // Create queue and DLQ
@@ -75,7 +100,10 @@ export class Queue extends pulumi.ComponentResource {
           })
         ),
         fifoQueue: args.fifoQueue ?? false,
+        ...highThroughput,
         visibilityTimeoutSeconds: visibilityTimeoutSeconds ?? 30,
+        delaySeconds,
+        messageRetentionSeconds,
         tags,
       },
       { parent: this, dependsOn: [this.dlq] }

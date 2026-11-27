@@ -1,14 +1,14 @@
-import { formatDate, formatEmailDate } from '@core/util/date';
 import UserPlusIcon from '@icon/system/regular/user-plus.svg';
 import { Button, Tooltip } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
+import { MessageTime } from './MessageTime';
 
 /** What participants can see and do about a request to join. */
 export type AccessRequestOutcome =
   | { kind: 'loading' }
   | { kind: 'unavailable' }
   | { kind: 'pending'; canAnswer: boolean }
-  | { kind: 'approved'; by: string }
+  | { kind: 'approved' }
   | { kind: 'denied'; by: string }
   | { kind: 'withdrawn' };
 
@@ -19,7 +19,8 @@ export type AccessRequestOutcome =
  * never depends on what loads later. The request wraps like message text from
  * what is known at mount (the name stored with the event, or the email), and
  * the answer line keeps the buttons' height in every state (taller on touch,
- * like them), including while the request loads.
+ * like them), including while the request loads. An approved request leaves
+ * the line empty: the timeline's added row already says who let them in.
  */
 export function AccessRequestActivityRow(props: {
   eventId: string;
@@ -53,13 +54,7 @@ export function AccessRequestActivityRow(props: {
             <Show when={email()}>{(email) => <span>({email()}) </span>}</Show>
             asked to join the channel
           </p>
-          <time
-            class="shrink-0 text-xs/6 text-ink-extra-muted"
-            dateTime={props.occurredAt}
-            title={formatEmailDate(props.occurredAt)}
-          >
-            {formatDate(props.occurredAt, { showTime: true })}
-          </time>
+          <MessageTime at={props.occurredAt} class="shrink-0 text-xs/6" />
         </div>
         <div class="h-7 touch:h-9 flex items-center gap-2 text-xs">
           <Switch>
@@ -87,24 +82,6 @@ export function AccessRequestActivityRow(props: {
               <span class="truncate">
                 Waiting for a channel member to answer
               </span>
-            </Match>
-            <Match
-              when={
-                props.outcome.kind === 'approved' ? props.outcome : undefined
-              }
-            >
-              {(outcome) => (
-                <Tooltip
-                  label={`Approved by ${outcome().by}`}
-                  class="min-w-0 max-w-max truncate"
-                  as="span"
-                >
-                  <span class="truncate">
-                    Approved by{' '}
-                    <span class="font-medium text-ink">{outcome().by}</span>
-                  </span>
-                </Tooltip>
-              )}
             </Match>
             <Match
               when={props.outcome.kind === 'denied' ? props.outcome : undefined}

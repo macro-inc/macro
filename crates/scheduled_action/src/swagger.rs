@@ -8,7 +8,7 @@ use crate::inbound::axum_router::{
     __path_check_action, __path_create_action, __path_delete_action, __path_detach_action,
     __path_execute_action, __path_get_action, __path_health, __path_list_actions,
     __path_list_history, __path_set_action_enabled, __path_set_appearance, __path_update_action,
-    ScheduledActionResponse, SetScheduledActionEnabled,
+    RoutineLimitCode, RoutineLimitErrorBody, ScheduledActionResponse, SetScheduledActionEnabled,
 };
 #[expect(
     unused_imports,
@@ -39,7 +39,7 @@ use crate::domain::models::{
     ExecutionResource, ExecutionResourceType, ExecutionResult, InProgressExecution, Schedule,
     ScheduledAction, ScheduledActionUpdate,
 };
-use ai_billing::inbound::admission::AiAdmissionErrorBody;
+use ai_billing::{PlanTier, inbound::admission::AiAdmissionErrorBody};
 use model::response::EmptyResponse;
 use model_entity::{AppearanceColor, AppearanceIcon, EntityAppearance};
 
@@ -62,8 +62,10 @@ use model_entity::{AppearanceColor, AppearanceIcon, EntityAppearance};
         crate::inbound::axum_router::delete_action,
         crate::inbound::axum_router::detach_action,
         crate::inbound::axum_router::execute_action,
+        crate::inbound::axum_router::stop_run,
         crate::inbound::axum_router::list_history,
         crate::inbound::axum_router::list_code_upgrades,
+        crate::inbound::axum_router::list_unusable_items,
         crate::inbound::axum_router::catalog,
         crate::inbound::draft_router::draft_routine,
         crate::inbound::draft_job_router::start_draft_job,
@@ -83,6 +85,9 @@ use model_entity::{AppearanceColor, AppearanceIcon, EntityAppearance};
     components(
         schemas(
             AiAdmissionErrorBody,
+            PlanTier,
+            RoutineLimitCode,
+            RoutineLimitErrorBody,
             crate::inbound::axum_router::ExecutionRecordResponse,
             crate::domain::models::SubRoutine,
             crate::domain::models::CreatedRoutine,
@@ -122,6 +127,7 @@ use model_entity::{AppearanceColor, AppearanceIcon, EntityAppearance};
             crate::domain::drafts::progress::CheckSummary,
             crate::domain::drafts::progress::StepTitle,
             crate::domain::code_upgrade::CodeUpgrade,
+            crate::domain::knob_entities::UnusableKnob,
             crate::domain::code_upgrade::UpgradeOutcome,
             ScheduledAction,
             EntityAppearance, AppearanceIcon, AppearanceColor,

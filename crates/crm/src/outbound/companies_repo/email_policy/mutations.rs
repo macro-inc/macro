@@ -1,6 +1,9 @@
 use super::*;
 use crate::domain::{email_policy_api::*, email_rules::*};
 
+#[cfg(test)]
+mod test;
+
 impl EmailPolicyAuthoringTransaction for PgEmailPolicyTransaction {
     fn initialized_legacy(&self) -> bool {
         self.initialized_legacy
@@ -40,42 +43,34 @@ impl EmailPolicyAuthoringTransaction for PgEmailPolicyTransaction {
         .await
     }
 
+    async fn admit_rule_resources(&mut self, rules: &[EmailInclusionRule]) -> Result<(), CrmError> {
+        super::authoring::admit_resources(
+            &mut self.tx,
+            self.team,
+            &self.user,
+            self.state.link_id,
+            rules,
+        )
+        .await?;
+        // Discovery uses a shrinking ten-second budget. Later revision, grant
+        // and audit writes retain the authoring transaction's existing timeout.
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *self.tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        Ok(())
+    }
+
     #[tracing::instrument(skip_all, fields(team_id = %self.team), err)]
     async fn save_rule_revision(&mut self, rules: &EmailRuleSet) -> Result<i64, CrmError> {
-        rules
-            .validate_shape()
-            .map_err(|e| CrmError::InvalidRequest(e.to_string()))?;
-        let revision = sqlx::query_scalar!(
-            r#"SELECT COALESCE((SELECT revision+1 FROM crm_email_rule_revisions
-                 WHERE team_id=$1 AND user_id=$2 ORDER BY revision DESC LIMIT 1),1) AS "revision!""#,
-            self.team,self.user
-        ).fetch_one(&mut *self.tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        let definition =
-            serde_json::to_value(rules).map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        sqlx::query!(
-            "INSERT INTO crm_email_rule_revisions(team_id,user_id,revision,link_id,schema_version,definition) VALUES($1,$2,$3,$4,$5,$6)",
-            self.team,self.user,revision,self.state.link_id,i16::try_from(rules.schema_version).map_err(|_|CrmError::InvalidRequest("unsupported schema version".into()))?,definition
-        ).execute(&mut *self.tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        let mut threads = Vec::new();
-        let mut addresses = Vec::new();
-        let mut contacts = Vec::new();
-        let mut domains = Vec::new();
-        let mut companies = Vec::new();
-        for rule in &rules.include {
-            match rule {
-                EmailInclusionRule::Thread { thread_id } => threads.push(*thread_id),
-                EmailInclusionRule::Address { address } => addresses.push(address.clone()),
-                EmailInclusionRule::Contact { contact_id } => contacts.push(*contact_id),
-                EmailInclusionRule::Domain { domain } => domains.push(domain.clone()),
-                EmailInclusionRule::Company { company_id } => companies.push(*company_id),
-            }
-        }
-        sqlx::query!("INSERT INTO crm_email_rule_threads(team_id,user_id,revision,thread_id) SELECT $1,$2,$3,unnest($4::uuid[])",self.team,self.user,revision,&threads).execute(&mut *self.tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        sqlx::query!("INSERT INTO crm_email_rule_addresses(team_id,user_id,revision,address) SELECT $1,$2,$3,unnest($4::text[])",self.team,self.user,revision,&addresses).execute(&mut *self.tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        sqlx::query!("INSERT INTO crm_email_rule_contacts(team_id,user_id,revision,contact_id) SELECT $1,$2,$3,unnest($4::uuid[])",self.team,self.user,revision,&contacts).execute(&mut *self.tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        sqlx::query!("INSERT INTO crm_email_rule_domains(team_id,user_id,revision,domain) SELECT $1,$2,$3,unnest($4::text[])",self.team,self.user,revision,&domains).execute(&mut *self.tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        sqlx::query!("INSERT INTO crm_email_rule_companies(team_id,user_id,revision,company_id) SELECT $1,$2,$3,unnest($4::uuid[])",self.team,self.user,revision,&companies).execute(&mut *self.tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        Ok(revision)
+        CompaniesRepositoryImpl::insert_rule_revision(
+            &mut self.tx,
+            self.team,
+            &self.user,
+            self.state.link_id,
+            rules,
+        )
+        .await
     }
 
     #[tracing::instrument(skip_all, fields(team_id = %self.team), err)]
@@ -143,5 +138,52 @@ impl EmailPolicyAuthoringTransaction for PgEmailPolicyTransaction {
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         Ok(())
+    }
+}
+
+impl CompaniesRepositoryImpl {
+    /// Store a rule set as the member's next revision, with its target rows.
+    /// The caller activates it.
+    pub(in crate::outbound::companies_repo) async fn insert_rule_revision(
+        conn: &mut sqlx::PgConnection,
+        team: Uuid,
+        user: &str,
+        link_id: Uuid,
+        rules: &EmailRuleSet,
+    ) -> Result<i64, CrmError> {
+        rules
+            .validate_shape()
+            .map_err(|e| CrmError::InvalidRequest(e.to_string()))?;
+        let revision = sqlx::query_scalar!(
+            r#"SELECT COALESCE((SELECT revision+1 FROM crm_email_rule_revisions
+                 WHERE team_id=$1 AND user_id=$2 ORDER BY revision DESC LIMIT 1),1) AS "revision!""#,
+            team,user
+        ).fetch_one(&mut *conn).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        let definition =
+            serde_json::to_value(rules).map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        sqlx::query!(
+            "INSERT INTO crm_email_rule_revisions(team_id,user_id,revision,link_id,schema_version,definition) VALUES($1,$2,$3,$4,$5,$6)",
+            team,user,revision,link_id,i16::try_from(rules.schema_version).map_err(|_|CrmError::InvalidRequest("unsupported schema version".into()))?,definition
+        ).execute(&mut *conn).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        let mut threads = Vec::new();
+        let mut addresses = Vec::new();
+        let mut contacts = Vec::new();
+        let mut domains = Vec::new();
+        let mut companies = Vec::new();
+        for rule in &rules.include {
+            match rule {
+                EmailInclusionRule::Thread { thread_id } => threads.push(*thread_id),
+                EmailInclusionRule::Address { address } => addresses.push(address.clone()),
+                EmailInclusionRule::Contact { contact_id } => contacts.push(*contact_id),
+                EmailInclusionRule::Domain { domain } => domains.push(domain.clone()),
+                EmailInclusionRule::Company { company_id } => companies.push(*company_id),
+            }
+        }
+        sqlx::query!("INSERT INTO crm_email_rule_threads(team_id,user_id,revision,thread_id) SELECT $1,$2,$3,unnest($4::uuid[])",team,user,revision,&threads).execute(&mut *conn).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        sqlx::query!("INSERT INTO crm_email_rule_addresses(team_id,user_id,revision,address) SELECT $1,$2,$3,unnest($4::text[])",team,user,revision,&addresses).execute(&mut *conn).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        sqlx::query!("INSERT INTO crm_email_rule_contacts(team_id,user_id,revision,contact_id) SELECT $1,$2,$3,unnest($4::uuid[])",team,user,revision,&contacts).execute(&mut *conn).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        sqlx::query!("INSERT INTO crm_email_rule_domains(team_id,user_id,revision,domain) SELECT $1,$2,$3,unnest($4::text[])",team,user,revision,&domains).execute(&mut *conn).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        sqlx::query!("INSERT INTO crm_email_rule_companies(team_id,user_id,revision,company_id) SELECT $1,$2,$3,unnest($4::uuid[])",team,user,revision,&companies).execute(&mut *conn).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        Ok(revision)
     }
 }

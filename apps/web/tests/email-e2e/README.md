@@ -27,6 +27,18 @@ many tests run at once (4); each runs three services and a browser, and half
 as many stacks again wait started for the next tests (about 0.5 GB, 40
 Postgres connections and one Redis database each).
 
+On a shared host, run builds and suites under `ionice -c3 nice -n10` with
+`CARGO_BUILD_JOBS=2`, `EMAIL_E2E_BROWSER_WORKERS=1` and `EMAIL_E2E_STACK_POOL=0`.
+Compare bundles sequentially, keep stack data on disk, and cap service logs at
+info level with bounded rotation. For long comparisons, `--trace=off` avoids
+recording every asset for every page; rerun failures with tracing enabled.
+Point `TMPDIR` through a short symlink when its on-disk path is long; Chromium's
+profile sockets must fit the Unix socket path limit.
+The isolated network helper keeps a stable dummy interface without an external
+route: Chromium otherwise reports a loopback-only namespace as offline even
+while the forwarded services answer. Browser offline emulation still controls
+the app's disconnected paths.
+
 ## How it works
 
 - `global-setup.ts` starts `email_e2e_stacks` (`crates/email_e2e/src/stack_server.rs`),
@@ -39,8 +51,11 @@ Postgres connections and one Redis database each).
   (`apps/web/dist`, or `EMAIL_E2E_DIST`) and proxies `/email` and `/dss` to
   that test's services, signing each request as the test's user with the
   services' internal headers. There is no authentication service: the few
-  `/auth` calls the app needs at startup are answered there, and `front.stub`
-  answers more. The bundle's own files reach the page from the test process
+  `/auth` calls the app needs at startup are answered there. The connector
+  list and catalog reads (`GET /cognition/connectors` and
+  `GET /cognition/connectors/catalog`) return an empty list and catalog page,
+  since the stack has no connector service. `front.stub` answers more.
+  The bundle's own files reach the page from the test process
   (a route in the fixture answers with what the front would send), not over
   the network.
 - The bundle is built by `just apps/web/build-email-e2e`: every service on the
@@ -50,6 +65,16 @@ Postgres connections and one Redis database each).
   socket and passes on what the email services ask the gateway to send the user.
 - Not in the stack: the notification, search, contacts and calendar services.
   New mail does not appear in an open list by itself; sync, then open.
+- The bundle has unified notifications on (`enable-unified-notifications` is
+  on in dev), so the navigation's unread marks, the Mail badge among them,
+  follow the server's count of unread notification rows, which only the
+  notification service writes: on a test's own stack they never light. Test
+  them on the full-stack tier.
+
+`authority-requests.spec.ts` counts permission reads through inbox navigation,
+thread reads and draft autosaves against the real services. Its Soup frames are
+protocol fixtures: the stack's HTTP recording proxy cannot relay WebSocket
+upgrades. Those counts measure client frame handling, not live Kafka delivery.
 
 ## Writing a test
 
@@ -145,7 +170,8 @@ nix develop -c just apps/web/test-email-e2e-full-stack email-e2e reply   # only 
   instance.
 - The `full-stack-*.spec.ts` files are the functions only this tier reaches:
   connecting through the authentication service and the providers' consent
-  (including administrator approval), search, notifications, sharing a
+  (including administrator approval), search, notifications and the Mail
+  badge, sharing a
   thread with another user, a file too large to attach, mail on Home and
   in a contact's record, a reminder coming due, and the calendar
   (invitations, an event made from an email).
@@ -249,7 +275,7 @@ One spec file per area; helpers a file shares with others are in `harness/`.
 | `list*`, `state`, `inbox`, `folders`, `saved-views` | the list, its views, controls and search, Done and read state, inbox selection, Sent, folders | `harness/list.ts` |
 | `organise-*`, `labels`, `reminders` | marking, moving and muting threads and senders, labels, reminders | `harness/organise.ts` |
 | `thread*`, `render` | the thread view, opening from search, pictures in a message | `harness/thread.ts` |
-| `link*`, `connect-more`, `settings-accounts`, `notify` | connecting, reconnecting and sharing inboxes, calendars, onboarding, the Mail badge | `harness/linking.ts` |
+| `link*`, `connect-more`, `settings-accounts` | connecting, reconnecting and sharing inboxes, calendars, onboarding | `harness/linking.ts` |
 | `sync-provider*` | what reaches the app from the provider: existing and new mail, changes made in the provider's own client, threading, classification | `harness/sync.ts` |
 | `sharing`, `elsewhere`, `entitlement` | sharing a thread and access requests, mail shown outside Mail, an account without email | `harness/sharing.ts` |
 | `calendar-invitation`, `invitation-actions` | the invitation card in a thread and its actions | |
@@ -263,6 +289,11 @@ One spec file per area; helpers a file shares with others are in `harness/`.
 - `list.spec.ts`'s new-mail test runs only with `EMAIL_E2E_LIVE_UPDATES=1`
   and alone: every stack's services read live updates in one Kafka consumer
   group, so another running stack can take the event.
+  The per-test stack's recording proxy currently buffers HTTP responses and
+  removes `Connection`; it does not relay WebSocket upgrades. Its Soup socket
+  therefore fails the handshake even with a private broker, and the readiness
+  probe fails before the test exercises list updates. Live subscription delivery
+  remains unverified by this test until the proxy supports upgraded connections.
 
 ## Fixture tests
 

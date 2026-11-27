@@ -94,6 +94,9 @@ Outlook (Microsoft Graph) outbound adapters.
   the link for reauthorization. Contact listings use `retry_with_fresh_token`
   to keep their WARN-level logging. Writes use `call_with_token` and do not
   retry.
+- Outlook's `recent_inbox_messages` reads the requested well-known folder,
+  `inbox` or `sentitems`, newest first: the inbox by `receivedDateTime`, sent
+  items by `sentDateTime`, which is also what a window read filters on.
 - `SendRequest::build_mime` (Gmail sends) turns an inline `text/calendar`
   attachment with no Content-ID into the message's calendar body, the last
   alternative after the text and HTML, which is how an answerable invitation
@@ -108,7 +111,9 @@ Outlook (Microsoft Graph) outbound adapters.
   code, or request id; the others drop them.
 - `outlook.graph_request` is the Graph telemetry contract the Outlook sync
   monitors in `infra/stacks/monitoring` read. Every attempt records
-  `outlook.throttle_origin` (`gate`, `graph` or `none`); a gate refusal
+  `outlook.throttle_origin` (`gate`, `graph` or `none`), and a request Graph
+  refuses records its `graph.error_code`, never the error's message, which
+  can quote addresses; a gate refusal
   (`RateLimitOrigin::Gate` with its `GateLimit`) sent nothing, so it is not
   a span error and logs at DEBUG. The span sets `operation.name` because
   Datadog files a client span with an HTTP method as `http.client.request`,
@@ -135,6 +140,32 @@ Outlook (Microsoft Graph) outbound adapters.
 - `domain::request_count::counted` counts the Graph requests one unit of work
   sends (the transport calls `record_sent`); Outlook token failures surface
   as `EmailApiError::CredentialsUnavailable`, apart from Graph failures.
+- The Outlook sync stores an event's HTML body as Graph returns it and
+  never parses it. A Macro edit of an online meeting's description, and an
+  event replacement, separate the Teams block (the outermost `me-email*`
+  `div`s) from the user's text in `outlook/calendar/conference_body.rs`,
+  which parses the body as received through `email_utils::bounded_html`,
+  since an invitation's body is whatever its sender wrote. A clipped parse
+  refuses the write with `CalendarProviderError::refused`, telling the user
+  to edit in Outlook, rather than write back a description cut at the clip;
+  a refusal reaches the user without the "Calendar provider request
+  failed:" prefix, since nothing was sent. It warns `refused to split an
+  Outlook event body too large to parse whole` with `body_bytes`. Find the blocks in one walk of the tree, never by checking
+  each `div`'s ancestors: that reads an ancestor's classes once per `div`
+  inside it, seconds of CPU for a body within the parse bounds. Macro's
+  description editor drops the `me-email*` markers, laying the block out as
+  plain paragraphs and the line breaks Graph puts between tags, so a
+  replacement carrying an edited description (`without_meeting`) removes the
+  top-level run around the join link whose texts, ignoring whitespace, match
+  the saved block's (textless parts only between them), and refuses one with
+  the link or a part of the block anywhere else. An ordinary description
+  edit (`preserve_meeting_details`) removes that run the same way and writes
+  Outlook's own block from the current body back in its place, so the block
+  keeps its markers; a description it cannot separate is written as given.
+- A replacement lays the editor's unsaved changes over the copied event
+  with the same `patch_body` an Outlook update sends, so its create body holds
+  no field the copy or an update does not already send. A series that moves
+  takes its saved repeat rule again from the new start.
 - The Outlook calendar normalizer (`outlook/calendar/normalize.rs`,
   `recurrence.rs`) fails with `Rejected`, which names the Graph property
   path (`recurrence.range.endDate`, `instances.start.dateTime`), built only
@@ -145,8 +176,10 @@ Outlook (Microsoft Graph) outbound adapters.
   plus `originalStart`); a new read of an instance property must be added
   there, since a `$select` returns nothing else. An exception still without
   one is left out of its series and reported as a `SkippedOccurrence`
-  (`instances.originalStart.missing`); one Macro cannot parse rejects the
-  series at `instances.originalStart`. Raise `READER_REVISION` with a change
+  (`instances.originalStart.missing`), and the series is stored under no
+  role, from the sync and from an edit's echo, so team reads leave it out;
+  one Macro cannot parse rejects the series at `instances.originalStart`.
+  Raise `READER_REVISION` with a change
   that lets Macro read events it skipped before, so delta calendars read
   them again. Graph names UTC `tzone://Microsoft/Utc` on meetings Exchange
   imported from another system's invitation, which `zones::zone` maps; a
@@ -161,12 +194,24 @@ Outlook (Microsoft Graph) outbound adapters.
   vendored tz data (`vendor/chrono-tz`) lacks: Outlook writes send local
   times computed with them, so stale rules move an event; update the tz
   data first.
+- A draft's `content_fingerprint` is stored (checkpoints, `base_content`)
+  and compared after a deploy, so a change to how it is computed reads as an
+  edit of every waiting draft; `a_fingerprint_keeps_its_value_across_releases`
+  pins it. `field_digests` only names the changed field in a log.
+  `DraftContent` (from `ProviderDraft::content` or the sync read's
+  `MailboxMessage::draft_content`) carries the version it was read at;
+  `crates/email` uses it as a baseline only for that version.
 - The Graph root is `macro_service_urls::MicrosoftGraphUrl`, so
   `OVERRIDE_MICROSOFT_GRAPH_URL` points every Outlook client in a process at
   `crates/outlook_emulator`; tests in other crates use
   `OutlookApiClientRepository::for_graph_url`. Continuation links and upload
   URLs are only followed on the root's origin (or Microsoft's upload hosts),
   so an emulator must serve them itself.
+- The Outlook `folders` read asks for the well-known Inbox first. Graph
+  answers 404 there only for an account it serves no mailbox for, and then
+  to every mailbox call, so that 404 is `MailFolderCatalog::NoMailbox` with
+  Graph's error code, not an error; every other failure stays an
+  `EmailApiError`.
 - Decode Graph JSON bodies with `transport::read_json`. `invalid_response`
   takes the field or shape that failed (`read_json` gives the JSON path and a
   missing field's name) and must never quote the response, which can carry

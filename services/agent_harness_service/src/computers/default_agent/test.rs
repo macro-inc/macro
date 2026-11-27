@@ -306,6 +306,7 @@ async fn revoking_a_computer_deletes_its_agents(pool: PgPool) {
         created_by: buyer.clone(),
         created_at: chrono::Utc::now(),
         enrolled_at: None,
+        hibernated_at: None,
         setup_completed_at: None,
         default_agent_id: None,
         image: None,

@@ -24,6 +24,9 @@ pub struct PredicateBaselineEntry {
 pub struct PredicateReconciliation {
     /// Deduplicated sorted baseline survivors and bounded matching candidates.
     pub keys: Vec<RecordKey>,
+    /// The value each of `keys` sorts by, in the same order: its current one,
+    /// or for a retained key the baseline's prior one.
+    pub sort_values: Vec<i64>,
     /// Baseline survivors whose current membership could not be evaluated.
     pub retained_keys: Vec<RecordKey>,
     /// Whether a query-relevant optimistic shadow was observed.
@@ -150,7 +153,7 @@ pub fn reconcile_predicate_baseline(
         directed(sort, descriptor.sort_direction)
             .then_with(|| directed(tie, descriptor.tie_break_direction))
     });
-    let keys: Vec<_> = hits.into_iter().map(|(key, _)| key).collect();
+    let (keys, sort_values): (Vec<_>, Vec<_>) = hits.into_iter().unzip();
     PredicateReconciliation {
         retained_keys: keys
             .iter()
@@ -158,6 +161,7 @@ pub fn reconcile_predicate_baseline(
             .cloned()
             .collect(),
         keys,
+        sort_values,
         optimistic,
     }
 }

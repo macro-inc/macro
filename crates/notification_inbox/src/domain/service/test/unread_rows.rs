@@ -55,6 +55,120 @@ async fn unread_rows_follow_each_rows_own_rule() {
         unread.counts(),
         HashMap::from([(InboxRowType::ChannelMessages, 1), (InboxRowType::Email, 1),])
     );
+    assert_eq!(
+        unread.chat_counts(),
+        HashMap::from([(InboxRowType::ChannelMessages, 1)])
+    );
+}
+
+/// Channels numbered from zero, each holding `notify`'s notification on it.
+fn channels(
+    count: u128,
+    notify: impl Fn(u128, u128) -> FeedNotification,
+) -> (Vec<Candidate<&'static str>>, Vec<FeedNotification>) {
+    let candidates = (0..count)
+        .map(|i| {
+            candidate(
+                "channel",
+                entity(EntityType::Channel, 0x3000 + i),
+                Some(5),
+                None,
+            )
+        })
+        .collect();
+    let notifications = (0..count).map(|i| notify(0x4000 + i, 0x3000 + i)).collect();
+    (candidates, notifications)
+}
+
+#[tokio::test]
+async fn a_thread_reply_is_unread_in_the_inbox_and_not_in_chat() {
+    let (candidates, notifications) =
+        channels(1, |id, channel| channel_reply(id, channel, ROOT, 0x101, 5));
+    let harness = harness(candidates, notifications);
+    may_be_unread(&harness);
+    let unread = harness.service.unread_rows(viewer()).await.unwrap();
+
+    assert_eq!(
+        unread.counts(),
+        HashMap::from([(InboxRowType::ChannelThread, 1)])
+    );
+    assert_eq!(unread.chat_counts(), HashMap::new());
+}
+
+#[tokio::test]
+async fn a_recount_takes_a_read_message_out_of_chat_and_leaves_its_replies_unread() {
+    let harness = harness(
+        vec![candidate("channel", channel().into_entity(), Some(9), None)],
+        vec![
+            channel_send(1, CHANNEL, ROOT, 2),
+            channel_reply(2, CHANNEL, ROOT, 0x101, 3),
+        ],
+    );
+    may_be_unread(&harness);
+    let unread = harness.service.unread_rows(viewer()).await.unwrap();
+    assert_eq!(
+        unread.chat_counts(),
+        HashMap::from([(InboxRowType::ChannelThread, 1)])
+    );
+
+    harness
+        .notifications
+        .by_entity
+        .lock()
+        .unwrap()
+        .get_mut(channel().entity())
+        .unwrap()
+        .iter_mut()
+        .filter(|notification| notification.notification_id == uuid(1))
+        .for_each(|notification| {
+            std::sync::Arc::make_mut(notification).state = NotificationState::Seen;
+        });
+    let unread = harness
+        .service
+        .recount_unread_rows(viewer(), unread, vec![channel()])
+        .await
+        .unwrap();
+
+    assert_eq!(
+        unread.counts(),
+        HashMap::from([(InboxRowType::ChannelThread, 1)])
+    );
+    assert_eq!(unread.chat_counts(), HashMap::new());
+}
+
+#[tokio::test]
+async fn unread_replies_never_stop_counting_before_a_message_chat_shows() {
+    let (candidates, notifications) = channels(250, |id, channel| {
+        if channel == 0x3000 + 249 {
+            channel_send(id, channel, 0x100, 5)
+        } else {
+            channel_reply(id, channel, ROOT, 0x101, 5)
+        }
+    });
+    let harness = harness(candidates, notifications);
+    may_be_unread(&harness);
+    let unread = harness.service.unread_rows(viewer()).await.unwrap();
+
+    assert_eq!(
+        unread.chat_counts(),
+        HashMap::from([(InboxRowType::ChannelMessages, 1)])
+    );
+    assert!(!unread.more.contains(&EntityType::Channel));
+}
+
+#[tokio::test]
+async fn counting_channels_stops_once_chat_shows_enough_of_them() {
+    let (candidates, notifications) =
+        channels(250, |id, channel| channel_send(id, channel, 0x100, 5));
+    let harness = harness(candidates, notifications);
+    may_be_unread(&harness);
+    let unread = harness.service.unread_rows(viewer()).await.unwrap();
+
+    assert_eq!(
+        unread.chat_counts(),
+        HashMap::from([(InboxRowType::ChannelMessages, 100)])
+    );
+    assert!(unread.more.contains(&EntityType::Channel));
 }
 
 #[tokio::test]

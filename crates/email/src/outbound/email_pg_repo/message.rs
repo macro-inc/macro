@@ -6,6 +6,7 @@ use crate::domain::{
     ports::RecipientsByMessageId,
 };
 use chrono::{DateTime, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -105,10 +106,11 @@ pub(super) async fn recipients_by_message_ids(
     Ok(map)
 }
 
-#[tracing::instrument(err, skip(pool, message_ids))]
+#[tracing::instrument(err, skip_all)]
 pub(super) async fn labels_by_message_ids(
     pool: &PgPool,
     message_ids: &[Uuid],
+    reader: Option<&MacroUserIdStr<'_>>,
 ) -> Result<HashMap<Uuid, Vec<MessageLabel>>, sqlx::Error> {
     if message_ids.is_empty() {
         return Ok(HashMap::new());
@@ -118,21 +120,43 @@ pub(super) async fn labels_by_message_ids(
         DbMessageLabelRow,
         r#"
         SELECT
-            ml.message_id AS "message_id!",
-            l.id,
-            l.link_id,
-            l.provider_label_id,
-            l.name,
-            l.created_at,
-            l.message_list_visibility as "message_list_visibility: _",
-            l.label_list_visibility as "label_list_visibility: _",
-            l.type as "type_: _"
-        FROM email_effective_message_labels ml
-        JOIN email_labels l ON ml.label_id = l.id
-        WHERE ml.message_id = ANY($1)
-        ORDER BY ml.message_id, l.name
+            labels.message_id AS "message_id!",
+            labels.id,
+            labels.link_id,
+            labels.provider_label_id,
+            labels.name,
+            labels.created_at,
+            labels.message_list_visibility as "message_list_visibility: _",
+            labels.label_list_visibility as "label_list_visibility: _",
+            labels.type as "type_: _"
+        FROM (
+            SELECT
+                ml.message_id,
+                l.id,
+                l.link_id,
+                l.provider_label_id,
+                l.name,
+                l.created_at,
+                l.message_list_visibility,
+                l.label_list_visibility,
+                l.type
+            FROM email_effective_message_labels ml
+            JOIN email_labels l ON ml.label_id = l.id
+            WHERE ml.message_id = ANY($1)
+            -- Read before the reader's inboxes are checked: checked inside,
+            -- the planner reads every label to check it first.
+            OFFSET 0
+        ) labels
+        WHERE labels.type = 'System'
+            OR labels.link_id IN (
+                SELECT el.id FROM email_links el WHERE el.macro_id = $2
+                UNION ALL
+                SELECT mul.link_id FROM macro_user_links mul WHERE mul.primary_macro_id = $2
+            )
+        ORDER BY labels.message_id, labels.name
         "#,
         message_ids,
+        reader.map(|reader| reader.as_ref()),
     )
     .fetch_all(pool)
     .await?;
@@ -335,6 +359,7 @@ pub(crate) async fn get_simple_message(
             m.link_id,
             m.thread_id,
             m.provider_thread_id,
+            m.replying_to_id,
             m.headers_jsonb,
             m.is_sent,
             m.is_draft
@@ -367,6 +392,7 @@ pub(crate) async fn get_draft_replying_to(
             m.link_id,
             m.thread_id,
             m.provider_thread_id,
+            m.replying_to_id,
             m.headers_jsonb,
             m.is_sent,
             m.is_draft
@@ -410,13 +436,13 @@ pub(crate) async fn delete_draft_message(
 
     expected_generation: i32,
 ) -> Result<Option<DraftDeletion>, sqlx::Error> {
-    let mut tx = pool.begin().await?;
+    let mut tx = super::begin(pool).await?;
 
     let outlook = sqlx::query!(r#"
         SELECT l.id,l.sync_generation FROM email_links l JOIN email_messages m ON m.link_id = l.id
         WHERE m.id = $1 AND m.thread_id = $2 AND l.id = ANY($3) AND l.provider = 'OUTLOOK'
             AND ($4::text = l.macro_id OR EXISTS (SELECT 1 FROM macro_user_links u WHERE u.link_id = l.id AND u.primary_macro_id = $4))
-        FOR UPDATE OF l
+        FOR SHARE OF l
     "#,message_id,thread_db_id,link_ids,actor).fetch_optional(&mut *tx).await?;
 
     // Sender migration must not delete a draft whose delivery was committed
@@ -670,6 +696,8 @@ pub(super) async fn insert_draft_attachment(
     attachment: &AttachmentDraft,
 ) -> Result<(), sqlx::Error> {
     // Match send admission's lock order, then read scheduling in a fresh statement.
+    // Locks the draft's message row, not the link.
+    // ast-grep-ignore: email-link-lock-transactions-time-out
     let mut tx = pool.begin().await?;
     let state = sqlx::query!(
         "SELECT is_draft, is_sent FROM email_messages WHERE id = $1 AND link_id = $2 FOR UPDATE",

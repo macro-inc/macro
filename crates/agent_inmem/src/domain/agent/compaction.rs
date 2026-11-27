@@ -31,7 +31,7 @@ use crate::domain::session::{PendingSummary, SUMMARY_PREAMBLE, end_of_turn, spli
 /// The model summaries run on: fast, cheap, reads images, and has a
 /// million-token window. It is the free plan's model, so every owner may
 /// use it.
-pub(crate) const SUMMARY_MODEL: &str = "google/gemini-3.8-flash";
+pub(crate) const SUMMARY_MODEL: &str = "google/gemini-4-hydrogen";
 
 /// The share of the session model's context window, in percent, at which a
 /// summary starts.
@@ -289,8 +289,10 @@ fn start_summary(
             settle,
         );
         // A connection already gone drops the task, which frees the slot.
+        // A summary of a withheld turn's conversation is withheld too.
+        let withheld = genai_telemetry::content_withheld();
         let _ = connection.spawn(async move {
-            task.await;
+            genai_telemetry::withhold_content_if(withheld, task).await;
             Ok(())
         });
     }

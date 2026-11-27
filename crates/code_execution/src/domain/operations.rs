@@ -84,3 +84,135 @@ pub fn sdk_declaration_files(directory: &str) -> Vec<(&'static str, &'static str
         .map(|(path, _, text)| (path.as_str(), text.as_str()))
         .collect()
 }
+
+/// The public members of the SDK class or interface `name`, its own in
+/// declaration order and then those it inherits, or `None` when the SDK
+/// declares no class or interface by that name.
+pub fn sdk_members(name: &str) -> Option<Vec<&'static str>> {
+    let mut members = Vec::new();
+    let mut next = Some(name.to_owned());
+    // A short chain: `Task` extends `Document`, which extends a base.
+    for depth in 0..4 {
+        let Some(current) = next.take() else { break };
+        let Some((own, base)) = declared_members(&current) else {
+            if depth == 0 {
+                return None;
+            }
+            break;
+        };
+        for member in own {
+            if !members.contains(&member) {
+                members.push(member);
+            }
+        }
+        next = base;
+    }
+    Some(members)
+}
+
+/// The values of the SDK's string-literal union type `name`, such as
+/// `SortDirection`, in declaration order.
+/// The SDK's own declarations (`src/`) win over a generated type of the same
+/// name; `None` when the type is something else or its declarations disagree.
+pub fn sdk_string_literals(name: &str) -> Option<Vec<&'static str>> {
+    let header = format!("type {name} = ");
+    let declared: Vec<(&str, Option<Vec<&'static str>>)> = SDK
+        .files
+        .iter()
+        .flat_map(|(path, text)| {
+            text.lines()
+                .filter_map(|line| {
+                    line.trim_start_matches("export ")
+                        .strip_prefix(header.as_str())?
+                        .strip_suffix(';')
+                })
+                .map(|union| (path.as_str(), string_union(union)))
+        })
+        .collect();
+    let own: Vec<_> = declared
+        .iter()
+        .filter(|(path, _)| path.starts_with("src/"))
+        .collect();
+    let candidates = if own.is_empty() {
+        declared.iter().collect()
+    } else {
+        own
+    };
+    let (_, first) = candidates.first()?;
+    candidates
+        .iter()
+        .all(|(_, values)| values == first)
+        .then(|| first.clone())
+        .flatten()
+}
+
+/// `'a' | 'b'` (or `"a" | "b"`) as `["a", "b"]`, or `None` when any member
+/// isn't a plain string.
+fn string_union(union: &'static str) -> Option<Vec<&'static str>> {
+    union
+        .split(" | ")
+        .map(|member| {
+            ['\'', '"'].into_iter().find_map(|quote| {
+                member
+                    .strip_prefix(quote)?
+                    .strip_suffix(quote)
+                    .filter(|value| !value.contains(['\'', '"']))
+            })
+        })
+        .collect()
+}
+
+/// The members `name`'s own declaration lists, and the class or interface
+/// it extends, if any.
+fn declared_members(name: &str) -> Option<(Vec<&'static str>, Option<String>)> {
+    let headers = [
+        format!("declare class {name} "),
+        format!("declare class {name}<"),
+        format!("interface {name} "),
+        format!("interface {name}<"),
+    ];
+    SDK.files.values().find_map(|text| {
+        let mut lines = text.lines();
+        let header = lines.find(|line| {
+            let line = line.trim_start_matches("export ");
+            headers
+                .iter()
+                .any(|header| line.starts_with(header.as_str()))
+        })?;
+        let base = header.split_once(" extends ").and_then(|(_, rest)| {
+            let end = rest
+                .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+                .unwrap_or(rest.len());
+            (end > 0).then(|| rest[..end].to_owned())
+        });
+        let mut members: Vec<&'static str> = Vec::new();
+        for line in lines.take_while(|line| !line.starts_with('}')) {
+            let Some(member) = line.strip_prefix("    ") else {
+                continue;
+            };
+            if member.starts_with(' ')
+                || ["private ", "protected ", "constructor("]
+                    .iter()
+                    .any(|hidden| member.starts_with(hidden))
+            {
+                continue;
+            }
+            let member = ["static ", "readonly ", "get ", "set ", "async "]
+                .iter()
+                .fold(member, |member, modifier| {
+                    member.strip_prefix(modifier).unwrap_or(member)
+                });
+            let end = member
+                .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '$'))
+                .unwrap_or(member.len());
+            let identifier = &member[..end];
+            if !identifier.is_empty() && !members.contains(&identifier) {
+                members.push(identifier);
+            }
+        }
+        Some((members, base))
+    })
+}
+
+#[cfg(test)]
+mod test;

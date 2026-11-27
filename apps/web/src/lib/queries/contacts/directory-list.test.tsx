@@ -244,3 +244,288 @@ it('lists only eligible rows, so dropped rows never count toward the bound', asy
   expect(ids(list())).toEqual([person(0).id, person(2).id]);
   client.clear();
 });
+
+it('orders the first server page by who the viewer works with, and leaves later pages below it', async () => {
+  vi.useFakeTimers();
+  const user = (email: string, name: string) => ({
+    id: `macro|${email}`,
+    email,
+    name,
+  });
+  // As the server window lists them: the named people, then loose matches.
+  const firstPage = [
+    user('aaron@example.com', 'Teo Aaron'),
+    user('teo.dm@example.com', 'Teo Baker'),
+    user('teo.old@example.com', 'Teo Olde'),
+    user('teo.nys@example.com', 'Teo Nys'),
+    user('teodora@example.com', 'Teodora Vance'),
+    user('prefix.dm@example.com', 'Teon Dale'),
+    user('mateo@example.com', 'Mateo Rossi'),
+    user('loose.mate@example.com', 'Stevie Leon'),
+    user('loose.dm@example.com', 'Tate Eton'),
+  ];
+  const reader = vi
+    .fn<typeof readContactDirectory>()
+    .mockImplementation(async (viewer, _host, request) => ({
+      query: request.query,
+      source: 'server',
+      sync: 'unavailable',
+      offline: false,
+      users: request.cursor
+        ? [user('later.dm@example.com', 'Otto Tennel')]
+        : firstPage,
+      ...(request.cursor
+        ? {}
+        : {
+            named: {
+              exact: [
+                'macro|aaron@example.com',
+                'macro|teo.dm@example.com',
+                'macro|teo.old@example.com',
+                'macro|teo.nys@example.com',
+              ],
+              wordStart: [
+                'macro|teodora@example.com',
+                'macro|prefix.dm@example.com',
+              ],
+            },
+          }),
+      nextCursor: request.cursor
+        ? null
+        : {
+            source: 'server',
+            after: 'next',
+            userId: viewer,
+            query: request.query,
+            policyKey: hashKey([request.policy]),
+          },
+    }));
+  const client = new QueryClient();
+  const [teammates, setTeammates] = createSignal<ReadonlySet<string>>(
+    new Set([
+      'macro|teo.nys@example.com',
+      'macro|teodora@example.com',
+      'macro|loose.mate@example.com',
+    ])
+  );
+  let list: ReturnType<typeof createContactDirectoryList> | undefined;
+  function Harness() {
+    const [search] = createSignal('teo');
+    list = createContactDirectoryList(
+      () => ({ userId: VIEWER }),
+      reader,
+      () => true,
+      {
+        search,
+        debounceMs: 0,
+        teammates,
+        directMessages: () =>
+          new Map([
+            ['macro|teo.old@example.com', '2026-01-05T00:00:00Z'],
+            ['macro|teo.dm@example.com', '2026-03-01T00:00:00Z'],
+            ['macro|prefix.dm@example.com', '2026-06-01T00:00:00Z'],
+            ['macro|loose.dm@example.com', '2026-02-01T00:00:00Z'],
+            ['macro|later.dm@example.com', '2026-07-01T00:00:00Z'],
+          ]),
+      }
+    );
+    return null;
+  }
+  render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(reader.mock.calls[0][2].teammates).toEqual([
+    'macro|loose.mate@example.com',
+    'macro|teo.nys@example.com',
+    'macro|teodora@example.com',
+  ]);
+  const names = () => list?.data()?.users.map((row) => row.name);
+  expect(names()).toEqual([
+    // Named, direct-message partners: exact by recency, then a word start.
+    'Teo Baker',
+    'Teo Olde',
+    'Teon Dale',
+    // Named teammates never messaged: exact, then a word start.
+    'Teo Nys',
+    'Teodora Vance',
+    // Named, everyone else.
+    'Teo Aaron',
+    // Loose matches, in the same three groups.
+    'Tate Eton',
+    'Stevie Leon',
+    'Mateo Rossi',
+  ]);
+
+  // A later page is listed below, whoever is on it.
+  await list?.loadNext();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(names()?.slice(-2)).toEqual(['Mateo Rossi', 'Otto Tennel']);
+
+  // A roster that changes reads page one again and orders it anew.
+  const reads = reader.mock.calls.length;
+  setTeammates(new Set(['macro|aaron@example.com']));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(reader.mock.calls).toHaveLength(reads + 1);
+  expect(reader.mock.lastCall?.[2]).toMatchObject({
+    cursor: undefined,
+    teammates: ['macro|aaron@example.com'],
+  });
+  expect(names()?.slice(3, 6)).toEqual([
+    'Teo Aaron',
+    'Teo Nys',
+    'Teodora Vance',
+  ]);
+  client.clear();
+});
+
+it('ranks a teammate whose listed ID differs from the roster only in case', async () => {
+  vi.useFakeTimers();
+  const stranger = {
+    id: 'macro|teo.amy@example.com',
+    email: 'teo.amy@example.com',
+    name: 'Teo Amy',
+  };
+  const teammate = {
+    id: 'macro|Teo.Zed@Example.com',
+    email: 'Teo.Zed@Example.com',
+    name: 'Teo Zed',
+  };
+  const reader = vi
+    .fn<typeof readContactDirectory>()
+    .mockImplementation(async (_viewer, _host, request) => ({
+      query: request.query,
+      source: 'server',
+      sync: 'unavailable',
+      offline: false,
+      users: [stranger, teammate],
+      named: { exact: [stranger.id, teammate.id], wordStart: [] },
+      nextCursor: null,
+    }));
+  const client = new QueryClient();
+  let list: ReturnType<typeof createContactDirectoryList> | undefined;
+  function Harness() {
+    const [search] = createSignal('teo');
+    list = createContactDirectoryList(
+      () => ({ userId: VIEWER }),
+      reader,
+      () => true,
+      {
+        search,
+        debounceMs: 0,
+        teammates: () => new Set(['macro|teo.zed@example.com']),
+      }
+    );
+    return null;
+  }
+  render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(list?.data()?.users.map((user) => user.name)).toEqual([
+    'Teo Zed',
+    'Teo Amy',
+  ]);
+  client.clear();
+});
+
+it('keeps the bound when a server page names more people than it', async () => {
+  vi.useFakeTimers();
+  const everyone = Array.from({ length: 520 }, (_, index) => person(index));
+  const reader = vi
+    .fn<typeof readContactDirectory>()
+    .mockImplementation(async (viewer, _host, request) => ({
+      query: request.query,
+      source: 'server',
+      sync: 'unavailable',
+      offline: false,
+      users: everyone,
+      named: { exact: [], wordStart: everyone.map((user) => user.id) },
+      nextCursor: {
+        source: 'server',
+        after: 'next',
+        userId: viewer,
+        query: request.query,
+        policyKey: hashKey([request.policy]),
+      },
+    }));
+  const client = new QueryClient();
+  let list: ReturnType<typeof createContactDirectoryList> | undefined;
+  function Harness() {
+    const [search] = createSignal('person');
+    list = createContactDirectoryList(
+      () => ({ userId: VIEWER }),
+      reader,
+      () => true,
+      { search, debounceMs: 0 }
+    );
+    return null;
+  }
+  render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(list?.data()?.users).toHaveLength(500);
+  expect(list?.data()?.users[499].id).toBe(person(499).id);
+  expect(list?.data()?.nextCursor).toBeNull();
+  client.clear();
+});
+
+it('reads the roster only for a typed search, so browsing keeps its pages when it loads', async () => {
+  vi.useFakeTimers();
+  const reader = vi
+    .fn<typeof readContactDirectory>()
+    .mockImplementation(async (_viewer, _host, request) =>
+      overlappingPage(request)
+    );
+  const client = new QueryClient();
+  const [teammates, setTeammates] = createSignal<ReadonlySet<string>>(
+    new Set()
+  );
+  const [search, setSearch] = createSignal('');
+  let list: ReturnType<typeof createContactDirectoryList> | undefined;
+  function Harness() {
+    list = createContactDirectoryList(
+      () => ({ userId: VIEWER }),
+      reader,
+      () => true,
+      { search, debounceMs: 0, teammates }
+    );
+    return null;
+  }
+  render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  const shown = () => list?.data()?.users.map((user) => user.id);
+  await vi.advanceTimersByTimeAsync(0);
+  await list?.loadNext();
+  await vi.advanceTimersByTimeAsync(0);
+  const browsed = shown();
+  expect(browsed).toHaveLength(5);
+
+  // The roster arrives while two browsed pages are listed.
+  const reads = reader.mock.calls.length;
+  setTeammates(new Set([person(9).id]));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(reader.mock.calls).toHaveLength(reads);
+  expect(shown()).toEqual(browsed);
+  expect(reader.mock.calls.every(([, , request]) => !request.teammates)).toBe(
+    true
+  );
+
+  setSearch('per');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(reader.mock.lastCall?.[2]).toMatchObject({
+    query: 'per',
+    teammates: [person(9).id],
+  });
+  client.clear();
+});

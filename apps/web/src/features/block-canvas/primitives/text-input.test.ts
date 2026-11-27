@@ -5,6 +5,19 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { createCanvasState } from './create-canvas-state';
 import { attachTextInput } from './text-input';
 
+// The test DOM has no PointerEvent. Touch navigation creates one to tell the
+// tools that a pen has taken the surface from a finger.
+class TestPointerEvent extends MouseEvent {
+  readonly pointerId: number;
+  readonly pointerType: string;
+  constructor(type: string, init: PointerEventInit = {}) {
+    super(type, init);
+    this.pointerId = init.pointerId ?? 0;
+    this.pointerType = init.pointerType ?? '';
+  }
+}
+vi.stubGlobal('PointerEvent', TestPointerEvent);
+
 const cleanups: (() => void)[] = [];
 afterEach(() => cleanups.splice(0).forEach((fn) => fn()));
 const MOUSE = { pointerId: 1, pointerType: 'mouse' };

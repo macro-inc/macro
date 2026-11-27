@@ -1,9 +1,13 @@
 use super::*;
 use crate::outbound::backfill_jobs::PgBackfillJobs;
+use crate::outbound::inbox_source::inbox_source;
 use crate::util::upload_attachment::{
     UploadAttachmentContext, UploadAttachmentError, upload_attachment,
 };
-use contacts::domain::{models::messages::ContactConnection, ports::ContactsIngress};
+use contacts::domain::{
+    models::messages::ContactConnection,
+    ports::{ContactListIngress, ContactsIngress},
+};
 use email_api_client::domain::models::{CalendarPart, ChangeBatch};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service::{
@@ -90,16 +94,20 @@ impl InboxSyncUploads for InboxSyncEffects {
 impl InboxSyncContacts for InboxSyncEffects {
     fn connect<'a>(
         &'a self,
-        owner: &'a MacroUserIdStr<'static>,
+        link: &'a Link,
         contacts: Vec<MacroUserIdStr<'static>>,
     ) -> BoxFuture<'a, anyhow::Result<()>> {
         Box::pin(async move {
             let connections = contacts
-                .into_iter()
-                .map(|contact| ContactConnection::new(owner.clone(), contact))
+                .iter()
+                .map(|contact| ContactConnection::new(link.macro_id.clone(), contact.clone()))
                 .collect();
             self.contacts_ingress
                 .enqueue_contact_connections(connections)
+                .await
+                .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+            self.contacts_ingress
+                .record_inbox_contacts(inbox_source(link), contacts)
                 .await
                 .map_err(|e| anyhow::anyhow!("{e:?}"))
         })

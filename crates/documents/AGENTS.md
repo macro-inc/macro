@@ -122,10 +122,18 @@ word docs, Illustrator/Photoshop files).
 - Add a document route: `src/domain/service.rs` (new domain method) →
   `src/inbound/axum_router.rs` → `src/domain/ports.rs` if it needs a new
   outbound capability.
+- Create tasks with explicit title pins by passing property definition IDs through `MarkdownSubtype::Task`; `MarkdownInitializationOptions` carries optional pins across the domain ports, leaving omitted pins implicit and preserving explicit empty lists.
+- Persist explicitly pinned empty fields as task-owned null assignments so every authorized task viewer can resolve them.
 - Create a document from a Notion page: `DocumentCreator::create_notion_markdown`
   (`src/domain/create.rs`) with a `NotionMarkdown` (`src/domain/notion_markdown.rs`);
   lexical-service converts it through `MarkdownInitializationPort::initialize_existing_notion`
-  and returns the Macro markdown that mention tracking reads.
+  and returns the Macro markdown that mention tracking reads. If the import
+  supplied a source last-edited time, its one-time ready transition persists
+  that time. Normal edits continue to advance the document timestamp.
+- Set creation-time link access with the canonical
+  `models_permissions::share_permission::InitialLinkShare` (re-exported from
+  `domain::models`); `NewDocumentMetadata::builder(..).initial_link_share(Off)`
+  selects `Exact(Off)` before the document row is inserted.
 - Create a document with its source's dates (an import): set
   `NewDocumentMetadata::builder(..).created_at(..).updated_at(..)`. Its folder
   and every folder above it then widen to those dates (`extend_project_dates`)
@@ -260,3 +268,8 @@ one as they do a document released today.
   Skill: `collab-surface-core`
 
 - Signed document grants carry agent correlation into Sync; editor deduplication and activity debounce include the invocation ID.
+
+Notion markdown initialization carries page-local database occurrence targets
+through `domain/notion_markdown.rs` to lexical-service. Keep UUIDs typed inside
+this domain and stringify them only at the outbound HTTP boundary; database
+sharing is independent of a document containing a card.

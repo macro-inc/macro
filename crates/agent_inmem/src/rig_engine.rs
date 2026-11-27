@@ -160,7 +160,7 @@ impl<Context> GatedToolSet<Context> {
     /// server the tool was registered under, never by its name's server
     /// segment, which another server's name can mangle to.
     fn reaches_remote_server(&self, tool_name: &str) -> bool {
-        tool_name.starts_with(mcp_select::MANGLED_PREFIX)
+        tool_name.starts_with(mcp_toolset::MANGLED_PREFIX)
             && self
                 .remote
                 .as_ref()
@@ -191,7 +191,7 @@ where
                 }));
             }
             let native = !UNGATED_NATIVE_TOOLS.contains(&tool_name)
-                && !tool_name.starts_with(mcp_select::MANGLED_PREFIX);
+                && !tool_name.starts_with(mcp_toolset::MANGLED_PREFIX);
             let arguments = if native {
                 // A tool that uses nobody's access (the web, Macro's help)
                 // takes no account and waits for nobody, but still asks the
@@ -306,7 +306,7 @@ async fn check_unless_cancelled(
 
 fn add_native_actor_schema(name: &str, schema: &mut schemars::Schema) {
     if !UNGATED_NATIVE_TOOLS.contains(&name)
-        && !name.starts_with(mcp_select::MANGLED_PREFIX)
+        && !name.starts_with(mcp_toolset::MANGLED_PREFIX)
         && agent_egress::domain::approval::spends_owner_access("macro", name)
         && let Some(schema) = schema.as_object_mut()
     {
@@ -428,7 +428,10 @@ impl TurnEngine for RigTurnEngine {
         let tool_context = self.tool_context.clone();
         let gate = Arc::clone(&self.gate);
         let metering = agent::MeteringContext::current();
-        tokio::spawn(
+        // A turn whose content is withheld keeps it withheld in its task.
+        let withheld = genai_telemetry::content_withheld();
+        tokio::spawn(genai_telemetry::withhold_content_if(
+            withheld,
             agent::MeteringContext::carry(metering, async move {
                 let mut request = request;
                 let Some(model) = select_auto_model(auto_model.as_ref(), &request).await else {
@@ -464,7 +467,7 @@ impl TurnEngine for RigTurnEngine {
                 forward_turn_result(turn, &parts).await;
             })
             .in_current_span(),
-        );
+        ));
         receiver
     }
 }
@@ -903,11 +906,11 @@ async fn drive_turn(
     let remote = mcp_tools.clone();
     let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = match mcp_tools {
         Some(mcp) if unseen => Arc::new(
-            mcp_select::CombinedToolSet::new(toolset, unseen::CodeModeOnly::new(mcp))
+            mcp_toolset::CombinedToolSet::new(toolset, unseen::CodeModeOnly::new(mcp))
                 .with_eager_mcp_tools(crate::domain::mcp::CODE_MODE_MCP_TOOLS),
         ),
         Some(mcp) => Arc::new(
-            mcp_select::CombinedToolSet::new(toolset, mcp)
+            mcp_toolset::CombinedToolSet::new(toolset, mcp)
                 .with_eager_mcp_tools(EAGER_INTERNAL_MCP_TOOLS),
         ),
         None => toolset,

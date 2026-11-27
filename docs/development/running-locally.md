@@ -105,7 +105,8 @@ fetch maps while DevTools is open. On a slow link this is the difference between
 ~100 MB and ~13 MB per load. Trust the CA rather than clicking through the
 certificate warning: Chrome caches nothing from a site with a certificate error.
 `MACRO_DEV_COMPRESSION=false` and `MACRO_DEV_INLINE_SOURCEMAPS=true` restore
-Vite's defaults.
+Vite's defaults. Source-map extraction inspects only the final map trailer,
+so multi-megabyte generated modules and dependency maps remain safe to serve.
 
 ## Run the local stack
 
@@ -293,7 +294,7 @@ environment the stack is started from) starts
 the model emulator (`crates/model_emulator`) as the `model_emulator` service,
 and `OVERRIDE_GOOGLE_GENERATIVE_AI_API_URL` points the agent harness's Gemini
 client at it (`xtask_local`'s `model_emulator.rs`). A new local user is on
-the free plan, whose model is Gemini Flash, so the assistant's turns are answered by the
+the free plan, whose model is Gemini 4 Hydrogen, so the assistant's turns are answered by the
 emulator, not by a model provider. Image generation does not go through it.
 
 - Every message is answered `OK.` until a script says otherwise. Add one with
@@ -372,8 +373,9 @@ persona accounts it created. It is safe to run against a stack that you tested i
 
 Passwords uses a local OpenBao server with team-scoped namespaces and single-node
 integrated Raft on a named Compose volume per instance. Startup initializes it once
-and unseals it automatically with a generated local seal key. Provision each new team
-using the [local vault bootstrap](../../infra/local/openbao/README.md); container
+and unseals it automatically with a generated local seal key. Stack startup provisions
+every existing team; for a team created later run `just passwords_provision`
+(see the [local vault bootstrap](../../infra/local/openbao/README.md)). Container
 and stack restarts preserve credentials, TOTP seeds, and provisioning without a
 reseed. Keep the volume and seal key together, and use synthetic credentials only.
 Migrating from the old in-memory development server requires restoring its values
@@ -1021,7 +1023,7 @@ it with `endpoint = "http://127.0.0.1:3100/otlp"` and `traces = false`.
 
 ### Your stacks' telemetry in Grafana (opt-in)
 
-To see your local stacks' own traces, logs and metrics in the hosted Grafana,
+To see your local stacks' own traces and metrics in the hosted Grafana,
 next to dev's, add `services = true` to the same settings file. It applies to
 every stack on the machine, from every worktree and instance:
 
@@ -1039,7 +1041,8 @@ the file as having unknown keys and send no timings until they are rebased. The 
 everything it receives there; stacks that are already running are sent from then
 on, but carry their instance name only after their next bring-up. The summary
 links the `Macro run_local` dashboard filtered to your machine: its last row
-shows bring-ups, stacks, traces, error logs and logs by machine.
+shows traces by machine. The hosted ingest drops local stacks' logs, so read
+those in the machine's own Loki (http://localhost:3001).
 
 **What is sent.** Everything your services send to the local collector, which
 includes request attributes, log messages and error text from your local data;

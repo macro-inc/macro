@@ -1,8 +1,9 @@
 import { createEffect, createSignal, on, onMount, Show } from 'solid-js';
 import { analytics } from '../../../app/utils/utilAnalytic';
 import presenterPhoto from '../../../assets/people/tutorial-presenter.jpg';
-import { createSitePalette } from '../../setup/sitePalette';
+import { sitePalette } from '../../setup/sitePalette';
 import {
+  hasLightTutorialPreview,
   TUTORIAL_PRESENTER,
   TUTORIAL_VIDEOS,
   type TutorialVideoId,
@@ -67,15 +68,22 @@ export function TutorialVideoEmbed(props: {
   tutorial: TutorialVideoId;
   backdrop?: boolean;
 }) {
-  const palette = createSitePalette();
   const [started, setStarted] = createSignal(false);
   let video: HTMLVideoElement | undefined;
   let playRecorded = false;
 
   const tutorial = () => TUTORIAL_VIDEOS[props.tutorial];
+  const lightPreview = () =>
+    sitePalette() === 'cream' && hasLightTutorialPreview(props.tutorial);
   const usesBenefitPoster = () => {
     const entry = tutorial();
     return 'preview' in entry && entry.preview === 'benefit';
+  };
+  const watchLabel = () => {
+    const { feature, length } = tutorial();
+    return usesBenefitPoster()
+      ? `Watch\u00a0demo\u00a0·\u00a0${length}`
+      : `Watch ${feature} demo · ${length}`;
   };
   // The diagram stands in for the video until it starts. This is a class and
   // not a `:has()` on the diagram: the video must never be hidden when play is
@@ -158,8 +166,8 @@ export function TutorialVideoEmbed(props: {
             <div class="tutorial-video-poster" aria-hidden="true">
               <TutorialWallpaper tutorial={props.tutorial} />
               <PreviewWindow
-                src={tutorialPreviewUrl(props.tutorial, palette() === 'cream')}
-                light={palette() === 'cream'}
+                src={tutorialPreviewUrl(props.tutorial, lightPreview())}
+                light={lightPreview()}
               />
             </div>
           </Show>
@@ -183,9 +191,7 @@ export function TutorialVideoEmbed(props: {
             <img src={presenterPhoto} alt="" />
             <span class="tutorial-video-byline">
               <span>{TUTORIAL_PRESENTER}</span>
-              <span>
-                Watch {tutorial().feature} demo · {tutorial().length}
-              </span>
+              <span>{watchLabel()}</span>
             </span>
           </button>
         </Show>

@@ -67,3 +67,22 @@ element transformers only on top-level nodes, so `listItemImage` exports it as
 an indented line, and the image importers attach an indented image line after a
 list to its last item. Add it to any new transformer set that has image
 transformers.
+
+Notion database blocks resolve through `NotionLinks.databases`, a page-local
+array keyed by dashless container ID from the URL path and zero-based ordinal
+per container. Each target selects a database/table/optional view for the
+existing `DocumentCardNode`; absent or failed targets remain named Notion links
+with a typed reason. Database mentions remain compact references. Keep the
+ordinal counter shared across recursive container imports and ignore code.
+Both parsers read `crates/import_notion/fixtures/database_occurrences.md`;
+split mid-line database tags into blocks, accept self-closing tags and either
+quote form, and exclude comments, code and escaped tags from the counter.
+
+Creation-time markdown snapshots write explicit root pins as `pending:<definitionId>`; omit initial pins to preserve the blank golden snapshot and implicit defaults.
+
+The Notion importer parses exact page and view references in `notion/links.ts`.
+Keep malformed and external URLs, code, and unmapped block anchors intact.
+Recognize an exact child-page block anchor only on a typed child-page placeholder.
+Use the child's Notion page URL when the placeholder has no mapped mention so
+the deferred workspace import pass can resolve it.
+Database cards remain a separate occurrence-based conversion.

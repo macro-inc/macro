@@ -276,3 +276,125 @@ fn timelines_round_trip_and_states_without_one_still_decode() {
     let state: crate::domain::lifecycle::ComputerState = serde_json::from_value(untimed).unwrap();
     assert_eq!(state.setup, None);
 }
+
+#[test]
+fn an_agent_computer_times_its_hand_off_and_the_agents_start() {
+    let mut timeline = SetupTimeline::started(at(0));
+    timeline.advance(
+        &Phase::Booting,
+        false,
+        false,
+        PaymentProgress::Settled,
+        at(3),
+    );
+    timeline.advance(
+        &Phase::Running,
+        true,
+        false,
+        PaymentProgress::Settled,
+        at(4),
+    );
+    let quiet = AgentProgress {
+        reported_online: false,
+        delivered: false,
+    };
+
+    // Connected, but the charge hasn't settled: nothing handed over yet.
+    assert_eq!(timeline.advance_agent(quiet, at(5)), vec![]);
+    assert_eq!(
+        timeline.advance_agent(
+            AgentProgress {
+                reported_online: false,
+                delivered: true,
+            },
+            at(6)
+        ),
+        vec![PhaseTiming {
+            phase: SetupPhase::AgentHandoff,
+            started_at: at(4),
+            ended_at: at(6),
+        }]
+    );
+    // A redelivery after the start deadline changes nothing.
+    assert_eq!(
+        timeline.advance_agent(
+            AgentProgress {
+                reported_online: false,
+                delivered: true,
+            },
+            at(200)
+        ),
+        vec![]
+    );
+    assert_eq!(
+        timeline.advance_agent(
+            AgentProgress {
+                reported_online: true,
+                delivered: false,
+            },
+            at(214)
+        ),
+        vec![PhaseTiming {
+            phase: SetupPhase::AgentStart,
+            started_at: at(6),
+            ended_at: at(214),
+        }]
+    );
+    assert_eq!(timeline.advance_agent(quiet, at(300)), vec![]);
+}
+
+#[test]
+fn a_computer_without_an_agent_times_no_agent_phases() {
+    let mut timeline = SetupTimeline::started(at(0));
+    timeline.advance(
+        &Phase::Running,
+        true,
+        false,
+        PaymentProgress::Settled,
+        at(4),
+    );
+
+    assert_eq!(
+        timeline.advance_agent(
+            AgentProgress {
+                reported_online: true,
+                delivered: false,
+            },
+            at(5)
+        ),
+        vec![]
+    );
+}
+
+/// A start given up on after its retries stops the wait without a report:
+/// the agent never came online, so no start is timed.
+#[test]
+fn giving_up_on_an_agent_times_no_start() {
+    let mut timeline = SetupTimeline::started(at(0));
+    timeline.advance(
+        &Phase::Running,
+        true,
+        false,
+        PaymentProgress::Settled,
+        at(4),
+    );
+    timeline.advance_agent(
+        AgentProgress {
+            reported_online: false,
+            delivered: true,
+        },
+        at(5),
+    );
+
+    assert_eq!(
+        timeline.advance_agent(
+            AgentProgress {
+                reported_online: false,
+                delivered: false,
+            },
+            at(400)
+        ),
+        vec![]
+    );
+    assert_eq!(timeline.agent_online_at, None);
+}

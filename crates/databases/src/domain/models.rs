@@ -308,10 +308,34 @@ pub struct RowRef {
 /// column that infers its type from its first value, holds each row's title.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FirstTable {
+    /// Stable starter identities for a resumable import, otherwise generated.
+    pub ids: Option<FirstTableIds>,
     /// The table's display name.
     pub name: String,
     /// The title column's display name.
     pub title_column: &'static str,
+}
+
+/// Starter table and title-column identities reserved with an import database.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FirstTableIds {
+    /// The source's table, independent of subsequent UI tab order.
+    pub table: TableId,
+    /// Its original title column.
+    pub title_column: ColumnId,
+}
+
+impl FirstTableIds {
+    /// Reserve the same identities on every attempt, including a lost response.
+    pub fn for_database(database: DatabaseId) -> Self {
+        Self {
+            table: TableId::from_uuid(Uuid::new_v5(database.as_uuid(), b"import/table")),
+            title_column: ColumnId::from_uuid(Uuid::new_v5(
+                database.as_uuid(),
+                b"import/title-column",
+            )),
+        }
+    }
 }
 
 /// Command to create a database (with its [`FirstTable`]).

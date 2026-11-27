@@ -48,6 +48,7 @@ import Linear from '../../../assets/icons/logo-linear.svg';
 import Notion from '../../../assets/icons/logo-notion.svg';
 import Slack from '../../../assets/icons/logo-slack.svg';
 import Superhuman from '../../../assets/icons/logo-superhuman.svg';
+import { ThemeToggle } from '../../marketing/components/ThemeToggle';
 import {
   FEATURE_PAGES,
   featureHrefForGuide,
@@ -177,7 +178,7 @@ const mainBenefits = guideNavigation.filter(
 const agentGuides = guideNavigation.filter(
   (entry) => typeof entry !== 'string' && entry.group === 'Agent setup'
 );
-const moreLinks = [
+const moreLinks: { href: string; title: string; desktopOnly?: boolean }[] = [
   { href: '/pricing', title: 'Pricing' },
   { href: '/docs/account/teams', title: 'Teams & Admin' },
   { href: '/docs/security', title: 'Security' },
@@ -186,7 +187,8 @@ const moreLinks = [
   { href: '/posts', title: 'Blog' },
   { href: '/partners', title: 'Partners' },
   { href: '/jobs', title: 'Jobs' },
-  { href: '/download', title: 'Download Macro' },
+  // The desktop download page is not offered on phones.
+  { href: '/download', title: 'Download Macro', desktopOnly: true },
   { href: '/legal', title: 'Legal' },
 ];
 
@@ -194,6 +196,15 @@ export function DocumentationNavigation(props: { currentPath: string }) {
   const compact = createMediaQuery(
     '(min-width: 768px) and (max-width: 1439px)'
   );
+  const desktop = createMediaQuery('(min-width: 768px)');
+  // The desktop sidebar shares its row with the theme toggle, so the hint
+  // shortens as the sidebar narrows.
+  const searchPlaceholder = () => {
+    const shortcut = isMac ? '⌘F' : 'Ctrl+F';
+    if (compact()) return 'Search';
+    if (desktop()) return `Search ${shortcut}`;
+    return `Search pages ${shortcut}`;
+  };
   const [query, setQuery] = createSignal('');
   const [searchActive, setSearchActive] = createSignal(false);
   const [searchPages] = createResource(
@@ -307,7 +318,7 @@ export function DocumentationNavigation(props: { currentPath: string }) {
             aria-label="Search pages"
             aria-controls="site-search-results"
             autocomplete="off"
-            placeholder={`${compact() ? 'Search' : 'Search pages'} ${isMac ? '⌘F' : 'Ctrl+F'}`}
+            placeholder={searchPlaceholder()}
             value={query()}
             onFocus={() => setSearchActive(true)}
             onInput={(event) => {
@@ -327,6 +338,7 @@ export function DocumentationNavigation(props: { currentPath: string }) {
             </button>
           </Show>
         </div>
+        <ThemeToggle />
       </div>
       <Show
         when={query().trim()}
@@ -478,6 +490,9 @@ export function DocumentationNavigation(props: { currentPath: string }) {
                 {(page) => (
                   <a
                     href={page.href}
+                    class={
+                      page.desktopOnly ? 'doc-nav-desktop-only' : undefined
+                    }
                     aria-current={
                       props.currentPath.replace(/\/$/, '') === page.href
                         ? 'page'

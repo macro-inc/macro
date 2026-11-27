@@ -10,13 +10,14 @@ use model_owner::CreationPrincipal;
 
 use super::model::{
     Accept, AttachDraft, Change, GenerationSession, GenerationTrigger, NewKind, NewSuggestion,
-    OpenTarget, ResolveReason, RetireSuggestionRequest, RewriteSuggestion, RoutineText,
+    OpenTarget, ResolveReason, RetireSuggestionRequest, RewriteSuggestion, RoutineText, RunReport,
     RunStartError, SessionReadError, SessionState, StoredRun, Suggestion, SuggestionCaller,
     SuggestionContent, SuggestionError, SuggestionFeed, SuggestionState, SuggestionWriteOutcome,
     SuggestionsReview, Target, Waiting,
 };
 use super::resolution::{ResolutionEvent, Resolved};
 use super::run::{Advanced, RunState, SessionEvent};
+use super::topic::{NameTopic, StoredTopic};
 
 /// Limits a write must stay within, checked where it is stored so two
 /// writes at once can't pass them together.
@@ -90,6 +91,24 @@ pub trait SuggestionRepo: Send + Sync + 'static {
         user: &MacroUserIdStr<'_>,
         dedup_key: &str,
     ) -> impl Future<Output = Result<Option<Suggestion>, Self::Err>> + Send;
+
+    /// Those of the person's topics `keys` that exist.
+    fn topics(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        keys: &[String],
+    ) -> impl Future<Output = Result<Vec<StoredTopic>, Self::Err>> + Send;
+
+    /// Store `topic` for the person, replacing the name and reason it had, as
+    /// `session` names it at `at`; false when its generation has named
+    /// `limit` others already.
+    fn name_topic(
+        &self,
+        session: &GenerationSession,
+        topic: &NameTopic,
+        limit: u32,
+        at: DateTime<Utc>,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// How many suggestions generation `generation` added or brought back.
     fn added_in(&self, generation: Uuid) -> impl Future<Output = Result<u32, Self::Err>> + Send;
@@ -213,14 +232,32 @@ pub trait SuggestionRepo: Send + Sync + 'static {
         change: &Change,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Bring back the person's suggestion `id` if they dismissed it at
-    /// `dismissed_since` or later, as proposed; a run its dismissal cancelled
-    /// stays cancelled. Whether it came back.
-    fn undismiss(
+    /// Bring back the person's suggestion `id` if they dismissed it, or it
+    /// became done, at `closed_since` or later, as proposed; a run its
+    /// dismissal cancelled stays cancelled. Whether it came back.
+    fn undo(
         &self,
         user: &MacroUserIdStr<'_>,
         id: Uuid,
-        dismissed_since: DateTime<Utc>,
+        closed_since: DateTime<Utc>,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Store `report` on the person's unsettled run `session`, replacing an
+    /// earlier one; whether there is such a run.
+    fn report_run(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        session: Uuid,
+        report: &str,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Cancel the unsettled run of the person's suggestion `id` while the
+    /// suggestion is open, which stays as it is; whether it is open.
+    fn cancel_run(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        id: Uuid,
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
@@ -278,7 +315,7 @@ pub trait SuggestionAccess: Send + Sync + 'static {
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Whether `part` is one of `target`'s item's own parts, such as a
-    /// message of its channel. Parts never move, so writes check this once.
+    /// message of its channel; one since deleted isn't.
     fn is_part_of(
         &self,
         target: &Target,
@@ -466,7 +503,31 @@ pub trait SuggestionApi: Send + Sync + 'static {
         id: Uuid,
     ) -> impl Future<Output = Result<(), SuggestionError>> + Send;
 
-    /// The person, or their own agent, takes back dismissing a suggestion, within
+    /// The person, or their own agent, stops an open suggestion's run without
+    /// dismissing the suggestion: the run is cancelled and its session
+    /// stopped, and once it settles the suggestion is open to run again.
+    /// Nothing under way is nothing to stop.
+    fn stop_run(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        caller: SuggestionCaller,
+        id: Uuid,
+    ) -> impl Future<Output = Result<(), SuggestionError>> + Send;
+
+    /// A background run, from its own session, says in one line what it did
+    /// and what it sent, for its card; a later report replaces an earlier one.
+    /// A report that isn't one plain line naming nobody's details is refused
+    /// with what to fix. Any caller but an unsettled run is refused
+    /// (`NotARun`).
+    fn report_run(
+        &self,
+        principal: &CreationPrincipal,
+        correlation: Option<Uuid>,
+        report: RunReport,
+    ) -> impl Future<Output = Result<SuggestionWriteOutcome, SuggestionError>> + Send;
+
+    /// The person, or their own agent, takes back dismissing a suggestion, or
+    /// completing one they acted on themself, within
     /// [`RESTORE_WITHIN`](super::service::RESTORE_WITHIN) of it: it is proposed
     /// again, and a run the dismissal cancelled stays cancelled.
     fn restore(
@@ -512,6 +573,15 @@ pub trait SuggestionApi: Send + Sync + 'static {
         correlation: Option<Uuid>,
         id: Uuid,
         request: RewriteSuggestion,
+    ) -> impl Future<Output = Result<SuggestionWriteOutcome, SuggestionError>> + Send;
+
+    /// Name a topic suggestions may belong to, or change the name and reason
+    /// of the one with its key.
+    fn name_topic(
+        &self,
+        principal: &CreationPrincipal,
+        correlation: Option<Uuid>,
+        request: NameTopic,
     ) -> impl Future<Output = Result<SuggestionWriteOutcome, SuggestionError>> + Send;
 
     /// Retire an open suggestion that no longer matters.

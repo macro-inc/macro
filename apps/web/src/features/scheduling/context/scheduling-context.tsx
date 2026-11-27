@@ -4,6 +4,7 @@ import {
   type ParentProps,
   useContext,
 } from 'solid-js';
+import type { BookingAccount } from '../core/booking-account';
 import type {
   Booking,
   BookingAttendance,
@@ -28,6 +29,8 @@ export type SchedulingSource = {
 export type SchedulingCapabilities = {
   scopes: Accessor<SchedulingScope[]>;
   members: Accessor<SchedulingMember[]>;
+  /** Connected accounts the user's personal links can book on, primary first. */
+  bookingAccounts: Accessor<BookingAccount[]>;
   userId: Accessor<string>;
   createSource: (
     scope: Accessor<SchedulingScope>,

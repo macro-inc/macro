@@ -1,8 +1,10 @@
 import type { CombinedError } from '@urql/core';
-import { type Accessor, createMemo } from 'solid-js';
+import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { arrayEquals } from '../../../core/util/compareUtils';
+import { readRowSnapshot } from '../../../graphql-cache/exchange/live-query';
 import type { QueryRevalidation } from '../../../graphql-cache/exchange/optimistic';
 import type { CacheRevision } from '../../../graphql-cache/protocol';
+import type { SoupApiItem } from '../../../service-clients/service-storage/generated/schemas';
 import {
   type GraphqlSoupItem,
   mapGraphqlSoupItem,
@@ -56,6 +58,8 @@ export type GraphqlSoupAstItemsQuery = {
   isEnabled: Accessor<boolean>;
   isLoading: Accessor<boolean>;
   isFetching: Accessor<boolean>;
+  /** Excludes partial local predicate snapshots with no cached or fetched page. */
+  hasPageData: Accessor<boolean>;
   isFetchingNextPage: Accessor<boolean>;
   /** The current error came from loading a continuation page. */
   isFetchNextPageError: Accessor<boolean>;
@@ -112,6 +116,11 @@ export function createGraphqlSoupAstItemsQuery(
         : { key, record, fetched: baseline };
     });
   }, []);
+  // Retain raw SoupApiItems only for Mail views (consumed by `itemsById` when
+  // cached Mail is active) so other views neither duplicate mapped rows nor
+  // break `createKeyedProjection`'s structural equality check with closures.
+  const mailItems = new Map<string, SoupApiItem>();
+  const [mailItemsVersion, setMailItemsVersion] = createSignal(0);
   const projected = createKeyedProjection(
     records,
     (row) => row.key,
@@ -119,16 +128,33 @@ export function createGraphqlSoupAstItemsQuery(
       const sort = sortMethod();
       const showSupportedForeignEntities = showForeign();
       const view = { emailView: input()?.emailView };
-      const item = mapGraphqlSoupItem(record, view);
-      const fetchedItem =
+      const rawRecord = readRowSnapshot(record);
+      const rawFetched =
         fetched === record
-          ? item
+          ? rawRecord
           : fetched
-            ? mapGraphqlSoupItem(fetched, view)
+            ? readRowSnapshot(fetched)
             : undefined;
+      const item = mapGraphqlSoupItem(rawRecord, view);
+      const fetchedItem =
+        rawFetched === rawRecord
+          ? item
+          : rawFetched
+            ? mapGraphqlSoupItem(rawFetched, view)
+            : undefined;
+      const key = soupItemKey(rawRecord);
+      if (view.emailView !== undefined) {
+        if (item) {
+          if (mailItems.get(key) !== item) {
+            mailItems.set(key, item);
+            setMailItemsVersion((version) => version + 1);
+          }
+        } else if (mailItems.delete(key)) {
+          setMailItemsVersion((version) => version + 1);
+        }
+      }
       return {
-        key: soupItemKey(record),
-        item: () => item,
+        key,
         entity: item
           ? mapSoupPageToEntityList(
               { items: [item], next_cursor: undefined },
@@ -141,9 +167,15 @@ export function createGraphqlSoupAstItemsQuery(
       };
     }
   );
-  const byKey = createMemo(
-    () => new Map(projected().map((item) => [item.key, item]))
-  );
+  const byKey = createMemo(() => {
+    const map = new Map(projected().map((item) => [item.key, item]));
+    if (mailItems.size > 0) {
+      for (const key of mailItems.keys()) {
+        if (!map.has(key)) mailItems.delete(key);
+      }
+    }
+    return map;
+  });
   const visible = createMemo(
     () =>
       (source.data() ?? []).flatMap((record) => {
@@ -156,16 +188,16 @@ export function createGraphqlSoupAstItemsQuery(
   const entities = createMemo(() =>
     visible().flatMap((item) => (item.entity ? [item.entity] : []))
   );
-  const itemsById = createMemo(() =>
-    source.cachedMail()
-      ? Object.fromEntries(
-          visible().flatMap((row) => {
-            const item = row.item();
-            return item ? [[mapApiSoupItemToEntity(item).id, item]] : [];
-          })
-        )
-      : undefined
-  );
+  const itemsById = createMemo(() => {
+    if (!source.cachedMail()) return undefined;
+    mailItemsVersion();
+    return Object.fromEntries(
+      visible().flatMap((row) => {
+        const item = mailItems.get(row.key);
+        return item ? [[mapApiSoupItemToEntity(item).id, item] as const] : [];
+      })
+    );
+  });
   const oldestFetchedTimestamp = createMemo(() => {
     let oldest = Infinity;
     for (const record of source.fetchedRecords()) {

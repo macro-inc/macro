@@ -1,21 +1,17 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/composite/setup_sccache.rs
 name: Setup sccache
-
 description: Install sccache and configure it as RUSTC_WRAPPER.
-
 inputs:
   version:
     description: sccache release version to install
     required: false
     default: v0.15.0
-
 runs:
   using: composite
   steps:
     - name: Install sccache
-      shell: bash
-      env:
-        SCCACHE_VERSION: ${{ inputs.version }}
-      run: |
+      run: | # zizmor: ignore[github-env] puts sccache on PATH for later steps
         set -euo pipefail
 
         install_dir="$HOME/.local/bin"
@@ -87,9 +83,10 @@ runs:
         chmod +x "$sccache_bin"
 
         echo "Installed sccache: $($sccache_bin --version)"
-
-    - name: Configure sccache
       shell: bash
+      env:
+        SCCACHE_VERSION: ${{ inputs.version }}
+    - name: Configure sccache
       run: |
         set -euo pipefail
 
@@ -105,3 +102,4 @@ runs:
         } >> "$GITHUB_ENV"
 
         "$sccache_bin" --version
+      shell: bash

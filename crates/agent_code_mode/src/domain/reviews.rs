@@ -108,6 +108,11 @@ pub struct CreateReview {
 /// Persisted review item state shared with typed system notifications.
 pub use agent_runtime_protocol::domain::notification::ItemStatus as ReviewItemStatus;
 
+/// Why a submit was refused before anything started. The card shows it, so
+/// it speaks to the owner; `DecideReview` adds what the agent should do.
+const NOT_APPROVABLE: &str =
+    "This plan isn't ready to approve yet, so nothing was started. Approve it once it's ready.";
+
 /// Full UI record, fetched outside the model context.
 #[derive(Clone, Serialize, Deserialize, ToSchema, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -259,6 +264,26 @@ pub trait ReviewActions: Send + Sync + 'static {
     ) -> Result<bool, CodeModeError> {
         Ok(true)
     }
+    /// `record` was dismissed: let go of anything it holds for the session
+    /// `owner` (who presented it). Default: nothing.
+    async fn released(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+        _record: &ReviewRecord,
+    ) -> Result<(), CodeModeError> {
+        Ok(())
+    }
+    /// Whether a new `record` can be presented to `owner`, checked before it
+    /// is saved so a refused review leaves no record that a later read would
+    /// try to present again. A kind whose review depends on other work (an
+    /// import's plan) refuses with the reason. Default: always.
+    async fn presentable(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+        _record: &ReviewRecord,
+    ) -> Result<(), CodeModeError> {
+        Ok(())
+    }
     /// Send a reviewed email as the record's saved, authenticated account holder.
     async fn send_email(
         &self,
@@ -279,6 +304,9 @@ pub trait ReviewActions: Send + Sync + 'static {
         record: &ReviewRecord,
         draft: &ImportDraft,
     ) -> Result<ImportResult, CodeModeError>;
+    /// Add safe defaults to a pending review before saving or returning it.
+    /// Return true when its draft or a missing saved-draft receipt needs a save.
+    async fn normalize(&self, record: &mut ReviewRecord) -> Result<bool, CodeModeError>;
     /// Persist and stream a completed presentation without waiting for user action.
     /// Repeated calls with the same review ID must not duplicate its ACP frames.
     async fn present(
@@ -415,6 +443,8 @@ impl ReviewService {
             decision: None,
             items: input.drafts.into(),
         };
+        let owner = self.owner(session).await?;
+        self.actions.presentable(&owner, &record).await?;
         self.store.create(&record, MAX_REVIEWS_PER_SESSION).await?;
         self.present(record).await
     }
@@ -427,7 +457,22 @@ impl ReviewService {
         // Presentation writes the session transcript, whose capability belongs
         // to the session owner. The record's immutable actor governs all actions.
         let owner = self.owner(record.session_id).await?;
-        self.actions.present(&owner, &record).await?;
+        match self.actions.present(&owner, &record).await {
+            Ok(()) => {}
+            Err(CodeModeError::Unpresentable(reason)) => {
+                // Settled, so no later read presents it again.
+                for item in record.items.states_mut() {
+                    item.status = ReviewItemStatus::Dismissed;
+                    item.error = Some(reason.clone());
+                }
+                match self.save(&mut record, None).await {
+                    Ok(()) | Err(CodeModeError::Conflict) => {}
+                    Err(error) => return Err(error),
+                }
+                return Err(CodeModeError::Unpresentable(reason));
+            }
+            Err(error) => return Err(error),
+        }
         record.presented_at = Some(chrono::Utc::now().timestamp_millis());
         match self.save(&mut record, None).await {
             Ok(()) => Ok(record),
@@ -458,8 +503,30 @@ impl ReviewService {
         Ok(records)
     }
     async fn refresh(&self, mut record: ReviewRecord) -> Result<ReviewRecord, CodeModeError> {
-        if record.presented_at.is_none() {
-            record = self.present(record).await?;
+        // A review dismissed before it was presented could never be shown
+        // (`CodeModeError::Unpresentable`); it is returned as it is.
+        let never_shown = record
+            .items
+            .states()
+            .iter()
+            .all(|item| item.status == ReviewItemStatus::Dismissed);
+        if record.presented_at.is_none() && !never_shown {
+            let (session, id) = (record.session_id, record.id);
+            record = match self.present(record).await {
+                Ok(record) => record,
+                // Settled just now: a read returns it like any later read.
+                Err(CodeModeError::Unpresentable(_)) => self.store.get(session, id).await?,
+                Err(error) => return Err(error),
+            };
+        }
+        if self.normalize(&mut record).await? {
+            match self.save(&mut record, None).await {
+                Ok(()) => {}
+                Err(CodeModeError::Conflict) => {
+                    record = self.store.get(record.session_id, record.id).await?
+                }
+                Err(error) => return Err(error),
+            }
         }
         // A killed replica cannot leave a permanent spinner or permit a blind retry.
         if chrono::Utc::now().timestamp_millis() - record.updated_at > STALE_SUBMISSION_MS
@@ -490,11 +557,25 @@ impl ReviewService {
         }
         Ok(record)
     }
+    async fn normalize(&self, record: &mut ReviewRecord) -> Result<bool, CodeModeError> {
+        if record.decision.is_some()
+            || record
+                .items
+                .states()
+                .iter()
+                .any(|item| item.status != ReviewItemStatus::Pending)
+        {
+            return Ok(false);
+        }
+        self.actions.normalize(record).await
+    }
+
     async fn save(
         &self,
         record: &mut ReviewRecord,
         event: Option<NotificationEvent>,
     ) -> Result<(), CodeModeError> {
+        self.normalize(record).await?;
         if serde_json::to_vec(record).map_err(|_| invalid())?.len() > MAX_RECORD_BYTES {
             return Err(invalid());
         }
@@ -585,18 +666,6 @@ impl ReviewService {
         {
             return Err(CodeModeError::Forbidden);
         }
-        if let ReviewDecision::Submit { .. } = decision {
-            let record = self.store.get(session, id).await?;
-            if self.record_actor(&record).await? != *actor {
-                return Err(CodeModeError::Forbidden);
-            }
-            if !self.actions.approvable(actor, &record).await? {
-                return Err(CodeModeError::Invalid(
-                    "This review is not ready to approve yet. Check it again before approving."
-                        .into(),
-                ));
-            }
-        }
         self.decide_owned(session, actor, id, decision, DecisionVia::Chat)
             .await
     }
@@ -668,6 +737,12 @@ impl ReviewService {
         if selected.is_empty() {
             return Ok(record);
         }
+        // The card and the chat approve by the same rule: a kind whose
+        // action depends on other work (an import's ready plan) refuses
+        // until it can start.
+        if submit && !self.actions.approvable(actor, &record).await? {
+            return Err(CodeModeError::NotApprovable(NOT_APPROVABLE.into()));
+        }
         if submit {
             for (position, (index, _)) in selected.iter().enumerate() {
                 if let Some(problem) = record.items.submission_problem(*index) {
@@ -687,6 +762,9 @@ impl ReviewService {
                 } else {
                     ReviewItemStatus::Dismissed
                 };
+                // A new decision starts clean: an earlier refusal's reason
+                // no longer applies.
+                item.error = None;
             }
         }
         record.decision = Some(ReviewDecisionContext {
@@ -697,6 +775,18 @@ impl ReviewService {
         });
         let event = NotificationEvent::ReviewDecided(review_outcome(&record));
         self.save(&mut record, Some(event)).await?;
+        if !submit {
+            // A dismissed review lets go of what it held (an import's plan),
+            // so the next review can present it. Best effort: the decision
+            // is saved either way.
+            let released = match self.owner(record.session_id).await {
+                Ok(owner) => self.actions.released(&owner, &record).await,
+                Err(error) => Err(error),
+            };
+            if let Err(error) = released {
+                tracing::warn!(error = ?error, "could not release a dismissed review");
+            }
+        }
         let response = record.clone();
         let service = self.clone();
         let actor = actor.clone();
@@ -711,15 +801,35 @@ impl ReviewService {
                         service.perform(&actor, &record, index).await
                     })
                     .await;
-                    let completed = match outcome {
-                        Ok(Ok(result)) => record.items.complete(index, result).is_ok(),
-                        _ => false,
+                    let (completed, not_started) = match outcome {
+                        Ok(Ok(result)) => (record.items.complete(index, result).is_ok(), None),
+                        // Refused before anything started: certain, not unknown.
+                        Ok(Err(CodeModeError::NotApprovable(reason))) => {
+                            tracing::info!(reason = %reason, "reviewed action refused before it started");
+                            (false, Some(reason))
+                        }
+                        Ok(Err(error)) => {
+                            tracing::warn!(error = ?error, "reviewed action failed");
+                            (false, None)
+                        }
+                        Err(_) => {
+                            tracing::warn!("reviewed action timed out");
+                            (false, None)
+                        }
                     };
                     if !completed
                         && let Some(item) = record.items.states_mut().get_mut(index)
                     {
-                        item.status = ReviewItemStatus::Unknown;
-                        item.error = Some("The submission outcome could not be confirmed. Check the destination before retrying.".into());
+                        match not_started {
+                            Some(reason) => {
+                                item.status = ReviewItemStatus::Pending;
+                                item.error = Some(reason);
+                            }
+                            None => {
+                                item.status = ReviewItemStatus::Unknown;
+                                item.error = Some("The submission outcome could not be confirmed. Check the destination before retrying.".into());
+                            }
+                        }
                     }
                     // A started import settles when its write ends; only one that
                     // could not start settles here.
@@ -805,6 +915,14 @@ pub fn review_outcome(record: &ReviewRecord) -> ReviewOutcome {
         .all(|item| item.status == ItemStatus::Dismissed)
     {
         DecisionOutcome::Dismissed
+    } else if !items.is_empty()
+        && items
+            .iter()
+            .all(|item| item.status == ItemStatus::Pending && item.error.is_some())
+    {
+        // Every approved action was refused before it started; the review
+        // is open again, unchanged.
+        DecisionOutcome::Refused
     } else if items
         .iter()
         .all(|item| matches!(item.status, ItemStatus::Completed | ItemStatus::Submitting))

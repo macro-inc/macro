@@ -6,6 +6,7 @@ import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownCon
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { iosCursorScrollPlugin } from '@core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
 import { keyboardShortcutsPlugin } from '@core/component/LexicalMarkdown/plugins/keyboard-shortcuts';
+import { $canOutdentSelection } from '@core/component/LexicalMarkdown/plugins/tab-indentation';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { fileSelector } from '@core/directive/fileSelector';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -19,7 +20,7 @@ import { ToggleButton as KToggleButton } from '@kobalte/core/toggle-button';
 import { isIOS } from '@solid-primitives/platform';
 import { Button, cn, SendButton, Surface, Tooltip } from '@ui';
 import type { LexicalEditor } from 'lexical';
-import { $getRoot } from 'lexical';
+import { $getRoot, COMMAND_PRIORITY_CRITICAL, KEY_TAB_COMMAND } from 'lexical';
 import {
   type Accessor,
   children,
@@ -79,6 +80,7 @@ type ReplyInputViewProps = Omit<
   | 'hasPaidAccess'
   | 'recordMention'
   | 'focusAfterReplyRequest'
+  | 'initialSavedDraftId'
 > & {
   context: EmailComposeContext;
   onReloadDraft?: () => void;
@@ -99,6 +101,12 @@ export function ReplyInputView(props: ReplyInputViewProps) {
     () => read && initialId,
     async (id) => await read!(id)
   );
+  const initialSavedDraftId = () => {
+    const initial = saved();
+    return initial?.persistence === 'committed'
+      ? initial.draft?.db_id
+      : undefined;
+  };
   const restoredHtml = () => {
     const draft = saved()?.draft;
     if (!draft) return props.preloadedHtml;
@@ -126,6 +134,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
         <LoadedReplyInputView
           {...props}
           draft={saved()?.draft ?? props.draft}
+          initialSavedDraftId={initialSavedDraftId()}
           localDraft={saved()?.local}
           localAttachments={saved()?.attachments}
           preloadedHtml={restoredHtml()}
@@ -135,7 +144,9 @@ export function ReplyInputView(props: ReplyInputViewProps) {
   );
 }
 
-function LoadedReplyInputView(props: ReplyInputViewProps) {
+function LoadedReplyInputView(
+  props: ReplyInputViewProps & Pick<ReplyComposerOptions, 'initialSavedDraftId'>
+) {
   const composeContext = props.context;
   const footer = children(() => props.footer);
   const ctx = props.session;
@@ -163,6 +174,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
       replyingTo: props.replyingTo,
       isEditingExisting: props.isEditingExisting,
       draft: props.draft,
+      initialSavedDraftId: props.initialSavedDraftId,
       localDraft: props.localDraft,
       localAttachments: props.localAttachments,
       preloadedHtml: props.preloadedHtml,
@@ -298,6 +310,16 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
     .use(keyboardShortcutsPlugin({ shortcuts: EMAIL_FORMAT_SHORTCUTS }))
     .use(registerToggleAppendedThread)
     .onChange(state.onContentChange)
+    // Shift+Tab outdents while there is something to outdent, and otherwise
+    // keeps its default so focus moves back to the recipients. A plugin, not
+    // onTab, which would drop the builder's tab indentation.
+    .use((editor) =>
+      editor.registerCommand(
+        KEY_TAB_COMMAND,
+        (e) => e.shiftKey && !$canOutdentSelection(),
+        COMMAND_PRIORITY_CRITICAL
+      )
+    )
     .withFilePaste({
       onPasteFilesAndDirs: (files, directories) => {
         if (editingDisabled()) return;

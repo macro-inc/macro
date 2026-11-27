@@ -1,10 +1,12 @@
 import type { CalendarGridHandle } from '@app/features/calendar/components/CalendarGrid';
 import { CalendarGridSkeleton } from '@app/features/calendar/components/CalendarGridSkeleton';
 import type { CalendarEventFormController } from '@app/features/calendar/components/composer/create-calendar-event-form-controller';
+import type { EventEditorSubmitValues } from '@app/features/calendar/components/composer/event-form-model';
 import { useCalendarOccurrenceData } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
 import { useCalendarSources } from '@app/features/calendar/hooks/use-calendar-sources';
-import type { CalendarPeriodView } from '@app/features/calendar/types';
-import { getDefaultCalendarTimeFormat } from '@app/features/calendar/utils/time-format';
+import type { CalendarGridPeriodView } from '@app/features/calendar/types';
+import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
+import { t } from '@app/lib/i18n';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { formatLocalDate } from '@core/util/local-date';
 import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
@@ -13,6 +15,7 @@ import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import { createCalendarOccurrenceQueryRange } from '@queries/calendar/occurrences';
 import { Button, cn } from '@ui';
 import {
+  type Accessor,
   createEffect,
   createMemo,
   createSignal,
@@ -26,6 +29,7 @@ import './EventPreview.css';
 import {
   buildCalendarToolPreviewEvent,
   type CalendarToolPreviewWindow,
+  calendarToolPreviewEvents,
   calendarToolPreviewStartDate,
   calendarToolPreviewWindow,
   expandCalendarToolPreviewEvents,
@@ -73,8 +77,8 @@ function CalendarPreviewViewport(props: {
   grid: CalendarGridHandle;
   start: string;
   allDay: boolean;
-  view: CalendarPeriodView;
-  initialView: CalendarPeriodView;
+  view: CalendarGridPeriodView;
+  initialView: CalendarGridPeriodView;
   dayCount?: number;
   eventIds: ReadonlySet<string>;
 }) {
@@ -157,6 +161,10 @@ interface CalendarToolEventPreviewProps {
   controller: CalendarEventFormController;
   eventId: string;
   timeZone?: string;
+  /** Optional validated draft snapshot, including explicit zone and recurrence edits. */
+  submission?: Accessor<EventEditorSubmitValues | undefined>;
+  /** The same field validation reported by the composer. */
+  validationError?: Accessor<string | undefined>;
   /** Whether to display the preview date's month and year above the grid. */
   showPeriodLabel?: boolean;
   /** Whether to show previous/next controls in week and month views. */
@@ -164,22 +172,34 @@ interface CalendarToolEventPreviewProps {
   /** Optional controls aligned to the right in place of built-in navigation. */
   navigationControls?: JSX.Element;
   class?: string;
+  /** The Macro event the draft became, shown in the draft's place once loaded. */
+  createdEventId?: string;
 }
 
 /** Live day-grid preview for a deferred calendar event tool call. */
 export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
+  const [preferences] = useCalendarPreferences();
   const previewEvent = createMemo(() =>
     buildCalendarToolPreviewEvent({
       id: props.eventId,
       values: props.controller.state(),
-      time: props.controller.eventTime(),
-      recurrenceLines: props.controller.recurrenceLines(),
+      time: props.submission
+        ? props.submission()?.time
+        : props.controller.eventTime(),
+      recurrenceLines: props.submission
+        ? props.submission()?.recurrenceLines
+        : props.controller.recurrenceLines(),
       calendar: props.controller.selectedCalendarOption(),
       timeZone: props.timeZone,
     })
   );
-  const editorStart = createMemo(() => props.controller.state().start);
-  const editorAllDay = createMemo(() => props.controller.state().allDay);
+  const editorStart = createMemo(
+    () => previewEvent()?.start ?? props.controller.state().start
+  );
+  // Out-of-office date ranges serialize as timed events; navigate their projected time kind.
+  const editorAllDay = createMemo(
+    () => previewEvent()?.allDay ?? props.controller.state().allDay
+  );
   const previewDay = createMemo(() => {
     const date = calendarToolPreviewStartDate(editorStart(), editorAllDay());
     return date ? formatLocalDate(date) : undefined;
@@ -225,9 +245,6 @@ export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
     sourceById,
     sourcesReady,
   });
-  const existingEvents = createMemo(() =>
-    occurrenceData.visibleEvents().slice(0, MAX_EXISTING_PREVIEW_EVENTS)
-  );
   const previewEvents = createMemo(() => {
     const event = previewEvent();
     const window = visibleWindow();
@@ -235,10 +252,18 @@ export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
       ? expandCalendarToolPreviewEvents(event, window)
       : [];
   });
-  const events = createMemo(() => [...existingEvents(), ...previewEvents()]);
-  const emphasizedEventIds = createMemo(
-    () => new Set(previewEvents().map((event) => event.id))
+  // The id arrives through a getter that rereads the whole review record.
+  const createdEventId = createMemo(() => props.createdEventId);
+  const shownEvents = createMemo(() =>
+    calendarToolPreviewEvents({
+      existing: occurrenceData.visibleEvents(),
+      draft: previewEvents(),
+      createdEventId: createdEventId(),
+      limit: MAX_EXISTING_PREVIEW_EVENTS,
+    })
   );
+  const events = () => shownEvents().events;
+  const emphasizedEventIds = () => shownEvents().emphasizedIds;
   const eventsById = createMemo(
     () => new Map(events().map((event) => [event.id, event]))
   );
@@ -277,6 +302,7 @@ export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
     <div
       role="region"
       aria-label="Calendar event preview"
+      data-event-created={shownEvents().showsCreated ? '' : undefined}
       class={cn(
         'calendar-tool-preview relative flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-edge-muted bg-surface shadow-sm',
         props.class
@@ -369,14 +395,14 @@ export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
                     collapseEmptyAllDaySlot: true,
                     showWeekends: true,
                     weekStartsOn: 0,
-                    timeFormat: getDefaultCalendarTimeFormat(),
+                    timeFormat: preferences.timeFormat,
                   }}
                   selection={{
                     color: previewColor() ?? 'var(--color-accent)',
                   }}
                   onDatesSet={(info) => {
                     setDisplayedWindow({
-                      view: info.view.type as CalendarPeriodView,
+                      view: info.view.type as CalendarGridPeriodView,
                       start: info.start,
                       end: info.end,
                       dayCount,
@@ -404,7 +430,7 @@ export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
           </Show>
           <Show when={previewEvent() === undefined}>
             <div class="pointer-events-none absolute inset-x-2 top-2 rounded-md border border-edge-muted bg-surface px-2 py-1 text-center text-xs text-ink-muted shadow-sm">
-              Enter an end time after the start time to preview this event.
+              {props.validationError?.() ?? t('calendar.previewUnavailable')}
             </div>
           </Show>
           <Show when={occurrenceData.isLoading()}>

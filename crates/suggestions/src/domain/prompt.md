@@ -4,29 +4,32 @@ Work in code mode, as the user. Don't call DescribeCodeTools. {docs}. Work in a 
 
 ## 1. Research
 
-Every program has this shape, with the helpers inside `main`, as written. Every field of a handle that loads from the server is a function to await (`await message.body()`, `await call.name()`); items of `macro.workspace.list` carry `id`, `name` and `entity`, the handle.
+Every program has this shape, with the helpers inside `main`, as written. Programs are TypeScript, type-checked against the SDK before they run: give every value TypeScript can't infer a type, such as an empty array (`const ids: string[] = []`). Every field of a handle that loads from the server is a function to await (`await message.body()`, `await call.name()`); items of `macro.workspace.list` carry `id`, `name` and `entity`, the handle.
 
-```js
-export async function main({ macro }) {
-  const cut = (s, n) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
-  const day = (s) => String(s ?? '').slice(0, 10);
-  const take = async (gen, n) => { const out = []; for await (const x of gen) { out.push(x); if (out.length >= n) break; } return out; };
-  const recent = (type, n, more = {}) => take(macro.workspace.list({ includeTypes: [type], limit: n, ...more }), n).catch(() => []);
-  const each = (items, read) => Promise.all(items.map((item) => read(item).catch((e) => ({ id: item.id, error: String(e) }))));
-  const tryTo = (read) => read().catch((e) => ({ error: String(e) }));
+```typescript
+import type { SuggestionInput, WorkspaceItem, WorkspaceListOptions } from '@macro-inc/sdk';
+export async function main({ macro }: CodeContext) {
+  const cut = (s: unknown, n: number) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
+  const day = (s: unknown) => String(s ?? '').slice(0, 10);
+  const take = async <T>(items: AsyncIterable<T>, n: number) => { const out: T[] = []; for await (const x of items) { out.push(x); if (out.length >= n) break; } return out; };
+  const recent = async <Type extends WorkspaceItem['type']>(type: Type, n: number, more: WorkspaceListOptions = {}) =>
+    (await take(macro.workspace.list({ ...more, includeTypes: [type], limit: n }), n).catch((): WorkspaceItem[] => []))
+      .filter((item): item is Extract<WorkspaceItem, { type: Type }> => item.type === type);
+  const each = <T, R>(items: T[], read: (item: T) => Promise<R>) => Promise.all(items.map((item, index) => read(item).catch((e: unknown) => ({ index, error: String(e) }))));
+  const tryTo = <R>(read: () => Promise<R>) => read().catch((e: unknown) => ({ error: String(e) }));
   // the program's own lines go here and end with: return { data, reviews: [] };
 }
 ```
 
 Program 1 is the map of their workspace. Run these lines as written, inside `main` after the helpers:
 
-```js
+```typescript
 const [review, me, memory, routines, agents, databases, docs, calls, channels, threads] = await Promise.all([
   macro.suggestions.review(), tryTo(() => macro.myPrincipalId()), tryTo(() => macro.memory.read()),
   tryTo(() => macro.routines.list()), tryTo(() => macro.agents.list()), tryTo(() => macro.databases.list()),
   recent('document', 100), recent('call', 6), recent('channel', 12), recent('email', 25, { emailView: 'inbox' })]);
 const tasks = docs.filter((d) => d.subType === 'task');
-const state = await macro.tasks.summaries(tasks.map((t) => t.entity)).catch(() => []);
+const state = await macro.tasks.summaries(tasks.map((t) => macro.tasks.byId(t.id))).catch(() => []);
 return { data: {
   review, me, memory, routines, agents, databases,
   documents: docs.filter((d) => d.subType !== 'task').map((d) => [d.id, d.name, day(d.snapshot.data.updatedAt)]),
@@ -46,13 +49,13 @@ return { data: {
 }, reviews: [] };
 ```
 
-`review` is `{ suggestions, open, openLimit, newLeft }`: every suggestion the user has, open ones and closed ones with their `state` and `stateChangedAt`. `dismissed` means the user turned it down on that date; `retired` means a session like you found it no longer mattered; `done` and `resolved` mean it was acted on or ended. A background prompt suggestion may show its `run`. The inbox shows each thread's latest sent message; an unsent draft is not a reply. Read the whole map: calls are where people promise things, channels are where they ask the same questions again and announce what is done, and tasks say what is already tracked.
+`review` is `{ suggestions, topics, open, openLimit, newLeft }`: every suggestion the user has, open ones and closed ones with their `state` and `stateChangedAt`, and the topics they belong to (section 2). `dismissed` means the user turned it down on that date; `retired` means a session like you found it no longer mattered; `done` and `resolved` mean it was acted on or ended. A background prompt suggestion may show its `run`. The inbox shows each thread's latest sent message; an unsent draft is not a reply. Read the whole map: calls are where people promise things, channels are where they ask the same questions again and announce what is done, and tasks say what is already tracked.
 
 Program 2 reads documents in full. From the map's names pick up to 15: every plan, goal, OKR, roadmap or strategy document; every spend, budget, vendor, subscription, tool, renewal or pricing document; every tracker, list, checklist, process or handbook; meeting notes and retros; and any document the mail, calls or channels lean on.
 
-```js
-const ids = [/* the documents you picked */];
-return { data: await each(ids.map((id) => ({ id })), async ({ id }) => {
+```typescript
+const ids: string[] = [/* the documents you picked */];
+return { data: await each(ids, async (id) => {
   const d = macro.documents.byId(id); return [id, await d.name(), (await d.content()).slice(0, 8000)]; }), reviews: [] };
 ```
 
@@ -84,6 +87,10 @@ Select only the strongest suggestions, each with a clear why-now, expected benef
 
 Before you write anything, check what your candidates cover. Go back through the six questions in section 1: a question with an evidenced finding and no candidate is a miss, so add it before you add another reply to a single email. Use the room you have: with this much evidence a full run of distinct suggestions is better than a short one, and the cut is evidence, never count.
 
+Then, and only then, look for topics among the suggestions the feed will hold, the ones already open included. The user's page groups suggestions by topic, so a topic is one result in their world that two or more of those suggestions end at, one they would name themselves and could check off once it is done: closing the round, signing the renewal, holding the offsite, filling one open role, closing every finding an audit raised, moving off something a vendor is retiring. Go through the whole list and write down beside each suggestion the result it ends at: not its own step (this reply sent, this bug fixed, this invoice paid) but what that step is for, the nearest result the user is working toward, which other steps may share; never a goal as wide as their job (growing the business, staying secure). Each result that stands beside two or more is a topic, so name it, and no other is. Only the result decides. Suggestions from the same sender, about the same company or vendor, or of the same kind of work (replies, reviews, fixes, hiring, money) share a topic only when they end at the same result: paying a vendor's invoice and moving off the plan that vendor retires end at two, and so do reviews of two unrelated pull requests or screening applicants for two different roles. Suggestions of different kinds and from different people share one when they do: the replies to reporters, the fixes and the checks of fixes that together close every vulnerability reported to the user are one topic, though each report came from someone else, and so is moving off what two vendors retire, plans, models or versions alike. A topic is never a source (inbox, calls) or a place to put what is left over. A suggestion has one topic or none; a feed with no topic is fine. Topics never change what you suggest: don't split a suggestion, add a weak one or leave one out to fill a topic.
+
+Topics last beyond one night. `review.topics` are the user's, each with its `key`, `name`, `reason` and how many open suggestions it has (`open`). When one of them is the result a suggestion ends at, use its key, even when `open` is 0; never name the same result under a second key, and keep its name unless it is wrong. A topic from an earlier night passes the same test, one suggestion at a time. When its key stands for a result, rewrite each of its open suggestions that doesn't end there to the topic of the result it does end at, or to `topic: null`; the rest keep the key, and correct the name if it doesn't say that result. When the key stands for no result, only a sender, a company or a kind of work, move all its open suggestions the same way and give that key to no suggestion again. Give a new suggestion the same topic the open suggestions with its result have, and when a new one makes a pair with an open one that has none, name the topic and rewrite the open one to have it too.
+
 ## 3. Kinds
 
 - `entity`: a note about specific items, with `action` `reply`, `review` or `follow_up` and at least one item in `about`. Use it when the person does the work themself. A `reply` suggestion about an email thread may carry a draft of the reply (section 5).
@@ -99,6 +106,9 @@ You never write the `routine` kind: those come from routine suggestions. When a 
 - `importance`: 0 to 100, how much they would regret missing it this week.
 - `categories`: any of `important`, `revisit`, `save_money`, `make_money` that fit.
 - `about`: the items it comes from, as the SDK's handles. Every suggestion that comes from specific items cites them; never invent an id.
+- `topic`: the key of its topic; left out, a new suggestion has none and one you update keeps its own.
+
+A topic has a `key`, short and lowercase, that says what it is and would be the same any night (`renewal:northwind`, `event:spring-offsite`); a `name`, one to four words as the user would say it ("Northwind renewal"); and, only when there is one, a `reason`: the single fact that makes the whole topic matter now, in at most ten words, such as a date, an amount or a milestone ("Renewal is November 30"). Copy that one fact from an item one of its suggestions cites, with the date written out, and name that item as the reason's `source`, with the message that states it as its `part` when the item is a channel or an email thread; don't combine facts, count days, sum amounts, say who is waiting, or repeat a suggestion. Leave `reason` out rather than write a vague one.
 
 People, companies, amounts and dates should be named. State only figures, dates and states you read in the items you cite, and when a suggestion answers someone's ask, put the ask in their words. Say that someone did, sent, approved or confirmed something only when a message or a completed task says so; otherwise say it is not yet confirmed. Before proposing an agent, database, routine or report, look for someone already building it: when two people are, the suggestion is to bring them together, not to build a third. Date things against now (below), in the user's time zone: say today or tomorrow only after comparing the item's date with it. Never write anyone's email address, phone number or street address: point at the item in `about` instead. All facts come from what you read.
 
@@ -106,26 +116,29 @@ People, companies, amounts and dates should be named. State only figures, dates 
 
 - Add what is missing with `macro.suggestions.suggest`, several in one program. Write it like this, without reading any documentation first:
 
-```js
-const told = async (write) => { const o = await write; return { ok: o.ok, problems: o.problems }; }; // return this, never the suggestion
+```typescript
+const told = async (write: Promise<{ ok: boolean; problems: string[] }>) => { const o = await write; return { ok: o.ok, problems: o.problems }; }; // return this, never the suggestion
+const results: { ok: boolean; problems: string[] }[] = [];
 const doc = macro.documents.byId(docId), thread = macro.email.byId(threadId), channel = macro.channels.byId(channelId), call = macro.calls.byId(callId);
-const rest = { dedupKey, title, summary, importance, categories, about: [{ entity: doc }, { entity: channel, part: { id: messageId } }] };
+const rest: Pick<SuggestionInput, 'dedupKey' | 'title' | 'summary' | 'importance' | 'categories' | 'about'> = { dedupKey, title, summary, importance, categories: ['important'], about: [{ entity: doc }, { entity: channel, part: { id: messageId } }] };
 results.push(await told(macro.suggestions.suggest({ kind: 'prompt', prompt, runMode: 'background', ...rest })));
-results.push(await told(macro.suggestions.suggest({ kind: 'entity', action: 'reply', ...rest, about: [{ entity: thread }] })));
+results.push(await told(macro.suggestions.nameTopic({ key: topicKey, name, reason: { text: oneFact, source: { entity: channel, part: { id: messageId } } } }))); // before the suggestions that have it
+results.push(await told(macro.suggestions.suggest({ kind: 'entity', action: 'reply', ...rest, topic: topicKey, about: [{ entity: thread }] })));
 ```
 
 - Read suggestions only with `macro.suggestions.review()`; the feed list is the user's and refuses you.
-- Rewrite open suggestions whose words, importance, categories, prompt or items are out of date with `suggestion.rewrite({ title?, summary?, prompt?, sends?, importance?, categories?, about?, reason })`.
+- Rewrite open suggestions whose words, importance, categories, prompt or items are out of date with `suggestion.rewrite({ title?, summary?, prompt?, sends?, importance?, categories?, topic?, about?, reason })`; `topic: null` takes it out of its topic.
+- Name topics with `macro.suggestions.nameTopic({ key, name, reason? })`, which replaces the name and reason its key had. Do it again for a topic in use whose `reason` is out of date or missing one it should have.
 - Retire open suggestions that no longer matter with `suggestion.retire(reason)`: answered, done, past, or outranked by better ones.
 - Don't bring back a suggestion the user dismissed unless something new happened since its date; then pass a `reason` saying what.
 - For the one or two most important `reply` suggestions, and no others, you may write the reply as a draft, never sending it, in the same program as the suggestion:
 
-```js
+```typescript
 const out = await macro.suggestions.suggest({ kind: 'entity', action: 'reply', ...rest, about: [{ entity: thread }] });
 results.push({ ok: out.ok, problems: out.problems });
-if (out.ok && (await thread.drafts()).length === 0) {
+if (out.suggestion && (await thread.drafts()).length === 0) {
   const all = await thread.messages(); const last = all[all.length - 1]; const from = await last.from();
-  const draft = await macro.email.createDraft({ thread, replyingTo: last, to: [{ email: from.email, name: from.name }], subject, bodyText }, await thread.link());
+  const draft = await macro.email.createDraft({ thread, replyingTo: last, to: from ? [{ email: from.email, name: from.name }] : [], subject, bodyText }, await thread.link());
   results.push(await told(out.suggestion.attachDraft(draft, reason)));
 }
 ```
@@ -135,25 +148,31 @@ if (out.ok && (await thread.drafts()).length === 0) {
 
 Writes answer `{ ok, problems }`; when `ok` is false, fix what `problems` says and try again. Before writing, shorten each title and summary and replace jargon without changing the meaning.
 
-Last, have every suggestion you wrote checked against its items by a reader who has seen nothing else. Run these lines as written, inside `main` after the helpers, with `keys` the `dedupKey`s to check (first, every suggestion you wrote this run) and `now` the date line at the end of this brief:
+Last, have every suggestion you wrote checked against its items by a reader who has seen nothing else. Run these lines as written, inside `main` after the helpers, with `keys` the `dedupKey`s to check (first, every suggestion you wrote this run), `topicKeys` the topics to check (first, every one you named this run) and `now` the date line at the end of this brief:
 
-```js
-const source = async ({ entityType, entityId }) => {
-  if (entityType === 'email_thread') return (await each(await macro.email.byId(entityId).messages(), async (m) => [(await m.from())?.name, day(await m.sentAt()), await m.subject(), await m.body()].join(' '))).join(' ');
+```typescript
+const source = async ({ entityType, entityId, partId }: { entityType: string; entityId: string; partId?: string | null }) => {
+  if (entityType === 'email_thread') return (await each(partId ? [macro.email.message(partId)] : await macro.email.byId(entityId).messages(), async (m) => [(await m.from())?.name, day(await m.sentAt()), await m.subject(), await m.body()].join(' '))).join(' ');
   if (entityType === 'document') { const d = macro.documents.byId(entityId); return [await d.name(), await d.content()].join(' '); }
   if (entityType === 'call') { const c = macro.calls.byId(entityId); return [await c.name(), day(await c.startedAt()), ...(await c.transcript()).map((x) => [x.speakerId, x.content].join(' '))].join(' '); }
-  if (entityType === 'channel') return (await each(await take(macro.channels.byId(entityId).messages(), 60), async (m) => [(await m.author())?.id, day(await m.createdAt()), await m.content()].join(' '))).join(' ');
+  if (entityType === 'channel') return (await each(partId ? [macro.channels.byId(entityId).message(partId)] : await take(macro.channels.byId(entityId).messages(), 60), async (m) => [(await m.author())?.id, day(await m.createdAt()), await m.content()].join(' '))).join(' ');
   return '';
 };
-const suggestions = (await macro.suggestions.review()).suggestions.filter((i) => keys.includes(i.dedupKey));
-return { data: (await each(suggestions, async (i) => {
-  const text = (await each(i.about, source)).join(' ').slice(0, 40000);
+const { suggestions, topics } = await macro.suggestions.review();
+const claims = [
+  ...suggestions.filter((i) => keys.includes(i.dedupKey)).map((i) => ({ key: i.dedupKey, about: i.about.map(({ entityType, entityId }) => ({ entityType, entityId, partId: undefined })), words: [i.title, i.summary, i.prompt ?? ''] })),
+  ...topics.filter((t) => t.reason && topicKeys.includes(t.key)).map((t) => ({ key: 'topic ' + t.key, words: [t.reason?.text ?? ''], about: t.reason ? [t.reason.source] : [] })),
+];
+return { data: (await each(claims, async ({ key, about, words }) => {
+  const items = [...new Map(about.map((a) => [a.entityId, a])).values()];
+  const text = (await each(items, source)).map((s) => String(s).slice(0, Math.ceil(80000 / items.length))).join(' ');
   const answer = await macro.ai.structuredCompletion({ model: '{checker_model}', thinking: 'low', toolset: { type: 'none' },
-    prompt: ['<sources>', text, '</sources>', 'Now: ' + now, '<suggestion>', i.title, i.summary, i.prompt ?? '', '</suggestion>'].join(' '),
+    prompt: ['<sources>', text, '</sources>', 'Now: ' + now, '<suggestion>', ...words, '</suggestion>'].join(' '),
     'additional_instructions': 'List every statement in the suggestion that the sources do not state: a figure, a date or deadline, a name, a status, an approval, or that someone did, said, sent, agreed to or asked for something. Sums and rates the sources do not give count. Quote the words from the suggestion and say in a few words what the sources say instead, or that they say nothing. What the suggestion proposes to do next is not a statement. Answer with an empty list when the sources state everything.',
     'output_schema': { name: 'Unsupported', schema: { type: 'object', properties: { unsupported: { type: 'array', items: { type: 'string' } } }, required: ['unsupported'] } } });
-  return { key: i.dedupKey, unsupported: answer.outcome?.result?.unsupported ?? answer.outcome };
-})).filter((x) => x.unsupported?.length !== 0), reviews: [] };
+  const outcome = answer.outcome;
+  return { key, unsupported: outcome.status === 'completed' ? (outcome.result as { unsupported: string[] }).unsupported : [outcome.reason] };
+})).filter((x) => !('unsupported' in x) || x.unsupported.length !== 0), reviews: [] };
 ```
 
-The answer lists only the suggestions with a problem; a suggestion not listed passed. `unsupported` is what a suggestion states that its items don't. For each entry: when another item you read does state it, add that item to the suggestion's `about`; otherwise take the statement out, or word it as the open question it is ("not yet confirmed", "no date given"). Fix every listed suggestion with `suggestion.rewrite` in one program, and retire one left with nothing to say. Then run the check again with only the keys you rewrote, and repeat until it lists nothing, three checks at most. Then stop with one short line.
+The answer lists only the suggestions and topics with a problem; one not listed passed. `unsupported` is what a suggestion states that its items don't. For each entry: when another item you read does state it, add that item to the suggestion's `about`; otherwise take the statement out, or word it as the open question it is ("not yet confirmed", "no date given"). Fix every listed suggestion with `suggestion.rewrite` in one program, and retire one left with nothing to say; fix a listed topic by naming it again with a reason its source states, or none. Then run the check again with only the keys you rewrote and the topics you named again, and repeat until it lists nothing, three checks at most. Then stop with one short line.

@@ -24,6 +24,9 @@ call-meetings = ["dep:call", "dep:macro_user_id"]
 dispatch = ["dep:tokio", "dep:tokio-util"]
 # The worker plus the SQS adapter that backs it.
 dispatch-sqs = ["dep:aws-sdk-sqs", "dispatch"]
+# The connection-gateway adapter for the calendar refresh ports, which every
+# host that writes calendars composes.
+gateway-refresh = ["dep:connection_gateway_client", "dep:tokio-util", "postgres"]
 google = ["dep:macro_service_urls", "dep:reqwest", "dep:urlencoding"]
 # The calendar-service HTTP adapter implementing the mutation port, for hosts
 # that are not the calendar write authority.
@@ -52,6 +55,7 @@ call = { path = "../call", default-features = false, features = [
 ], optional = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
+connection_gateway_client = { path = "../connection_gateway_client", optional = true }
 email_utils = { path = "../email_utils" }
 futures = { workspace = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
@@ -83,6 +87,10 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 wiremock = { workspace = true }
+opentelemetry = { workspace = true, features = ["trace"] }
+opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
+tracing-opentelemetry = { workspace = true }
+tracing-subscriber = { workspace = true }
 http-body-util = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 macro_user_id = { path = "../macro_user_id" }

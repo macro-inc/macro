@@ -13,6 +13,7 @@ fn message_args() -> UpsertChannelMessageArgs {
         imported_author: Some("quartzarchivebot".into()),
         mentions: vec![],
         content: "Historical message body".into(),
+        links: vec![],
         created_at_millis: EpochMillis::new(1_600_000_000_123).unwrap(),
         updated_at_millis: EpochMillis::new(1_600_000_000_123).unwrap(),
     }
@@ -30,6 +31,17 @@ fn author_is_text_not_content_or_sender() {
         assert_eq!(value["entity_id"], args.channel_id);
         assert_eq!(value["message_id"], args.message_id);
     }
+}
+
+#[test]
+fn links_are_written_only_when_the_message_shares_some() {
+    let mut args = message_args();
+    assert!(serde_json::to_value(&args).unwrap().get("links").is_none());
+    args.links = vec!["https://app.sketchpad.example/file/0ABC".into()];
+    assert_eq!(
+        serde_json::to_value(&args).unwrap()["links"],
+        json!(["https://app.sketchpad.example/file/0ABC"])
+    );
 }
 
 /// Repair a legacy copy_to mapping and search both existing and new messages.

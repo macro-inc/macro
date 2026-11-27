@@ -19,7 +19,7 @@ impl PgComputerRepo {
             ComputerRow,
             r#"
             SELECT id, team_id, host_id, name, size AS "size: ComputerSize", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, state, harness_id, created_by,
-                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image
+                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image, hibernated_at
             FROM hosted_runtime
             WHERE purchase_key = $1
             "#,

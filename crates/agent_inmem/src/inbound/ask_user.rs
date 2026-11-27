@@ -45,8 +45,8 @@ pub enum AskUserResponse {
         /// The selected option or entered text.
         answer: String,
     },
-    /// The user explicitly declined to answer.
-    Declined,
+    /// The user skipped the question (the card's Skip); the turn goes on.
+    Skipped,
     /// The user dismissed the question or stopped the turn.
     Cancelled,
 }
@@ -105,7 +105,7 @@ impl AsyncTool<AskUserContext> for AskUser {
 
         Ok(match answer {
             UserInputOutcome::Answered(answer) => AskUserResponse::Answered { answer },
-            UserInputOutcome::Declined => AskUserResponse::Declined,
+            UserInputOutcome::Declined => AskUserResponse::Skipped,
             UserInputOutcome::Cancelled => AskUserResponse::Cancelled,
         })
     }

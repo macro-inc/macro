@@ -31,6 +31,8 @@ const iconFor = (kind: InboxCardKind) =>
     .with('invite', () => UserPlusIcon)
     .with('access', () => LockKeyIcon)
     .with('agent', () => RobotIcon)
+    // A ping shows what it is about; see `InboxKindIcon`.
+    .with('ping', () => getIconConfig('default').icon)
     .with('task', () => CheckSquareIcon)
     .with('pull_request', () => GitPullRequestIcon)
     .with('event', () => CalendarBlankIcon)
@@ -50,6 +52,7 @@ export const inboxKindLabel = (kind: InboxCardKind) =>
     .with('invite', () => t('notificationsInbox.kindInvite'))
     .with('access', () => t('notificationsInbox.kindAccess'))
     .with('agent', () => t('notificationsInbox.kindAgent'))
+    .with('ping', () => t('notificationsInbox.kindPing'))
     .with('task', () => t('notificationsInbox.kindTask'))
     .with('pull_request', () => t('notificationsInbox.kindPullRequest'))
     .with('event', () => t('notificationsInbox.kindEvent'))
@@ -67,11 +70,24 @@ export const inboxEntityColor = (entity: EntityData) => {
   return getIconConfig(type === 'emailRead' ? 'email' : type).foreground;
 };
 
-/** The glyph for a kind of notification. */
-export function InboxKindIcon(props: { kind: InboxCardKind; class?: string }) {
+/**
+ * The glyph for a kind of notification on `entity`. A ping, whichever row it
+ * joined, shows the icon of what it is about.
+ */
+export const inboxKindGlyph = (kind: InboxCardKind, entity: EntityData) =>
+  kind === 'ping'
+    ? getIconConfig(getEntityIconType(entity)).icon
+    : iconFor(kind);
+
+/** The glyph for a kind of notification; see {@link inboxKindGlyph}. */
+export function InboxKindIcon(props: {
+  kind: InboxCardKind;
+  entity: EntityData;
+  class?: string;
+}) {
   return (
     <Dynamic
-      component={iconFor(props.kind)}
+      component={inboxKindGlyph(props.kind, props.entity)}
       class={props.class}
       aria-hidden="true"
     />

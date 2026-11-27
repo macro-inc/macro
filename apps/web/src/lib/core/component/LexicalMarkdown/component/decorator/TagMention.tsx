@@ -3,9 +3,7 @@ import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { useIsAuthenticated } from '@core/auth';
 import {
   $isTagMentionNode,
-  HISTORIC_TAG,
-  SKIP_DOM_SELECTION_TAG,
-  SKIP_SCROLL_INTO_VIEW_TAG,
+  BACKGROUND_UPDATE_TAGS,
   type TagMentionDecoratorProps,
 } from '@macro-inc/lexical-core';
 import { TagDot } from '@property/tags/TagDot';
@@ -89,7 +87,7 @@ export function TagMention(props: TagMentionDecoratorProps) {
         });
       },
       {
-        tag: [HISTORIC_TAG, SKIP_DOM_SELECTION_TAG, SKIP_SCROLL_INTO_VIEW_TAG],
+        tag: BACKGROUND_UPDATE_TAGS,
         discrete: true,
       }
     );
@@ -99,7 +97,15 @@ export function TagMention(props: TagMentionDecoratorProps) {
     if (isAuthenticated() !== true) return;
 
     const tag = resolvedTag();
-    navigateToTag(split.openWithSplit, tag, { handle: panel?.handle });
+    navigateToTag(
+      split.openWithSplit,
+      {
+        optionId: tag.optionId,
+        propertyDefinitionId: tag.propertyDefinitionId,
+        label: tag.name,
+      },
+      { handle: panel?.handle }
+    );
   };
 
   if (editor) {

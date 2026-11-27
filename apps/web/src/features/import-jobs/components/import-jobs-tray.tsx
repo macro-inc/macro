@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import IconHubSpot from '@icon/import/hubspot.svg';
 import IconJira from '@icon/import/jira.svg';
 import IconNotion from '@icon/import/notion.svg';
 import IconLinear from '@icon/mcp-linear.svg';
@@ -6,11 +7,11 @@ import IconSlack from '@icon/slack-color.svg';
 import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
 import CaretUp from '@icon/system/regular/caret-up.svg';
 import X from '@icon/system/regular/x.svg';
-import type { ImportSource } from '@service-cognition/import';
+import type { ImportSource, RunErrorKind } from '@service-cognition/import';
 import { Button, cn, Item, ProgressRing, Surface } from '@ui';
 import { type Component, Index, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { match } from 'ts-pattern';
+import { match, P } from 'ts-pattern';
 import {
   type ImportJob,
   type ImportJobPhase,
@@ -28,6 +29,7 @@ const SOURCES: Record<ImportSource, SourceDisplay> = {
   linear: { name: 'Linear', icon: IconLinear },
   jira: { name: 'Jira', icon: IconJira },
   slack: { name: 'Slack', icon: IconSlack },
+  hubspot: { name: 'HubSpot', icon: IconHubSpot },
 };
 
 function phaseLabel(source: ImportSource, phase: ImportJobPhase): string {
@@ -37,6 +39,9 @@ function phaseLabel(source: ImportSource, phase: ImportJobPhase): string {
         .with('notion', () => t('importJobs.scanningPages', { count: found }))
         .with('linear', 'jira', () =>
           t('importJobs.scanningIssues', { count: found })
+        )
+        .with('hubspot', () =>
+          t('importJobs.scanningRecords', { count: found })
         )
         .with('slack', () => t('importJobs.findingChannels'))
         .exhaustive()
@@ -52,9 +57,50 @@ function phaseLabel(source: ImportSource, phase: ImportJobPhase): string {
     .with({ kind: 'importingChannels' }, ({ channels }) =>
       t('importJobs.importingChannels', { count: channels })
     )
-    .with({ kind: 'completed' }, () => t('importJobs.completed'))
-    .with({ kind: 'failed' }, () => t('importJobs.failed'))
+    .with({ kind: 'completed' }, ({ outcome }) =>
+      match(outcome)
+        .with({ kind: 'all' }, () => t('importJobs.completed'))
+        .with({ kind: 'nothing' }, () => t('importJobs.completedNothing'))
+        .with({ kind: 'some', problems: null }, () =>
+          t('importJobs.completedPartly')
+        )
+        .with({ kind: 'some', problems: P.number }, ({ problems }) =>
+          t('importJobs.completedWithProblems', { count: problems })
+        )
+        .exhaustive()
+    )
+    .with({ kind: 'failed' }, ({ errorKind }) => failedLabel(source, errorKind))
     .with({ kind: 'cancelled' }, () => t('importJobs.cancelled'))
+    .exhaustive();
+}
+
+/** Why a run failed, from its kind; never the server's raw error. */
+function failedLabel(
+  source: ImportSource,
+  errorKind: RunErrorKind | null
+): string {
+  const name = SOURCES[source].name;
+  return match(errorKind)
+    .with('access_lost', () =>
+      t('importJobs.failedAccessLost', { source: name })
+    )
+    .with('connection_unavailable', () =>
+      t('importJobs.failedConnectionUnavailable', { source: name })
+    )
+    .with('not_connected', () =>
+      t('importJobs.failedNotConnected', { source: name })
+    )
+    .with('not_found', () => t('importJobs.failedNotFound', { source: name }))
+    .with('forbidden', () => t('importJobs.failedForbidden', { source: name }))
+    .with('rate_limited', () =>
+      t('importJobs.failedRateLimited', { source: name })
+    )
+    .with('unreachable', () =>
+      t('importJobs.failedUnreachable', { source: name })
+    )
+    .with('usage_refused', () => t('importJobs.failedUsageRefused'))
+    .with('interrupted', () => t('importJobs.failedInterrupted'))
+    .with('internal', null, () => t('importJobs.failed'))
     .exhaustive();
 }
 
@@ -72,10 +118,21 @@ function overallFraction(jobs: readonly ImportJob[]): number | null {
   return sum / fractions.length;
 }
 
+/** What a failed job offers: reconnecting a lost connection, or its review. */
+function failedAction(job: ImportJob): 'reconnect' | 'details' | null {
+  if (job.phase.kind !== 'failed') return null;
+  const lost =
+    job.phase.errorKind === 'access_lost' ||
+    job.phase.errorKind === 'connection_unavailable';
+  if (lost && job.source !== 'slack') return 'reconnect';
+  return job.sessionId ? 'details' : null;
+}
+
 function ImportJobRow(props: {
   job: ImportJob;
   onOpen: (job: ImportJob) => void;
   onDismiss: (job: ImportJob) => void;
+  onReconnect: (job: ImportJob) => void;
 }) {
   const source = () => SOURCES[props.job.source];
   const label = () => phaseLabel(props.job.source, props.job.phase);
@@ -107,7 +164,25 @@ function ImportJobRow(props: {
             <Show when={percent() !== undefined}>{percent()}%</Show>
           </span>
         </Show>
-        <Show when={props.job.sessionId}>
+        <Show when={failedAction(props.job) === 'reconnect'}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => props.onReconnect(props.job)}
+          >
+            {t('importJobs.reconnect', { source: source().name })}
+          </Button>
+        </Show>
+        <Show when={failedAction(props.job) === 'details'}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => props.onOpen(props.job)}
+          >
+            {t('importJobs.viewDetails')}
+          </Button>
+        </Show>
+        <Show when={props.job.sessionId && props.job.phase.kind !== 'failed'}>
           <Button
             variant="ghost"
             size="icon-sm"
@@ -148,6 +223,7 @@ export function ImportJobsTray(props: {
   onExpandedChange: (expanded: boolean) => void;
   onOpen: (job: ImportJob) => void;
   onDismiss: (job: ImportJob) => void;
+  onReconnect: (job: ImportJob) => void;
 }) {
   return (
     <Show when={props.jobs.length > 0}>
@@ -167,6 +243,7 @@ export function ImportJobsTray(props: {
                   job={job()}
                   onOpen={props.onOpen}
                   onDismiss={props.onDismiss}
+                  onReconnect={props.onReconnect}
                 />
               )}
             </Index>
@@ -187,7 +264,9 @@ export function ImportJobsTray(props: {
             }
             onClick={() => props.onExpandedChange(!props.expanded)}
           >
-            <ProgressRing fraction={overallFraction(props.jobs)} />
+            <Show when={props.jobs.some((job) => !job.dismissable)}>
+              <ProgressRing fraction={overallFraction(props.jobs)} />
+            </Show>
             <span>{t('importJobs.summary', { count: props.jobs.length })}</span>
             <CaretUp
               class={cn(

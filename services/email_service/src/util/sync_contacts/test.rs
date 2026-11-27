@@ -4,6 +4,7 @@ use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use serde_json::{Value, json};
 
 use super::*;
+use crate::outbound::inbox_source::recording::{Recorded, RecordingContactLists};
 
 #[derive(Clone, Debug)]
 struct PublishedEvent {
@@ -203,7 +204,7 @@ fn link_for(macro_id: &str, email: &str) -> Link {
 }
 
 #[test]
-fn address_book_connections_cover_saved_contacts_and_skip_noise() {
+fn address_book_contacts_cover_saved_contacts_and_skip_noise() {
     let link = link_for("macro|owner@acme.com", "owner@acme.com");
     let contacts = vec![
         other_contact(Some("Alice@Acme.com"), Some("Alice")),
@@ -215,19 +216,71 @@ fn address_book_connections_cover_saved_contacts_and_skip_noise() {
         other_contact(Some("friend@gmail.com"), Some("Friend")),
     ];
 
-    let connections = address_book_connections(&link, &contacts);
-
-    let second: Vec<String> = connections
+    let contacts: Vec<String> = address_book_contacts(&link, &contacts)
         .iter()
-        .map(|connection| connection.second.to_string())
+        .map(ToString::to_string)
         .collect();
     assert_eq!(
-        second,
+        contacts,
         vec!["macro|alice@acme.com", "macro|friend@gmail.com"]
     );
-    assert!(
-        connections
-            .iter()
-            .all(|connection| connection.first == link.macro_id)
+}
+
+#[tokio::test]
+async fn the_address_book_is_connected_and_joins_the_owners_list_for_this_inbox() {
+    let link = link_for("macro|owner@example.com", "owner@example.com");
+    let ingress = RecordingContactLists::default();
+
+    connect_address_book(
+        &ingress,
+        &link,
+        &[
+            other_contact(Some("friend@example.com"), Some("Friend")),
+            other_contact(Some("noreply@example.com"), None),
+        ],
+    )
+    .await
+    .unwrap();
+
+    let friend = MacroUserIdStr::try_from_email("friend@example.com").unwrap();
+    assert_eq!(
+        ingress.calls(),
+        [
+            Recorded::Connections(vec![ContactConnection::new(
+                link.macro_id.clone(),
+                friend.clone()
+            )]),
+            Recorded::InboxContacts(inbox_source(&link), vec![friend]),
+        ]
     );
+}
+
+#[tokio::test]
+async fn an_address_book_with_no_people_publishes_nothing() {
+    let link = link_for("macro|owner@example.com", "owner@example.com");
+    let ingress = RecordingContactLists::failing();
+
+    connect_address_book(
+        &ingress,
+        &link,
+        &[other_contact(Some("noreply@example.com"), None)],
+    )
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn a_failed_publish_fails_the_address_book_step() {
+    let link = link_for("macro|owner@example.com", "owner@example.com");
+    let ingress = RecordingContactLists::failing();
+
+    let error = connect_address_book(
+        &ingress,
+        &link,
+        &[other_contact(Some("friend@example.com"), None)],
+    )
+    .await
+    .unwrap_err();
+
+    assert!(format!("{error:#}").contains("Unable to connect address book contacts"));
 }

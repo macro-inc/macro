@@ -1223,10 +1223,13 @@ async fn a_usage_limit_refusal_answers_the_prompt_with_a_notice() {
 
     let error = response.get("error").expect("a refused prompt is an error");
     assert_eq!(error["data"]["kind"], "provider_usage_limit");
-    assert_eq!(error["data"]["title"], "Cursor usage limit reached");
+    assert_eq!(
+        error["data"]["title"],
+        "Cursor billing stopped this message"
+    );
     assert_eq!(
         error["data"]["link"]["url"],
-        "https://www.cursor.com/dashboard?tab=settings"
+        "https://macro.com/docs/AI/cursor#cursor-usage-and-billing"
     );
     let message = error["message"].as_str().expect("a message");
     assert!(

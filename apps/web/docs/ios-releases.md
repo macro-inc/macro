@@ -19,7 +19,8 @@ Play as the source of truth — is described in `docs/development/android.md`.)
 
 Web bundles ship to installed apps over the air (see
 `tauri/macro_bundle_updater_plugin`). On iOS they persist in a backup-excluded
-Application Support directory so storage pressure cannot purge them; the
+Application Support directory so storage pressure cannot purge them, and startup
+serves one only when every file its completion record lists is present; the
 updater ignores legacy cache contents (see
 `tauri/src-tauri/README.md#ota-bundle-storage`). Native code — anything under
 `apps/web/tauri/` — only reaches users through the App Store. A bundle that
@@ -184,6 +185,25 @@ UIKit bridge; device verification must include notification launches after
 termination/WebContent eviction and ordinary icon resume, as well as auth
 failures, account switching, and rapid successive taps. Confirm the app stays
 visible in the app switcher and under Control Center and Notification Center.
+
+### CRM cache command compatibility
+
+New bundles use `current_authority` and `transition_authority` to observe and
+retire the cache's session generation. Response writes carry the generation
+captured before their request; a supplied stale generation is rejected under the
+shared owner lock. Reads and watches do not require a proof or admission claim.
+Older bundles omit the optional `generation` argument; the new native plugin
+preserves the deployed cache contract for those calls, including writes.
+The native plugin regression exercises the old bundle's argument shape. This
+preserves the older production bundle's command contract on a newer binary during
+rollback, with one known limitation: queue inspection removes copied optimistic
+data from legacy queued `SaveEmailDraft` entries for every caller. Authored
+command variables remain, but an older bundle may lose its optimistic draft
+display or recovery data. The minimum native build only protects the reverse
+combination. Older bundles
+do not acquire CRM cache retirement by upgrading native code alone. Keep CRM
+access changes disabled until all access consumers are upgraded, as described
+in [CRM email privacy](../../../docs/CRM_EMAIL_PRIVACY.md#member-access).
 
 ## What counts as native code
 

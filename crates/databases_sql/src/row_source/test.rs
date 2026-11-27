@@ -122,7 +122,9 @@ fn soup_row(row: &Row) -> SoupItem<SoupPropertiesField> {
                         Cell::Text(text) => PropertyValue::Str(text.clone()),
                         Cell::Number(number) => PropertyValue::Num(*number),
                         Cell::Bool(checked) => PropertyValue::Bool(*checked),
-                        Cell::Date(date) => PropertyValue::Date(*date),
+                        Cell::Date(date) => {
+                            PropertyValue::Date(models_properties::shared::DateValue::new(*date))
+                        }
                         Cell::DateRange(range) => PropertyValue::DateRange(
                             models_properties::shared::DateRange::new(range.start, range.end)
                                 .unwrap(),
@@ -302,6 +304,14 @@ impl ContactsService for NoContacts {
         unimplemented!("no transcript reads people")
     }
     async fn add_contact_nodes(&self, _: ContactsNodes) -> Result<(), rootcause::Report> {
+        unimplemented!("no transcript adds contacts")
+    }
+
+    async fn invite_contact(
+        &self,
+        _: MacroUserIdStr<'static>,
+        _: MacroUserIdStr<'static>,
+    ) -> Result<(), rootcause::Report> {
         unimplemented!("no transcript adds contacts")
     }
 }

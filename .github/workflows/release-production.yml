@@ -6,7 +6,7 @@ env:
 on:
   release:
     types:
-    - released
+      - released
 jobs:
   deploy-cloud-storage:
     if: github.event_name == 'release'
@@ -23,7 +23,7 @@ jobs:
       NIX_CACHE_SIGNING_KEY: ${{ secrets.NIX_CACHE_SIGNING_KEY }}
   deploy-sync-service:
     needs:
-    - deploy-cloud-storage
+      - deploy-cloud-storage
     name: Deploy Sync Service
     uses: ./.github/workflows/deploy_sync_service.yml
     with:
@@ -31,8 +31,8 @@ jobs:
     secrets: inherit
   deploy-ai-editing-worker:
     needs:
-    - deploy-cloud-storage
-    - deploy-sync-service
+      - deploy-cloud-storage
+      - deploy-sync-service
     name: Deploy AI Editing Worker
     uses: ./.github/workflows/deploy_ai_editing_worker.yml
     with:
@@ -40,7 +40,7 @@ jobs:
     secrets: inherit
   deploy-mcp-chatgpt-worker:
     needs:
-    - deploy-cloud-storage
+      - deploy-cloud-storage
     name: Deploy MCP ChatGPT Worker
     uses: ./.github/workflows/deploy_mcp_chatgpt_worker.yml
     with:
@@ -58,11 +58,11 @@ jobs:
       PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
   publish-ios:
     needs:
-    - deploy
+      - deploy
     name: Publish iOS App Store Version
-    uses: ./.github/workflows/ios-app-store-publish.yml
     permissions:
       contents: read
+    uses: ./.github/workflows/ios-app-store-publish.yml
     secrets:
       IOS_RELEASE_DOPPLER_TOKEN: ${{ secrets.IOS_RELEASE_DOPPLER_TOKEN }}
   build:
@@ -76,91 +76,93 @@ jobs:
       POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
   deploy:
     needs:
-    - build
-    - deploy-cloud-storage
-    - deploy-sync-service
+      - build
+      - deploy-cloud-storage
+      - deploy-sync-service
     name: Deploy Web App
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     env:
       CI: 'true'
     steps:
-    - name: Checkout Repo
-      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-      with:
-        ref: ${{ github.sha }}
-      env:
-        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
-        GIT_HTTP_LOW_SPEED_TIME: '60'
-    - name: Mount Namespace cache volume
-      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
-      with:
-        cache: nix
-        path: /home/runner/.bun/install/cache
-      continue-on-error: true
-    - name: Setup Nix
-      uses: ./.github/actions/setup-nix
-    - name: Setup Prereqs
-      uses: ./.github/actions/setup-reqs-web
-    - name: Download dist
-      uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
-      with:
-        name: web-app-dist-prod
-        path: apps/web/dist
-    - name: Install infra dependencies
-      run: bun install
-      working-directory: infra
-    - name: Configure AWS Credentials
-      uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: us-east-1
-    - name: Deploy with Pulumi
-      uses: pulumi/actions@8e5e406f4007fca908480587cb9893c07090f58d
-      with:
-        command: up
-        stack-name: macro-inc/prod
-        work-dir: ./infra/stacks/web-app
-      env:
-        PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-        DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
-        DD_API_KEY: ${{ secrets.DD_API_KEY }}
-        DD_HOST: https://api.us5.datadoghq.com/
-    - name: Upload sourcemaps to Datadog
-      run: bun run ddupload:prod
-      env:
-        DATADOG_API_KEY: ${{ secrets.DD_API_KEY }}
-        DATADOG_SITE: us5.datadoghq.com
-        DATADOG_API_HOST: api.us5.datadoghq.com
-      working-directory: apps/web
-    - name: Teardown Nix
-      if: always()
-      uses: ./.github/actions/teardown-nix
+      - name: Checkout Repo # zizmor: ignore[artipacked] release scripts run from the checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          ref: ${{ github.sha }}
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Mount Namespace cache volume
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          cache: nix
+          path: /home/runner/.bun/install/cache
+        continue-on-error: true
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+      - name: Setup Prereqs
+        uses: ./.github/actions/setup-reqs-web
+      - name: Download dist
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: web-app-dist-prod
+          path: apps/web/dist
+      - name: Install infra dependencies
+        run: bun install
+        working-directory: infra
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b
+        with:
+          aws-region: us-east-1
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Deploy with Pulumi
+        uses: pulumi/actions@8e5e406f4007fca908480587cb9893c07090f58d
+        with:
+          command: up
+          stack-name: macro-inc/prod
+          work-dir: ./infra/stacks/web-app
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
+          DD_API_KEY: ${{ secrets.DD_API_KEY }}
+          DD_HOST: https://api.us5.datadoghq.com/
+      - name: Upload sourcemaps to Datadog
+        run: bun run ddupload:prod
+        env:
+          DATADOG_API_KEY: ${{ secrets.DD_API_KEY }}
+          DATADOG_SITE: us5.datadoghq.com
+          DATADOG_API_HOST: api.us5.datadoghq.com
+        working-directory: apps/web
+      - name: Teardown Nix
+        if: always()
+        uses: ./.github/actions/teardown-nix
   upload:
     needs:
-    - build
-    - deploy
+      - build
+      - deploy
     name: Upload Release Artifacts
     runs-on: namespace-profile-linux-tiny-no-cache
     steps:
-    - name: Checkout Repo
-      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-      with:
-        ref: ${{ github.sha }}
-      env:
-        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
-        GIT_HTTP_LOW_SPEED_TIME: '60'
-    - name: Download dist
-      uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
-      with:
-        name: web-app-dist-prod
-        path: apps/web/dist
-    - name: Create Web App Artifact
-      run: tar -czf web-app-${{ github.ref_name }}.tar.gz -C apps/web/dist .
-    - name: Upload Release Artifacts
-      uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
-      with:
-        files: web-app-${{ github.ref_name }}.tar.gz
+      - name: Checkout Repo # zizmor: ignore[artipacked] release scripts run from the checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          ref: ${{ github.sha }}
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Download dist
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: web-app-dist-prod
+          path: apps/web/dist
+      - name: Create Web App Artifact
+        run: tar -czf "web-app-${REF_NAME}.tar.gz" -C apps/web/dist .
+        env:
+          REF_NAME: ${{ github.ref_name }}
+      - name: Upload Release Artifacts
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
+        with:
+          files: web-app-${{ github.ref_name }}.tar.gz
 concurrency:
   group: ${{ github.workflow }}-production
   cancel-in-progress: false

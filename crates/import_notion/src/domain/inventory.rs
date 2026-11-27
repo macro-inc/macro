@@ -8,7 +8,7 @@ use lazy_regex::regex;
 
 use super::model::{
     DataSourceSummary, DrainedRows, ImportScope, Inventory, InventoryProgress, NotionDataSource,
-    NotionId, NotionPage, NotionParent, NotionUser, RowsNext, SearchHit, SearchObject,
+    NotionId, NotionPage, NotionParent, NotionUser, PlanStage, RowsNext, SearchHit, SearchObject,
 };
 use super::ports::{NotionApi, NotionError};
 
@@ -32,7 +32,17 @@ const MARKDOWN_CONCURRENCY: usize = 4;
 /// as are data sources whose rows cannot be read. Rows are counted from the
 /// search results; a data source is queried only when search showed none
 /// of its rows.
-#[tracing::instrument(skip_all, err, fields(pages, data_sources, queried_data_sources))]
+#[tracing::instrument(
+    name = "notion.plan.inventory",
+    skip_all,
+    err,
+    fields(
+        stage = <&'static str>::from(PlanStage::Inventory),
+        pages,
+        data_sources,
+        queried_data_sources,
+    )
+)]
 pub async fn inventory<Api: NotionApi>(
     api: &Api,
     scope: &ImportScope,
@@ -133,10 +143,12 @@ pub async fn all_rows<Api: NotionApi>(
     data_source: &NotionId,
 ) -> Result<DrainedRows, NotionError> {
     let mut rows: Vec<NotionPage> = Vec::new();
+    let mut rows_read = 0;
     let mut seen: HashSet<NotionId> = HashSet::new();
     let mut cursor = None;
     let complete = loop {
         let page = api.query_data_source(data_source, cursor).await?;
+        rows_read += page.rows.len();
         // A query that restarts past Notion's result cap repeats the rows
         // created in the same instant as the last one it returned.
         rows.extend(
@@ -153,7 +165,11 @@ pub async fn all_rows<Api: NotionApi>(
     let span = tracing::Span::current();
     span.record("rows", rows.len());
     span.record("complete", complete);
-    Ok(DrainedRows { rows, complete })
+    Ok(DrainedRows {
+        rows,
+        complete,
+        rows_read,
+    })
 }
 
 /// Every workspace member the connection may list, bots excluded.

@@ -9,13 +9,14 @@
 use agent_session::domain::model::AgentSessionId;
 use ai_toolset::actor::ToolActor;
 use async_trait::async_trait;
+use connectors::inbound::toolset::DiscoverConnectorsResponse;
+use connectors::inbound::toolset::DiscoveryRequest;
+use connectors::inbound::toolset::{ConnectMcpServer, ConnectMcpServerResponse};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt};
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_client::inbound::toolset::{ConnectMcpServer, ConnectMcpServerResponse};
-use pipedream_mcp::domain::service::discovery::DiscoveryRequest;
-use pipedream_mcp::inbound::toolset::DiscoverConnectorsResponse;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use tracing::Instrument as _;
 use utoipa::ToSchema;
 
 use super::{CodeModeError, ExecutionId, ExecutionStatus, ExecutionStore, ExecutionTurns};
@@ -91,6 +92,16 @@ pub struct ConnectedToolSearch {
 
 /// Most tools one search returns.
 pub const MAX_TOOL_MATCHES: usize = 20;
+
+/// How long a search waits for any one app to list its tools. A slow server
+/// (some answer `tools/list` in over 10 s) would otherwise hold up the whole
+/// search; it is reported unsearched, and `app.tools()` still reads it.
+pub const TOOL_LISTING_DEADLINE: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// How long a listing the search stopped waiting for may keep running. A
+/// server that never answers would otherwise hold one of its app's call slots
+/// for as long as the transport's own timeout.
+pub const LATE_TOOL_LISTING_LIMIT: std::time::Duration = std::time::Duration::from_secs(60);
 
 /// Call one tool of a connected app.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
@@ -298,8 +309,8 @@ impl ConnectedAppService {
 
     /// Find tools across every app the agent was given by keywords matched
     /// against tool names and descriptions, ranked the way `SearchTools`
-    /// ranks: by how many terms match. An app whose tools cannot be listed
-    /// is reported, not fatal.
+    /// ranks: by how many terms match. An app whose tools cannot be listed,
+    /// or not within [`TOOL_LISTING_DEADLINE`], is reported, not fatal.
     pub async fn search_tools(
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
@@ -310,12 +321,37 @@ impl ConnectedAppService {
         let usage = self.admit(access, caller, execution).await?;
         let apps = self.tools.apps(&usage).await?;
         let listings = futures::future::join_all(apps.iter().map(|app| {
+            let tools = Arc::clone(&self.tools);
+            let usage = usage.clone();
             let reference = ConnectedAppRef {
                 kind: app.kind,
                 key: app.key.clone(),
             };
-            let usage = &usage;
-            async move { self.tools.tools(usage, &reference).await }
+            // Spawned so a listing past the deadline still finishes: dropping
+            // it could lose a rotated OAuth token before it is saved. Only a
+            // listing past the much longer limit is given up.
+            let listing = tokio::spawn(
+                async move {
+                    tokio::time::timeout(LATE_TOOL_LISTING_LIMIT, tools.tools(&usage, &reference))
+                        .await
+                        .unwrap_or_else(|_| {
+                            tracing::warn!(app = %reference.key, "gave up a connected app's late tool listing");
+                            Err(CodeModeError::Unavailable)
+                        })
+                }
+                .in_current_span(),
+            );
+            let key = app.key.clone();
+            async move {
+                match tokio::time::timeout(TOOL_LISTING_DEADLINE, listing).await {
+                    Ok(Ok(listed)) => listed,
+                    Ok(Err(_)) => Err(CodeModeError::Unavailable),
+                    Err(_) => {
+                        tracing::warn!(app = %key, "a connected app did not list its tools in time");
+                        Err(CodeModeError::Unavailable)
+                    }
+                }
+            }
         }))
         .await;
 

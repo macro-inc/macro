@@ -22,7 +22,8 @@ export function RoutineRunButton(props: {
         finish="raised"
         variant="secondary"
         size="md"
-        class="border-0"
+        // Takes taps in the touch top bar, which ignores them outside islands.
+        class="border-0 touch:pointer-events-auto"
         aria-label="Run routine"
       >
         <ButtonGroup.Button

@@ -1,11 +1,23 @@
 import type { PropertyDefinitionDomain } from '@property/types';
 import { toPropertyDefinitionDomain } from '@property/utils/transforms';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
+import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { type Accessor, createMemo } from 'solid-js';
 
-export function useAllProperties(enabled: Accessor<boolean> = () => true) {
+/**
+ * Every property definition the user can see. With `forEntityType`, only the
+ * ones the server lets an entity of that type take.
+ */
+export function useAllProperties(
+  enabled: Accessor<boolean> = () => true,
+  forEntityType: Accessor<EntityType | undefined> = () => undefined
+) {
   const query = useListPropertiesQuery(
-    () => ({ scope: 'all', includeOptions: true }),
+    () => ({
+      scope: 'all',
+      includeOptions: true,
+      forEntityType: forEntityType(),
+    }),
     enabled
   );
 

@@ -141,6 +141,12 @@ export function MobileCanvasViewSheet(props: {
     /** A drawing tool stays chosen after it has drawn. */
     toolLocked: boolean;
     onToolLocked: (locked: boolean) => void;
+    /**
+     * Only the pen draws, and fingers move the canvas. Absent until a pen has
+     * pressed the canvas: without one there is nothing to choose.
+     */
+    penOnly?: boolean;
+    onPenOnly: (only: boolean) => void;
   };
 }) {
   const percent = () => Math.round(props.scale * 100);
@@ -204,6 +210,13 @@ export function MobileCanvasViewSheet(props: {
                 checked={editing().toolLocked}
                 onClick={() => editing().onToolLocked(!editing().toolLocked)}
               />
+              <Show when={editing().penOnly !== undefined}>
+                <SheetRow
+                  label="Draw with pen only"
+                  checked={!!editing().penOnly}
+                  onClick={() => editing().onPenOnly(!editing().penOnly)}
+                />
+              </Show>
             </MobileDrawer.Section>
           </>
         )}

@@ -15,8 +15,8 @@ work); each agent's code starts as a copy of `packages/starter-agent`.
 | Enrollment | `crates/hosted_runtimes` + `crates/team_agents` | On every enrollment generation, the computer of an agent gets `agent.env`: its Macro key, gateway and service addresses, its repo URL and token, and, in Macro-credits mode, its Anthropic gateway access. The key and repo token rotate with each generation. |
 | Repository | `crates/agent_git` | One bare repo per agent, over smart HTTP, seeded from `packages/starter-agent` with `agent.json` (owner = the inviting admin, the agent itself) and, when the invite described it, the agent's identity. |
 | Runtime | `packages/muppet` | Behaviors, event sources, typed capability modules, the code mode, the Claude Code agent. Pure: IO comes from an injected context. |
-| The agent's code | `packages/starter-agent` → the agent's repo | Chat, schedules, people, identity, heartbeat (commit, land), tools, browser, calls, secrets. |
-| Image | `nix/macro-box` | The agent service (a hardened system unit), its launcher, Claude Code, Chromium, Xvnc, ffmpeg, PulseAudio, bubblewrap, xclip, computer-use-linux. |
+| The agent's code | `packages/starter-agent` → the agent's repo | Chat, schedules, people, identity, heartbeat (commit, land), tools, browser, captcha ([CAPTCHAs](agent-teammates-captcha.md)), calls, secrets. |
+| Image | `nix/macro-box` | The agent service (a hardened system unit), its launcher, Claude Code, Chromium, Xvnc, ffmpeg, PulseAudio, bubblewrap, xclip, computer-use-linux, OpenCode (the CAPTCHA solver). |
 
 ## The repo
 
@@ -48,13 +48,16 @@ Team admins and owners can read the repo with their Macro credential.
 2. **The computer is created** from the agent image, because it has an agent.
 3. **Enrollment** writes `agent.env` as the agent service's systemd credential.
 4. **The launcher** clones the repo into the workspace, sets the agent's git
-   identity and credential helper, links the image's packages (muppet, the
-   SDK and the template's locked dependencies) and starts `bun cli.ts run`.
+   identity and credential helper, links the selected runtime packages (muppet, the
+   SDK and the template's locked dependencies), checks that the code needs no
+   higher muppet API than the runtime has (`muppetApi` against `apiLevel`; a new
+   agent on too old an image stops with exit 79), and starts `bun cli.ts run`.
 5. **Claude Code** reaches Anthropic through the customer's Claude login
    (harnessd), or through the Macro-credits gateway when `agent.env` says so.
 6. **The agent boots**: it reads its credentials, shows online, starts its
-   event sources and records the healthy HEAD. With no identity, its first
-   wake DMs its owner to ask who it should be; otherwise it introduces itself.
+   event sources and records the healthy HEAD. With no saved identity, its
+   first wake uses the configured name if present and DMs its owner to ask
+   what to take on.
 
 `create_default_agent` at the computer's first connection keeps creating the
 default coding agent only on computers without an agent teammate.
@@ -63,6 +66,11 @@ default coding agent only on computers without an agent teammate.
 
 The agent's process is the only one that holds its credentials.
 
+- **Code and image** ship separately: the code from the template (or the
+  agent's own lands), Muppet from the image or a compatible runtime bundle.
+  The code declares its required API and the runtime declares its level.
+  A bundle changes SDK and Muppet without replacing the guest image.
+  See the [dev rollout procedure](../runbooks/firecracker-computers-rollout.md#service-only-runtime-updates-in-dev).
 - **Credentials** come from the systemd credential file
   (`MUPPET_CREDENTIALS_FILE`, read-only). A self-hosted agent can keep them in
   SOPS instead (`MUPPET_CREDENTIALS=sops`).
@@ -108,17 +116,45 @@ call carries the wake id as `X-Macro-Agent-Session-Id`.
 
 `@macro-inc/observability/server` exports OTLP when the computer sets the
 standard `OTEL_EXPORTER_OTLP_*` variables. The start is an `agent.start`
-span from the process's start to a healthy boot, with a child per step, in
-the computer's setup trace when the image passes `MACRO_SETUP_TRACEPARENT`;
-wakes stay traces of their own. A wake is an `agent.wake` span
-(event, wake id, outcome, cost, turns); each script is an
+span from the image's `start-agent` (its steps, which it times in
+`MACRO_LAUNCH_TIMINGS`, are `agent.launch.*`) to a healthy boot, with a
+child per step, in the computer's setup trace when the image passes
+`MACRO_SETUP_TRACEPARENT`; wakes stay traces of their own. A wake is an
+`agent.wake` span (event, wake id, outcome, cost, turns); each script is an
 `agent.capability_script` span whose context reaches the script's process.
+A message the screen queues keeps the screen span's `traceparent`, and its
+reply run is a `chat.turn` span in that trace (last message and channel
+ids, DM or thread, messages, how long they waited, `posted` or
+`not_posted`, how soon it answered, its duration, the wake's outcome and
+error category), with the wake as its child. A task handed over with `doLater` is
+an `agent.task.queue` span (task id, channel id) whose `traceparent` the
+task's schedule keeps; the run that does it is an `agent.task` span in that
+trace (task id, lateness, outcome); any other schedule that wakes the agent
+is an `agent.scheduled_wake`. The agent's Macro SDK clients send the active
+trace context (`traceContext`), through the relay too, so each service's
+`http.request` span joins the trace. That context is the agent's claim;
+who the request really was is the service's own finding, on the same span:
+`auth.credential` (`user_api_key` for an agent), `auth.principal_id` (the
+verified account's FusionAuth id) and, for an agent's account,
+`macro.agent.id` (the same value its runtime reports). A message queued
+before a restart keeps its trace context, so its reply joins that older
+trace. The trace context never enters a prompt. Nothing is sampled: every agent span is exported. Its
+environment is agent.env's `OTEL_DEPLOYMENT_ENVIRONMENT`, set by the
+authentication service beside the intake (`dev`, `prod`, `local`).
+Each message the listener screens is a `chat.screen` span (message and
+channel ids, verdict and its reason category (`own`, `bot`, `no_sender`,
+`dm`, `mention`, `screen`, `screen_failed`), and each probability by
+question, never the text), and each drop of the events
+stream a `chat.events.reconnect` span from the drop until the stream reopens
+(at most a minute, `chat.events.reopened` false if it is still down), with the
+process's running count.
 The agent's account appears only as a hash.
 
 ## Defaults, for review
 
-- **Identity**: seeded from the invite form when filled; otherwise the agent
-  asks its owner.
+- **Identity**: each wake uses saved identity when present. For a name-only
+  invite, the agent uses the name seeded in `agent.json` and asks its owner
+  what to take on first.
 - **Authority**: the owner is the inviting admin or the buyer, while they are
   on the team; once they leave, the team's owner is, and is told once (checked
   before every wake). Only the owner gives orders; text the agent reads is

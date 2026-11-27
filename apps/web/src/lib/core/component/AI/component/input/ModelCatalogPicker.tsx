@@ -15,11 +15,14 @@ import {
   createSignal,
   For,
   type JSX,
-  onCleanup,
   onMount,
   Show,
 } from 'solid-js';
 import { ModelIcon } from '../ProviderIcon';
+import {
+  focusSearchAfterMenuOpen,
+  keepSearchFocused,
+} from './model-catalog-search';
 import {
   buildModelCatalog,
   type CatalogModelOption,
@@ -125,74 +128,6 @@ function ModelList(props: {
       </For>
     </Dropdown.Group>
   );
-}
-
-/**
- * Kobalte menus still autofocus the collection on a deferred `setTimeout(0)`
- * (`deferAutoFocus` in createSelectableList) after `onOpenAutoFocus` is
- * prevented. A microtask loses that race; wait past the timeout so typing
- * lands in search.
- */
-function focusSearchAfterMenuOpen(input: () => HTMLInputElement | undefined) {
-  setTimeout(() => {
-    requestAnimationFrame(() => {
-      const search = input();
-      if (search?.isConnected) search.focus();
-    });
-  });
-}
-
-/**
- * Hover-opened subs never move focus into the catalog, and two later races
- * would steal the caret even after we do:
- *   1. Focusing before the portaled DismissableLayer registers looks like
- *      "focus outside" to the parent and closes the menu tree. The timeout
- *      + rAF in `focusSearchAfterMenuOpen` waits past that onMount.
- *   2. SubTrigger `onPointerMove` keeps calling `focusWithoutScrolling` on
- *      the agent row, so any mouse move while hovering it yanks focus back.
- *      Keep startup autofocus on search, then reclaim only when that parent
- *      trigger steals focus. Model rows and their nested effort menus must
- *      retain focus once the user navigates them.
- */
-function keepSearchFocused(input: () => HTMLInputElement | undefined) {
-  focusSearchAfterMenuOpen(input);
-  const menu = input()?.closest('[role="menu"]');
-  let navigating = false;
-  const onNavigate = (event: Event) => {
-    if (
-      event.target instanceof Element &&
-      event.target.closest('[role="menuitem"], input[type="range"]')
-    ) {
-      navigating = true;
-    }
-  };
-  for (const type of ['pointermove', 'pointerdown', 'keydown']) {
-    menu?.addEventListener(type, onNavigate, true);
-  }
-  const onBlur = () => {
-    queueMicrotask(() => {
-      const search = input();
-      const triggerId = menu?.getAttribute('aria-labelledby');
-      const active = document.activeElement;
-      // Kobalte may focus its selected row after the search's initial focus.
-      // Once the user navigates the catalog, leave those rows in control.
-      const initialRowFocus =
-        !navigating && menu && active?.closest('[role="menu"]') === menu;
-      if (
-        search?.isConnected &&
-        (triggerId === active?.id || initialRowFocus)
-      ) {
-        search.focus();
-      }
-    });
-  };
-  input()?.addEventListener('blur', onBlur);
-  onCleanup(() => {
-    input()?.removeEventListener('blur', onBlur);
-    for (const type of ['pointermove', 'pointerdown', 'keydown']) {
-      menu?.removeEventListener(type, onNavigate, true);
-    }
-  });
 }
 
 /**

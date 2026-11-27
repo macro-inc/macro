@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
+import solid from 'vite-plugin-solid';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
 const directory = fileURLToPath(new URL('.', import.meta.url));
@@ -9,6 +10,32 @@ export default defineConfig(({ command }) => ({
   root: directory,
   base: command === 'build' ? '/app/' : '/',
   plugins: [
+    solid(),
+    {
+      // The directory reader's checkpoint and server modules load the app's
+      // sync and analytics code; the list order harness needs neither.
+      name: 'people-list-order-adapters',
+      enforce: 'pre',
+      resolveId(source, importer) {
+        if (
+          importer?.endsWith('/queries/contacts/directory.ts') &&
+          ['./backfill', '@service-storage/graphql-contacts'].includes(source)
+        )
+          return resolve(directory, 'people-list-order-adapters.ts');
+      },
+    },
+    {
+      // The calendar create harness brings its own client and cache host.
+      name: 'calendar-create-adapters',
+      enforce: 'pre',
+      resolveId(source, importer) {
+        if (
+          importer?.includes('/queries/calendar/graphql/') &&
+          source === '@service-storage/graphql-soup'
+        )
+          return resolve(directory, 'calendar-create-adapters.ts');
+      },
+    },
     tsconfigPaths({
       projects: [resolve(directory, '../../../../../tsconfig.json')],
     }),
@@ -39,6 +66,7 @@ export default defineConfig(({ command }) => ({
       input: Object.fromEntries(
         [
           'calendar-points.html',
+          'calendar-create.html',
           'index.html',
           'host.html',
           'cutover.html',
@@ -53,6 +81,7 @@ export default defineConfig(({ command }) => ({
           'parking.html',
           'graphql-soup-rollout.html',
           'cache-recovery.html',
+          'queue-salvage.html',
           'notification-projection.html',
           'mail-projection.html',
           'mail-reconciliation.html',
@@ -60,6 +89,7 @@ export default defineConfig(({ command }) => ({
           'email-participants.html',
           'search-buckets.html',
           'people-references.html',
+          'people-list-order.html',
         ].map((name) => [name.replace('.html', ''), resolve(directory, name)])
       ),
     },

@@ -47,6 +47,10 @@ engine) — keep it free of native-only dependencies.
 
 - Mail All/Inbox require an All Mail preview; Drafts/Sent use their own preview
   membership because a message in junk cannot supply All Mail.
+- Inbox windows sort by derived view keys (`SORT_FACT_DERIVATIONS`):
+  `mail-inbox-view-ts`, and `mail-important-view-ts` when the tree requires
+  importance through `And`. A new rule needs no storage version: Turso
+  storage backfills only the rules a cache has not recorded.
 
 - `STATUS_PROPERTY_DEFINITION_ID` hardcodes `SystemPropertyKey::STATUS_UUID`
   to avoid a native dependency on `system_properties` for wasm; a native test

@@ -19,6 +19,7 @@ sudo install -m 0555 "$AGENT_BUILD" "$AGENT"
 sudo install -m 0555 "$FIRECRACKER" "$ROOT/bin/firecracker"
 sudo install -m 0555 "$JAILER" "$ROOT/bin/jailer"
 sudo ln -sfn "$IMAGE_SOURCE" "$IMAGES_DIR/$IMAGE"
+sudo ln -sfn "$IMAGE_SOURCE" "$IMAGES_DIR/$NEXT_IMAGE"
 
 if ! sudo zfs list -H "$DATASET" >/dev/null 2>&1; then
   sudo zfs create -p -o mountpoint="$ROOT/zfs" "$DATASET"
@@ -105,4 +106,6 @@ sudo systemctl daemon-reload
 start_agent ""
 client build-golden --image "$IMAGE" --vcpus "$VCPUS" --memory-mib "$MEMORY_MIB" >/dev/null
 wait_golden_ready "$VCPUS" "$MEMORY_MIB"
-echo "setup done: golden $IMAGE ${VCPUS}v-${MEMORY_MIB}m ready"
+client build-golden --image "$NEXT_IMAGE" --vcpus "$VCPUS" --memory-mib "$MEMORY_MIB" >/dev/null
+IMAGE=$NEXT_IMAGE wait_golden_ready "$VCPUS" "$MEMORY_MIB"
+echo "setup done: goldens $IMAGE and $NEXT_IMAGE ${VCPUS}v-${MEMORY_MIB}m ready"

@@ -13,7 +13,7 @@ describe('onboarding tool ordering', () => {
           'quickbooks',
           'stripe',
           'notion',
-          'slack_v2',
+          'slack',
           'posthog',
           'linear',
           'github',
@@ -24,7 +24,7 @@ describe('onboarding tool ordering', () => {
     ).toEqual([
       'linear',
       'notion',
-      'slack_v2',
+      'slack',
       'posthog',
       'stripe',
       'github',
@@ -36,7 +36,7 @@ describe('onboarding tool ordering', () => {
     ]);
   });
 
-  it('deduplicates promoted apps, later pages and Slack aliases, and hides only excluded Google apps', () => {
+  it('deduplicates promoted apps and later pages, and hides only excluded Google apps', () => {
     expect(
       orderOnboardingTools(
         tools([
@@ -47,7 +47,7 @@ describe('onboarding tool ordering', () => {
           'google_sheets',
           'google_drive',
           'google_calendar',
-          'slack_v2',
+          'slack',
           'linear',
           'stripe',
           'mysql',

@@ -50,7 +50,7 @@
     {
       "path": "apps/web/src/lib/core/component/AI/component/mcpConstants.ts",
       "blob": "98338de71a33e65fcf6c41652e89ad807a8f92fe",
-      "consumer": "AgentStories.tsx"
+      "consumer": "AgentMcpSetup.tsx"
     },
     {
       "path": "apps/web/src/features/routines/components/routines-list.tsx",

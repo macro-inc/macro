@@ -16,12 +16,19 @@ use crate::domain::model::{
     NotionDataSource, NotionId, NotionPage, NotionParent, NotionUser, NotionValue, PageMarkdown,
     Paged, SearchHit, SearchObject,
 };
-use crate::domain::ports::{NotionApi, NotionError};
+use crate::domain::ports::{NotionApi, NotionError, TransportClass};
+
+/// One scripted answer: Notion's response, or a request that did not
+/// complete.
+enum Step {
+    Answer(TransportResponse),
+    Fail(TransportClass),
+}
 
 /// Answers requests in order from a script and records what was sent.
 struct ScriptedTransport {
     started: Instant,
-    responses: Mutex<VecDeque<TransportResponse>>,
+    responses: Mutex<VecDeque<Step>>,
     requests: Mutex<Vec<SentRequest>>,
 }
 
@@ -35,9 +42,13 @@ struct SentRequest {
 
 impl ScriptedTransport {
     fn new(responses: Vec<TransportResponse>) -> Arc<Self> {
+        Self::steps(responses.into_iter().map(Step::Answer).collect())
+    }
+
+    fn steps(steps: Vec<Step>) -> Arc<Self> {
         Arc::new(Self {
             started: Instant::now(),
-            responses: Mutex::new(responses.into()),
+            responses: Mutex::new(steps.into()),
             requests: Mutex::new(Vec::new()),
         })
     }
@@ -55,8 +66,17 @@ impl NotionTransport for Arc<ScriptedTransport> {
             body: read.body().cloned(),
             after: self.started.elapsed(),
         });
-        let response = self.responses.lock().unwrap().pop_front();
-        Ok(response.expect("the script has a response for every request"))
+        let step = self.responses.lock().unwrap().pop_front();
+        match step.expect("the script has a response for every request") {
+            Step::Answer(response) => Ok(response),
+            Step::Fail(class) => Err(NotionError::Transport {
+                class,
+                report: rootcause::report!(
+                    "proxy request to https://api.notion.com/v1/pages/598337872cf94fdf8782e53db20768a5 failed"
+                )
+                .into_dynamic(),
+            }),
+        }
     }
 }
 
@@ -686,6 +706,11 @@ fn every_read() -> Vec<NotionRead> {
             body: json!({}),
         },
         NotionRead::Database(id.clone()),
+        NotionRead::ListViews {
+            scope: crate::domain::views::ViewScope::Database(id.clone()),
+            cursor: None,
+        },
+        NotionRead::RetrieveView(id.clone()),
         NotionRead::Users { cursor: None },
     ];
     for read in &reads {
@@ -697,6 +722,8 @@ fn every_read() -> Vec<NotionRead> {
             | NotionRead::DataSource(_)
             | NotionRead::QueryDataSource { .. }
             | NotionRead::Database(_)
+            | NotionRead::ListViews { .. }
+            | NotionRead::RetrieveView(_)
             | NotionRead::Users { .. } => {}
         }
     }
@@ -739,7 +766,354 @@ fn every_request_the_client_can_send_only_reads_notion() {
                 Method::GET,
                 "/v1/databases/598337872cf94fdf8782e53db20768a5".to_owned()
             ),
+            (Method::GET, "/v1/views?database_id=598337872cf94fdf8782e53db20768a5&page_size=100".to_owned()),
+            (Method::GET, "/v1/views/598337872cf94fdf8782e53db20768a5".to_owned()),
             (Method::GET, "/v1/users?page_size=100".to_owned()),
         ]
     );
 }
+
+// Synthetic Views API fixtures, Notion-Version 2026-03-11:
+// https://developers.notion.com/reference/list-views
+// https://developers.notion.com/reference/retrieve-a-view
+#[tokio::test(start_paused = true)]
+async fn views_list_references_by_container_or_source_and_retrieve_full_configuration() {
+    use crate::domain::views::ViewScope;
+    let transport = ScriptedTransport::new(vec![
+        ok(
+            json!({"object":"list", "type":"view", "view":{}, "has_more":true,
+            "next_cursor":"00000000-0000-4000-8000-000000000004",
+            "results":[{"object":"view", "id":"00000000-0000-4000-8000-000000000001"}]}),
+        ),
+        ok(
+            json!({"object":"list", "type":"view", "view":{}, "has_more":false, "next_cursor":null, "results":[]}),
+        ),
+        ok(
+            json!({"object":"view", "id":"00000000-0000-4000-8000-000000000001",
+            "name":"Open", "parent":{"type":"database_id", "database_id":"00000000-0000-4000-8000-000000000002"},
+            "data_source_id":"00000000-0000-4000-8000-000000000003", "type":"table",
+            "filter":{"property":"done", "checkbox":{"equals":false}}, "sorts":null, "configuration":null}),
+        ),
+    ]);
+    let client = NotionRestClient::new(
+        transport.clone(),
+        Arc::new(RequestPacer::new(Duration::ZERO)),
+    );
+    let database = NotionId::parse("00000000-0000-4000-8000-000000000002").unwrap();
+    let source = NotionId::parse("00000000-0000-4000-8000-000000000003").unwrap();
+    let list = client
+        .list_views(&ViewScope::Database(database), None)
+        .await
+        .unwrap();
+    assert_eq!(
+        list.results,
+        vec![NotionId::parse("00000000-0000-4000-8000-000000000001").unwrap()]
+    );
+    assert!(
+        client
+            .list_views(&ViewScope::DataSource(source), list.next_cursor)
+            .await
+            .unwrap()
+            .results
+            .is_empty()
+    );
+    let view = client.retrieve_view(&list.results[0]).await.unwrap();
+    assert_eq!(
+        view.filter,
+        Some(json!({"property":"done", "checkbox":{"equals":false}}))
+    );
+    assert_eq!(
+        transport
+            .requests()
+            .iter()
+            .map(|r| r.path.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            "/v1/views?database_id=00000000000040008000000000000002&page_size=100",
+            "/v1/views?data_source_id=00000000000040008000000000000003&page_size=100&start_cursor=00000000-0000-4000-8000-000000000004",
+            "/v1/views/00000000000040008000000000000001"
+        ]
+    );
+    assert!(
+        transport
+            .requests()
+            .iter()
+            .all(|r| r.method == Method::GET && r.body.is_none())
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn incomplete_view_lists_are_errors_and_view_reads_retry_and_preserve_access_errors() {
+    use crate::domain::views::ViewScope;
+    let id = NotionId::parse("00000000-0000-4000-8000-000000000001").unwrap();
+    let transport = ScriptedTransport::new(vec![
+        ok(
+            json!({"object":"list", "results":[], "has_more":false, "next_cursor":null, "request_status":{"type":"incomplete"}}),
+        ),
+        ok(json!({"object":"list", "results":[], "has_more":true, "next_cursor":null})),
+        TransportResponse {
+            status: StatusCode::TOO_MANY_REQUESTS,
+            retry_after: Some(Duration::from_secs(2)),
+            body: String::new(),
+        },
+        TransportResponse {
+            status: StatusCode::FORBIDDEN,
+            retry_after: None,
+            body: String::new(),
+        },
+        TransportResponse {
+            status: StatusCode::NOT_FOUND,
+            retry_after: None,
+            // Notion's own 404 (an empty body reads as the connection
+            // being unusable, not a missing object).
+            body: r#"{"object":"error","status":404,"code":"object_not_found","message":"Could not find view"}"#.into(),
+        },
+    ]);
+    let client = NotionRestClient::new(
+        transport.clone(),
+        Arc::new(RequestPacer::new(Duration::ZERO)),
+    );
+    assert!(matches!(
+        client
+            .list_views(&ViewScope::Database(id.clone()), None)
+            .await,
+        Err(NotionError::IncompleteViewList)
+    ));
+    assert!(matches!(
+        client
+            .list_views(&ViewScope::DataSource(id.clone()), None)
+            .await,
+        Err(NotionError::IncompleteViewList)
+    ));
+    assert!(matches!(
+        client.retrieve_view(&id).await,
+        Err(NotionError::Forbidden)
+    ));
+    assert!(transport.requests()[3].after >= Duration::from_secs(2));
+    assert!(matches!(
+        client.retrieve_view(&id).await,
+        Err(NotionError::NotFound)
+    ));
+}
+
+#[tokio::test(start_paused = true)]
+async fn malformed_view_lists_cannot_be_mistaken_for_no_saved_views() {
+    use crate::domain::views::ViewScope;
+    let id = NotionId::parse("00000000-0000-4000-8000-000000000001").unwrap();
+    let transport = ScriptedTransport::new(vec![ok(json!({}))]);
+    let client = NotionRestClient::new(transport, Arc::new(RequestPacer::new(Duration::ZERO)));
+    assert!(matches!(
+        client.list_views(&ViewScope::Database(id), None).await,
+        Err(NotionError::Decode(_))
+    ));
+}
+
+#[tokio::test(start_paused = true)]
+async fn database_body_references_resolve_against_documented_rest_shapes() {
+    use crate::domain::databases::{SourceOwnership, read_page_databases};
+
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("../../../fixtures/database_occurrences.json")).unwrap();
+    let transport = ScriptedTransport::new(vec![
+        ok(fixture["page_markdown"].clone()),
+        ok(fixture["database"].clone()),
+        ok(fixture["owned_source"].clone()),
+        ok(fixture["linked_source"].clone()),
+    ]);
+    let client = NotionRestClient::new(
+        transport.clone(),
+        Arc::new(RequestPacer::new(NOTION_REQUEST_INTERVAL)),
+    );
+    let page = NotionId::parse("598337872cf94fdf8782e53db20768a5").unwrap();
+    let body = read_page_databases(&client, &page).await.unwrap();
+
+    assert_eq!(
+        body.markdown,
+        fixture["page_markdown"]["markdown"].as_str().unwrap()
+    );
+    assert_eq!(body.occurrences.len(), 1);
+    assert_eq!(
+        body.occurrences[0].sources[0].ownership,
+        Some(SourceOwnership::Owned)
+    );
+    assert_eq!(
+        body.occurrences[0].sources[1].ownership,
+        Some(SourceOwnership::Linked)
+    );
+    assert_eq!(
+        body.occurrences[0].view_id,
+        NotionId::parse("c7f0aa501f0e4a529a17e2f6f3a3b0c1")
+    );
+    assert!(body.occurrences[0].losses.is_empty());
+    assert_eq!(
+        transport
+            .requests()
+            .iter()
+            .map(|request| request.path.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            "/v1/pages/598337872cf94fdf8782e53db20768a5/markdown",
+            "/v1/databases/d9824bdc84454327be8b5b47500af6ce",
+            "/v1/data_sources/1a44be1209534631a1d67d4c2b1b4a2f",
+            "/v1/data_sources/ee5f0f84409a440f983aa5315961c6e4",
+        ]
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn database_placements_keep_access_failures_distinct_from_needing_views() {
+    use crate::domain::databases::{DatabaseLoss, ReadFailure, read_page_databases};
+
+    let markdown = include_str!("../../../fixtures/database_unresolved.md");
+    let transport = ScriptedTransport::new(vec![
+        ok(json!({"object": "page_markdown", "markdown": markdown, "unknown_block_ids": []})),
+        ok(json!({"object": "database", "data_sources": []})),
+        TransportResponse {
+            status: StatusCode::FORBIDDEN, retry_after: None,
+            body: r#"{"object":"error","status":403,"code":"restricted_resource","message":"Access denied"}"#.into(),
+        },
+        TransportResponse {
+            status: StatusCode::NOT_FOUND, retry_after: None,
+            body: r#"{"object":"error","status":404,"code":"object_not_found","message":"Object not found"}"#.into(),
+        },
+        TransportResponse {
+            status: StatusCode::BAD_REQUEST, retry_after: None,
+            body: r#"{"object":"error","status":400,"code":"validation_error","message":"Not a database"}"#.into(),
+        },
+    ]);
+    let client = NotionRestClient::new(
+        transport.clone(),
+        Arc::new(RequestPacer::new(NOTION_REQUEST_INTERVAL)),
+    );
+    let page = NotionId::parse("598337872cf94fdf8782e53db20768a5").unwrap();
+    let body = read_page_databases(&client, &page).await.unwrap();
+    assert_eq!(body.markdown, markdown);
+    assert_eq!(body.occurrences.len(), 5);
+    assert_eq!(body.occurrences[0].losses, vec![DatabaseLoss::NeedsViews]);
+    assert_eq!(
+        body.occurrences[1].losses,
+        vec![DatabaseLoss::ContainerUnavailable {
+            reason: ReadFailure::Forbidden
+        }]
+    );
+    assert_eq!(
+        body.occurrences[2].losses,
+        vec![DatabaseLoss::ContainerUnavailable {
+            reason: ReadFailure::NotFound
+        }]
+    );
+    assert_eq!(
+        body.occurrences[3].losses,
+        vec![DatabaseLoss::ContainerUnavailable {
+            reason: ReadFailure::InvalidObject
+        }]
+    );
+    assert_eq!(
+        body.occurrences[4].losses,
+        vec![DatabaseLoss::MissingContainerId]
+    );
+    assert_eq!(body.occurrences[4].fallback_url(&page), page.url());
+    assert_eq!(body.occurrences[4].title, "Notion database");
+    assert_eq!(transport.requests().len(), 5);
+}
+
+#[tokio::test(start_paused = true)]
+async fn one_malformed_source_does_not_lose_other_sources_in_the_placement() {
+    use crate::domain::databases::{
+        DatabaseLoss, ReadFailure, SourceOwnership, read_page_databases,
+    };
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("../../../fixtures/database_occurrences.json")).unwrap();
+    let mut unreadable = fixture["owned_source"].clone();
+    unreadable["parent"] = json!({"type":"workspace"});
+    let transport = ScriptedTransport::new(vec![
+        ok(fixture["page_markdown"].clone()),
+        ok(fixture["database"].clone()),
+        ok(unreadable),
+        ok(fixture["linked_source"].clone()),
+    ]);
+    let client = NotionRestClient::new(
+        transport,
+        Arc::new(RequestPacer::new(NOTION_REQUEST_INTERVAL)),
+    );
+    let body = read_page_databases(
+        &client,
+        &NotionId::parse("598337872cf94fdf8782e53db20768a5").unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(body.occurrences[0].sources.len(), 2);
+    assert_eq!(body.occurrences[0].sources[0].ownership, None);
+    assert_eq!(
+        body.occurrences[0].sources[1].ownership,
+        Some(SourceOwnership::Linked)
+    );
+    assert!(matches!(
+        &body.occurrences[0].losses[0],
+        DatabaseLoss::SourceUnavailable {
+            reason: ReadFailure::InvalidObject,
+            ..
+        }
+    ));
+}
+
+#[tokio::test]
+async fn a_lost_connection_is_told_apart_from_an_object_that_is_not_shared() {
+    let transport = ScriptedTransport::new(vec![
+        // Notion: the token is not valid (revoked or expired).
+        TransportResponse {
+            status: StatusCode::UNAUTHORIZED,
+            retry_after: None,
+            body: r#"{"object":"error","status":401,"code":"unauthorized","message":"API token is invalid."}"#.into(),
+        },
+        // Notion: this object is missing or not shared.
+        TransportResponse {
+            status: StatusCode::NOT_FOUND,
+            retry_after: None,
+            body: r#"{"object":"error","status":404,"code":"object_not_found","message":"Could not find page"}"#.into(),
+        },
+        // Not Notion's error shape: the proxy itself could not use the account.
+        TransportResponse {
+            status: StatusCode::NOT_FOUND,
+            retry_after: None,
+            body: r#"{"error":"account apn_1 not found"}"#.into(),
+        },
+        // Notion: the connection may not read this object.
+        TransportResponse {
+            status: StatusCode::FORBIDDEN,
+            retry_after: None,
+            body: r#"{"object":"error","status":403,"code":"restricted_resource","message":"no access"}"#.into(),
+        },
+    ]);
+    let client = NotionRestClient::new(
+        transport.clone(),
+        Arc::new(RequestPacer::new(NOTION_REQUEST_INTERVAL)),
+    );
+    let id = NotionId::parse("598337872cf94fdf8782e53db20768a5").unwrap();
+
+    let revoked = client.page(&id).await.unwrap_err();
+    let not_shared = client.page(&id).await.unwrap_err();
+    let unavailable = client.page(&id).await.unwrap_err();
+    let forbidden = client.page(&id).await.unwrap_err();
+
+    assert!(matches!(revoked, NotionError::AccessLost), "{revoked:?}");
+    assert!(
+        matches!(not_shared, NotionError::NotFound),
+        "{not_shared:?}"
+    );
+    assert!(
+        matches!(unavailable, NotionError::ConnectionUnavailable),
+        "{unavailable:?}"
+    );
+    assert!(matches!(forbidden, NotionError::Forbidden), "{forbidden:?}");
+    assert_eq!(
+        revoked.to_string(),
+        "Notion no longer accepts Macro's connection (it was revoked or expired); reconnect Notion"
+    );
+    assert_eq!(
+        unavailable.to_string(),
+        "Macro couldn't use your Notion connection; reconnect Notion"
+    );
+}
+
+mod telemetry;

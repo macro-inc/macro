@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\nSELECT written.import_id, written.object::jsonb ->> 'reason' AS reason,\n    count(DISTINCT written.macro_id) AS \"count!\",\n    bool_and((written.object::jsonb - ARRAY['task_id', 'reason']) = '{}'::jsonb\n        AND (written.object::jsonb ->> 'task_id')::uuid = written.macro_id) AS valid\nFROM UNNEST($2::uuid[]) AS wanted(import_id)\nJOIN import_entity AS entity ON entity.id = wanted.import_id\n    AND (SELECT entity.user_id OFFSET 0) = $1\nJOIN import_entity_written AS written ON written.import_id = entity.id\n    AND written.kind = 'task_notice'\nGROUP BY written.import_id, written.object::jsonb ->> 'reason'\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "import_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "reason",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "valid",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "816f8942af1fc918d23ae78f4e7f8c15f0616afcc68915bb396e6e42229a0a2c"
+}

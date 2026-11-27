@@ -26,6 +26,13 @@ if [ "${1:-}" = "--" ]; then
   shift
 fi
 
+# CI jobs link native Rust with mold through RUSTFLAGS, which every wasm32
+# build inherits, and rust-lld rejects the flag. It reaches a build only on a
+# cache miss; the key does not read RUSTFLAGS, so dropping it changes no key.
+if [ -n "${RUSTFLAGS:-}" ]; then
+  export RUSTFLAGS="${RUSTFLAGS//-C link-arg=-fuse-ld=mold/}"
+fi
+
 if [ -z "${WASM_PKG_CACHE_DIR:-}" ]; then
   exec "$@"
 fi

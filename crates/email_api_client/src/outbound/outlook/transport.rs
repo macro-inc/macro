@@ -261,6 +261,7 @@ impl OutlookApiClientRepository {
             reauthorized,
             http.response.status_code = tracing::field::Empty,
             graph.request_id = tracing::field::Empty,
+            graph.error_code = tracing::field::Empty,
             outlook.gate_wait_ms = tracing::field::Empty,
             outlook.throttle_origin = tracing::field::Empty,
             outlook.retry_after_seconds = tracing::field::Empty,
@@ -358,6 +359,7 @@ impl OutlookApiClientRepository {
         let body = response.text().await.unwrap_or_default();
         let error: Value = serde_json::from_str(&body).unwrap_or(Value::Null);
         let code = error.pointer("/error/code").and_then(Value::as_str);
+        span.record("graph.error_code", code);
         if method != Method::GET {
             // Graph error messages can quote recipient addresses. The code and
             // request-id identify the failure; only bodies without a Graph error
@@ -481,14 +483,17 @@ pub(super) fn invalid_response(what: impl std::fmt::Display) -> EmailApiError {
 /// and, for a missing or duplicate field, the field; serde's own message is
 /// dropped because it quotes the offending value.
 pub(super) async fn read_json<T: DeserializeOwned>(response: Response) -> Result<T, EmailApiError> {
-    let body = response
-        .bytes()
-        .await
-        .map_err(|_| invalid_response("body was cut off"))?;
-    decode(&body)
+    decode(read_body(response).await?.as_ref())
 }
 
-fn decode<T: DeserializeOwned>(body: &[u8]) -> Result<T, EmailApiError> {
+pub(super) async fn read_body(response: Response) -> Result<impl AsRef<[u8]>, EmailApiError> {
+    response
+        .bytes()
+        .await
+        .map_err(|_| invalid_response("body was cut off"))
+}
+
+pub(super) fn decode<T: DeserializeOwned>(body: &[u8]) -> Result<T, EmailApiError> {
     let mut deserializer = serde_json::Deserializer::from_slice(body);
     let value = serde_path_to_error::deserialize(&mut deserializer).map_err(|error| {
         let problem = match error.inner().classify() {

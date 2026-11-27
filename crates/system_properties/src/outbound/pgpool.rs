@@ -159,17 +159,19 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
         ];
 
         // Step 1: Fetch all properties from source task. A copy doesn't join
-        // the source's project: that needs edit access to the project.
+        // the source's project: that needs edit access to the project. Nor does
+        // it take the source's Time logged: the copy has no time entries.
         let source_properties = sqlx::query!(
             r#"
             SELECT property_definition_id, values
             FROM entity_properties
             WHERE entity_id = $1
               AND entity_type = 'TASK'
-              AND property_definition_id <> $2
+              AND property_definition_id NOT IN ($2, $3)
             "#,
             from_task_id,
-            SystemPropertyKey::PROJECT_UUID
+            SystemPropertyKey::PROJECT_UUID,
+            SystemPropertyKey::TIME_LOGGED_UUID
         )
         .fetch_all(&self.pool)
         .await?;
@@ -283,13 +285,17 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
         Ok(())
     }
 
-    async fn project_task_ids(&self, project_id: Uuid) -> Result<Vec<String>, SystemPropertyError> {
+    async fn project_task_ids(
+        &self,
+        project_id: Uuid,
+        limit: Option<u32>,
+    ) -> Result<Vec<String>, SystemPropertyError> {
         // The Project id is a literal so a generic plan can prove the partial
         // predicate of idx_ep_project_value_gin. A bound parameter cannot.
         // Containment on values->'value' matches whole-value containment of
         // {"value": [ref]}: null, non-object, and non-array rows are excluded
         // either way. The literal must stay equal to SystemPropertyKey::PROJECT_UUID.
-        let rows = sqlx::query_scalar!(
+        let query = sqlx::query_scalar!(
             r#"
             SELECT entity_id
             FROM entity_properties
@@ -299,11 +305,22 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
                   'entity_id', $1::text, 'entity_type', 'INITIATIVE'
               ))
             ORDER BY entity_id
+            LIMIT $2
             "#,
             project_id.to_string(),
-        )
-        .fetch_all(&self.pool)
-        .await?;
+            limit.map(i64::from),
+        );
+        if limit.is_none() {
+            return Ok(query.fetch_all(&self.pool).await?);
+        }
+        // A bounded read serves reports, which answer within their own
+        // statement timeout; this read keeps to the same bound.
+        let mut transaction = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '5s'")
+            .execute(&mut *transaction)
+            .await?;
+        let rows = query.fetch_all(&mut *transaction).await?;
+        transaction.commit().await?;
         Ok(rows)
     }
 

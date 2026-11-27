@@ -27,6 +27,8 @@ use crate::domain::ports::{
 use crate::domain::service::Clock;
 use crate::domain::size::ComputerResources;
 
+mod image_upgrades;
+pub use image_upgrades::StoredUpgrade;
 mod moves;
 mod overcommit;
 #[cfg(test)]
@@ -133,6 +135,8 @@ pub struct FakeRepo {
     pub usage: Mutex<HashMap<ComputerId, Vec<crate::domain::usage::StoredSample>>>,
     /// Moves (`domain::moves`), in the order created.
     pub moves: Mutex<Vec<crate::domain::moves::ComputerMove>>,
+    /// Image upgrades.
+    pub image_upgrades: Mutex<Vec<StoredUpgrade>>,
 }
 
 impl crate::domain::agent::ComputerAgents for FakeRepo {
@@ -361,6 +365,7 @@ impl ComputerRepo for FakeRepo {
             created_by: reservation.created_by,
             created_at: reservation.created_at,
             enrolled_at: None,
+            hibernated_at: None,
             setup_completed_at: None,
             default_agent_id: None,
             image: None,
@@ -444,6 +449,12 @@ impl ComputerRepo for FakeRepo {
             .lock()
             .unwrap()
             .push((computer_id, event.clone()));
+        if matches!(
+            event,
+            Event::MacrodConnected | Event::MacrodConnectedWithoutAgentHandOff
+        ) {
+            self.note_upgrade_reconnect(computer_id, now);
+        }
         let mut computers = self.computers.lock().unwrap();
         let Some(computer) = computers.get_mut(&computer_id) else {
             return Ok(None);
@@ -470,8 +481,18 @@ impl ComputerRepo for FakeRepo {
             state.waiting_for_capacity(),
             state.payment_progress(),
         );
+        let agent = crate::domain::setup::AgentProgress {
+            reported_online: matches!(event, Event::AgentOnline),
+            delivered: matches!(event, Event::AgentDelivered),
+        };
         if let Some(setup) = state.setup.as_mut() {
             setup.advance(&phase, connected, waiting, payment, now);
+            setup.advance_agent(agent, now);
+        }
+        // Like the Postgres applier: nothing changed, timeline included,
+        // nothing written.
+        if state == computer.state && effects.is_empty() {
+            return Ok(Some(Applied::Changed(Box::new(computer.clone()))));
         }
         computer.state = state;
         self.push_effects(computer, effects, now);
@@ -713,6 +734,12 @@ impl ComputerRepo for FakeRepo {
         self.complete_effect(id).await
     }
 
+    async fn defer_effect(&self, id: i64, run_after: DateTime<Utc>) -> Result<(), FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        self.effect_run_after.lock().unwrap().insert(id, run_after);
+        Ok(())
+    }
+
     async fn retry_effect(
         &self,
         id: i64,
@@ -886,6 +913,7 @@ pub fn deployment() -> crate::domain::enrollment::Deployment {
         document_storage_url: "http://10.210.0.1:8081".parse().unwrap(),
         app_url: "http://10.210.0.1:3000".parse().unwrap(),
         egress_url: "http://10.210.0.1:41027".parse().unwrap(),
+        telemetry_url: None,
     }
 }
 

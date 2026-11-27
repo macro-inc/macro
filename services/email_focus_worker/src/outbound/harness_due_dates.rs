@@ -7,8 +7,7 @@
 
 use std::{sync::Arc, time::Duration};
 
-use chrono::NaiveDate;
-use email::domain::focus::{DueDateExtractor, DueDateInput};
+use email::domain::focus::{DueDateExtractor, DueDateInput, ThreadDates};
 use macro_authorization::{INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER};
 use macro_user_id::user_id::MacroUserIdStr;
 use reqwest::{Client, Url, header::HeaderValue};
@@ -32,8 +31,9 @@ const ROUTE: &str = "universal_input/thread-due-date";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(8);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
 
-/// Asks the harness for the day a thread is due, acting as the thread's owner,
-/// and counts each ask, its failures, and the tokens and cost the harness reports.
+/// Asks the harness for the days a thread's mail names, acting as its owner,
+/// and counts each ask, its failures and rejected answers, and the tokens and
+/// cost the harness reports.
 pub struct HarnessDueDates {
     client: Client,
     url: Url,
@@ -93,12 +93,12 @@ fn request_failed(error: reqwest::Error) -> Report {
 }
 
 impl DueDateExtractor for HarnessDueDates {
-    async fn due_on(
+    async fn dates(
         &self,
         owner: &MacroUserIdStr<'static>,
         thread_id: Uuid,
         input: &DueDateInput,
-    ) -> Result<Option<NaiveDate>, Report> {
+    ) -> Result<ThreadDates, Report> {
         self.metrics.add(Metric::DueDateCalls, 1.0);
         let outcome = UnlessDone::new(&self.metrics, Metric::DueDateFailures);
         let request = ThreadDueDateRequest {
@@ -132,10 +132,18 @@ impl DueDateExtractor for HarnessDueDates {
             return Err(rootcause::report!("the harness answered {status}"));
         }
         let answer: ThreadDueDateResponse = response.json().await.map_err(request_failed)?;
-        outcome.finish(None);
+        // A rejected answer holds no dates, as one naming none would; asking
+        // again would get the same answer from the same mail.
+        outcome.finish(answer.rejected.then_some(Metric::DueDateRejected));
+        if answer.rejected {
+            tracing::info!("the harness rejected the model's due date answer");
+        }
         if let Some(usage) = &answer.usage {
             self.count_usage(usage);
         }
-        Ok(answer.due_on)
+        Ok(ThreadDates {
+            due_on: answer.due_on,
+            event_on: answer.event_on,
+        })
     }
 }

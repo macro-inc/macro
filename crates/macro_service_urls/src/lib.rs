@@ -593,6 +593,14 @@ service_url! {
             dev: "https://dev-gateway.macro.com/agent-harness-egress",
             prod: "https://gateway.macro.com/agent-harness-egress",
         },
+        /// OTLP/HTTP intake base for telemetry from outside Macro's network
+        /// (Macro computers, desktop): the analytics proxy, which adds the
+        /// Datadog key. Append `/v1/traces`. Locally, the OTLP collector.
+        pub TelemetryIntakeUrl {
+            local: "http://localhost:4318",
+            dev: "https://macro-prox-dev.macroverse.workers.dev/i/otlp",
+            prod: "https://macro-prox-prod.macroverse.workers.dev/i/otlp",
+        },
         /// Macro MCP service base URL. Append `/mcp` for its transport endpoint.
         pub McpServiceUrl {
             local: "http://localhost:8101",
@@ -825,6 +833,17 @@ service_url! {
         local: "https://generativelanguage.googleapis.com",
         dev: "https://generativelanguage.googleapis.com",
         prod: "https://generativelanguage.googleapis.com",
+    }
+}
+
+service_url! {
+    /// CapSolver's task API, which the agent harness's CAPTCHA gateway
+    /// calls. CapSolver's host in every environment; override it to run
+    /// against `crates/capsolver_emulator`.
+    pub struct CapsolverApiUrl {
+        local: "https://api.capsolver.com",
+        dev: "https://api.capsolver.com",
+        prod: "https://api.capsolver.com",
     }
 }
 

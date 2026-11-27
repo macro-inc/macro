@@ -124,7 +124,7 @@ fn preflight_and_collector_share_the_job_listing() {
         .iter()
         .filter_map(|step| step["env"]["CI_TELEMETRY_JOBS"].as_str())
         .collect();
-    assert_eq!(files, [JOBS_FILE, JOBS_FILE]);
+    assert_eq!(files, [jobs_file(), jobs_file()]);
     assert_eq!(steps[0]["id"], "preflight");
     let preflight = include_str!("../scripts/ci_telemetry_preflight.js");
     let budget = preflight.find("rateLimit.get()").unwrap();

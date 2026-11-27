@@ -1,13 +1,14 @@
 use std::time::Duration;
 
 use email_api_client::domain::models::{
-    EmailApiError, FolderRole, RateLimitOrigin, RoundStart, StreamPosition, SubmissionOutcome,
+    EmailApiError, FolderRole, MailFolderCatalog, RateLimitOrigin, RoundStart, StreamPosition,
+    SubmissionOutcome,
 };
 use email_api_client::domain::ports::{
     FolderChangeReader, MailboxActionWriter, MailboxContentReader,
 };
 
-use super::{ADA, BOB, id, message_id, start, token};
+use super::{ADA, BOB, folders, id, message_id, start, token};
 use crate::{Fault, FaultError, Route};
 
 const SEED: &str = "mailboxes:\n  - email: ada@example.com\n    messages:\n      - subject: Hello\n  - email: bob@example.com\n";
@@ -52,10 +53,8 @@ async fn a_throttled_request_carries_graphs_retry_after() {
 async fn a_fault_for_a_folder_applies_to_that_folders_requests_only() {
     let (emulator, api) = start(SEED).await;
     let token = token(&emulator, ADA);
-    let inbox = api
-        .folders(&token)
+    let inbox = folders(&api, &token)
         .await
-        .unwrap()
         .into_iter()
         .find(|folder| folder.role == FolderRole::Inbox)
         .unwrap()
@@ -227,6 +226,10 @@ async fn graph_error_statuses_map_to_the_clients_errors() {
         EmailApiError::Forbidden
     ));
     assert!(matches!(
+        fail(FaultError::ExtensionForbidden).await,
+        EmailApiError::Forbidden
+    ));
+    assert!(matches!(
         fail(FaultError::Unauthorized).await,
         EmailApiError::AuthRequired
     ));
@@ -242,4 +245,36 @@ async fn graph_error_statuses_map_to_the_clients_errors() {
         fail(FaultError::ConcurrentRequests).await,
         EmailApiError::RateLimited { .. }
     ));
+}
+
+#[tokio::test]
+async fn an_inbox_graph_answers_404_to_is_an_account_without_a_mailbox() {
+    let (emulator, api) = start(SEED).await;
+    let token = token(&emulator, ADA);
+    emulator.inject_fault(Fault {
+        route: Some(Route::FoldersGet),
+        error: Some(FaultError::MailboxNotEnabled),
+        times: Some(1),
+        ..Fault::default()
+    });
+
+    assert_eq!(
+        api.folders(&token).await.unwrap(),
+        MailFolderCatalog::NoMailbox {
+            error_code: Some("MailboxNotEnabledForRESTAPI".into())
+        }
+    );
+
+    // Any other failure of the Inbox read is still the call's error.
+    emulator.inject_fault(Fault {
+        route: Some(Route::FoldersGet),
+        error: Some(FaultError::Internal),
+        times: Some(1),
+        ..Fault::default()
+    });
+    assert!(matches!(
+        api.folders(&token).await,
+        Err(EmailApiError::Transient { .. })
+    ));
+    assert!(!folders(&api, &token).await.is_empty());
 }

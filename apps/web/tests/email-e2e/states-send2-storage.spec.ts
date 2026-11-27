@@ -1,8 +1,9 @@
 // What the composer says when the local storage drafts sync through cannot
 // start: a page whose app files a deploy took away. Without the cache's
-// coordinator, only a reload brings storage back; without its engine,
-// storage keeps restarting on its own, and the composer speaks up once it
-// has stalled.
+// coordinator or without its engine, storage keeps restarting on its own,
+// and the composer speaks up, with Retry, once it has stalled. (Only a
+// newer build taking the storage over leaves a reload as the way back, and
+// the suite serves one build.)
 //
 // Gmail only: the banner reads this browser's storage, the same for either
 // provider.
@@ -35,8 +36,8 @@ test.use({ provider: 'GMAIL' });
 test.beforeEach(({ page }) => loadAppSteadily(page));
 
 // When this fails, edits that cannot sync because local storage failed to
-// start wait on this device without a word: no word that only a reload
-// helps and no Reload, or no word once a restarting storage has stalled.
+// start wait on this device without a word, or without the Retry that starts
+// it again, once a restarting storage has stalled.
 test('a draft says so when the storage it syncs through cannot start', async ({
   page,
   mailbox,
@@ -48,17 +49,16 @@ test('a draft says so when the storage it syncs through cannot start', async ({
   );
   await mailbox.open('/app/mail/new');
   await writeNew(page, 'Stuck here');
-  // The worker's failure to load usually tells at once; when the page does
-  // not hear of it, the cache gives up after its 60-second connect timeout
-  // (COORDINATOR_CONNECT_TIMEOUT_MS).
+  // The worker's failure to load tells the page at once, and storage is
+  // given 15 seconds of restarting before the composer speaks.
   await expect(waiting(page)).toContainText(
-    'Queued changes are preserved. Update or reload Macro to recover local storage.',
-    { timeout: 75_000 }
+    'Changes stay on this device until draft synchronization resumes.',
+    { timeout: 90_000 }
   );
   await expect(
-    waiting(page).getByRole('button', { name: 'Reload', exact: true })
+    waiting(page).getByRole('button', { name: 'Retry', exact: true })
   ).toBeVisible();
-  saw('STC-085');
+  saw('STC-434');
 
   await page.unroute(coordinator);
   await page.route(/\/cache\.engine-worker-[^/]+\.js$/, (route) =>

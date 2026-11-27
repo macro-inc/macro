@@ -132,6 +132,85 @@ async fn unchecked_cell(pool: &PgPool, entity_id: &str, definition: Uuid, value:
     transaction.commit().await.unwrap();
 }
 
+/// A person who can own a team or a custom property.
+async fn person(pool: &PgPool) -> String {
+    let macro_user_id = Uuid::now_v7();
+    let user_id = format!("macro|{macro_user_id}@example.com");
+    sqlx::query!(
+        "INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, $2)",
+        macro_user_id,
+        user_id,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ($1, $1, $2)"#,
+        user_id,
+        macro_user_id,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    user_id
+}
+
+/// A custom property of `data_type`, owned by the team when one is given and
+/// by the person otherwise.
+async fn custom_property(
+    pool: &PgPool,
+    data_type: &str,
+    team_id: Option<Uuid>,
+    user_id: Option<&str>,
+) -> Uuid {
+    let definition = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO property_definitions (id, display_name, data_type, is_multi_select, team_id, user_id)
+         VALUES ($1, $2, $3::text::property_data_type, TRUE, $4, $5)",
+        definition,
+        definition.to_string(),
+        data_type,
+        team_id,
+        user_id,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    definition
+}
+
+/// A property value stored on an entity.
+async fn property_value(
+    pool: &PgPool,
+    entity_id: &str,
+    entity_type: &str,
+    definition: Uuid,
+    value: Value,
+) {
+    sqlx::query!(
+        r#"INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+           VALUES ($1, $2, $3::text::property_entity_type, $4, $5)"#,
+        Uuid::now_v7(),
+        entity_id,
+        entity_type,
+        definition,
+        value,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+fn task_edges(tasks: &[&str]) -> Vec<CrmPropertyEdge> {
+    tasks
+        .iter()
+        .map(|task| CrmPropertyEdge {
+            entity_type: EntityType::Task,
+            entity_id: (*task).into(),
+        })
+        .collect()
+}
+
 fn row_edges(rows: &[Uuid]) -> Vec<CrmPropertyEdge> {
     let mut edges: Vec<CrmPropertyEdge> = rows
         .iter()
@@ -148,8 +227,11 @@ async fn sorted_edges(
     pool: &PgPool,
     companies: &[Uuid],
     contacts: &[Uuid],
+    custom_task_properties: bool,
 ) -> Vec<CrmPropertyEdge> {
-    let mut edges = property_edges(pool, companies, contacts).await.unwrap();
+    let mut edges = property_edges(pool, companies, contacts, custom_task_properties)
+        .await
+        .unwrap();
     edges.sort_by(|a, b| a.entity_id.cmp(&b.entity_id));
     edges
 }
@@ -181,7 +263,9 @@ async fn matches_companies_and_contacts_once(pool: PgPool) {
     .await;
     link(&pool, "doc-other", "DOCUMENT", contacts, &[OTHER]).await;
 
-    let mut edges = property_edges(&pool, &[COMPANY], &[CONTACT]).await.unwrap();
+    let mut edges = property_edges(&pool, &[COMPANY], &[CONTACT], false)
+        .await
+        .unwrap();
     edges.sort_by(|a, b| a.entity_id.cmp(&b.entity_id));
     assert_eq!(
         edges,
@@ -200,10 +284,123 @@ async fn matches_companies_and_contacts_once(pool: PgPool) {
             },
         ]
     );
-    assert!(property_edges(&pool, &[], &[]).await.unwrap().is_empty());
+    assert!(
+        property_edges(&pool, &[], &[], true)
+            .await
+            .unwrap()
+            .is_empty()
+    );
     assert_eq!(
-        property_edges(&pool, &[], &[CONTACT]).await.unwrap().len(),
+        property_edges(&pool, &[], &[CONTACT], false)
+            .await
+            .unwrap()
+            .len(),
         2
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn matches_tasks_whose_custom_entity_properties_reference_a_record(pool: PgPool) {
+    let owner = person(&pool).await;
+    let team = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO team (id, name, owner_id) VALUES ($1, 'Team', $2)",
+        team,
+        owner,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let team_property = custom_property(&pool, "ENTITY", Some(team), None).await;
+    let personal_property = custom_property(&pool, "ENTITY", None, Some(&owner)).await;
+    let text_property = custom_property(&pool, "STRING", Some(team), None).await;
+    let (database, deals) = table(&pool).await;
+    let column_property = column(&pool, database, deals, "ENTITY").await;
+    let contact = references(&[("CONTACT", CONTACT)]);
+
+    // A team's property and a person's own property each name the contact.
+    property_value(&pool, "task-team", "TASK", team_property, contact.clone()).await;
+    property_value(
+        &pool,
+        "task-personal",
+        "TASK",
+        personal_property,
+        contact.clone(),
+    )
+    .await;
+    // The built-in property on the same task still produces one edge.
+    link(
+        &pool,
+        "task-team",
+        "TASK",
+        SystemPropertyKey::COMPANIES_UUID,
+        &[COMPANY],
+    )
+    .await;
+    // The company among several references in one value.
+    property_value(
+        &pool,
+        "task-company",
+        "TASK",
+        team_property,
+        references(&[("USER", OTHER), ("COMPANY", COMPANY)]),
+    )
+    .await;
+    // The company's id typed as a contact, or another record, never matches.
+    property_value(
+        &pool,
+        "task-mistyped",
+        "TASK",
+        team_property,
+        references(&[("CONTACT", COMPANY)]),
+    )
+    .await;
+    property_value(
+        &pool,
+        "task-other",
+        "TASK",
+        personal_property,
+        references(&[("CONTACT", OTHER)]),
+    )
+    .await;
+    // Only tasks are matched through custom properties.
+    property_value(
+        &pool,
+        "document-custom",
+        "DOCUMENT",
+        team_property,
+        contact.clone(),
+    )
+    .await;
+    // A reference held by a property that is not a custom entity property:
+    // a text property, a built-in one, and a database column.
+    property_value(&pool, "task-text", "TASK", text_property, contact.clone()).await;
+    property_value(
+        &pool,
+        "task-source",
+        "TASK",
+        SystemPropertyKey::SOURCE_UUID,
+        contact.clone(),
+    )
+    .await;
+    property_value(&pool, "task-column", "TASK", column_property, contact).await;
+
+    assert_eq!(
+        sorted_edges(&pool, &[COMPANY], &[CONTACT], true).await,
+        task_edges(&["task-company", "task-personal", "task-team"])
+    );
+    assert_eq!(
+        sorted_edges(&pool, &[], &[CONTACT], true).await,
+        task_edges(&["task-personal", "task-team"])
+    );
+    assert_eq!(
+        sorted_edges(&pool, &[COMPANY], &[], true).await,
+        task_edges(&["task-company", "task-team"])
+    );
+    // Without custom properties, only the built-in Companies property counts.
+    assert_eq!(
+        sorted_edges(&pool, &[COMPANY], &[CONTACT], false).await,
+        task_edges(&["task-team"])
     );
 }
 
@@ -266,20 +463,20 @@ async fn matches_database_rows_whose_entity_cells_reference_a_record(pool: PgPoo
     .await;
 
     assert_eq!(
-        sorted_edges(&pool, &[COMPANY], &[CONTACT]).await,
+        sorted_edges(&pool, &[COMPANY], &[CONTACT], false).await,
         row_edges(&[both, contact_only, elsewhere])
     );
     assert_eq!(
-        sorted_edges(&pool, &[COMPANY], &[]).await,
+        sorted_edges(&pool, &[COMPANY], &[], false).await,
         row_edges(&[both, elsewhere])
     );
     assert_eq!(
-        sorted_edges(&pool, &[], &[CONTACT]).await,
+        sorted_edges(&pool, &[], &[CONTACT], false).await,
         row_edges(&[both, contact_only])
     );
     // OTHER is named as a company only.
     assert_eq!(
-        sorted_edges(&pool, &[OTHER], &[OTHER]).await,
+        sorted_edges(&pool, &[OTHER], &[OTHER], false).await,
         row_edges(&[both])
     );
 }
@@ -425,7 +622,7 @@ async fn database_row_edges_equal_the_full_scan(pool: PgPool) {
         let expected = full_scan_edges(&pool, &company_ids, &contact_ids).await;
         matched += expected.len();
         assert_eq!(
-            sorted_edges(&pool, &company_ids, &contact_ids).await,
+            sorted_edges(&pool, &company_ids, &contact_ids, false).await,
             expected,
             "companies {company_ids:?}, contacts {contact_ids:?}"
         );

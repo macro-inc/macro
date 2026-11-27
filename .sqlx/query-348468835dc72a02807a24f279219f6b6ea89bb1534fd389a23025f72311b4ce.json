@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT team_role IN ('admin','owner') AS \"admin!\" FROM team_user\n               WHERE team_id = $1 AND user_id = $2 FOR SHARE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "admin!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "348468835dc72a02807a24f279219f6b6ea89bb1534fd389a23025f72311b4ce"
+}

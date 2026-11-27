@@ -60,6 +60,7 @@ impl SkillSearcher for SearchServiceSkillSearcher {
             calendar_event_scope: Default::default(),
             term_matching: models_search::TermMatching::All,
             collapse: None,
+            time_zone: None,
         };
 
         let response = self

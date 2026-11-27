@@ -22,6 +22,21 @@ Expected shape today: a `web-app` CLIENT span (`http POST /dss/...`, attributes 
 Secondary key: the HTTP response header `x-request-id` equals the server span's `request.id`
 attribute.
 
+## VNC viewer attempts
+
+Find `computer.screen.connect` by `screen.journey.id` and compare
+`screen.connect_generation` across reconnects. The browser's `screen.attempt`
+retains the retry counter used for backoff. The span records `screen.terminal_stage`
+and `screen.close_reason` once, at the first decoded frame or when setup ends.
+Use the ticket trace to find the corresponding `computer.screen.session` relay
+span. Its `screen.relay.stage` and `screen.relay.close_reason` identify guest
+or socket failures. An `aborted` relay stopped before its task recorded an
+ordinary end. `screen.bytes_written` counts binary bytes after a
+successful socket write. The `computer.screen.tunnel` child identifies the
+guest image and the relay or input role. The session's
+`macrod.connection.epoch` identifies a runtime connection observed on that
+harness replica.
+
 ## Finding traces without a reqid (TraceQL)
 
 - Discover services: `tempo_get-attribute-values` on `resource.service.name`.
@@ -217,6 +232,23 @@ line "focus usage this minute" carries that minute's tokens and dollars. The
 **Email Focus rollout** Grafana dashboard draws them; see
 [the runbook](../runbooks/email-focus.md).
 
+## Email thread opens
+
+An open thread, from Mail, a reference in a message or a link, is the routed
+view's flow (`view.mail-thread` in Mail). Its `email.thread` phase lasts until
+the first page of messages loads. Inside it, `email.thread.identity` is the wait
+for the local cache to say whether the route is an unsynced local draft; the
+thread request starts only after that answer. Both carry `email.thread_id`.
+
+When the cache has not answered within a second, or the lookup fails, the
+thread is read from the server without storing the answer, and an
+always-exported `email.thread.identity_fallback` span records
+`email.thread_id`, `email.thread.identity_fallback_reason` (`timeout` or
+`error`) and `email.thread.identity_wait_ms`. Search Tempo for
+`{ name="email.thread.identity_fallback" }` to find opens a slow or stalled
+cache held up. The span joins the view's trace when that trace is sampled, and
+starts its own otherwise.
+
 ## Contact searches
 
 Contact pickers read directory pages as they scroll, and read on by themselves
@@ -237,6 +269,21 @@ longest run of them), `contacts.listed`, `contacts.elapsed_ms`,
 time a picker stays open afterwards is not counted. Reading the same input again
 after a search ended, as a reopened picker or a re-read after a contact change
 does, starts a new span with `contacts.repeat` true. Never add the query text.
+
+A `contacts.read_window` answered by the server (`contacts.source` `server`,
+a tab without a usable local cache) has a `contacts.read_server_window` child.
+On the first page of a typed search it has up to two more, read in parallel:
+`contacts.read_server_exact`, the server's exact-name search (never for text
+that holds an `@`), and `contacts.read_server_named`, the lookup by ID of the
+viewer's teammates or of the one person a whole typed address identifies. Each
+has its own `graphql.transport` request, with one exception: a teammate lookup
+equal to one still in flight, as the previous keystroke's is, shares that
+request, so its span has none under it and the request sits in the trace of the
+search that started it. The window records `contacts.named_exact_count` and
+`contacts.named_word_start_count`, how many of the listed people the text
+names, `contacts.named_failed` when one of the extra reads failed, and
+`contacts.named_late` when one had not answered within its budget; either way
+the page was listed without the people that read would have added.
 
 ## Agent sessions
 
@@ -389,11 +436,11 @@ Attributes every perf trace carries, set by the owners (`ui-operation.ts`,
 | On | Attributes |
 | --- | --- |
 | Every span in a classed trace, including HTTP client spans started in it | `macro.sampling.class` (the class it asked for, else its parent's) and `macro.sampling.rate` (that class's rate; weight by its inverse) |
-| Roots | `flow.kind`, `route.id` (when known), `ui.operation`, `ui.outcome` (`success`, `cancelled`, `hidden`, `timeout`), `ui.elapsed_ms`, `ui.work_to_ready_ms` (success only), `ui.long_task_count`, `ui.long_task_overlap_ms`, `ui.long_animation_frame_count`, `ui.long_animation_frame_overlap_ms`, `ui.long_animation_frame_blocking_ms`, `ui.visibility`; with an input event, `ui.input_to_ready_ms`, `ui.input_to_paint_opportunity_ms` and `ui.event_*` |
+| Roots | `flow.kind`, `route.id` (when known), `ui.operation`, `ui.outcome` (`success`, `cancelled`, `hidden`, `timeout`), `ui.elapsed_ms`, `ui.work_to_ready_ms` (success only), `ui.long_task_count`, `ui.long_task_overlap_ms`, `ui.long_animation_frame_count`, `ui.long_animation_frame_overlap_ms`, `ui.long_animation_frame_blocking_ms`, `ui.visibility`; with a long frame in the window, its attribution (below); with an input event, `ui.input_to_ready_ms`, `ui.input_to_paint_opportunity_ms` and `ui.event_*` |
 | Flow roots | `flow.phase_count` (child spans opened), `flow.ready_phase_count` (`usePending` phases already loaded when reached) |
 | Phases | `flow.root` (the root's name), `route.id` (the nearest view's), `flow.outcome` (`success` or `cancelled`) |
 | A phase's parent | `<phase>.waited`: `false` when it was already loaded (cache or an earlier load), `true` when the flow waited for it |
-| Resource (Datadog tags and facets) | `service.name=web-app`, `service.version` (Datadog `version`), `deployment.environment` (Datadog `env`), `app.runtime` (`browser`, `tauri`), `app.platform` (`web`, `desktop`, `ios`, `android`), `os.type` (`darwin`, `windows`, `linux`, `ios`, `android`, `chromeos`, `unknown`), `frontend_instance_id` |
+| Resource (Datadog tags and facets) | `service.name=web-app`, `service.version` (Datadog `version`), `deployment.environment` (Datadog `env`), `app.runtime` (`browser`, `tauri`), `app.platform` (`web`, `desktop`, `ios`, `android`), `os.type` (`darwin`, `windows`, `linux`, `ios`, `android`, `chromeos`, `unknown`), `frontend_instance_id`; native apps add `macro.native.version` (the marketing version, `2.5.0` on every Android build) and `macro.native.build`, the installed binary's build number (Android versionCode, iOS CFBundleVersion, desktop release build), absent when the binary can't report it. `service.version` names the web bundle, which reaches old binaries over the air: split native builds by `macro.native.build` |
 
 Entity context is opaque ids and categories only, on the phase that loads the
 entity (`block.type` and `document.id` on `block.data`, `channel.id`,
@@ -408,6 +455,23 @@ flow node and carry `traceparent` to the backend. They hang under the flow
 (`view.*` or a nested `TraceFlow`), not under the `usePending` phase that
 watches the query. A refetch after the flow settled, and global background
 queries (pending sends, Command-K sources), start their own traces.
+
+Entity writes (`entity.trash`, `entity.delete_permanently`, `entity.restore`,
+`entity.duplicate`, `entity.update_share_policy`, `entity.move`,
+`entity.rename`) name their span as the mutation's trace parent
+(`TRACE_PARENT_CONTEXT_KEY` in the urql operation context); other mutations
+join no trace. A write without an optimistic response sends `graphql.transport`
+under it, then applies the response's cache effects in
+`graphql.mutation.cache_effects` (`cache.effect_count`,
+`cache.deleted_record_count`, `cache.effects_applied`, `cache.failure`), with a
+`graphql.mutation.cache_write` or `cache_delete` child per effect and, in the
+native apps, the `graphql_cache.ipc.request` spans for each host call under
+those (subscription effects nest theirs the same way). The caller waits for
+both phases. An IPC span exported inside such a trace keeps its own `perf`
+class and rate tags, so don't weight those by `1 / macro.sampling.rate`. A queued write (`entity.move`, `entity.rename`) holds
+`graphql.mutation_queue.enqueue` and, when the page that queued it sends it,
+`graphql.mutation_queue.attempt`, which can end after its parent; a replay
+after a reload starts its own trace, found by `mutation_queue.item_id`.
 
 ### Request and response body timing
 
@@ -487,7 +551,8 @@ Phases you will see:
   `agent.session.load.projection_ms` with its message count; do not add the two.
   A slow fold with a similarly slow projection is main-thread store work, not
   WASM.
-- Lists and details: `channel.messages`, `channel.detail`, `email.thread`,
+- Lists and details: `channel.messages`, `channel.detail`, `email.thread`
+  (with `email.thread.identity` inside it; see [Email thread opens](#email-thread-opens)),
   `database.detail`, `database.rows`, `calendar.target`, `calendar.occurrences`
   (per mounted page), `activity.feed`, `activity.overview`, `home.items`,
   `home.list`, `drive.items`, `reviews.items`, `settings.plan`, shared Soup
@@ -552,6 +617,25 @@ Phases you will see:
   `ui.long_task_*` and `ui.long_animation_frame_*`. These are a two-frame paint
   opportunity and overlapping main-thread work, not proof a pixel painted or
   that the flow caused every task.
+- Long-frame attribution on roots comes from the frames overlapping the root's
+  window (input event to finish), read 150 ms after the root finishes (at once
+  when it is cancelled, times out or the page hides) because Chrome reports a
+  frame only after presenting it; the span keeps its real end.
+  Fields: `ui.long_animation_frame_max_ms`, `_max_render_ms` (rendering phase of
+  the longest frame) and `_max_style_layout_ms` (its style and layout),
+  `_forced_style_layout_ms` (forced layout by scripts, all frames),
+  `_script_count` (scripts reported, at most three), and for the up to three
+  longest scripts
+  `ui.long_animation_frame_script_<1..3>.{invoker, invoker_type, source_url,
+  source_function, source_char_position, duration_ms, forced_style_layout_ms}`.
+  `source_url` is origin and path only; page code (inline handlers, Tauri IPC
+  replies) is `<origin>/(document)`, other schemes keep only the scheme, and
+  invokers drop element ids and `[src=…]`. The invoker is the entry point the
+  browser called: every Solid `onClick` is `#document.onclick` in `solid-js/web`,
+  and promise continuations go to whoever awaited first, so resolve
+  `source_url` + `source_char_position` through the build's source map
+  (`<chunk>.js.map` next to the chunk) to find the code. Chrome and Edge only
+  (desktop CEF included); Safari and Firefox have no Long Animation Frames.
 - `flow.outcome=success` means the UI reached readiness, which can be a
   terminal error panel; read connected HTTP spans to tell whether data loaded.
   Exclude cancelled, hidden, timeout and error outcomes from load percentiles.

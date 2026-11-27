@@ -61,7 +61,8 @@ pub struct ChannelUpdatedMetadata {
     pub actor: MacroUserIdStr<'static>,
     /// Stored channel name before the update.
     pub previous_name: Option<String>,
-    /// New channel name.
+    /// Stored channel name after the update; equal to `previous_name` when
+    /// the update was not a rename.
     pub channel_name: Option<String>,
 }
 
@@ -178,7 +179,9 @@ pub enum ChannelTopicEvent {
     /// A channel was created.
     #[serde(rename = "channel.created")]
     Created(ChannelCreatedMetadata),
-    /// A channel's metadata was updated (rename).
+    /// A channel's settings were patched (a rename, a team conversion, or an
+    /// auto-join change), or the bots in it changed; the names are equal when
+    /// it was not a rename.
     #[serde(rename = "channel.updated")]
     Updated(ChannelUpdatedMetadata),
     /// A channel was deleted.

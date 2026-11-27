@@ -45,6 +45,30 @@ export const SEARCH_INDEX_SEEDS: Record<SearchIndexId, Query> = {
   calendar: defineQueryFilters({}, { skipTargets: ['calf'] }),
 };
 
+const isNilFilter = (values: unknown) =>
+  Array.isArray(values) && values.length === 1 && values[0] === NIL_UUID;
+
+/**
+ * The id filters that keep a feed to `indexes`' entity types together: each
+ * type's seed leaves its own targets open and shuts the rest, so a target is
+ * shut only where every one of `indexes` shuts it.
+ */
+export function searchIndexesFilters(
+  indexes: readonly SearchIndexId[]
+): FieldFilters {
+  const seeds = indexes.map(
+    (index) =>
+      (SEARCH_INDEX_SEEDS[index].include ?? {}) as Record<string, unknown>
+  );
+  const [first, ...rest] = seeds;
+  const shut: Record<string, unknown> = {};
+  for (const [field, values] of Object.entries(first ?? {})) {
+    if (isNilFilter(values) && rest.every((seed) => isNilFilter(seed[field])))
+      shut[field] = [NIL_UUID];
+  }
+  return shut as FieldFilters;
+}
+
 /**
  * Single compile path: facet state → query filters. Both data paths (soup
  * AST feed and search-service request) derive from the resulting store

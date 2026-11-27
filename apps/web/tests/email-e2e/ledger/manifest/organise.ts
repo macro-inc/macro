@@ -1035,9 +1035,10 @@ export const organise = {
       id: 'STL-617',
       surface: 'SL-31',
       fn: ['F-075', 'F-177'],
-      state: 'thread closes (inline view returns to the list)',
+      state: 'thread closes and the list that opened it reappears',
       trigger: 'Delete from title menu',
       source: [
+        'src/features/block-email/EmailBlockAdapter.tsx',
         'src/features/block-email/component/useEmailThreadTools.tsx',
         'src/features/email-view/components/EmailDetailView.tsx',
       ],
@@ -1083,6 +1084,15 @@ export const organise = {
         'src/features/email-thread/components/email-thread-title.tsx',
       ],
       note: 'tested on desktop in the thread opened from Home, where the title is not covered by the header; and on a phone',
+    },
+    {
+      id: 'STL-997',
+      surface: 'SL-31',
+      fn: ['F-053'],
+      state:
+        'subject of more than three lines cut to three, with "Show full subject" / "Show less"',
+      trigger: 'open a thread with a long subject',
+      source: ['src/features/email-thread/components/email-thread-title.tsx'],
     },
 
     // SL-32 side panel

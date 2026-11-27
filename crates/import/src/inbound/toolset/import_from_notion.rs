@@ -10,8 +10,8 @@ use import_notion::domain::model::{ImportScope, NotionId};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::{ImportToolContext, import_error, tool_error};
-use crate::domain::models::{NotionImportReport, NotionSharing, RunStatus};
+use super::{FAILED_NEXT, ImportToolContext, failure_reason, import_error, tool_error};
+use crate::domain::models::{ImportSource, NotionImportReport, NotionSharing, RunStatus};
 use crate::domain::ports::ImportError;
 use crate::domain::service::NotionWorkspaceImporter;
 
@@ -40,7 +40,7 @@ pub enum NotionImportAction {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "ImportFromNotion",
-    description = "Import the user's Notion workspace (or part of it) into Macro: pages become documents in folders mirroring Notion's page tree, databases become Macro databases with their rows and relations, and task-tracker databases become Macro tasks. `plan` reads the workspace through the user's Notion connection, decides per page and database what to do (and, with `sharing` \"ai\", who sees it), links anything a teammate already imported and shared, and stages a plan without writing anything. Who sees the import: unless the user already said, call `plan` without `sharing` first. A user who is not on a team gets a personal import straight away; tell them so and do not offer team sharing. For a user on a team it answers that `sharing` is required: then ask them in one short question with three options (shared with their team, only them, or let AI decide per page), do not guess, and plan again with their answer. `plan` answers within seconds while planning goes on in the background: present the plan right away with PresentReview (kind \"import\", drafts [{\"source\":\"notion\"}]). The review fills in as Notion is read and each object is decided, and the user approves it there once it is ready; do not wait for planning or check `status` in a loop. Approving that review writes the plan; never import plan items with other tools. End your message after presenting it by asking \"Should I kick it off?\"; if the user says yes, approve it yourself with DecideReview, submitting the reviewId PresentReview returned. `status` reports progress; `cancel` stops planning or importing. Use this for anything bigger than a single page instead of ImportNotionPage."
+    description = "Import the user's Notion workspace (or part of it) into Macro: pages become documents in folders mirroring Notion's page tree, databases become Macro databases with their rows and relations, and task-tracker databases become Macro tasks. `plan` reads the workspace through the user's Notion connection, decides per page and database what to do (and, with `sharing` \"ai\", who sees it), links anything a teammate already imported and shared, and stages a plan without writing anything. Who sees the import: unless the user already said, call `plan` without `sharing` first. A user who is not on a team gets a personal import straight away; tell them so and do not offer team sharing. For a user on a team it answers that `sharing` is required: then ask them in one short question with three options (shared with their team, only them, or let AI decide per page), do not guess, and plan again with their answer. `plan` answers within seconds while planning goes on in the background: present the plan right away with PresentReview (kind \"import\", drafts [{\"source\":\"notion\"}]). The review fills in as Notion is read and each object is decided, and the user approves it there once it is ready; do not wait for planning or check `status` in a loop. Approving that review writes the plan; never import plan items with other tools. Once the plan is ready, end your message after presenting it by asking \"Should I kick it off?\"; if the user says yes, approve it yourself with DecideReview, submitting the reviewId PresentReview returned. While it is still being planned, do not ask or approve: the user approves it on the card once it is ready. `status` reports progress; `cancel` stops planning or importing. Use this for anything bigger than a single page instead of ImportNotionPage."
 )]
 pub struct ImportFromNotion {
     /// What to do.
@@ -68,6 +68,20 @@ pub struct ImportFromNotionResponse {
     pub message: String,
 }
 
+impl ImportFromNotionResponse {
+    /// The agent reads why a run failed from `error_kind` and the message;
+    /// the run's report text is for the owner's card.
+    pub(super) fn for_agent(report: NotionImportReport, message: String) -> Self {
+        Self {
+            report: NotionImportReport {
+                error: None,
+                ..report
+            },
+            message,
+        }
+    }
+}
+
 impl ToolAnnotated for ImportFromNotion {
     const ANNOTATIONS: ToolAnnotations =
         ToolAnnotations::additive("Import from Notion").with_open_world();
@@ -77,7 +91,7 @@ impl ToolAnnotated for ImportFromNotion {
 impl<T: NotionWorkspaceImporter> AsyncTool<ImportToolContext<T>> for ImportFromNotion {
     type Output = ImportFromNotionResponse;
 
-    #[tracing::instrument(skip_all, fields(user_id = %request_context.user_id, action = ?self.action, roots = self.roots.len(), sharing = ?self.sharing), err)]
+    #[tracing::instrument(skip_all, fields(action = ?self.action, roots = self.roots.len(), sharing = ?self.sharing), err)]
     async fn call(
         &self,
         service_context: ServiceContext<ImportToolContext<T>>,
@@ -114,7 +128,7 @@ impl<T: NotionWorkspaceImporter> AsyncTool<ImportToolContext<T>> for ImportFromN
             other => import_error("Notion import failed", other),
         })?;
         let message = message(self.action, &report);
-        Ok(ImportFromNotionResponse { report, message })
+        Ok(ImportFromNotionResponse::for_agent(report, message))
     }
 }
 
@@ -172,7 +186,7 @@ pub(super) fn message(action: NotionImportAction, report: &NotionImportReport) -
             let progress = planning_progress(report);
             match report.review_id {
                 None => format!(
-                    "Planning has started and goes on in the background{progress}.{personal} Present the plan now with {present} and tell the user in a sentence that the review fills in as Notion is read and each object is decided, and that they approve it there once it is ready. Do not wait for planning or check `status` in a loop. End your message by asking \"Should I kick it off once it's ready?\". If they say yes, approve it with DecideReview (a submit decision); while the plan is still being made it refuses, so tell them it is not ready yet and that they can say so again, or approve it on the card, once it is."
+                    "Planning has started and goes on in the background{progress}.{personal} Present the plan now with {present} and tell the user in a sentence that the review fills in as Notion is read and each object is decided, and that they approve it on the card once it is ready. Do not wait for planning or check `status` in a loop. Do not offer to start it once it is ready, and do not call DecideReview while it is still being planned: a yes now cannot approve a plan that does not exist yet, and nothing acts on it later. If they ask you to start it before it is ready, tell them it is still being planned and that they approve it on the card, or ask you again, once it is ready."
                 ),
                 Some(_) => format!(
                     "The plan is presented and still being made{progress}.{personal} The review fills in as planning goes, and the user approves it there once it is ready. Do not wait for planning or check `status` in a loop."
@@ -212,8 +226,8 @@ pub(super) fn message(action: NotionImportAction, report: &NotionImportReport) -
             waiting_on_teammates(report)
         ),
         (_, Some(RunStatus::Failed)) => format!(
-            "The Notion import failed: {}. Fix the cause and plan again.",
-            report.error.as_deref().unwrap_or("unknown error")
+            "The Notion import failed: {}. {FAILED_NEXT}",
+            failure_reason(ImportSource::Notion, report.error_kind)
         ),
         (_, Some(RunStatus::Dismissed)) => "The last Notion import was cancelled.".to_string(),
         (_, None) => "No Notion import has been planned yet. Use action `plan`.".to_string(),

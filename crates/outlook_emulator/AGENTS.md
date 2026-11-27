@@ -30,7 +30,10 @@ local stack, without Microsoft accounts.
   at most 5,000 messages); the tokens carry them, as they carry `$select` and
   `$top`. A token from before `expire_delta_tokens`, or older
   than the mailbox's `delta_token_lifetime_days`, answers 410
-  `SyncStateNotFound`.
+  `SyncStateNotFound`. A folder's message list takes the same
+  `receivedDateTime` filter, or `sentDateTime ge` or `gt` a time. Every
+  message the emulator holds has a `sentDateTime`, a draft the time it was
+  made, so that filter keeps a recent draft.
 - `POST /subscriptions` posts a validation token to the notification URL and
   the lifecycle URL and stores the subscription only if both echo it. After
   that a message change posts a change notification; `send_lifecycle` posts
@@ -162,7 +165,10 @@ local stack, without Microsoft accounts.
   `--allow-http-notification-urls`. Put a TLS front before the service and
   pass its certificate authority with `--trust-certificate`.
 - New mail: `POST /_emulator/mailboxes/{email}/messages` (`deliver`). A change
-  made in Outlook: `PATCH`/`DELETE …/messages/{id}`. Provider failure:
+  made in Outlook: `PATCH`/`DELETE …/messages/{id}`; a `PATCH` without `body`
+  moves a draft's version and keeps its content, as an add-in does. A folder emptied out of
+  Deleted Items: `DELETE …/folders/{id or name}` (`delete_folder`), which
+  takes its subfolders and their messages with it. Provider failure:
   `POST /_emulator/faults` (`inject_fault`) with a `route` such as
   `messages.get` and an `error` such as `rate_limit`. A `folder` (`inbox`)
   with route `messages.list` or `messages.delta` fails only that folder's

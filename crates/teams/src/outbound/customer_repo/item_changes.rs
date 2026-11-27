@@ -74,6 +74,25 @@ impl CustomerRepositoryImpl {
                 self.finish_item_change(key, ItemChangeOutcome::Succeeded)
                     .await
             }
+            // 400 idempotency_error: Stripe saw this key before with other
+            // parameters (another environment on the same account used it).
+            // Our request was not applied and never will be under this key,
+            // so give it up for good rather than leave it pending, where it
+            // would hold up every later change on the subscription. A 409
+            // idempotency_error is the same key still running: that one
+            // stays pending.
+            Err(stripe::StripeError::Stripe(request))
+                if request.http_status == 400
+                    && request.error_type == stripe::ErrorType::IdempotencyError =>
+            {
+                tracing::warn!(
+                    idempotency_key = key,
+                    "Stripe refused a reused idempotency key; giving the change up"
+                );
+                self.finish_item_change(key, ItemChangeOutcome::Abandoned)
+                    .await?;
+                Err(CustomerError::ItemChangeAbandoned)
+            }
             Err(error) => {
                 let error_if_incomplete = change
                     .request

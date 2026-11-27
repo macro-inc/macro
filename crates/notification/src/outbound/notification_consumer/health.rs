@@ -4,7 +4,10 @@
 use std::{sync::Arc, time::Duration};
 
 use chrono::Utc;
-use kafka_util::ConsumerStatistics;
+use kafka_util::{
+    ConsumerStatistics,
+    progress::{STALE_AFTER, assigned_partitions},
+};
 use rdkafka::statistics::Statistics;
 use tokio::{
     sync::watch,
@@ -15,7 +18,6 @@ use uuid::Uuid;
 
 const TOPIC: &str = "macro.notifications";
 const REPORT_INTERVAL: Duration = Duration::from_secs(10);
-const STALE_AFTER: Duration = Duration::from_secs(30);
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct Backlog {
@@ -29,7 +31,9 @@ struct Backlog {
 }
 
 fn backlog(stats: &Statistics) -> Option<Backlog> {
-    let topic = stats.topics.get(TOPIC)?;
+    if !stats.topics.contains_key(TOPIC) {
+        return None;
+    }
     let mut result = Backlog {
         connected_brokers: stats
             .brokers
@@ -38,40 +42,21 @@ fn backlog(stats: &Statistics) -> Option<Backlog> {
             .count(),
         ..Backlog::default()
     };
-    for partition in topic
-        .partitions
-        .values()
-        .filter(|p| p.partition >= 0 && p.desired)
+    for partition in assigned_partitions(stats)
+        .into_iter()
+        .filter(|partition| partition.topic == TOPIC)
     {
-        if !stats
-            .brokers
-            .values()
-            .any(|broker| broker.nodeid == partition.broker && broker.state == "UP")
-        {
-            // Another partition's healthy connection cannot make this cached
-            // high watermark trustworthy while its own broker is unavailable.
+        if !partition.broker_up {
             result.disconnected_partitions += 1;
         }
-        // app_offset is next-to-deliver, not committed_offset (which is always
-        // invalid here). Before the first delivery use next-to-fetch plus the
-        // prefetched queue, so an idle latest-start partition can report zero.
-        let (position, queued) = if partition.app_offset >= 0 {
-            (partition.app_offset, 0)
-        } else {
-            (partition.next_offset, partition.fetchq_cnt)
-        };
-        let pending = (position >= 0 && partition.hi_offset >= position && queued >= 0)
-            .then(|| (partition.hi_offset - position).checked_add(queued))
-            .flatten()
-            .and_then(|value| u64::try_from(value).ok());
-        if let Some(pending) = pending {
+        if let Some(pending) = partition.pending {
             result.known_partitions += 1;
             result.max_offset_backlog = result.max_offset_backlog.max(pending);
             result.total_offset_backlog = result.total_offset_backlog.saturating_add(pending);
         } else {
             result.unknown_partitions += 1;
         }
-        if let Ok(queued) = u64::try_from(partition.fetchq_cnt) {
+        if let Some(queued) = partition.prefetched {
             result.prefetched_messages = result.prefetched_messages.saturating_add(queued);
         }
     }

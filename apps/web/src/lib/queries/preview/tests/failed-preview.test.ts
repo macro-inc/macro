@@ -5,6 +5,10 @@ import type { PreviewItem } from '../types';
 const fetchPreviewBatch = vi.hoisted(() => vi.fn());
 const graphqlItem = vi.hoisted(() => ({ value: false }));
 
+vi.mock('@service-storage/crm-access-authority', () => ({
+  crmAccessAllowed: () => true,
+}));
+
 vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
   LOCAL_ONLY: false,

@@ -27,6 +27,10 @@ pub enum InitializationError {
     InboxBeingRemoved,
     #[error("mailbox initialization is temporarily unavailable")]
     Unavailable,
+    /// Another transaction held the inbox's link row past the lock timeout;
+    /// connecting again succeeds once it finishes.
+    #[error("the inbox is busy; retry")]
+    Contended,
 }
 
 #[derive(Debug, Clone)]

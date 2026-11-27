@@ -262,7 +262,14 @@ async fn series_preview_includes_exceptions_and_cancellations_outside_the_sync_h
         .mount(&server)
         .await;
     let snapshot = api
-        .inspect_replacement("token", &target, "master", None, true)
+        .inspect_replacement(
+            "token",
+            &target,
+            "master",
+            None,
+            true,
+            &CalendarEventPatch::default(),
+        )
         .await
         .unwrap();
     assert_eq!(snapshot.occurrences.len(), 2);
@@ -327,7 +334,14 @@ async fn moved_exception_preview_and_outlook_link_follow_original_identity_outsi
         .unwrap()
         .occurrence_key();
     let preview = api
-        .inspect_replacement("token", &target, "master", Some(&original), true)
+        .inspect_replacement(
+            "token",
+            &target,
+            "master",
+            Some(&original),
+            true,
+            &CalendarEventPatch::default(),
+        )
         .await
         .unwrap();
     assert_eq!(preview.source_id, "moved");
@@ -425,4 +439,372 @@ fn conference_removal_preserves_notes_in_an_ordinary_outer_wrapper() {
         copy_body(&source, true).unwrap()["body"]["content"],
         "<div><p>Keep these notes</p></div>"
     );
+}
+
+const JOIN: &str = "https://teams.microsoft.com/meet/old?a=1&b=2";
+
+fn teams_meeting(id: &str) -> Value {
+    let mut source = organized(id);
+    source["isOnlineMeeting"] = json!(true);
+    source["onlineMeetingProvider"] = json!("teamsForBusiness");
+    source["onlineMeeting"] = json!({"joinUrl":JOIN});
+    source["location"] = json!({"displayName":"Room 1"});
+    source["locations"] = json!([{"displayName":"Room 1"}]);
+    source["body"] = json!({"contentType":"html","content":"<p>Agenda</p><div class=\"me-email-text\"><div><span>Microsoft Teams meeting</span></div><div><a href=\"https://teams.microsoft.com/meet/old?a=1&amp;b=2\">Join the meeting now</a></div><div><span>Meeting ID: 456</span></div></div>"});
+    source
+}
+
+#[tokio::test]
+async fn unsaved_changes_ride_in_the_preview_and_the_new_invitation_without_the_old_meeting() {
+    let (server, api) = setup().await;
+    let target = target();
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/calendars/calendar/events/old"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(teams_meeting("old")))
+        .mount(&server)
+        .await;
+    let time = EventTime::Timed {
+        starts_at: "2026-11-23T18:00:00Z".parse().unwrap(),
+        ends_at: "2026-11-23T18:30:00Z".parse().unwrap(),
+        time_zone: Some("America/New_York".into()),
+    };
+    // The description as Macro's editor exports it, the Teams block flattened.
+    let changes = CalendarEventPatch {
+        title: Some("Q4 design review".into()),
+        description: Some("<p>New agenda</p><p>Microsoft Teams meeting</p><p><a href=\"https://teams.microsoft.com/meet/old?a=1&amp;b=2\">Join the meeting now</a></p><p>Meeting ID: 456</p>".into()),
+        location: Some("Room 2".into()),
+        time: Some(time.clone()),
+        attendees: Some(vec![
+            CalendarAttendeeInput {
+                email: "ada@example.com".into(),
+                is_optional: false,
+                response_status: None,
+            },
+            CalendarAttendeeInput {
+                email: "grace@example.com".into(),
+                is_optional: true,
+                response_status: None,
+            },
+        ]),
+        ..CalendarEventPatch::default()
+    };
+
+    let snapshot = api
+        .inspect_replacement("token", &target, "old", None, true, &changes)
+        .await
+        .unwrap();
+
+    assert_eq!(snapshot.title, "Q4 design review");
+    assert_eq!(snapshot.time, time);
+    assert_eq!(snapshot.attendee_count, 2);
+    let body = &snapshot.payload["body"];
+    assert_eq!(body["subject"], "Q4 design review");
+    assert_eq!(body["body"]["content"], "<p>New agenda</p>");
+    assert_eq!(body["location"]["displayName"], "Room 2");
+    assert!(body.get("locations").is_none());
+    assert_eq!(body["start"]["dateTime"], "2026-11-23T13:00:00");
+    assert_eq!(body["start"]["timeZone"], "America/New_York");
+    assert_eq!(
+        body["attendees"][1]["emailAddress"]["address"],
+        "grace@example.com"
+    );
+    assert_eq!(body["attendees"][1]["type"], "optional");
+    assert!(body.get("isOnlineMeeting").is_none());
+    // Nothing the replacement copy and an Outlook update do not already send.
+    let sent = [
+        "subject",
+        "body",
+        "location",
+        "locations",
+        "categories",
+        "sensitivity",
+        "showAs",
+        "importance",
+        "isAllDay",
+        "isReminderOn",
+        "reminderMinutesBeforeStart",
+        "responseRequested",
+        "allowNewTimeProposals",
+        "hideAttendees",
+        "recurrence",
+        "start",
+        "end",
+        "attendees",
+        "singleValueExtendedProperties",
+    ];
+    for field in body.as_object().unwrap().keys() {
+        assert!(sent.contains(&field.as_str()), "{field}");
+    }
+    assert!(
+        !server
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .any(|r| r.method.as_str() != "GET")
+    );
+}
+
+fn series(id: &str) -> Value {
+    let mut master = teams_meeting(id);
+    master["type"] = json!("seriesMaster");
+    master["recurrence"] = json!({"pattern":{"type":"daily","interval":1},"range":{"type":"noEnd","startDate":"2026-11-02"}});
+    master
+}
+
+#[tokio::test]
+async fn a_series_schedule_change_drops_its_copied_occurrences_without_reading_them() {
+    let (server, api) = setup().await;
+    let target = target();
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/calendars/calendar/events/master"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(series("master")))
+        .with_priority(10)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/calendars/calendar/events/master"))
+        .and(query_param(
+            "$select",
+            "id,exceptionOccurrences,cancelledOccurrences",
+        ))
+        .respond_with(ResponseTemplate::new(200))
+        .with_priority(1)
+        .expect(0)
+        .mount(&server)
+        .await;
+    let changes = CalendarEventPatch {
+        time: Some(EventTime::Timed {
+            starts_at: "2026-11-02T18:00:00Z".parse().unwrap(),
+            ends_at: "2026-11-02T19:00:00Z".parse().unwrap(),
+            time_zone: Some("UTC".into()),
+        }),
+        ..CalendarEventPatch::default()
+    };
+
+    let snapshot = api
+        .inspect_replacement("token", &target, "master", None, true, &changes)
+        .await
+        .unwrap();
+
+    assert!(snapshot.is_series);
+    assert!(snapshot.occurrences.is_empty());
+    assert_eq!(snapshot.write_count(), 2);
+    assert_eq!(
+        snapshot.payload["body"]["recurrence"]["pattern"]["type"],
+        "daily"
+    );
+}
+
+#[tokio::test]
+async fn occurrences_showing_the_series_value_take_its_edit_and_changed_ones_keep_theirs() {
+    let (server, api) = setup().await;
+    let target = target();
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/calendars/calendar/events/master"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(series("master")))
+        .with_priority(10)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET")).and(path("/v1.0/me/calendars/calendar/events/master"))
+        .and(query_param("$select","id,exceptionOccurrences,cancelledOccurrences"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"@odata.etag":"W/\"1\"","exceptionOccurrences":[{"id":"same","occurrenceId":"OID.master.2026-11-03"},{"id":"own","occurrenceId":"OID.master.2026-11-04"}],"cancelledOccurrences":[]}))).with_priority(1).mount(&server).await;
+    let mut same = teams_meeting("same");
+    same["type"] = json!("exception");
+    let mut own = teams_meeting("own");
+    own["type"] = json!("exception");
+    own["subject"] = json!("Moved standup");
+    for occurrence in [same, own] {
+        Mock::given(method("GET"))
+            .and(path(format!(
+                "/v1.0/me/calendars/calendar/events/{}",
+                occurrence["id"].as_str().unwrap()
+            )))
+            .respond_with(ResponseTemplate::new(200).set_body_json(occurrence))
+            .mount(&server)
+            .await;
+    }
+    let changes = CalendarEventPatch {
+        title: Some("Renamed".into()),
+        ..CalendarEventPatch::default()
+    };
+
+    let snapshot = api
+        .inspect_replacement("token", &target, "master", None, true, &changes)
+        .await
+        .unwrap();
+
+    assert_eq!(snapshot.occurrences.len(), 2);
+    assert_eq!(snapshot.occurrences[0]["body"]["subject"], "Renamed");
+    assert_eq!(snapshot.occurrences[1]["body"]["subject"], "Moved standup");
+    assert_eq!(
+        snapshot.occurrences[0]["body"]["attendees"],
+        snapshot.payload["body"]["attendees"]
+    );
+}
+
+#[test]
+fn series_guest_changes_reach_every_occurrence_even_with_its_own_list() {
+    let guest = |address: &str| json!({"emailAddress":{"address":address},"type":"required"});
+    let saved = json!({"attendees":[guest("ada@example.com"), guest("x@example.com")]});
+    let edited = json!({"attendees":[guest("ada@example.com"), guest("new@example.com")]});
+    let mut own_list = json!({"attendees":[guest("X@example.com"), guest("grace@example.com")]});
+
+    inherit_changes(&mut own_list, &saved, &edited);
+
+    assert_eq!(
+        own_list["attendees"],
+        json!([guest("grace@example.com"), guest("new@example.com")])
+    );
+}
+
+#[tokio::test]
+async fn a_series_moved_to_another_day_starts_its_repeat_rule_there() {
+    let (server, api) = setup().await;
+    let target = target();
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/calendars/calendar/events/master"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(series("master")))
+        .mount(&server)
+        .await;
+    let changes = CalendarEventPatch {
+        time: Some(EventTime::Timed {
+            starts_at: "2026-11-05T15:00:00Z".parse().unwrap(),
+            ends_at: "2026-11-05T16:00:00Z".parse().unwrap(),
+            time_zone: Some("America/New_York".into()),
+        }),
+        ..CalendarEventPatch::default()
+    };
+
+    let snapshot = api
+        .inspect_replacement("token", &target, "master", None, true, &changes)
+        .await
+        .unwrap();
+
+    let recurrence = &snapshot.payload["body"]["recurrence"];
+    assert_eq!(recurrence["range"]["startDate"], "2026-11-05");
+    assert_eq!(recurrence["pattern"]["type"], "daily");
+    assert!(snapshot.is_series);
+}
+
+#[tokio::test]
+async fn the_preview_names_a_series_by_what_the_replacement_repeats() {
+    let (server, api) = setup().await;
+    let target = target();
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/calendars/calendar/events/old"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(teams_meeting("old")))
+        .mount(&server)
+        .await;
+    let changes = CalendarEventPatch {
+        recurrence_lines: Some(vec!["RRULE:FREQ=WEEKLY;BYDAY=MO".into()]),
+        ..CalendarEventPatch::default()
+    };
+
+    let snapshot = api
+        .inspect_replacement("token", &target, "old", None, true, &changes)
+        .await
+        .unwrap();
+
+    assert!(snapshot.is_series);
+    assert_eq!(snapshot.write_count(), 2);
+}
+
+#[test]
+fn a_series_guest_made_optional_and_its_reminder_settings_reach_occurrences_still_like_it() {
+    let guest = |address: &str, kind: &str| json!({"emailAddress":{"address":address},"type":kind});
+    let preferences = |minutes: u32| json!([{"id":PREFERENCES_ID,"value":format!("{{\"reminders\":{{\"useDefault\":false,\"overrides\":[{{\"method\":\"popup\",\"minutes\":{minutes}}}]}}}}")}]);
+    let saved = json!({
+        "attendees":[guest("ada@example.com", "required")],
+        "singleValueExtendedProperties": preferences(10),
+    });
+    let edited = json!({
+        "attendees":[guest("ada@example.com", "optional")],
+        "singleValueExtendedProperties": preferences(30),
+    });
+    let mut like_series = saved.clone();
+    let mut own_reminder = json!({
+        "attendees":[guest("ADA@example.com", "required")],
+        "singleValueExtendedProperties": preferences(5),
+    });
+
+    inherit_changes(&mut like_series, &saved, &edited);
+    inherit_changes(&mut own_reminder, &saved, &edited);
+
+    assert_eq!(like_series, edited);
+    assert_eq!(own_reminder["attendees"][0]["type"], "optional");
+    assert_eq!(
+        own_reminder["singleValueExtendedProperties"],
+        preferences(5)
+    );
+}
+
+#[tokio::test]
+async fn a_time_that_names_the_saved_schedule_keeps_the_copied_occurrences() {
+    let (server, api) = setup().await;
+    let target = target();
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/calendars/calendar/events/master"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(series("master")))
+        .with_priority(10)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET")).and(path("/v1.0/me/calendars/calendar/events/master"))
+        .and(query_param("$select","id,exceptionOccurrences,cancelledOccurrences"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"@odata.etag":"W/\"1\"","exceptionOccurrences":[],"cancelledOccurrences":["OID.master.2026-11-05"]}))).with_priority(1).expect(1).mount(&server).await;
+    // The saved time, named in another zone.
+    let changes = CalendarEventPatch {
+        time: Some(EventTime::Timed {
+            starts_at: "2026-11-02T17:00:00Z".parse().unwrap(),
+            ends_at: "2026-11-02T18:00:00Z".parse().unwrap(),
+            time_zone: Some("America/New_York".into()),
+        }),
+        title: Some("Renamed".into()),
+        ..CalendarEventPatch::default()
+    };
+
+    let snapshot = api
+        .inspect_replacement("token", &target, "master", None, true, &changes)
+        .await
+        .unwrap();
+
+    assert_eq!(snapshot.occurrences.len(), 1);
+    assert_eq!(snapshot.occurrences[0]["cancelled"], true);
+    // The saved rule and zone stay, so no occurrence moves.
+    let body = &snapshot.payload["body"];
+    assert_eq!(
+        body["start"],
+        copy_body(&series("master"), true).unwrap()["start"]
+    );
+    assert_eq!(body["recurrence"], series("master")["recurrence"]);
+}
+
+#[test]
+fn an_occurrence_with_its_own_reminders_keeps_them_whole_when_the_series_reminder_changes() {
+    let reminders = |minutes: &[u32]| {
+        json!([{"id":PREFERENCES_ID,"value":json!({
+            "reminders":{"useDefault":false,"overrides":minutes.iter().map(|m| json!({"method":"popup","minutes":m})).collect::<Vec<_>>()},
+            "nativeReminderMinutes":minutes[0],
+        }).to_string()}])
+    };
+    let saved = json!({
+        "isReminderOn":true, "reminderMinutesBeforeStart":10,
+        "singleValueExtendedProperties":reminders(&[10]),
+    });
+    let edited = json!({
+        "isReminderOn":true, "reminderMinutesBeforeStart":30,
+        "singleValueExtendedProperties":reminders(&[30]),
+    });
+    let own = json!({
+        "isReminderOn":true, "reminderMinutesBeforeStart":10,
+        "singleValueExtendedProperties":reminders(&[10, 60]),
+    });
+    let mut occurrence = own.clone();
+    let mut like_series = saved.clone();
+
+    inherit_changes(&mut occurrence, &saved, &edited);
+    inherit_changes(&mut like_series, &saved, &edited);
+
+    assert_eq!(occurrence, own);
+    assert_eq!(like_series, edited);
 }

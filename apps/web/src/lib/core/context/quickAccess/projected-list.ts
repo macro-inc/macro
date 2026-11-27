@@ -10,6 +10,7 @@ import {
   isOwnerEpochLostError,
   isOwnerHandoffBlockedError,
 } from '@graphql-cache/protocol';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import {
   type CacheErrorCode,
   classifyCacheError,
@@ -56,6 +57,7 @@ export const MAX_BROWSE_PAGES_PER_LOAD = 4;
 export const UNANSWERED_SEARCH_LIMIT_MS = 12_000;
 
 type Request = {
+  generation: string;
   buckets: Bucket[];
   query: string;
   pages: number;
@@ -108,7 +110,7 @@ export function searchRowHost(
  * rather than shrinking a scrolled list back to its first page. */
 export function createProjectedList<T extends { id: string }>(options: {
   host: Pick<CacheHost, 'search'> &
-    Partial<Pick<CacheHost, 'onCacheGenerationChanged'>>;
+    Partial<Pick<CacheHost, 'onCacheGenerationChanged' | 'onOwnerReady'>>;
   /** A reactive getter can change the allowed buckets as feature flags load. */
   buckets: readonly Bucket[];
   revision: Accessor<number>;
@@ -156,7 +158,7 @@ export function createProjectedList<T extends { id: string }>(options: {
   // The search stays pending and the replacement engine still replays it
   // whenever it arrives; this only stops telling the user that an answer is
   // on its way. It runs from the start of the attempt because a host that is
-  // waiting for an owner has paused its own read timeouts.
+  // waiting for an owner counts its read timeouts only while the page is shown.
   const stopWaitingAtLimit = (request: Request) => {
     clearTimeout(request.giveUpTimer);
     request.giveUpTimer = setTimeout(() => {
@@ -165,7 +167,11 @@ export function createProjectedList<T extends { id: string }>(options: {
   };
 
   const finishRequest = (request: Request) => {
-    if (current !== request) return;
+    if (
+      current !== request ||
+      !cacheSessionGeneration.isCurrent(request.generation)
+    )
+      return;
     request.busy = false;
     // A read refused while the cache moves between owners is replayed when
     // the replacement engine arrives, so the query is still unanswered.
@@ -240,7 +246,11 @@ export function createProjectedList<T extends { id: string }>(options: {
             return result;
           }
         );
-        if (current !== request) return;
+        if (
+          current !== request ||
+          !cacheSessionGeneration.isCurrent(request.generation)
+        )
+          return;
         phase = 'materialize';
         const materialized = await span.span(
           'quick_access.materialize',
@@ -249,7 +259,11 @@ export function createProjectedList<T extends { id: string }>(options: {
             return options.materialize(page.documents, request.query);
           }
         );
-        if (current !== request) return;
+        if (
+          current !== request ||
+          !cacheSessionGeneration.isCurrent(request.generation)
+        )
+          return;
         for (const item of materialized) {
           merged.set(item.id, item);
           if (!visibleIds.has(item.id)) foundNewRow = true;
@@ -278,7 +292,11 @@ export function createProjectedList<T extends { id: string }>(options: {
       setItems((shown) => (append ? rows : keepUnchangedRows(shown, rows)));
       setHasMore(cursor !== undefined);
     } catch (error) {
-      if (current !== request) return;
+      if (
+        current !== request ||
+        !cacheSessionGeneration.isCurrent(request.generation)
+      )
+        return;
       span.error('Quick Access cache search failed');
       span.setAttr('search.failure_kind', searchFailureKind(error));
       span.setAttr('search.failure_phase', phase);
@@ -319,15 +337,31 @@ export function createProjectedList<T extends { id: string }>(options: {
   });
   onCleanup(() => stopWatchingEngine?.());
 
+  // A first answer can also end while a slow first owner is still starting, or
+  // while the owner stays the same.
+  const stopWatchingOwner = options.host.onOwnerReady?.(() => {
+    queueMicrotask(() => {
+      const request = current;
+      if (!request || request.answered || request.busy) return;
+
+      fireAndForget(fetchPages(request, request.pages, false), 'quick-access');
+    });
+  });
+  onCleanup(() => stopWatchingOwner?.());
+
   createEffect(() => {
     options.revision();
     const query = options.searchTerm?.().trim() ?? '';
     const activeBuckets = buckets();
-    const enabled = options.enabled?.() !== false && activeBuckets.length > 0;
+    const { epoch, paused } = cacheSessionGeneration.state();
+    const enabled =
+      !paused && options.enabled?.() !== false && activeBuckets.length > 0;
     const previous = current;
     if (
       enabled &&
-      previous?.query === query &&
+      previous !== undefined &&
+      cacheSessionGeneration.isCurrent(previous.generation) &&
+      previous.query === query &&
       previous.buckets.length === activeBuckets.length &&
       previous.buckets.every((bucket, index) => bucket === activeBuckets[index])
     ) {
@@ -349,7 +383,9 @@ export function createProjectedList<T extends { id: string }>(options: {
     setError(undefined);
     setHasMore(false);
     const sameBuckets =
-      previous?.buckets.length === activeBuckets.length &&
+      previous !== undefined &&
+      cacheSessionGeneration.isCurrent(previous.generation) &&
+      previous.buckets.length === activeBuckets.length &&
       previous.buckets.every(
         (bucket, index) => bucket === activeBuckets[index]
       );
@@ -364,6 +400,7 @@ export function createProjectedList<T extends { id: string }>(options: {
       return;
     }
     const request: Request = {
+      generation: epoch,
       buckets: activeBuckets,
       query,
       pages: 1,

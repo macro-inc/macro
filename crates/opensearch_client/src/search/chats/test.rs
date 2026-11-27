@@ -79,10 +79,10 @@ fn test_build_bool_query_tag_filter_emits_nested_terms() -> anyhow::Result<()> {
     let builder = ChatQueryBuilder::new(vec!["foo".to_string()])
         .match_type("partial")
         .user_id("alice")
-        .tag_option_ids(vec![
+        .tag_groups(vec![vec![
             "00000001-0000-0000-0003-000000000001".to_string(),
             "00000001-0000-0000-0003-000000000002".to_string(),
-        ]);
+        ]]);
 
     let json = builder.build_bool_query()?.build().to_json();
     let filter = json["bool"]["filter"].as_array().expect("filter array");
@@ -119,13 +119,13 @@ fn test_build_bool_query_tag_filter_empty_skipped() -> anyhow::Result<()> {
     let builder = ChatQueryBuilder::new(vec!["foo".to_string()])
         .match_type("partial")
         .user_id("alice")
-        .tag_option_ids(vec![]);
+        .tag_groups(vec![]);
 
     let json = builder.build_bool_query()?.build().to_json();
     let filter = json["bool"]["filter"].as_array().expect("filter array");
     assert!(
         !filter.iter().any(|f| f.get("nested").is_some()),
-        "empty tag_option_ids should emit no nested clause: {filter:?}"
+        "no tag groups should emit no nested clause: {filter:?}"
     );
     Ok(())
 }
@@ -189,6 +189,35 @@ fn only_the_first_ten_term_clauses_carry_inner_hits() -> anyhow::Result<()> {
         must[11]["has_child"]["query"]["bool"]["must"].is_array(),
         "a clause past the budget keeps its term and role query: {:?}",
         must[11]
+    );
+    Ok(())
+}
+
+#[test]
+fn a_left_out_term_drops_chats_with_a_message_it_would_match_as_a_term() -> anyhow::Result<()> {
+    let roles = vec!["user".to_string()];
+    let searching = ChatQueryBuilder::new(vec!["budget".to_string()])
+        .match_type("partial")
+        .user_id("user123")
+        .role(roles.clone())
+        .excluded_terms(vec!["draft".to_string()]);
+    let as_a_term = ChatQueryBuilder::new(vec!["draft".to_string()])
+        .match_type("partial")
+        .user_id("user123")
+        .role(roles);
+
+    let json = searching.build_bool_query()?.build().to_json();
+    let term_json = as_a_term.build_bool_query()?.build().to_json();
+
+    let must_not = json["bool"]["must_not"].as_array().expect("must_not array");
+    assert_eq!(must_not.len(), 1, "{must_not:?}");
+    assert_eq!(
+        must_not[0]["has_child"]["query"], term_json["bool"]["must"][0]["has_child"]["query"],
+        "the left-out word matches a message, role included, as the term would"
+    );
+    assert!(
+        must_not[0]["has_child"].get("inner_hits").is_none(),
+        "a left-out word returns no messages"
     );
     Ok(())
 }

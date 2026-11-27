@@ -16,7 +16,7 @@ describe('CodeExecutionToolCall', () => {
           id: 'execute-code',
           label: 'ExecuteCode',
           status: 'running',
-          muted: false,
+          unsuccessful: false,
           stopped: false,
           trailing: undefined,
         }}
@@ -46,7 +46,7 @@ describe('CodeExecutionToolCall', () => {
     expect(view.container.textContent).toContain('Browse workspace');
     expect(view.container.textContent).toContain('Search email');
     expect(view.container.textContent).not.toMatch(
-      /Workspace activity|Working in your workspace|export async/
+      /Workspace activity|Working on it|export async/
     );
   });
 
@@ -57,7 +57,7 @@ describe('CodeExecutionToolCall', () => {
           id: 'execute-code',
           label: 'ExecuteCode',
           status: 'failed',
-          muted: true,
+          unsuccessful: true,
           stopped: false,
           trailing: 'Failed',
         }}
@@ -94,7 +94,7 @@ describe('CodeExecutionToolCall', () => {
           id: 'execute-code',
           label: 'ExecuteCode',
           status: 'completed',
-          muted: false,
+          unsuccessful: false,
           stopped: false,
           trailing: undefined,
         }}

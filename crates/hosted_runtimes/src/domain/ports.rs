@@ -347,6 +347,14 @@ pub trait ComputerRepo: Send + Sync + 'static {
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Run the effect again at `run_after` without counting an attempt: it
+    /// was turned away, not failed.
+    fn defer_effect(
+        &self,
+        id: i64,
+        run_after: DateTime<Utc>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Record a failed attempt and run the effect again at `retry_at`.
     fn retry_effect(
         &self,
@@ -436,6 +444,10 @@ pub enum BillingError {
     /// teams only, so nothing is charged or provisioned.
     #[error("Computers are available on paid plans. Your team is on a trial.")]
     TeamOnTrial,
+    /// Another change to the team's subscription is still in flight (a
+    /// release's item removal, say): nothing was sent; try again shortly.
+    #[error("another change to the team's subscription is still in flight")]
+    ChangeInFlight,
     /// The billing provider failed; the change's outcome is unknown.
     #[error("billing provider error: {0:?}")]
     Provider(rootcause::Report),
@@ -450,7 +462,7 @@ impl BillingError {
             | Self::IntervalNotSold(_)
             | Self::PaymentFailed
             | Self::TeamOnTrial => true,
-            Self::Provider(_) => false,
+            Self::ChangeInFlight | Self::Provider(_) => false,
         }
     }
 }

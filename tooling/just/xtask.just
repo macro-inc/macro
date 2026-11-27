@@ -24,6 +24,12 @@ run_local *ARGS:
 run_dev *ARGS:
   {{ xtask }} run-dev "$@"
 
+# Give every team on a running local stack its Passwords vault (teams created after startup need this).
+#   just passwords_provision                      # default instance
+#   just passwords_provision --instance agent-a
+passwords_provision *ARGS:
+  {{ xtask }} passwords-provision "$@"
+
 # Check tools/toolchain/ports/env for the local stack.
 doctor-local *ARGS:
   {{ xtask }} doctor-local "$@"

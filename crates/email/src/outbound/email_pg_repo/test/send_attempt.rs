@@ -6,11 +6,13 @@ use crate::domain::{
 
 mod deferred_deletion;
 mod independent_outbox;
+mod lock_timeouts;
 mod preparation_cancel;
 mod provider_deletion;
 mod provider_draft_trash;
 mod reply_draft_identity;
 mod retention;
+mod stopped_draft;
 mod trash;
 
 fn actor() -> MacroUserIdStr<'static> {

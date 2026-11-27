@@ -13,19 +13,21 @@ use bot_id::BotId;
 use macro_event_broker::Event;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use strum::IntoEnumIterator as _;
 use trigger_context::{TriggerContext, TriggerOrigin};
 use webhook::domain::models::WebhookFilter;
 
 #[cfg(test)]
-mod test;
+pub(crate) mod test;
 
 /// What one trigger event asks this daemon to do.
 ///
 /// Pure translation from the event vocabulary, split out so it can be tested
 /// without HTTP or a live service - the same shape as the harness service's
 /// own Kafka inbound.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
 pub enum TriggerWork {
     /// Open a session for a mention, serve it, and forward the mention as
     /// its first prompt.
@@ -213,16 +215,110 @@ pub trait WorkExecutor: Send + Sync + 'static {
 /// The envelope the stream delivers: the broker's, carrying a trigger event.
 pub type TriggerEvent = Event<AgentTriggerTopicEvent>;
 
+/// What became of one trigger event, recorded on its span as `outcome`, so
+/// a failed event is not mistaken for a fast success where only spans are
+/// exported (error events, which carry messages, are not).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum EventOutcome {
+    /// The work was done.
+    Ok,
+    /// The event asked for nothing this daemon does.
+    Skipped,
+    /// The repository or worktree could not be prepared.
+    Workspace,
+    /// The service could not be reached.
+    ApiUnreachable,
+    /// The service refused; `api_status` holds its status.
+    ApiRefused,
+    /// The thread's session already exists and could not be named.
+    ApiConflict,
+    /// The runtime gateway could not be dialed.
+    Dial,
+}
+
+/// Record `outcome` on `span`, marking it failed unless the event was done
+/// or skipped.
+pub(crate) fn record_outcome(span: &tracing::Span, outcome: EventOutcome) {
+    span.record("outcome", <&'static str>::from(outcome));
+    if !matches!(outcome, EventOutcome::Ok | EventOutcome::Skipped) {
+        span.record("otel.status_code", "ERROR");
+    }
+}
+
+/// How long after its id was minted `event_id` reached this daemon: the time
+/// it spent being published and delivered (or replayed) before any work on it
+/// began. `None` for an id without a time, or one minted after `received`
+/// (this machine's clock behind the service's).
+pub(crate) fn receipt_lag(event_id: Uuid, received: SystemTime) -> Option<Duration> {
+    let (seconds, nanos) = event_id.get_timestamp()?.to_unix();
+    received
+        .duration_since(UNIX_EPOCH + Duration::new(seconds, nanos))
+        .ok()
+}
+
+/// Milliseconds for a span field: an `i64`, which OpenTelemetry exports as
+/// a number (a `u64` arrives as a string).
+pub(crate) fn millis(duration: Duration) -> i64 {
+    i64::try_from(duration.as_millis()).unwrap_or(i64::MAX)
+}
+
 /// Translate one delivered event and execute it. Skippable events are
 /// ignored; an execute failure is returned so the caller can log it.
-#[tracing::instrument(skip(executor, event), fields(event_id = %event.event_id), err)]
+///
+/// The span holds what a slow event needs explained: how late it arrived
+/// (`receipt_lag_ms`), what it asked for, and each phase's milliseconds,
+/// which the executor records here and in its own child spans. Its closing
+/// log line carries them all, for a daemon that exports no spans.
+#[tracing::instrument(
+    name = "macrod.trigger.handle",
+    skip_all,
+    fields(
+        event_id = %event.event_id,
+        receipt_lag_ms = tracing::field::Empty,
+        work = tracing::field::Empty,
+        session_id = tracing::field::Empty,
+        resumed = tracing::field::Empty,
+        workspace_prepare_ms = tracing::field::Empty,
+        create_ms = tracing::field::Empty,
+        ensure_connected_ms = tracing::field::Empty,
+        prompt_ms = tracing::field::Empty,
+        outcome = tracing::field::Empty,
+        api_status = tracing::field::Empty,
+        otel.status_code = tracing::field::Empty,
+    ),
+    err
+)]
 pub async fn handle_event<Executor: WorkExecutor>(
     event: TriggerEvent,
     executor: &Executor,
 ) -> Result<(), crate::dispatch::DispatchError> {
+    let span = tracing::Span::current();
+    if let Some(lag) = receipt_lag(event.event_id, SystemTime::now()) {
+        span.record("receipt_lag_ms", millis(lag));
+    }
     match trigger_to_work(event.event) {
-        Ok(work) => executor.execute(work).await,
+        Ok(work) => {
+            span.record("work", <&'static str>::from(&work));
+            let started = Instant::now();
+            let result = executor.execute(work).await;
+            match &result {
+                Ok(()) => record_outcome(&span, EventOutcome::Ok),
+                Err(error) => {
+                    record_outcome(&span, error.outcome());
+                    if let Some(status) = error.api_status() {
+                        span.record("api_status", i64::from(status));
+                    }
+                }
+            }
+            tracing::info!(
+                elapsed_ms = millis(started.elapsed()),
+                "agent-trigger event handled"
+            );
+            result
+        }
         Err(skipped) => {
+            record_outcome(&span, EventOutcome::Skipped);
             tracing::debug!(?skipped, "agent-trigger stream event skipped");
             Ok(())
         }

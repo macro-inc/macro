@@ -1,3 +1,4 @@
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 /**
  * Creating a new Photoshop document: 1920 × 1080 with a white Background,
  * as Photoshop's default "Web" preset is laid out.
@@ -25,6 +26,7 @@ export async function createPsdDocument(args: {
   /** UI surface the creation originated from, for analytics. */
   source?: string;
 }): Promise<string | undefined> {
+  const generation = cacheSessionGeneration.capture();
   const title = args.title ?? 'Untitled image';
   const bytes = await PsdEngine.blank(
     NEW_DOCUMENT.width,
@@ -54,6 +56,7 @@ export async function createPsdDocument(args: {
     'create-psd-document'
   );
   setPreviewOnCreate({
+    generation,
     itemId: documentId,
     itemType: 'document',
     name: title,

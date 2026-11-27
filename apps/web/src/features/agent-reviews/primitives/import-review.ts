@@ -1,9 +1,17 @@
-import { type Accessor, createMemo, createSignal } from 'solid-js';
+import { fireAndForget } from '@core/util/fireAndForget';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+} from 'solid-js';
 import {
   alreadyInMacro,
   alreadyInMacroSummary,
   buildPlanTree,
+  canCopySkippedPage,
   EMPTY_IMPORT_DRAFT,
+  hubspotTotals,
   type ImportDraft,
   type ImportPlanEntry,
   type ImportProgress,
@@ -52,17 +60,45 @@ export function createImportReview(sources: ImportReviewSources) {
   };
   // Shown until the review is reloaded; the controller saves it in order.
   const [editedDraft, setEditedDraft] = createSignal<ImportDraft>();
+  const [dependencyScope, setDependencyScope] = createSignal<
+    ReadonlySet<string>
+  >(new Set());
+  const [refreshingDependencies, setRefreshingDependencies] =
+    createSignal(false);
   const draft = (): ImportDraft => {
     const saved = item();
-    return (
-      editedDraft() ?? (saved ? withRowLists(saved.draft) : EMPTY_IMPORT_DRAFT)
-    );
+    const current =
+      editedDraft() ?? (saved ? withRowLists(saved.draft) : EMPTY_IMPORT_DRAFT);
+    const excluded = new Set(current.excluded);
+    for (const entry of sources.entries()) {
+      if (entry.linkedFrom?.length && !dependencyScope().has(entry.id))
+        excluded.add(entry.id);
+    }
+    return { ...current, excluded: [...excluded] };
   };
-  const nodes = createMemo(() =>
-    buildPlanTree(planTreeEntries(sources.entries()))
-  );
   const entriesById = createMemo(
     () => new Map(sources.entries().map((entry) => [entry.id, entry]))
+  );
+  const copyOverrides = createMemo(() => new Set(draft().copySkipped));
+  function isCopyOverride(id: string): boolean {
+    const entry = entriesById().get(id);
+    return Boolean(
+      entry &&
+        copyOverrides().has(id) &&
+        canCopySkippedPage(entry, draft().source)
+    );
+  }
+  const effectiveEntries = createMemo(() =>
+    sources
+      .entries()
+      .map((entry) =>
+        isCopyOverride(entry.id)
+          ? { ...entry, decision: 'copy' as const, reason: null }
+          : entry
+      )
+  );
+  const nodes = createMemo(() =>
+    buildPlanTree(planTreeEntries(sources.entries()))
   );
   const [collapsed, setCollapsed] = createSignal<ReadonlySet<string>>();
   // Databases whose sample rows are showing; kept here so a refreshed plan
@@ -79,25 +115,95 @@ export function createImportReview(sources: ImportReviewSources) {
     if (!report) return undefined;
     if (report.reviewId === record().id) return report;
     // A newer run replaced this one; its rows still say how it ended.
-    return item()?.status === 'completed'
-      ? progressFromEntries(record().id, sources.entries())
-      : undefined;
+    if (item()?.status === 'completed')
+      return progressFromEntries(record().id, sources.entries());
+    // Planning again clears the run's review, so a plan that failed names
+    // none: this review's plan can no longer be approved. That failure may
+    // come from a later plan than the one this card showed; its reason is
+    // still why nothing here can be imported.
+    if (
+      item()?.status === 'pending' &&
+      report.status === 'failed' &&
+      report.reviewId === null
+    )
+      return report;
+    return undefined;
   };
   const phase = () => importReviewPhase(record(), item(), progress());
   const locked = () =>
     !sources.canAct() ||
     controller.busy() ||
+    refreshingDependencies() ||
     Boolean(controller.error()) ||
     controller.stale() ||
     record().presentedAt == null;
   const editable = () => !locked() && phase().kind === 'plan';
-  const count = () => importCount(sources.entries(), draft().excluded);
-  const volume = () => importVolume(sources.entries(), draft().excluded);
+  // A plan that failed can still be dismissed, so the review settles.
+  const dismissable = () =>
+    !locked() && (phase().kind === 'plan' || phase().kind === 'planFailed');
+  const count = () => importCount(effectiveEntries(), draft().excluded);
+  const volume = () => importVolume(effectiveEntries(), draft().excluded);
+
+  let refreshedDependencies = '';
+  createEffect(() => {
+    const ids = sources
+      .entries()
+      .filter((entry) => entry.linkedFrom?.length)
+      .map((entry) => entry.id)
+      .sort();
+    const key = ids.join(',');
+    if (
+      key === refreshedDependencies ||
+      controller.busy() ||
+      controller.saving() ||
+      controller.error() ||
+      record().presentedAt == null
+    )
+      return;
+    refreshedDependencies = key;
+    // New dependencies can arrive after presentation. Keep them as links
+    // until the server has saved the exclusions and acknowledged their scope.
+    setRefreshingDependencies(true);
+    fireAndForget(
+      (async () => {
+        try {
+          if ((await controller.flush()) && (await controller.reload())) {
+            setEditedDraft(undefined);
+            setDependencyScope(new Set(ids));
+          }
+        } finally {
+          setRefreshingDependencies(false);
+        }
+      })(),
+      'agent-reviews'
+    );
+  });
 
   function setIncluded(id: string, included: boolean) {
     const current = item();
     if (!current || !editable()) return;
-    const next = setExcluded(draft(), nodes(), id, !included);
+    const entry = entriesById().get(id);
+    const saved = draft();
+    let next: ImportDraft;
+    if (entry && canCopySkippedPage(entry, saved.source)) {
+      const copySkipped = new Set(saved.copySkipped);
+      if (included) copySkipped.add(id);
+      else copySkipped.delete(id);
+      next = {
+        ...saved,
+        copySkipped: [...copySkipped],
+        excluded: saved.excluded.filter((excluded) => excluded !== id),
+      };
+    } else {
+      next = setExcluded(
+        saved,
+        nodes().map((node) =>
+          isCopyOverride(node.id) ? { ...node, decision: 'copy' } : node
+        ),
+        id,
+        !included
+      );
+    }
     setEditedDraft(next);
     controller.edit(current.id, { kind: 'import', draft: next });
   }
@@ -125,7 +231,7 @@ export function createImportReview(sources: ImportReviewSources) {
     return controller.decide('submit', []);
   }
   async function dismiss(): Promise<boolean> {
-    if (!editable()) return false;
+    if (!dismissable()) return false;
     return controller.decide('dismiss', []);
   }
   async function stop(): Promise<boolean> {
@@ -142,7 +248,17 @@ export function createImportReview(sources: ImportReviewSources) {
   }
   async function reload(): Promise<boolean> {
     const reloaded = await controller.reload();
-    if (reloaded) setEditedDraft(undefined);
+    if (reloaded) {
+      setEditedDraft(undefined);
+      setDependencyScope(
+        new Set(
+          sources
+            .entries()
+            .filter((entry) => entry.linkedFrom?.length)
+            .map((entry) => entry.id)
+        )
+      );
+    }
     return reloaded;
   }
 
@@ -152,17 +268,27 @@ export function createImportReview(sources: ImportReviewSources) {
     progress,
     summary: () =>
       planSummary(
-        progress()?.counts ?? planCounts(sources.entries()),
+        phase().kind === 'plan' && copyOverrides().size
+          ? planCounts(effectiveEntries())
+          : (progress()?.counts ?? planCounts(sources.entries())),
         volume(),
         draft().source
       ),
     sharingSummary: () =>
       sharingSummary(
-        sources.entries(),
+        effectiveEntries(),
         draft(),
         sources.report()?.onTeam ?? true
       ),
-    totals: () => planTotals(sources.entries(), draft().excluded),
+    totals: () => [
+      ...planTotals(effectiveEntries(), draft().excluded),
+      // A newer run's owners and losses are not this review's.
+      ...hubspotTotals(
+        sources.report()?.reviewId === record().id
+          ? sources.report()?.hubspot
+          : undefined
+      ),
+    ],
     planningStatus: () =>
       planningStatus(progress(), sources.entries(), draft().source),
     alreadyInMacroSummary: () => alreadyInMacroSummary(sources.entries()),
@@ -172,6 +298,7 @@ export function createImportReview(sources: ImportReviewSources) {
     isCollapsed: (id: string) => collapsedIds().has(id),
     isShowingRows: (id: string) => showingRows().has(id),
     isExcluded: (id: string) => draft().excluded.includes(id),
+    isCopyOverride,
     isShared: (id: string) => {
       const entry = entriesById().get(id);
       return entry ? isShared(entry, draft()) : false;
@@ -179,6 +306,7 @@ export function createImportReview(sources: ImportReviewSources) {
     count,
     volume,
     editable,
+    dismissable,
     working: controller.busy,
     stopping,
     stopFailed,

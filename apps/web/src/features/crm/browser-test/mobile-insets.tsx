@@ -38,6 +38,7 @@ function Fixture() {
         <Match when={surface === 'crm' || surface === 'reviews'}>
           <ViewShell.Header>
             <CrmMobileTabs
+              canAccess
               active={tab()}
               pipelines={[{ id: 'sales', name: 'Sales' }]}
               lists={[]}

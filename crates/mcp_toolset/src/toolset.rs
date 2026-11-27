@@ -233,8 +233,29 @@ impl RemoteMcpToolSet {
         names
     }
 
-    #[tracing::instrument(skip(self, arguments), err, fields(subject = ?self.0.subject))]
+    #[tracing::instrument(skip(self, arguments), fields(subject = ?self.0.subject))]
     async fn call_tool(
+        &self,
+        name: &str,
+        arguments: serde_json::Map<String, serde_json::Value>,
+    ) -> Result<CallToolResult, Error> {
+        let result = self.send_tool_call(name, arguments).await;
+        // The event `#[instrument(err)]` emits. A server's error can quote
+        // the call, so inside `genai_telemetry::withhold_content` it says
+        // only that the call failed.
+        if let Err(error) = &result {
+            if genai_telemetry::content_withheld() {
+                tracing::error!(
+                    error = "the tool call failed; its text is withheld with the call's content"
+                );
+            } else {
+                tracing::error!(error = %error);
+            }
+        }
+        result
+    }
+
+    async fn send_tool_call(
         &self,
         name: &str,
         arguments: serde_json::Map<String, serde_json::Value>,
@@ -259,7 +280,19 @@ impl RemoteMcpToolSet {
             .peer
             .call_tool(params)
             .await
-            .map_err(|e| Error::ToolCall(e.to_string()))
+            .map_err(|e| Error::ToolCall(call_error(&e)))
+    }
+}
+
+/// What a failed call says to the model and the transcript. rmcp names a
+/// failed send by its transport's Rust type, kilobytes of generics that say
+/// nothing; the error under it says what went wrong.
+fn call_error(error: &rmcp::ServiceError) -> String {
+    match error {
+        rmcp::ServiceError::TransportSend(send) => {
+            format!("the MCP server call failed: {}", send.error)
+        }
+        other => other.to_string(),
     }
 }
 

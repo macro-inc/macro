@@ -8,10 +8,16 @@ import {
 import type { EntityActionListState } from '../../next-soup/actions/entity-action-context';
 import type { SoupState } from '../../next-soup/create-soup-state';
 import type { QueryStore } from '../../next-soup/filters/filter-store/query-store';
-import type { CrmRecordRef, CrmRecordSection } from '../core/record';
+import type {
+  CrmMergeSurvivor,
+  CrmRecordRef,
+  CrmRecordSection,
+} from '../core/record';
 
 /** A new `seek` asks to show the same message again. */
 export type CrmCommentTarget = { commentId: string; seek: string };
+
+export type CrmRecordOpenOptions = { followLink?: boolean };
 
 /** Records opened inside the workspace; the route holds them. */
 export type CrmRecordNavigation = {
@@ -21,8 +27,17 @@ export type CrmRecordNavigation = {
   section: Accessor<CrmRecordSection | undefined>;
   /** A Discussion message of the shown record to scroll to. */
   commentTarget: Accessor<CrmCommentTarget | undefined>;
-  /** Shows the last record of `trail` at its Overview. */
-  open(trail: readonly CrmRecordRef[]): void;
+  /**
+   * Shows the last record of `trail` at its Overview, here even when another
+   * split shows it. A link from one record to another (`followLink`) goes to
+   * the split already showing that record instead, as entity links do.
+   */
+  open(trail: readonly CrmRecordRef[], options?: CrmRecordOpenOptions): void;
+  /**
+   * Shows the company or contact the shown one was merged into in its place,
+   * or brings up the split already showing it.
+   */
+  openMerged(survivor: CrmMergeSurvivor): void;
   setSection(section: CrmRecordSection): void;
   item: Accessor<
     | {
