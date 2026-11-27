@@ -399,3 +399,6 @@ fn completed_observation_is_idempotent_per_agent() {
     assert_eq!(journal.observe(other, work), Ok(Observed::Recorded));
     assert!(serde_json::from_str::<Source>(r#"{"kind":"unknown"}"#).is_err());
 }
+
+#[path = "signed_test.rs"]
+mod signed;

@@ -216,7 +216,12 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   completion timestamps only. Before service exposure, agree on the human viewer
   policy and authorization consistency, compose auth and rollout, review durable
   storage and a trusted producer, and generate the OpenAPI and SDK read contract.
-  Mail address comes from the separate authorized mailbox surface.
+  The separate signed loopback test uses the shared Macro JWT validator and
+  resolves the selected opaque account UUID before applying the same team,
+  agent, and source policy. Missing or ambiguous mappings are unavailable.
+  It runs only in tests with disposable Postgres and seeds document
+  completions explicitly. Mail address comes from the separate authorized
+  mailbox surface.
 - `src/voice_gateway.rs`: `GET /voices` and `GET /voices/{model}/sample` for
   team admins behind `enable-agent-teammates` (`team_agents::domain::voice`).
   The Deepgram catalog (Aura-2 only) is cached for a day, and each voice's
