@@ -1,14 +1,14 @@
 html[data-homepage] { color-scheme: dark; }
 html[data-homepage][data-theme-light='true'] { color-scheme: light; }
 .macro-homepage {
-  --color-surface: light-dark(#f5f1e8, #000);
+  --color-surface: light-dark(#f3efe8, #000);
   --color-ink: light-dark(#1d1c1a, #fff);
   --color-ink-muted: light-dark(#54524f, #aaa);
   --color-ink-extra-muted: light-dark(#6a6762, #888);
-  --color-edge-muted: light-dark(#e6e1d7, #ffffff14);
+  --color-edge-muted: light-dark(#e4dfd7, #ffffff14);
   --color-hover: light-dark(#1d1c1a0a, #ffffff08);
   height: 100%;
-  background: light-dark(#f5f1e8, #000);
+  background: light-dark(#f3efe8, #000);
   color: light-dark(#1d1c1a, #fff);
   color-scheme: inherit;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter Variable', sans-serif;
@@ -19,9 +19,9 @@ html[data-homepage][data-theme-light='true'] { color-scheme: light; }
 .macro-homepage .site-header {
   --nav-ink: light-dark(#1d1c1a, #fff);
   --nav-muted: light-dark(#6a6762, #b8b8bd);
-  --nav-surface: light-dark(rgb(250 248 243 / 85%), rgb(18 18 20 / 78%));
-  --nav-menu-surface: light-dark(#fcfbf8, rgb(21 21 23 / 96%));
-  --nav-mobile-surface: light-dark(#f5f1e8, #121214);
+  --nav-surface: light-dark(rgb(248 246 243 / 85%), rgb(18 18 20 / 78%));
+  --nav-menu-surface: light-dark(#faf9f8, rgb(21 21 23 / 96%));
+  --nav-mobile-surface: light-dark(#f3efe8, #121214);
   --nav-edge: light-dark(#1d1c1a1a, #ffffff14);
   --nav-menu-shadow: 0 14px 50px light-dark(#1d1c1a26, #000a);
   top: 0;
@@ -105,7 +105,8 @@ html[data-homepage][data-theme-light='true'] :is(.site-nav-demo, .macro-home-dem
 /* Keep the homepage hero on the same measure and rhythm as feature heroes. */
 .macro-homepage { min-width: 0; max-width: 100%; }
 .macro-homepage .page-aura { width: 100%; overflow-x: clip; }
-.macro-homepage .page-aura::before { inset-inline: 0; opacity: .25; }
+.macro-homepage .page-aura { --page-aura-strength: .25; }
+.macro-homepage .page-aura::before { inset-inline: 0; }
 .macro-homepage .page-aura::after { inset-inline: 0; opacity: .012; }
 .macro-homepage .homepage-sections { background: transparent; }
 

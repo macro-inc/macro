@@ -21,12 +21,12 @@
         root.style.colorScheme = light ? 'light' : 'dark';
         if (location.pathname === '/') root.setAttribute('data-homepage', '');
         if (light) root.dataset.palette = 'cream';
-        document.querySelector('meta[name="theme-color"]').content = light ? '#f5f1e8' : '#000000';
+        document.querySelector('meta[name="theme-color"]').content = light ? '#f3efe8' : '#000000';
       })();
     </script>
     <!-- The light page color for the first paint, before the stylesheet that
          defines the palette arrives. <html> paints var(--b0). -->
-    <style>html[data-palette=cream]{--b0:#f5f1e8}</style>
+    <style>html[data-palette=cream]{--b0:#f3efe8}</style>
     <title>Macro — The Unified System for Work</title>
     <!-- Default SEO tags. Tags marked data-seo are replaced per-route by the
          prerender step (scripts/prerender.ts) and updated at runtime by

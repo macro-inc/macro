@@ -1,5 +1,18 @@
 /* App windows on product wallpapers: the homepage tour and each product section. */
 .homepage-screen {
+  /* The overlay pills' colors: dark glass here; the cream palette makes them
+     light in cream-preview.css. */
+  --screen-action-fill: rgb(14 14 16 / 0.8);
+  --screen-action-fill-hover: rgb(28 28 32 / 0.9);
+  --screen-action-fill-solid: #141416;
+  --screen-action-edge: rgb(255 255 255 / 0.16);
+  --screen-action-edge-hover: rgb(255 255 255 / 0.28);
+  --screen-action-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.14),
+    0 8px 24px rgb(0 0 0 / 0.48);
+  --screen-action-ink: #fff;
+  --screen-action-ink-muted: rgb(255 255 255 / 0.58);
+  --screen-action-icon: rgb(255 255 255 / 0.72);
   position: relative;
   isolation: isolate;
   overflow: hidden;
@@ -102,15 +115,13 @@
   gap: 7px;
   height: 36px;
   padding: 0 14px;
-  border: 1px solid rgb(255 255 255 / 0.16);
+  border: 1px solid var(--screen-action-edge);
   border-radius: 999px;
-  background: rgb(14 14 16 / 0.8);
+  background: var(--screen-action-fill);
   backdrop-filter: blur(16px) saturate(1.4);
   -webkit-backdrop-filter: blur(16px) saturate(1.4);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.14),
-    0 8px 24px rgb(0 0 0 / 0.48);
-  color: #fff;
+  box-shadow: var(--screen-action-shadow);
+  color: var(--screen-action-ink);
   font: 450 13.5px/1 'Inter Variable', Inter, sans-serif;
   letter-spacing: -0.005em;
   text-decoration: none;
@@ -123,7 +134,7 @@
 }
 
 .feature-page .homepage-screen-action:focus-visible {
-  outline: 2px solid #fff;
+  outline: 2px solid var(--screen-action-ink);
   outline-offset: 2px;
 }
 
@@ -131,11 +142,11 @@
   flex-shrink: 0;
   width: 11px;
   height: 11px;
-  color: #fff;
+  color: var(--screen-action-ink);
 }
 
 .homepage-screen-action-length {
-  color: rgb(255 255 255 / 0.58);
+  color: var(--screen-action-ink-muted);
   font-variant-numeric: tabular-nums;
 }
 
@@ -148,18 +159,18 @@
   flex-shrink: 0;
   width: 13px;
   height: 13px;
-  color: rgb(255 255 255 / 0.72);
+  color: var(--screen-action-icon);
   transition: transform 150ms ease, color 150ms ease;
 }
 
 @media (hover: hover) and (pointer: fine) {
   .feature-page .homepage-screen-action:hover {
-    background: rgb(28 28 32 / 0.9);
-    border-color: rgb(255 255 255 / 0.28);
+    background: var(--screen-action-fill-hover);
+    border-color: var(--screen-action-edge-hover);
   }
 
   .feature-page .homepage-screen-action--page:hover svg {
-    color: #fff;
+    color: var(--screen-action-ink);
   }
 }
 
@@ -195,7 +206,7 @@
 
 @media (prefers-reduced-transparency: reduce) {
   .feature-page .homepage-screen-action {
-    background: #141416;
+    background: var(--screen-action-fill-solid);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }

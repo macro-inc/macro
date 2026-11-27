@@ -11,7 +11,7 @@ export type SitePalette = 'cream' | 'dark';
 export const SITE_PALETTE_STORAGE_KEY = 'macro-site-palette';
 
 const THEME_COLOR: Record<SitePalette, string> = {
-  cream: '#f5f1e8',
+  cream: '#f3efe8',
   dark: '#000000',
 };
 

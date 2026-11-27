@@ -17,8 +17,8 @@
   width: calc(var(--glow-width) + 48px);
   height: calc(var(--glow-width) / 3 - 10px);
   transform: translate(-50%, -50%);
-  background-color: color-mix(in srgb, var(--page-aura-primary) 12%, transparent);
-  background-image: radial-gradient(color-mix(in srgb, var(--page-aura-primary) 16%, transparent) .7px, transparent .7px);
+  background-color: color-mix(in srgb, var(--page-aura-primary) var(--section-oval-tint, 12%), transparent);
+  background-image: radial-gradient(color-mix(in srgb, var(--page-aura-primary) var(--section-oval-dots, 16%), transparent) .7px, transparent .7px);
   background-size: 8px 8px;
   mask-image: radial-gradient(ellipse closest-side, black, #0009 25%, #0003 55%, transparent);
 }

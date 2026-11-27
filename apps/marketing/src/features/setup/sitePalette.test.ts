@@ -59,7 +59,7 @@ describe('website palette policy', () => {
       document
         .querySelector('meta[name="theme-color"]')
         ?.getAttribute('content')
-    ).toBe('#f5f1e8');
+    ).toBe('#f3efe8');
     expect(sitePalette()).toBe('cream');
   });
 
@@ -142,7 +142,7 @@ describe('website palette policy', () => {
         document
           .querySelector('meta[name="theme-color"]')
           ?.getAttribute('content')
-      ).toBe(light ? '#f5f1e8' : '#000000');
+      ).toBe(light ? '#f3efe8' : '#000000');
     });
 
     it('reads the same storage key as the app', () => {

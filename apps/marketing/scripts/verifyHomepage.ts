@@ -284,7 +284,7 @@ async function verifyStoredLightPalette(
     const scrollRoot = page.locator('#app-scroll-root');
     await expect(scrollRoot).toHaveCSS(
       'background-color',
-      'rgb(245, 241, 232)'
+      'rgb(243, 239, 232)'
     );
     const lightWindow = page.locator(
       '.homepage-tour-screen img.palette-light-only[data-active="true"]'
@@ -301,7 +301,7 @@ async function verifyStoredLightPalette(
     });
     await expect(scrollRoot).toHaveCSS(
       'background-color',
-      'rgb(245, 241, 232)'
+      'rgb(243, 239, 232)'
     );
     await expect(lightWindow).toBeVisible();
 

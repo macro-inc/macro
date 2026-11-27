@@ -6,7 +6,7 @@ package manifest, Vite entry points, TypeScript aliases, styles, assets, and UI
 components. Application UI changes must not alter the website.
 
 The website has two palettes: dark, the default, and a light cream palette
-(`cream`: page `#f5f1e8`, ink `#1d1c1a`). The theme toggle beside the sidebar
+(`cream`: page `#f3efe8`, ink `#1d1c1a`). The theme toggle beside the sidebar
 search (`ThemeToggle`, also in the phone menu) switches between them and keeps
 the choice in `localStorage` under `macro-site-palette`. `?theme=cream` or
 `?theme=dark` pins a palette for one URL. The site does not follow the
@@ -22,7 +22,10 @@ never off a component flag. Components draw from tokens, the shared
 `--color-*` set or a few local ones declared beside the component, and
 `cream-preview.css` overrides those tokens for the cream palette. Add a token
 and its cream value rather than a hardcoded hex or a per-component override,
-and keep text at 4.5:1 on both palettes.
+and keep text at 4.5:1 on both palettes. The page's color wash
+(`--page-aura-strength`) and the homepage's section ovals (`--section-oval-*`)
+are tuned for black; cream keeps only a trace of them so the page stays a
+neutral `#f3efe8` instead of drifting toward each module's hue.
 
 An app capture that has a light counterpart renders both images, classed
 `palette-dark-only` and `palette-light-only`; CSS shows the one for the
@@ -54,7 +57,7 @@ then introduces Macro in the 640px reading column with a short founder note and 
 then gives each product one
 `FeaturePageSection` in the feature pages' 640px reading column with a centered
 graphic up to 720px wide and 16:9 on desktop. Use the product page's hero heading (tightened where needed for a single mobile line) and one simple sentence that fills nearly two lines on desktop above
-the capture. Place two frosted dark glass pills on the bottom right of each capture: a “Watch · [length]” button that opens `TutorialVideoDialog` (auto-playing the Block's walkthrough video) and a “Learn about [feature] →” link to that Block's page.
+the capture. Place two frosted glass pills on the bottom right of each capture, dark glass with white text on the dark palette and light glass with ink text on the light one (the `--screen-action-*` tokens in `homepage-screen.css`, overridden in `cream-preview.css`): a “Watch · [length]” button that opens `TutorialVideoDialog` (auto-playing the Block's walkthrough video) and a “Learn about [feature] →” link to that Block's page.
 Scale mobile section headings with `clamp(22px, 6.2vw, 27px)` so short headings fit on one line while longer ones wrap naturally. Follow each capture with one or two short
 sentences in the same type as the introduction that reference other Blocks with `ProductCopy` icon links and explain how they integrate. Below 768px, pricing lists the included modules with an icon and a link to each page. Follow the feature sections with `HomepageTestimonials`, `HomepageBlog` (a horizontal strip on desktop and a vertical post list on phones), and `HomepageClosing`. The captures
 in `src/assets/homepage/`
@@ -396,12 +399,17 @@ meta-ads repository's tutorial sets, taken at about 1000×600 in dark mode at 2x
 and stored as WebP in `src/features/marketing/assets/screens/`. Register each
 capture in `core/feature-screens.ts` with its alt text and an optional `focus`
 rectangle (capture pixels) that `FeatureScreenshot` outlines in the app accent.
-These screens have no light counterpart yet: the tutorial sets they come from
-build against older app revisions, so they stay dark on the light palette, on
-their wallpaper stage or, on pages without one, a solid dark mat
-(`--feature-screenshot-stage`). Recapture them in the app's light theme from
-those sets, at the same sizes so each `focus` rectangle still lines up, then
-render both with the `palette-dark-only` / `palette-light-only` classes.
+These screens have no light counterpart yet, and an exact one cannot be
+regenerated from what is committed: the fixture changes and capture steps used
+for them were never checked in. The committed tutorial sets show different
+people and data than the screens do, and several no longer run against the app
+revision of that time. They stay dark on the light palette, on their wallpaper
+stage or, on pages without one, a solid dark mat (`--feature-screenshot-stage`).
+To add light versions, re-take each screen in both palettes from a committed
+script: drive the fixture to the state, capture the dark frame, switch the app's
+theme in the same page (`applyTheme('Macro Light')`) and capture again, so both
+frames share one layout and one `focus` rectangle. Then render the pair with the
+`palette-dark-only` / `palette-light-only` classes.
 On feature pages with their own hero palette, the screen sits on a toned `TutorialWallpaper` stage (varied per section with a subtle dark atmospheric scrim and grain); pages without a dedicated feature palette keep the flat 50% `#101010` stage.
 On phones the canvas is up to 640px wide, sized so the focus fits, and scrolls sideways starting on it.
 When the focus is too wide for that (about 580 capture pixels or more), add a
@@ -1231,7 +1239,10 @@ previews, already cropped to the app window, and the homepage's
 `src/assets/homepage/*-light.webp` windows. A tutorial listed in
 `LIGHT_PREVIEWS` (`core/tutorial-videos.ts`) shows its light preview; the
 others, whose module the sample workspace does not have, keep their dark
-frame. Do not invert screenshots or portraits. Keep the per-feature
+frame. A light preview shows the whole window, with wallpaper margins as
+wide as the stage's corner radius (`--tutorial-video-radius`) and the window
+running off the bottom; the play pill is light glass on the light palette.
+Do not invert screenshots or portraits. Keep the per-feature
 wallpaper and original playback in both themes. The documentation compiler routes
 known tutorial embeds through this player; external videos stay native.
 

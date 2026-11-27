@@ -39,7 +39,9 @@
 	.page-aura,
 	.marketing-content:not(:has(.feature-page, .wall-of-love))
 )::before {
-	opacity: 0.65;
+	/* The cream palette lowers this in cream-preview.css: a tint that sinks
+	   into black shifts a pale page's hue. */
+	opacity: var(--page-aura-strength, 0.65);
 	background:
 		radial-gradient(
 			ellipse 55% 750px at 30% 530px,
