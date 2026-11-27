@@ -18,9 +18,12 @@ use hosted_runtimes::{
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use team_agents::domain::{
-    models::{CreateTeamAgent, TeamAgent, TeamAgentError},
-    ports::{TeamAgentService, TeamMembership},
+use team_agents::{
+    domain::{
+        models::{CreateTeamAgent, TeamAgent, TeamAgentError},
+        ports::{AgentAccounts, TeamAgentService, TeamMembership},
+    },
+    outbound::pg_team_agents_repo::PgTeamAgentsRepo,
 };
 use teams::{
     domain::{model::TeamRole, team_repo::TeamRepository},
@@ -149,6 +152,7 @@ struct Offer {
 
 pub struct Review {
     teams: TeamRepositoryImpl,
+    accounts: PgTeamAgentsRepo,
     actor: MacroUserIdStr<'static>,
     team: Uuid,
     offers: HashMap<Uuid, Offer>,
@@ -158,12 +162,14 @@ pub struct Review {
 impl Review {
     pub fn new(
         teams: TeamRepositoryImpl,
+        accounts: PgTeamAgentsRepo,
         actor: MacroUserIdStr<'static>,
         team: Uuid,
         journal: PathBuf,
     ) -> Self {
         Self {
             teams,
+            accounts,
             actor,
             team,
             offers: HashMap::new(),
@@ -257,11 +263,10 @@ impl Review {
         };
         let mut items = Vec::new();
         for agent in roster.agents {
-            if agent.computer_id.is_some() {
-                let Some(item) = self.persisted_agent(computers, &agent, None).await else {
-                    return json!({"status":"unavailable"});
-                };
-                items.push(item);
+            match self.persisted_agent(computers, &agent, None).await {
+                Ok(Some(item)) => items.push(item),
+                Ok(None) => {}
+                Err(()) => return json!({"status":"unavailable"}),
             }
         }
         json!({"status":"available","teamId":self.team,"agents":items})
@@ -272,27 +277,50 @@ impl Review {
         computers: &PgComputerRepo,
         agent: &TeamAgent,
         size: Option<ComputerSize>,
-    ) -> Option<Value> {
-        let id = agent.computer_id?;
-        let computer = computers.get(id).await.ok()??.into_healthy().ok()?;
-        let owner = computers.agent_of(id).await.ok()??;
+    ) -> Result<Option<Value>, ()> {
+        let facts = self
+            .accounts
+            .account_facts(&agent.user_id)
+            .await
+            .map_err(|_| ())?;
+        if agent.team_id != self.team
+            || !facts
+                .is_some_and(|facts| facts.team_id == self.team && facts.is_agent && facts.member)
+        {
+            return Ok(None);
+        }
+        let Some(key) = self
+            .accounts
+            .opaque_key_for_account(&agent.user_id)
+            .await
+            .map_err(|_| ())?
+        else {
+            return Ok(None);
+        };
+
+        // An account remains addressable while its computer is changing;
+        // confirmation itself still requires the exact persisted assignment.
+        let mut item = json!({"id":key,"teamId":self.team,"name":agent.name,"status":agent.status});
+        let Some(id) = agent.computer_id else {
+            return Ok(size.is_none().then_some(item));
+        };
+        let Some(computer) = computers.get(id).await.map_err(|_| ())? else {
+            return Ok(size.is_none().then_some(item));
+        };
+        let computer = computer.into_healthy().map_err(|_| ())?;
+        let owner = computers.agent_of(id).await.map_err(|_| ())?;
         if computer.team_id != self.team
-            || agent.team_id != self.team
-            || owner != agent.user_id
+            || owner.as_ref() != Some(&agent.user_id)
             || size.is_some_and(|size| computer.size != size)
             || !matches!(computer.state.billing, BillingState::Comped { .. })
         {
-            return None;
+            return Ok(size.is_none().then_some(item));
         }
-
-        // The stable computer association is a review routing key. Roster
-        // admission still requires the signed actor and current team.
-        let phase = serde_json::to_value(&computer.state.phase).ok()?;
-        let phase = phase.get("phase")?.as_str()?;
-        Some(json!({
-            "id":id,"teamId":self.team,"name":agent.name,"status":agent.status,
-            "size":computer.size,"phase":phase,
-        }))
+        let phase = serde_json::to_value(&computer.state.phase).map_err(|_| ())?;
+        item["computerId"] = json!(id);
+        item["size"] = json!(computer.size);
+        item["phase"] = phase["phase"].clone();
+        Ok(Some(item))
     }
 
     async fn offers(&mut self, computers: &PgComputerRepo) -> Value {
@@ -415,8 +443,8 @@ impl Review {
                 .persisted_agent(computers, &agent, Some(intent.size))
                 .await
             {
-                Some(agent) => json!({"status":"accepted","agent":agent}),
-                None => json!({"status":"unknown"}),
+                Ok(Some(agent)) => json!({"status":"accepted","agent":agent}),
+                Ok(None) | Err(()) => json!({"status":"unknown"}),
             },
             Err(TeamAgentError::InvalidName) => json!({"status":"invalid-profile"}),
             Err(TeamAgentError::NoRoom(_)) => json!({"status":"no-room"}),

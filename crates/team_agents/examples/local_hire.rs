@@ -83,7 +83,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if std::fs::canonicalize(&journal)? != journal {
         return Err("expected private review receipt directory".into());
     }
-    let mut review = Review::new(teams, actor.clone(), team, journal);
+    let accounts = PgTeamAgentsRepo::new(pool.clone());
+    let mut review = Review::new(teams, accounts.clone(), actor.clone(), team, journal);
     review.verify_seed().await?;
 
     let fleet = fleet::LocalFleet::new(std::path::PathBuf::from("/bin/sh"))?;
@@ -137,7 +138,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .with_comp_policy(LocalComp(team))
             .with_rollout(ComputerRollout::new(LocalOnly(actor.clone())));
     let agents = TeamAgentServiceImpl::new(
-        PgTeamAgentsRepo::new(pool.clone()),
+        accounts,
         IncludedMembership(TeamRepositoryImpl::new(pool)),
         Unwired,
         Unwired,

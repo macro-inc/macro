@@ -29,4 +29,6 @@ The example provisions no guest OS or running agent. Real readiness
 requires Macrod enrollment and the agent's authenticated online report.
 
 The executable has no billing client or TCP listener. The browser receives
-only the team-scoped roster projection and opaque computer UUID.
+the team-scoped roster projection and opaque account UUID. A verified
+computer assignment is separate metadata and can change without changing
+the account route.
