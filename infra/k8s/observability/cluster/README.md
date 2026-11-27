@@ -238,18 +238,21 @@ ALB ─▶ edge ─┬─ grafana.* ──▶ grafana ──▶ query-gateway �
 ```
 
 CloudWatch Logs reach Loki through Amazon Data Firehose (`../aws`,
-`modules/firehose.nix`): a log group's subscription filter sends to a Firehose
-stream in its region, which posts batches to the edge with the OTLP token as
-its access key. `modules/ingest-firehose.alloy` turns each event into a log
-record of its group (`service.name` is the group's name without
-`/aws/lambda/` or a leading `/`, other slashes as dashes, and without the
+`modules/firehose.nix`): a log group in us-east-1, production's region, has a
+subscription filter to the one Firehose stream there, which posts batches to
+the edge with the OTLP token as its access key (a subscription can't cross
+regions). `modules/ingest-firehose.alloy` turns each event into a log record of
+its group (`service.name` is the group's name without `/aws/lambda/`,
+`/aws/vendedlogs/` or a leading `/`, other slashes as dashes, and without the
 `-prod` or `-dev` suffix, which becomes `deployment.environment`) and hands it
 to the OTLP log path, so emails are hashed as in every other log. The group,
 stream and function name are structured metadata (`aws_log_group_names`,
 `aws_log_stream_names`, `faas_name`). Firehose has its answer once the events
 are handed on: a batch the memory limiter then refuses is lost, not retried
 (the limiter's `otelcol_processor_incoming_items_total` minus
-`outgoing_items_total`, and the error "failed to consume log entries").
+`outgoing_items_total`, and the error "failed to consume log entries"). Events
+from Firehose's own log groups are dropped, so its delivery errors can't loop
+back through it.
 
 ### Trace sampling
 

@@ -471,8 +471,8 @@ data:
     // (modules/firehose.nix), which delivers here through the edge's
     // /awsfirehose/api/v1/push with the ingest token as its access key. Each event
     // becomes a log record of its log group. service.name is the group's name
-    // without `/aws/lambda/` or a leading `/`, other slashes as dashes, and without
-    // the stack suffix (`-prod`, `-dev`), which gives deployment.environment. The
+    // without `/aws/lambda/`, `/aws/vendedlogs/` or a leading `/`, other slashes as
+    // dashes, and without the stack suffix (`-prod`, `-dev`), which gives deployment.environment. The
     // records then take the OTLP path (memory limiter, email hashing, Loki).
     //
     // Firehose has its 200 once the events are handed on, so a batch the memory
@@ -518,13 +518,15 @@ data:
     }
 
     // Only log events: CloudWatch's control messages (it checks the destination
-    // when a subscription is made) and records that came from no log group go.
+    // when a subscription is made), records that came from no log group, and
+    // Firehose's own error log groups, whose events would loop back through it.
     otelcol.processor.filter "cloudwatch" {
       error_mode = "ignore"
       logs {
         log_record = [
           `attributes["log_group"] == nil`,
           `attributes["msg_type"] != "DATA_MESSAGE"`,
+          `IsMatch(attributes["log_group"], "^/aws/kinesisfirehose/")`,
         ]
       }
       output { logs = [otelcol.processor.transform.cloudwatch.input] }
