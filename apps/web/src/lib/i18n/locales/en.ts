@@ -13,6 +13,7 @@ import channelComposer from './en/channel-composer';
 import channelLabels from './en/channel-labels';
 import channelNotificationStacks from './en/channel-notification-stacks';
 import channelSections from './en/channel-sections';
+import channelSidebar from './en/channel-sidebar';
 import commandMenu from './en/command-menu';
 import commands from './en/commands';
 import common from './en/common';
@@ -78,6 +79,7 @@ export default {
   channelLabels,
   channelNotificationStacks,
   channelSections,
+  channelSidebar,
   commandMenu,
   commands,
   common,

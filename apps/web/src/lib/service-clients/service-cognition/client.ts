@@ -20,6 +20,8 @@ import type { Connector } from './generated/schemas/connector';
 import type { ConnectStep } from './generated/schemas/connectStep';
 import type { DatabaseQueryAnswer } from './generated/schemas/databaseQueryAnswer';
 import type { DatabaseQueryRequest } from './generated/schemas/databaseQueryRequest';
+import type { DecisionRequest } from './generated/schemas/decisionRequest';
+import type { DecisionResponse } from './generated/schemas/decisionResponse';
 import type { GetBatchPreviewRequest } from './generated/schemas/getBatchPreviewRequest';
 import type { GetBatchPreviewResponse } from './generated/schemas/getBatchPreviewResponse';
 import type { GetChatPermissionsResponse } from './generated/schemas/getChatPermissionsResponse';
@@ -233,6 +235,21 @@ export const cognitionApiServiceClient = {
         body: JSON.stringify(args),
         errorResponseHandler: aiUsageErrorResponseHandler,
       })
+    ).map((result) => result);
+  },
+
+  /** Named yes/no classification backed by Jev (`POST /decisions`). */
+  async decide(args: DecisionRequest, signal?: AbortSignal) {
+    return (
+      await fetchWithToken<DecisionResponse, typeof AI_USAGE_LIMIT_ERROR>(
+        `${dcsHost}/decisions`,
+        {
+          method: 'POST',
+          body: JSON.stringify(args),
+          signal,
+          errorResponseHandler: aiUsageErrorResponseHandler,
+        }
+      )
     ).map((result) => result);
   },
 };
