@@ -178,8 +178,9 @@ fn decode_bounded(
 
 impl SyncServiceClient {
     /// Read `document_id`'s current Loro state with a grant scoped to it.
-    /// A shallow snapshot keeps the version and supports edits without fetching
-    /// every past change in a long-lived document.
+    /// The snapshot is usually shallow: it keeps the version and supports edits
+    /// without fetching every past change in a long-lived document. It is full
+    /// when a shallow export would keep most of the history anyway.
     #[tracing::instrument(err, skip(self, token))]
     pub async fn document_state(
         &self,
