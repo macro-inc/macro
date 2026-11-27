@@ -71,5 +71,8 @@ fn only_a_role_deserializes_and_a_refusal_never_repeats_the_value() {
         );
         assert!(!message.contains("example.com"), "{refused}: {message}");
     }
-    assert_eq!(serde_json::to_value(ToolActor::Owner).unwrap(), json!("owner"));
+    assert_eq!(
+        serde_json::to_value(ToolActor::Owner).unwrap(),
+        json!("owner")
+    );
 }

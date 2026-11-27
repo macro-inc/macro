@@ -85,7 +85,7 @@ async fn execute_code_takes_only_a_role_as_acting_as() {
         json!({
             "type": "string",
             "enum": ["requester", "owner"],
-            "description": "Whose account authenticates every SDK operation in this execution: the\nrole \"requester\" or \"owner\", never a person's id. Prefer requester.",
+            "description": "Whose account authenticates every SDK operation in this execution: the role \"requester\" or \"owner\", never a person's id. Prefer requester.",
         })
     );
     assert!(
@@ -94,7 +94,12 @@ async fn execute_code_takes_only_a_role_as_acting_as() {
             .unwrap()
             .contains(&json!("acting_as"))
     );
-    assert!(schema.get("$defs").is_none_or(|defs| defs.get("ToolActor").is_none()), "{schema}");
+    assert!(
+        schema
+            .get("$defs")
+            .is_none_or(|defs| defs.get("ToolActor").is_none()),
+        "{schema}"
+    );
 
     let call = |acting_as: serde_json::Value, withheld: bool| {
         let mut params = json!({
@@ -138,7 +143,10 @@ async fn execute_code_takes_only_a_role_as_acting_as() {
         ("owner", ToolActor::Owner),
     ] {
         let (_, response) = call(json!(role), false).await;
-        assert!(response.get("error").is_none() || response["error"]["code"] != -32602, "{role}: {response}");
+        assert!(
+            response.get("error").is_none() || response["error"]["code"] != -32602,
+            "{role}: {response}"
+        );
         assert_eq!(code_mode.actors.lock().unwrap().pop(), Some(actor));
     }
 }
