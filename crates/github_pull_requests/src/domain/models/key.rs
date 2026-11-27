@@ -11,6 +11,15 @@ impl GithubKey {
     pub fn new(org: &str, repo: &str, pr: u64) -> Self {
         Self(format!("{org}/{repo}/pull/{pr}"))
     }
+
+    /// Create the key for issue `issue` in `org/repo`.
+    ///
+    /// Issues share GitHub's numbering space with pull requests, so the key
+    /// uses an `issues` segment to avoid colliding with a PR of the same
+    /// number in the same repository.
+    pub fn new_issue(org: &str, repo: &str, issue: u64) -> Self {
+        Self(format!("{org}/{repo}/issues/{issue}"))
+    }
 }
 
 impl fmt::Display for GithubKey {
