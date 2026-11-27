@@ -2186,7 +2186,9 @@ focus, touch always. The backend-free regression for both is
 
 ### Assignee people scope
 
-Use only the current team roster and available agents for new Assignee selections.
+Use only the viewer, the current team roster and available agents for new Assignee
+selections. List the viewer once, also without a team (`GET /team` answers 204, so
+the roster is empty), in both editors' shared `scoped-user-options.ts`.
 Keep initially selected outsiders visible and removable, and allow them to be
 re-added while the record stays mounted, without contact discovery.
 Reuse the existing selected-first ordering at opening and keep row positions

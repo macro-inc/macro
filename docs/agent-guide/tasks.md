@@ -1709,9 +1709,11 @@ with the PR's status, title, `owner/repo#N`, and line changes. Clicking it opens
 Macro in a new split (in place on touch devices); a PR Macro has not synced yet opens on
 GitHub instead.
 
-Assignees lists and searches current team members and available agents, keeping
-each surface's existing search placeholder, styling, and selected-first ordering
-when opening the picker. Unsearched, it lists you, then team members, then agents
+Assignees lists and searches you, current team members and available agents,
+keeping each surface's existing search placeholder, styling, and selected-first
+ordering when opening the picker. You are listed once, also without a team, so
+an account with no team can assign itself (and see the item under **My tasks**
+or **My projects**). Unsearched, it lists you, then team members, then agents
 with Macro first; the Tasks filter keeps the saved-view **Me** above you, and the
 other Assignee filters put **Unassigned** right after you. A search ranks names
 as the @ menu does, lists an agent only when its name or handle holds the typed
