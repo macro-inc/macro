@@ -671,6 +671,121 @@ it('keeps the people still matching typed text when a server page read again fil
   client.clear();
 });
 
+it('keeps nobody listed while typing once a page shows a row from an earlier generation again', async () => {
+  vi.useFakeTimers();
+  const client = new QueryClient();
+  const [search, setSearch] = createSignal('sam');
+  const [teammates, setTeammates] = createSignal<ReadonlySet<string>>(
+    new Set()
+  );
+  let changeGeneration = () => {};
+  let changed = false;
+  const host = {
+    clientId: 'client',
+    onCacheChanged: () => () => {},
+    onCacheGenerationChanged: (listener: () => void) => {
+      changeGeneration = listener;
+      return () => {};
+    },
+  } as unknown as NonNullable<
+    ReturnType<Parameters<typeof createContactRecipientSource>[0]>['host']
+  >;
+  const person = (name: string) => {
+    const email = `${name.toLowerCase().replace(' ', '')}@example.com`;
+    return { id: `macro|${email}`, email, name };
+  };
+  // As above, Old Sam is kept below a server page naming 500 people. Once
+  // the roster loads, the same generation's page one names only Sam 0, so
+  // Old Sam, read before the generation changed, is listed again.
+  const named = Array.from({ length: 500 }, (_, index) =>
+    person(`Sam ${index}`)
+  );
+  const reader = vi
+    .fn<typeof readContactDirectory>()
+    .mockImplementation(async (viewer, _host, request) => {
+      const after = request.cursor?.after;
+      if (request.query !== 'sam') {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        return {
+          query: request.query,
+          source: 'cache',
+          sync: 'snapshot',
+          offline: false,
+          users: [],
+          nextCursor: null,
+        };
+      }
+      if (changed) {
+        const users = request.teammates?.length ? named.slice(0, 1) : named;
+        return {
+          query: request.query,
+          source: 'server',
+          sync: 'unavailable',
+          offline: false,
+          users,
+          named: { exact: [], wordStart: users.map((user) => user.id) },
+          nextCursor: null,
+        };
+      }
+      return {
+        query: request.query,
+        source: 'cache',
+        sync: 'snapshot',
+        offline: false,
+        users: [person(after === 'second' ? 'Old Sam' : 'First Sam')],
+        nextCursor:
+          after === 'second'
+            ? null
+            : {
+                source: 'people',
+                generation: 'fixture',
+                after: 'second',
+                userId: viewer,
+                query: request.query,
+                policyKey: hashKey([request.policy]),
+              },
+      };
+    });
+  let source: ReturnType<typeof createContactRecipientSource> | undefined;
+  function Harness() {
+    source = createContactRecipientSource(
+      () => ({ userId: 'macro|viewer@example.com', host }),
+      {
+        search,
+        enabled: () => true,
+        selfId: () => undefined,
+        senderDomain: () => undefined,
+        includeSelf: () => true,
+      },
+      () => false,
+      reader,
+      teammates
+    );
+    return null;
+  }
+  render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  const listed = () => source!.items().map((item) => item.data.name);
+  await vi.advanceTimersByTimeAsync(300);
+  await source!.next();
+  await vi.advanceTimersByTimeAsync(0);
+  changed = true;
+  changeGeneration();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(listed()).toHaveLength(500);
+
+  setTeammates(new Set(['macro|teammate@example.com']));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(listed()).toEqual(['Sam 0', 'Old Sam']);
+  setSearch('sam o');
+  expect(listed()).toEqual([]);
+  await vi.advanceTimersByTimeAsync(1500);
+  client.clear();
+});
+
 it('lists a typed address, then a typed teammate, first when a recipient picker reads the server', async () => {
   vi.useFakeTimers();
   const viewer = 'macro|viewer@example.com';
