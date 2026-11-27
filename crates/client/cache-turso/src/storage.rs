@@ -1,6 +1,6 @@
 use crate::driver::{self, Db, WalCheckpoint, WalPosition};
 use crate::key::RecordKey;
-use crate::sql::{Sql, SqlPart, UnreportedSql};
+use crate::sql::{Ordinals, Sql, SqlPart, UnreportedSql};
 use crate::{PhysicalResetReason, TursoStorageError};
 use cache_core::codec::{
     CACHE_FORMAT_VERSION, MIGRATABLE_CACHE_FORMAT_VERSIONS, cache_namespace,
@@ -3422,7 +3422,7 @@ fn compile_predicate_selection(
 struct SqlPredicateCompiler {
     ctes: Vec<Sql>,
     parameters: Vec<Value>,
-    next_id: usize,
+    names: Ordinals,
 }
 
 impl SqlPredicateCompiler {
@@ -3445,14 +3445,12 @@ impl SqlPredicateCompiler {
                 .copied()
                 .map(Value::from_i64)
                 .collect(),
-            next_id: 0,
+            names: Ordinals::new(),
         }
     }
 
     fn next_name(&mut self) -> Sql {
-        let name = Sql::numbered("expr_", self.next_id);
-        self.next_id += 1;
-        name
+        Sql::numbered("expr_", self.names.take())
     }
 
     fn compile(&mut self, expr: &PredicateExpr, profile: &Profile, partition: &Token) -> Sql {

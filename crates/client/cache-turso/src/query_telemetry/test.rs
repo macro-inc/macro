@@ -154,14 +154,21 @@ fn the_sent_set_is_bounded() {
     let texts = (0..=SENT_TEMPLATES)
         .map(|count| crate::sql!("SELECT {list}", list = Sql::placeholders(count + 1)))
         .collect::<Vec<_>>();
-    for text in &texts {
+    let (last, within) = texts.split_last().unwrap();
+    for text in within {
         slow(&telemetry, text);
     }
+    // Every one of the first SENT_TEMPLATES texts is still remembered.
+    slow(&telemetry, &texts[0]);
+    slow(&telemetry, last);
     SENT.with(|sent| assert!(sent.borrow().len() <= SENT_TEMPLATES));
     // The set started over, so the first text is sent again.
     slow(&telemetry, &texts[0]);
     let events = telemetry.events.borrow();
-    assert!(events.iter().all(|event| event.3.is_some()));
+    let sent: Vec<_> = events.iter().map(|event| event.3.is_some()).collect();
+    let mut expected = vec![true; SENT_TEMPLATES];
+    expected.extend([false, true, true]);
+    assert_eq!(sent, expected);
 }
 
 #[cfg(not(target_arch = "wasm32"))]

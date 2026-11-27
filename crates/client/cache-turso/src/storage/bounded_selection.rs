@@ -13,6 +13,7 @@
 //! cost each.
 
 use super::*;
+use crate::sql::Ordinals;
 use predicate_index::{IndexQuery, PartitionPredicate, ReferenceHit};
 
 const MIN_CANDIDATES: usize = 64;
@@ -102,7 +103,9 @@ pub(super) fn listed_within_window(
     // would scan every fact of the attribute and test it against the list.
     let mut parameters = Vec::new();
     let mut wanted = Vec::new();
-    for (index, (_, values)) in lists.iter().enumerate() {
+    let mut ordinals = Ordinals::new();
+    let names: Vec<_> = lists.iter().map(|_| ordinals.take()).collect();
+    for ((_, values), name) in lists.iter().zip(&names) {
         parameters.extend(
             values
                 .iter()
@@ -110,16 +113,16 @@ pub(super) fn listed_within_window(
         );
         wanted.push(crate::sql!(
             "{name}(value) AS (VALUES {rows})",
-            name = Sql::numbered("w", index),
+            name = Sql::numbered("w", *name),
             rows = Sql::repeat("(?)", values.len(), ", ")
         ));
     }
     let mut branches = Vec::new();
-    for (index, (attribute, _)) in lists.iter().enumerate() {
+    for ((attribute, _), name) in lists.iter().zip(&names) {
         parameters.push(text(attribute.as_str()));
         branches.push(crate::sql!(
             "SELECT 1 FROM {name} AS w CROSS JOIN exact_facts AS f INDEXED BY exact_facts_lookup_idx ON f.attribute = ? AND f.value = w.value",
-            name = Sql::numbered("w", index)
+            name = Sql::numbered("w", *name)
         ));
     }
     parameters.push(Value::from_i64(

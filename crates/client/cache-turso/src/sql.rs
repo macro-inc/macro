@@ -12,8 +12,13 @@
 //!
 //! Numbers enter a template only as structure: how many placeholders a list
 //! has ([`Sql::placeholders`]), a placeholder's position ([`Sql::placeholder`]),
-//! the position of a generated name ([`Sql::numbered`]), or a constant the
-//! compiler evaluates ([`Sql::constant`]). A value always stays bound.
+//! a generated name's position, handed out in order by [`Ordinals`]
+//! ([`Sql::numbered`]), or a constant the compiler evaluates
+//! ([`Sql::constant`]). A value always stays bound. The driver refuses to run
+//! a statement whose placeholders do not match the values bound with it, so a
+//! placeholder's number is always a bind position; a generated name's number
+//! counts the names before it, since [`Ordinals`] has no way to start
+//! anywhere but zero or to skip.
 //!
 //! ```
 //! use cache_turso::sql::Sql;
@@ -58,6 +63,16 @@
 //! }
 //! ```
 //!
+//! A generated name's number comes only from [`Ordinals`], never from a
+//! number the caller has:
+//!
+//! ```compile_fail,E0308
+//! use cache_turso::sql::Sql;
+//!
+//! let id: usize = std::env::args().count();
+//! Sql::numbered("w", id);
+//! ```
+//!
 //! A [`Template`], what the driver runs, is made only from a `&'static str`,
 //! a [`Sql`], or the crate-private `UnreportedSql`:
 //!
@@ -86,6 +101,32 @@
 //! `rust-cache-turso-no-runtime-static-text` forbids both in this crate.
 
 use std::fmt::Write as _;
+
+/// Positions for the names a statement generates, handed out in order from
+/// zero. There is no other way to make an [`Ordinal`], so its number counts
+/// the names generated before it and never carries a value.
+#[derive(Debug, Default)]
+pub struct Ordinals {
+    next: usize,
+}
+
+impl Ordinals {
+    /// Positions starting at zero.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The next position: 0 first, then 1, and so on.
+    pub fn take(&mut self) -> Ordinal {
+        let ordinal = Ordinal(self.next);
+        self.next += 1;
+        ordinal
+    }
+}
+
+/// One position from [`Ordinals`]. Copy it to name the same thing twice.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Ordinal(usize);
 
 /// A statement template built only from text written in this crate.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
@@ -145,9 +186,9 @@ impl Sql {
     }
 
     /// A generated name: `prefix` followed by its position, such as `expr_3`.
-    pub fn numbered(prefix: &'static str, index: usize) -> Self {
+    pub fn numbered(prefix: &'static str, ordinal: Ordinal) -> Self {
         let mut sql = Self::new();
-        let _ = write!(sql.text, "{prefix}{index}");
+        let _ = write!(sql.text, "{prefix}{}", ordinal.0);
         sql
     }
 

@@ -1,6 +1,7 @@
 //! Point-probed residual predicates for a scoped, already-selected candidate set.
 
 use super::*;
+use crate::sql::{Ordinal, Ordinals};
 use predicate_index::ExactValue;
 
 #[derive(Clone, Copy)]
@@ -98,7 +99,8 @@ const MAX_JOINED_FACTS: usize = 16;
 /// probed for every candidate while an `EXISTS` can be skipped.
 pub(super) struct ExactJoins {
     source: FactSource,
-    facts: Vec<(Token, ExactValue)>,
+    facts: Vec<(Token, ExactValue, Ordinal)>,
+    names: Ordinals,
     sql: Sql,
     parameters: Vec<Value>,
 }
@@ -108,6 +110,7 @@ impl ExactJoins {
         Self {
             source,
             facts: Vec::new(),
+            names: Ordinals::new(),
             sql: Sql::new(),
             parameters: Vec::new(),
         }
@@ -120,16 +123,16 @@ impl ExactJoins {
     }
 
     fn test(&mut self, attribute: &Token, value: &ExactValue) -> Option<Sql> {
-        let index = match self
+        let name = match self
             .facts
             .iter()
-            .position(|(known, known_value)| known == attribute && known_value == value)
+            .find(|(known, known_value, _)| known == attribute && known_value == value)
         {
-            Some(index) => index,
+            Some((_, _, name)) => *name,
             None if self.facts.len() < MAX_JOINED_FACTS => {
-                let index = self.facts.len();
+                let name = self.names.take();
                 let (table, key) = self.source.table(FactKind::Exact);
-                let join = Sql::numbered("x", index);
+                let join = Sql::numbered("x", name);
                 self.sql.push(crate::sql!(
                     " LEFT JOIN {table} AS {join} INDEXED BY {key} ON {join}.document_id = d.id AND {join}.attribute = ? AND {join}.value = ?",
                     table,
@@ -140,14 +143,14 @@ impl ExactJoins {
                     text(attribute.as_str()),
                     Value::from_blob(value.as_bytes().to_vec()),
                 ]);
-                self.facts.push((attribute.clone(), value.clone()));
-                index
+                self.facts.push((attribute.clone(), value.clone(), name));
+                name
             }
             None => return None,
         };
         Some(crate::sql!(
             "{join}.document_id IS NOT NULL",
-            join = Sql::numbered("x", index)
+            join = Sql::numbered("x", name)
         ))
     }
 }

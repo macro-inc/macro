@@ -6,16 +6,27 @@ fn numbers_enter_only_as_structure() {
     assert_eq!(Sql::placeholders(3).as_str(), "?, ?, ?");
     assert_eq!(Sql::placeholder(7).as_str(), "?7");
     assert_eq!(Sql::numbered_placeholders(2, 3).as_str(), "?2, ?3, ?4");
-    assert_eq!(Sql::numbered("expr_", 3).as_str(), "expr_3");
+    let mut names = Ordinals::new();
+    let first = names.take();
+    assert_eq!(Sql::numbered("expr_", first).as_str(), "expr_0");
+    assert_eq!(Sql::numbered("expr_", names.take()).as_str(), "expr_1");
+    assert_eq!(
+        Sql::numbered("expr_", first).as_str(),
+        "expr_0",
+        "a copy names the same"
+    );
     assert_eq!(Sql::constant::<4095>().as_str(), "4095");
     assert_eq!(Sql::repeat("(?, ?)", 2, ", ").as_str(), "(?, ?), (?, ?)");
     assert_eq!(
         Sql::join(
-            [Sql::numbered("w", 0), Sql::numbered("w", 1)],
+            [
+                Sql::numbered("w", names.take()),
+                Sql::numbered("w", names.take())
+            ],
             " UNION ALL "
         )
         .as_str(),
-        "w0 UNION ALL w1"
+        "w2 UNION ALL w3"
     );
 }
 
