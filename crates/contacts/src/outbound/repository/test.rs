@@ -6,6 +6,8 @@ use sqlx::types::Uuid;
 
 use super::DbContactsRepository;
 
+mod one_directional;
+
 fn mid(s: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(s.to_owned()).unwrap()
 }
@@ -23,6 +25,63 @@ async fn test_create_connections_basic(pool: PgPool) -> sqlx::Result<()> {
         .await?;
     assert_eq!(pair.user1, user1);
     assert_eq!(pair.user2, user2);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_delete_connections_removes_only_the_named_pairs(pool: PgPool) -> sqlx::Result<()> {
+    // Legacy rows may spell one end in another ASCII case, which can also put
+    // that end first in byte order.
+    sqlx::query!(
+        "INSERT INTO contacts_connections (user1, user2) VALUES
+         ('macro|a@example.com', 'macro|leaver@example.com'),
+         ('macro|ALPHA@example.com', 'macro|leaver@example.com'),
+         ('macro|Zed@example.com', 'macro|leaver@example.com'),
+         ('macro|b@example.com', 'macro|leaver@example.com'),
+         ('macro|a@example.com', 'macro|b@example.com')"
+    )
+    .execute(&pool)
+    .await?;
+    let repo = DbContactsRepository::new(pool.clone());
+
+    repo.delete_connections(vec![
+        (mid("macro|leaver@example.com"), mid("macro|a@example.com")),
+        (
+            mid("macro|alpha@example.com"),
+            mid("macro|leaver@example.com"),
+        ),
+        (
+            mid("macro|leaver@example.com"),
+            mid("macro|zed@example.com"),
+        ),
+        (
+            mid("macro|leaver@example.com"),
+            mid("macro|nobody@example.com"),
+        ),
+    ])
+    .await
+    .unwrap();
+
+    let remaining = sqlx::query!("SELECT user1, user2 FROM contacts_connections ORDER BY id")
+        .fetch_all(&pool)
+        .await?;
+    let remaining: Vec<_> = remaining
+        .into_iter()
+        .map(|row| (row.user1, row.user2))
+        .collect();
+    assert_eq!(
+        remaining,
+        vec![
+            (
+                "macro|b@example.com".to_owned(),
+                "macro|leaver@example.com".to_owned()
+            ),
+            (
+                "macro|a@example.com".to_owned(),
+                "macro|b@example.com".to_owned()
+            ),
+        ]
+    );
     Ok(())
 }
 

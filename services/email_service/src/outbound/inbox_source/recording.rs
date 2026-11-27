@@ -60,6 +60,13 @@ impl ContactsIngress for RecordingContactLists {
     ) -> Result<(), Report> {
         self.record(Recorded::Connections(connections))
     }
+
+    async fn enqueue_contact_disconnections(
+        &self,
+        _: Vec<ContactConnection>,
+    ) -> Result<(), Report> {
+        Err(rootcause::report!("email never removes connections"))
+    }
 }
 
 impl ContactListIngress for RecordingContactLists {

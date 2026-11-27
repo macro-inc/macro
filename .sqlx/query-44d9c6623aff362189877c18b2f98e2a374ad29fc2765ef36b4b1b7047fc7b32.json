@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM contacts_connections\n         WHERE user1 IN ('macro|external@example.com', 'macro|first@example.com', 'macro|profile@example.com')\n           AND user2 IN ('macro|first@example.com', 'macro|second@example.com', 'macro|profile@example.com')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "44d9c6623aff362189877c18b2f98e2a374ad29fc2765ef36b4b1b7047fc7b32"
+}

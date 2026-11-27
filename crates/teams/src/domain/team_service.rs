@@ -106,6 +106,9 @@ enum SeatBilling {
     Included,
 }
 
+/// How many ended teammate pairs a team deletion hands to contacts at once.
+const ENDED_PAIRS_PER_BATCH: usize = 500;
+
 /// Implementation of the TeamService using a TeamRepository
 #[derive(Debug)]
 pub struct TeamServiceImpl<
@@ -568,8 +571,6 @@ where
         }
 
         let teammate_ids = self.teammate_ids_except(&team_id, user_id).await;
-        self.enqueue_joining_user_contacts(user_id, &teammate_ids)
-            .await;
         self.send_teammates_changed(&team_id, user_id, &teammate_ids)
             .await;
 
@@ -950,7 +951,20 @@ where
             .delete_team(&cleared)
             .await
             .map_err(DeleteTeamError::TeamError)?;
-        // Every member lost every other member as a teammate.
+        // Every member lost every other member as a teammate. A roster has
+        // no size cap, so the n(n-1)/2 pairs go out in bounded batches
+        // instead of being collected whole first.
+        let mut ended = Vec::with_capacity(ENDED_PAIRS_PER_BATCH);
+        for (index, member) in member_user_ids.iter().enumerate() {
+            for other in &member_user_ids[index + 1..] {
+                ended.push((member.clone(), other.clone()));
+                if ended.len() == ENDED_PAIRS_PER_BATCH {
+                    self.enqueue_ended_contacts(&team_id, std::mem::take(&mut ended))
+                        .await;
+                }
+            }
+        }
+        self.enqueue_ended_contacts(&team_id, ended).await;
         if member_user_ids.len() > 1 {
             self.send_directory_changed(&team_id, member_user_ids.clone(), member_user_ids.clone())
                 .await;
@@ -1053,6 +1067,11 @@ where
         } else {
             None
         };
+        // Read before the removal: another member leaving at the same time
+        // is still on this roster, so the pair between the two leavers is
+        // not missed by both removals. Nothing else names those pairs once
+        // the membership is gone, so a failed read stops the removal.
+        let roster_before_removal = self.read_teammate_ids_except(&team_id, user_id).await?;
         let removed_member = match self
             .team_repository
             .remove_user_from_team(&team_id, user_id)
@@ -1209,6 +1228,11 @@ where
         }
 
         let remaining_members = self.teammate_ids_except(&team_id, user_id).await;
+        let ended = roster_before_removal
+            .into_iter()
+            .map(|teammate| (user_id.clone().into_owned(), teammate))
+            .collect();
+        self.enqueue_ended_contacts(&team_id, ended).await;
         self.send_teammates_changed(&team_id, user_id, &remaining_members)
             .await;
 
@@ -1252,27 +1276,32 @@ where
             .ok();
     }
 
+    /// The roster without `user_id`, or none when it cannot be read: for the
+    /// best-effort side effects after a membership change.
     async fn teammate_ids_except(
         &self,
         team_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
     ) -> Vec<MacroUserIdStr<'static>> {
-        let Some(team_with_members) = self
-            .team_repository
-            .get_team_by_id(team_id)
+        self.read_teammate_ids_except(team_id, user_id)
             .await
             .inspect_err(|error| {
                 tracing::error!(
                     error = ?error,
                     team_id = %team_id,
-                    user_id = %user_id,
                     "failed to load team roster for membership side effects"
                 );
             })
-            .ok()
-        else {
-            return Vec::new();
-        };
+            .unwrap_or_default()
+    }
+
+    /// The roster without `user_id`, sorted by id.
+    async fn read_teammate_ids_except(
+        &self,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, TeamError> {
+        let team_with_members = self.team_repository.get_team_by_id(team_id).await?;
 
         let joining_user = user_id.clone().into_owned();
         let mut teammate_ids = std::iter::once(team_with_members.team.owner_id)
@@ -1287,33 +1316,31 @@ where
             .into_iter()
             .collect::<Vec<_>>();
         teammate_ids.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
-        teammate_ids
+        Ok(teammate_ids)
     }
 
-    async fn enqueue_joining_user_contacts(
+    /// Deletes the legacy contact edges team joins used to write for pairs
+    /// who are no longer teammates, so a membership's contacts end with it.
+    /// Joins write none now: teammates come from the live roster. A contact
+    /// the viewer's own inbox or invite names stays listed through those
+    /// rows. Best-effort, like the other contacts side effects.
+    async fn enqueue_ended_contacts(
         &self,
-        user_id: &MacroUserIdStr<'_>,
-        teammate_ids: &[MacroUserIdStr<'static>],
+        team_id: &uuid::Uuid,
+        ended: Vec<(MacroUserIdStr<'static>, MacroUserIdStr<'static>)>,
     ) {
-        if teammate_ids.is_empty() {
+        if ended.is_empty() {
             return;
         }
 
-        let joining_user = user_id.clone().into_owned();
-        let connections = teammate_ids
-            .iter()
-            .cloned()
-            .map(|teammate| (joining_user.clone(), teammate))
-            .collect::<Vec<_>>();
-
         self.contacts_enqueuer
-            .enqueue_contact_connections(connections)
+            .enqueue_contact_disconnections(ended)
             .await
             .inspect_err(|error| {
                 tracing::error!(
                     error = ?error,
-                    user_id = %user_id,
-                    "failed to enqueue team contact connections"
+                    team_id = %team_id,
+                    "failed to enqueue team contact disconnections"
                 );
             })
             .ok();
@@ -2321,8 +2348,6 @@ where
 
         let teammate_ids = self
             .teammate_ids_except(&team_member.team_id, user_id)
-            .await;
-        self.enqueue_joining_user_contacts(user_id, &teammate_ids)
             .await;
         self.send_teammates_changed(&team_member.team_id, user_id, &teammate_ids)
             .await;

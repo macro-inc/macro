@@ -230,7 +230,7 @@ async fn adding_people_pairs_them_with_every_active_member() {
 
 #[tokio::test]
 async fn joining_pairs_the_joiner_with_every_active_member() {
-    for channel_type in NON_DM_TYPES {
+    for channel_type in [ChannelType::Private, ChannelType::Team] {
         let event = ChannelEvent::ParticipantJoined {
             channel_id: Uuid::nil(),
             channel_type,
@@ -254,6 +254,20 @@ async fn joining_pairs_the_joiner_with_every_active_member() {
 }
 
 #[tokio::test]
+async fn joining_a_public_channel_pairs_nobody() {
+    // Anyone signed in may join a public channel, so joining alone must not
+    // hand the joiner every member, or every member the joiner.
+    let event = ChannelEvent::ParticipantJoined {
+        channel_id: Uuid::nil(),
+        channel_type: ChannelType::Public,
+        user_id: Sender::new_from_user(user("c@example.com")),
+        active_participant_user_ids: users(&["a@example.com", "b@example.com", "c@example.com"]),
+    };
+
+    assert!(recorded(event).await.is_empty());
+}
+
+#[tokio::test]
 async fn joining_an_empty_channel_pairs_nobody() {
     let event = ChannelEvent::ParticipantJoined {
         channel_id: Uuid::nil(),
@@ -266,7 +280,9 @@ async fn joining_an_empty_channel_pairs_nobody() {
 }
 
 #[tokio::test]
-async fn team_auto_join_pairs_the_new_members_without_notifying_anyone() {
+async fn team_auto_join_pairs_nobody_and_notifies_nobody() {
+    // Teammates are computed from the live roster, so a team channel's
+    // auto-join writes no contacts that would outlive the membership.
     let contacts = FakeContacts::default();
     let notifications = FakeNotifications::default();
     let realtime = FakeRealtime::default();
@@ -285,13 +301,7 @@ async fn team_auto_join_pairs_the_new_members_without_notifying_anyone() {
     assert!(broker_events_for_event(&event).is_empty());
     service.handle(event).await;
 
-    assert_eq!(
-        *contacts.interactions.lock().unwrap(),
-        pairs(
-            &["c@example.com"],
-            &["a@example.com", "b@example.com", "c@example.com"]
-        )
-    );
+    assert!(contacts.interactions.lock().unwrap().is_empty());
     assert!(contacts.users.lock().unwrap().is_empty());
     assert!(notifications.effects.lock().unwrap().is_empty());
     assert!(realtime.effects.lock().unwrap().is_empty());

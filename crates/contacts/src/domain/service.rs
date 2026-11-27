@@ -2,7 +2,8 @@ use crate::domain::models::graph::{UndirectedGraph, Vertex};
 use crate::domain::models::invalidation::{ContactsInvalidation, MAX_CHANGED_CONTACTS};
 use crate::domain::models::list::InboxSource;
 use crate::domain::models::messages::{
-    ContactConnection, ContactConnections, ContactsMessage, ContactsNodes, DirectoryChange,
+    ContactConnection, ContactConnections, ContactDisconnections, ContactsMessage, ContactsNodes,
+    DirectoryChange,
 };
 use crate::domain::models::page::{ContactCursor, ContactIdPage, ContactPageSize};
 use crate::domain::models::people::{
@@ -70,6 +71,9 @@ impl<R: ContactsRepository + ContactListRepository, N: ContactsNotifier>
     ) -> Result<(), rootcause::Report> {
         let (users, connections): (HashSet<_>, Vec<_>) = match msg {
             ContactsMessage::Change(change) => return self.process_change(change).await,
+            ContactsMessage::Disconnections(ContactDisconnections { disconnections }) => {
+                return self.process_disconnections(disconnections).await;
+            }
             ContactsMessage::Nodes(ContactsNodes { users }) => {
                 let graph = UndirectedGraph::new(users.iter().map(Vertex::new)).complete();
                 let connections = graph
@@ -104,6 +108,38 @@ impl<R: ContactsRepository + ContactListRepository, N: ContactsNotifier>
             .invalidate_contacts_for_users(invalidations)
             .await?;
         Ok(())
+    }
+
+    /// Deletes legacy edges and tells both ends of every pair to re-read
+    /// their directory. A removal has no contacts to re-read, so each is
+    /// unknown. Recipients come from the message, not from what the delete
+    /// found, so a redelivery after a crash between the two still notifies.
+    async fn process_disconnections(
+        &self,
+        disconnections: Vec<ContactConnection>,
+    ) -> Result<(), Report> {
+        tracing::Span::current().record("connections", disconnections.len() as i64);
+        let ends: HashSet<_> = disconnections
+            .iter()
+            .flat_map(|connection| [connection.first.clone(), connection.second.clone()])
+            .collect();
+        tracing::Span::current().record("users", ends.len() as i64);
+        let pairs = disconnections
+            .into_iter()
+            .map(|connection| (connection.first, connection.second))
+            .collect();
+        self.repository.delete_connections(pairs).await?;
+
+        if ends.is_empty() {
+            return Ok(());
+        }
+        self.notifier
+            .invalidate_contacts_for_users(
+                ends.into_iter()
+                    .map(ContactsInvalidation::unknown)
+                    .collect(),
+            )
+            .await
     }
 
     /// Applies one list-aware change and notifies only the owners whose
@@ -516,6 +552,18 @@ impl<Q: ContactsIngressQueue> ContactsIngress for SqsContactsIngress<Q> {
         for chunk in connections.chunks(CONNECTIONS_PER_MESSAGE) {
             self.queue
                 .publish_connections(ContactConnections::new(chunk.to_vec()))
+                .await?;
+        }
+        Ok(())
+    }
+
+    async fn enqueue_contact_disconnections(
+        &self,
+        disconnections: Vec<ContactConnection>,
+    ) -> Result<(), Report> {
+        for chunk in disconnections.chunks(CONNECTIONS_PER_MESSAGE) {
+            self.queue
+                .publish_disconnections(ContactDisconnections::new(chunk.to_vec()))
                 .await?;
         }
         Ok(())

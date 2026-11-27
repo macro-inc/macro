@@ -33,24 +33,18 @@ impl ContactsRepository for DbContactsRepository {
         &self,
         user_id: MacroUserIdStr<'_>,
     ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
-        // Each pair is stored once with user1 < user2, so the branches are
-        // disjoint and neither repeats a contact.
-        let rows = sqlx::query!(
-            "
-            SELECT user1 AS contact FROM contacts_connections WHERE user2 = $1
-            UNION ALL
-            SELECT user2 AS contact FROM contacts_connections WHERE user1 = $1
-            ",
-            user_id.as_ref()
-        )
-        .fetch_all(&self.db)
-        .await?;
+        // The viewer's edges and current team, without self; peers only the
+        // peer has are left out, as in page.sql.
+        let rows = sqlx::query_file!("src/outbound/repository/contacts.sql", user_id.as_ref())
+            .fetch_all(&self.db)
+            .await?;
 
-        Ok(rows
+        let contacts: HashSet<_> = rows
             .into_iter()
             .filter_map(|r| r.contact)
             .filter_map(|s| MacroUserIdStr::try_from(s).ok())
-            .collect())
+            .collect();
+        Ok(contacts.into_iter().collect())
     }
 
     async fn create_connections(
@@ -99,6 +93,28 @@ impl ContactsRepository for DbContactsRepository {
             tracing::error!(error=?e, "couldn't create connections");
         })?;
 
+        Ok(())
+    }
+
+    async fn delete_connections(
+        &self,
+        connections: Vec<(MacroUserIdStr<'_>, MacroUserIdStr<'_>)>,
+    ) -> Result<(), Report> {
+        if connections.is_empty() {
+            return Ok(());
+        }
+        let (firsts, seconds): (Vec<&str>, Vec<&str>) = connections
+            .iter()
+            .map(|(first, second)| (first.as_ref(), second.as_ref()))
+            .unzip();
+
+        sqlx::query_file!(
+            "src/outbound/repository/delete_connections.sql",
+            &firsts as &[&str],
+            &seconds as &[&str]
+        )
+        .execute(&self.db)
+        .await?;
         Ok(())
     }
 }

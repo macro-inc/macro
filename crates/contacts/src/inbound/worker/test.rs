@@ -30,6 +30,14 @@ impl ContactsRepository for CountingRepository {
         self.writes.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }
+
+    async fn delete_connections(
+        &self,
+        _connections: Vec<(MacroUserIdStr<'_>, MacroUserIdStr<'_>)>,
+    ) -> Result<(), rootcause::Report> {
+        self.writes.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    }
 }
 
 impl ContactListRepository for CountingRepository {

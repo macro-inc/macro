@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- The requested ids that are in the viewer's legacy directory, in request\n-- order: self, a current teammate, someone the viewer's own inbox or invite\n-- names, or the other end of one of the viewer's edges. $1 viewer, $2 canonical requested ids.\n--\n-- Team joins no longer write edges, so teammates come from team_user, ids\n-- folded like the list-aware lookup; the roster is read once.\nWITH teammates AS MATERIALIZED (\n    SELECT lower(teammate.user_id COLLATE \"C\") AS id\n    FROM team_user AS own\n    JOIN team_user AS teammate ON teammate.team_id = own.team_id\n    WHERE own.user_id IN (\n        -- team_user may hold a legacy mixed-case id for this user. Find\n        -- it through the lower(email) index and keep it only if it folds\n        -- to the canonical id.\n        SELECT $1::text\n        UNION\n        SELECT account.id\n        FROM \"User\" AS account\n        WHERE lower(account.email) = substr($1, length('macro|') + 1)\n          AND lower(account.id COLLATE \"C\") = $1\n    )\n)\nSELECT requested.contact AS \"contact!\"\nFROM unnest($2::text[]) WITH ORDINALITY AS requested(contact, ordinal)\n-- Keep membership as at most one point-read result per requested ID, rather\n-- than a hashed subplan materializing a high-degree viewer's entire directory.\n-- Pages parse supported ASCII case aliases into canonical IDs. Match those\n-- aliases through the scoped expression indexes, not a scan of the viewer's\n-- neighbors. Preserve raw viewer equality and reject invalid marker casing;\n-- C folding must not turn an invalid Unicode identity into an ASCII member.\nLEFT JOIN LATERAL (\n    SELECT TRUE AS present FROM contacts_connections\n    WHERE user1 = $1\n      AND lower(user2 COLLATE \"C\") = requested.contact\n      AND user2 COLLATE \"C\" LIKE 'macro|%'\n    UNION ALL\n    SELECT TRUE AS present FROM contacts_connections\n    WHERE user2 = $1\n      AND lower(user1 COLLATE \"C\") = requested.contact\n      AND user1 COLLATE \"C\" LIKE 'macro|%'\n    LIMIT 1\n) AS membership ON TRUE\nWHERE requested.contact = $1\n   OR requested.contact COLLATE \"C\" IN (SELECT id FROM teammates)\n   -- The viewer's own inbox or invited row, so a contact the viewer really\n   -- has stays listed after a team removal deletes its edge.\n   OR EXISTS (\n       SELECT 1 FROM contact_inbox_members AS mine\n       WHERE mine.user_id = lower($1 COLLATE \"C\")\n         AND mine.contact_user_id = requested.contact\n   )\n   OR EXISTS (\n       SELECT 1 FROM contact_list_members AS mine\n       WHERE mine.user_id = lower($1 COLLATE \"C\")\n         AND mine.contact_user_id = requested.contact\n         AND mine.list_key = 'invited'\n   )\n   -- An edge counts unless only the peer has the viewer, as in page.sql: the\n   -- peer's inbox or invite names the viewer, and no list or inbox row of\n   -- the viewer's names the peer. Ids in the lists are canonical, like\n   -- requested.contact.\n   OR (\n       membership.present IS TRUE\n       AND NOT (\n           (\n               EXISTS (\n                   SELECT 1 FROM contact_inbox_members AS theirs\n                   WHERE theirs.user_id = requested.contact\n                     AND theirs.contact_user_id = lower($1 COLLATE \"C\")\n               )\n               OR EXISTS (\n                   SELECT 1 FROM contact_list_members AS theirs\n                   WHERE theirs.user_id = requested.contact\n                     -- In the invited index's own expression, so both columns are index\n                     -- conditions there (it would otherwise seek user_id and filter).\n                     AND (theirs.contact_user_id COLLATE \"default\") = (lower($1 COLLATE \"C\") COLLATE \"default\")\n                     AND theirs.list_key = 'invited'\n               )\n           )\n           AND NOT EXISTS (\n               SELECT 1 FROM contact_list_members AS mine\n               WHERE mine.user_id = lower($1 COLLATE \"C\")\n                 AND mine.contact_user_id = requested.contact\n           )\n           AND NOT EXISTS (\n               SELECT 1 FROM contact_inbox_members AS mine\n               WHERE mine.user_id = lower($1 COLLATE \"C\")\n                 AND mine.contact_user_id = requested.contact\n           )\n       )\n   )\nORDER BY requested.ordinal\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "contact!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "24e15ab96d878717e893c1b42b0058a6d41ead6061337fd0b4c974867e31d473"
+}

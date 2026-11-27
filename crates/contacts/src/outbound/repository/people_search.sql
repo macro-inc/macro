@@ -1,5 +1,5 @@
--- Ranked people search over the viewer's contact graph (both directions),
--- self, and the viewer's current team. Peers are read through
+-- Ranked people search over the viewer's contact graph (both directions,
+-- less peers only the peer has), self, and the viewer's current team. Peers are read through
 -- contacts_connections_user1_user2_key and idx_contacts_connections_user2_user1,
 -- so nothing outside the viewer's own edges and team is ever read.
 -- $1 viewer id, $2 trimmed query (at least two characters), $3 result limit.
@@ -21,15 +21,56 @@ candidates AS MATERIALIZED (
         WHERE user2 = (SELECT id FROM viewer)
           AND user1 COLLATE "C" LIKE 'macro|%'
         UNION ALL
+        -- The viewer's own inbox and invited rows, so a contact the viewer
+        -- really has stays searchable after a team removal deletes its edge.
+        SELECT contact_user_id COLLATE "default", FALSE
+        FROM contact_inbox_members
+        WHERE user_id = lower((SELECT id FROM viewer) COLLATE "C")
+        UNION ALL
+        SELECT contact_user_id COLLATE "default", FALSE
+        FROM contact_list_members
+        WHERE user_id = lower((SELECT id FROM viewer) COLLATE "C") AND list_key = 'invited'
+        UNION ALL
         SELECT lower((SELECT id FROM viewer) COLLATE "C") COLLATE "default", FALSE
         UNION ALL
         -- A user has at most one team; its members include the viewer.
         SELECT lower(teammate.user_id COLLATE "C") COLLATE "default", TRUE
         FROM team_user AS own
         JOIN team_user AS teammate ON teammate.team_id = own.team_id
-        WHERE own.user_id = (SELECT id FROM viewer)
+        WHERE own.user_id IN (
+            -- team_user may hold a legacy mixed-case id for this user. Find
+            -- it through the lower(email) index and keep it only if it folds
+            -- to the canonical id.
+            SELECT id FROM viewer
+            UNION
+            SELECT account.id
+            FROM "User" AS account
+            WHERE lower(account.email) = substr($1, length('macro|') + 1)
+              AND lower(account.id COLLATE "C") = $1
+        )
     ) AS directory
     GROUP BY directory.id
+),
+-- Peers only the peer has: their inbox or invite names the viewer, and no list
+-- or inbox row of the viewer's names them. Read once from the viewer's own
+-- list rows and the rows naming the viewer (contact_idx, primary keys), so its
+-- cost follows those lists, not the directory's size.
+hidden AS MATERIALIZED (
+    (
+        SELECT user_id AS id FROM contact_inbox_members
+        WHERE contact_user_id = lower($1 COLLATE "C")
+        UNION
+        SELECT user_id FROM contact_list_members
+        WHERE contact_user_id = lower($1 COLLATE "C") AND list_key = 'invited'
+    )
+    EXCEPT
+    (
+        SELECT contact_user_id FROM contact_list_members
+        WHERE user_id = lower($1 COLLATE "C")
+        UNION
+        SELECT contact_user_id FROM contact_inbox_members
+        WHERE user_id = lower($1 COLLATE "C")
+    )
 ),
 profiles AS (
     SELECT
@@ -57,8 +98,15 @@ ranked AS (
         ) AS is_prefix,
         COALESCE(NULLIF(p.full_name, ''), p.email) COLLATE "C" AS sort_key
     FROM profiles AS p
-    WHERE strpos(p.email, (SELECT needle FROM viewer)) > 0
-       OR strpos(p.full_name, (SELECT needle FROM viewer)) > 0
+    -- A join, not NOT IN: it can spill to disk, while a NOT IN subplan too
+    -- big for hash_mem is rescanned once per candidate.
+    LEFT JOIN hidden ON hidden.id = p.id COLLATE "C"
+    WHERE (
+        strpos(p.email, (SELECT needle FROM viewer)) > 0
+        OR strpos(p.full_name, (SELECT needle FROM viewer)) > 0
+    )
+      -- Hide a peer only the peer has (see hidden); teammates always stay.
+      AND (p.is_teammate OR hidden.id IS NULL)
     -- Byte order keeps ties stable whatever the database's locale.
     ORDER BY p.is_teammate DESC, is_prefix DESC, sort_key, p.id COLLATE "C"
     LIMIT $3

@@ -122,6 +122,15 @@ impl<I: ContactsIngress, F: ServiceFeatureFlags + 'static> ContactsIngress
     ) -> Result<(), Report> {
         self.inner.enqueue_contact_connections(connections).await
     }
+
+    async fn enqueue_contact_disconnections(
+        &self,
+        disconnections: Vec<ContactConnection>,
+    ) -> Result<(), Report> {
+        self.inner
+            .enqueue_contact_disconnections(disconnections)
+            .await
+    }
 }
 
 impl<I: ContactListIngress, F: ServiceFeatureFlags + 'static> ContactListIngress

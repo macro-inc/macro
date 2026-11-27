@@ -1207,8 +1207,10 @@ fn contact_sync_users_for_event(event: &ChannelEvent) -> Option<HashSet<MacroUse
         } if invited_by.as_user().is_some() => {
             Some(active_participant_user_ids.iter().cloned().collect())
         }
+        // Anyone signed in may join a public channel, so joining one pairs
+        // nobody; a member adding them does.
         ChannelEvent::ParticipantJoined {
-            channel_type: ChannelType::Public | ChannelType::Private | ChannelType::Team,
+            channel_type: ChannelType::Private | ChannelType::Team,
             user_id,
             active_participant_user_ids,
             ..
@@ -1244,7 +1246,11 @@ impl Interactions {
 ///
 /// Sharing a channel counts from the moment two people are both in it, so
 /// creation pairs everyone and each later arrival pairs the newcomers with
-/// the active members, who are already paired with each other. A DM counts
+/// the active members, who are already paired with each other. Arriving on
+/// one's own counts only where someone had to let you in: anyone signed in
+/// may join a public channel, so joining one pairs nobody (a member adding
+/// you still does), and team auto-join pairs nobody because teammates are
+/// computed from the live roster and must not outlive the team. A DM counts
 /// only once a person posts in it: Macro opens DMs on its own (teammates,
 /// inbox contacts), so an empty one is never something two people did
 /// together. The Macro system bot's channels (the signup support channel)
@@ -1276,19 +1282,14 @@ fn interactions_for_event(event: &ChannelEvent) -> Option<Interactions> {
             active_participant_user_ids.clone(),
         ),
         ChannelEvent::ParticipantJoined {
-            channel_type,
+            channel_type: ChannelType::Private | ChannelType::Team,
             user_id,
             active_participant_user_ids,
             ..
-        } if *channel_type != ChannelType::DirectMessage => {
+        } => {
             let joiner = user_id.as_user()?.clone();
             Interactions::between(vec![joiner], active_participant_user_ids.clone())
         }
-        ChannelEvent::MembersAutoJoined {
-            added_user_ids,
-            active_participant_user_ids,
-            ..
-        } => Interactions::between(added_user_ids.clone(), active_participant_user_ids.clone()),
         ChannelEvent::MessagePosted {
             metadata,
             participants,
