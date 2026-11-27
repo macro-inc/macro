@@ -1193,11 +1193,10 @@ unlike the name finds the contact, below name matches. Within each name tier, an
 input, personal suggestions are recent-first rather than domain/brevity-weighted.
 While the contact read for newly typed text is pending, the contacts already
 listed who still match it stay listed and no other contact shows before it
-lands (thread participants and a typed address can). Pasting a listed
-contact's address and pressing Enter then adds that contact's chip. If the
-contact cache changed generation in between, the contact is no longer listed
-until the read lands, so Enter adds the address alone unless a thread
-participant has it.
+lands (thread participants and a typed address can); none stay if the contact
+cache changed generation since they were read. Enter on a pasted address adds
+the recipient the picker lists with that address as their chip, and the
+address alone when it lists none.
 A chip shows the name followed by the address in muted ink.
 A quick click or tap in the message body moves the caret where it lands; check
 it by tapping mid-word and on another line of a two-line body, then typing.
