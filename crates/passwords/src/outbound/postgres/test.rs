@@ -868,4 +868,5 @@ async fn first_erasure_and_quarantine_are_not_starved_by_repeat_tombstones(pool:
 mod access;
 pub(crate) mod support;
 mod update_plan;
+mod vault_setup;
 pub(super) use support::{another_team, folder_fixture};

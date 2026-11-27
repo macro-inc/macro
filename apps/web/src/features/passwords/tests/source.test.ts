@@ -756,3 +756,68 @@ it("tells a team whose vault isn't set up from a failed action", async () => {
   expect(result.isErr() && result.error).toBe('notProvisioned');
   expect(mocks.fetch).toHaveBeenCalledTimes(1);
 });
+
+it('resends a save while the vault is being set up, with the same payload, and then succeeds', async () => {
+  vi.useFakeTimers();
+  vi.spyOn(Math, 'random').mockReturnValue(0);
+  const bodies: unknown[] = [];
+  const settingUp = () =>
+    new Response(JSON.stringify({ code: PasswordErrorCode.vault_setting_up }), {
+      status: 409,
+    });
+  mocks.fetch
+    .mockImplementationOnce(async (_url: string, init: RequestInit) => {
+      bodies.push(init.body);
+      return settingUp();
+    })
+    .mockImplementationOnce(async (_url: string, init: RequestInit) => {
+      bodies.push(init.body);
+      return settingUp();
+    })
+    .mockImplementationOnce(async (_url: string, init: RequestInit) => {
+      bodies.push(init.body);
+      return new Response(JSON.stringify(disclosed), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+  const pending = createPasswordSource('team', CURRENT).reveal('item');
+  // With no jitter the two waits are 1 and 2 seconds.
+  await vi.advanceTimersByTimeAsync(3000);
+  expect((await pending).isOk()).toBe(true);
+  expect(mocks.fetch).toHaveBeenCalledTimes(3);
+  expect(new Set(bodies).size).toBe(1);
+});
+
+it('stops resending after the setting-up budget and says the vault is still being set up', async () => {
+  vi.useFakeTimers();
+  vi.spyOn(Math, 'random').mockReturnValue(1);
+  mocks.fetch.mockImplementation(
+    async () =>
+      new Response(
+        JSON.stringify({ code: PasswordErrorCode.vault_setting_up }),
+        { status: 409 }
+      )
+  );
+  const pending = createPasswordSource('team', CURRENT).reveal('item');
+  // The longest jitter waits 3, 6 and 12 seconds.
+  await vi.advanceTimersByTimeAsync(21000);
+  const result = await pending;
+  expect(result.isErr() && result.error).toBe('settingUp');
+  expect(mocks.fetch).toHaveBeenCalledTimes(4);
+});
+
+it('never resends when vault setup failed or the vault needs recovery', async () => {
+  for (const code of [
+    PasswordErrorCode.vault_setup_failed,
+    PasswordErrorCode.vault_needs_recovery,
+  ]) {
+    mocks.fetch.mockReset();
+    mocks.fetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ code }), { status: 409 })
+    );
+    const result = await createPasswordSource('team', CURRENT).reveal('item');
+    expect(result.isErr() && result.error).toBe('vaultFailed');
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  }
+});

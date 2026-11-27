@@ -16769,7 +16769,7 @@ export type PasswordAgentEditableMetadata = {
 /**
  * Closed, payload-free failure codes of the agent vault API.
  */
-export type PasswordAgentErrorCode = 'unauthorized' | 'invalid_agent' | 'invalid_session_attribution' | 'not_found' | 'not_granted' | 'pending' | 'forbidden' | 'invalid_request' | 'unsupported_kind' | 'field_not_set' | 'version_conflict' | 'vault_busy' | 'rate_limited' | 'vault_unavailable' | 'vault_not_provisioned';
+export type PasswordAgentErrorCode = 'unauthorized' | 'invalid_agent' | 'invalid_session_attribution' | 'not_found' | 'not_granted' | 'pending' | 'forbidden' | 'invalid_request' | 'unsupported_kind' | 'field_not_set' | 'version_conflict' | 'vault_busy' | 'rate_limited' | 'vault_unavailable' | 'vault_not_provisioned' | 'vault_setting_up' | 'vault_setup_failed' | 'vault_needs_recovery';
 
 /**
  * Sanitized agent vault failure.
@@ -17046,7 +17046,7 @@ export type PasswordCreateFolderBody = {
 /**
  * Closed, payload-free failure codes exposed by the human vault API.
  */
-export type PasswordErrorCode = 'not_found' | 'forbidden' | 'invalid_request' | 'version_conflict' | 'vault_busy' | 'folder_missing' | 'vault_unavailable' | 'vault_not_provisioned';
+export type PasswordErrorCode = 'not_found' | 'forbidden' | 'invalid_request' | 'version_conflict' | 'vault_busy' | 'folder_missing' | 'vault_unavailable' | 'vault_not_provisioned' | 'vault_setting_up' | 'vault_setup_failed' | 'vault_needs_recovery';
 
 /**
  * Sanitized vault failure shared with generated HTTP clients.
@@ -17161,7 +17161,7 @@ export type PasswordImportBatchResult = {
 /**
  * Closed, sanitized per-item failure categories.
  */
-export type PasswordImportErrorCode = 'not_found' | 'forbidden' | 'invalid_request' | 'version_conflict' | 'folder_missing' | 'busy' | 'vault_unavailable' | 'vault_not_provisioned';
+export type PasswordImportErrorCode = 'not_found' | 'forbidden' | 'invalid_request' | 'version_conflict' | 'folder_missing' | 'busy' | 'vault_unavailable' | 'vault_not_provisioned' | 'vault_setting_up' | 'vault_setup_failed' | 'vault_needs_recovery';
 
 /**
  * Source folder; parents must precede children in every batch.
@@ -17545,6 +17545,27 @@ export type PasswordUsername = {
      */
     version: number;
 };
+
+/**
+ * Why a team's vault setup failed.
+ */
+export type PasswordVaultFailureReason = 'incompatible' | 'needs_recovery';
+
+/**
+ * A team's vault readiness, as the API reports it.
+ */
+export type PasswordVaultReadiness = {
+    reason?: null | PasswordVaultFailureReason;
+    /**
+     * Setup progress.
+     */
+    state: PasswordVaultReadinessState;
+};
+
+/**
+ * Setup progress of a team's vault.
+ */
+export type PasswordVaultReadinessState = 'not_started' | 'setting_up' | 'ready' | 'failed';
 
 /**
  * Immutable provider version metadata, without historic values.
@@ -37611,6 +37632,28 @@ export type PasswordsCopyUsernameResponses = {
 };
 
 export type PasswordsCopyUsernameResponse = PasswordsCopyUsernameResponses[keyof PasswordsCopyUsernameResponses];
+
+export type PasswordsVaultReadinessData = {
+    body?: never;
+    path: {
+        team: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/vault';
+};
+
+export type PasswordsVaultReadinessErrors = {
+    403: PasswordFailure;
+    404: PasswordFailure;
+};
+
+export type PasswordsVaultReadinessError = PasswordsVaultReadinessErrors[keyof PasswordsVaultReadinessErrors];
+
+export type PasswordsVaultReadinessResponses = {
+    200: PasswordVaultReadiness;
+};
+
+export type PasswordsVaultReadinessResponse = PasswordsVaultReadinessResponses[keyof PasswordsVaultReadinessResponses];
 
 export type GetPinsHandlerData = {
     body?: never;

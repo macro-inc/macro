@@ -1069,6 +1069,9 @@ async fn run_server() -> anyhow::Result<()> {
             repository: passwords_repository.clone(),
             provider: passwords_provider,
             availability: passwords_availability,
+            // No provisioner is composed yet: a missing namespace stays
+            // `vault_not_provisioned` and no setup state is recorded.
+            setup: Arc::new(passwords::outbound::vault_setup::NoVaultSetup),
         }),
         authorization: authorization_state.clone(),
     };
@@ -1091,6 +1094,10 @@ async fn run_server() -> anyhow::Result<()> {
     consumer_tracker.spawn(crate::passwords_cleanup::run(
         passwords_state.service.clone(),
         passwords_agent_state.service.clone(),
+        consumer_cancellation_token.clone(),
+    ));
+    consumer_tracker.spawn(crate::passwords_cleanup::resume_vault_setup(
+        passwords_state.service.clone(),
         consumer_cancellation_token.clone(),
     ));
     consumer_tracker.spawn(crate::released_attachments::run(

@@ -34,6 +34,8 @@ import type {
  * `unreachable`: no answer from Macro (offline, or a gateway that could not
  * reach it). `serviceUnavailable`: the service answered 503.
  * `notProvisioned`: the team's vault was never set up, so no action on its values can work.
+ * `settingUp`: the team's vault is still being set up after the request's own retries.
+ * `vaultFailed`: setting the team's vault up failed, or it went missing; only support can fix it.
  */
 export type PasswordFailure =
   | 'forbidden'
@@ -41,6 +43,8 @@ export type PasswordFailure =
   | 'unreachable'
   | 'serviceUnavailable'
   | 'notProvisioned'
+  | 'settingUp'
+  | 'vaultFailed'
   | 'failed';
 export type PasswordResult<T> = Promise<Result<T, PasswordFailure>>;
 export type PasswordSource = {

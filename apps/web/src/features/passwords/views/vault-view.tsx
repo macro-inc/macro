@@ -259,7 +259,9 @@ function ItemPane(props: {
                   props.vault.failure() === 'failed' ||
                   props.vault.failure() === 'unreachable' ||
                   props.vault.failure() === 'serviceUnavailable' ||
-                  props.vault.failure() === 'notProvisioned'
+                  props.vault.failure() === 'notProvisioned' ||
+                  props.vault.failure() === 'settingUp' ||
+                  props.vault.failure() === 'vaultFailed'
                 }
               >
                 <FailureNotice failure={props.vault.failure()} class="pt-3" />

@@ -453,7 +453,11 @@ impl AgentVaultService {
             {
                 return Err(AgentError::Conflict);
             }
-            self.vault.reconcile(team, id).await?;
+            // The agent's first write may set the team's vault up; a timed-out
+            // attempt releases the lease before it returns.
+            if let Err(error) = self.vault.reconcile(team, id).await {
+                return Err(PasswordService::settle(_lock, error).await.into());
+            }
             match self.vault.repository.get(team, id).await {
                 Ok(existing) => {
                     tracing::Span::current().record("replayed", true);

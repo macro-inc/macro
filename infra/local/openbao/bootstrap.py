@@ -11,7 +11,7 @@ from urllib.request import ProxyHandler, build_opener
 from uuid import UUID
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "openbao"))
-from openbao_provisioning import NoRedirect, OpenBaoClient, provision_team  # noqa: E402
+from openbao_provisioning import NoRedirect, OpenBaoClient, bootstrap_root, provision_team  # noqa: E402
 
 
 class LocalOpenBao(OpenBaoClient):
@@ -37,6 +37,9 @@ def main():
     parser.add_argument("--team-id", required=True, type=UUID, action="append", help="repeat for each team")
     parser.add_argument("--jwt-public-key", required=True, type=Path)
     parser.add_argument("--jwt-issuer", required=True)
+    parser.add_argument("--provisioner-public-key", type=Path,
+                        help="the scoped provisioner's PEM public key; without it no provisioner identity is set up")
+    parser.add_argument("--provisioner-issuer", help="the scoped provisioner's JWT issuer")
     arguments = parser.parse_args()
     token = os.environ.get("BAO_TOKEN")
     if arguments.init_file:
@@ -46,10 +49,13 @@ def main():
     if not token:
         parser.error("--init-file or BAO_TOKEN is required (local bootstrap identity only)")
     client = LocalOpenBao(arguments.address, token)
-    public_key = arguments.jwt_public_key.read_text()
+    public_keys = [arguments.jwt_public_key.read_text()]
+    provisioner_key = arguments.provisioner_public_key and arguments.provisioner_public_key.read_text()
+    if not bootstrap_root(client, public_keys, arguments.jwt_issuer, ["RS256"], provisioner_key, arguments.provisioner_issuer):
+        print("No --provisioner-public-key: skipped the scoped provisioner identity")
     for team_id in arguments.team_id:
-        namespace = provision_team(client, team_id, public_key, arguments.jwt_issuer)
-        print(f"Provisioned local Passwords namespace {namespace}")
+        result = provision_team(client, team_id, public_keys, arguments.jwt_issuer, ["RS256"], overwrite=True)
+        print(f"Provisioned local Passwords namespace {result.namespace}")
 
 
 if __name__ == "__main__":

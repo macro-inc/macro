@@ -7,7 +7,19 @@ impl PasswordService {
         let _lease = self.repository.lock(team, ItemId(Uuid::nil())).await?;
         self.availability.require_provider()?;
         self.repository.close_team(team).await?;
-        self.provider.purge_namespace(team).await?;
+        // A setup that never finished may not have created the namespace; the
+        // lease and the fence above keep it from being created now.
+        let unfinished =
+            self.repository.vault_setup(team).await? == Some(VaultSetupState::SettingUp);
+        if !unfinished
+            || self
+                .setup
+                .namespace_exists(team)
+                .await
+                .map_err(|_| Error::Unavailable)?
+        {
+            self.provider.purge_namespace(team).await?;
+        }
         self.repository.purge_team_metadata(team).await?;
         tracing::Span::current().record("outcome", "purged");
         Ok(())

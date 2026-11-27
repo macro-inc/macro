@@ -37,7 +37,7 @@ fn tested_inventory_matches_every_registered_public_method_including_head() {
         .map(|(method, path, _)| (method.to_owned(), path))
         .collect();
     assert_eq!(registered, tested);
-    assert_eq!(tested.len(), 35);
+    assert_eq!(tested.len(), 37);
 }
 
 #[tokio::test]
@@ -324,6 +324,7 @@ async fn import_enforces_body_and_batch_limits_without_echoing_payloads() {
     let app = router(PasswordRouterState {
         authorization: MacroAuthorizationState::new(Arc::new(Authorization)),
         service: Arc::new(PasswordService {
+            setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
             repository,
             provider: Arc::new(FakeProvider::new()),
             availability: Arc::new(FakeAvailability),
@@ -431,6 +432,7 @@ async fn import_accepts_and_audits_every_parser_format() {
     let app = router(PasswordRouterState {
         authorization: MacroAuthorizationState::new(Arc::new(Authorization)),
         service: Arc::new(PasswordService {
+            setup: Arc::new(crate::outbound::vault_setup::NoVaultSetup),
             repository: repository.clone(),
             provider: Arc::new(FakeProvider::new()),
             availability: Arc::new(FakeAvailability),

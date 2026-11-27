@@ -55,10 +55,13 @@ stack generator owns the container, instance volumes, and generated credentials.
 - [Passwords design](../../../docs/design/passwords.md)
 - [Running locally](../../../docs/development/running-locally.md)
 
-- Provision parent JWT mount `macro-lifecycle` locally, with one `team-<team-id>`
-  role bound to the lifecycle subject/audience and that exact team claim. Grant
-  only read/delete on the exact namespace path, no default policy, and 60-second
-  maximum token TTL. Runtime services never receive the local bootstrap token.
+- `bootstrap.py` runs `bootstrap_root` before the teams: parent JWT mount
+  `macro-lifecycle` with the templated `passwords-lifecycle` policy (read/delete
+  on `team-<team_id claim>` only), plus the scoped provisioner identity when
+  given `--provisioner-public-key`. Each team gets a `team-<team-id>` role bound
+  to the lifecycle subject/audience and that exact team claim, with
+  `user_claim=team_id`, no default policy, and 60-second maximum token TTL.
+  Runtime services never receive the local bootstrap token.
 - Provider cleanup tests delete their own synthetic namespaces and verify
   cross-team deletion denial, missing-role failure, and asynchronous completion.
 

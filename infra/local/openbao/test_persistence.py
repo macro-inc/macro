@@ -11,7 +11,7 @@ import unittest
 from uuid import uuid4
 
 from bootstrap import LocalOpenBao
-from openbao_provisioning import provision_team as bootstrap
+from openbao_provisioning import bootstrap_root, provision_team
 
 
 @unittest.skipUnless(os.environ.get("PASSWORDS_TEST_OPENBAO_PERSISTENCE"), "disposable Docker lifecycle test opt-in required")
@@ -64,7 +64,8 @@ class PersistenceIntegration(unittest.TestCase):
                     return LocalOpenBao("http://127.0.0.1:" + port, json.loads(credentials)["root_token"])
 
                 root = client()
-                bootstrap(root, team, public_key, "local-persistence")
+                bootstrap_root(root, [public_key], "local-persistence", ["RS256"])
+                provision_team(root, team, [public_key], "local-persistence", ["RS256"], overwrite=True)
                 for version in (0, 1):
                     root.request("POST", "passwords/data/item", {"options": {"cas": version}, "data": {"password": f"synthetic-{version}"}}, namespace)
                 root.request("POST", "totp/keys/item", {"key": "JBSWY3DPEHPK3PXP"}, namespace)
@@ -82,7 +83,8 @@ class PersistenceIntegration(unittest.TestCase):
                     self.assertEqual(root.request("GET", "passwords/data/item?version=1", namespace=namespace)["data"]["data"]["password"], "synthetic-0")
                     self.assertRegex(root.request("GET", "totp/code/item", namespace=namespace)["data"]["code"], r"^\d{6}$")
                     self.assertEqual(root.request("GET", "auth/macro/config", namespace=namespace)["data"]["bound_issuer"], "local-persistence")
-                    bootstrap(root, team, public_key, "local-persistence")
+                    bootstrap_root(root, [public_key], "local-persistence", ["RS256"])
+                    provision_team(root, team, [public_key], "local-persistence", ["RS256"], overwrite=True)
                     logs = run("logs")
                     for credential in [json.loads(credentials)["root_token"], *json.loads(credentials)["recovery_keys_b64"]]:
                         self.assertFalse(credential.encode() in logs, "Initialization credential appeared in container logs")

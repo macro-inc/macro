@@ -21,6 +21,19 @@ pub trait Repository: Send + Sync {
     /// Any retained item, intent, enrollment or namespace closure identity, including tombstones.
     async fn has_team_data(&self, team: TeamId) -> Result<bool, Error>;
 
+    /// Any item (tombstones included), write intent or TOTP enrollment: proof the
+    /// team's namespace existed, so a missing one is drift, never a first setup.
+    async fn has_vault_values(&self, team: TeamId) -> Result<bool, Error>;
+    /// The team's automatic vault setup state; `None` before the first request.
+    async fn vault_setup(&self, team: TeamId) -> Result<Option<VaultSetupState>, Error>;
+    /// Record a setup request with the current trace id; false when one already exists.
+    async fn request_vault_setup(&self, team: TeamId) -> Result<bool, Error>;
+    /// Record a setup outcome. `SettingUp` counts a failed attempt and schedules
+    /// the next one with backoff; the other states are final for the worker.
+    async fn record_vault_setup(&self, team: TeamId, state: VaultSetupState) -> Result<(), Error>;
+    /// A bounded batch of live, unclosed teams whose setup attempt is due.
+    async fn vault_setup_due(&self) -> Result<Vec<DueVaultSetup>, Error>;
+
     /// Durably close a team vault before provider deletion; future human admissions fail.
     async fn close_team(&self, team: TeamId) -> Result<(), Error>;
     /// Remove team vault metadata only after acknowledged namespace erasure.
@@ -218,6 +231,42 @@ pub trait SecretProvider: Send + Sync {
     async fn delete_totp(&self, team: TeamId, key_id: TotpKeyId) -> Result<(), Error>;
     /// Resolve the current confidential verification code.
     async fn totp(&self, team: TeamId, key_id: TotpKeyId) -> Result<TotpCode, Error>;
+}
+
+/// Creates a team's vault when it is missing. DSS is its only caller, after
+/// admission, the closed-team fence check and under the team lease.
+#[async_trait]
+pub trait VaultSetup: Send + Sync {
+    /// Without a provisioner a missing namespace stays `NotProvisioned`.
+    fn configured(&self) -> bool;
+    /// Create whatever of the team's vault is missing and verify the rest; never
+    /// overwrite an existing piece. Gives up within `deadline`.
+    async fn provision(
+        &self,
+        team: TeamId,
+        deadline: std::time::Duration,
+    ) -> Result<Provisioned, SetupError>;
+    /// Read-only: whether any of the team's namespace exists. Purge uses it to
+    /// skip erasing a namespace a setup never created.
+    async fn namespace_exists(&self, team: TeamId) -> Result<bool, SetupError>;
+}
+
+/// A vault the provisioner confirmed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Provisioned {
+    /// Whether this call created anything.
+    pub created: bool,
+}
+
+/// Why provisioning did not confirm the vault.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum SetupError {
+    /// Part of the vault exists with a configuration setup must not change.
+    #[error("team vault configuration is incompatible")]
+    Incompatible,
+    /// The provisioner failed, timed out or is unreachable; retrying may help.
+    #[error("team vault provisioner unavailable")]
+    Unavailable,
 }
 
 /// A scope-bound team-vault lock; releasing the guard releases its lease.

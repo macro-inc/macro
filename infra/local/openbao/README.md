@@ -144,8 +144,12 @@ Upstream references: [namespaces](https://openbao.org/docs/concepts/namespaces/)
 
 The local bootstrap also provisions JWT auth at `macro-lifecycle` in the parent
 namespace. Role `team-<team-id>` binds lifecycle subject/audience and that team
-claim, with read/delete limited to `sys/namespaces/team-<team-id>` and a 60-second
-maximum TTL. It has no default policy. Services sign short-lived JWTs; the local
+claim (`user_claim=team_id`). The shared templated `passwords-lifecycle` policy
+limits its token to read/delete on `sys/namespaces/team-<team_id claim>`, with a
+60-second maximum TTL and no default policy. `bootstrap.py` sets up these
+root-level pieces with `bootstrap_root` before the teams; pass
+`--provisioner-public-key` and `--provisioner-issuer` to also create the scoped
+provisioner identity (`infra/openbao/README.md`). Services sign short-lived JWTs; the local
 bootstrap token remains local and is never used at runtime. Hosted environments
 require equivalent role provisioning before enabling namespace cleanup.
 

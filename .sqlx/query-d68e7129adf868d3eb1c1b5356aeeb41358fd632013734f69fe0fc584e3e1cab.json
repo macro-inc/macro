@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM password_vault_setup WHERE team_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d68e7129adf868d3eb1c1b5356aeeb41358fd632013734f69fe0fc584e3e1cab"
+}

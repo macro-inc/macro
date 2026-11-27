@@ -101,10 +101,31 @@ Do not add plaintext values to any metadata record, errors or tracing fields.
   eviction. `passwords.openbao.authenticate` spans mark real logins only;
   operation spans carry `cache_hit` and `token_retry`. Lifecycle (namespace
   purge) logins are never cached.
-- Nothing here creates namespaces. A missing one at team login (and only there) is
-  `Error::NotProvisioned`: HTTP 409 `vault_not_provisioned` (agent routes too), import item code
-  `vault_not_provisioned`, authenticate span `outcome=not_provisioned`. Locally,
-  `just passwords_provision` creates them (see `infra/local/openbao/README.md`).
+- A missing namespace at team login (and only there) is `Error::NotProvisioned`,
+  authenticate span `outcome=not_provisioned`. `reconcile`, every write's first
+  provider call, hands it to `domain/service/vault_setup.rs` behind the
+  `VaultSetup` port; DSS is the provisioner's only caller.
+  - No provisioner (`NoVaultSetup`, today's composition): it stays 409
+    `vault_not_provisioned` and nothing is recorded. Locally,
+    `just passwords_provision` creates namespaces (`infra/local/openbao/README.md`).
+  - The team's first write records `password_vault_setup` = `setting_up` and asks
+    the provisioner for up to 8 s under the team lease, then the same save goes on.
+    A timeout answers 409 `vault_setting_up` after releasing the lease explicitly
+    (a dropped lease waits for its connection's queued rollback); later writes get
+    it at once and the DSS resume worker (`resume_vault_setup`, 5 s, row backoff)
+    finishes. `vault_setup_failed`: an incompatible existing piece. Never retried.
+  - Drift: a missing namespace for a `ready` row, or for a team with items,
+    intents or enrollments (`has_vault_values`; folders don't count), is
+    `vault_needs_recovery` and is never recreated. Closed teams are never set up.
+  - The row stores the requesting write's trace id (opaque); the resume span
+    records it as `requested_trace_id`, so a worker-finished setup is findable
+    from the write that asked for it.
+  - The row holds no item, body or credential. It counts in `has_team_data`, so
+    team deletion purges; purge skips erasure only for an unfinished setup whose
+    namespace the provisioner reports absent.
+  - `GET /passwords/teams/{team}/vault` reports readiness to members
+    (`not_started|setting_up|ready|failed{incompatible|needs_recovery}`) and
+    never starts a setup.
 
 Run the ignored Rust provider and import tests against a disposable local OpenBao with
 `PASSWORDS_TEST_OPENBAO_ADDRESS`, `PASSWORDS_TEST_OPENBAO_SIGNING_KEY` (private

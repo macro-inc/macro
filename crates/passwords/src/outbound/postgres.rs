@@ -38,10 +38,10 @@ impl PgRepository {
             )),
         })
     }
-    /// Whether this namespace has any retained metadata or closure fence.
+    /// Whether this namespace has any retained metadata, setup request or closure fence.
     // Order the one-row audit lookup so absent teams cannot scan the growing activity table.
     pub async fn has_team_data(&self, team: TeamId) -> Result<bool, Error> {
-        sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM password_item_entities WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_write_intents WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_folders WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_totp_enrollments WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_team_lifecycle WHERE team_id=$1) OR (SELECT id FROM password_import_activity WHERE team_id=$1 ORDER BY id LIMIT 1) IS NOT NULL AS "present!""#,team.0)
+        sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM password_item_entities WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_write_intents WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_folders WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_totp_enrollments WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_team_lifecycle WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_vault_setup WHERE team_id=$1) OR (SELECT id FROM password_import_activity WHERE team_id=$1 ORDER BY id LIMIT 1) IS NOT NULL AS "present!""#,team.0)
             .fetch_one(&self.pool).await.map_err(database_error)
     }
 
@@ -178,6 +178,16 @@ fn trace_id() -> String {
         .to_string()
 }
 
+/// The current trace id, or none outside a sampled trace.
+fn requesting_trace_id() -> Option<String> {
+    let context = tracing::Span::current().context();
+    let span = context.span();
+    let span_context = span.span_context();
+    span_context
+        .is_valid()
+        .then(|| span_context.trace_id().to_string())
+}
+
 struct PgItemLock {
     _admission: OwnedSemaphorePermit,
     _transaction: Transaction<'static, Postgres>,
@@ -187,6 +197,24 @@ struct PgItemLock {
 impl ItemLock for PgItemLock {
     async fn release(self: Box<Self>) -> Result<(), Error> {
         self._transaction.rollback().await.map_err(database_error)
+    }
+}
+
+fn setup_state(state: &str) -> Result<VaultSetupState, Error> {
+    match state {
+        "setting_up" => Ok(VaultSetupState::SettingUp),
+        "ready" => Ok(VaultSetupState::Ready),
+        "failed" => Ok(VaultSetupState::Failed),
+        "needs_recovery" => Ok(VaultSetupState::NeedsRecovery),
+        _ => Err(Error::Unavailable),
+    }
+}
+fn setup_state_name(state: VaultSetupState) -> &'static str {
+    match state {
+        VaultSetupState::SettingUp => "setting_up",
+        VaultSetupState::Ready => "ready",
+        VaultSetupState::Failed => "failed",
+        VaultSetupState::NeedsRecovery => "needs_recovery",
     }
 }
 
@@ -243,6 +271,81 @@ impl Repository for PgRepository {
         PgRepository::has_team_data(self, team).await
     }
 
+    async fn has_vault_values(&self, team: TeamId) -> Result<bool, Error> {
+        sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM password_item_entities WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_write_intents WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_totp_enrollments WHERE team_id=$1) AS "present!""#,team.0)
+            .fetch_one(&self.pool).await.map_err(database_error)
+    }
+    async fn vault_setup(&self, team: TeamId) -> Result<Option<VaultSetupState>, Error> {
+        let state = sqlx::query_scalar!(
+            "SELECT state FROM password_vault_setup WHERE team_id=$1",
+            team.0
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(database_error)?;
+        state.map(|state| setup_state(&state)).transpose()
+    }
+    async fn request_vault_setup(&self, team: TeamId) -> Result<bool, Error> {
+        let inserted = sqlx::query!(
+            "INSERT INTO password_vault_setup(team_id, state, requested_trace_id) VALUES($1, 'setting_up', $2) ON CONFLICT(team_id) DO NOTHING",
+            team.0,
+            requesting_trace_id()
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(database_error)?;
+        Ok(inserted.rows_affected() == 1)
+    }
+    async fn record_vault_setup(&self, team: TeamId, state: VaultSetupState) -> Result<(), Error> {
+        match state {
+            // A failed attempt: retry after 5 s, doubling up to 10 minutes.
+            VaultSetupState::SettingUp => sqlx::query!(
+                "UPDATE password_vault_setup SET attempts=attempts+1, next_attempt_at=now()+LEAST(interval '10 minutes', interval '5 seconds'*power(2, LEAST(attempts, 10))), updated_at=now() WHERE team_id=$1 AND state='setting_up'",
+                team.0
+            )
+            .execute(&self.pool)
+            .await,
+            // Drift may have no row yet; never record one for a closed team,
+            // whose purge may already have removed it.
+            VaultSetupState::NeedsRecovery => sqlx::query!(
+                "INSERT INTO password_vault_setup(team_id, state) SELECT $1, 'needs_recovery' WHERE NOT EXISTS(SELECT 1 FROM password_team_lifecycle WHERE team_id=$1) ON CONFLICT(team_id) DO UPDATE SET state='needs_recovery', updated_at=now()",
+                team.0
+            )
+            .execute(&self.pool)
+            .await,
+            // An attempt's outcome finishes only an open request: a purge that
+            // removed the row, or another outcome, wins.
+            final_state @ (VaultSetupState::Ready | VaultSetupState::Failed) => sqlx::query!(
+                "UPDATE password_vault_setup SET state=$2, updated_at=now() WHERE team_id=$1 AND state='setting_up'",
+                team.0,
+                setup_state_name(final_state)
+            )
+            .execute(&self.pool)
+            .await,
+        }
+        .map_err(database_error)?;
+        Ok(())
+    }
+    async fn vault_setup_due(&self) -> Result<Vec<DueVaultSetup>, Error> {
+        let due = sqlx::query!(
+            r#"SELECT setup.team_id, setup.requested_trace_id FROM password_vault_setup setup
+               WHERE setup.state='setting_up' AND setup.next_attempt_at<=now()
+                 AND EXISTS(SELECT 1 FROM team WHERE team.id=setup.team_id)
+                 AND NOT EXISTS(SELECT 1 FROM password_team_lifecycle closed WHERE closed.team_id=setup.team_id)
+               ORDER BY setup.next_attempt_at LIMIT 50"#
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(database_error)?;
+        Ok(due
+            .into_iter()
+            .map(|row| DueVaultSetup {
+                team: TeamId(row.team_id),
+                requested_trace_id: row.requested_trace_id,
+            })
+            .collect())
+    }
+
     async fn close_team(&self, team: TeamId) -> Result<(), Error> {
         sqlx::query!("INSERT INTO password_team_lifecycle(team_id) VALUES($1) ON CONFLICT(team_id) DO NOTHING", team.0).execute(&self.pool).await.map_err(|_|Error::Unavailable)?;
         Ok(())
@@ -274,6 +377,10 @@ impl Repository for PgRepository {
         .execute(&mut *transaction)
         .await
         .map_err(database_error)?;
+        sqlx::query!("DELETE FROM password_vault_setup WHERE team_id=$1", team.0)
+            .execute(&mut *transaction)
+            .await
+            .map_err(database_error)?;
         transaction.commit().await.map_err(database_error)
     }
     async fn item_cleanup_due(&self) -> Result<Vec<(TeamId, ItemId)>, Error> {

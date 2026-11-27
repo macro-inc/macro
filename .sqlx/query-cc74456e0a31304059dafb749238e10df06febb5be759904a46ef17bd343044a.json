@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO password_vault_setup(team_id, state, requested_trace_id) VALUES($1, 'setting_up', $2) ON CONFLICT(team_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cc74456e0a31304059dafb749238e10df06febb5be759904a46ef17bd343044a"
+}

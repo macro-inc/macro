@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM password_item_entities WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_write_intents WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_totp_enrollments WHERE team_id=$1) AS \"present!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "present!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ff94d5906ab6b9804cf5d62e4b07dcd12aec037b2c60f6239d2d5aa31cb8b6fb"
+}

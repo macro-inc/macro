@@ -15,6 +15,8 @@ pub struct PasswordService {
     pub provider: Arc<dyn SecretProvider>,
     /// Per-user rollout and explicit provider availability.
     pub availability: Arc<dyn Availability>,
+    /// Automatic setup of a team's missing vault.
+    pub setup: Arc<dyn VaultSetup>,
 }
 impl PasswordService {
     fn view(mut record: Record, actor: &Actor, admin: bool, favorite: bool) -> ItemView {
@@ -158,7 +160,18 @@ impl PasswordService {
     }
     /// A lost provider response can be reconciled from its operation UUID and durable metadata intent.
     /// Every caller holds the same distributed item lock throughout this and the protected action.
+    /// It is every write's first provider call, so a missing team vault is set up here.
     pub(crate) async fn reconcile(&self, team: TeamId, item: ItemId) -> Result<(), Error> {
+        match self.reconcile_values(team, item).await {
+            Err(Error::NotProvisioned) => {
+                self.ensure_vault(team).await?;
+                self.reconcile_values(team, item).await
+            }
+            Err(Error::Unavailable) => Err(self.while_setting_up(team, Error::Unavailable).await),
+            result => result,
+        }
+    }
+    async fn reconcile_values(&self, team: TeamId, item: ItemId) -> Result<(), Error> {
         let current = self.repository.get(team, item).await;
         let current_record = current.as_ref().ok().cloned();
         if matches!(&current,Ok(record) if record.deleting) {
@@ -350,12 +363,16 @@ impl PasswordService {
         team: TeamId,
         command: WriteItem,
     ) -> Result<ItemView, Error> {
-        let _lock = self
+        let lock = self
             .admit(actor, team, ItemId(command.operation_id))
             .await?;
-        self.create_under_lease(actor, team, command, _lock.as_ref())
+        match self
+            .create_under_lease(actor, team, command, lock.as_ref())
             .await
-            .map(|(item, _)| item)
+        {
+            Ok((item, _)) => Ok(item),
+            Err(error) => Err(Self::settle(lock, error).await),
+        }
     }
     #[tracing::instrument(skip_all,err,name="passwords.create.commit",fields(team_id=%team.0))]
     async fn create_under_lease(
@@ -876,5 +893,7 @@ pub(crate) mod test;
 mod review_test;
 
 mod lifecycle;
+
+mod vault_setup;
 
 mod import;

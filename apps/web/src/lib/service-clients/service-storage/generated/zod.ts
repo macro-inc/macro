@@ -82012,6 +82012,9 @@ export const passwordsImportBatchResponse = zod
                     'busy',
                     'vault_unavailable',
                     'vault_not_provisioned',
+                    'vault_setting_up',
+                    'vault_setup_failed',
+                    'vault_needs_recovery',
                   ])
                   .describe('Closed, sanitized per-item failure categories.'),
               ])
@@ -83358,6 +83361,30 @@ export const passwordsCopyUsernameResponse = zod
   .describe(
     'Current account identifier, without confidential credentials or custom fields.'
   );
+
+/**
+ * @summary How far automatic setup of the team's vault has come. Read-only: it never
+starts a setup; the team's first save does.
+ */
+export const passwordsVaultReadinessParams = zod.object({
+  team: zod.uuid(),
+});
+
+export const passwordsVaultReadinessResponse = zod
+  .object({
+    reason: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['incompatible', 'needs_recovery'])
+          .describe("Why a team's vault setup failed."),
+      ])
+      .optional(),
+    state: zod
+      .enum(['not_started', 'setting_up', 'ready', 'failed'])
+      .describe("Setup progress of a team's vault."),
+  })
+  .describe("A team's vault readiness, as the API reports it.");
 
 /**
  * @summary Gets the users pinned items

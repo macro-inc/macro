@@ -21,4 +21,7 @@ export const PasswordErrorCode = {
   folder_missing: 'folder_missing',
   vault_unavailable: 'vault_unavailable',
   vault_not_provisioned: 'vault_not_provisioned',
+  vault_setting_up: 'vault_setting_up',
+  vault_setup_failed: 'vault_setup_failed',
+  vault_needs_recovery: 'vault_needs_recovery',
 } as const;

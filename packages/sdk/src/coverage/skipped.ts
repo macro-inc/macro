@@ -473,6 +473,7 @@ export const storageExcluded = [
   'passwordsTotp',
   'passwordsUpdate',
   'passwordsUsername',
+  'passwordsVaultReadiness',
   'patchViewHandler',
   'postItemsSoup',
   'postItemsSoupAstGrouped',

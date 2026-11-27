@@ -43,6 +43,10 @@ export default {
   serviceUnavailable:
     'Passwords is temporarily unavailable. Try again in a minute.',
   vaultNotProvisioned: "This team's vault isn't set up yet.",
+  vaultSettingUp:
+    "This team's vault is still being set up. Your changes haven't been saved; try again in a moment.",
+  vaultFailed:
+    "This team's vault can't be used right now. Contact support; your changes haven't been saved.",
   retry: 'Retry',
   name: 'Name',
   kind: 'Type',
