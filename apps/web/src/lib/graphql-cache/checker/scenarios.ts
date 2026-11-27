@@ -186,6 +186,27 @@ export const SCRIPTS: ScriptedScenario[] = [
       { waitMs: 120_000 },
     ],
   },
+  // A refused write and one put back for a retry settle in the old engine too.
+  {
+    name: 'a write the server refused is rolled back as a newer build opens',
+    pages: [1, 1],
+    script: [
+      { waitMs: 5_000 },
+      { send: 'tab2', settle: 'rollback' },
+      { kind: 'open-newer' },
+      { waitMs: 120_000 },
+    ],
+  },
+  {
+    name: 'a write put back for a retry as a newer build opens',
+    pages: [1, 1],
+    script: [
+      { waitMs: 5_000 },
+      { send: 'tab1', settle: 'defer' },
+      { kind: 'open-newer' },
+      { waitMs: 120_000 },
+    ],
+  },
   // Just inside `SETTLEMENT_WAIT_MS`, and the newer build still gets its cache.
   {
     name: 'a write sent as a newer build opens is answered a minute later',

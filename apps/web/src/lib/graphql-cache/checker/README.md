@@ -31,10 +31,15 @@ skipped, so a fault in one of those heartbeats goes unseen), and each page makes
 one more draft and read. The properties are checked last.
 
 A script can also have a page send the head of the queue (`{ send: page }`):
-claim it, wait `SERVER_MS` for the server, and settle it through the host it
-claimed it from, as the queue runner does. The fake engine keeps the claim's
-lease and takes a head out of the queue only for a settlement under it. The
-explored scenarios send nothing.
+claim it, wait `SERVER_MS` (or the step's `serverMs`) for the server, and
+commit, roll back or defer it (`settle`) through the host it claimed it from,
+as the queue runner does. The fake engine keeps the claim's lease, writes a
+settlement only under it, and records each lease it wrote for; S7 compares
+that with what the host answered, and S8 catches a head still queued, or sent
+again, after an answer that was not a deferral. The fake engine's enqueue
+claims nothing and its leases do not expire, so a head an enqueue claims
+during the wait is covered by the coordinator's unit tests only. The explored
+scenarios send nothing.
 
 ## What a bound covers
 

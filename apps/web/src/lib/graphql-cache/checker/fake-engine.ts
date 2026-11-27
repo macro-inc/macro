@@ -58,8 +58,10 @@ export class DurableStorage {
   readonly openConflicts: string[] = [];
   /** Every mutation that reached a durable queue, with where it went. */
   readonly admitted = new Map<string, string>();
-  /** Mutations an engine settled, and so took out of the queue. */
+  /** Mutations an engine committed or rolled back, so took out of the queue. */
   readonly settled = new Set<string>();
+  /** Each lease an engine wrote a settlement for, as `uuid@generation`. */
+  readonly writtenLeases = new Set<string>();
   /** How many leases have been handed out, for each claim's generation. */
   leases = 0;
   /** The tick of each mutation's wipe, for those whose queue could not be read. */
@@ -305,6 +307,9 @@ export class FakeEngineCore {
           if (written) {
             this.database().queue.delete(written.uuid);
             this.storage.settled.add(written.uuid);
+            this.storage.writtenLeases.add(
+              `${written.uuid}@${settlement.leaseGeneration}`
+            );
           }
           const kind =
             settlement.kind === 'commit-optimistic-write'
@@ -323,7 +328,12 @@ export class FakeEngineCore {
       )
       .with({ kind: 'defer-optimistic-write' }, (settlement) => {
         const deferred = this.leased(settlement);
-        if (deferred) deferred.lease = undefined;
+        if (deferred) {
+          deferred.lease = undefined;
+          this.storage.writtenLeases.add(
+            `${deferred.uuid}@${settlement.leaseGeneration}`
+          );
+        }
         return { kind: 'deferred' };
       })
       // The requests the handover does not depend on.

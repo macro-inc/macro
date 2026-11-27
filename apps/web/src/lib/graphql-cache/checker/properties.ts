@@ -208,9 +208,12 @@ function needlessWipes(world: World): Violation[] {
     }));
 }
 
+/** What a host answers when an engine wrote the settlement it was sent. */
+const WRITTEN = new Set(['committed', 'rolled-back', 'deferred']);
+
 function falseAcks(world: World): Violation[] {
   return world.deliveries
-    .filter(({ settled, written }) => settled === 'committed' && !written)
+    .filter(({ settled, written }) => WRITTEN.has(settled ?? '') && !written)
     .map(({ page, uuid }) => ({
       symptom: 'S7:settlement acknowledged, nothing written',
       detail: `${page} ${uuid}`,
@@ -219,12 +222,28 @@ function falseAcks(world: World): Violation[] {
 
 function sentAgain(world: World): Violation[] {
   const { queue } = world.storage.database(getOrCreateCacheScope());
-  return world.deliveries
-    .filter(({ page, uuid }) => queue.has(uuid) && !exempt(pageOf(world, page)))
+  const answered = (delivery: (typeof world.deliveries)[number]) =>
+    delivery.settled !== 'deferred' && !exempt(pageOf(world, delivery.page));
+  const queued = world.deliveries
+    .filter((delivery) => queue.has(delivery.uuid) && answered(delivery))
     .map(({ page, uuid, settled }) => ({
       symptom: `S8:answered head still queued (${settled ?? 'unsettled'})`,
       detail: `${page} ${uuid}`,
     }));
+  // Settled or not, a head is not sent once more after an answer was kept.
+  const twice = world.deliveries
+    .filter(
+      (delivery, index) =>
+        answered(delivery) &&
+        world.deliveries
+          .slice(index + 1)
+          .some(({ uuid }) => uuid === delivery.uuid)
+    )
+    .map(({ page, uuid, settled }) => ({
+      symptom: `S8:answered head sent again (${settled ?? 'unsettled'})`,
+      detail: `${page} ${uuid}`,
+    }));
+  return [...queued, ...twice];
 }
 
 function olderOpens(world: World): Violation[] {

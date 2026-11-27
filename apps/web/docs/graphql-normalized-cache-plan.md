@@ -609,15 +609,22 @@ draining it, answers:
 - **Yield**, if the requester is strictly newer. Every tab registered there gets
   `cache-superseded`, and later requests are refused with the
   `cache-superseded` error code rather than `owner-lock-unavailable`. Each page retires its host to the network. A
-  queue head a page claimed is on its way to the server, and only this engine
-  can settle it: the coordinator keeps the engine serving until every claimed
-  head is settled, its page has gone, or `SETTLEMENT_WAIT_MS` (70 s, past the
-  runner's 60 s request timeout) has passed, and claims no new head meanwhile.
-  Otherwise the answer would reach a retired host and a page of the newer build
-  would send the head again. A retired host refuses a settlement
+  queue head a page claimed is on its way to the server, and only this build
+  can settle it, or a page of the newer build sends it again. So the
+  coordinator answers `yield` but keeps an engine serving this build until
+  every claimed head is settled (a written commit, rollback or deferral under
+  its lease, or a `clear`), no claim or enqueue is still on its way to the
+  engine, and no claiming page is left; or until `SETTLEMENT_WAIT_MS` (70 s,
+  past the runner's 60 s request timeout) has passed, from the takeover and
+  again from each claim the wait sees, up to `SETTLEMENT_WAIT_LIMIT_MS`
+  (140 s). It claims no new head meanwhile. An owner that drains or leaves
+  during the wait is replaced as usual, unless the replacement would wipe the
+  database. On the page, a head claimed before retirement settles through the
+  host that claimed it (`createRetirableCacheHost` pins it until the head
+  settles or its lease ends), and a retired host refuses any other settlement
   (`CacheSettlementUnwrittenError`) rather than acknowledging one it did not
-  write, so a head still out after the wait stays queued and is sent again,
-  at least once as on any lost page. A
+  write. A head still out after the wait, or whose coordinator restarted, stays
+  queued and is sent again, at least once as on any lost page. A
   running engine is then drained, within the same limit as any drain (15 s), so
   what it was given settles; it then releases the owner lock. An enqueue that
   was already sent and still has no answer is reported as uncertain rather than

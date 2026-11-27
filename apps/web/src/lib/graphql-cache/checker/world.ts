@@ -64,6 +64,9 @@ export type CallOutcome = {
   moot?: boolean;
 };
 
+/** What a page does with the server's answer to a head it sent. */
+export type Settle = 'commit' | 'rollback' | 'defer';
+
 /** A queue head a page sent to the server, and what its cache said of it. */
 export type Delivery = {
   page: string;
@@ -71,7 +74,7 @@ export type Delivery = {
   sentAt: number;
   /** What the host answered its settlement with. */
   settled?: string;
-  /** Whether an engine took it out of the queue by then. */
+  /** Whether an engine wrote that settlement for this lease by then. */
   written?: boolean;
 };
 
@@ -485,7 +488,7 @@ export class Page {
    * through the host it claimed it from, as `settle` does however long the
    * server took.
    */
-  send(serverMs: number): void {
+  send(serverMs: number, settle: Settle): void {
     const host = this.host;
     if (!host || host.disabled) return;
     const call: CallOutcome = {
@@ -495,10 +498,14 @@ export class Page {
       issuedTick: this.world.sim.nextTick(),
     };
     this.world.calls.push(call);
-    this.track(call, () => this.sendHead(host, serverMs));
+    this.track(call, () => this.sendHead(host, serverMs, settle));
   }
 
-  private async sendHead(host: CacheHost, serverMs: number): Promise<void> {
+  private async sendHead(
+    host: CacheHost,
+    serverMs: number,
+    settle: Settle
+  ): Promise<void> {
     const owner = `exchange-live:${this.id}`;
     const now = this.world.sim.now;
     const head = await host.claimNextMutation(owner, now, now + LEASE_MS);
@@ -512,23 +519,37 @@ export class Page {
     await new Promise<void>((answered) => {
       this.world.sim.setTimeout(answered, serverMs);
     });
-    const settled = await host.commitOptimisticWrite(
-      head.transactionId,
-      { owner, generation: head.leaseGeneration },
-      {
-        generation: '00000000-0000-4000-8000-000000000098',
-        query: DRAFT_MUTATION,
-        variables: draftVariables(head.uuid),
-        data: {
-          saveEmailDraft: {
-            __typename: 'SaveEmailDraftPayload',
-            draftId: head.uuid,
+    const lease = { owner, generation: head.leaseGeneration };
+    const settled = await match(settle)
+      .with('commit', () =>
+        host.commitOptimisticWrite(head.transactionId, lease, {
+          generation: '00000000-0000-4000-8000-000000000098',
+          query: DRAFT_MUTATION,
+          variables: draftVariables(head.uuid),
+          data: {
+            saveEmailDraft: {
+              __typename: 'SaveEmailDraftPayload',
+              draftId: head.uuid,
+            },
           },
-        },
-      }
-    );
+        })
+      )
+      .with('rollback', () =>
+        host.rollbackOptimisticWrite(head.transactionId, lease, 'refused')
+      )
+      .with('defer', () =>
+        host.deferOptimisticWrite(
+          head.transactionId,
+          lease,
+          this.world.sim.now + 1_000,
+          'the server did not answer'
+        )
+      )
+      .exhaustive();
     delivery.settled = settled.kind;
-    delivery.written = this.world.storage.settled.has(head.uuid);
+    delivery.written = this.world.storage.writtenLeases.has(
+      `${head.uuid}@${head.leaseGeneration}`
+    );
   }
 
   private track(call: CallOutcome, request: () => Promise<unknown>): void {
@@ -1151,10 +1172,14 @@ export class World {
   }
 
   /** A page sends the head of the queue (a scripted step). */
-  async send(id: string, serverMs = SERVER_MS): Promise<void> {
+  async send(
+    id: string,
+    serverMs = SERVER_MS,
+    settle: Settle = 'commit'
+  ): Promise<void> {
     this.steps.push({ kind: 'fault', fault: `send:${id}` });
     const page = this.pages.find((candidate) => candidate.id === id);
-    if (page) this.sim.runIn(page.context, () => page.send(serverMs));
+    if (page) this.sim.runIn(page.context, () => page.send(serverMs, settle));
     await this.sim.settle();
   }
 

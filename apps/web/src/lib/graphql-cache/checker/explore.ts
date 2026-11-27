@@ -11,7 +11,13 @@
  */
 import { check, QUIET_MS } from './properties';
 import { isHeartbeat } from './sim';
-import { type Delivery, type Fault, type Scenario, World } from './world';
+import {
+  type Delivery,
+  type Fault,
+  type Scenario,
+  type Settle,
+  World,
+} from './world';
 
 export type Bound = {
   maxFaults: number;
@@ -370,7 +376,7 @@ export async function explore(
 export type ScriptStep =
   | Fault
   | { waitMs: number }
-  | { send: string; serverMs?: number };
+  | { send: string; serverMs?: number; settle?: Settle };
 
 /**
  * Runs a fixed fault sequence on the default schedule, for defects that need
@@ -388,7 +394,8 @@ export async function runScript(
     for (const step of script) {
       if ('waitMs' in step)
         settled = (await quiesce(world, step.waitMs)) && settled;
-      else if ('send' in step) await world.send(step.send, step.serverMs);
+      else if ('send' in step)
+        await world.send(step.send, step.serverMs, step.settle);
       else await world.apply(step);
     }
     settled = (await quiet(world)) && settled;
