@@ -107,6 +107,17 @@ because telemetry failed. The existing ten-second invocation headroom covers
 this flush. The extension must be checked live after an approved deployment;
 unit tests or a green Lambda result do not prove Datadog received its traces.
 
+Where the stack's ECS services also send to Grafana (`grafanaTelemetryEnabled`
+in `infra/packages/shared/src/grafana_telemetry.ts`), the function also runs the
+pinned OpenTelemetry Collector layer, listening on `127.0.0.1:14317`, and the
+entrypoint sends it a copy of every span (`GRAFANA_OTLP_ENDPOINT`). The
+collector reads the shared ingest token from Secrets Manager when it starts; if
+it can't, the function's init fails and the sweep with it, so check the
+`notification_retention_handler-errors` alarm after the first deploy. Each copy
+is one export with a 1.5-second limit and no retry; Datadog's export is
+unaffected. The collector carries only spans; logs go through the CloudWatch
+log subscriptions.
+
 DSS notification consumers intentionally assign all partitions from latest,
 without committing offsets or joining durable consumer groups. Consequently MSK
 `MaxOffsetLag` is absent for `macro.notifications`; don't change delivery semantics

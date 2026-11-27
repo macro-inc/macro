@@ -22,6 +22,11 @@ From `infra/`:
 - The retention function needs its pinned x86_64 Datadog extension to receive
   gRPC OTLP; the ECS sidecar default alone does not work in Lambda.
 - Pass the existing Datadog key ARN, not its value, and scope the role to that key.
+- Where `grafanaTelemetryEnabled`, the function also runs the pinned
+  OpenTelemetry Collector layer on `127.0.0.1:14317` for Grafana's copy of its
+  spans. Its config is the `GRAFANA_COLLECTOR_CONFIG` env var, with a reference
+  to the ingest token's ARN, never the token. The collector failing to start
+  fails the function's init.
 - Extension log shipping is off: the shared Lambda helper already forwards
   CloudWatch logs through Firehose. Monitoring resources deploy separately from
   `infra/stacks/monitoring`, not automatically with this service.

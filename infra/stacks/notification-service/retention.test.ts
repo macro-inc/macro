@@ -6,6 +6,8 @@ import { parse } from 'yaml';
 const resources: pulumi.runtime.MockResourceArgs[] = [];
 const secretArn =
   'arn:aws:secretsmanager:us-east-1:123456789012:secret:datadog-test';
+const grafanaSecretArn =
+  'arn:aws:secretsmanager:us-east-1:123456789012:secret:observability/dev-ingest';
 
 beforeAll(async () => {
   pulumi.runtime.setAllConfig({ 'aws:region': 'us-east-1' });
@@ -32,6 +34,8 @@ beforeAll(async () => {
   );
   mock.module('../../packages/shared', () => ({
     stack: 'dev',
+    grafanaTelemetryEnabled: true,
+    grafanaIngestSecretArn: pulumi.output(grafanaSecretArn),
     CLOUD_TRAIL_SNS_TOPIC_ARN: 'arn:aws:sns:us-east-1:123456789012:alerts',
     CLOUDWATCH_KINESIS_STREAM_ROLE_ARN: 'arn:aws:iam::123456789012:role/logs',
     DATADOG_KINESIS_FIREHOSE_STREAM_ARN:
@@ -85,6 +89,7 @@ test('retention has a pinned OTLP collector and consistent service identity', ()
   const fn = resource('aws:lambda/function:Function').inputs;
   expect(fn.layers).toEqual([
     'arn:aws:lambda:us-east-1:464622532012:layer:Datadog-Extension:101',
+    'arn:aws:lambda:us-east-1:184161586896:layer:opentelemetry-collector-amd64-0_24_0:1',
   ]);
   const environment = pulumi.runtime.unwrapRpcSecret(fn.environment);
   expect(environment.variables).toMatchObject({
@@ -108,6 +113,42 @@ test('extension access is scoped to the existing Datadog key, not all secrets', 
       Effect: 'Allow',
       Action: 'secretsmanager:GetSecretValue',
       Resource: secretArn,
+    },
+  ]);
+});
+
+test('spans also go to Grafana through a collector that reads its own key', () => {
+  const fn = resource('aws:lambda/function:Function').inputs;
+  const { variables } = pulumi.runtime.unwrapRpcSecret(fn.environment);
+  // The entrypoint's second exporter, to the collector, not Datadog's.
+  expect(variables.GRAFANA_OTLP_ENDPOINT).toBe('http://127.0.0.1:14317');
+  expect(variables.DD_OTLP_CONFIG_RECEIVER_PROTOCOLS_GRPC_ENDPOINT).toBe(
+    '127.0.0.1:4317'
+  );
+  expect(variables.OPENTELEMETRY_COLLECTOR_CONFIG_URI).toBe(
+    'env:GRAFANA_COLLECTOR_CONFIG'
+  );
+  const config = JSON.parse(variables.GRAFANA_COLLECTOR_CONFIG);
+  expect(config.receivers.otlp.protocols.grpc.endpoint).toBe('127.0.0.1:14317');
+  expect(config.exporters['otlphttp/grafana']).toEqual({
+    endpoint: 'https://otlp.macro-internal.com',
+    // A reference the collector resolves at start, never the token.
+    headers: { Authorization: `Bearer \${secretsmanager:${grafanaSecretArn}}` },
+    timeout: '1500ms',
+    sending_queue: { enabled: false },
+    retry_on_failure: { enabled: false },
+  });
+  expect(config.service.pipelines).toEqual({
+    traces: { receivers: ['otlp'], exporters: ['otlphttp/grafana'] },
+  });
+  const policies = resources
+    .filter((r) => r.type === 'aws:iam/rolePolicy:RolePolicy')
+    .map((r) => JSON.parse(r.inputs.policy).Statement);
+  expect(policies).toContainEqual([
+    {
+      Effect: 'Allow',
+      Action: 'secretsmanager:GetSecretValue',
+      Resource: grafanaSecretArn,
     },
   ]);
 });
