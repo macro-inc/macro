@@ -14,6 +14,7 @@ import { UserContextProvider } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { onElementConnect } from '@core/util/onElementConnect';
 import { createLoroManager } from '@macro-inc/collaboration/collab/manager';
+import { SyncSourceStatus } from '@macro-inc/collaboration/collab/source';
 import {
   BrowserWALStore,
   LORO_WAL_DB_NAME,
@@ -62,6 +63,8 @@ declare global {
       ready: () => boolean;
       placeAtEnd: () => void;
       pendingWrites: () => Promise<number>;
+      /** Whether the client itself has seen its socket open. */
+      connected: () => boolean;
     };
   }
 }
@@ -84,6 +87,7 @@ function Fixture() {
   const [ready, setReady] = createSignal(false);
   let editor: LexicalEditor | undefined;
   let socket: SyncServiceSource | undefined;
+  let status: () => SyncSourceStatus = () => SyncSourceStatus.Disconnected;
   onCleanup(() => socket?.cleanup());
   const owner = getOwner();
 
@@ -99,9 +103,8 @@ function Fixture() {
     const ws = createSyncSocket(`ws://127.0.0.1:${port}/${peer}`);
     const state = runWithOwner(owner, () => createWebsocketStateSignal(ws));
     if (!state) throw new Error('Fixture lost its owner');
-    const source = new SyncServiceSource(ws, documentId, {
-      status: () => mapToSyncStatus(state()),
-    });
+    status = () => mapToSyncStatus(state());
+    const source = new SyncServiceSource(ws, documentId, { status });
     socket = source;
     const initial = await source.doInitialSync();
     if (initial.isErr()) throw new Error('Initial fixture sync failed');
@@ -127,6 +130,7 @@ function Fixture() {
     },
     pendingWrites: async () =>
       (await wal.getAll()).filter((entry) => !entry.delivered).length,
+    connected: () => status() === SyncSourceStatus.Connected,
   };
 
   return (

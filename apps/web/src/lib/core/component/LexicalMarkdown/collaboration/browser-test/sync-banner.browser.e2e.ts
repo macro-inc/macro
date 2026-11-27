@@ -317,6 +317,10 @@ test('the offline banner stays until the server sends the document again, not ju
   room.reconnect('writer');
   await page.clock.runFor(5_000);
   await reopened;
+  // The client has seen its socket open, and the document is still withheld.
+  await expect
+    .poll(() => page.evaluate(() => window.syncBannerFixture?.connected()))
+    .toBe(true);
   await page.clock.runFor(1_000);
   await expect(banner(page)).toHaveAttribute('data-sync-problem', 'offline');
 
