@@ -45,9 +45,15 @@ export function prMergeabilityQueryOptions(id: string, reference?: PrRef) {
               ],
             })
           );
+          const state = response.pullRequests[0]?.mergeability ?? 'unknown';
           return {
-            state: response.pullRequests[0]?.mergeability ?? 'unknown',
-            refetches: previous && !invalidated ? previous.refetches + 1 : 0,
+            state,
+            refetches:
+              state === 'unknown' &&
+              previous?.state === 'unknown' &&
+              !invalidated
+                ? previous.refetches + 1
+                : 0,
           };
         }
       : skipToken,

@@ -279,6 +279,39 @@ describe('MergePullRequestButton', () => {
     }
   });
 
+  it('starts a new lazy retry budget when a known mergeability becomes unknown', async () => {
+    vi.useFakeTimers();
+    const request = vi.mocked(
+      authServiceClient.getGithubPullRequestMergeability
+    );
+    request.mockResolvedValue(
+      ok({ pullRequests: [{ ...target, mergeability: 'mergeable' }] })
+    );
+    const options = prMergeabilityQueryOptions('known-then-unknown', target);
+    for (let index = 0; index < 4; index++) {
+      await queryClient.fetchQuery({ ...options, staleTime: 0 });
+    }
+    request.mockResolvedValue(
+      ok({ pullRequests: [{ ...target, mergeability: 'unknown' }] })
+    );
+    const observer = new QueryObserver(queryClient, options);
+    const unsubscribe = observer.subscribe(() => {});
+    try {
+      await queryClient.fetchQuery({ ...options, staleTime: 0 });
+      expect(queryClient.getQueryData(options.queryKey)).toMatchObject({
+        state: 'unknown',
+        refetches: 0,
+      });
+      await vi.advanceTimersByTimeAsync(9_000);
+      expect(request).toHaveBeenCalledTimes(8);
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(request).toHaveBeenCalledTimes(8);
+    } finally {
+      unsubscribe();
+      observer.destroy();
+    }
+  });
+
   it('stops lazy retries on a known state or a failed refetch', async () => {
     vi.useFakeTimers();
     for (const result of [
