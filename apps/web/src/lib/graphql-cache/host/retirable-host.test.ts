@@ -176,6 +176,77 @@ describe('createRetirableCacheHost', () => {
     expect(commit).not.toHaveBeenCalled();
   });
 
+  it('settles a head claimed before retirement through the host that claimed it', async () => {
+    vi.useFakeTimers();
+    const written = {
+      revision: INITIAL_CACHE_REVISION,
+      revisionAdvanced: false,
+      changed: [],
+      affectedOps: [],
+      reset: false,
+    };
+    const head = (transactionId: string) => ({
+      transactionId,
+      uuid: `mutation-${transactionId}`,
+      superseded: false,
+      requiresConfirmation: false,
+      leaseGeneration: '1',
+      query: 'mutation M { m }',
+      variables: {},
+      attemptCount: 0,
+      serverFailureCount: 0,
+    });
+    const commit = vi.fn(async () => ({
+      kind: 'committed' as const,
+      ...written,
+    }));
+    const dispose = vi.fn();
+    const inner: CacheHost = {
+      ...createNoopCacheHost(),
+      disabled: false,
+      claimNextMutation: vi.fn(async () => head('1')),
+      enqueueOptimisticMutation: vi.fn(async () => ({
+        ...written,
+        transactionId: '2',
+        upsertKind: { kind: 'inserted' as const },
+        initialClaim: { kind: 'claimed' as const, mutation: head('2') },
+      })),
+      commitOptimisticWrite: commit,
+      dispose,
+    };
+    const host = createRetirableCacheHost(inner);
+    const claim = { owner: 'runner', generation: '1' };
+    const args = { generation: 'g', query: 'mutation M { m }', data: {} };
+    await host.claimNextMutation('runner', 0, 300_000);
+    await host.enqueueOptimisticMutation(
+      { uuid: 'mutation-2', query: 'mutation M { m }', data: {} } as never,
+      { owner: 'runner', nowMs: 0, leaseExpiresAtMs: 300_000 }
+    );
+    host.dispose();
+    // The engine is kept for the claimed heads, and writes their answers.
+    expect(dispose).not.toHaveBeenCalled();
+    await expect(host.commitOptimisticWrite('1', claim, args)).resolves.toEqual(
+      expect.objectContaining({ kind: 'committed' })
+    );
+    expect(dispose).not.toHaveBeenCalled();
+    // A second answer for the same head finds no pin, and nothing to write it.
+    await expect(
+      host.commitOptimisticWrite('1', claim, args)
+    ).rejects.toBeInstanceOf(CacheSettlementUnwrittenError);
+    // Past its lease the other head lets the engine go.
+    await vi.advanceTimersByTimeAsync(300_000);
+    expect(dispose).toHaveBeenCalledOnce();
+    await expect(
+      host.commitOptimisticWrite('2', claim, args)
+    ).rejects.toBeInstanceOf(CacheSettlementUnwrittenError);
+    expect(commit).toHaveBeenCalledOnce();
+    // Nothing claimed after retirement pins anything.
+    await expect(
+      host.claimNextMutation('runner', 0, 1)
+    ).resolves.toBeUndefined();
+    vi.useRealTimers();
+  });
+
   it('publishes and searches people through the app wrapper, retiring captured capabilities too', async () => {
     const scope = {
       identity: 'macro|viewer@example.com',
