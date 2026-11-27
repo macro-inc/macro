@@ -59,6 +59,15 @@ MCP app, a custom server, or a GitHub installation token) on each request.
   `tools/call` is `EgressError::RateLimited` (with its `Retry-After`), which
   `exchange_as` returns as an error, never as an `isError` result (the
   sandbox proxy answers a tool result saying the call did not run).
+- An upstream HTTP 401 with a `WWW-Authenticate` challenge, at the handshake
+  or on a listing or call, is `EgressError::SignInRequired` (a 401 without
+  one stays `Upstream`). Both actor paths report it through
+  `McpCredentials::unauthorized` (`connectors::McpConnectionsService::unauthorized`,
+  so a server added by URL reads as needing a sign-in) and answer as for an
+  unusable connection: a listing offers `how_to_connect`, a call gets the
+  sign-in text, never retried and never "outcome unknown". The raw
+  passthrough records a 401 to a bare (anonymous) call the same way and
+  passes the status through untouched.
 
 ## Scope
 
@@ -118,8 +127,8 @@ scope, `dry_run` for a routine's dry run).
   `domain/service/actor.rs`): `server.address`, `app.kind` / `app.key` (the
   connected-app slug or custom-server key), `mcp.method`,
   `mcp.request_bytes` / `mcp.response_bytes` (JSON lengths) and `mcp.outcome`
-  (`ok`, `tool_error`, `rate_limited`, `upstream_error`). Never arguments or
-  results. A new upstream session's handshake is its own
+  (`ok`, `tool_error`, `rate_limited`, `sign_in_required`, `upstream_error`).
+  Never arguments or results. A new upstream session's handshake is its own
   `connected_app.mcp_connect` child, and a `tools/call`'s pacing is its
   `mcp.call_budget` child (`wait_ms`, `attempts`, `rate_limited`).
 

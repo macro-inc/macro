@@ -27,6 +27,7 @@ impl OAuthClient for FakeOAuth {
             server_name: "Example".to_owned(),
             credentials: None,
             enabled: true,
+            requires_sign_in: false,
         })
     }
 }

@@ -117,7 +117,7 @@ impl HttpActorMcpTransport {
                 )
                 .await
                 .map_err(|error| EgressError::Upstream(rootcause::report!(error).into()))?
-                .map_err(|error| EgressError::Upstream(rootcause::report!(error).into()))?;
+                .map_err(initialize_error)?;
                 Ok(Arc::new(client))
             }
             // A new upstream session's handshake, apart from the call it serves.
@@ -144,7 +144,7 @@ impl ActorMcpTransport for HttpActorMcpTransport {
                 .list_all_tools()
                 .await
                 .map(|tools| serde_json::json!({"tools": tools}))
-                .map_err(|error| EgressError::Upstream(rootcause::report!(error).into())),
+                .map_err(listing_error),
             Some("tools/call") => {
                 let mut params: rmcp::model::CallToolRequestParams =
                     serde_json::from_value(request["params"].clone())
@@ -175,10 +175,35 @@ impl ActorMcpTransport for HttpActorMcpTransport {
     }
 }
 
-/// A failed call: a 429 the upstream answered is a typed rate limit, since
-/// the request did not run and may be sent again; anything else broke the
-/// exchange.
+/// A failed handshake: a 401 with a sign-in challenge is
+/// [`EgressError::SignInRequired`]; anything else broke the exchange.
+fn initialize_error(error: rmcp::service::ClientInitializeError) -> EgressError {
+    // Walks the transport error's chain for the 401's challenge, as
+    // `asks_for_sign_in` does for a call; a 403 asking for more scope is
+    // not a sign-in.
+    if error.is_authorization_required() {
+        return EgressError::SignInRequired;
+    }
+    EgressError::Upstream(rootcause::report!(error).into())
+}
+
+/// A failed listing: a 401 with a sign-in challenge is
+/// [`EgressError::SignInRequired`]; anything else broke the exchange.
+fn listing_error(error: rmcp::ServiceError) -> EgressError {
+    if asks_for_sign_in(&error) {
+        return EgressError::SignInRequired;
+    }
+    EgressError::Upstream(rootcause::report!(error).into())
+}
+
+/// A failed call: a 401 with a sign-in challenge is
+/// [`EgressError::SignInRequired`], and a 429 the upstream answered is a
+/// typed rate limit, since the request did not run and may be sent again;
+/// anything else broke the exchange.
 fn call_error(error: rmcp::ServiceError) -> EgressError {
+    if asks_for_sign_in(&error) {
+        return EgressError::SignInRequired;
+    }
     if let rmcp::ServiceError::TransportSend(transport) = &error
         && let Some(StreamableHttpError::HttpStatus(status)) = transport
             .error
@@ -190,6 +215,22 @@ fn call_error(error: rmcp::ServiceError) -> EgressError {
         };
     }
     EgressError::Upstream(rootcause::report!(error).into())
+}
+
+/// Whether the upstream answered HTTP 401 with a `WWW-Authenticate`
+/// challenge, which the MCP authorization spec requires of a server asking
+/// for a sign-in. rmcp reports a 401 without one as an unexpected response,
+/// which stays an upstream failure.
+fn asks_for_sign_in(error: &rmcp::ServiceError) -> bool {
+    let rmcp::ServiceError::TransportSend(transport) = error else {
+        return false;
+    };
+    matches!(
+        transport
+            .error
+            .downcast_ref::<StreamableHttpError<reqwest::Error>>(),
+        Some(StreamableHttpError::AuthRequired(_))
+    )
 }
 
 /// A `Retry-After` value as a wait: delay-seconds, or an HTTP date, which

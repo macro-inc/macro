@@ -86,10 +86,15 @@ Pipedream, Macro Connect) or tell which one holds a connection.
   native source skips it and the link source owns GitHub.
 - OAuth state lives in Redis apart from the server row: a row surviving does
   not mean its sign-in did.
-- A server added by URL with no grant is connected (anonymous servers work);
-  one whose row shows a dead grant (a sign-in that never finished, an expired
-  token with no refresh token) needs reauth, as the proxy would refuse it.
-  A refresh token the server revoked is found only when dialing.
+- A server added by URL with no grant is connected (anonymous servers work),
+  unless it answered a request without a token with HTTP 401: adding it asks
+  once, and a dial or a 401 the egress reports (`McpConnectionsService::
+  unauthorized`) sets `mcp_servers.requires_sign_in`, which signing in clears.
+  Any 401 counts, challenge or not; adding a held unmarked URL asks again; a
+  save without credentials keeps the stored mark.
+  Such a row, like one whose grant is dead (a sign-in that never finished, an
+  expired token with no refresh token), needs reauth, as the proxy would
+  refuse it. A refresh token the server revoked is found only when dialing.
 
 ## Related
 

@@ -94,6 +94,13 @@ pub enum EgressError {
         retry_after: Option<std::time::Duration>,
     },
 
+    /// The upstream answered HTTP 401 with a sign-in challenge to the
+    /// credential the proxy stamped, or to none. The request did not run,
+    /// and sending it again cannot help: only the owner of the connection
+    /// signing in mends it.
+    #[error("upstream asked for a sign-in")]
+    SignInRequired,
+
     /// Our side broke: storage, decryption, configuration.
     #[error("egress failed: {0}")]
     Internal(rootcause::Report),

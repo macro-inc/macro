@@ -91,6 +91,7 @@ fn toggle_row(url: &str, name: &str, enabled: bool) -> McpServerRecord {
         server_name: name.to_owned(),
         credentials: None,
         enabled,
+        requires_sign_in: false,
     }
 }
 

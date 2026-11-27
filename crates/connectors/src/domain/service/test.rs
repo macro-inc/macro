@@ -974,3 +974,43 @@ fn a_sources_refusal_answers_as_the_error_it_means() {
         ConnectorsError::Internal(_)
     ));
 }
+
+/// A server added by URL and never signed in to counts as connected until
+/// it answers 401: reported, it reads as needing sign-in and leaves what
+/// agents are given. A 401 on an app, or on a key the user doesn't hold,
+/// changes nothing.
+#[tokio::test]
+async fn a_401_from_a_server_never_signed_in_takes_it_out_of_use() {
+    let tracker = server_key("https://tracker.example.com/mcp");
+    let mut never_signed_in = row(SourceKind::Native, tracker.clone());
+    never_signed_in.grant = crate::domain::ports::GrantState::Missing;
+    let world = World::new()
+        .holding(never_signed_in)
+        .holding(row(SourceKind::Pipedream, app_key("notion")));
+    let connectors = world.connectors();
+    let usable = |connections: &McpConnections, key: &ConnectorKey| {
+        connections.handles().any(|handle| handle.key() == key)
+    };
+    let before = connectors.connections(&user()).await.unwrap();
+    assert!(usable(&before, &tracker));
+
+    connectors
+        .unauthorized(&user(), &app_key("notion"))
+        .await
+        .unwrap();
+    connectors
+        .unauthorized(&user(), &server_key("https://elsewhere.example.com/mcp"))
+        .await
+        .unwrap();
+    connectors.unauthorized(&user(), &tracker).await.unwrap();
+
+    let listing = connectors.list(&user()).await.unwrap();
+    assert_eq!(status_in(&listing, &tracker), Some(Status::NeedsReauth));
+    assert_eq!(
+        status_in(&listing, &app_key("notion")),
+        Some(Status::Connected)
+    );
+    let after = connectors.connections(&user()).await.unwrap();
+    assert!(!usable(&after, &tracker));
+    assert!(usable(&after, &app_key("notion")));
+}

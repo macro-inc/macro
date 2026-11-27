@@ -72,22 +72,30 @@ impl McpServerStore for PgServerRepo {
 
         // Never clobber stored credentials with NULL on conflict: re-adding
         // an existing server (e.g. via the Add Server dialog) must not wipe
-        // a valid OAuth grant.
+        // a valid OAuth grant. A save without credentials keeps the stored
+        // sign-in mark too, so a row loaded before a concurrent mark can't
+        // undo it; one carrying a grant takes its own, which is how signing
+        // in clears it.
         sqlx::query!(
             r#"
-            INSERT INTO mcp_servers (user_id, url, server_name, credentials, enabled)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO mcp_servers (user_id, url, server_name, credentials, enabled, requires_sign_in)
+            VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (user_id, url) DO UPDATE
-            SET server_name = EXCLUDED.server_name,
-                credentials = COALESCE(EXCLUDED.credentials, mcp_servers.credentials),
-                enabled     = EXCLUDED.enabled,
-                updated_at  = NOW()
+            SET server_name      = EXCLUDED.server_name,
+                credentials      = COALESCE(EXCLUDED.credentials, mcp_servers.credentials),
+                enabled          = EXCLUDED.enabled,
+                requires_sign_in = CASE
+                    WHEN EXCLUDED.credentials IS NULL THEN mcp_servers.requires_sign_in
+                    ELSE EXCLUDED.requires_sign_in
+                END,
+                updated_at       = NOW()
             "#,
             record.user_id.as_ref(),
             record.url,
             record.server_name,
             encrypted.as_deref(),
             record.enabled,
+            record.requires_sign_in,
         )
         .execute(&self.pool)
         .await?;
@@ -103,7 +111,7 @@ impl McpServerStore for PgServerRepo {
     ) -> Result<Option<McpServerRecord>, Self::Err> {
         let row = sqlx::query!(
             r#"
-            SELECT user_id, url, server_name, credentials, enabled
+            SELECT user_id, url, server_name, credentials, enabled, requires_sign_in
             FROM mcp_servers
             WHERE user_id = $1 AND url = $2
             "#,
@@ -113,8 +121,17 @@ impl McpServerStore for PgServerRepo {
         .fetch_optional(&self.pool)
         .await?;
 
-        row.map(|r| self.to_record(r.user_id, r.url, r.server_name, r.credentials, r.enabled))
-            .transpose()
+        row.map(|r| {
+            self.to_record(
+                r.user_id,
+                r.url,
+                r.server_name,
+                r.credentials,
+                r.enabled,
+                r.requires_sign_in,
+            )
+        })
+        .transpose()
     }
 
     #[tracing::instrument(skip_all, err)]
@@ -138,13 +155,37 @@ impl McpServerStore for PgServerRepo {
     }
 
     #[tracing::instrument(skip_all, err)]
+    async fn mark_requires_sign_in(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        server_url: &str,
+    ) -> Result<(), Self::Err> {
+        // Conditional in the statement itself: a sign-in that lands between
+        // the 401 and this write keeps its grant.
+        sqlx::query!(
+            r#"
+            UPDATE mcp_servers
+            SET requires_sign_in = TRUE,
+                updated_at       = NOW()
+            WHERE user_id = $1 AND url = $2 AND credentials IS NULL AND NOT requires_sign_in
+            "#,
+            user_id.as_ref(),
+            server_url,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip_all, err)]
     async fn list(
         &self,
         user_id: &MacroUserIdStr<'static>,
     ) -> Result<Vec<McpServerRecord>, Self::Err> {
         let rows = sqlx::query!(
             r#"
-            SELECT user_id, url, server_name, credentials, enabled
+            SELECT user_id, url, server_name, credentials, enabled, requires_sign_in
             FROM mcp_servers
             WHERE user_id = $1
             ORDER BY created_at
@@ -155,7 +196,16 @@ impl McpServerStore for PgServerRepo {
         .await?;
 
         rows.into_iter()
-            .map(|r| self.to_record(r.user_id, r.url, r.server_name, r.credentials, r.enabled))
+            .map(|r| {
+                self.to_record(
+                    r.user_id,
+                    r.url,
+                    r.server_name,
+                    r.credentials,
+                    r.enabled,
+                    r.requires_sign_in,
+                )
+            })
             .collect()
     }
 }
@@ -169,6 +219,7 @@ impl PgServerRepo {
         server_name: String,
         credentials: Option<Vec<u8>>,
         enabled: bool,
+        requires_sign_in: bool,
     ) -> Result<McpServerRecord, sqlx::Error> {
         let user_id = MacroUserIdStr::parse_from_str(&user_id)
             .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
@@ -182,6 +233,7 @@ impl PgServerRepo {
             server_name,
             credentials,
             enabled,
+            requires_sign_in,
         })
     }
 }

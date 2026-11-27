@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE mcp_servers\n            SET requires_sign_in = TRUE,\n                updated_at       = NOW()\n            WHERE user_id = $1 AND url = $2 AND credentials IS NULL AND NOT requires_sign_in\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cd5eefdef4113be202ed80b84b9dd453b5a922fbbfbbe09628fa13f414ec8803"
+}

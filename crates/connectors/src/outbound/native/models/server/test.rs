@@ -31,6 +31,14 @@ impl McpServerStore for UntouchedStore {
         unreachable!()
     }
 
+    async fn mark_requires_sign_in(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        _server_url: &str,
+    ) -> Result<(), Self::Err> {
+        unreachable!()
+    }
+
     async fn list(
         &self,
         _user_id: &MacroUserIdStr<'static>,
@@ -66,6 +74,7 @@ async fn a_server_that_never_answers_initialize_times_out() {
         server_name: "Stalled".to_owned(),
         credentials: None,
         enabled: true,
+        requires_sign_in: false,
     };
     let http = McpHttp::new(AddressPolicy::AnyAddress).unwrap();
     let connect =

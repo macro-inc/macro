@@ -125,6 +125,7 @@ where
             server_name: server_name.to_owned(),
             credentials: None,
             enabled: true,
+            requires_sign_in: false,
         };
         self.store
             .save(&record)

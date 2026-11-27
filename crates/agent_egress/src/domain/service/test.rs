@@ -124,6 +124,8 @@ struct SpyCredentials {
     selections: Mutex<Vec<Selection>>,
     /// The agent each resolution was attributed to.
     agents: Mutex<Vec<BotId>>,
+    /// Each 401 reported, by whose connection and where it went.
+    unauthorized: Mutex<Vec<(String, McpDestination)>>,
     known: Knowledge,
     url: String,
     scope: HeaderMap,
@@ -140,6 +142,7 @@ impl SpyCredentials {
             asked: Mutex::default(),
             selections: Mutex::default(),
             agents: Mutex::default(),
+            unauthorized: Mutex::default(),
             known: Knowledge::Connected,
             url: url.to_owned(),
             scope: HeaderMap::new(),
@@ -208,6 +211,7 @@ impl SpyCredentials {
             asked: Mutex::default(),
             selections: Mutex::default(),
             agents: Mutex::default(),
+            unauthorized: Mutex::default(),
             known: Knowledge::Unknown,
             url: String::new(),
             scope: HeaderMap::new(),
@@ -268,6 +272,19 @@ impl McpCredentials for SpyCredentials {
         }
         Ok(McpResolution::Connected(call))
     }
+
+    async fn unauthorized(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        destination: &McpDestination,
+    ) -> Result<Option<String>, EgressError> {
+        self.unauthorized
+            .lock()
+            .expect("lock")
+            .push((owner.to_string(), destination.clone()));
+        // The owner's name for a custom server; an app is named by the grant.
+        Ok(matches!(destination, McpDestination::Custom(_)).then(|| "Team wiki".to_owned()))
+    }
 }
 
 /// Records which repository it was asked to mint for.
@@ -315,6 +332,7 @@ impl GithubTokens for SpyGithubTokens {
 /// Records the request it was handed, and answers with a fixed response.
 struct SpyForwarder {
     seen: Mutex<Option<http::request::Parts>>,
+    status: StatusCode,
     response_headers: HeaderMap,
 }
 
@@ -322,7 +340,16 @@ impl SpyForwarder {
     fn answering(response_headers: &[(&str, &str)]) -> Self {
         Self {
             seen: Mutex::default(),
+            status: StatusCode::ACCEPTED,
             response_headers: header_map(response_headers),
+        }
+    }
+
+    /// An upstream answering every request with `status`.
+    fn answering_with(status: StatusCode) -> Self {
+        Self {
+            status,
+            ..Self::answering(&[])
         }
     }
 
@@ -347,7 +374,7 @@ impl Forwarder for SpyForwarder {
         *self.seen.lock().expect("lock") = Some(parts);
 
         let mut response = http::Response::new(empty_body());
-        *response.status_mut() = StatusCode::ACCEPTED;
+        *response.status_mut() = self.status;
         *response.headers_mut() = self.response_headers.clone();
         Ok(response)
     }
@@ -878,7 +905,7 @@ async fn a_tools_call_to_a_disconnected_custom_server_is_answered_locally() {
         .as_str()
         .expect("a text content block");
     assert!(text.contains("Team wiki is a custom MCP server"), "{text}");
-    assert!(text.contains("Reconnect"), "{text}");
+    assert!(text.contains("Sign in"), "{text}");
     assert!(!text.contains("m-connect-app"), "{text}");
     assert!(!text.contains("do-not-echo"), "{text}");
 }
@@ -1832,4 +1859,5 @@ async fn a_public_web_search_in_a_gated_turn_goes_straight_through() {
 }
 
 mod actor;
+mod sign_in;
 mod telemetry;

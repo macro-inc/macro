@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT user_id, url, server_name, credentials, enabled\n            FROM mcp_servers\n            WHERE user_id = $1\n            ORDER BY created_at\n            ",
+  "query": "\n            SELECT user_id, url, server_name, credentials, enabled, requires_sign_in\n            FROM mcp_servers\n            WHERE user_id = $1\n            ORDER BY created_at\n            ",
   "describe": {
     "columns": [
       {
@@ -27,6 +27,11 @@
         "ordinal": 4,
         "name": "enabled",
         "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "requires_sign_in",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
@@ -39,8 +44,9 @@
       false,
       false,
       true,
+      false,
       false
     ]
   },
-  "hash": "13a6d39ef2b895cae2162fcf65f7f64a5b303859b36186f4106144a2c5cc23ac"
+  "hash": "f6aa54299df132e55b63ae5538e42caa79b5a476c1f550a1e5600e45c9a3ca84"
 }

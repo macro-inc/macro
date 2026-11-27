@@ -31,6 +31,14 @@ impl McpServerStore for UntouchedStore {
         unreachable!()
     }
 
+    async fn mark_requires_sign_in(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        _server_url: &str,
+    ) -> Result<(), Self::Err> {
+        unreachable!()
+    }
+
     async fn list(
         &self,
         _user_id: &MacroUserIdStr<'static>,
@@ -48,6 +56,7 @@ fn record(credentials: Option<StoredCredentials>) -> McpServerRecord {
         server_name: "Example".to_owned(),
         credentials,
         enabled: true,
+        requires_sign_in: false,
     }
 }
 

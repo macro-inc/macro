@@ -50,6 +50,15 @@ pub trait McpServerStore: Send + Sync + 'static {
         server_url: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Record that the user's server at `server_url` answered HTTP 401 to a
+    /// request without a token. Only a row that holds no credentials is
+    /// marked: one signed in meanwhile keeps its grant and reads as it is.
+    fn mark_requires_sign_in(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        server_url: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// List all stored server records for a user.
     fn list(
         &self,
