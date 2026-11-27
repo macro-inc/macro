@@ -5,7 +5,7 @@
  */
 import { choices, type Look, type PresetId, presets } from '../presets';
 
-export const STATE_VERSION = 1;
+const STATE_VERSION = 1;
 
 export type MorphKey =
   | 'faceWidth'
@@ -222,9 +222,4 @@ export function resolve(preset: PresetId, look: Look): RenderState {
     }[look.framing],
     light: look.light,
   };
-}
-
-/** Canonical JSON of the renderer state: equal looks give equal strings. */
-export function serialize(preset: PresetId, look: Look, pose = 0): string {
-  return JSON.stringify({ preset, pose, state: resolve(preset, look) });
 }

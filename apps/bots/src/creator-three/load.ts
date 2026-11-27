@@ -6,7 +6,8 @@ import { mount } from './stage';
 
 export function loadPortraitScene(
   canvas: HTMLCanvasElement,
-  signal: AbortSignal
+  signal: AbortSignal,
+  onRenderError: () => void
 ) {
-  return mount(canvas, { head, color, normal, spec }, signal);
+  return mount(canvas, { head, color, normal, spec }, signal, onRenderError);
 }

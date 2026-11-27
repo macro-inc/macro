@@ -32,21 +32,26 @@ export function CreatorScene(props: {
     if (!target) return;
 
     const life = new AbortController();
+    function fallBack() {
+      life.abort();
+      release();
+    }
+
     const resize = new ResizeObserver(([entry]) => {
       if (!entry) return;
+
       const { width, height } = entry.contentRect;
-      if (width > 0 && height > 0) scene()?.resize(width, height);
+      try {
+        if (width > 0 && height > 0) scene()?.resize(width, height);
+      } catch {
+        fallBack();
+      }
     });
 
     resize.observe(target);
-    target.addEventListener(
-      'webglcontextlost',
-      () => {
-        life.abort();
-        release();
-      },
-      { signal: life.signal }
-    );
+    target.addEventListener('webglcontextlost', fallBack, {
+      signal: life.signal,
+    });
 
     async function load(target: HTMLCanvasElement) {
       let pending: PortraitScene | undefined;
@@ -55,25 +60,34 @@ export function CreatorScene(props: {
         const { loadPortraitScene } = await import('./creator-three/load');
         if (life.signal.aborted) return;
 
-        pending = await loadPortraitScene(target, life.signal);
+        pending = await loadPortraitScene(target, life.signal, fallBack);
         if (life.signal.aborted) return;
 
         const { width, height } = target.getBoundingClientRect();
-        pending.resize(width, height);
         pending.update(props.preset, props.look, props.pose);
+        pending.resize(width, height);
+        if (life.signal.aborted) return;
 
         const instance = pending;
         setScene(instance);
         props.onCapture(() => {
+          let source: string | undefined;
           try {
-            return instance.captureCanonical();
+            source = instance.captureCanonical();
           } catch {
-            return undefined;
+            // A capture cannot be accepted without the image the review shows.
           }
+
+          if (!source) {
+            queueMicrotask(() => {
+              if (scene() === instance) fallBack();
+            });
+          }
+          return source;
         });
         pending = undefined;
       } catch {
-        release();
+        fallBack();
       } finally {
         pending?.dispose();
       }
