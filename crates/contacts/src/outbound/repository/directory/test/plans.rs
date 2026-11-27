@@ -13,6 +13,22 @@ const TEAM_SIZE: i32 = 1_000;
 const BACKGROUND_USERS: i32 = 20_000;
 
 async fn seed(pool: &PgPool) {
+    // An autoanalyze snapshot here takes its xmin from the cluster's oldest
+    // running transaction with an XID, which can be in another test database, and
+    // holds VACUUM's horizon below the seed. Keep autovacuum off every table
+    // the seed writes; catalogs cannot be excluded, so this lowers the odds.
+    sqlx::raw_sql(
+        "ALTER TABLE macro_user SET (autovacuum_enabled = false);
+         ALTER TABLE \"User\" SET (autovacuum_enabled = false);
+         ALTER TABLE team SET (autovacuum_enabled = false);
+         ALTER TABLE team_user SET (autovacuum_enabled = false);
+         ALTER TABLE email_links SET (autovacuum_enabled = false);
+         ALTER TABLE contact_list_members SET (autovacuum_enabled = false);
+         ALTER TABLE contact_inbox_members SET (autovacuum_enabled = false);",
+    )
+    .execute(pool)
+    .await
+    .unwrap();
     // Users 0..TEAM_SIZE are the subject and its teammates, spread through
     // the subject's stored contacts so the roster interleaves with every page.
     // The rest fill background teams of ten, so the roster is a small part of
@@ -123,10 +139,10 @@ async fn seed(pool: &PgPool) {
     .await
     .unwrap();
     // The block budgets assume index-only scans that never visit the heap,
-    // so every seeded page must be in the visibility map. On a database
+    // so every seeded page must be in the visibility map. On a cluster
     // shared with parallel tests a single VACUUM sometimes leaves pages out
-    // (seen in CI on Postgres 14, with no other transaction holding the
-    // horizon), so vacuum until none is left, a bounded number of times.
+    // (seen in CI on Postgres 14), so vacuum until none is left, a bounded
+    // number of times; a failure names this database's horizon holders.
     let mut unmarked = None;
     for _ in 0..10 {
         sqlx::query!(
@@ -148,11 +164,27 @@ async fn seed(pool: &PgPool) {
             break;
         }
     }
+    let holders = if unmarked == Some(0) {
+        String::new()
+    } else {
+        sqlx::query_scalar!(
+            r#"SELECT coalesce(json_agg(json_build_object(
+                   'pid', pid, 'backend_type', backend_type,
+                   'backend_xid', backend_xid::text, 'backend_xmin', backend_xmin::text,
+                   'state', state, 'query', left(query, 120))), '[]')::text AS "holders!"
+               FROM pg_stat_activity
+               WHERE datname = current_database() AND pid <> pg_backend_pid()"#
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap_or_else(|error| format!("<dump failed: {error}>"))
+    };
     assert_eq!(
         unmarked,
         Some(0),
         "VACUUM left seeded pages out of the visibility map after 10 tries, so \
-         index-only scans would fetch heap tuples and overrun the block budgets"
+         index-only scans would fetch heap tuples and overrun the block budgets; \
+         other sessions in this database: {holders}"
     );
 }
 
