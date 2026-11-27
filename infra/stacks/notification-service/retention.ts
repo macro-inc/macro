@@ -4,8 +4,7 @@ import { Lambda } from '../../packages/lambda';
 import { DATADOG_API_KEY_SECRET_ARN } from '../../packages/resources';
 import {
   CLOUD_TRAIL_SNS_TOPIC_ARN,
-  grafanaIngestSecretArn,
-  grafanaTelemetryEnabled,
+  GRAFANA_OTLP_INGEST_URL,
   stack,
 } from '../../packages/shared';
 
@@ -18,24 +17,26 @@ const DATADOG_EXTENSION_ARN =
 // v0.163.0), verified in us-east-1. It sends a copy of the spans to Grafana.
 const GRAFANA_COLLECTOR_ARN =
   'arn:aws:lambda:us-east-1:184161586896:layer:opentelemetry-collector-amd64-0_24_0:1';
-// The same local address the ECS services' Alloy sidecar listens on.
-const GRAFANA_OTLP_ENDPOINT = 'http://127.0.0.1:14317';
+// The collector's receiver: the same local address the ECS services' Alloy
+// sidecar listens on.
+const GRAFANA_COLLECTOR_ADDRESS = '127.0.0.1:14317';
 
 /**
  * The Grafana collector's whole config, as JSON (which is YAML). The collector
  * reads the ingest token from Secrets Manager when it starts; it never sits in
- * the environment. One export per flush, bounded below the entrypoint's
- * two-second Grafana timeout and with no queue or retries, so a Grafana outage
- * costs one failed export, not a late or failed sweep.
+ * the environment. Each export has a 1.5-second limit, below the entrypoint's
+ * two-second Grafana timeout, and no queue or retries: a Grafana outage costs
+ * failed copies, not a late or failed sweep. Not reading the token does fail
+ * the function's init (see the runbook).
  */
 function grafanaCollectorConfig(secretArn: pulumi.Output<string>) {
   return pulumi.jsonStringify({
     receivers: {
-      otlp: { protocols: { grpc: { endpoint: '127.0.0.1:14317' } } },
+      otlp: { protocols: { grpc: { endpoint: GRAFANA_COLLECTOR_ADDRESS } } },
     },
     exporters: {
       'otlphttp/grafana': {
-        endpoint: 'https://otlp.macro-internal.com',
+        endpoint: GRAFANA_OTLP_INGEST_URL,
         headers: {
           Authorization: pulumi.interpolate`Bearer \${secretsmanager:${secretArn}}`,
         },
@@ -79,6 +80,11 @@ type Args = {
     privateSubnetIds: pulumi.Output<string[]> | string[];
   };
   tags: Record<string, string>;
+  /**
+   * The Grafana ingest token's secret, in stacks whose ECS services send to
+   * Grafana: the function then also sends Grafana a copy of its spans.
+   */
+  grafanaIngestSecretArn?: pulumi.Output<string>;
 };
 
 /** Isolated maintenance worker with explicit scheduling and dry-run controls. */
@@ -91,7 +97,8 @@ export class NotificationRetention extends pulumi.ComponentResource {
     opts?: pulumi.ComponentResourceOptions
   ) {
     super('macro:notifications:Retention', name, {}, opts);
-    const { databaseUrl, enabled, dryRun, vpc, tags } = args;
+    const { databaseUrl, enabled, dryRun, vpc, tags, grafanaIngestSecretArn } =
+      args;
     const role = new aws.iam.Role(
       `${BASE_NAME}-role`,
       {
@@ -130,32 +137,30 @@ export class NotificationRetention extends pulumi.ComponentResource {
       },
       { parent: this }
     );
-    // Stacks whose ECS services send to Grafana (grafanaTelemetryEnabled) send
-    // this function's spans too. The collector carries only spans; the logs go
-    // through the Lambda component's CloudWatch log subscriptions.
-    const grafana =
-      grafanaTelemetryEnabled && grafanaIngestSecretArn
-        ? {
-            secretArn: grafanaIngestSecretArn,
-            policy: new aws.iam.RolePolicy(
-              `${BASE_NAME}-grafana-key`,
-              {
-                role: role.id,
-                policy: pulumi.jsonStringify({
-                  Version: '2012-10-17',
-                  Statement: [
-                    {
-                      Effect: 'Allow',
-                      Action: 'secretsmanager:GetSecretValue',
-                      Resource: grafanaIngestSecretArn,
-                    },
-                  ],
-                }),
-              },
-              { parent: this }
-            ),
-          }
-        : undefined;
+    // The collector carries only spans; the logs go through the Lambda
+    // component's CloudWatch log subscriptions.
+    const grafana = grafanaIngestSecretArn
+      ? {
+          secretArn: grafanaIngestSecretArn,
+          policy: new aws.iam.RolePolicy(
+            `${BASE_NAME}-grafana-key`,
+            {
+              role: role.id,
+              policy: pulumi.jsonStringify({
+                Version: '2012-10-17',
+                Statement: [
+                  {
+                    Effect: 'Allow',
+                    Action: 'secretsmanager:GetSecretValue',
+                    Resource: grafanaIngestSecretArn,
+                  },
+                ],
+              }),
+            },
+            { parent: this }
+          ),
+        }
+      : undefined;
     this.lambda = new Lambda<RetentionEnvVars>(
       `${BASE_NAME}-lambda`,
       {
@@ -174,7 +179,7 @@ export class NotificationRetention extends pulumi.ComponentResource {
           // Keep the existing CloudWatch → Firehose log path; avoid duplicates.
           DD_SERVERLESS_LOGS_ENABLED: 'false',
           ...(grafana && {
-            GRAFANA_OTLP_ENDPOINT,
+            GRAFANA_OTLP_ENDPOINT: `http://${GRAFANA_COLLECTOR_ADDRESS}`,
             GRAFANA_COLLECTOR_CONFIG: grafanaCollectorConfig(grafana.secretArn),
             OPENTELEMETRY_COLLECTOR_CONFIG_URI: 'env:GRAFANA_COLLECTOR_CONFIG',
             OPENTELEMETRY_EXTENSION_LOG_LEVEL: 'warn',

@@ -77,4 +77,5 @@ export * from './service_urls';
 export {
   grafanaTelemetryEnabled,
   grafanaIngestSecretArn,
+  GRAFANA_OTLP_INGEST_URL,
 } from './grafana_telemetry';

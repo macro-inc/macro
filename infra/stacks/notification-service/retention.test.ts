@@ -34,8 +34,7 @@ beforeAll(async () => {
   );
   mock.module('../../packages/shared', () => ({
     stack: 'dev',
-    grafanaTelemetryEnabled: true,
-    grafanaIngestSecretArn: pulumi.output(grafanaSecretArn),
+    GRAFANA_OTLP_INGEST_URL: 'https://otlp.macro-internal.com',
     CLOUD_TRAIL_SNS_TOPIC_ARN: 'arn:aws:sns:us-east-1:123456789012:alerts',
     CLOUDWATCH_KINESIS_STREAM_ROLE_ARN: 'arn:aws:iam::123456789012:role/logs',
     DATADOG_KINESIS_FIREHOSE_STREAM_ARN:
@@ -72,6 +71,7 @@ beforeAll(async () => {
       privateSubnetIds: ['subnet-test'],
     },
     tags: {},
+    grafanaIngestSecretArn: pulumi.output(grafanaSecretArn),
   });
   await pulumi.runtime.waitForRPCs();
 });
@@ -151,6 +151,37 @@ test('spans also go to Grafana through a collector that reads its own key', () =
       Resource: grafanaSecretArn,
     },
   ]);
+});
+
+test('without the Grafana key, only Datadog gets the spans', async () => {
+  const start = resources.length;
+  const { NotificationRetention } = await import('./retention');
+  new NotificationRetention('retention-datadog-only', {
+    databaseUrl: pulumi.secret('test-database'),
+    enabled: false,
+    dryRun: true,
+    vpc: {
+      vpcId: 'vpc-test',
+      publicSubnetIds: [],
+      privateSubnetIds: ['subnet-test'],
+    },
+    tags: {},
+  });
+  await pulumi.runtime.waitForRPCs();
+  const registered = resources.slice(start);
+  const fn = resource('aws:lambda/function:Function', registered).inputs;
+  expect(fn.layers).toEqual([
+    'arn:aws:lambda:us-east-1:464622532012:layer:Datadog-Extension:101',
+  ]);
+  const { variables } = pulumi.runtime.unwrapRpcSecret(fn.environment);
+  expect(
+    Object.keys(variables).filter((key) =>
+      /^(GRAFANA|OPENTELEMETRY)_/.test(key)
+    )
+  ).toEqual([]);
+  expect(
+    registered.filter((r) => r.type === 'aws:iam/rolePolicy:RolePolicy')
+  ).toHaveLength(1);
 });
 
 test.each(['dev', 'prod'])('%s uses hourly retention', async (stack) => {
