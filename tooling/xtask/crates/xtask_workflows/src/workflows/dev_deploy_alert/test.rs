@@ -164,3 +164,44 @@ fn it_reads_the_api_and_checks_out_nothing() {
             .all(|step| step["uses"].is_null())
     );
 }
+
+/// Every `runs-on` label a Dev deploy job asks for, in the deploy workflow and
+/// the workflows it calls, read from their rendered files.
+fn deploy_runners() -> std::collections::BTreeSet<String> {
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../.github/workflows");
+    let mut files = vec![deploy_on_push::FILE.to_owned()];
+    let mut labels = std::collections::BTreeSet::new();
+    while let Some(file) = files.pop() {
+        let yaml = std::fs::read_to_string(format!("{dir}/{file}")).expect("a rendered workflow");
+        let workflow: serde_yaml::Value = serde_yaml::from_str(&yaml).expect("the workflow parses");
+        for job in workflow["jobs"].as_mapping().expect("jobs").values() {
+            if let Some(called) = job["uses"]
+                .as_str()
+                .and_then(|uses| uses.strip_prefix("./.github/workflows/"))
+            {
+                files.push(called.to_owned());
+            }
+            labels.extend(job["runs-on"].as_str().map(str::to_owned));
+        }
+    }
+    labels
+}
+
+/// A runner the deploys can't get would hold the alert that says so too.
+#[test]
+fn it_runs_apart_from_the_deploys_runners() {
+    let deploys = deploy_runners();
+    assert!(deploys.contains(runners::DB_MIGRATOR), "{deploys:?}");
+    assert!(
+        deploys.contains(&runners::Runner::Small.to_string()),
+        "{deploys:?}"
+    );
+    let label = alert()["jobs"]["alert"]["runs-on"]
+        .as_str()
+        .expect("one label")
+        .to_owned();
+    assert!(
+        !deploys.contains(&label) && !label.starts_with("namespace-profile-"),
+        "{label} also runs deploys: {deploys:?}"
+    );
+}

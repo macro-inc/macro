@@ -581,7 +581,7 @@ pub fn node_script_calling(source: &str, function: &str) -> String {
 /// ([`vars::MACRO_BUILD_ALERT_WEBHOOK_URL`], with
 /// [`vars::MACRO_BUILD_ALERT_BOT_TOKEN`]). `set_message` is bash that sets
 /// `message`, which the channel renders as markdown. Needs `jq` and `curl`,
-/// which [`runners::Runner::Small`] has.
+/// which [`runners::Runner::Small`] and [`runners::GITHUB_LINUX`] have.
 pub fn post_to_macro_alerts(name: &str, set_message: &str) -> Step<Run> {
     post_to_macro_channel(
         name,

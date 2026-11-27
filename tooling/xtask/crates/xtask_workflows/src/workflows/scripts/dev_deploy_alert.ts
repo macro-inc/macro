@@ -25,19 +25,23 @@
 //   between, Dev deployed each push within 121 minutes.
 //
 // Dev deploys again once the newest run that ended succeeded and neither of
-// the other two holds. Each of the three ends only once a run ends, so the
-// channel hears that Dev deploys again only when it did.
+// the other two holds. Each of the three ends only once a run ends, and the
+// channel hears that Dev deploys again only from a run that deployed after it
+// was told Dev is failing: a failed run re-run, going again, fails nothing yet
+// but has deployed nothing either.
 //
 // The script posts only when that differs from what the channel was last told:
 // failing while the channel shows Dev deploying posts the failure, and
 // deploying while it shows Dev failing posts that it deploys again. The job
 // records what the channel shows in its last step, "Macro Alerts shows Dev
 // failing" or "Macro Alerts shows Dev deploying", which runs only once a post
-// succeeded or none was needed. The newest such step among the workflow's
-// recent runs, read through the jobs API, is what the channel shows; with none,
-// it shows Dev deploying. The workflow's runs go one at a time (a concurrency
-// group), so each reads what the one before it left. A failed post records
-// nothing, so the next run posts again.
+// succeeded or none was needed, so a run of the workflow succeeds only once it
+// recorded. The newest record among its recent successful runs, read through
+// the jobs API, is what the channel shows, as of when its job started, before
+// it read Dev; with none, it shows Dev deploying. The workflow's runs go one at
+// a time (a concurrency group), so each reads what the one before it left, and
+// a run started again by hand comes first. A failed post records nothing, so
+// the next run posts again.
 //
 // The step writes the message to DEV_DEPLOY_ALERT_MESSAGE, `post=true` when
 // there is one, and `shows=failing` or `shows=deploying` to its outputs; the
@@ -55,10 +59,13 @@ export const UNDEPLOYED_MINUTES = 180;
 /** The branch whose pushes deploy Dev. */
 export const BRANCH = 'main';
 
-/** How many of the newest deploy runs the job lists, the most a page holds. */
+/** How many deploy runs a page lists, the most it holds. */
 const LISTED = 100;
 
-/** How many of the alert workflow's newest runs the job reads for a record. */
+/** How many pages of deploy runs the job lists at most, back to the one Dev last deployed. */
+const PAGES = 10;
+
+/** How many of the alert workflow's newest successful runs the job reads for a record. */
 export const LOOK_BACK = 30;
 
 /** How many runs' jobs the job reads at once. */
@@ -89,6 +96,8 @@ export type Run = {
   conclusion: string | null;
   created_at: string;
   updated_at: string;
+  /** When its latest attempt started. */
+  run_started_at?: string;
   head_sha: string;
   html_url: string;
   head_commit?: { message?: string } | null;
@@ -144,6 +153,7 @@ export type Health = { problems: Problem[]; deployed: Run | null };
 /** What the channel shows, from the newest record. */
 export type Shown = { failing: boolean; at: string | null };
 
+/** Whether to post, and what the channel shows once the job is done (`failing`). */
 export type Decision = { post: 'failure' | 'recovery' | null; failing: boolean; why: string };
 
 /** The names of the alert job and of the steps the script reads. */
@@ -181,6 +191,15 @@ const minutesBetween = (from: string | number, to: string | number) => (time(to)
 const sinceMinutes = (at: string, now: number) => minutesBetween(at, now);
 
 const newestFirst = (a: Run, b: Run) => b.run_number - a.run_number;
+
+/** The newest run that succeeded: `deployed`, or one in `runs` that succeeded after it. */
+export function lastDeployed(deployed: Run | null, runs: Run[]): Run | null {
+  return (
+    [deployed, ...runs.filter((run) => run.status === 'completed' && run.conclusion === 'success')]
+      .filter((run): run is Run => run !== null)
+      .sort(newestFirst)[0] ?? null
+  );
+}
 
 /** The latest attempt of each of a run's jobs, in the order the run started them. */
 export function latestAttempts(jobs: Job[]): Job[] {
@@ -274,13 +293,8 @@ export async function assess({
   jobsOf: (run: Run) => Promise<Job[]>;
 }): Promise<Health> {
   // The list can be newer than the query for the last success.
-  const succeeded = [deployed, ...runs.filter((run) => run.status === 'completed' && run.conclusion === 'success')]
-    .filter((run): run is Run => run !== null)
-    .sort(newestFirst)[0];
-  const lastDeployed = succeeded ?? null;
-  const newer = runs
-    .filter((run) => lastDeployed === null || run.run_number > lastDeployed.run_number)
-    .sort(newestFirst);
+  const last = lastDeployed(deployed, runs);
+  const newer = runs.filter((run) => last === null || run.run_number > last.run_number).sort(newestFirst);
   const needsJobs = (run: Run) => run.status === 'completed' || STARTED.has(run.status);
 
   const problems: Problem[] = [];
@@ -316,30 +330,33 @@ export async function assess({
       problems.push({ kind: 'undeployed', since: undeployed, minutes, deploying });
     }
   }
-  return { problems, deployed: lastDeployed };
+  return { problems, deployed: last };
 }
 
-/** What each alert job of a run, in any attempt, recorded, with when. */
+/** What each alert job of a run, in any attempt, recorded, as of when the job started. */
 export function records(jobs: Job[], names: Names): { failing: boolean; at: string }[] {
   const done = (job: Job, name: string) =>
     job.steps?.find((step) => step.name === name && step.conclusion === 'success');
   return jobs.flatMap((job) => {
     const shown = job.name === names.job ? (done(job, names.failing) ?? done(job, names.deploying)) : undefined;
-    return shown?.completed_at ? [{ failing: shown.name === names.failing, at: shown.completed_at }] : [];
+    return shown && job.started_at ? [{ failing: shown.name === names.failing, at: job.started_at }] : [];
   });
 }
 
+const latestStartFirst = (a: Run, b: Run) =>
+  (b.run_started_at ?? b.created_at).localeCompare(a.run_started_at ?? a.created_at);
+
 /**
  * What the channel shows, from the newest record among the alert workflow's
- * `runs`, read newest first a few at a time with `jobsOf` until one holds a
- * record; with none, Dev deploying.
+ * successful `runs`, read a few at a time with `jobsOf`, the latest started
+ * first, until one holds a record; with none, Dev deploying.
  */
 export async function readShown(
   runs: Run[],
   names: Names,
   jobsOf: (run: Run) => Promise<Job[]>,
 ): Promise<Shown> {
-  const sorted = [...runs].sort(newestFirst).slice(0, LOOK_BACK);
+  const sorted = [...runs].sort(latestStartFirst).slice(0, LOOK_BACK);
   for (let start = 0; start < sorted.length; start += BATCH) {
     const batch = sorted.slice(start, start + BATCH);
     const found = (await Promise.all(batch.map(jobsOf)))
@@ -360,7 +377,15 @@ export function decide(health: Health, shown: Shown): Decision {
     return { post: 'failure', failing, why: 'Dev is failing' };
   }
   if (!failing && shown.failing) {
-    return { post: 'recovery', failing, why: 'Dev deploys again' };
+    const deployedSince =
+      health.deployed !== null && shown.at !== null && time(health.deployed.updated_at) > time(shown.at);
+    return deployedSince
+      ? { post: 'recovery', failing, why: 'Dev deploys again' }
+      : {
+          post: null,
+          failing: true,
+          why: `no run fails now, but Dev has deployed nothing since the channel was told it is failing${as}`,
+        };
   }
   return {
     post: null,
@@ -609,18 +634,31 @@ export async function main() {
     ).workflow_runs as Run[];
 
   const own = await github(`/repos/${repo}/actions/runs/${env('GITHUB_RUN_ID')}`);
-  const [runs, [deployed, previous], alertRuns] = await Promise.all([
-    runsOf({ per_page: `${LISTED}` }),
+  const [[queried = null, previous = null], alertRuns] = await Promise.all([
     runsOf({ status: 'success', per_page: '2' }),
     github(
-      `/repos/${repo}/actions/workflows/${own.workflow_id}/runs?${new URLSearchParams({ branch: BRANCH, per_page: `${LOOK_BACK}` })}`,
+      `/repos/${repo}/actions/workflows/${own.workflow_id}/runs?${new URLSearchParams({ branch: BRANCH, status: 'success', per_page: `${LOOK_BACK}` })}`,
     ).then((listed) => listed.workflow_runs as Run[]),
   ]);
+  // Listed after that query, back to the run it found, so the list holds every
+  // run since; a run that succeeded in between is the one Dev deployed.
+  const byId = new Map<number, Run>();
+  for (let page = 1; page <= PAGES; page++) {
+    const listed = await runsOf({ per_page: `${LISTED}`, page: `${page}` });
+    for (const run of listed) {
+      byId.set(run.id, run);
+    }
+    if (listed.length < LISTED || queried === null || listed.some((run) => run.run_number <= queried.run_number)) {
+      break;
+    }
+  }
+  const runs = [...byId.values()];
+  const deployed = lastDeployed(queried, runs);
   const read = (run: Run) => jobsOf(repo, run.id);
   const health = await assess({
     runs,
-    deployed: deployed ?? null,
-    undeployed: await findUndeployed(repo, runs, deployed ?? null),
+    deployed,
+    undeployed: await findUndeployed(repo, runs, deployed),
     now: context.now,
     jobsOf: read,
   });
@@ -632,12 +670,12 @@ export async function main() {
     summary = `Nothing posted to Macro Alerts: ${decision.why}.`;
     outputs.push('post=false');
   } else {
-    // Dev deploys, so it deployed a run: the newest success the query found,
-    // or one the list found after it, whose deploy before is that query's.
-    const now = health.deployed ?? deployed;
-    const before = now.id === deployed?.id ? previous : deployed;
+    // A recovery follows a deploy, the newest success the query found or one
+    // the list found after it, whose deploy before is that query's.
     const message =
-      decision.post === 'failure' ? failureMessage(health, context) : recoveryMessage(now, before ?? null, context);
+      decision.post === 'recovery' && deployed
+        ? recoveryMessage(deployed, deployed.id === queried?.id ? previous : queried, context)
+        : failureMessage(health, context);
     writeFileSync(env('DEV_DEPLOY_ALERT_MESSAGE'), message);
     outputs.push('post=true');
     summary = `Posting to Macro Alerts:\n\n${message

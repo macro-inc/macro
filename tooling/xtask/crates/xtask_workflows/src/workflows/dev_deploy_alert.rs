@@ -14,7 +14,9 @@
 //! last step records what the channel then shows, which the next run reads.
 //!
 //! It reads the deploy runs through the API and checks out nothing, so the
-//! `workflow_run` trigger runs no code from the deploy.
+//! `workflow_run` trigger runs no code from the deploy. It runs on GitHub's own
+//! runner, not the deploys' Namespace and in-VPC ones, so it still runs when
+//! those give the deploys none.
 
 use gh_workflow::expr::typed::{Bool, Expr, Flag, StepHandle, StepOutput, Str, github, runner};
 use gh_workflow::{
@@ -72,7 +74,7 @@ fn job() -> Job {
         .name(MACRO_ALERTS.job)
         .cond(posts())
         .timeout_minutes(10u32)
-        .runs_on(runners::Runner::Small.to_string())
+        .runs_on(runners::GITHUB_LINUX)
         .add_step(decide())
         .add_step(post())
         .add_step(record(SHOWS_FAILING, "failing"))

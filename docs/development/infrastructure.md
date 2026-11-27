@@ -233,8 +233,10 @@ when:
   which also catches runs that never start or end and a disabled workflow.
 
 A push replaced by a newer one while it waited ends cancelled before any job
-started; it is read past and posts nothing. The job's summary says why it
-posted or did not.
+started; it is read past and posts nothing. `✅ Resolved` waits for a run that
+deploys after the alert, so a failed run re-run clears nothing while it goes.
+The job runs on GitHub's own runner, apart from the deploys' Namespace and
+`db-migrator` runners, and its summary says why it posted or did not.
 
 What to do:
 

@@ -19,6 +19,10 @@ pub const DB_MIGRATOR: &str = "db-migrator";
 /// allowed to use the image.
 pub const RUST_CI_IMAGE_GENERATION: &str = "linux-rust-ci-image-generation-small";
 
+/// GitHub's hosted Linux image, for a job that must still run when Namespace
+/// or the in-VPC runner gives the deploys none. It has Node, `jq` and `curl`.
+pub const GITHUB_LINUX: &str = "ubuntu-latest";
+
 /// The GitHub-hosted Windows Server 2025 runner that launches the desktop app.
 /// [`Runner::Windows`] runs jobs elevated in non-interactive session 0, where
 /// WebView2 cannot start.
