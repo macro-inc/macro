@@ -5,7 +5,7 @@ export default {
   // Banner above a shared document whose edits aren't reaching the server.
   syncUnsavedTitle: 'Changes not saved',
   syncUnsavedDescription:
-    "Your recent edits haven't reached the server. They're kept on this device, but collaborators can't see them yet.",
+    "Your recent edits haven't reached the server, so collaborators can't see them yet. Keep this document open until this message clears.",
   // Banner above a shared document that has lost its connection.
   syncOfflineTitle: 'Not connected',
   syncOfflineDescription:

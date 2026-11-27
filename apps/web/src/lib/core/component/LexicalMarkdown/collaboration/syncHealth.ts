@@ -9,8 +9,8 @@ import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
  * - `unsaved`: their edits have been waiting for the server too long, so
  *   collaborators can't see them and they live only on this device.
  * - `offline`: the session has been disconnected too long, so the viewer may
- *   not be seeing collaborators' latest changes. It lasts until the document
- *   has caught up again, not just until the socket reopens.
+ *   not be seeing collaborators' latest changes. After a drop it lasts until
+ *   the server has sent the document again, not just until the socket reopens.
  */
 export type CollabSyncProblem = 'unsaved' | 'offline';
 
@@ -24,9 +24,17 @@ export type CollabSyncHealth = {
  *  viewer is told. Long enough to ride out a reconnect or a slow ack. */
 export const SYNC_PROBLEM_DELAY_MS = 10_000;
 
+type LinkState = {
+  connected: boolean;
+  everConnected: boolean;
+  /** Reconnected after a drop, but the server hasn't sent the document yet. */
+  awaitingResync: boolean;
+  resyncsAtDrop: number;
+};
+
 type SyncHealthOptions = {
   status: Accessor<SyncSourceStatus>;
-  /** Calls the listener each time the document has caught up with the server
+  /** Calls the listener each time the server has sent the document again
    *  after a reconnect; returns the unsubscribe. */
   onResync: (listener: () => void) => () => void;
   /** A viewer who can't edit can't send their pending edits either, so they
@@ -54,18 +62,43 @@ export function createCollabSyncHealth(
   });
   const [resyncs, setResyncs] = createSignal(0);
   onCleanup(options.onResync(() => setResyncs((count) => count + 1)));
-  // Down from when the link drops until the document has caught up after it
-  // comes back. A memo, so the gate sees one change per outage, not a restart
-  // of its timer on every Connecting/Disconnected step of a reconnect loop.
-  let resyncsAtDrop = 0;
-  const disconnected = createMemo((was: boolean) => {
-    const count = resyncs();
-    if (options.status() !== SyncSourceStatus.Connected) {
-      resyncsAtDrop = count;
-      return true;
+  const link = createMemo<LinkState>(
+    (previous) => {
+      const count = resyncs();
+      if (options.status() !== SyncSourceStatus.Connected) {
+        // Only a link that was up waits for a resync: the first connection's
+        // initial sync doesn't send one.
+        return {
+          connected: false,
+          everConnected: previous.everConnected,
+          awaitingResync: previous.everConnected,
+          resyncsAtDrop: previous.awaitingResync
+            ? previous.resyncsAtDrop
+            : count,
+        };
+      }
+      return {
+        connected: true,
+        everConnected: true,
+        awaitingResync:
+          previous.awaitingResync && count === previous.resyncsAtDrop,
+        resyncsAtDrop: previous.resyncsAtDrop,
+      };
+    },
+    {
+      connected: false,
+      everConnected: false,
+      awaitingResync: false,
+      resyncsAtDrop: 0,
     }
-    return was && count === resyncsAtDrop;
-  }, false);
+  );
+  // Down from when the link drops until the server has sent the document
+  // again after it comes back. A memo of the boolean, so the gate sees one
+  // change per outage, not a restart of its timer on every
+  // Connecting/Disconnected step of a reconnect loop.
+  const disconnected = createMemo(
+    () => !link().connected || link().awaitingResync
+  );
   const offline = deferredGate(disconnected, delay);
 
   return {

@@ -592,7 +592,7 @@ container scan per node.
 A Markdown document tells the viewer when edits stop reaching the server: after
 10 s with an edit unacknowledged it shows **Changes not saved**, after 10 s
 disconnected **Not connected**, each with Retry, and clears once the edits are
-delivered or the document has resynced (`collaboration/syncHealth.ts`, from the WAL's
+delivered or the server has resent the document (`collaboration/syncHealth.ts`, from the WAL's
 `pendingSince`). Its backend-free two-peer regression stalls and drops a peer's
 socket on a local room, on desktop and phone; run it through
 `tests/view-parity/isolated-network.sh ""`, or interface changes drop its page

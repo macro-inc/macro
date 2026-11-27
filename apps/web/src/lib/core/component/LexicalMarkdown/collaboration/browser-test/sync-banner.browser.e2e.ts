@@ -300,7 +300,7 @@ test('a lost connection raises an offline banner, then an unsaved one once edits
   }
 });
 
-test('the offline banner stays until the document has caught up, not just until the socket reopens', async ({
+test('the offline banner stays until the server sends the document again, not just until the socket reopens', async ({
   page,
   room,
 }) => {

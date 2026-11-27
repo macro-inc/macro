@@ -23,9 +23,9 @@ class FakeWAL {
   }
 }
 
-function setup() {
+function setup(initial = SyncSourceStatus.Connected) {
   const wal = new FakeWAL();
-  const [status, setStatus] = createSignal(SyncSourceStatus.Connected);
+  const [status, setStatus] = createSignal(initial);
   const [canEdit, setCanEdit] = createSignal(true);
   const resyncListeners = new Set<() => void>();
   const resync = () => {
@@ -111,6 +111,15 @@ describe('createCollabSyncHealth', () => {
     vi.advanceTimersByTime(30_000);
     expect(health.problem()).toBe('offline');
     resync();
+    expect(health.problem()).toBeUndefined();
+    dispose();
+  });
+
+  it('clears once a first connection opens, which sends no resync', () => {
+    const { health, setStatus, dispose } = setup(SyncSourceStatus.Connecting);
+    vi.advanceTimersByTime(5_000);
+    setStatus(SyncSourceStatus.Connected);
+    vi.advanceTimersByTime(30_000);
     expect(health.problem()).toBeUndefined();
     dispose();
   });

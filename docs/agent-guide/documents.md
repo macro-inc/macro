@@ -290,8 +290,8 @@ warning in view while they scroll:
 - **Not connected** once the document has been disconnected for 10 s.
 
 Retry reconnects and resends at once. The warning clears as soon as every edit is
-delivered and the document has caught up with the server again (an open socket
-alone isn't enough); short reconnects and slow acks never show it.
+delivered and, after a drop, the server has sent the document again (an open
+socket alone isn't enough); short reconnects and slow acks never show it.
 
 ## Create a document from an editor
 
