@@ -26,6 +26,11 @@ const server = vi.hoisted(() => ({
   incoming: [] as ServerRequest[],
   mine: null as ServerRequest | null,
   stateReads: 0,
+  resolves: 0,
+  /** Holds every state read until released, when a test sets it. */
+  readsHeld: null as Promise<void> | null,
+  /** Holds the resolve response until released, when a test sets it. */
+  resolveHeld: null as Promise<void> | null,
 }));
 
 vi.mock('@service-storage/access-requests', () => ({
@@ -34,6 +39,7 @@ vi.mock('@service-storage/access-requests', () => ({
       server.stateReads++;
       // A real read finishes on a later task, after the row has rendered.
       await new Promise((resolve) => setTimeout(resolve));
+      if (server.readsHeld) await server.readsHeld;
       if (entity.entityId === MINE) {
         const pending = server.incoming.filter(
           (request) => request.status === 'pending'
@@ -61,9 +67,11 @@ vi.mock('@service-storage/access-requests', () => ({
       _revision: number,
       level: 'edit' | null
     ) => {
+      server.resolves++;
+      if (server.resolveHeld) await server.resolveHeld;
       const request = server.incoming.find((request) => request.id === id);
       if (request) request.status = level ? 'granted' : 'denied';
-      return ok(request);
+      return ok(request && { ...request, revision: request.revision + 1 });
     },
     cancel: async () => {
       if (server.mine) server.mine = { ...server.mine, status: 'cancelled' };
@@ -139,6 +147,9 @@ beforeEach(() => {
   server.incoming = [request('r-alice', ALICE)];
   server.mine = request('r-mine', VIEWER);
   server.stateReads = 0;
+  server.resolves = 0;
+  server.readsHeld = null;
+  server.resolveHeld = null;
 });
 afterEach(() => queryClient.clear());
 
@@ -163,6 +174,28 @@ describe('PendingRequestsSection', () => {
     expect(server.stateReads - settledReads).toBe(2);
     fireEvent.click(approve);
     await waitFor(() => expect(server.incoming[0]?.status).toBe('granted'));
+  });
+
+  it('shows Approve pending at once and drops the row on the response, not the refetch', async () => {
+    show();
+    const approve = await screen.findByRole('button', { name: 'Approve' });
+    const deny = screen.getByRole('button', { name: 'Deny' });
+    await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+    let releaseResolve = () => {};
+    server.resolveHeld = new Promise((release) => {
+      releaseResolve = release;
+    });
+    // The refetch after the decision never answers in this test.
+    server.readsHeld = new Promise(() => {});
+
+    fireEvent.click(approve);
+    expect(approve.getAttribute('aria-busy')).toBe('true');
+    expect(deny).toHaveProperty('disabled', true);
+    fireEvent.click(approve);
+
+    releaseResolve();
+    await waitFor(() => expect(rows('incoming')).toBe(0));
+    expect(server.resolves).toBe(1);
   });
 
   it('drops a request once it is approved', async () => {
