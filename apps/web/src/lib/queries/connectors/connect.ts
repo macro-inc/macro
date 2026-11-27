@@ -1,4 +1,3 @@
-import { SERVER_HOSTS } from '@core/constant/servers';
 import {
   openPipedreamConnectUI,
   type PipedreamConnectEvent,
@@ -141,6 +140,11 @@ async function followStep(
  * is closed, the session expires, or another user signs in. Setup can take
  * minutes and hundreds of polls, so a failed poll doesn't end it; only the
  * last answer counts.
+ *
+ * The tab is never touched here: its opener is severed (`reserveOauthPopup`),
+ * so the browser refuses both `close()` and navigating it once it is on the
+ * vendor's page. Consent ends with the vendor sending it to the callback page,
+ * which closes itself; a tab abandoned on the vendor's page stays the user's.
  */
 async function pollCompletion(
   key: string,
@@ -157,7 +161,6 @@ async function pollCompletion(
     });
     if (result.isOk()) {
       if (currentUserId() !== userId) return 'closed';
-      finishTab(tab, 'connected');
       return await recordConnected(result.value);
     }
     failure = result.error.some((error) => error.code === 'NOT_FOUND')
@@ -166,21 +169,9 @@ async function pollCompletion(
     if (closed && (!failure || closedRetries-- <= 0)) break;
     await sleep(COMPLETE_POLL_MS);
   }
-  finishTab(tab, 'error');
   if (failure && currentUserId() === userId)
     throw new ThrownResultError(failure);
   return 'closed';
-}
-
-/**
- * Take the consent tab off the vendor's page. `close()` does nothing once a
- * tab with a severed opener has navigated, so send it to the page that closes
- * itself or tells the user to.
- */
-function finishTab(tab: Window | null, status: 'connected' | 'error') {
-  if (tab && !tab.closed) {
-    tab.location.href = `${SERVER_HOSTS['cognition-service']}/pipedream/mcp/connect/callback?status=${status}`;
-  }
 }
 
 /** The recorded connector, or none while the server has nothing to record. */

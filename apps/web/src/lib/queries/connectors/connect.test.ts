@@ -241,14 +241,39 @@ describe('polling a page that cannot report back', () => {
     );
   });
 
-  it('sends the tab to the page that closes itself once connected', async () => {
+  // The tab's opener is severed, so the browser refuses to navigate or close
+  // it from here: the flow must never try.
+  it('leaves the tab alone once connected', async () => {
     mocks.complete.mockResolvedValueOnce(linear);
     const pending = connectConnector({ key: 'app/linear' });
     await vi.runAllTimersAsync();
     expect(await pending).toBe('connected');
-    expect(tab.location.href).toContain(
-      '/pipedream/mcp/connect/callback?status=connected'
-    );
+    expect(tab.location.href).toBe('');
+    expect(tab.close).not.toHaveBeenCalled();
+  });
+
+  // Chromium throws a SecurityError when the app sets the location of a tab
+  // whose opener it severed, once that tab is on another origin. The vendor
+  // or callback page can still be up when the poll sees the connection.
+  it('reports a connection made while the tab is still on another origin', async () => {
+    const crossOrigin = {
+      closed: false,
+      close: vi.fn(),
+      location: {
+        set href(_: string) {
+          throw new DOMException(
+            'The current window does not have permission to navigate the target frame',
+            'SecurityError'
+          );
+        },
+      },
+    };
+    mocks.reservePopup.mockReturnValue(crossOrigin);
+    mocks.complete.mockResolvedValueOnce(linear);
+    const pending = connectConnector({ key: 'app/linear' });
+    await vi.runAllTimersAsync();
+    expect(await pending).toBe('connected');
+    expect(mocks.setData).toHaveBeenCalledOnce();
   });
 
   it('keeps polling through a failed poll', async () => {
@@ -271,25 +296,22 @@ describe('polling a page that cannot report back', () => {
     expect(await pending).toBe('connected');
   });
 
-  it('fails and retires the tab when polls fail until the deadline', async () => {
+  it('fails when polls fail until the deadline', async () => {
     mocks.complete.mockResolvedValue(blip);
     const pending = connectConnector({ key: 'app/linear' });
     const outcome = expect(pending).rejects.toBeDefined();
     await vi.runAllTimersAsync();
     await outcome;
-    expect(tab.location.href).toContain(
-      '/pipedream/mcp/connect/callback?status=error'
-    );
+    expect(tab.location.href).toBe('');
     expect(mocks.setData).not.toHaveBeenCalled();
   });
 
-  it('retires a tab still open at the deadline', async () => {
+  it('stops quietly at the deadline and leaves a still-open tab alone', async () => {
     const pending = connectConnector({ key: 'app/linear' });
     await vi.runAllTimersAsync();
     expect(await pending).toBe('closed');
-    expect(tab.location.href).toContain(
-      '/pipedream/mcp/connect/callback?status=error'
-    );
+    expect(tab.location.href).toBe('');
+    expect(tab.close).not.toHaveBeenCalled();
   });
 });
 
