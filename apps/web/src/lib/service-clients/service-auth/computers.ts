@@ -269,7 +269,7 @@ export const computersClient = {
     withinDeadline((signal) =>
       fetchWithToken<ComputerUsage[]>(`${base}/usage`, { signal })
     ),
-  /** Whether computers are rolled out to the caller (flag or dev allowlist). */
+  /** Whether computers are rolled out to the caller (the PostHog flag). */
   rollout: () =>
     withinDeadline((signal) =>
       fetchWithToken<ComputerRollout>(`${base}/rollout`, { signal })
