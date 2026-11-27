@@ -167,11 +167,15 @@ export const useChannelDirectory = () => {
 
 export const useIsConnectedSecondaryInbox = () => () => false;
 
+/** A contact read started and not yet answered: a first page has no cursor. */
+type PendingRead = { id: number; query: string; cursor: string | null };
+
 const [reads, setReads] = createSignal(0);
 /** Contact reads started and not yet answered. */
-const [pendingReads, setPendingReads] = createSignal(0);
+const [pending, setPending] = createSignal<readonly PendingRead[]>([]);
+const pendingReads = () => pending().length;
 
-export { pendingReads, reads };
+export { pending, pendingReads, reads };
 
 /** Ranked like the cache: names starting with the query, then other names or
  * addresses containing it, most recent first in each group. */
@@ -209,10 +213,15 @@ const HOST: ContactWindowHost = {
       throw new Error('Fixture has no publisher');
     },
     search: async (request) => {
-      setReads((value) => value + 1);
-      setPendingReads((value) => value + 1);
+      const read: PendingRead = {
+        id: reads() + 1,
+        query: request.query,
+        cursor: request.cursor ?? null,
+      };
+      setReads(read.id);
+      setPending((value) => [...value, read]);
       await new Promise((resolve) => setTimeout(resolve, world().latencyMs));
-      setPendingReads((value) => value - 1);
+      setPending((value) => value.filter((other) => other !== read));
       const { page, next } = search(
         request.query,
         request.cursor ? Number(request.cursor) : 0,

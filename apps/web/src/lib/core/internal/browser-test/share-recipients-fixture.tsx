@@ -4,7 +4,7 @@ import type {
 } from '@app/features/sharing/share-delivery/share-delivery';
 import { ShareRecipientField } from '@core/component/ShareRecipientField';
 import { createSignal } from 'solid-js';
-import { pendingReads, reads } from './share-recipient-adapters';
+import { pending, pendingReads, reads } from './share-recipient-adapters';
 
 /** The Share menu's real To field over an account with many channels and
  * contacts (`share-recipient-adapters.ts` sets their number from the URL). */
@@ -34,6 +34,9 @@ export function ShareRecipientsFixture() {
       </pre>
       <output data-testid="reads">{reads()}</output>
       <output data-testid="pending-reads">{pendingReads()}</output>
+      <output data-testid="pending-read-list">
+        {JSON.stringify(pending())}
+      </output>
     </main>
   );
 }
