@@ -78,6 +78,8 @@ export interface SidebarItem {
   hotkey?: ValidHotkey | ValidHotkey[];
   hotkeyToken: HotkeyToken;
   standaloneHotkey?: boolean;
+  /** Extra Command-K search terms for the destination's GoTo command. */
+  keywords?: string[];
 }
 
 /**
@@ -199,12 +201,13 @@ const SIDEBAR_LINKS = [
   {
     id: 'channels',
     get label() {
-      return t('nav.channels');
+      return t('nav.chat');
     },
     href: LIST_VIEW_PATHS.channels,
     icon: getIconConfig('channel').icon,
     hotkey: 'c',
     hotkeyToken: TOKENS.sidebar.goTo.channels,
+    keywords: ['Channels'],
   },
 ] satisfies SidebarItem[];
 
@@ -350,6 +353,7 @@ export const GoToHotkeys = () => {
         scopeId: link.standaloneHotkey ? 'global' : GO_TO_COMMAND_SCOPE,
         hotkeyToken: link.hotkeyToken,
         description: () => t('nav.goTo', { label: link.label }),
+        keywords: link.keywords,
         keyDownHandler: openSidebarView,
         icon: link.icon,
         // Views add letters the app doesn't use (a list's g then g).
