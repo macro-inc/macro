@@ -207,36 +207,40 @@ function Zone(props: ParentProps<ZoneProps>) {
       }}
       data-resize-zone
     >
+      {/* Panels and gutters are separate insertions. In one list, Solid can
+          reconcile a panel swap (docked aside to overlay) together with the
+          last gutter leaving by detaching and re-appending the main panel,
+          which resets every scroll position inside it. */}
       <ResizeZoneContext.Provider value={ctx}>
         {props.children}
-        {/* A gutter renders between every visible pair of panels so the
-            divider it paints is present even in a fixed layout; only a
-            resizable zone makes it draggable. */}
-        <Show when={gutterPx() > 0 && visibleLayouts().length > 1}>
-          <Index each={visibleLayouts()}>
-            {(panel, visibleIndex) => {
-              const actualIndex = solver.order().indexOf(panel().id);
-              return (
-                <Show when={visibleIndex < visibleLayouts().length - 1}>
-                  <Gutter
-                    direction={direction()}
-                    gutterSize={gutterPx()}
-                    offset={panel().offset + panel().size}
-                    index={actualIndex}
-                    resizable={gutterEnabled()}
-                    showDivider={props.showDividers ?? true}
-                    showTouchDivider={props.showTouchDividers}
-                    nudge={solver.moveHandle}
-                    onChangeStart={beginResizeChange}
-                    onChangeEnd={endResizeChange}
-                    root={root}
-                  />
-                </Show>
-              );
-            }}
-          </Index>
-        </Show>
       </ResizeZoneContext.Provider>
+      {/* A gutter renders between every visible pair of panels so the
+          divider it paints is present even in a fixed layout; only a
+          resizable zone makes it draggable. */}
+      <Show when={gutterPx() > 0 && visibleLayouts().length > 1}>
+        <Index each={visibleLayouts()}>
+          {(panel, visibleIndex) => {
+            const actualIndex = solver.order().indexOf(panel().id);
+            return (
+              <Show when={visibleIndex < visibleLayouts().length - 1}>
+                <Gutter
+                  direction={direction()}
+                  gutterSize={gutterPx()}
+                  offset={panel().offset + panel().size}
+                  index={actualIndex}
+                  resizable={gutterEnabled()}
+                  showDivider={props.showDividers ?? true}
+                  showTouchDivider={props.showTouchDividers}
+                  nudge={solver.moveHandle}
+                  onChangeStart={beginResizeChange}
+                  onChangeEnd={endResizeChange}
+                  root={root}
+                />
+              </Show>
+            );
+          }}
+        </Index>
+      </Show>
     </div>
   );
 }
