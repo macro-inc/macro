@@ -14,7 +14,7 @@ let
   ];
   # kind 0.31 (nixos-26.05) can't create a v1.37 node: kubeadm dropped the
   # v1beta3 config it writes.
-  kind = pkgs.kind.overrideAttrs (old: {
+  kind = pkgs.kind.overrideAttrs (_: {
     version = "0.33.0";
     src = pkgs.fetchFromGitHub {
       owner = "kubernetes-sigs";

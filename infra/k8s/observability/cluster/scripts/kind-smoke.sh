@@ -25,8 +25,9 @@ if ! kind get clusters | grep -qx "$name"; then
   kind create cluster --name "$name" --image "$image" --wait 2m
 fi
 context="kind-$name"
-# Replicas spread across zones with DoNotSchedule (derived-metrics, the
-# backends) stay Pending on a node with no zone label.
+# Workloads spread across zones with DoNotSchedule (derived-metrics, Grafana,
+# ingest) stay Pending on a node with no zone label. The backends stay Pending
+# anyway: their spread needs three zones (`minDomains`), and their volumes gp3.
 kubectl --context "$context" label nodes --all --overwrite topology.kubernetes.io/zone=kind
 nix run "$(git rev-parse --show-toplevel)/infra/k8s/observability/cluster#bootstrap" -- \
   --context "$context" --revision "$revision"
