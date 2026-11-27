@@ -153,8 +153,8 @@ export class ChannelNamespace {
    * Search the user's channels by name (the default) or by content; `maxItems`
    * caps the total. A name search matches, case-insensitively, channels whose
    * name or other members' names contain every word of `query`; the server runs
-   * it, one request per page of matches, newest first. A blank query lists
-   * every channel.
+   * it, one request per page of matches, newest first. A blank name query
+   * lists every channel; a blank content search throws.
    *
    * @readonly
    */
