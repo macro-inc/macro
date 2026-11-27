@@ -505,30 +505,35 @@ export function useHotkeyDOMScope(
       return console.error(
         'Trying to attach hotkeys to an element that does exist.'
       );
-    const DOMScope = hotkeyScopeTree.get(scopeId);
-    // Attach this scope to the closest parent scope.
-    // Note: this only works in "ideal" circumstances, where children are attached sequentially after parents. This is not always the case.
-    let parentScopeId;
-    if (!detachedScope) {
-      parentScopeId = findClosestParentScopeId(el);
-      const parentScope = hotkeyScopeTree.get(parentScopeId);
-      if (parentScope) {
-        parentScope.childScopeIds.push(scopeId);
+    const currentDataAttribute = el.getAttribute('data-hotkey-scope');
+    // Solid re-runs a spread ref on the same element whenever another spread
+    // prop changes (a Kobalte tooltip trigger spreads its open state), and the
+    // re-run's cleanup has just removed the focus listener. Re-add only that.
+    const reattaching = currentDataAttribute === scopeId;
+    if (!reattaching) {
+      const DOMScope = hotkeyScopeTree.get(scopeId);
+      // Attach this scope to the closest parent scope.
+      // Note: this only works in "ideal" circumstances, where children are attached sequentially after parents. This is not always the case.
+      let parentScopeId;
+      if (!detachedScope) {
+        parentScopeId = findClosestParentScopeId(el);
+        const parentScope = hotkeyScopeTree.get(parentScopeId);
+        if (parentScope) {
+          parentScope.childScopeIds.push(scopeId);
+        }
       }
-    }
-    if (DOMScope?.type === 'dom') {
-      DOMScope.parentScopeId = parentScopeId;
+      if (DOMScope?.type === 'dom') {
+        DOMScope.parentScopeId = parentScopeId;
+      }
+      if (currentDataAttribute) {
+        Telemetry.error(
+          `Attempting to attach ${scopeId} hotkey scope, but the specified element already has a hotkey scope attached to it. This is an error and will break the hotkey scope tree. Please use that scope, ${currentDataAttribute}, instead of inventing your own.`
+        );
+      }
+      el.setAttribute('data-hotkey-scope', scopeId);
     }
 
     el.addEventListener('focusin', handleFocusIn);
-
-    const currentDataAttribute = el.getAttribute('data-hotkey-scope');
-    if (currentDataAttribute) {
-      Telemetry.error(
-        `Attempting to attach ${scopeId} hotkey scope, but the specified element already has a hotkey scope attached to it. This is an error and will break the hotkey scope tree. Please use that scope, ${currentDataAttribute}, instead of inventing your own.`
-      );
-    }
-    el.setAttribute('data-hotkey-scope', scopeId);
 
     onCleanup(() => {
       el.removeEventListener('focusin', handleFocusIn);
