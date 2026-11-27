@@ -231,6 +231,17 @@ export class InMemoryWALStore<T> implements WALStore<T> {
  * Triggering flushes on transport reconnect (or other "try again" signals)
  * is the caller's responsibility.
  */
+function oldestUndelivered(
+  entries: readonly WALEntry<unknown>[]
+): number | undefined {
+  let oldest: number | undefined;
+  for (const entry of entries) {
+    if (!entry.delivered && (oldest === undefined || entry.createdAt < oldest))
+      oldest = entry.createdAt;
+  }
+  return oldest;
+}
+
 export class WALSyncer<T> {
   /** True while a flush is in progress — prevents concurrent flushes. */
   private isFlushing = false;
@@ -259,6 +270,10 @@ export class WALSyncer<T> {
    *  cannot clear the pending state that append set. */
   private appends = 0;
   private refreshes = 0;
+  /** When an edit failed to reach the store. It never gets sent, and the
+   *  server can't apply later edits without it, so it stays pending for the
+   *  rest of this session. */
+  private lostAt: number | undefined;
   private readonly pendingListeners = new Set<
     (since: number | undefined) => void
   >();
@@ -328,8 +343,14 @@ export class WALSyncer<T> {
   }
 
   private async appendEntry(item: T): Promise<void> {
-    await this.ready();
-    await this.store.append(item);
+    try {
+      await this.ready();
+      await this.store.append(item);
+    } catch (error) {
+      this.lostAt ??= Date.now();
+      if (this.pending === undefined) this.setPending(this.lostAt);
+      throw error;
+    }
     this.appends++;
     if (this.pending === undefined) this.setPending(Date.now());
     if (this.label)
@@ -418,27 +439,37 @@ export class WALSyncer<T> {
   }
 
   /** Rereads the store. Only the latest read applies, and a read that finds
-   *  nothing pending doesn't clear an append that landed after it started. A
-   *  failed read keeps the last answer; the next flush or append retries. */
+   *  nothing pending doesn't clear an append that landed after it started. */
   private async refreshPending(): Promise<void> {
+    try {
+      await this.readEntries();
+    } catch {
+      // Keep the last answer; the next flush or append rereads.
+    }
+  }
+
+  /** Reads every entry and updates {@link pendingSince} from them, so each
+   *  flush also corrects a pending state another tab's delivery or a failed
+   *  earlier read left stale. */
+  private async readEntries(): Promise<WALEntry<T>[]> {
     const refresh = ++this.refreshes;
     const appends = this.appends;
-    let entries: WALEntry<T>[];
-    try {
-      entries = await this.store.getAll();
-    } catch {
-      return;
-    }
-    if (refresh !== this.refreshes) return;
-    let oldest: number | undefined;
-    for (const entry of entries) {
-      if (!entry.delivered && (oldest === undefined || entry.createdAt < oldest))
-        oldest = entry.createdAt;
-    }
-    if (oldest === undefined && appends !== this.appends) return;
-    this.setPending(
-      oldest === undefined ? undefined : Math.max(oldest, this.startedAt)
-    );
+    const entries = await this.store.getAll();
+    if (refresh !== this.refreshes) return entries;
+    const oldest = oldestUndelivered(entries);
+    // A read that finds nothing pending may have missed an append that landed
+    // while it ran. That append's own flush reads again and corrects it.
+    if (oldest === undefined && appends !== this.appends) return entries;
+    this.applyPending(oldest);
+    return entries;
+  }
+
+  private applyPending(oldest: number | undefined): void {
+    const since = [
+      oldest === undefined ? undefined : Math.max(oldest, this.startedAt),
+      this.lostAt,
+    ].filter((time) => time !== undefined);
+    this.setPending(since.length ? Math.min(...since) : undefined);
   }
 
   public async summary(): Promise<WalContext> {
@@ -471,7 +502,7 @@ export class WALSyncer<T> {
 
     try {
       await this.ready();
-      const entries = await this.store.getAll();
+      const entries = await this.readEntries();
       const undelivered = entries.filter((e) => !e.delivered);
       if (undelivered.length === 0) return; // nothing to do
 
