@@ -10,7 +10,7 @@ it works: [architecture](../architecture/stripe-event-inbox.md).
   prod (`.github/workflows/release-production.yml:14`) both deploy through
   `.github/workflows/deploy_all_services.yml`.
 - In it, `migrate-db` (`deploy_all_services.yml:309`, running
-  `.github/actions/migrate-cloud-storage-db`, which is `cargo sqlx migrate run`
+  `.github/actions/migrate-cloud-storage-db`, which is `sqlx migrate run`
   at `action.yml:53-55`) must succeed before `deploy-services` starts
   (`deploy_all_services.yml:336-337`: `needs.migrate-db.result == 'success'`).
   Source: `tooling/xtask/crates/xtask_workflows/src/workflows/deploy_all_services.rs:299-342`.
@@ -73,7 +73,7 @@ WHERE state <> 'idle' GROUP BY consumer, state;
 
 - Revert the code, but **keep the migration file**
   (`crates/macro_db_client/migrations/*_stripe_event_inbox.sql`). Prod runs
-  `cargo sqlx migrate run` without `--ignore-missing`, so a release missing an
+  `sqlx migrate run` without `--ignore-missing`, so a release missing an
   applied migration fails `migrate-db`, and that blocks every later deploy.
 - While rolled back, the old webhook handler applies each event directly and
   writes nothing to the inbox tables. The inbox never sees those events.
