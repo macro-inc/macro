@@ -72,6 +72,8 @@ data:
     [unified_alerting.state_history]
     backend = multiple
     enabled = true
+    loki_basic_auth_password = $__file{/etc/grafana/secrets/otlp_token}
+    loki_basic_auth_username = state-history
     loki_remote_read_url = http://query-gateway.observability.svc.cluster.local:8081/loki
     loki_remote_write_url = http://query-gateway.observability.svc.cluster.local:8081/state-history
     primary = annotations

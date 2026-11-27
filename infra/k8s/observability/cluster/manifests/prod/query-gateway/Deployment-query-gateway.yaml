@@ -18,7 +18,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: a9cf410492b68d62041529cd65de145b00c1303b96b0c479d6b4c035e075ddf9
+        checksum/config: 2531de400d8b6752ba0a6622d995967e136c3076448515cf32a44d7645ae2f84
       labels:
         app.kubernetes.io/name: query-gateway
         observability.macro.com/telemetry-read: "true"
@@ -72,6 +72,9 @@ spec:
               readOnly: true
             - mountPath: /tmp
               name: tmp
+            - mountPath: /etc/nginx/auth
+              name: auth
+              readOnly: true
       enableServiceLinks: false
       securityContext:
         fsGroup: 101
@@ -100,3 +103,6 @@ spec:
           name: config
         - emptyDir: {}
           name: tmp
+        - name: auth
+          secret:
+            secretName: query-gateway-basic-auth

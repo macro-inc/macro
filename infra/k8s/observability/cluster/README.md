@@ -325,8 +325,9 @@ GoAlert notify. Datadog's monitors run beside Datadog as shadow rules (folder
 `grafana-provisioning/datadog/MAPPING.md`): they route to GoAlert notify and
 never page, even critical ones, until the paging moves over group by group.
 Every rule's state changes also go to Loki (`{from="state-history"}`), through
-the query gateway's one write path, so they can be compared with Datadog's
-without the Grafana API. Muting covers notification policies only: a contact point's
+the query gateway's one write path (basic auth, user `state-history`, password
+`otlp_token`, which only Grafana's historian sends), so they can be compared
+with Datadog's without the Grafana API. Muting covers notification policies only: a contact point's
 **Test** button in the UI sends for real even while muted; don't press it
 before the switch.
 
@@ -334,7 +335,7 @@ before the switch.
 
 | Key | Used by | Missing means |
 | --- | --- | --- |
-| `otlp_token` | `alloy-ingest` (bearer token), `edge` (basic-auth password of user `metrics`) | neither starts: no ingest, and no Grafana either, since it is behind the edge |
+| `otlp_token` | `alloy-ingest` (bearer token), `edge` (basic-auth password of user `metrics`), `grafana` and `query-gateway` (state history's basic auth, user `state-history`) | none of them starts: no ingest and no Grafana |
 | `google_client_id`, `google_client_secret`, `grafana_secret_key` | `grafana` | Grafana doesn't start |
 | `goalert_grafana_integration_key`, `goalert_grafana_notify_integration_key` | `grafana` contact points | they fail once unmuted |
 | `goalert_cluster_heartbeat_id` | the watchdog | it pings a URL that doesn't exist, and GoAlert never pages for it |

@@ -358,6 +358,10 @@ let
       secondaries = "loki";
       loki_remote_read_url = config.macro.edge.datasourceUrls.loki;
       loki_remote_write_url = config.macro.edge.stateHistoryUrl;
+      # The gateway's push path checks it (edge.nix); Grafana sends it on
+      # reads too, which the query endpoints ignore.
+      loki_basic_auth_username = "state-history";
+      loki_basic_auth_password = secretFile "grafana" "otlp_token";
     };
   };
 
@@ -588,6 +592,8 @@ in
           "google_client_id"
           "google_client_secret"
           "grafana_secret_key"
+          # State history's basic auth on the query gateway.
+          "otlp_token"
         ];
       })
       (workload.externalSecret cluster {
