@@ -5,6 +5,7 @@ import type { CacheHost } from '@graphql-cache/host/types';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import type { Client, OperationResult } from '@urql/core';
 import type { Result } from 'neverthrow';
+import { createSignal } from 'solid-js';
 import {
   channelNotificationRefresh,
   disposeChannelNotificationRefresh,
@@ -300,6 +301,14 @@ export function createGraphqlSoupSubscriptionsLifecycle(
     host?: CacheHost
   ): void;
   connected(): void;
+  /** The websocket connected: subscriptions now reach the server. */
+  socketConnected(): void;
+  /** The websocket closed: nothing published until it reconnects arrives. */
+  socketClosed(): void;
+  /** Since when, in epoch milliseconds, Soup updates have reached the cache
+   * host without a break: the socket stayed open and the subscriptions that
+   * write the cache stayed attached. Undefined while they do not. */
+  updatesLiveSince(): number | undefined;
   dispose(): void;
 } {
   let currentClient: Pick<Client, 'subscription' | 'query'> | undefined;
@@ -312,6 +321,19 @@ export function createGraphqlSoupSubscriptionsLifecycle(
   let signaledFailure = false;
   let connections = 0;
   let stopWatchingForReattach: (() => void) | undefined;
+  let socketOpen = false;
+  const [liveSince, setLiveSince] = createSignal<number | undefined>();
+  // Updates reach the cache from now on, once the set that writes it is
+  // attached on an open socket.
+  const markLive = () => {
+    if (
+      socketOpen &&
+      activity !== undefined &&
+      currentHost !== undefined &&
+      !currentHost.disabled
+    )
+      setLiveSince(Date.now());
+  };
 
   // graphql-ws retries transient failures itself and gives up only on ones a
   // timer cannot fix (a rejected session, a protocol error). Reattach the set
@@ -323,6 +345,7 @@ export function createGraphqlSoupSubscriptionsLifecycle(
   };
 
   const unsubscribeAll = () => {
+    setLiveSince(undefined);
     generation += 1;
     stopWatchingForReattach?.();
     stopWatchingForReattach = undefined;
@@ -425,6 +448,13 @@ export function createGraphqlSoupSubscriptionsLifecycle(
                 });
               }
             }
+            // An error may have ended the subscription; what it would have
+            // delivered since is missed.
+            if (
+              (result.error || result.hasNext === false) &&
+              setGeneration === generation
+            )
+              setLiveSince(undefined);
             // urql ends a subscription with a final `hasNext: false` result.
             if (result.hasNext === false && setGeneration === generation) {
               reattachOnNextOpportunity();
@@ -432,6 +462,7 @@ export function createGraphqlSoupSubscriptionsLifecycle(
           });
         return () => subscription.unsubscribe();
       });
+      markLive();
     },
     connected: () => {
       signaledFailure = false;
@@ -443,6 +474,19 @@ export function createGraphqlSoupSubscriptionsLifecycle(
           revalidateMailAttachmentLists(),
           'graphql-soup-subscriptions'
         );
+      markLive();
+    },
+    socketConnected() {
+      socketOpen = true;
+      lifecycle.connected();
+    },
+    socketClosed() {
+      socketOpen = false;
+      setLiveSince(undefined);
+    },
+    updatesLiveSince() {
+      const since = liveSince();
+      return currentHost && !currentHost.disabled ? since : undefined;
     },
     dispose() {
       if (options.suspendOnPagehide) {

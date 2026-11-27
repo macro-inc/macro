@@ -475,6 +475,83 @@ describe('GraphQL Soup subscription lifecycle', () => {
     expect(client.subscription).toHaveBeenCalledTimes(4);
   });
 
+  it('says since when updates reached the cache host without a break', () => {
+    vi.useFakeTimers();
+    const receive: Array<
+      (result: { error?: unknown; hasNext?: boolean }) => void
+    > = [];
+    const client = {
+      query: vi.fn(),
+      subscription: vi.fn(() => ({
+        subscribe: vi.fn((next) => {
+          receive.push(next);
+          return { unsubscribe: vi.fn() };
+        }),
+      })),
+    };
+    const host = {
+      disabled: false,
+      onCacheGenerationChanged: () => () => {},
+    };
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle({
+      suspendOnPagehide: true,
+    });
+    try {
+      vi.setSystemTime(1_000);
+      lifecycle.replace(client as never, host as never);
+      // Subscribed, but nothing reaches the server before the socket opens.
+      expect(lifecycle.updatesLiveSince()).toBeUndefined();
+      vi.setSystemTime(2_000);
+      lifecycle.socketConnected();
+      expect(lifecycle.updatesLiveSince()).toBe(2_000);
+
+      vi.setSystemTime(3_000);
+      lifecycle.socketClosed();
+      expect(lifecycle.updatesLiveSince()).toBeUndefined();
+      // A refresh after the socket closed does not make it live again.
+      lifecycle.connected();
+      expect(lifecycle.updatesLiveSince()).toBeUndefined();
+      vi.setSystemTime(4_000);
+      lifecycle.socketConnected();
+      expect(lifecycle.updatesLiveSince()).toBe(4_000);
+
+      // A subscription that ended or failed misses what follows.
+      receive.at(-1)?.({ hasNext: true });
+      expect(lifecycle.updatesLiveSince()).toBe(4_000);
+      receive.at(-1)?.({ error: new Error('lagging'), hasNext: false });
+      expect(lifecycle.updatesLiveSince()).toBeUndefined();
+      // Attached again on the open socket.
+      vi.setSystemTime(5_000);
+      lifecycle.replace(client as never, host as never);
+      expect(lifecycle.updatesLiveSince()).toBe(5_000);
+
+      // Paused for navigation.
+      dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+      expect(lifecycle.updatesLiveSince()).toBeUndefined();
+      vi.setSystemTime(6_000);
+      dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+      expect(lifecycle.updatesLiveSince()).toBe(6_000);
+
+      // A cache that takes no updates.
+      host.disabled = true;
+      expect(lifecycle.updatesLiveSince()).toBeUndefined();
+      host.disabled = false;
+      expect(lifecycle.updatesLiveSince()).toBe(6_000);
+      // Subscriptions without the cache host write no cache.
+      lifecycle.replace(client as never);
+      lifecycle.connected();
+      expect(lifecycle.updatesLiveSince()).toBeUndefined();
+
+      lifecycle.replace(client as never, host as never);
+      expect(lifecycle.updatesLiveSince()).toBe(6_000);
+      lifecycle.dispose();
+      expect(lifecycle.updatesLiveSince()).toBeUndefined();
+    } finally {
+      lifecycle.dispose();
+      vi.useRealTimers();
+    }
+  });
+
   it('refreshes activity when it subscribes the same client again', async () => {
     vi.useFakeTimers();
     const client = {

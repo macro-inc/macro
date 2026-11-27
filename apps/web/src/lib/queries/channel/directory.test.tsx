@@ -1073,8 +1073,8 @@ type CachedDirectoryOptions = {
   subscribeMembership?: (
     listener: (patch: ChannelMembershipPatch) => void
   ) => () => void;
-  /** Reconnects of the soup socket. */
-  subscribeReconnected?: (listener: () => void) => () => void;
+  /** Since when soup updates have reached the cache without a break. */
+  updatesLiveSince?: () => number | undefined;
 };
 
 const CACHE_SESSION = 'session-1';
@@ -1193,7 +1193,7 @@ function mountCachedDirectory(
       sessionStartedAt: options.sessionStartedAt,
       departureRechecksMs: options.departureRechecksMs,
       subscribeMembership: options.subscribeMembership,
-      subscribeReconnected: options.subscribeReconnected,
+      updatesLiveSince: options.updatesLiveSince,
     });
   });
   return {
@@ -1410,30 +1410,32 @@ describe('cached channel directory', () => {
       await vi.waitFor(() => expect(directory.viewsCurrent()).toBe(true));
     });
 
-    it('shows removals as current only after a pass that started since the soup socket last reconnected', async () => {
-      const reconnects = new Set<() => void>();
+    it('shows removals as current only after a pass that started while soup updates reached the cache without a break', async () => {
+      let liveSince: number | undefined;
       const { cache, directory } = mountCachedDirectory([], {
         sessionStartedAt: Date.parse(LOADED_AT),
-        subscribeReconnected: (listener) => {
-          reconnects.add(listener);
-          return () => reconnects.delete(listener);
-        },
+        updatesLiveSince: () => liveSince,
       });
       cache.put(channelRecord('a'));
-      // The last session's pass leaves records this page never reread.
-      lanePass('g1', '2026-11-20T08:00:00.000Z', 'finished');
-      await vi.waitFor(() => expect(directory.complete()).toBe(true));
+      // The socket has not connected: no removal is known to reach the cache.
+      lanePass('g1', '2026-11-21T08:00:02.000Z', 'finished');
+      await vi.waitFor(() => expect(directory.viewsCurrent()).toBe(true));
       expect(directory.removalsCurrent()).toBe(false);
 
-      lanePass('g1', '2026-11-21T08:00:01.000Z', 'finished');
-      await vi.waitFor(() => expect(directory.removalsCurrent()).toBe(true));
-
-      // Removals published while the socket was down never reached the cache.
-      for (const listener of reconnects) listener();
-      expect(directory.viewsCurrent()).toBe(true);
+      liveSince = Date.parse('2026-11-21T08:00:01.000Z');
+      expect(directory.removalsCurrent()).toBe(true);
+      // Live only from the moment the pass started: a removal of a record
+      // it read before then may have been missed.
+      liveSince = Date.parse('2026-11-21T08:00:02.000Z');
+      expect(directory.removalsCurrent()).toBe(false);
+      // The socket closed, or a subscription that writes the cache ended.
+      liveSince = undefined;
       expect(directory.removalsCurrent()).toBe(false);
 
-      lanePass('g1', new Date(Date.now() + 1_000).toISOString(), 'finished');
+      // Back, and a pass that started since then finishes.
+      liveSince = Date.parse('2026-11-21T08:05:00.000Z');
+      expect(directory.removalsCurrent()).toBe(false);
+      lanePass('g1', '2026-11-21T08:05:01.000Z', 'finished');
       await vi.waitFor(() => expect(directory.removalsCurrent()).toBe(true));
     });
 

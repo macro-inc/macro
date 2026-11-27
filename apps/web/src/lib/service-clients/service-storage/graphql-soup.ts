@@ -512,6 +512,23 @@ export function getGraphqlSoupNetworkClient(): Client {
   return graphqlSoupClient;
 }
 
+// The subscriptions of the cached client: the only ones that write the cache.
+const [cacheUpdates, setCacheUpdates] = createSignal<
+  ReturnType<typeof createGraphqlSoupSubscriptionsLifecycle> | undefined
+>();
+
+/**
+ * Since when, in epoch milliseconds, Soup updates have reached this page's
+ * cache without a break: its websocket stayed open and the subscriptions
+ * that write the cache stayed attached. Undefined while they do not (no
+ * cache, a socket not yet connected or closed, a subscription that ended,
+ * a cache that takes no updates). A record the cache read before then may
+ * miss a removal published meanwhile.
+ */
+export function graphqlSoupCacheUpdatesLiveSince(): number | undefined {
+  return cacheUpdates()?.updatesLiveSince();
+}
+
 const reconnectListeners = new Set<() => void>();
 
 /**
@@ -540,7 +557,10 @@ function notifyReconnected(): void {
 }
 
 function createGraphqlSoupWebSocketClient(
-  onConnected: () => void,
+  subscriptions: Pick<
+    ReturnType<typeof createGraphqlSoupSubscriptionsLifecycle>,
+    'socketConnected' | 'socketClosed'
+  >,
   onState: (state: MutationQueueEnvironment['websocket']) => void = () =>
     undefined
 ): GraphqlWsClient {
@@ -574,12 +594,13 @@ function createGraphqlSoupWebSocketClient(
       closed: () => {
         liveness.closed();
         onState('disconnected');
+        subscriptions.socketClosed();
       },
       pong: liveness.pong,
       connected: (socket) => {
         liveness.connected(socket);
         onState('connected');
-        onConnected();
+        subscriptions.socketConnected();
         connections += 1;
         if (connections === 1) return;
         notifyReconnected();
@@ -607,7 +628,7 @@ function getUncachedRealtimeClient(): Client {
     suspendOnPagehide: !isTauri(),
   });
   const websocketClient = createGraphqlSoupWebSocketClient(
-    subscriptionsLifecycle.connected
+    subscriptionsLifecycle
   );
   const client = createClient({
     url: `${dssHost}/items/soup/graphql`,
@@ -1035,6 +1056,7 @@ export function getGraphqlSoupClient(): Client {
     const subscriptionsLifecycle = createGraphqlSoupSubscriptionsLifecycle({
       suspendOnPagehide: !native,
     });
+    setCacheUpdates(subscriptionsLifecycle);
     const lifetime = new AbortController();
     /** Whether the host still served this page's client once they could start. */
     const startSubscriptions = async (target: CacheHost): Promise<boolean> => {
@@ -1076,6 +1098,8 @@ export function getGraphqlSoupClient(): Client {
       // Unsubscribing emits urql teardown operations; keep the cache host
       // available until those best-effort registration removals are issued.
       subscriptionsLifecycle.dispose();
+      if (untrack(cacheUpdates) === subscriptionsLifecycle)
+        setCacheUpdates(undefined);
       lifetime.abort();
       // Retires the host: operations still running on this client, and any
       // caller that captured the host, fall back to the network from here.
@@ -1165,7 +1189,7 @@ export function getGraphqlSoupClient(): Client {
       host = createHost(true);
       let websocketState: MutationQueueEnvironment['websocket'] = 'none';
       const graphqlWsClient = createGraphqlSoupWebSocketClient(
-        subscriptionsLifecycle.connected,
+        subscriptionsLifecycle,
         (state) => {
           websocketState = state;
         }
