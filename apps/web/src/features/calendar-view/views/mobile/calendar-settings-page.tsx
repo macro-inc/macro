@@ -141,7 +141,9 @@ export function MobileCalendarSettingsPage(props: { onBack: () => void }) {
                           >
                             <Checkbox.Control />
                             <Checkbox.Label class="flex min-w-0 flex-1 items-center gap-2">
-                              <span class="min-w-0 flex-1">{source.name}</span>
+                              <span class="min-w-0 flex-1 wrap-anywhere">
+                                {source.name}
+                              </span>
                               <Show when={source.isSubscription}>
                                 <SubscriptionMark />
                               </Show>

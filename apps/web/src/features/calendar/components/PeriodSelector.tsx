@@ -32,7 +32,7 @@ const calendarViews = () =>
     hotkeyToken: VIEW_HOTKEYS[value],
   }));
 
-function createCalendarPeriodControls(onSelect?: () => void) {
+function createCalendarPeriodControls() {
   const calendarView = useCalendarView();
   const navigation = useCalendarNavigation();
   const initialDate = new Date();
@@ -60,7 +60,6 @@ function createCalendarPeriodControls(onSelect?: () => void) {
 
   const changeView = (view: CalendarPeriodView) => {
     setPickerState('open', false);
-    onSelect?.();
     if (navigation.periodView() === view) return;
 
     navigation.changeView(view);
@@ -81,7 +80,6 @@ function createCalendarPeriodControls(onSelect?: () => void) {
 
     setPickerState({ month: date, focusedDay: date, open: false });
     navigation.gotoDate(date);
-    onSelect?.();
   };
 
   return {
