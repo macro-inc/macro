@@ -217,6 +217,7 @@ function DesktopChannelsRail(props: {
         ...props.sources,
         search: sectionsEnabled() ? sectionSearch : searchSource,
       }}
+      localChannels={listChannels}
       searchQuery={searchQuery()}
       onSearchQueryChange={setSearchQuery}
       searchOpen={props.searchOpen}

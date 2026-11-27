@@ -7,7 +7,7 @@ Chat's desktop sidebar, mobile conversation lists, section membership, and route
 ## Start here
 
 - `queries.ts` owns the bounded list sources; `channels-view.tsx` composes the shared local channel pool and views.
-- `components/rail/ChannelsRail.tsx` composes section membership, favorites, and referenced-channel hydration.
+- `components/rail/ChannelsRail.tsx` composes section membership, favorites, and the on-screen reference window.
 - `queries/channel-list-search-pool.ts` adapts the joined channels of the channel directory (`useChannelDirectory`, `lib/queries/channel/directory.ts`) for initial display, search, and mobile pins.
 
 ## Data and loading
@@ -17,7 +17,7 @@ Chat's desktop sidebar, mobile conversation lists, section membership, and route
 - Bound each seeded section to the normal first-page size and preserve membership and sorting; recreate the query graph and reference batches on account-session changes, including same-viewer reauthentication, without rebuilding for sort, cache, or tab changes.
 - Keep Soup's bounded unread projection and live updates authoritative; do not replace them with a full-list fetch.
 - Filter Unread only and collapsed sections by `unreadOrMentionedChannelIds`, so every channel that lights Chat's dot in the app rail stays listed; the row's unread dot and section counts stay on `unreadChannelIds`.
-- Hydrate only referenced channels missing from the loaded sources.
+- Fetch section and favorite members by ID only for the rows on screen in open sections (`reportSectionRange`), through one `useChannelWindow` (`lib/queries/channel/window.ts`); other rows show the directory pool’s record, and unread state comes from `useCollapsedUnreadChannels`. A collapsed or scrolled-away section fetches nothing, and an open section looks up members no source holds while its loading row is on screen. Never resolve a whole membership by ID.
 - Render favorite metadata without extra skeleton rows; an unread filter can legitimately leave no rows after enrichment.
 - Keep failed referenced lookups retryable and omit successfully unavailable channel favorites from the rail without deleting saved favorites.
 - Require a cached or fetched Soup page before treating missing reference IDs as unavailable; an empty offline index proves nothing.

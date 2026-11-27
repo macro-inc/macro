@@ -2,6 +2,7 @@ import type { ListScrollHandle } from '@app/components/list';
 import type { ChannelPreviewSelection } from '@app/features/next-soup/utils';
 import type { ChannelEntity } from '@entity/types/entity';
 import type { WithNotification } from '@entity/types/notification';
+import type { ChannelIdWindow } from '@queries/channel/window';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import {
@@ -15,7 +16,10 @@ import { createSignal, getOwner, type JSX, onCleanup } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChannelsSources } from '../../queries';
 import type { ChannelSectionKey, ChannelSectionPreferences } from '../../types';
-import type { ChannelRailRow } from './ChannelsRailContext';
+import type {
+  ChannelRailRow,
+  ChannelsRailContext,
+} from './ChannelsRailContext';
 
 // Tracked by the mocked `queryAccountSession`, so a sign-in reaches what
 // follows the session.
@@ -61,6 +65,12 @@ const mocks = vi.hoisted(() => ({
   favoriteId: undefined as string | undefined,
   favorites: [] as Favorite[],
   referencedChannels: [] as ChannelEntity[],
+  setReferencedChannels: (_channels: ChannelEntity[]) => {},
+  referenceWindow: undefined as (() => ChannelIdWindow) | undefined,
+  rail: undefined as ChannelsRailContext | undefined,
+  pool: [] as ChannelEntity[],
+  labels: [] as ChannelLabel[],
+  flags: [] as string[],
   pendingReferenceIds: [] as string[],
   failedReferenceIds: [] as string[],
   unavailableReferenceIds: [] as string[],
@@ -237,7 +247,9 @@ vi.mock('@app/features/soup/entity-notifications', () => ({
   withEntityNotifications: (channel: ChannelEntity) => channel,
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: false }),
+  useFeatureFlag: (flag: { key: string }) => () => ({
+    enabled: mocks.flags.includes(flag.key),
+  }),
 }));
 vi.mock('@app/util/favorites', () => ({ favoriteSplitContent: vi.fn() }));
 vi.mock('@components/app/GlobalAppState', () => ({
@@ -256,7 +268,7 @@ vi.mock('@core/component/Toast/Toast', () => ({
 }));
 vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
-  enableChannelTags: {},
+  enableChannelTags: { key: 'enable-channel-tags' },
 }));
 vi.mock('@channel/queries/prefetch-channel-target', () => ({
   prefetchLatestChannelMessages: mocks.prefetch,
@@ -302,7 +314,11 @@ vi.mock('@queries/notification/unsubscribes', () => ({
   }),
 }));
 vi.mock('@queries/channel-labels/channel-labels', () => ({
-  useChannelLabelsQuery: () => ({ isSuccess: false }),
+  useChannelLabelsQuery: (scope?: string) => {
+    if (mocks.labels.length === 0) return { isSuccess: false };
+    const labels = scope === 'personal' ? [] : mocks.labels;
+    return { isPending: false, data: { teamId: 'team', labels } };
+  },
   useCreateChannelLabelMutation: () => ({ mutateAsync: mocks.createSection }),
   useDeleteChannelLabelMutation: () => ({}),
   useRenameChannelLabelMutation: () => ({ mutateAsync: mocks.updateSection }),
@@ -384,20 +400,31 @@ vi.mock('../../queries', () => ({
       collections.flat().map((channel) => [channel.id, channel])
     ).values(),
   ],
-  useChannelsByIdsQuery: () => ({ isEnabled: false }),
-  resolveReferencedChannels: () => mocks.referencedChannels,
 }));
+// The real window builder, over a lookup that returns what a test resolved.
+vi.mock('@queries/channel/window', async (importOriginal) => {
+  const { createSignal } = await import('solid-js');
+  return {
+    ...(await importOriginal<typeof import('@queries/channel/window')>()),
+    useChannelWindow: (window: () => ChannelIdWindow) => {
+      const [channels, setChannels] = createSignal(mocks.referencedChannels);
+      mocks.setReferencedChannels = setChannels;
+      mocks.referenceWindow = window;
+      return {
+        channels,
+        retained: () => [],
+        pendingIds: () => new Set(mocks.pendingReferenceIds),
+        failedIds: () => new Set(mocks.failedReferenceIds),
+        unavailableIds: () => new Set(mocks.unavailableReferenceIds),
+        error: () => undefined,
+        isLoading: () => false,
+        retry: async () => {},
+      };
+    },
+  };
+});
 vi.mock('@queries/channel/by-ids', () => ({
   useChannelsByIdsQuery: () => ({ isEnabled: false }),
-  useCachedChannelsByIds: () => ({
-    channels: () => mocks.referencedChannels,
-    pendingIds: () => new Set(mocks.pendingReferenceIds),
-    failedIds: () => new Set(mocks.failedReferenceIds),
-    unavailableIds: () => new Set(mocks.unavailableReferenceIds),
-    error: () => undefined,
-    isLoading: () => false,
-    retry: async () => {},
-  }),
 }));
 vi.mock('./next/SectionDialog', () => ({ promptSection: mocks.promptSection }));
 vi.mock('./ChannelLabelNameDialog', () => ({
@@ -463,6 +490,7 @@ vi.mock('./next/ExpandedChannelsRail', async (importOriginal) => {
         return <RealRenderer {...props} />;
       }
       const rail = useChannelsRail();
+      mocks.rail = rail;
       onCleanup(
         rail.registerBrowseScrollHandle({ scrollToIndex: mocks.scrollBrowse })
       );
@@ -612,6 +640,7 @@ const sources: ChannelsSources = {
 const mount = () =>
   render(() => (
     <ChannelsRail
+      localChannels={() => mocks.pool}
       sources={sources}
       searchQuery=""
       onSearchQueryChange={() => {}}
@@ -626,6 +655,11 @@ beforeEach(() => {
   mocks.focusedRow = undefined;
   mocks.favorites = [];
   mocks.referencedChannels = [];
+  mocks.referenceWindow = undefined;
+  mocks.rail = undefined;
+  mocks.pool = [];
+  mocks.labels = [];
+  mocks.flags = [];
   mocks.pendingReferenceIds = [];
   mocks.failedReferenceIds = [];
   mocks.unavailableReferenceIds = [];
@@ -752,6 +786,102 @@ describe('favorite metadata hydration', () => {
       ).toBe(state === 'failed');
     }
   );
+});
+
+describe('bounded reference window', () => {
+  const windowIds = () =>
+    (mocks.referenceWindow?.().chunks ?? []).flatMap((chunk) => chunk.ids);
+  const numbered = (prefix: string, count: number) =>
+    Array.from(
+      { length: count },
+      (_, index) => `${prefix}-${String(index).padStart(3, '0')}`
+    );
+  const favoritesOf = (ids: readonly string[]): Favorite[] =>
+    ids.map((entityId, sortOrder) => ({
+      entityId,
+      entityType: 'channel',
+      createdAt: '2026-01-01',
+      sortOrder,
+    }));
+  const joined = (id: string): ChannelEntity => ({
+    ...channel,
+    id,
+    name: id,
+    unreadNotifications: [],
+  });
+
+  it('fetches only the blocks of favorites on screen, and nothing once they leave', () => {
+    const ids = numbered('fav', 60);
+    mocks.favorites = favoritesOf(ids);
+    mount();
+    expect(windowIds()).toEqual([]);
+
+    mocks.rail!.reportSectionRange('favorites', { start: 0, end: 10 });
+    expect(windowIds()).toEqual(ids.slice(0, 25));
+
+    mocks.rail!.reportSectionRange('favorites', { start: 30, end: 40 });
+    expect(windowIds()).toEqual(ids.slice(25, 50));
+
+    mocks.rail!.reportSectionRange('favorites', undefined);
+    expect(windowIds()).toEqual([]);
+  });
+
+  it('skips rows a loaded list already holds', () => {
+    const ids = numbered('fav', 10);
+    mocks.favorites = favoritesOf(['one', ...ids]);
+    mount();
+    mocks.rail!.reportSectionRange('favorites', { start: 0, end: 11 });
+    expect(windowIds()).toEqual(ids);
+  });
+
+  it('discovers an open section’s unknown members while its loading row is on screen', () => {
+    const ids = numbered('member', 60);
+    mocks.flags = ['enable-channel-tags'];
+    mocks.labels = [
+      {
+        id: 'section',
+        teamId: 'team',
+        name: 'Section',
+        channelIds: ids,
+        channelCount: ids.length,
+        sortOrder: 0,
+        createdAt: '2026-01-01',
+        updatedAt: '2026-01-01',
+      },
+    ];
+    mount();
+    expect(windowIds()).toEqual([]);
+
+    mocks.rail!.reportSectionRange('label:section', { start: 0, end: 10 });
+    expect(windowIds()).toEqual(ids.slice(0, 25));
+
+    // Found members push the loading row below what the section shows.
+    mocks.setReferencedChannels(
+      ids.slice(0, 25).map((id) => ({ ...joined(id), channelType: 'team' }))
+    );
+    const keys = () =>
+      (mocks.referenceWindow?.().chunks ?? []).map((chunk) => chunk.key);
+    expect(keys().some((key) => key.startsWith('unknown:'))).toBe(false);
+    expect(new Set(windowIds())).toEqual(new Set(ids.slice(0, 25)));
+
+    // Scrolled down to the loading row, the next members are looked up.
+    mocks.rail!.reportSectionRange('label:section', { start: 20, end: 30 });
+    const unknown = mocks
+      .referenceWindow?.()
+      .chunks.find((chunk) => chunk.key.startsWith('unknown:'));
+    expect(unknown?.ids).toEqual(ids.slice(25, 50));
+  });
+
+  it('bounds the original rail to the references the directory lacks', () => {
+    mocks.sectionsEnabled = false;
+    const ids = numbered('fav', 250);
+    mocks.favorites = favoritesOf(ids);
+    mocks.pool = ids.slice(0, 30).map(joined);
+    mount();
+    const window = mocks.referenceWindow!();
+    expect(windowIds()).toEqual(ids.slice(30, 230));
+    expect(window.dropped).toBe(20);
+  });
 });
 
 it.each([false, true])(
@@ -931,6 +1061,7 @@ it.each(['team_channels', 'channels'] as const)(
     };
     const { container } = render(() => (
       <ChannelsRail
+        localChannels={() => mocks.pool}
         sources={liveSources}
         searchQuery=""
         onSearchQueryChange={() => {}}
@@ -1003,6 +1134,7 @@ it('opens search over mounted section rows', async () => {
   const [searchOpen, setSearchOpen] = createSignal(false);
   render(() => (
     <ChannelsRail
+      localChannels={() => mocks.pool}
       sources={{
         ...sources,
         team_channels: { ...source, items: () => [] },

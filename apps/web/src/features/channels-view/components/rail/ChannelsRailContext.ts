@@ -129,6 +129,9 @@ export const rowKeyForLabel = (labelId: string) => `label:${labelId}` as const;
 export const domIdForRow = (railId: string, rowId: string) =>
   `${railId}-${rowId}`;
 
+/** Indexes `[start, end)` of a section's rows. */
+export type ChannelSectionRange = { start: number; end: number };
+
 export type ChannelRailActivationMetadata = {
   event?: MouseEvent;
   newSplit?: boolean;
@@ -163,6 +166,15 @@ export type ChannelsRailContext = {
   retryLabels: () => Promise<void>;
   /** Retry unresolved channels referenced by section membership or favorites. */
   retryReferencedChannels: () => Promise<void>;
+  /**
+   * The rows of a section on screen, as indexes `[start, end)` of its rows
+   * including overscan, or `undefined` while it is collapsed or off screen.
+   * Only these rows' channels are fetched by ID.
+   */
+  reportSectionRange: (
+    section: ChannelSectionKey,
+    range: ChannelSectionRange | undefined
+  ) => void;
   isLabelOpen: (labelId: string) => boolean;
   toggleLabel: (labelId: string) => void;
   /** The Channels section's rendered rows: label headings and channels. */

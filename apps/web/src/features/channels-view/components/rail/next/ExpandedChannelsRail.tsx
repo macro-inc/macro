@@ -54,6 +54,7 @@ import {
 import { ChannelFavoriteRow } from './ChannelFavoriteRow';
 import { ChannelLabelEmptyState, ChannelLabelRow } from './ChannelLabelRows';
 import {
+  CHANNEL_RAIL_OVERSCAN,
   ChannelRailVirtualizer,
   type ChannelRailVirtualizerHandle,
   scrollChannelRailTargetIntoView,
@@ -463,21 +464,27 @@ function BrowseSection(props: {
       return [];
     });
   });
-  const loadVisibleSections = () => {
+  // Only the rows on screen have their channels fetched by ID.
+  onCleanup(() => rail.reportSectionRange(props.sectionKey, undefined));
+  const onScreenRange = () => {
     const current = virtualizer();
-
-    if (!open() || !current) {
-      return;
-    }
-
     const viewport = scrollRoot();
     const outer = props.outerScrollRoot;
-    if (!viewport || !outer) return;
+    if (!open() || !current || !viewport || !outer) return;
     const bounds = viewport.getBoundingClientRect();
     const visible = outer.getBoundingClientRect();
     if (bounds.bottom <= visible.top || bounds.top >= visible.bottom) return;
-
-    const range = current.visibleRange();
+    return current.visibleRange();
+  };
+  const loadVisibleSections = () => {
+    const range = onScreenRange();
+    rail.reportSectionRange(
+      props.sectionKey,
+      range && {
+        start: Math.max(0, range.startIndex - CHANNEL_RAIL_OVERSCAN),
+        end: range.endIndex + 1 + CHANNEL_RAIL_OVERSCAN,
+      }
+    );
     if (!range) return;
 
     const first = Math.max(0, range.startIndex - 3);
@@ -506,6 +513,7 @@ function BrowseSection(props: {
       ],
       () => {
         if (!open()) {
+          rail.reportSectionRange(props.sectionKey, undefined);
           return;
         }
 

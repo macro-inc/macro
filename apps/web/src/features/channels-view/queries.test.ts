@@ -1,11 +1,5 @@
 import type { ChannelEntity } from '@entity/types/entity';
-import {
-  batch,
-  createMemo,
-  createRoot,
-  createSignal,
-  onCleanup,
-} from 'solid-js';
+import { batch, createRoot, createSignal, onCleanup } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 
 const useSoupAstItemsQuery = vi.hoisted(() =>
@@ -67,11 +61,7 @@ import {
   useChannelsByIdsQuery,
 } from '@queries/channel/by-ids';
 import { queryClient } from '@queries/client';
-import {
-  channelGroupIds,
-  resolveReferencedChannels,
-  useChannelsSources,
-} from './queries';
+import { channelGroupIds, useChannelsSources } from './queries';
 
 const channelEntity = (id: string) =>
   ({
@@ -177,77 +167,6 @@ describe('channels resolved by id', () => {
   });
 
   const resolved = [channelEntity('design'), channelEntity('support')];
-  const settled = {
-    isEnabled: true,
-    isPending: false,
-    error: undefined,
-    data: undefined,
-  };
-
-  it('replaces the previous answer, dropping channels the lookup stops returning', () => {
-    expect(
-      resolveReferencedChannels(resolved, {
-        ...settled,
-        data: {
-          entities: [
-            channelEntity('design'),
-            { id: 'note', type: 'document' } as never,
-          ],
-        },
-      })
-    ).toEqual([channelEntity('design')]);
-  });
-
-  it.each(['disabled', 'pending', 'failed'] as const)(
-    'keeps the previous answer without reading %s query data',
-    (state) => {
-      expect(
-        resolveReferencedChannels(resolved, {
-          isEnabled: state !== 'disabled',
-          isPending: state === 'pending',
-          error: state === 'failed' ? new Error('page failed') : undefined,
-          get data(): { entities: ChannelEntity[] } {
-            throw new Error('An unavailable query resource was read');
-          },
-        })
-      ).toBe(resolved);
-    }
-  );
-
-  it('retains resolved rows while a changed lookup is pending and updates when it settles', () => {
-    const { dispose, result, setPending, setEntities } = createRoot(
-      (dispose) => {
-        const [pending, setPending] = createSignal(false);
-        const [entities, setEntities] = createSignal(resolved);
-        const query = {
-          ...settled,
-          get isPending() {
-            return pending();
-          },
-          get data() {
-            if (pending()) throw new Error('A pending query resource was read');
-            return { entities: entities() };
-          },
-        };
-        const result = createMemo<ChannelEntity[]>(
-          (previous) => resolveReferencedChannels(previous, query),
-          []
-        );
-        return { dispose, result, setPending, setEntities };
-      }
-    );
-    try {
-      const previous = result();
-      setPending(true);
-      setEntities([channelEntity('support')]);
-      expect(result()).toBe(previous);
-      setPending(false);
-      expect(result()).toEqual([channelEntity('support')]);
-    } finally {
-      dispose();
-    }
-  });
-
   it('retains section members during notification refresh without reading pending data', () => {
     const { dispose, result, setPending, setEntities, setIds } = createRoot(
       (dispose) => {
@@ -341,10 +260,6 @@ describe('channels resolved by id', () => {
       useSoupAstItemsQuery.mockReset();
     }
   });
-  it('keeps the previous answer when a settled lookup has no data', () => {
-    expect(resolveReferencedChannels(resolved, settled)).toBe(resolved);
-  });
-
   it('keeps untouched 500-ID batches mounted when individual channel references churn', () => {
     const disposedBatches: number[] = [];
     const batchArgGetters: Array<() => unknown> = [];
