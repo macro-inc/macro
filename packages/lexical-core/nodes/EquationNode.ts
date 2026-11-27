@@ -7,6 +7,7 @@ import {
   type EditorConfig,
   type LexicalEditor,
   type LexicalNode,
+  type LexicalUpdateJSON,
   type NodeKey,
   type SerializedLexicalNode,
   type Spread,
@@ -63,10 +64,16 @@ export class EquationNode extends DecoratorNode<
   }
 
   static importJSON(serializedNode: SerializedEquationNode): EquationNode {
-    return $createEquationNode(
-      serializedNode.equation,
-      serializedNode.inline
-    ).updateFromJSON(serializedNode);
+    return $createEquationNode().updateFromJSON(serializedNode);
+  }
+
+  updateFromJSON(
+    serializedNode: LexicalUpdateJSON<SerializedEquationNode>
+  ): this {
+    const self = super.updateFromJSON(serializedNode);
+    self.__equation = serializedNode.equation ?? '';
+    self.__inline = serializedNode.inline ?? false;
+    return self;
   }
 
   exportJSON(): SerializedEquationNode {

@@ -5,6 +5,7 @@ import {
   type EditorThemeClasses,
   type LexicalEditor,
   type LexicalNode,
+  type LexicalUpdateJSON,
   type NodeKey,
   type SerializedLexicalNode,
   type Spread,
@@ -61,6 +62,15 @@ export class HtmlRenderNode extends DecoratorBlockNode<
     });
     $applyIdFromSerialized(node, serializedNode);
     return node;
+  }
+
+  updateFromJSON(
+    serializedNode: LexicalUpdateJSON<SerializedHtmlRenderNode>
+  ): this {
+    const self = super.updateFromJSON(serializedNode);
+    self.__html = serializedNode.html;
+    self.__adaptColors = serializedNode.adaptColors ?? undefined;
+    return self;
   }
 
   exportJSON(): SerializedHtmlRenderNode {

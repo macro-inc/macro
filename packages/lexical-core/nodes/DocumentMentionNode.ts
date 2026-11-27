@@ -7,6 +7,7 @@ import {
   type EditorThemeClasses,
   type LexicalEditor,
   type LexicalNode,
+  type LexicalUpdateJSON,
   type NodeKey,
   type SerializedLexicalNode,
   type Spread,
@@ -117,6 +118,21 @@ export class DocumentMentionNode extends DecoratorNode<
     });
     $applyIdFromSerialized(node, serializedNode);
     return node;
+  }
+
+  updateFromJSON(
+    serializedNode: LexicalUpdateJSON<SerializedDocumentMentionNode>
+  ): this {
+    const self = super.updateFromJSON(serializedNode);
+    // Each viewer writes the name it can see, including access fallbacks.
+    self.__documentId = serializedNode.documentId;
+    self.__blockName = serializedNode.blockName;
+    self.__blockParams = serializedNode.blockParams ?? {};
+    self.__mentionUuid = serializedNode.mentionUuid ?? undefined;
+    self.__collapsed = serializedNode.collapsed ?? false;
+    self.__channelType = serializedNode.channelType ?? undefined;
+    self.__createdAt = serializedNode.createdAt ?? undefined;
+    return self;
   }
 
   exportJSON(): SerializedDocumentMentionNode {

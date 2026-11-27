@@ -123,6 +123,9 @@ async function startRoom() {
       const data = doc.getByPath('root/children/0/previewData');
       return data instanceof LoroMap ? data.toJSON() : data;
     },
+    storedEquation() {
+      return doc.getByPath('root/children/1/children/1/equation');
+    },
     async close() {
       for (const socket of server.clients) socket.terminate();
       await new Promise<void>((resolve) => server.close(() => resolve()));
@@ -179,6 +182,55 @@ async function typeAtEnd(page: Page, text: string) {
   await page.evaluate(() => window.canvasViewportFixture?.placeAtEnd());
   await page.keyboard.insertText(text);
 }
+
+test('a peer typing beside an edited equation keeps the shared equation', async ({
+  page,
+  browser,
+  room,
+}) => {
+  const second = await browser.newContext();
+  try {
+    const other = await second.newPage();
+    const leftUrl = `${room.url('left')}&equation`;
+    const rightUrl = `${room.url('right')}&equation`;
+    await Promise.all([openEditor(page, leftUrl), openEditor(other, rightUrl)]);
+    const leftEquation = page.locator('.md-editor-equation .katex');
+    const rightEquation = other.locator('.md-editor-equation .katex');
+    await expect(leftEquation).toHaveText('x+1');
+    await expect(rightEquation).toHaveText('x+1');
+
+    expect(
+      await page.evaluate(() =>
+        window.canvasViewportFixture?.editEquation('x+2')
+      )
+    ).toBe(true);
+    expect(
+      await page.evaluate(() => window.canvasViewportFixture?.flush())
+    ).toBe(true);
+    await expect(leftEquation).toHaveText('x+2');
+    expect(room.storedEquation()).toBe('x+2');
+    // A separate edit on the same paragraph establishes that the right peer
+    // has ingested the update even when its equation still shows the old value.
+    await typeAtEnd(page, ' from the left');
+    expect(
+      await page.evaluate(() => window.canvasViewportFixture?.flush())
+    ).toBe(true);
+    await expect(other.getByRole('textbox')).toContainText('from the left');
+    expect.soft(await rightEquation.textContent()).toBe('x+2');
+
+    await typeAtEnd(other, ' from the right');
+    expect(
+      await other.evaluate(() => window.canvasViewportFixture?.flush())
+    ).toBe(true);
+    await expect(page.getByRole('textbox')).toContainText('from the right');
+    expect(room.storedEquation()).toBe('x+2');
+    await other.reload();
+    await expect(rightEquation).toHaveText('x+2');
+    await expect(other.getByRole('textbox')).toContainText('from the right');
+  } finally {
+    await second.close();
+  }
+});
 
 test('two current clients navigate locally while intentional markdown edits sync', async ({
   page,

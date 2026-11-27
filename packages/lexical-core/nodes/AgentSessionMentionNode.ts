@@ -12,6 +12,7 @@ import {
   type EditorThemeClasses,
   type LexicalEditor,
   type LexicalNode,
+  type LexicalUpdateJSON,
   type NodeKey,
   type SerializedLexicalNode,
   type Spread,
@@ -126,6 +127,17 @@ export class AgentSessionMentionNode extends DecoratorNode<
     });
     $applyIdFromSerialized(node, serializedNode);
     return node;
+  }
+
+  updateFromJSON(
+    serializedNode: LexicalUpdateJSON<SerializedAgentSessionMentionNode>
+  ): this {
+    const self = super.updateFromJSON(serializedNode);
+    self.__id = serializedNode.id;
+    self.__label = serializedNode.label ?? undefined;
+    self.__mentionUuid = serializedNode.mentionUuid ?? undefined;
+    self.__expanded = serializedNode.expanded ?? false;
+    return self;
   }
 
   exportJSON(): SerializedAgentSessionMentionNode {

@@ -6,6 +6,7 @@ import {
   type EditorThemeClasses,
   type LexicalEditor,
   type LexicalNode,
+  type LexicalUpdateJSON,
   type NodeKey,
   type SerializedLexicalNode,
   type Spread,
@@ -100,6 +101,17 @@ export class DatabaseQueryNode extends DecoratorNode<
     $applyIdFromSerialized(node, serialized);
     return node;
   }
+
+  updateFromJSON(
+    serializedNode: LexicalUpdateJSON<SerializedDatabaseQueryNode>
+  ): this {
+    const self = super.updateFromJSON(serializedNode);
+    const data = parseDatabaseQueryData(serializedNode);
+    // Keep the last usable answer if an in-place payload is malformed.
+    if (data) self.setQuery(data);
+    return self;
+  }
+
   exportJSON(): SerializedDatabaseQueryNode {
     return {
       ...super.exportJSON(),

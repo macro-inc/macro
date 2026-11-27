@@ -7,6 +7,7 @@ import {
   type EditorThemeClasses,
   type LexicalEditor,
   type LexicalNode,
+  type LexicalUpdateJSON,
   type NodeKey,
   type SerializedLexicalNode,
   type Spread,
@@ -92,6 +93,16 @@ export class TagMentionNode extends DecoratorNode<
     });
     $applyIdFromSerialized(node, serializedNode);
     return node;
+  }
+
+  updateFromJSON(
+    serializedNode: LexicalUpdateJSON<SerializedTagMentionNode>
+  ): this {
+    const self = super.updateFromJSON(serializedNode);
+    // Each viewer resolves the tag by option ID and writes the other fields
+    // back from its own query result.
+    self.__optionId = serializedNode.optionId;
+    return self;
   }
 
   exportJSON(): SerializedTagMentionNode {

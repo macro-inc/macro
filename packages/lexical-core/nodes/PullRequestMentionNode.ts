@@ -7,6 +7,7 @@ import {
   type EditorThemeClasses,
   type LexicalEditor,
   type LexicalNode,
+  type LexicalUpdateJSON,
   type NodeKey,
   type SerializedLexicalNode,
   type Spread,
@@ -106,6 +107,27 @@ export class PullRequestMentionNode extends DecoratorNode<
     });
     $applyIdFromSerialized(node, serializedNode);
     return node;
+  }
+
+  updateFromJSON(
+    serializedNode: LexicalUpdateJSON<SerializedPullRequestMentionNode>
+  ): this {
+    const self = super.updateFromJSON(serializedNode);
+    const { id, url } = serializedNode;
+    const idIsUrl = isGithubPullRequestUrl(id);
+    const nextId = idIsUrl ? '' : id;
+    // The decorator resolves the label and fills a missing URL for an
+    // ID-backed reference. For a URL-only reference the URL is its target.
+    if (!nextId) {
+      self.__url =
+        (url && isAllowedLinkUrl(url) ? url : undefined) ||
+        (idIsUrl ? id : undefined);
+    } else if (nextId !== self.__id) {
+      self.__url = undefined;
+    }
+    self.__id = nextId;
+    self.__mentionUuid = serializedNode.mentionUuid ?? undefined;
+    return self;
   }
 
   exportJSON(): SerializedPullRequestMentionNode {
