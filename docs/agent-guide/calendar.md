@@ -921,8 +921,8 @@ invitation on save (other edits are saved first); a guest who may not invite kee
 read-only pill that explains why. A guest on an event whose organizer hides the guest list
 may not invite either (`viewerCan.inviteGuests` is false; the route answers 403
 `guest_list_hidden`), since that guest's copy lists only themselves and perhaps the organizer:
-the guests row reads `Guest list hidden` instead of a count (so does the editor's read-only
-guests pill), and when the organizer does let guests invite, the explanation reads `Guests
+the guests row reads `Guest list hidden` instead of a count (the editor names the guests the
+copy lists and notes `Guest list hidden` under its guests field), and when the organizer does let guests invite, the explanation reads `Guests
 cannot be added while the organizer hides the guest list.` instead. To check the refusal
 states without a Google account, answer `POST /events/{id}/guests` with HTTP 403 and code
 `guests_cannot_invite` or `guest_list_hidden`; each switches the guest list to its own
@@ -1813,8 +1813,8 @@ Outlook cannot remove Teams from an existing event. In the editor of a writable
 Outlook event you organize, the conferencing choice offers only the event's
 meeting and `No meeting link`. Turning Teams off disables Save (Enter and the
 recurring Save menu too) and shows a notice with `Undo`, which turns Teams back
-on. The footer's `Replace without meeting` previews a replacement that carries
-the editor's unsaved changes (title, time, description, location, guests,
+on. `Replace without meeting`, after the notice at the end of the fields,
+previews a replacement that carries the editor's unsaved changes (title, time, description, location, guests,
 reminders, repeat rule) without Teams; nothing is saved to the old event. For
 recurring events, it asks for Apply to this event or Apply to all events before its preview.
 A time or repeat change on the whole series drops its changed and cancelled occurrences, as Outlook does;
