@@ -11,11 +11,12 @@ import {
   sameFleetScope,
 } from './fleet-data';
 import { hireReceipt, selectedHireReceipt } from './hire-fixture';
+import { fixtureTeam, fixtureTeamName } from './routes';
 
 export const fleetViewer: FleetViewer = {
   viewerId: 'hire-fixture-account',
-  teamId: 'sample-team',
-  teamName: 'Northstar Design',
+  teamId: fixtureTeam,
+  teamName: fixtureTeamName,
   role: 'owner',
   teammateRollout: 'on',
   computerRollout: 'on',

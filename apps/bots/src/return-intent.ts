@@ -1,19 +1,23 @@
 export type ReturnIntent =
   | { route: 'creator'; action: 'edit' | 'hire' }
-  | { route: 'fleet' };
+  | { route: 'fleet' | 'passwords' | 'billing' };
 
 export const editIntent: ReturnIntent = { route: 'creator', action: 'edit' };
 export const hireIntent: ReturnIntent = { route: 'creator', action: 'hire' };
 export const fleetIntent: ReturnIntent = { route: 'fleet' };
+export const passwordsIntent: ReturnIntent = { route: 'passwords' };
+export const billingIntent: ReturnIntent = { route: 'billing' };
 
 const returnPaths = new Map<string, ReturnIntent>([
   ['/', editIntent],
   ['/?intent=hire', hireIntent],
   ['/fleet', fleetIntent],
+  ['/passwords', passwordsIntent],
+  ['/billing', billingIntent],
 ]);
 
 export function returnPath(intent: ReturnIntent): string {
-  if (intent.route === 'fleet') return '/fleet';
+  if (intent.route !== 'creator') return `/${intent.route}`;
   return intent.action === 'hire' ? '/?intent=hire' : '/';
 }
 

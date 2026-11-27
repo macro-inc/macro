@@ -1,0 +1,117 @@
+<svg viewBox="0 0 96 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <defs>
+    <radialGradient id="ov-flush-l" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#d45c52" stop-opacity="0.60"/>
+      <stop offset="100%" stop-color="#d45c52" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="ov-flush-r" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#d45c52" stop-opacity="0.60"/>
+      <stop offset="100%" stop-color="#d45c52" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ov-jaw-shade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="0.40"/>
+    </linearGradient>
+    <linearGradient id="ov-beard-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2e2017" stop-opacity="0.22"/>
+      <stop offset="55%" stop-color="#2e2017" stop-opacity="0.78"/>
+      <stop offset="100%" stop-color="#2e2017" stop-opacity="0.90"/>
+    </linearGradient>
+    <filter id="ov-soft" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur stdDeviation="1.25"/>
+    </filter>
+    <filter id="ov-micro" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur stdDeviation="0.55"/>
+    </filter>
+  </defs>
+  <ellipse id="ov-under-wash" cx="46" cy="64" rx="28" ry="34" fill="#d88a4a" opacity="0" style="mix-blend-mode:soft-light"/>
+  <g id="ov-flush" opacity="0.18" style="mix-blend-mode:soft-light">
+    <ellipse cx="29" cy="69" rx="10" ry="7.5" fill="url(#ov-flush-l)"/>
+    <ellipse cx="62" cy="69" rx="10" ry="7.5" fill="url(#ov-flush-r)"/>
+  </g>
+  <!-- Independent Gender facial structure layer -->
+  <g id="ov-gender-masc" opacity="0" filter="url(#ov-soft)">
+    <path d="M23 47 Q45 44 68 47 L67 51 Q45 48.5 24 51 Z" fill="#140e0b" opacity="0.62"/>
+    <path d="M22 77 L24 94 L35 102 L57 102 L68 94 L70 77 L64 90 L55 96 L37 96 L28 90 Z" fill="#100b09" opacity="0.62"/>
+  </g>
+  <g id="ov-gender-fem" opacity="0" filter="url(#ov-micro)">
+    <ellipse cx="30" cy="66" rx="9" ry="5.5" fill="#f7cbb8" opacity="0.40" style="mix-blend-mode:soft-light"/>
+    <ellipse cx="61" cy="66" rx="9" ry="5.5" fill="#f7cbb8" opacity="0.40" style="mix-blend-mode:soft-light"/>
+    <path d="M34.5 84.5 Q43.5 81.8 52 84.5 Q43.5 88.2 34.5 84.5 Z" fill="#c05858" opacity="0.54" style="mix-blend-mode:soft-light"/>
+    <path d="M23.5 56 Q30.5 53 36.5 56" fill="none" stroke="#16100e" stroke-width="1.3" opacity="0.52"/>
+    <path d="M49.5 56 Q56.2 53 62.5 56" fill="none" stroke="#16100e" stroke-width="1.3" opacity="0.52"/>
+  </g>
+  <!-- Independent Cheekbones sculpt layer -->
+  <g id="ov-cheeks" opacity="0" filter="url(#ov-soft)">
+    <path id="ov-cheek-hi" d="M23 64 Q30 61 36 66 Q30 68 23 66 Z M69 64 Q62 61 56 66 Q62 68 69 66 Z" fill="#f4d8be" opacity="0.34" style="mix-blend-mode:soft-light"/>
+    <path id="ov-cheek-lo" d="M23 72 Q30 76 36 74 Q30 80 24 77 Z M69 72 Q62 76 56 74 Q62 80 68 77 Z" fill="#0d0907" opacity="0.42"/>
+  </g>
+  <!-- Independent Nose sculpt layer (Bridge width, Nose length, Tip shape) -->
+  <g id="ov-nose" opacity="0.18" filter="url(#ov-micro)">
+    <path id="ov-nose-hi" d="M43 56 L42.5 72 L45 72 L45.5 56 Z" fill="#f8dec4" opacity="0.36" style="mix-blend-mode:soft-light"/>
+    <path id="ov-nose-sh" d="M40 57 L38.5 73 Q43 76.5 49 73 L47.5 57 L46 72 Q43 74.5 40.5 72 Z" fill="#180f0a" opacity="0.56"/>
+    <path id="ov-nose-tip" d="M39.5 73 Q43.5 76.8 48.5 73" fill="none" stroke="#120b07" stroke-width="1.4" stroke-linecap="round" opacity="0.65"/>
+  </g>
+  <!-- Discrete Freckles tiers -->
+  <g id="ov-freckles-light" fill="#5e321a" opacity="0">
+    <circle cx="32" cy="66" r="0.65"/><circle cx="38" cy="65" r="0.55"/><circle cx="43" cy="66" r="0.6"/>
+    <circle cx="49" cy="66" r="0.6"/><circle cx="55" cy="65" r="0.55"/><circle cx="60" cy="67" r="0.65"/>
+  </g>
+  <g id="ov-freckles-med" fill="#5e321a" opacity="0">
+    <circle cx="28" cy="68" r="0.6"/><circle cx="34" cy="69" r="0.6"/><circle cx="40" cy="67" r="0.55"/>
+    <circle cx="46" cy="68" r="0.55"/><circle cx="52" cy="68" r="0.6"/><circle cx="57" cy="69" r="0.6"/>
+    <circle cx="64" cy="68" r="0.6"/><circle cx="36" cy="64" r="0.5"/><circle cx="54" cy="64" r="0.5"/>
+  </g>
+  <g id="ov-freckles-dense" fill="#542b16" opacity="0">
+    <circle cx="26" cy="66" r="0.6"/><circle cx="31" cy="71" r="0.6"/><circle cx="36" cy="71" r="0.55"/>
+    <circle cx="42" cy="69" r="0.55"/><circle cx="48" cy="70" r="0.55"/><circle cx="54" cy="71" r="0.6"/>
+    <circle cx="61" cy="71" r="0.6"/><circle cx="66" cy="66" r="0.6"/><circle cx="45" cy="64" r="0.55"/>
+    <circle cx="30" cy="64" r="0.55"/><circle cx="62" cy="64" r="0.55"/>
+  </g>
+  <path id="ov-jaw" d="M24 84 Q45 104 68 84 Q66 98 46 104 Q26 98 24 84 Z" fill="url(#ov-jaw-shade)" opacity="0.06" filter="url(#ov-soft)"/>
+  <!-- Age & Skin Texture micro-sculpt layer -->
+  <g id="ov-age-texture" opacity="0" fill="none" stroke-linecap="round" filter="url(#ov-micro)">
+    <path d="M30 39 Q44 37.5 58 39 M32 42.5 Q44 41.2 56 42.5" stroke="#1a110c" stroke-width="0.95" opacity="0.58"/>
+    <path d="M31 39.8 Q44 38.4 57 39.8" stroke="#f0d4b8" stroke-width="0.55" opacity="0.24" style="mix-blend-mode:soft-light"/>
+    <path d="M35.5 72 Q32.5 79 33.5 86 M52.5 72 Q55.5 79 54.5 86" stroke="#180e09" stroke-width="1.2" opacity="0.62"/>
+    <path d="M23 58 L20 56.8 M23 59.5 L20.4 60.5 M63.5 58 L66.5 56.8 M63.5 59.5 L66.1 60.5" stroke="#1c120d" stroke-width="0.85" opacity="0.55"/>
+    <path d="M26.5 61.5 Q30.5 63.2 35 61.6 M51.5 61.6 Q56 63.2 60.5 61.5" stroke="#1d130e" stroke-width="1.0" opacity="0.48"/>
+  </g>
+  <!-- Expression layer (mouth corner curve + subtle upper-cheek lift) -->
+  <g id="ov-expression" opacity="0" fill="none" stroke-linecap="round" filter="url(#ov-micro)">
+    <path id="ov-mouth-line" d="M36 85 Q43.8 85.4 51.6 85" stroke="#22110e" stroke-width="1.35" opacity="0.76"/>
+    <path id="ov-mouth-hi" d="M38 86.8 Q43.8 88.2 49.6 86.8" stroke="#f4cfb8" stroke-width="0.95" opacity="0.32" style="mix-blend-mode:soft-light"/>
+    <path id="ov-expr-eyes" d="M24 60.5 Q30.5 59.5 36.5 60.8 M50 60.8 Q56.2 59.5 62.5 60.5" stroke="#1d120e" stroke-width="0.95" opacity="0"/>
+  </g>
+  <g id="ov-eyes">
+    <g id="ov-eye-l" transform="rotate(0 30.5 57.2)">
+      <path id="ov-lid-l" d="M23.5 56.4 Q30.5 53.6 37.2 56.5" fill="none" stroke="#140d0a" stroke-width="1.25" stroke-linecap="round" opacity="0.22" filter="url(#ov-micro)"/>
+      <ellipse id="ov-iris-l" cx="30.5" cy="57.2" rx="3.5" ry="2.3" fill="#665432" style="mix-blend-mode:color" opacity="0.64" filter="url(#ov-micro)"/>
+      <circle id="ov-glint-l" cx="29.4" cy="56.4" r="0.9" fill="#ffffff" opacity="0.44"/>
+    </g>
+    <g id="ov-eye-r" transform="rotate(0 56.2 57.2)">
+      <path id="ov-lid-r" d="M49.5 56.5 Q56.2 53.6 63.2 56.4" fill="none" stroke="#140d0a" stroke-width="1.25" stroke-linecap="round" opacity="0.22" filter="url(#ov-micro)"/>
+      <ellipse id="ov-iris-r" cx="56.2" cy="57.2" rx="3.8" ry="2.3" fill="#665432" style="mix-blend-mode:color" opacity="0.64" filter="url(#ov-micro)"/>
+      <circle id="ov-glint-r" cx="55.1" cy="56.4" r="0.9" fill="#ffffff" opacity="0.44"/>
+    </g>
+  </g>
+  <g id="ov-brows" fill="none" stroke="#2e2017" stroke-linecap="round" opacity="0.22" filter="url(#ov-micro)">
+    <path id="ov-brow-l" d="M22 50.8 Q30 48.8 38.5 50.6" stroke-width="2.0"/>
+    <path id="ov-brow-r" d="M47 50.6 Q56.5 48.6 67 50.8" stroke-width="2.0"/>
+  </g>
+  <g id="ov-hair" filter="url(#ov-soft)">
+    <path id="ov-hair-tint" d="M18 46 C16 24 28 13 48 13 C68 13 79 25 76 47 C71 36 62 31 47 31 C33 31 23 36 18 46 Z" fill="#2e2017" opacity="0.16" style="mix-blend-mode:color"/>
+    <path id="ov-hair-style" d="M19 42 C17 20 30 10 48 10 C67 10 78 21 76 42 C72 30 61 24 48 24 C34 24 23 30 19 42 Z" fill="#2e2017" opacity="0"/>
+  </g>
+  <g id="ov-beard" filter="url(#ov-soft)" opacity="0.14">
+    <path id="ov-beard-path" d="M25 76 C26 91 34 100 46 101 C58 100 66 91 67 76 C63 85 56 90 46 90 C36 90 29 85 25 76 Z M35 80 Q44 77 53 80 Q44 82.5 35 80 Z" fill="url(#ov-beard-grad)"/>
+  </g>
+  <g id="ov-outfit" filter="url(#ov-micro)">
+    <path id="ov-outfit-body" d="M2 120 L8 109 Q26 105 34 105 Q46 114 60 105 Q70 105 88 109 L94 120 Z" fill="#2a2c30" opacity="0.82"/>
+    <path id="ov-outfit-trim" d="M33 105 Q46 115 61 105" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1.2"/>
+  </g>
+  <!-- Independent Accessories layers (weapon-free: Eyewear, Earpiece, Character Accent) -->
+  <g id="ov-acc-eyewear"></g>
+  <g id="ov-acc-earpiece"></g>
+  <g id="ov-acc-mark"></g>
+</svg>

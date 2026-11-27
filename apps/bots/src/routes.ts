@@ -8,6 +8,7 @@ export const brainViews = {
 export type BrainView = keyof typeof brainViews;
 
 export const fixtureTeam = 'sample-team';
+export const fixtureTeamName = 'Northstar Design';
 
 export const towerViews = {
   fleet: 'Fleet',

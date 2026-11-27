@@ -194,7 +194,9 @@ function FleetTower(props: {
             </dd>
           </div>
         </dl>
-        <Schedule />
+        <Show when={agent().status !== 'provisioning'}>
+          <Schedule />
+        </Show>
         <div class="fleet-usage">
           <span>Usage over time · 24h</span>
           <Show when={exampleBars()} fallback={<p>Unavailable</p>}>

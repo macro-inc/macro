@@ -1,10 +1,22 @@
 # Macro Bots
 
-The standalone Bots app starts at `/` in Character Creator. In the local
-fixture preview, choose a preset, change the portrait width, and edit the bot
-name. Review Hire preview opens the synthetic checkout. Confirm a preview
-offer to see the new teammate in Fleet. The offline sign-in screen returns
-to the same draft in the current tab.
+The standalone Bots app starts at `/` in Character Creator. Creator, Fleet,
+Passwords, and Billing stay in the same order in the shared header. On narrow
+screens the links move below the brand and account action.
+
+Choose from ten presets or three stage examples. Face, Skin, Eyes, Nose, Hair,
+Outfit, Accessories, and Gender update the visible portrait. Use Tab to reach
+the categories and arrow keys to switch between them. Portrait angle supports
+horizontal drag and the Left and Right arrow keys. Edit the name and choose
+Computer size, Intelligence, and Autonomy in the bot profile. The mix and
+hourly estimates show sample information.
+
+In the local fixture, choose **Hire**, then **Continue with sample account**.
+The same tab restores the complete draft after a reload on sign-in and after
+the return. Review the selected computer and optionally enter Responsibilities
+and Personality. XL illustrates a sold-out offer. Confirm a sample Hire and
+choose **View setup in Fleet** to open its team-scoped card, then open its Hub
+to see the same portrait in Brain. No service purchases occur.
 
 Open Fleet at `/fleet` or from the header. Add bot opens Creator. In fixture
 mode, each sample bot has a Brain with Overview, Activity, Email, and Access

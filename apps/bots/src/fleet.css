@@ -2,19 +2,6 @@ main[data-route="/fleet"] {
   min-width: 0;
   display: flow-root;
 }
-body:has(main[data-route="/fleet"]) .top nav a {
-  background: transparent;
-  border-color: transparent;
-}
-body:has(main[data-route="/fleet"] .fleet-team-line)
-  .top
-  nav
-  :is(a[href="/"], a[href^="/sign-in"]) {
-  display: none;
-}
-body:has(main[data-route="/fleet"]) .top nav a[aria-current="page"] {
-  color: var(--amber);
-}
 .canonical-fleet {
   margin-block: 10px 6px;
   min-width: 0;

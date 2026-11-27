@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { defaultDraft } from './draft';
 import {
   fixtureCheckout,
   hireFleetPath,
@@ -24,23 +25,36 @@ test('only this tab’s verified mock receipt selects the exact Hire identity', 
   if (result.status !== 'accepted')
     throw new Error('Expected a fixture receipt');
   const { agent } = result;
+  const draft = { ...defaultDraft(), first: intent.request.name, last: '' };
 
   expect(agent.teamId).toBe(scope.team);
   expect(agent.userId).not.toBe(intent.request.purchaseKey);
   expect(agent.status).toBe('provisioning');
   expect(await fixtureCheckout.submit(intent)).toEqual(result);
+  expect(
+    await fixtureCheckout.submit({
+      ...intent,
+      scope: { ...scope, team: 'other-team' },
+    })
+  ).toEqual({ status: 'declined' });
   expect(hireReceiptFor(agent.teamId, agent.userId)).toBeUndefined();
   saveHireReceipt({
     agent: { ...agent },
+    draft,
     portrait: 'sample-portrait',
     width: 3,
   });
   expect(hireReceipt()).toBeUndefined();
 
-  saveHireReceipt({ agent, portrait: 'sample-portrait', width: 3 });
+  saveHireReceipt({ agent, draft, portrait: 'sample-portrait', width: 3 });
   const path = new URL(hireFleetPath(agent), 'https://fixture.invalid');
   const receipt = selectedHireReceipt(path.search);
-  expect(receipt).toEqual({ agent, portrait: 'sample-portrait', width: 3 });
+  expect(receipt).toEqual({
+    agent,
+    draft,
+    portrait: 'sample-portrait',
+    width: 3,
+  });
   expect(hireReceiptFor(agent.teamId, agent.userId)).toBe(receipt);
   expect(hireReceiptFor('other-team', agent.userId)).toBeUndefined();
   expect(hireReceiptFor(agent.teamId, 'other-agent')).toBeUndefined();
