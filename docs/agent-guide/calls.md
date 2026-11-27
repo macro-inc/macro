@@ -108,9 +108,14 @@ Call cues follow the speaker selected in the call controls; notification sounds
 and settings previews still use the system-default output. Outside a call, or
 with no speaker selected, cues play without taking the device's audio session,
 so music or podcasts from other apps keep playing on iPhone. Mouse, touch, Enter,
-and Space activation unlock audio, including when enabling sounds. A browser
-that cannot resume audio promptly drops the cue rather than replaying it on a
-later click.
+and Space activation unlock call audio only while a browser call is starting
+or running and Call sounds is on; the Join or Start tap itself unlocks it. When
+the call ends, audio suspends after the leave chime, and it also suspends while
+the page is hidden, resuming for the next cue or tap. The player lives in the
+call provider rather than around each call: the leave chime plays as the call
+state clears, and the player holds no audio context until a call unlocks it. A
+browser that cannot resume audio promptly drops the cue rather than replaying
+it on a later click.
 
 `Call/primitives/call-sounds.ts` exchanges explicit visit announcements over the
 room's reliable data channel; RTC roster changes never make sounds. Announcements

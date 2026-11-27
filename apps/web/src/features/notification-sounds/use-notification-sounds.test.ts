@@ -1,12 +1,18 @@
 import type { UnifiedNotification } from '@notifications/types';
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { playNotificationSound } from './primitives/sound-player';
+import {
+  NOTIFICATION_SOUND_PLAYER,
+  playNotificationSound,
+} from './primitives/sound-player';
 import { useNotificationSounds } from './use-notification-sounds';
 
 vi.mock('./primitives/sound-player', () => ({
   playNotificationSound: vi.fn().mockResolvedValue(undefined),
-  unlockNotificationSounds: vi.fn().mockResolvedValue(undefined),
+  NOTIFICATION_SOUND_PLAYER: {
+    unlock: vi.fn().mockResolvedValue(undefined),
+    setKeepRunning: vi.fn(),
+  },
 }));
 
 const USER_ID = 'user-1';
@@ -51,6 +57,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   localStorage.clear();
   vi.mocked(playNotificationSound).mockClear();
+  vi.mocked(NOTIFICATION_SOUND_PLAYER.setKeepRunning).mockClear();
 });
 
 afterEach(() => vi.useRealTimers());
@@ -148,5 +155,20 @@ it('reclaims sound when a focused page returns from the back/forward cache', () 
   );
   expect(localStorage.getItem(TAB_KEY)).not.toBeNull();
   vi.mocked(document.hasFocus).mockRestore();
+  dispose();
+});
+
+it('keeps audio ready only while sounds are on, following saves in other tabs', () => {
+  const keepRunning = vi.mocked(NOTIFICATION_SOUND_PLAYER.setKeepRunning);
+  const { dispose } = mountSounds();
+  expect(keepRunning).toHaveBeenLastCalledWith(false);
+
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ enabled: true }));
+  window.dispatchEvent(new StorageEvent('storage', { key: SETTINGS_KEY }));
+  expect(keepRunning).toHaveBeenLastCalledWith(true);
+
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ enabled: false }));
+  window.dispatchEvent(new StorageEvent('storage', { key: SETTINGS_KEY }));
+  expect(keepRunning).toHaveBeenLastCalledWith(false);
   dispose();
 });

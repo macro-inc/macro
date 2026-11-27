@@ -3,30 +3,39 @@ import {
   soundForCallEvent,
 } from '@app/features/notification-sounds/core/settings';
 import { createSoundPlayer } from '@app/features/notification-sounds/primitives/sound-player';
-import { readNotificationSoundSettings } from '@app/features/notification-sounds/primitives/sound-settings';
+import { createSavedNotificationSoundSettings } from '@app/features/notification-sounds/primitives/sound-settings';
 import { createSoundUnlock } from '@app/features/notification-sounds/primitives/sound-unlock';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
-import { type Accessor, createEffect, on, onCleanup } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  on,
+  onCleanup,
+} from 'solid-js';
 import type { CallPresenceEvent } from './call-presence';
 
-/** Playback policy shared by signed-in channel calls and guest browser calls. */
+/**
+ * Playback policy shared by signed-in channel calls and guest browser calls.
+ * `callActive` is true while a browser call is starting or running: audio
+ * unlocks only then, so ordinary taps outside calls never start it.
+ */
 export function createCallSoundPlayer(
   userId: Accessor<string | undefined>,
+  callActive: Accessor<boolean>,
   outputDeviceId: Accessor<string | null> = () => null
 ) {
   const player = createSoundPlayer(outputDeviceId);
-  createSoundUnlock(player.unlock);
+  const saved = createSavedNotificationSoundSettings(userId);
+  // Guests have no saved settings and use the defaults.
+  const settings = () => saved() ?? DEFAULT_NOTIFICATION_SOUND_SETTINGS;
+  const wanted = createMemo(() => callActive() && settings().callSoundsEnabled);
+  createSoundUnlock(player, wanted);
   createEffect(
     on(outputDeviceId, () => fireAndForget(player.syncOutput(), 'call-sounds'))
   );
   onCleanup(() => fireAndForget(player.dispose(), 'call-sounds'));
-  const settings = () => {
-    const id = userId();
-    return id
-      ? readNotificationSoundSettings(id)
-      : DEFAULT_NOTIFICATION_SOUND_SETTINGS;
-  };
 
   return (event: CallPresenceEvent) => {
     const current = settings();

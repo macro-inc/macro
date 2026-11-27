@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import {
   type CallSoundId,
@@ -30,6 +31,12 @@ export function createSoundPlayer(outputDeviceId?: () => string | null) {
   let routing: Promise<void> | undefined;
   let starting: Promise<void> | undefined;
   let disposed = false;
+  /** Whether the context may stay running between cues. */
+  let keepRunning = false;
+  /** Cues waiting to start plus tones still sounding. */
+  let busy = 0;
+  /** Suspends not yet settled; the context may still report "running". */
+  let suspending = 0;
 
   function audioContext(): AudioContext | undefined {
     if (disposed) return undefined;
@@ -108,6 +115,40 @@ export function createSoundPlayer(outputDeviceId?: () => string | null) {
     await Promise.all([starting, routeSerialized()]);
   }
 
+  /**
+   * A running AudioContext holds the device's audio output (on iOS, the audio
+   * session, which keeps a backgrounded app awake), so it runs only while a
+   * cue sounds or while its owner keeps it ready for the next one.
+   */
+  function release() {
+    if (disposed || keepRunning || busy > 0 || !context) return;
+    if (context.state === 'closed') return;
+    // Suspending a suspended context is a no-op, and an unlock still settling
+    // resumes first, so this always ends suspended.
+    fireAndForget(suspend(context), 'audio-suspend');
+  }
+
+  /** WebKit reports "running" until a suspend settles, so track it here. */
+  async function suspend(current: AudioContext): Promise<void> {
+    suspending += 1;
+    try {
+      await current.suspend();
+    } finally {
+      suspending -= 1;
+    }
+  }
+
+  /** Keep the context running between cues, or suspend it once it is idle. */
+  function setKeepRunning(keep: boolean) {
+    keepRunning = keep;
+    release();
+  }
+
+  function settle() {
+    busy -= 1;
+    release();
+  }
+
   /** Call synchronously inside the gesture, before any network/media awaits. */
   async function unlock(): Promise<void> {
     const current = audioContext();
@@ -115,7 +156,11 @@ export function createSoundPlayer(outputDeviceId?: () => string | null) {
     // Start both gated APIs before awaiting either: syncOutput starts the
     // chosen speaker's element synchronously. "interrupted" also needs resume
     // on Safari after the OS temporarily takes the audio device.
-    const resume = current.state === 'running' ? undefined : current.resume();
+    // A suspend still settling would win over a skipped resume.
+    const resume =
+      current.state === 'running' && suspending === 0
+        ? undefined
+        : current.resume();
     await Promise.all([resume, syncOutput()]);
   }
 
@@ -124,6 +169,18 @@ export function createSoundPlayer(outputDeviceId?: () => string | null) {
     volume: number
   ): Promise<void> {
     if (disposed || volume <= 0) return;
+    busy += 1;
+    try {
+      await playCue(id, volume);
+    } finally {
+      settle();
+    }
+  }
+
+  async function playCue(
+    id: NotificationSoundId | CallSoundId,
+    volume: number
+  ): Promise<void> {
     await Telemetry.span('audio.cue.play', async (span) => {
       span.setAttr('audio.cue', id);
       const requestedAt = performance.now();
@@ -180,9 +237,11 @@ export function createSoundPlayer(outputDeviceId?: () => string | null) {
           );
         }
         oscillator.connect(gain);
+        busy += 1;
         oscillator.onended = () => {
           oscillator.disconnect();
           gain.disconnect();
+          settle();
         };
         oscillator.start(toneStart);
         oscillator.stop(toneEnd);
@@ -200,9 +259,11 @@ export function createSoundPlayer(outputDeviceId?: () => string | null) {
     if (context && context.state !== 'closed') await context.close();
   }
 
-  return { unlock, play, syncOutput, dispose };
+  return { unlock, play, syncOutput, setKeepRunning, dispose };
 }
 
-const NOTIFICATION_PLAYER = createSoundPlayer();
-export const unlockNotificationSounds = NOTIFICATION_PLAYER.unlock;
-export const playNotificationSound = NOTIFICATION_PLAYER.play;
+export type SoundPlayer = ReturnType<typeof createSoundPlayer>;
+
+/** Notification sounds and settings previews share one context. */
+export const NOTIFICATION_SOUND_PLAYER = createSoundPlayer();
+export const playNotificationSound = NOTIFICATION_SOUND_PLAYER.play;

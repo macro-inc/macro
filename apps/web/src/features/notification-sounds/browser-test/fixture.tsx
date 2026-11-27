@@ -2,8 +2,9 @@ import '@fontsource-variable/inter';
 import '../../../index.css';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { UnifiedNotification } from '@notifications/types';
-import { onMount } from 'solid-js';
+import { createSignal, onMount } from 'solid-js';
 import { render } from 'solid-js/web';
+import { createCallSoundPlayer } from '../../channel/Call/call-sound-player';
 import { SettingsPage } from '../../settings/primitives';
 import { macroDarkTheme } from '../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../theme/themes/macro-light';
@@ -19,6 +20,8 @@ const USER_ID = 'fixture-user';
 declare global {
   interface Window {
     deliverNotification: (tag: string) => void;
+    setCallActive: (active: boolean) => void;
+    playCallSound: (event: 'join' | 'leave') => void;
   }
 }
 
@@ -34,6 +37,10 @@ function Fixture() {
     },
     () => USER_ID
   );
+  // A stand-in for a browser call: its sound player, without the room.
+  const [callActive, setCallActive] = createSignal(false);
+  window.setCallActive = setCallActive;
+  window.playCallSound = createCallSoundPlayer(() => USER_ID, callActive);
   window.deliverNotification = (tag) => {
     // The hook reads only the event tag and lifecycle state.
     const notification = {

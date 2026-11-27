@@ -527,8 +527,15 @@ function createCallState() {
     backgroundEffect: persistedBackgroundEffect(),
     noiseSuppressionMode: persistedNoiseSuppressionMode(),
   });
+  // Native call builds play no join/leave cues and own the audio session;
+  // browser calls are active from the Join tap (the optimistic join) until
+  // they disconnect.
   const playCallSound = createCallSoundPlayer(
     userId,
+    () =>
+      !isNativeCallEnabled() &&
+      (store.optimisticJoinChannelId !== null ||
+        isActiveCallConnectionState(store.connectionState)),
     () => store.activeAudioOutputDeviceId
   );
   const [krispFilter, setKrispFilter] = createSignal<ReturnType<
