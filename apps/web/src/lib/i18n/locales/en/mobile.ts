@@ -64,4 +64,10 @@ export default {
   updateFailedDescription:
     'Try again later. Macro downloads updates automatically on Wi-Fi.',
   updateOk: 'OK',
+
+  // Launch screen when the session check fails
+  sessionCheckNetwork: 'Unable to connect. Please check your network.',
+  sessionCheckServer: "Macro isn't responding. Please try again in a moment.",
+  sessionCheckUnexpected: 'Something went wrong while loading Macro.',
+  retrying: 'Retrying…',
 };
