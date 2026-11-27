@@ -42,7 +42,7 @@ in
       window = 300;
       comparator = ">";
       critical = 1;
-      translation = "Used over high-watermark memory per host, averaged over 5 minutes at one-minute steps, from the gauges agent-harness-service reports per host (`host` is the gauges' own attribute; in Mimir from local stacks). On ECS the telemetry sidecar sets `deployment.environment` on every datapoint (`infra/packages/resources/src/resources/ecs-telemetry.alloy`), so the series carry `deployment_environment` as dev's do today. No data until agent-harness-service's prod sending is turned on.";
+      translation = "Used over high-watermark memory per host, averaged over 5 minutes at one-minute steps, from the gauges agent-harness-service reports per host (`host` is the gauges' own attribute; in Mimir from local stacks). On ECS the telemetry sidecar sets `deployment.environment` on every datapoint (`infra/packages/resources/src/resources/ecs-telemetry.alloy`), so the series carry `deployment_environment` as dev's do today; the sidecar writes `dev` for now, and turning on prod sending sets it from the stack (https://github.com/macro-inc/macro/pull/12204). No data until agent-harness-service's prod sending is turned on.";
     })
     (monitor {
       monitor = "firecracker-host-unhealthy";
