@@ -21,7 +21,9 @@ pub struct ImportedCall {
     pub source: CallSource,
     /// Provider title.
     pub title: Option<String>,
-    /// Observed conversation start; calendar schedule is source metadata.
+    /// When the conversation started: observed when the provider recorded
+    /// it, otherwise the provider's best estimate (such as the scheduled
+    /// start or when its record was created).
     pub started_at: Option<DateTime<Utc>>,
     /// Observed conversation end.
     pub ended_at: Option<DateTime<Utc>>,

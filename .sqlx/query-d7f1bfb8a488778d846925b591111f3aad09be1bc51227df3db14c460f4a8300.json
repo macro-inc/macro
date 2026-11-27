@@ -57,6 +57,51 @@
         "ordinal": 10,
         "name": "namespace",
         "type_info": "Uuid"
+      },
+      {
+        "ordinal": 11,
+        "name": "backfill_cursor",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "backfill_completed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "backfill_available_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "backfill_lease_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 15,
+        "name": "backfill_attempts",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 16,
+        "name": "backfill_handled",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 17,
+        "name": "backfill_deferrals",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 18,
+        "name": "backfill_skipped",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 19,
+        "name": "backfill_gave_up",
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -75,7 +120,16 @@
       false,
       true,
       true,
-      false
+      false,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true
     ]
   },
   "hash": "d7f1bfb8a488778d846925b591111f3aad09be1bc51227df3db14c460f4a8300"

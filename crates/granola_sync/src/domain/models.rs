@@ -103,6 +103,96 @@ pub struct Job {
     pub attempts: i32,
 }
 
+/// A note as Granola lists it: enough to decide whether to fetch it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListedNote {
+    pub id: NoteId,
+    /// Deleted notes are listed only to keys that can see the whole workspace.
+    pub deleted: bool,
+}
+
+/// One page of the user's notes, newest first.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NotesPage {
+    pub notes: Vec<ListedNote>,
+    /// Where the next page starts; `None` on the last page.
+    pub next: Option<String>,
+}
+
+/// A leased page of a connection's history backfill. Completion is fenced by
+/// `lease_id`; `cursor` is `None` for the first page.
+pub struct BackfillJob {
+    pub connection: Connection,
+    pub cursor: Option<String>,
+    pub lease_id: Uuid,
+    /// Attempts at this page, including this one.
+    pub attempts: i32,
+    /// Notes of this page already handled by an earlier attempt; a retry
+    /// skips them, so a slow page makes progress on every attempt.
+    pub handled: Vec<NoteId>,
+    /// Times in a row the user was not opted in, for backing off deferrals.
+    pub deferrals: i32,
+}
+
+/// Why a backfilled note was given up on when its page moved on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, strum::AsRefStr)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum SkipReason {
+    /// Granola kept failing to return the note.
+    FetchFailed,
+    /// The call import kept rejecting the note.
+    ImportFailed,
+    /// No attempt at the page reached the note within its time budget.
+    OutOfTime,
+}
+
+/// A note a page moved on without importing; recorded durably by ID only.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SkippedNote {
+    pub note_id: NoteId,
+    pub reason: SkipReason,
+}
+
+/// Why a backfill stopped before Granola's last page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum GiveUpReason {
+    /// The listing kept handing back the cursor it was given.
+    RepeatedCursor,
+}
+
+/// How a backfill page ended.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BackfillStep {
+    /// The page was imported; continue from this cursor. `skipped` are
+    /// the notes it gave up on after its last attempt.
+    Next {
+        cursor: String,
+        skipped: Vec<SkippedNote>,
+    },
+    /// The last page was imported, except `skipped`.
+    Done { skipped: Vec<SkippedNote> },
+    /// The backfill cannot continue; stop it for good.
+    GaveUp(GiveUpReason),
+    /// The page failed; retry it after a backoff from its saved cursor.
+    Retry,
+    /// Granola rate-limited the page; retry it after this wait without
+    /// spending one of its attempts, so throttling never causes skips.
+    Throttled(std::time::Duration),
+    /// Backfill is not rolled out to this user; check again later without
+    /// calling Granola or spending an attempt.
+    Deferred,
+}
+
+/// Granola answered 429: the key's request allowance is spent for now.
+#[derive(Debug, thiserror::Error)]
+#[error("Granola rate-limited the request")]
+pub struct RateLimited {
+    /// Granola's `Retry-After`, when it sent one in seconds.
+    pub retry_after: Option<std::time::Duration>,
+}
+
 /// Why a sync is not healthy, stored as the connection's `last_error`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr, strum::EnumString)]
 pub enum SyncIssue {

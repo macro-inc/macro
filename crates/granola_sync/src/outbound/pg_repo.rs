@@ -128,7 +128,10 @@ impl SyncRepository for PgSyncRepository {
             VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (user_id) DO UPDATE SET id = EXCLUDED.id, account_id = EXCLUDED.account_id,
                 scope = EXCLUDED.scope, started_at = EXCLUDED.started_at, enabled = false,
-                endpoint_id = NULL, signing_secret = NULL, last_error = NULL, last_synced_at = NULL
+                endpoint_id = NULL, signing_secret = NULL, last_error = NULL, last_synced_at = NULL,
+                backfill_cursor = NULL, backfill_completed_at = NULL, backfill_available_at = now(),
+                backfill_lease_id = NULL, backfill_attempts = 0, backfill_handled = '{}',
+                backfill_deferrals = 0, backfill_skipped = '[]', backfill_gave_up = NULL
             WHERE granola_sync_connections.endpoint_id IS NOT NULL
                 OR granola_sync_connections.last_error IS NOT NULL
                 OR granola_sync_connections.started_at < now() - interval '2 minutes'
@@ -255,6 +258,146 @@ impl SyncRepository for PgSyncRepository {
         tx.commit().await?;
         Ok(())
     }
+    async fn claim_backfill(&self) -> Result<Option<BackfillJob>> {
+        let lease = macro_uuid::generate_uuid_v7();
+        let row = sqlx::query!(
+            r#"WITH candidate AS (
+                SELECT id FROM granola_sync_connections
+                WHERE enabled AND backfill_completed_at IS NULL AND backfill_available_at <= now()
+                ORDER BY backfill_available_at LIMIT 1 FOR UPDATE SKIP LOCKED
+            )
+            UPDATE granola_sync_connections c SET backfill_lease_id = $1,
+                backfill_attempts = c.backfill_attempts + 1,
+                backfill_available_at = now() + interval '10 minutes'
+            FROM candidate WHERE c.id = candidate.id
+            RETURNING c.id, c.backfill_cursor, c.backfill_attempts, c.backfill_handled,
+                c.backfill_deferrals"#,
+            lease
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        let Some(connection) = self.by_id(row.id).await? else {
+            return Ok(None);
+        };
+        Ok(Some(BackfillJob {
+            connection,
+            cursor: row.backfill_cursor,
+            lease_id: lease,
+            attempts: row.backfill_attempts,
+            handled: row.backfill_handled.into_iter().map(NoteId).collect(),
+            deferrals: row.backfill_deferrals,
+        }))
+    }
+    async fn mark_backfilled(&self, job: &BackfillJob, note: &NoteId) -> Result<()> {
+        sqlx::query!(
+            "UPDATE granola_sync_connections SET backfill_handled = array_append(backfill_handled, $3)
+             WHERE id = $1 AND backfill_lease_id = $2",
+            job.connection.id,
+            job.lease_id,
+            note.as_ref()
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+    async fn finish_backfill(&self, job: &BackfillJob, step: BackfillStep) -> Result<()> {
+        // A failed page waits 30 s, doubling per attempt, up to an hour. A
+        // throttled page waits as long as Granola asked. A deferred one (the
+        // user is not opted in) waits ten minutes, doubling per deferral in a
+        // row, up to an hour, so an opt-in takes effect within the hour.
+        // Neither of the last two spends the attempt.
+        let mut finished = Finished::default();
+        match step {
+            BackfillStep::Next { cursor, skipped } => {
+                finished.next_cursor = Some(cursor);
+                finished.page_over = true;
+                finished.skipped = skipped;
+            }
+            BackfillStep::Done { skipped } => {
+                finished.done = true;
+                finished.page_over = true;
+                finished.skipped = skipped;
+            }
+            BackfillStep::GaveUp(reason) => {
+                finished.done = true;
+                finished.page_over = true;
+                finished.gave_up = Some(reason);
+            }
+            BackfillStep::Retry => {
+                let seconds = 30_i32
+                    .saturating_mul(2_i32.saturating_pow(job.attempts.clamp(1, 8) as u32 - 1))
+                    .min(3600);
+                finished.wait_seconds = Some(f64::from(seconds));
+            }
+            BackfillStep::Throttled(wait) => {
+                finished.wait_seconds = Some(wait.as_secs_f64());
+                finished.keep_attempt = true;
+            }
+            BackfillStep::Deferred => {
+                let seconds = 600_i64
+                    .saturating_mul(2_i64.saturating_pow(job.deferrals.clamp(0, 10) as u32))
+                    .min(3600);
+                finished.wait_seconds = Some(seconds as f64);
+                finished.keep_attempt = true;
+                finished.deferred = true;
+            }
+        }
+        sqlx::query!(
+            r#"UPDATE granola_sync_connections SET
+                backfill_cursor = COALESCE($3, backfill_cursor),
+                backfill_completed_at = CASE WHEN $4 THEN now() ELSE NULL END,
+                backfill_attempts = CASE WHEN $6 THEN backfill_attempts - 1
+                    WHEN $5::double precision IS NULL THEN 0 ELSE backfill_attempts END,
+                backfill_available_at = now() + make_interval(secs => COALESCE($5::double precision, 0)),
+                backfill_handled = CASE WHEN $7 THEN '{}' ELSE backfill_handled END,
+                backfill_skipped = CASE WHEN jsonb_array_length($8::jsonb) = 0 THEN backfill_skipped
+                    ELSE (SELECT COALESCE(jsonb_agg(entry ORDER BY position), '[]'::jsonb)
+                        FROM jsonb_array_elements(backfill_skipped || $8::jsonb)
+                            WITH ORDINALITY AS kept(entry, position)
+                        WHERE position > jsonb_array_length(backfill_skipped || $8::jsonb) - $11)
+                    END,
+                backfill_gave_up = COALESCE($9, backfill_gave_up),
+                backfill_deferrals = CASE WHEN $10 THEN backfill_deferrals + 1 ELSE 0 END,
+                backfill_lease_id = NULL
+            WHERE id = $1 AND backfill_lease_id = $2"#,
+            job.connection.id,
+            job.lease_id,
+            finished.next_cursor,
+            finished.done,
+            finished.wait_seconds,
+            finished.keep_attempt,
+            finished.page_over,
+            serde_json::to_value(&finished.skipped)?,
+            finished.gave_up.as_ref().map(|reason| reason.as_ref()),
+            finished.deferred,
+            BACKFILL_SKIPPED_KEPT as i64
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+}
+
+/// Skipped notes kept per connection; older entries drop off first.
+pub(crate) const BACKFILL_SKIPPED_KEPT: usize = 1000;
+
+/// The columns one backfill outcome writes.
+#[derive(Default)]
+struct Finished {
+    next_cursor: Option<String>,
+    /// The backfill is over: completed or given up.
+    done: bool,
+    /// Wait before the next claim; `None` resets the attempts.
+    wait_seconds: Option<f64>,
+    keep_attempt: bool,
+    /// The page moved on, so its handled notes are forgotten.
+    page_over: bool,
+    skipped: Vec<SkippedNote>,
+    gave_up: Option<GiveUpReason>,
+    deferred: bool,
 }
 
 #[cfg(test)]

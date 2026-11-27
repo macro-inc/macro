@@ -19,14 +19,33 @@ once (`inbound::connected_hook`, on the `/connectors` connect hook), and
 reconcile keeps a holder whose connection could not be resolved: `holders`
 fails rather than leave them out, so nothing is stopped on an outage.
 
+Webhooks only bring new activity, so each enabled sync also backfills the
+notes the key can already see (`SyncService::backfill`). It runs only for
+users the backend flag `enable-granola-backfill` opts in (`outbound::rollout`;
+off without a PostHog key or flag), otherwise the page is deferred without
+calling Granola: ten minutes, doubling per deferral in a row, up to an hour,
+so a user opted in later starts within the hour, or at once on reconnect. The worker leases one page of `GET /notes` (10 notes)
+at a time while no delivery waits, fetches each live note through the same
+adapter and mapper as a delivery, imports it at once, and saves the next
+cursor after the page. Each imported note is recorded on the page
+(`backfill_handled`), so a retried page skips it and makes progress. A page
+has a 120 s budget, inside the worker's 300 s timeout, so it always records
+its outcome; notes it did not reach fail that attempt. A failed page retries
+from its saved cursor with backoff; after `BACKFILL_PAGE_ATTEMPTS` the notes
+that still fail are skipped so history is not blocked, each logged and kept
+by ID and `SkipReason` in `backfill_skipped` (the newest 1000). A listing that keeps repeating
+its cursor ends the backfill (`backfill_gave_up`). A 429 (`RateLimited`) is not a failure: the page stops, waits for
+Granola's `Retry-After` (a minute without one) and keeps its attempt; a
+deferred page keeps it too. Restarting sync (a connect) starts the backfill over.
+
 ## Start here
 
 - `src/domain/service.rs`: `plan` decides start/stop; `start` handles scope fallback.
-- `src/outbound/pg_repo.rs`: reservation, leases, and encrypted signing secrets.
+- `src/outbound/pg_repo.rs`: reservation, leases, backfill cursors, and encrypted signing secrets.
 
 ## Scope
 
-- Owns: webhook lifecycle, delivery verification and deduplication, Granola note mapping.
+- Owns: webhook lifecycle, delivery verification and deduplication, history backfill, Granola note mapping.
 - Not here: call storage and reads → `crates/call`; which Granola connection counts and how it is called → `crates/connectors`.
 
 ## Boundaries
@@ -48,6 +67,16 @@ fails rather than leave them out, so nothing is stopped on an outage.
 - `namespace` must survive reconnects: it is the import identity in
   `call_entity_sources`, so re-registering never duplicates calls.
 - Never log provider response bodies; webhook registration returns the signing secret.
+- Backfill and webhooks may import the same note; both use the connection's
+  `namespace` and the note ID, so the call import upserts one call. Deleted
+  notes are skipped and private scratch notes are never imported, on both paths.
+- Granola lists only notes with a generated summary, newest first, at most 30
+  per page, and allows 5 requests a second; backfill lists 10 and paces notes
+  at 500 ms (two or more requests each).
+- History depth is unbounded: a workspace-scope key backfills every note the
+  workspace shares with it. Keep `enable-granola-backfill` targeted.
+- An imported call starts at its first transcript segment, else its calendar
+  event's scheduled start, else the note's creation time.
 - Sync is off for users on Macro Connect: Connect holds Granola as MCP only, so
   their connection gives no API access and they are not holders.
 - The connectors services name no account, so reconcile cannot see a

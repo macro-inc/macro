@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE granola_sync_connections SET\n                backfill_cursor = COALESCE($3, backfill_cursor),\n                backfill_completed_at = CASE WHEN $4 THEN now() ELSE NULL END,\n                backfill_attempts = CASE WHEN $6 THEN backfill_attempts - 1\n                    WHEN $5::double precision IS NULL THEN 0 ELSE backfill_attempts END,\n                backfill_available_at = now() + make_interval(secs => COALESCE($5::double precision, 0)),\n                backfill_handled = CASE WHEN $7 THEN '{}' ELSE backfill_handled END,\n                backfill_skipped = CASE WHEN jsonb_array_length($8::jsonb) = 0 THEN backfill_skipped\n                    ELSE (SELECT COALESCE(jsonb_agg(entry ORDER BY position), '[]'::jsonb)\n                        FROM jsonb_array_elements(backfill_skipped || $8::jsonb)\n                            WITH ORDINALITY AS kept(entry, position)\n                        WHERE position > jsonb_array_length(backfill_skipped || $8::jsonb) - $11)\n                    END,\n                backfill_gave_up = COALESCE($9, backfill_gave_up),\n                backfill_deferrals = CASE WHEN $10 THEN backfill_deferrals + 1 ELSE 0 END,\n                backfill_lease_id = NULL\n            WHERE id = $1 AND backfill_lease_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Bool",
+        "Float8",
+        "Bool",
+        "Bool",
+        "Jsonb",
+        "Text",
+        "Bool",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "23a0a6ba65c93629866dcaa5bc8faf96158d8024b8db4b9eac2aaf63f8b527f2"
+}
