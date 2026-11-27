@@ -10,17 +10,24 @@ import {
 /**
  * Whether an unsent draft (text or files) is stored for this channel or
  * thread. Reads the copy a mounted input shares, or storage when none is
- * mounted, without subscribing the caller.
+ * mounted, without subscribing the caller. A stored value that is not text
+ * counts as no text.
  */
 export function hasStoredDraft(scope: PersistenceProps): boolean {
   return createRoot((dispose) => {
-    const [text] = holdPersistedDraftText(makeInputValuePersistenceKey(scope));
-    const stored =
-      !!text()?.trim() ||
-      createInputAttachmentTracker({
-        persistenceKey: makeAttachmentTrackerPersistenceKey(scope),
-      }).attachments().length > 0;
-    dispose();
-    return stored;
+    try {
+      const [text] = holdPersistedDraftText(
+        makeInputValuePersistenceKey(scope)
+      );
+      const value: unknown = text();
+      if (typeof value === 'string' && value.trim() !== '') return true;
+      return (
+        createInputAttachmentTracker({
+          persistenceKey: makeAttachmentTrackerPersistenceKey(scope),
+        }).attachments().length > 0
+      );
+    } finally {
+      dispose();
+    }
   });
 }

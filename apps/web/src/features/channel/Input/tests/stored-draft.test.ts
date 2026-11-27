@@ -48,6 +48,12 @@ describe('hasStoredDraft', () => {
     expect(hasStoredDraft(THREAD)).toBe(false);
   });
 
+  it('counts a stored value that is not text as no text', () => {
+    localStorage.setItem(makeInputValuePersistenceKey(THREAD), '{}');
+
+    expect(hasStoredDraft(THREAD)).toBe(false);
+  });
+
   it('reads the copy a mounted input holds, and leaves it held', () => {
     createRoot((dispose) => {
       const [text, setText] = holdPersistedDraftText(

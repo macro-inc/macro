@@ -94,6 +94,23 @@ describe('replyTargetStorage', () => {
     second.dispose();
   });
 
+  it('keeps the reply the same channel open elsewhere stored when this one closes', () => {
+    const here = mount([]);
+    here.manager.bindReply(root);
+    const elsewhere = mount([]);
+    elsewhere.manager.bindReply({
+      id: 'root-2',
+      thread_id: null,
+    } as MessageData);
+    here.manager.closeReply();
+    here.dispose();
+    elsewhere.dispose();
+
+    const again = mount(['root-2']);
+    expect(again.manager.replyTarget()).toEqual({ threadId: 'root-2' });
+    again.dispose();
+  });
+
   it('ignores a stored binding it cannot read', () => {
     localStorage.setItem('channel-reply-target:channel-1', '{"threadId":');
     const second = mount(['root-1']);
