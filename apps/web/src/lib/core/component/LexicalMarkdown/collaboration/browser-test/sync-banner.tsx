@@ -7,9 +7,11 @@
 
 import '@app/index.css';
 import { CollabSyncMessage } from '@app/features/block-md/component/CollabSyncMessage';
+import { applyTheme } from '@app/features/theme/utils/themeUtils';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { UserContextProvider } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { onElementConnect } from '@core/util/onElementConnect';
 import { createLoroManager } from '@macro-inc/collaboration/collab/manager';
 import {
@@ -234,6 +236,12 @@ function Editor(props: {
   );
 }
 
+document.documentElement.dataset.touchDevice = String(isTouchDevice());
+applyTheme(
+  new URLSearchParams(location.search).get('theme') === 'light'
+    ? 'Macro Light'
+    : 'Macro Dark'
+);
 initializeLexical();
 render(
   () => (

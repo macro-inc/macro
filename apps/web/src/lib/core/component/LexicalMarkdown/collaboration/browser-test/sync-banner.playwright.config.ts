@@ -16,7 +16,11 @@ export default defineConfig({
   workers: 1,
   timeout: 140_000,
   expect: { timeout: 15_000 },
-  use: { baseURL: `http://127.0.0.1:${port}` },
+  use: {
+    baseURL: `http://127.0.0.1:${port}`,
+    // SYNC_BANNER_VIDEO=1 records each test, for showing the banner come and go.
+    video: process.env.SYNC_BANNER_VIDEO ? 'on' : 'off',
+  },
   webServer: {
     command: `MACRO_DEV_HTTPS=false MACRO_DEV_PROXY=false bunx vite --host 127.0.0.1 --port ${port} --strictPort --config ${dir}/sync-banner.vite.config.ts`,
     cwd: webDirectory,

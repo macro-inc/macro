@@ -117,8 +117,8 @@ async function startRoom() {
   });
 
   return {
-    url(peer: string) {
-      return `${fixture}?id=${id}&port=${address.port}&peer=${peer}`;
+    url(peer: string, theme: 'light' | 'dark' = 'dark') {
+      return `${fixture}?id=${id}&port=${address.port}&peer=${peer}&theme=${theme}`;
     },
     stall(peer: string) {
       stalled.add(peer);
@@ -197,8 +197,8 @@ test('edits the server never acknowledges raise a banner that clears once they a
   try {
     const other = await second.newPage();
     await Promise.all([
-      openEditor(page, room.url('writer')),
-      openEditor(other, room.url('reader')),
+      openEditor(page, room.url('writer', 'light')),
+      openEditor(other, room.url('reader', 'light')),
     ]);
 
     // A healthy session types for longer than the delay without a banner.
@@ -236,6 +236,7 @@ test('edits the server never acknowledges raise a banner that clears once they a
     await expect.poll(() => pendingWrites(page)).toBe(0);
     await page.clock.runFor(DELAY_MS * 2);
     await expect(banner(page)).toHaveCount(0);
+    await page.screenshot({ path: test.info().outputPath('delivered.png') });
   } finally {
     await second.close();
   }
@@ -266,6 +267,9 @@ test('a lost connection raises an offline banner, then an unsaved one once edits
     await typeAtEnd(page, ' offline edit');
     await page.clock.runFor(DELAY_MS + 1_000);
     await expect(banner(page)).toHaveAttribute('data-sync-problem', 'unsaved');
+    await page.screenshot({
+      path: test.info().outputPath('offline-unsaved-banner.png'),
+    });
 
     const reopened = page.waitForEvent('websocket', {
       predicate: (socket) => socket.url().endsWith('/writer'),
