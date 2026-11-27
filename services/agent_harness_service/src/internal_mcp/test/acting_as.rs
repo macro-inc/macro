@@ -142,11 +142,11 @@ async fn execute_code_takes_only_a_role_as_acting_as() {
         ("requester", ToolActor::Requester),
         ("owner", ToolActor::Owner),
     ] {
-        let (_, response) = call(json!(role), false).await;
-        assert!(
-            response.get("error").is_none() || response["error"]["code"] != -32602,
-            "{role}: {response}"
+        call(json!(role), false).await;
+        assert_eq!(
+            code_mode.actors.lock().unwrap().pop(),
+            Some(actor),
+            "{role} reaches code mode"
         );
-        assert_eq!(code_mode.actors.lock().unwrap().pop(), Some(actor));
     }
 }
