@@ -21,6 +21,8 @@ means this is a Macro-managed team vault.
 - `src/inbound/router.rs`: authenticated human routes, CSRF header, private no-store responses.
 - `src/domain/agent.rs`, `src/domain/agent/service.rs`: bounded agent vault API
   (closed Login/API selectors, Agent grants, standing approval, requests, TOTP lifetime).
+- `src/domain/agent/missing_item.rs`: isolated missing-item review authority and
+  decision proof. See the [design](../../docs/design/passwords.md#missing-item-request-proof).
 - `src/inbound/agent_router.rs`: agent routes at `/passwords/agent/teams/{team}` and
   the human review routes; `src/outbound/postgres/agent.rs` their storage.
 

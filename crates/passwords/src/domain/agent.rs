@@ -9,6 +9,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Deserializer, Serialize};
 use uuid::Uuid;
 
+pub mod missing_item;
 pub mod ports;
 pub mod service;
 pub(crate) mod totp;
