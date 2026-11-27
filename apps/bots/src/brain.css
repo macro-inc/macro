@@ -1,0 +1,280 @@
+.brain {
+  display: grid;
+  gap: 14px;
+  margin: 12px 16px 20px;
+  min-width: 0;
+}
+
+.brain-frame {
+  background: #0e1422;
+}
+
+.brain-back,
+.brain-open {
+  width: fit-content;
+  color: #bcd1e8;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.brain-heading {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+}
+
+.brain-portrait {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: #0a0d15;
+  border: 1px solid #64512f;
+  border-radius: 4px;
+  font-size: 24px;
+  color: var(--amber);
+}
+
+.brain-portrait img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.brain-status-line,
+.brain-header-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brain-status-line {
+  flex-wrap: wrap;
+}
+
+.brain-identity p,
+.brain-section-heading time,
+.brain-section-heading p,
+.brain-row-main p,
+.brain-row-outcome,
+.brain-entry p,
+.brain-empty {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.brain-lifecycle {
+  color: #7ddabb;
+}
+
+.brain-lifecycle.is-setting-up,
+.brain-work-status {
+  color: #a2c3e5;
+}
+
+.brain-header-side {
+  align-items: start;
+}
+
+.brain-schedule,
+.brain-computer {
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #101827;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.brain-schedule summary {
+  cursor: pointer;
+}
+
+.brain-schedule summary:focus-visible {
+  outline: 2px solid #85c2ff;
+  outline-offset: 3px;
+}
+
+.brain-schedule-grid {
+  display: inline-grid;
+  grid-template-columns: repeat(7, 12px);
+  gap: 2px;
+  margin-inline-start: 8px;
+  vertical-align: middle;
+  text-align: center;
+  font-size: 9px;
+}
+
+.brain-schedule-grid i {
+  display: block;
+  height: 4px;
+  border: 1px solid #465168;
+  border-radius: 1px;
+  margin-top: 2px;
+}
+
+.brain-schedule-grid i.on-shift {
+  border-color: var(--amber);
+  background: var(--amber);
+}
+
+.brain-schedule ul {
+  padding-inline-start: 19px;
+}
+
+.brain-computer {
+  display: grid;
+  min-width: 99px;
+  gap: 4px;
+}
+
+.brain nav {
+  gap: 0;
+  border-top: 1px solid var(--border);
+}
+
+.brain nav a {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  min-height: 40px;
+  padding: 7px 13px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+}
+
+.brain nav a:hover,
+.brain nav a[aria-current="page"] {
+  color: #eef0f5;
+  background: #1a2029;
+}
+
+.brain nav a[aria-current="page"] {
+  box-shadow: inset 0 -2px var(--amber);
+}
+
+.brain-count {
+  font-size: 11px;
+}
+
+.brain-overview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 14px;
+}
+
+.brain-board {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.brain-section {
+  min-width: 0;
+  padding: 14px 16px;
+}
+
+.brain-current.has-active-work {
+  background: linear-gradient(112deg, #24201d, #162b32);
+}
+
+.brain-section-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.brain-empty {
+  margin-block: 10px 4px;
+}
+
+.brain-rows {
+  padding: 0;
+  margin: 10px 0 0;
+  list-style-type: none;
+}
+
+.brain-rows li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  gap: 12px;
+  padding-block: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.brain-row-main strong,
+.brain-entry h2 {
+  overflow-wrap: anywhere;
+}
+
+.brain-row-main p {
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.brain-open {
+  display: inline-grid;
+  align-items: center;
+  min-height: 32px;
+}
+
+.brain-entry {
+  display: grid;
+  gap: 9px;
+}
+
+@media (max-width: 700px) {
+  .brain {
+    margin-inline: 12px;
+  }
+
+  .brain-heading {
+    grid-template-columns: 52px minmax(0, 1fr);
+    padding-inline: 12px;
+  }
+
+  .brain-header-side {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--border);
+    padding-top: 9px;
+    flex-wrap: wrap;
+  }
+
+  .brain-schedule {
+    flex: 1;
+  }
+
+  .brain nav a {
+    flex: 1;
+    min-height: 44px;
+    padding-inline: 4px;
+  }
+
+  .brain-overview {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .brain-rows li {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 10px;
+  }
+
+  .brain-row-main {
+    grid-column: 1 / -1;
+  }
+}
+
+.brain-entry h2:focus-visible {
+  outline: 2px solid #85c2ff;
+  outline-offset: 3px;
+}

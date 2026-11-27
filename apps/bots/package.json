@@ -1,0 +1,34 @@
+{
+  "name": "@macro-inc/bots",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "preview": "vite preview --mode local-fixture",
+    "build:preview": "bun run check:boundary && vite build --mode local-fixture",
+    "check:boundary": "bun scripts/verify-bots-boundary.ts",
+    "type-check": "tsc --noEmit",
+    "lint": "biome ci && oxlint --type-aware",
+    "test": "bun test",
+    "build": "bun run check:boundary && vite build"
+  },
+  "dependencies": {
+    "@kobalte/core": "0.13.11",
+    "@macro-inc/sdk": "workspace:*",
+    "@solidjs/router": "^0.15.3",
+    "motion": "14.14.0",
+    "solid-js": "^1.9.7",
+    "three": "0.187.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.6",
+    "@types/bun": "^1.2.19",
+    "@types/node": "^24.8.0",
+    "@types/three": "0.187.0",
+    "oxlint": "1.73.0",
+    "oxlint-tsgolint": "7.0.2004",
+    "typescript": "^5.9.3",
+    "vite": "8.3.7",
+    "vite-plugin-solid": "2.11.16"
+  }
+}
