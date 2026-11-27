@@ -136,9 +136,11 @@ unchanged webhook should not produce another Soup update. The PR detail's
 separate diff and discussion requests are outside this subscription behavior.
 The `github_pull_request_updated` push also marks that source record's detail
 and mergeability queries stale. Active details refetch; inactive details do not.
-Check-run bursts share one in-flight refresh and one trailing refresh for pushes
-received during it. The push itself never replaces detail data, since typed
-columns and current linked people are only returned by the detail read.
+Detail and mergeability reads coalesce independently, so slow mergeability never
+holds up live checks. Each running read has at most one pending refresh; pushes
+received during a trailing read queue one more read rather than losing that
+update. The push itself never replaces detail data, since typed columns and
+current linked people are only returned by the detail read.
 
 Opening a pull request from Home clears its loaded unread notifications immediately,
 including desktop previews, keyboard activation, j/k navigation, and phone taps.

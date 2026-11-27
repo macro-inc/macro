@@ -7,52 +7,57 @@ import type { QueryClient } from '@tanstack/solid-query';
 type PrRefetch = { trailing: boolean };
 const ACTIVE_PR_REFETCHES = new WeakMap<QueryClient, Map<string, PrRefetch>>();
 
-/** Bursts share the current fetch, then read once more for pushes received during it. */
-export async function invalidateActivePrDetail(
+async function invalidateActivePrQuery(
   client: QueryClient,
-  id: string
+  queryKey: readonly string[]
 ): Promise<void> {
   let active = ACTIVE_PR_REFETCHES.get(client);
   if (!active) {
     active = new Map();
     ACTIVE_PR_REFETCHES.set(client, active);
   }
-  const existing = active.get(id);
+  const key = JSON.stringify(queryKey);
+  const existing = active.get(key);
   if (existing) {
     existing.trailing = true;
     return;
   }
   const refetch = { trailing: false };
-  active.set(id, refetch);
+  active.set(key, refetch);
   try {
-    // A read started before the push can already contain stale data. Let it finish
-    // before invalidating, so active readers fetch again and inactive ones stay stale.
-    const earlierReads = [
-      prForeignEntityQueryKey(id),
-      prMergeabilityQueryKey(id),
-    ]
-      .flatMap((queryKey) => client.getQueryCache().findAll({ queryKey }))
+    // An earlier read can already contain stale data. Invalidate after it settles,
+    // so active readers fetch again and inactive readers retain their stale flag.
+    const earlierReads = client
+      .getQueryCache()
+      .findAll({ queryKey })
       .flatMap((query) =>
         query.state.fetchStatus === 'fetching' && query.promise
           ? [query.promise]
           : []
       );
     if (earlierReads.length > 0) await Promise.allSettled(earlierReads);
+    // Each running read has at most one pending read. Pushes during a trailing read
+    // need another read too; a lifetime two-read cap would discard those updates.
     do {
       refetch.trailing = false;
-      await Promise.all([
-        client.invalidateQueries(
-          { queryKey: prForeignEntityQueryKey(id), refetchType: 'active' },
-          { cancelRefetch: false }
-        ),
-        client.invalidateQueries(
-          { queryKey: prMergeabilityQueryKey(id), refetchType: 'active' },
-          { cancelRefetch: false }
-        ),
-      ]);
+      await client.invalidateQueries(
+        { queryKey, refetchType: 'active' },
+        { cancelRefetch: false }
+      );
     } while (refetch.trailing);
   } finally {
-    active.delete(id);
+    active.delete(key);
     if (active.size === 0) ACTIVE_PR_REFETCHES.delete(client);
   }
+}
+
+/** Refresh independently so a slow GitHub mergeability read cannot hold up checks. */
+export async function invalidateActivePrDetail(
+  client: QueryClient,
+  id: string
+): Promise<void> {
+  await Promise.all([
+    invalidateActivePrQuery(client, prForeignEntityQueryKey(id)),
+    invalidateActivePrQuery(client, prMergeabilityQueryKey(id)),
+  ]);
 }

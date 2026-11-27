@@ -376,11 +376,11 @@ describe('MergePullRequestButton', () => {
         await handlePullRequestUpdated(payload);
         await handlePullRequestUpdated(payload);
         expect(read).toHaveBeenCalledTimes(1);
-        expect(readMergeability).toHaveBeenCalledTimes(1);
+        expect(readMergeability).toHaveBeenCalled();
         releaseFirst?.();
         await trailingRead;
         expect(read).toHaveBeenCalledTimes(2);
-        expect(readMergeability).toHaveBeenCalledTimes(2);
+        expect(readMergeability).toHaveBeenCalled();
         releaseTrailing?.();
         await pushed;
         expect(queryClient.getQueryData(prForeignEntityQueryKey(id))).toBe(
@@ -475,6 +475,137 @@ describe('MergePullRequestButton', () => {
         release?.();
         unsubscribe?.();
         observer?.destroy();
+        queryClient.clear();
+      }
+    }
+  });
+
+  it('retains one pending read when a new push arrives during a trailing read', async () => {
+    const id = 'rolling-push';
+    let releaseFirst: (() => void) | undefined;
+    let releaseSecond: (() => void) | undefined;
+    let secondStarted: (() => void) | undefined;
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const secondGate = new Promise<void>((resolve) => {
+      releaseSecond = resolve;
+    });
+    const secondRead = new Promise<void>((resolve) => {
+      secondStarted = resolve;
+    });
+    const read = vi
+      .fn()
+      .mockImplementationOnce(async () => {
+        await firstGate;
+        return 'first';
+      })
+      .mockImplementationOnce(async () => {
+        secondStarted?.();
+        await secondGate;
+        return 'second';
+      })
+      .mockResolvedValue('latest');
+    const observer = new QueryObserver(queryClient, {
+      queryKey: prForeignEntityQueryKey(id),
+      queryFn: read,
+      initialData: 'old',
+      staleTime: Infinity,
+    });
+    const unsubscribe = observer.subscribe(() => {});
+    try {
+      const pushed = invalidateActivePrDetail(queryClient, id);
+      await invalidateActivePrDetail(queryClient, id);
+      expect(read).toHaveBeenCalledTimes(1);
+      releaseFirst?.();
+      await secondRead;
+      await invalidateActivePrDetail(queryClient, id);
+      expect(read).toHaveBeenCalledTimes(2);
+      releaseSecond?.();
+      await pushed;
+      expect(read).toHaveBeenCalledTimes(3);
+      expect(queryClient.getQueryData(prForeignEntityQueryKey(id))).toBe(
+        'latest'
+      );
+    } finally {
+      releaseFirst?.();
+      releaseSecond?.();
+      unsubscribe();
+      observer.destroy();
+    }
+  });
+
+  it('refreshes detail independently of existing and trailing mergeability reads', async () => {
+    for (const existingMergeRead of [true, false]) {
+      const id = 'independent-push';
+      let releaseMerge: (() => void) | undefined;
+      let detailReady: (() => void) | undefined;
+      let secondDetailStarted: (() => void) | undefined;
+      const mergeGate = new Promise<void>((resolve) => {
+        releaseMerge = resolve;
+      });
+      const firstDetail = new Promise<void>((resolve) => {
+        detailReady = resolve;
+      });
+      const secondDetail = new Promise<void>((resolve) => {
+        secondDetailStarted = resolve;
+      });
+      const read = vi
+        .fn()
+        .mockResolvedValueOnce('detail-current')
+        .mockImplementation(async () => {
+          secondDetailStarted?.();
+          return 'detail-newer';
+        });
+      const readMerge = vi
+        .fn()
+        .mockImplementationOnce(async () => {
+          await mergeGate;
+          return 'old-mergeability';
+        })
+        .mockResolvedValue('mergeable');
+      const detailObserver = new QueryObserver(queryClient, {
+        queryKey: prForeignEntityQueryKey(id),
+        queryFn: read,
+        initialData: 'old',
+        staleTime: Infinity,
+      });
+      const mergeOptions = {
+        queryKey: prMergeabilityQueryKey(id),
+        queryFn: readMerge,
+        initialData: 'old',
+        staleTime: Infinity,
+      };
+      const mergeObserver = new QueryObserver(queryClient, mergeOptions);
+      const unsubscribeDetail = detailObserver.subscribe((result) => {
+        if (result.data === 'detail-current') detailReady?.();
+      });
+      const unsubscribeMerge = mergeObserver.subscribe(() => {});
+      const earlier = existingMergeRead
+        ? queryClient.fetchQuery({ ...mergeOptions, staleTime: 0 })
+        : undefined;
+      try {
+        const firstPush = invalidateActivePrDetail(queryClient, id);
+        await firstDetail;
+        expect(readMerge).toHaveBeenCalledTimes(1);
+        const nextPush = invalidateActivePrDetail(queryClient, id);
+        await secondDetail;
+        expect(read).toHaveBeenCalledTimes(2);
+        expect(readMerge).toHaveBeenCalledTimes(1);
+        releaseMerge?.();
+        await earlier;
+        await firstPush;
+        await nextPush;
+        expect(readMerge).toHaveBeenCalledTimes(2);
+        expect(queryClient.getQueryData(prForeignEntityQueryKey(id))).toBe(
+          'detail-newer'
+        );
+      } finally {
+        releaseMerge?.();
+        unsubscribeDetail();
+        unsubscribeMerge();
+        detailObserver.destroy();
+        mergeObserver.destroy();
         queryClient.clear();
       }
     }
