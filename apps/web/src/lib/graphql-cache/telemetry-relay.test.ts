@@ -96,6 +96,54 @@ describe('cache telemetry worker relay', () => {
     expect(channel.closed).toBe(true);
   });
 
+  it('forwards a slow query template from a worker only beside a valid fingerprint', async () => {
+    const channel = new FakeChannel();
+    const events: CacheTelemetryEnvelope[] = [];
+    let lockCallback: ((lock: Lock | null) => Promise<void> | void) | undefined;
+    const { relay } = createPageCacheTelemetry({
+      rolloutCohort: 'unknown',
+      sink: { emit: (event) => events.push(event) },
+      relay: {
+        createChannel: () => channel as unknown as BroadcastChannel,
+        lockManager: {
+          request: async (
+            _name: string,
+            _options: LockOptions,
+            callback: (lock: Lock | null) => Promise<void> | void
+          ) => {
+            lockCallback = callback;
+          },
+        } as unknown as Pick<LockManager, 'request'>,
+      },
+    });
+    relay.start();
+    await Promise.resolve();
+    const leadership = lockCallback?.({
+      name: 'reporter',
+      mode: 'exclusive',
+    } as Lock);
+    await Promise.resolve();
+    const slow = {
+      name: 'graphql_cache.slow_query',
+      operationCategory: 'storage',
+      durationMs: 640,
+      outcome: 'success',
+      queryTemplate: 'SELECT value FROM records WHERE id IN (?, ?)',
+    };
+    channel.receive({ ...slow, queryFingerprint: '92389d1ea869911c' });
+    channel.receive({ ...slow, queryFingerprint: 'not-a-fingerprint' });
+
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({
+      queryFingerprint: '92389d1ea869911c',
+      queryTemplate: slow.queryTemplate,
+    });
+    expect(events[1]).not.toHaveProperty('queryFingerprint');
+    expect(events[1]).not.toHaveProperty('queryTemplate');
+    relay.dispose();
+    await leadership;
+  });
+
   it('isolates channel failures', () => {
     const relay = new CacheTelemetryRelay(
       new CacheTelemetryReporter(browserCacheTelemetryContext('unknown'), {
