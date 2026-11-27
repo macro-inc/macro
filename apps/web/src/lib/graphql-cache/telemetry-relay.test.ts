@@ -57,8 +57,8 @@ describe('cache telemetry worker relay', () => {
     await Promise.resolve();
     // An older build's reporter, on v1, would drop events carrying
     // `unavailableReason` whole, so this build reports on its own version.
-    expect(channelName).toBe('macro:graphql-cache-telemetry:v2');
-    expect(lockName).toBe('macro:graphql-cache-telemetry-reporter:v2');
+    expect(channelName).toBe('macro:graphql-cache-telemetry:v3');
+    expect(lockName).toBe('macro:graphql-cache-telemetry-reporter:v3');
     const leadership = lockCallback?.({
       name: lockName,
       mode: 'exclusive',
