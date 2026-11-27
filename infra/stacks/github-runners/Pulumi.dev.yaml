@@ -1,6 +1,5 @@
 config:
   aws:region: us-east-1
-  github-runners:instanceType: t3.large
+  # t3.micro (1 GiB) ran out of memory and hung on 2026-11-25.
+  github-runners:dbMigratorInstanceType: t3.medium
   github-runners:runnerUrl: https://github.com/macro-inc
-  github-runners:runnerToken:
-    secure: AAABAITqpBY+NbTOaeJMHl8tYniMcggbPuYplw4WAc6giqK4HPdLE/OkMCKLuCqCcs62bEj85Muq1401GQ==
