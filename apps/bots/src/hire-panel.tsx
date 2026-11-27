@@ -53,7 +53,14 @@ export default function HirePanel(props: {
   draft: Draft;
   onAccepted: () => void;
   onPending: (pending: boolean) => void;
+  capturePortrait?: () => string | undefined;
 }) {
+  const avatar =
+    props.capturePortrait?.() ??
+    snapshotPortrait(props.draft.preset, props.draft.look);
+  const [portraitStatus, setPortraitStatus] = createSignal<
+    'loading' | 'ready' | 'unavailable'
+  >('loading');
   const [state, setState] = createSignal<CheckoutState>({ status: 'idle' });
   const [size, setSize] = createSignal<ComputerSize>(props.draft.size);
   const [job, setJob] = createSignal('');
@@ -101,7 +108,13 @@ export default function HirePanel(props: {
   return (
     <div class="hire-checkout">
       <div class="profile-summary">
-        <Portrait preset={props.draft.preset} look={props.draft.look} />
+        <Portrait
+          preset={props.draft.preset}
+          look={props.draft.look}
+          capture={avatar}
+          onLoad={() => setPortraitStatus('ready')}
+          onError={() => setPortraitStatus('unavailable')}
+        />
         <div>
           <strong>{draftName(props.draft)}</strong>
           <p>
@@ -112,23 +125,27 @@ export default function HirePanel(props: {
         </div>
       </div>
       <p class="creator-sample-note">Sample data. No service purchases.</p>
+      <Show when={portraitStatus() === 'unavailable'}>
+        <p role="status">The portrait could not load. Reopen Hire to retry.</p>
+      </Show>
       <Show when={review()}>
         {(current) => (
           <form
             onSubmit={(event) => {
               event.preventDefault();
               const choice = selected()?.size;
-              if (choice && state().status === 'review') {
+              if (
+                choice &&
+                state().status === 'review' &&
+                portraitStatus() === 'ready'
+              ) {
                 confirmed = {
                   draft: {
                     ...props.draft,
                     size: choice,
                     look: { ...props.draft.look },
                   },
-                  portrait: snapshotPortrait(
-                    props.draft.preset,
-                    props.draft.look
-                  ),
+                  portrait: avatar,
                 };
                 void checkout.confirm(
                   {
@@ -204,7 +221,11 @@ export default function HirePanel(props: {
             <Show when={current().notice}>
               {(notice) => <p role="status">{notices[notice()]}</p>}
             </Show>
-            <button type="submit" class="primary" disabled={!selected()}>
+            <button
+              type="submit"
+              class="primary"
+              disabled={!selected() || portraitStatus() !== 'ready'}
+            >
               Confirm preview Hire
             </button>
             <button type="button" onClick={() => void checkout.load()}>

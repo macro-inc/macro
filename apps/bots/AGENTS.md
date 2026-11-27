@@ -15,8 +15,10 @@ generated SDK storage schemas.
 - `src/main.tsx` registers routes and renders the shared Creator, Fleet,
   Passwords, and Billing navigation.
 - `src/creator.tsx` owns the editable profile and portrait. `src/presets.ts`
-  defines canonical controls and preset seeds. `src/portrait.tsx` renders the
-  same configuration for the stage, thumbnails, and fixture Hire.
+  defines the controls and preset seeds. `src/creator-scene.tsx` owns the
+  stage lifecycle and loads the WebGL2 renderer only from Creator. The stage
+  uses the credited [head scan](src/assets/creator/README.md). The SVG
+  composition in `src/portrait.tsx` supplies thumbnails and the stage fallback.
 - `src/fleet-data.ts` defines the scoped, read-only Fleet ports over generated
   auth DTOs. `src/fleet.tsx` joins the fixture roster and optional computer
   details into one horizontal rail. The ordinary build leaves Fleet reads

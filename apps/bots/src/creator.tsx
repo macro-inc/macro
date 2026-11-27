@@ -1,8 +1,11 @@
 import { useLocation, useNavigate } from '@solidjs/router';
 import {
+  createEffect,
+  createMemo,
   createSignal,
   For,
   lazy,
+  on,
   onCleanup,
   onMount,
   Show,
@@ -39,6 +42,7 @@ import {
 import { buildSignInUrl, hireIntent } from './return-intent';
 import { fixtureTeamName } from './routes';
 import './creator.css';
+import { CreatorScene } from './creator-scene';
 
 const HirePanel = __BOTS_FIXTURES__
   ? lazy(() => import('./hire-panel'))
@@ -48,6 +52,11 @@ export default function Creator() {
   const location = useLocation();
   const navigate = useNavigate();
   const [draft, setDraft] = createSignal(defaultDraft());
+  const preset = createMemo(() => draft().preset);
+  const look = createMemo(() => draft().look);
+  const [capturePortrait, setCapturePortrait] =
+    createSignal<() => string | undefined>();
+  const [profileImage, setProfileImage] = createSignal<string>();
   const [restored, setRestored] =
     createSignal<ReturnType<typeof takeHireDraft>>();
   const [sampleSignedIn, setSampleSignedIn] = createSignal(false);
@@ -70,6 +79,22 @@ export default function Creator() {
     'Right',
   ];
   const angleLabel = () => angleLabels[pose() + 2];
+
+  createEffect(
+    on([capturePortrait, preset, look], ([capture]) => {
+      setProfileImage(undefined);
+      if (!capture) return;
+
+      // Capture the canonical view once an appearance edit settles. Orbit
+      // changes never require reading the framebuffer for the profile tile.
+      const timer = window.setTimeout(() => setProfileImage(capture()), 180);
+      onCleanup(() => window.clearTimeout(timer));
+    })
+  );
+
+  function snapshotForReview() {
+    return profileImage() ?? capturePortrait()?.();
+  }
 
   onMount(() => {
     const strip = hireStrip;
@@ -261,13 +286,12 @@ export default function Creator() {
                 drag = undefined;
               }}
             >
-              <div class="creator-scene">
-                <Portrait
-                  preset={draft().preset}
-                  look={draft().look}
-                  pose={pose()}
-                />
-              </div>
+              <CreatorScene
+                preset={preset()}
+                look={look()}
+                pose={pose()}
+                onCapture={(capture) => setCapturePortrait(() => capture)}
+              />
             </div>
             <img class="creator-reticle" src={reticle} alt="" />
           </div>
@@ -366,7 +390,21 @@ export default function Creator() {
           </label>
         </div>
         <div class="profile-summary">
-          <Portrait preset={draft().preset} look={draft().look} />
+          <Show
+            when={!capturePortrait() || profileImage()}
+            fallback={
+              <span
+                class="creator-portrait creator-portrait-pending"
+                aria-hidden="true"
+              />
+            }
+          >
+            <Portrait
+              preset={preset()}
+              look={look()}
+              capture={profileImage()}
+            />
+          </Show>
           <div>
             <strong>{name()}</strong>
             <p>{sampleSignedIn() ? fixtureTeamName : 'Sign in at hire'}</p>
@@ -457,6 +495,7 @@ export default function Creator() {
                 draft={draft()}
                 onAccepted={finishHire}
                 onPending={setReviewPending}
+                capturePortrait={snapshotForReview}
               />
             </Suspense>
           </Show>

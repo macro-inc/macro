@@ -290,7 +290,7 @@ footer {
 }
 
 @media (max-width: 540px) {
-  :root {
+  :root:has(.creator) {
     scroll-padding-bottom: calc(var(--creator-hire-height, 76px) + 6px);
   }
 }

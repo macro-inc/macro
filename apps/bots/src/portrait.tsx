@@ -56,8 +56,13 @@ export function Portrait(props: {
   preset: PresetId;
   look: Look;
   pose?: number;
+  capture?: string;
+  onLoad?: () => void;
+  onError?: () => void;
 }) {
-  const artwork = createMemo(() => snapshotPortrait(props.preset, props.look));
+  const artwork = createMemo(
+    () => props.capture ?? snapshotPortrait(props.preset, props.look)
+  );
 
   return (
     <span class="creator-portrait" aria-hidden="true">
@@ -65,6 +70,8 @@ export function Portrait(props: {
         src={artwork()}
         alt=""
         draggable={false}
+        onLoad={props.onLoad}
+        onError={props.onError}
         style={{
           transform: props.pose
             ? `perspective(580px) translateX(${props.pose * 2.5}px) rotateY(${props.pose * 4.5}deg)`
