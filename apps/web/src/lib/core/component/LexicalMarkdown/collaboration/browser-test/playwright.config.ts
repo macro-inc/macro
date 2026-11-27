@@ -8,7 +8,7 @@ const port = process.env.LARGE_UNDO_TEST_PORT ?? '3052';
 
 export default defineConfig({
   testDir: fileURLToPath(new URL('.', import.meta.url)),
-  testMatch: '*.browser.e2e.ts',
+  testMatch: 'large-undo.browser.e2e.ts',
   workers: 1,
   timeout: 180_000,
   use: {

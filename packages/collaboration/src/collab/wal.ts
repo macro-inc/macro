@@ -231,6 +231,17 @@ export class InMemoryWALStore<T> implements WALStore<T> {
  * Triggering flushes on transport reconnect (or other "try again" signals)
  * is the caller's responsibility.
  */
+function oldestUndelivered(
+  entries: readonly WALEntry<unknown>[]
+): number | undefined {
+  let oldest: number | undefined;
+  for (const entry of entries) {
+    if (!entry.delivered && (oldest === undefined || entry.createdAt < oldest))
+      oldest = entry.createdAt;
+  }
+  return oldest;
+}
+
 export class WALSyncer<T> {
   /** True while a flush is in progress — prevents concurrent flushes. */
   private isFlushing = false;
@@ -251,6 +262,21 @@ export class WALSyncer<T> {
         maxUndelivered: number;
       }
     | undefined;
+
+  /** When this syncer started; see {@link pendingSince}. */
+  private readonly startedAt = Date.now();
+  private pending: number | undefined;
+  /** Bumped by every append, so a store read that started before an append
+   *  cannot clear the pending state that append set. */
+  private appends = 0;
+  private refreshes = 0;
+  /** When an edit failed to reach the store. It never gets sent, and the
+   *  server can't apply later edits without it, so it stays pending for the
+   *  rest of this session. */
+  private lostAt: number | undefined;
+  private readonly pendingListeners = new Set<
+    (since: number | undefined) => void
+  >();
 
   /**
    * Exists so that we can not "do stuff" until we have pruned expired entries
@@ -291,6 +317,8 @@ export class WALSyncer<T> {
     try {
       await setup;
       this.reportedFailures.delete('initialization');
+      // Not part of setup: appends don't wait for this read.
+      await this.refreshPending();
     } catch (error) {
       // Retry only on the next caller's request, sharing any in-flight setup.
       if (this.readyPromise === setup) this.readyPromise = undefined;
@@ -315,8 +343,16 @@ export class WALSyncer<T> {
   }
 
   private async appendEntry(item: T): Promise<void> {
-    await this.ready();
-    await this.store.append(item);
+    try {
+      await this.ready();
+      await this.store.append(item);
+    } catch (error) {
+      this.lostAt ??= Date.now();
+      if (this.pending === undefined) this.setPending(this.lostAt);
+      throw error;
+    }
+    this.appends++;
+    if (this.pending === undefined) this.setPending(Date.now());
     if (this.label)
       logSyncService({
         documentId: this.label,
@@ -378,6 +414,64 @@ export class WALSyncer<T> {
     return this.store.pruneDelivered();
   }
 
+  /**
+   * When the oldest edit still waiting for the server was written, or
+   * undefined when every edit has been delivered. Edits left by an earlier
+   * session count from this syncer's start, so reopening a document with old
+   * pending edits doesn't report them as long overdue before a first try.
+   */
+  public pendingSince(): number | undefined {
+    return this.pending;
+  }
+
+  /** Calls `listener` whenever {@link pendingSince} changes. */
+  public onPendingChange(
+    listener: (since: number | undefined) => void
+  ): () => void {
+    this.pendingListeners.add(listener);
+    return () => this.pendingListeners.delete(listener);
+  }
+
+  private setPending(since: number | undefined): void {
+    if (since === this.pending) return;
+    this.pending = since;
+    for (const listener of this.pendingListeners) listener(since);
+  }
+
+  /** Rereads the store. Only the latest read applies, and a read that finds
+   *  nothing pending doesn't clear an append that landed after it started. */
+  private async refreshPending(): Promise<void> {
+    try {
+      await this.readEntries();
+    } catch {
+      // Keep the last answer; the next flush or append rereads.
+    }
+  }
+
+  /** Reads every entry and updates {@link pendingSince} from them, so each
+   *  flush also corrects a pending state another tab's delivery or a failed
+   *  earlier read left stale. */
+  private async readEntries(): Promise<WALEntry<T>[]> {
+    const refresh = ++this.refreshes;
+    const appends = this.appends;
+    const entries = await this.store.getAll();
+    if (refresh !== this.refreshes) return entries;
+    const oldest = oldestUndelivered(entries);
+    // A read that finds nothing pending may have missed an append that landed
+    // while it ran. That append's own flush reads again and corrects it.
+    if (oldest === undefined && appends !== this.appends) return entries;
+    this.applyPending(oldest);
+    return entries;
+  }
+
+  private applyPending(oldest: number | undefined): void {
+    const since = [
+      oldest === undefined ? undefined : Math.max(oldest, this.startedAt),
+      this.lostAt,
+    ].filter((time) => time !== undefined);
+    this.setPending(since.length ? Math.min(...since) : undefined);
+  }
+
   public async summary(): Promise<WalContext> {
     const entries = await this.store.getAll();
     const undelivered = entries.filter((e) => !e.delivered);
@@ -395,6 +489,7 @@ export class WALSyncer<T> {
     }
     for (const fn of this.cleanupFns) fn();
     this.cleanupFns = [];
+    this.pendingListeners.clear();
   }
 
   public addCleanup(fn: () => void): void {
@@ -407,40 +502,12 @@ export class WALSyncer<T> {
 
     try {
       await this.ready();
-      const entries = await this.store.getAll();
+      const entries = await this.readEntries();
       const undelivered = entries.filter((e) => !e.delivered);
-      if (undelivered.length === 0) return; // nothing to do
-
-      if (this.label)
-        logSyncService({
-          documentId: this.label,
-          level: 'debug',
-          context: { wal: await this.summary() },
-          message: `WAL flush: pushing ${undelivered.length} entries`,
-        });
-
-      let delivered: boolean;
-      try {
-        delivered = await this.push(undelivered.map((e) => e.update));
-      } catch (e) {
-        this.recordDeliveryFailure('push_error', undelivered.length, e);
-        throw e;
-      }
-
-      if (delivered) {
-        await this.store.markDelivered(undelivered.map((e) => e.id));
-        this.recordDeliveryRecovery(undelivered.length);
-        if (this.label)
-          logSyncService({
-            documentId: this.label,
-            level: 'debug',
-            context: { wal: await this.summary() },
-            message: `WAL flush: delivered ${undelivered.length} entries`,
-          });
-      } else {
-        this.recordDeliveryFailure('not_acked', undelivered.length);
-        succeeded = false;
-      }
+      // With nothing to send, still fall through: an edit appended while the
+      // store was read needs the follow-up flush below.
+      if (undelivered.length > 0)
+        succeeded = await this.sendUndelivered(undelivered);
     } finally {
       this.isFlushing = false;
     }
@@ -450,6 +517,42 @@ export class WALSyncer<T> {
       this.pendingFlush = this.doFlush();
       return this.pendingFlush;
     }
+  }
+
+  /** Pushes `undelivered` and marks it delivered once acked; false when the
+   *  server didn't ack it. */
+  private async sendUndelivered(undelivered: WALEntry<T>[]): Promise<boolean> {
+    if (this.label)
+      logSyncService({
+        documentId: this.label,
+        level: 'debug',
+        context: { wal: await this.summary() },
+        message: `WAL flush: pushing ${undelivered.length} entries`,
+      });
+
+    let delivered: boolean;
+    try {
+      delivered = await this.push(undelivered.map((e) => e.update));
+    } catch (e) {
+      this.recordDeliveryFailure('push_error', undelivered.length, e);
+      throw e;
+    }
+
+    if (!delivered) {
+      this.recordDeliveryFailure('not_acked', undelivered.length);
+      return false;
+    }
+    await this.store.markDelivered(undelivered.map((e) => e.id));
+    await this.refreshPending();
+    this.recordDeliveryRecovery(undelivered.length);
+    if (this.label)
+      logSyncService({
+        documentId: this.label,
+        level: 'debug',
+        context: { wal: await this.summary() },
+        message: `WAL flush: delivered ${undelivered.length} entries`,
+      });
+    return true;
   }
 
   private recordDeliveryFailure(

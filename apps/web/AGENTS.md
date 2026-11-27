@@ -589,6 +589,16 @@ caret mapping) has a backend-free timing regression:
 Keep reconcile and caret lookups linear in the document: no `getChildren()` or
 container scan per node.
 
+A Markdown document tells the viewer when edits stop reaching the server: after
+10 s with an edit unacknowledged it shows **Changes not saved**, after 10 s
+disconnected **Not connected**, each with Retry, and clears once the edits are
+delivered or the server has resent the document (`collaboration/syncHealth.ts`, from the WAL's
+`pendingSince`). Its backend-free two-peer regression stalls and drops a peer's
+socket on a local room, on desktop and phone; run it through
+`tests/view-parity/isolated-network.sh ""`, or interface changes drop its page
+loads:
+`bunx playwright test --config src/lib/core/component/LexicalMarkdown/collaboration/browser-test/sync-banner.playwright.config.ts --project chromium --project mobile`.
+
 Collaborative Markdown editing across several peers has a fast-check fuzzer and
 the fixed scenarios it found; see
 `src/lib/core/component/LexicalMarkdown/fuzz/README.md` before changing
