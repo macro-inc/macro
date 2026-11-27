@@ -27,6 +27,12 @@ The in-memory state and loro_document are initialized using a loro-snapshot retr
 Since generating and importing loro snapshots is computationally expensive, we want to maintain the in-memory state as long as active connections exist. To accomplish this, we implement a "heartbeat" system by scheduling an alarm for 5 seconds into the future, similar to a debounce mechanism. Even without incoming WebSocket messages, this alarm fires regularly, preventing the in-memory state from being evicted.
 When a client updates a document via a WebSocket message, we apply the update to the in-memory loro document. Whenever the alarm fires, we generate a new loro snapshot and store it in the Durable Object's persistent storage. When a new user connects to the document, we retrieve both the latest snapshot and any pending operations from persistent storage, then send a complete snapshot to the client.
 
+The session lazily creates one storage instance and retains it across reads and
+existence checks. That instance tracks applied pending-operation keys so the
+snapshot alarm can remove them only after saving the document. Readiness checks
+still verify that a durable snapshot exists; they do not replace this tracking
+state or clear the retained operation history.
+
 ### Authentication
 
 `document_storage_service` will generate a jwt with permissions for the document. This jwt will be passed to the connecting websocket using queryParams.  
