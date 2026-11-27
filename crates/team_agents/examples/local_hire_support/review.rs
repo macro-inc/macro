@@ -9,7 +9,7 @@ use entity_access::domain::models::{
 use hosted_runtimes::{
     domain::{
         agent::ComputerAgents,
-        lifecycle::Billing as BillingState,
+        lifecycle::{Billing as BillingState, Phase},
         ports::ComputerRepo,
         size::{ComputerSize, current_catalog},
     },
@@ -20,8 +20,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use team_agents::{
     domain::{
-        models::{CreateTeamAgent, TeamAgent, TeamAgentError},
-        ports::{AgentAccounts, TeamAgentService, TeamMembership},
+        models::{CreateTeamAgent, TeamAgent, TeamAgentError, TeamAgentStatus},
+        ports::{AgentAccounts, TeamAgentRepository, TeamAgentService, TeamMembership},
     },
     outbound::pg_team_agents_repo::PgTeamAgentsRepo,
 };
@@ -300,7 +300,8 @@ impl Review {
 
         // An account remains addressable while its computer is changing;
         // confirmation itself still requires the exact persisted assignment.
-        let mut item = json!({"id":key,"teamId":self.team,"name":agent.name,"status":agent.status});
+        let mut item =
+            json!({"id":key,"teamId":self.team,"name":agent.name,"status":"unavailable"});
         let Some(id) = agent.computer_id else {
             return Ok(size.is_none().then_some(item));
         };
@@ -317,6 +318,22 @@ impl Review {
             return Ok(size.is_none().then_some(item));
         }
         let phase = serde_json::to_value(&computer.state.phase).map_err(|_| ())?;
+        let status = if agent.status == TeamAgentStatus::Running
+            && (computer.state.phase != Phase::Running
+                || !computer.state.macrod_connected
+                || computer.state.awaiting_agent
+                || !self
+                    .accounts
+                    .get(&agent.user_id)
+                    .await
+                    .map_err(|_| ())?
+                    .is_some_and(|record| record.first_online_at.is_some()))
+        {
+            TeamAgentStatus::Starting
+        } else {
+            agent.status
+        };
+        item["status"] = json!(status);
         item["computerId"] = json!(id);
         item["size"] = json!(computer.size);
         item["phase"] = phase["phase"].clone();
