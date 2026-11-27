@@ -10,8 +10,11 @@
     </style>
   </head>
   <body>
-    <main>
-      <h1>Allow “{{ client_name }}” to access your Macro account?</h1>
+    <main class="consent">
+      <div class="intro">
+        {% include "macro_mark.html" %}
+        <h1>Allow “{{ client_name }}” to access your Macro account?</h1>
+      </div>
       {% if manual_delivery %}
       <p>
         If you allow it, Macro will sign you in and show you a link that gives

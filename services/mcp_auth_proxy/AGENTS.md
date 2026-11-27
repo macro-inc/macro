@@ -23,7 +23,9 @@ in front of FusionAuth, which doesn't support DCR itself.
 - `src/domain/browser_binding.rs`: the cookie secret tying a flow to the browser
   that started it, and the anti-forgery token the broker's forms carry.
 - `templates/`: the broker's pages (sign-in chooser, consent and its cancellation,
-  email sign-in, manual delivery), which share `broker_page.css`.
+  email sign-in, manual delivery), which share `broker_page.css`: the web app's
+  sign-in look (its onboarding palette, the Macro mark in `macro_mark.html`, and
+  Roboto Slab inlined in `roboto_slab_font.css`, since the pages load nothing).
 - `src/domain/ports.rs`: `ClientRegistrationStore`, `OAuthProvider`,
   `EmailCodeProvider`, `RefreshTokenBindingStore`, `MacroApiTokenMinter` — the
   ports the service depends on. The harness implements the minter
