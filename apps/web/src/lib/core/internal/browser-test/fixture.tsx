@@ -25,6 +25,7 @@ import { changeViewer } from './network';
 import { OnboardingContactsFixture } from './onboarding-contacts-fixture';
 import { RecipientDirectoryFixture } from './recipient-directory-fixture';
 import { RecipientRankingFixture } from './recipient-ranking-fixture';
+import { ShareRecipientsFixture } from './share-recipients-fixture';
 import { SoupFilterFixture } from './soup-filter-fixture';
 import { SqlPeopleFixture } from './sql-people-fixture';
 import { TaskFilterFixture } from './task-filter-fixture';
@@ -207,6 +208,11 @@ render(
           when={new URLSearchParams(location.search).has('recipient-ranking')}
         >
           <RecipientRankingFixture />
+        </Match>
+        <Match
+          when={new URLSearchParams(location.search).has('share-recipients')}
+        >
+          <ShareRecipientsFixture />
         </Match>
         <Match
           when={

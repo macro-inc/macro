@@ -21,6 +21,7 @@ import type {
   ContactDirectoryByUserIdsQuery,
   ContactDirectoryPageQuery,
   ContactDirectoryPageQueryVariables,
+  ContactNamedPeopleQuery,
 } from '@service-storage/graphql/generated/graphql';
 
 export let viewer = 'account-a';
@@ -50,6 +51,15 @@ export async function fetchContactDirectoryPage(
         : { nodes: [], nextCursor: 'after-budget' },
     },
   };
+}
+/** Server reads of the people typed text names find nobody here: fixtures
+ * list people from the directory page and lookups by ID. */
+export async function fetchContactNamedPeople(
+  _variables: unknown,
+  signal: AbortSignal
+): Promise<ContactNamedPeopleQuery> {
+  signal.throwIfAborted();
+  return { user: { id: viewer, contactsNamedBy: [] } };
 }
 export async function fetchContactDirectoryByIds(
   userIds: string[],

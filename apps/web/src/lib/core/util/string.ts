@@ -105,6 +105,17 @@ export function isEmojiOnly(text: string): boolean {
   return EMOJI_ONLY_REGEX.test(trimmed);
 }
 
+/** Whether `token`'s characters appear in `text` in order, with gaps allowed. */
+export function isCharacterSubsequence(token: string, text: string) {
+  let position = 0;
+  for (const character of token) {
+    const next = text.indexOf(character, position);
+    if (next === -1) return false;
+    position = next + character.length;
+  }
+  return true;
+}
+
 /** Whether every query token appears in `text` as an ordered character
  * subsequence, case-insensitively. Whitespace and commas separate tokens.
  * Mirrors cache-core/search.rs matching. */
@@ -117,13 +128,5 @@ export function matchesTokenSubsequences(text: string, query: string) {
   if (tokens.length === 0) return !query.trim();
 
   const haystack = text.toLowerCase();
-  return tokens.every((token) => {
-    let position = 0;
-    for (const character of token) {
-      const next = haystack.indexOf(character, position);
-      if (next === -1) return false;
-      position = next + character.length;
-    }
-    return true;
-  });
+  return tokens.every((token) => isCharacterSubsequence(token, haystack));
 }

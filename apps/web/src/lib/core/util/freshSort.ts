@@ -14,7 +14,12 @@ import {
   ANY_SCRIPT_FUZZY_OPTIONS,
   fuzzyScoreCommaSpaceSeparated,
 } from './fuzzy';
-import { nameMatchQuality, normalizeNameText } from './name-match-score';
+import {
+  type NameQuery,
+  nameMatchQuality,
+  nameQuery,
+  normalizeNameText,
+} from './name-match-score';
 
 const fuzzyEligibility = new uFuzzy(ANY_SCRIPT_FUZZY_OPTIONS);
 
@@ -228,7 +233,7 @@ function filterNameMatches<T>(
   items: T[],
   getName: NameFn<T>,
   getDisplayName: NameFn<T>,
-  query: string,
+  query: NameQuery,
   gapPenaltyWeight: number,
   startBonusDecay: number
 ): FuzzyFilterResult<T>[] {
@@ -369,7 +374,9 @@ export function createFreshSearch<T>({
 }: CreateFreshSearchArgs<T>) {
   return (items: T[], query: string): FreshSortResult<T>[] => {
     const finalConfig = { ...DEFAULT_CONFIG, ...config };
-    const trimmedQuery = normalizeNameText(query);
+    // Prepared once: each row would otherwise normalize the query again.
+    const prepared = nameQuery(query);
+    const trimmedQuery = prepared.term;
     const term = trimmedQuery;
     const getNameMatchRank = (item: T) => {
       const name = normalizeNameText(getDisplayName(item));
@@ -430,7 +437,7 @@ export function createFreshSearch<T>({
       eligible,
       getName,
       getDisplayName,
-      trimmedQuery,
+      prepared,
       finalConfig.gapPenaltyWeight,
       finalConfig.startBonusDecay
     );

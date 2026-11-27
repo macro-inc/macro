@@ -22,6 +22,7 @@ vi.mock('@queries/contacts/directory-query', () => ({
     }),
     windowKey: () => 'page',
     loading: () => false,
+    generation: () => 0,
     error: () => null,
     loadNext: window.loadNext,
   }),

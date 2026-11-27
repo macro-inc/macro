@@ -7,7 +7,7 @@ import {
   createContactFilterOptions,
 } from '@core/user/contact-filter-options';
 import { createContactIdFilterSource } from '@queries/contacts/filter-source';
-import { type Accessor, createSignal } from 'solid-js';
+import { type Accessor, createSignal, type JSX } from 'solid-js';
 
 export { useContactFilterLabels } from '../../user/use-contact-filter-options';
 
@@ -42,6 +42,9 @@ export function useDriveView() {
 }
 export function useFeatureFlag() {
   return () => ({ enabled: true, loading: false });
+}
+export function ShowFeatureFlag(props: { children?: JSX.Element }) {
+  return props.children;
 }
 export function useTagFilterGroup() {
   return () => ({ id: 'tags', label: 'Tags', options: [] });

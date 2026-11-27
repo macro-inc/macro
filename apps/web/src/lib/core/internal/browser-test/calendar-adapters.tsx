@@ -16,6 +16,40 @@ export const getGraphqlSoupCacheHost = () =>
 export { useQueryAccount } from './test-account';
 export const emailToId = (email: string) => `macro|${email}`;
 export const idToEmail = (id: string) => id.replace(/^macro\|/, '');
+export {
+  emailToMacroId,
+  macroIdToEmail,
+  tryMacroId,
+} from '@core/user/macroId';
+export {
+  ENTITY_ICON_CONFIGS,
+  getEntityIconType,
+  getIconConfig,
+} from '../../component/EntityIcon';
+export const getDisplayName = (id: string | undefined | null) =>
+  id ? idToEmail(id) : '';
+export const getDisplayNameParts = (id: string | undefined | null) => ({
+  firstName: '',
+  lastName: '',
+  fullName: getDisplayName(id),
+});
+export const idToDisplayName = (id: string) => getDisplayName(id);
+export const useDisplayName = (id: string | undefined | null) =>
+  [() => getDisplayName(id), { refetch: () => {}, mutate: () => {} }] as const;
+export const getInitials = (
+  firstName: string,
+  lastName: string,
+  email: string
+) =>
+  (
+    firstName.slice(0, 1) + lastName.slice(0, 1) || email.slice(0, 1)
+  ).toUpperCase();
+export const getInitialsFromName = (
+  name: string | null | undefined,
+  email: string
+) => getInitials(name ?? '', '', email);
+export const isAgentAccount = (_id: string | undefined | null) => false;
+export const useIsConnectedSecondaryInbox = () => () => false;
 export const useUserId = () => () => 'macro|viewer@example.com';
 export const useIsAuthenticated = () => () => true;
 export const useUserInfo = () => () => ({
@@ -26,6 +60,11 @@ export const useUserInfo = () => () => ({
 });
 export const useUserContext = () => ({ userId: useUserId() });
 export const useEmail = () => () => 'viewer@example.com';
+export const useLicenseStatus = () => () => undefined;
+export const useAuthor = () => () => 'viewer@example.com';
+export const useTutorialCompleted = () => () => true;
+export const useAiDataConsent = () => () => false;
+export const useReferralCode = () => () => undefined;
 export const useAugmentUserWithDmActivity = () => (user: IUser) => user;
 export const UserTooltip = (props: { children?: JSX.Element }) =>
   props.children;

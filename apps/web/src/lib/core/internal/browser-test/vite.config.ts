@@ -105,6 +105,17 @@ export default defineConfig({
         )
           return `${directory}/soup-filter-adapters.tsx`;
         if (
+          importer?.endsWith('/queries/contacts/recipient-source.ts') &&
+          [
+            '@core/context/channels',
+            '@core/user/inboxOnly',
+            './use-directory',
+          ].includes(source)
+        )
+          // `directory` ends with a slash. The fixture imports this file too,
+          // and a build keeps two copies of a module reached by two spellings.
+          return `${directory}share-recipient-adapters.ts`;
+        if (
           importer?.endsWith('/queries/contacts/use-directory.ts') &&
           [
             '../auth/use-query-account',
