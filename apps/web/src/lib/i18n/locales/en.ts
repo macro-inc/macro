@@ -1,5 +1,6 @@
 import accountManager from './en/account-manager';
 import agentAutoArchive from './en/agent-auto-archive';
+import agentCards from './en/agent-cards';
 import agentControls from './en/agent-controls';
 import agentNavigation from './en/agent-navigation';
 import agentScreen from './en/agent-screen';
@@ -63,6 +64,7 @@ import viewMenus from './en/view-menus';
  */
 export default {
   agentAutoArchive,
+  agentCards,
   appearance,
   agentControls,
   agentNavigation,

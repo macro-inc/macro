@@ -11,7 +11,7 @@ import {
 } from 'solid-js';
 
 /** How wide a card may grow: one item, an ask or list, or content to read. */
-export type CardWidth = 'compact' | 'standard' | 'wide';
+export type CardWidth = 'compact' | 'standard' | 'wide' | 'full';
 
 /**
  * How tall a card is. `auto` grows with its content; a fixed height is both a
@@ -24,6 +24,8 @@ const WIDTHS: Record<CardWidth, string> = {
   compact: 'max-w-md',
   standard: 'max-w-xl',
   wide: 'max-w-2xl',
+  /** The whole column, as the agent question card is. */
+  full: 'max-w-none',
 };
 
 type CardState = {
