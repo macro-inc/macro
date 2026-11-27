@@ -202,6 +202,7 @@ export class Project extends PropertiedEntity<ProjectDetail> {
   static search = entitySearch({
     filters: { project_filters: {} },
     type: 'project',
-    make: (client, hit) => new Project(client, hit.id),
+    make: (client, hit) =>
+      new Project(client, hit.id).withListed({ name: hit.name }),
   });
 }

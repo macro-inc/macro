@@ -2,7 +2,7 @@ import type { PropertyInput } from '../../../generated/storage/types.gen';
 import { MacroError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { rejectUnknownOptions } from '../../utils/options';
-import { Document } from '../documents/document';
+import { Document, searchHitDetail } from '../documents/document';
 import type { Initiative } from '../initiatives/initiative';
 import type { Project } from '../projects/project';
 import { entitySearch } from '../search/options';
@@ -331,7 +331,8 @@ export class Task extends Document {
   static search = entitySearch({
     filters: { document_filters: { sub_types: ['task'], task_filters: {} } },
     type: 'document',
-    make: (client, hit) => new Task(client, hit.document_id),
+    make: (client, hit) =>
+      new Task(client, hit.document_id).withListed(searchHitDetail(hit)),
   });
 }
 
