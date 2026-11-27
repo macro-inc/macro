@@ -436,6 +436,9 @@ pub enum CalendarMutationErrorCode {
     /// An agent's program asked to create an event the user has not seen;
     /// it must present a review or quote the user's approval.
     ConfirmationRequired,
+    /// A program (an agent's or a routine's) tried to make a decision only a
+    /// person makes, such as answering a request to join an event.
+    PersonMustDecide,
 }
 
 /// HTTP error body returned by calendar mutation endpoints.
@@ -485,6 +488,26 @@ fn refuse_program_create(
         return Err(CalendarMutationApiError {
             code: CalendarMutationErrorCode::ConfirmationRequired,
             message: PROGRAM_CREATE_REFUSAL.to_owned(),
+            status: StatusCode::FORBIDDEN,
+        });
+    }
+    Ok(())
+}
+
+/// Why a program may not answer a join request.
+const PROGRAM_JOIN_ANSWER_REFUSAL: &str = "A program cannot answer a request to join a calendar event: who joins is the user's decision. Tell the user about the request so they can accept or decline it themselves.";
+
+/// Refuse a program (see [`is_program_run`]: a credential signed for an
+/// agent or a routine run, or a code-mode request) answering a join request:
+/// accepting invites the requester, and only a person decides who joins.
+fn refuse_program_join_answer(
+    attribution: CredentialAttribution,
+    headers: &HeaderMap,
+) -> Result<(), CalendarMutationApiError> {
+    if is_program_run(attribution, headers) {
+        return Err(CalendarMutationApiError {
+            code: CalendarMutationErrorCode::PersonMustDecide,
+            message: PROGRAM_JOIN_ANSWER_REFUSAL.to_owned(),
             status: StatusCode::FORBIDDEN,
         });
     }
@@ -1137,7 +1160,7 @@ pub struct RespondToJoinRequestRequest {
     responses(
         (status = 200, description = "The answered join request", body = CalendarJoinRequest),
         (status = 401, description = "Authentication required"),
-        (status = 403, description = "Calendar is read-only, the organizer doesn't let guests invite others, or the calendar needs reauthorization", body = CalendarMutationApiError),
+        (status = 403, description = "Calendar is read-only, the organizer doesn't let guests invite others, the calendar needs reauthorization, or a program answered (code person_must_decide)", body = CalendarMutationApiError),
         (status = 404, description = "Request not found or its event cannot be changed by the requester", body = CalendarMutationApiError),
         (status = 409, description = "The provider rejected the new guest", body = CalendarMutationApiError),
         (status = 503, description = "Transient provider failure", body = CalendarMutationApiError),
@@ -1146,6 +1169,7 @@ pub struct RespondToJoinRequestRequest {
 pub async fn respond_to_join_request<S, L, Auth>(
     State(state): State<CalendarMutationRouterState<S, L, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    headers: HeaderMap,
     Path(request_id): Path<Uuid>,
     Json(request): Json<RespondToJoinRequestRequest>,
 ) -> Result<Json<CalendarJoinRequest>, CalendarMutationApiError>
@@ -1154,6 +1178,7 @@ where
     L: MeetingLinkProvider,
     Auth: MacroAuthorizationService,
 {
+    refuse_program_join_answer(user.authorization.user.attribution(), &headers)?;
     let answered = state
         .service
         .respond_to_join_request(
