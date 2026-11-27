@@ -48,7 +48,10 @@ const SHARED_ORIGINS = [
   // preview apps (for example, https://branch.preview.macro.com) load
   // presigned S3 media such as call recordings.
   'https://*.preview.macro.com',
+  // The native apps' pages: iOS, the desktop apps, Android.
   'tauri://localhost',
+  'http://tauri.localhost',
+  'https://tauri.localhost',
 ];
 
 /** Browser origins allowed by S3 bucket CORS rules on the current Pulumi stack. */

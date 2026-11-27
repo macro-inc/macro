@@ -373,7 +373,10 @@ header exposes **Download** on desktop, phone, and tablet. The file menu uses
 the same action. Video routes also expose it in their header; channel videos
 expose it over the player on hover or keyboard focus (always visible on touch)
 and in the expanded viewer. Linked video cards also offer Download in their
-preview header without opening the file.
+preview header without opening the file. An email attachment chip's download
+segment saves the attachment under its original name, without filing a Drive
+copy, in the browser and in the desktop, iOS and Android apps. It hands off
+like the action below but shows no progress, Cancel or Retry.
 
 - Click Download once. The control shows preparation progress when the server
   provides a length, disables repeat clicks, and offers Cancel. Browser users
@@ -391,7 +394,9 @@ preview header without opening the file.
   for another attempt and does not report success.
 - Installed iOS binaries without the optional file-export bridge use the system
   share sheet for saving too. After a slow preparation, tap **Save file** to open
-  it, then choose Save to Files or another available system action. The dedicated
+  it, then choose Save to Files or another available system action. An email
+  attachment chip has no button of its own to tap again, so its **File ready**
+  notice carries the **Save file** button. The dedicated
   save picker becomes available when the new native binary ships.
 - Change files or close the viewer during preparation: the old request must stop
   and must not save a late response. Close the expanded viewer with Escape and

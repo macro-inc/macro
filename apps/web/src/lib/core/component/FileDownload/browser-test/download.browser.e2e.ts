@@ -196,6 +196,39 @@ test('downloads a linked video using its current version and original extension'
   expect(await readFile((await file.path())!)).toEqual(video);
 });
 
+test('downloads an email attachment from its chip through the signed URL', async ({
+  page,
+}) => {
+  const bytes = Buffer.from('%PDF-1.7 quarterly report');
+  const signedUrl =
+    'https://d111111abcdef8.cloudfront.net/temp/link/email-attachment-Quarterly%20report.pdf?Signature=s';
+  await page.route('**/email/attachments/email-attachment', (route) =>
+    route.fulfill({ json: { attachment: { data_url: signedUrl } } })
+  );
+  // The distribution answers CORS for the page's origin, as the bucket's
+  // rules do for the web and native app origins.
+  await page.route(signedUrl, (route) =>
+    route.fulfill({
+      body: bytes,
+      contentType: 'binary/octet-stream',
+      headers: {
+        'Access-Control-Allow-Origin': route.request().headers().origin ?? '*',
+      },
+    })
+  );
+  await page.goto('/?email');
+  const saved = page.waitForEvent('download');
+  await page
+    .getByRole('button', {
+      name: 'Download Quarterly report.pdf',
+      exact: true,
+    })
+    .click();
+  const file = await saved;
+  expect(file.suggestedFilename()).toBe('Quarterly report.pdf');
+  expect(await readFile((await file.path())!)).toEqual(bytes);
+});
+
 test('shares from the mobile Download menu after a transfer outlives browser activation', async ({
   page,
   isMobile,

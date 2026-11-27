@@ -78,8 +78,22 @@ export async function fetchPresignedBlobWithProgress(
   init?: RequestInit,
   maxBytes = Infinity
 ): Promise<Result<Blob, ResultError<FetchError>[]>> {
+  return fetchBlobWithProgress(platformFetch, url, onProgress, init, maxBytes);
+}
+
+/**
+ * {@link fetchPresignedBlobWithProgress} over a chosen transport, for a URL
+ * the platform transport can't reach (see `webviewFetch`).
+ */
+export async function fetchBlobWithProgress(
+  transport: typeof fetch,
+  url: string,
+  onProgress: (progress: FetchProgress) => void,
+  init?: RequestInit,
+  maxBytes = Infinity
+): Promise<Result<Blob, ResultError<FetchError>[]>> {
   try {
-    const response = await platformFetch(url, init);
+    const response = await transport(url, init);
 
     if (!response.ok) {
       return httpStatusToError(response.status);

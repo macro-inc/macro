@@ -1,8 +1,8 @@
 import type { BlockName } from '@core/block';
 import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import {
-  createFileDownload,
   type DownloadSource,
+  startFileDownload,
 } from '@core/util/createFileDownload';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
@@ -10,7 +10,6 @@ import {
   exportedDocxDownloadSource,
   storedDocumentDownloadSource,
 } from '@queries/storage/document-download';
-import { createRoot } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { EntityActionListState } from './entity-action-context';
 
@@ -68,20 +67,6 @@ function documentDownloadSource(
 }
 
 /**
- * Downloads under a root of its own. The controller cancels its transfer when
- * its owner is disposed, and choosing the item disposes the menu it sits in.
- */
-async function downloadDocument(source: DownloadSource) {
-  await createRoot(async (dispose) => {
-    try {
-      await createFileDownload(() => source).start();
-    } finally {
-      dispose();
-    }
-  });
-}
-
-/**
  * Downloads one document row by id through the shared file download
  * controller (native save picker, toasts, `file.download` trace), under the
  * filename the file's own Download uses. Offer it for a single entity.
@@ -96,7 +81,7 @@ export const makeDownloadAction = () => {
     if (!entity || entities.length !== 1) return;
     const source = documentDownloadSource(entity);
     if (!source) return;
-    await downloadDocument(source);
+    await startFileDownload(source);
   };
 
   const executeWithSoup = async (

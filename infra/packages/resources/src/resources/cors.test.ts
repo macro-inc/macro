@@ -31,6 +31,18 @@ describe('ALLOWED_ORIGINS', () => {
     }
   });
 
+  test('every stack allows the native apps’ pages', async () => {
+    for (const stack of ['dev', 'prod']) {
+      expect(await originsFor(stack)).toEqual(
+        expect.arrayContaining([
+          'tauri://localhost',
+          'http://tauri.localhost',
+          'https://tauri.localhost',
+        ])
+      );
+    }
+  });
+
   test('each origin has at most one wildcard, as S3 requires', async () => {
     for (const stack of ['dev', 'prod']) {
       for (const origin of await originsFor(stack)) {

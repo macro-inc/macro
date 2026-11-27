@@ -176,7 +176,7 @@ test.describe('the notices of files in an open thread', () => {
     await openDelivered(page, mailbox, 'Lunch?', [received('menu.txt')]);
 
     await page.getByRole('button', { name: 'Download menu.txt' }).click();
-    await expect(notice(page, 'Download failed')).toBeVisible();
+    await expect(notice(page, 'Unable to download file')).toBeVisible();
     saw('STL-092');
     await page.getByRole('button', { name: 'menu.txt', exact: true }).click();
     await expect(notice(page, 'Attachment unavailable')).toBeVisible();

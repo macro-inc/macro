@@ -882,15 +882,16 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     }),
   },
   {
-    name: 'Attachment download failed',
+    name: 'File download failed',
     category: 'File transfer',
-    source: 'features/email-message/attachment-action-adapter.ts',
-    trigger: 'The attachment download request fails.',
+    source: 'lib/core/util/createFileDownload.ts',
+    trigger:
+      'A file or email attachment download fails to load its bytes or its address.',
     behavior: '4.5 seconds',
     create: () => ({
       toastType: ToastType.FAILURE,
-      message: 'Download failed',
-      subtext: 'Please try again',
+      message: 'Unable to download file',
+      subtext: 'Try again. The file may no longer be available.',
     }),
   },
   {
