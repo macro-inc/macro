@@ -266,7 +266,7 @@ collapses each pair in `fold/elicitation.rs`; everything else is plain ACP.
 | Hermes Agent | `hermes-agent` | no (PR #30089 unmerged would add `answer` + `other_answer`) | `clarify` excluded from the ACP toolset | n/a |
 | OpenClaw bridge | `openclaw-acp` | no | `ask_user` shows as `tool_call` `title:"ask_user: …"`, blocks the Gateway run; cannot be answered over ACP | n/a (times out → `no_answer`) |
 | Goose | — | yes, form, MCP-originated | plain ACP | JSON-RPC response |
-| Macro in-memory agent | `macro-inmem` | yes — form, when the client advertises it | model-callable `AskUser` asks one required free-text or single-choice question; `/ask` remains the deterministic end-to-end rig | JSON-RPC response |
+| Macro in-memory agent | `macro-inmem` | yes — form, when the client advertises it | model-callable `AskUser` (and `/ask`) asks one question: a required free-text `answer`, or an `answer` select (`oneOf`) + `answer_custom` marked `_meta._askUserQuestionCustomAnswer`, neither required; custom text wins; `/ask` remains the deterministic end-to-end rig | JSON-RPC response |
 | Gemini CLI, Kimi, Cursor cloud | — | no | — | — |
 
 Consequences already built in:

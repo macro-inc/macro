@@ -22,16 +22,17 @@ pub struct AskUserContext {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[schemars(
     title = "AskUser",
-    description = "Ask the user for information or a decision that is required before continuing. Use this only when the answer cannot be inferred safely. Pass options for a single-choice question, or omit them for free text. Never request passwords, API keys, authentication codes, payment details, or other secrets."
+    description = "Ask the user for information or a decision that is required before continuing. Use this only when the answer cannot be inferred safely. Pass options for a single-choice question, or omit them for free text. A question with options always offers the user a box to type their own answer, so never add an \"Other\" or \"I'll type it\" option. Never request passwords, API keys, authentication codes, payment details, or other secrets."
 )]
 pub struct AskUser {
     /// The complete, concise question shown to the user.
     #[schemars(description = "The complete, concise question shown to the user.")]
     pub question: String,
-    /// Allowed answers for a single-choice question. Empty requests free text.
+    /// Suggested answers for a single-choice question; the user may type their
+    /// own instead. Empty requests free text.
     #[serde(default)]
     #[schemars(
-        description = "Allowed answers for a single-choice question. Omit or pass an empty list to request free text."
+        description = "Suggested answers for a single-choice question; the user may type their own instead. Omit or pass an empty list to request free text."
     )]
     pub options: Vec<String>,
 }

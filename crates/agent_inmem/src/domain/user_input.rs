@@ -9,7 +9,8 @@ use async_trait::async_trait;
 pub struct UserInputRequest {
     /// The question shown to the user.
     pub question: String,
-    /// Allowed answers. An empty list requests free text.
+    /// Suggested answers, offered beside an "Other" box for the user's own.
+    /// An empty list requests free text.
     pub options: Vec<String>,
 }
 
