@@ -36,5 +36,7 @@ engine reads, derived from the GraphQL SDL. `cache-core` re-exports it as
 - Keep this crate free of `cache-core` and `database_sql`: it is a build
   dependency of `cache-wasm`, and `database_sql` is a cdylib whose unhashed
   output files collide when a native build compiles it twice.
-- A change to the artifact's shape or the epoch changes every cache's schema
-  hash; incompatible changes bump `CACHE_SCHEMA_COMPATIBILITY_EPOCH`.
+- A change to the artifact's shape or the epoch makes every cache's stored
+  schema unreadable, so every cache drops its records on its next open
+  (`cache_core::schema_change`). A GraphQL field or type change needs no epoch
+  bump: the open drops only the changed types' records.

@@ -72,6 +72,10 @@ pub enum TursoStorageError {
     /// A deterministic database operation failed without an uncertain commit outcome.
     #[error("Turso database operation failed")]
     Database,
+    /// A cache file could not be moved or removed. The files stay as they
+    /// were, so a later open can try again; a reset would delete them.
+    #[error("cache file operation failed")]
+    FileOperation,
     /// The disposable physical database must be closed and replaced.
     #[error("physical cache reset required: {0}")]
     PhysicalResetRequired(PhysicalResetReason),
@@ -87,7 +91,7 @@ impl TursoStorageError {
     pub const fn physical_reset_reason(&self) -> Option<PhysicalResetReason> {
         match self {
             Self::PhysicalResetRequired(reason) => Some(*reason),
-            Self::InvalidInput | Self::Database => None,
+            Self::InvalidInput | Self::Database | Self::FileOperation => None,
         }
     }
 
@@ -122,7 +126,7 @@ impl TursoStorageError {
 
     pub(crate) const fn initialization(self) -> Self {
         match self {
-            Self::PhysicalResetRequired(_) => self,
+            Self::PhysicalResetRequired(_) | Self::FileOperation => self,
             Self::InvalidInput | Self::Database => Self::reset(PhysicalResetReason::Compatibility),
         }
     }

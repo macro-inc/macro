@@ -100,12 +100,19 @@ entire cache in browser memory. With 10s of thousands of cached objects
     write cannot be bypassed by a timeout. Login waits for all logout wipes and teardown, not just
     normalized-cache clearing. A post-write identity check cannot
     undo a native mutation already dispatched.
-    Additive GraphQL schema changes retain existing normalized records;
-    fragment reads can continue projecting fields already present. Manually
-    bump the schema compatibility epoch when identity, field storage shape, or
-    other schema-derived cache semantics become incompatible. Discard records
-    on compatibility-epoch/format mismatch (cache is disposable, rebuild from
-    network).
+    A cache stores the GraphQL schema its records were written under. An
+    open under another schema keeps every record it can still read: additive
+    changes keep all of them, a changed type drops only its own records and
+    rows derived from them, and a renamed operation root drops every record
+    (`crates/client/README.md#schema-changes`). Manually bump the schema
+    compatibility epoch only for cache semantics the schema cannot show.
+    Discard records on compatibility-epoch/format mismatch (cache is
+    disposable, rebuild from network). Every schema change keeps queued
+    mutations, and so does a native epoch change or a native move from a
+    format in `MIGRATABLE_CACHE_FORMAT_VERSIONS`; any other format change
+    resets the file, queue included. A browser
+    database's name holds the epoch, format and storage schema, so a bump of
+    any of them opens a new, empty file without the old one's queued writes.
 
     **Key policy — presence-of-id convention**: no client-side key config.
     An output object type with `id: ID!` is keyed by `__typename:id`; no
@@ -706,7 +713,8 @@ that fails tries to keep the migrated file as it is.
 A recovery wipe in the browser keeps the mutation queue. Under the owner lock, the
 engine about to wipe opens the old database, copies what it queues (rows with their
 IDs, leases and attempt counts, their optimistic layers and shadows, the aliases
-they use, and the account binding) into a side file, `{database}-salvage`, and
+they use, the account binding, and the stored GraphQL schema their overlays were
+made under) into a side file, `{database}-salvage`, and
 flushes it before it removes the database. The next open queues the copy again
 before it serves its first request, in one transaction that also records that this
 copy was taken, and then removes the side file. An engine may die between any two of
@@ -731,7 +739,15 @@ opened and reset, even when no copy says what it queued. A side file that cannot
 `unreadable` rather than queued behind newer writes later; only one that can be neither
 removed nor emptied then can still come back, behind them and as `partial`. Records, the
 projections and index facts the server's answers gave them, and everything else
-refetchable are not carried; only the pending writes' own projections are. The copy
+refetchable are not carried; only the pending writes' own projections are. The
+next database takes the copy's stored schema with it, so the schema adoption after the
+open retires the overlays the wiped database would have retired. A copy joined from
+databases of two schemas when the older one adds a write, or taken into a database
+that stores another schema or holds records, or rows derived from them, under none,
+leaves that database's schema unreadable instead: adoption then resets it and keeps
+every write, without their overlays. A copy that adds no write leaves the schema as
+it is. An adoption that fails as a corrupt file wipes the same way, keeping the
+queue, and its open tells the page one report for both databases, each loss once. The copy
 is given up after three engines die reading the old database, three die taking the
 copy in, or eight wipes in two minutes, and a database bound to another account
 refuses it. Logout, an account switch, a mismatched identity and stale-database

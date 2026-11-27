@@ -349,16 +349,14 @@ fn a_hydrate_gives_way_to_a_command_that_queued_while_it_ran() {
     });
 }
 
-/// A command that installs a compatible schema while a hydrate gives way does
-/// not write, so the hydrate goes on, normalizing its response again under
-/// the new schema. The first hydrate for an account binds it, so it is not
+/// A command that installs a compatible schema while a hydrate gives way
+/// writes no record, only the stored schema, so the hydrate goes on,
+/// normalizing its response again under the new schema. The first hydrate for an account binds it, so it is not
 /// staged and writes whole.
 #[test]
 fn a_hydrate_that_gave_way_to_a_schema_install_still_lands() {
     block_on(async {
         let handle = spawn_handle();
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("schema.json");
         let noop = std::task::Waker::noop();
         super::test_hooks::PAUSE_STEPS.with(|pauses| pauses.set(1));
         let page = threads(1, "thread-a", true);
@@ -375,7 +373,7 @@ fn a_hydrate_that_gave_way_to_a_schema_install_still_lands() {
             "paused holding the engine"
         );
         let schema = cache_core::meta::bundled_schema();
-        let mut install = Box::pin(handle.install_schema(&schema, &path));
+        let mut install = Box::pin(handle.install_schema(&schema));
         assert!(poll_once(install.as_mut(), noop).is_pending());
         assert!(
             poll_once(hydrate.as_mut(), noop).is_pending(),

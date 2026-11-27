@@ -176,6 +176,7 @@ impl<S: Storage> Engine<S> {
             write_result: WriteResult {
                 field_changes: Some(field_changes),
                 identity_errors: Vec::new(),
+                unwritable_response: None,
                 mutation_uuid: None,
                 revision,
                 revision_advanced,

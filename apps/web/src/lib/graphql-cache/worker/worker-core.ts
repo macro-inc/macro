@@ -51,6 +51,7 @@ import {
   type CacheEngineHydrationResult,
   type CacheOpenOutcome,
   type CacheOpenResult,
+  type CacheOpenSchemaChange,
   type CacheQueueCrossing,
   type CacheWalCheckpoint,
   loadCacheWasm,
@@ -1685,6 +1686,7 @@ export class CacheWorkerCore {
         : undefined;
       try {
         let openOutcome: CacheOpenOutcome;
+        let schemaChange: CacheOpenSchemaChange | undefined;
         let queue: CacheQueueCrossing | undefined;
         if (awaitStorageGrant && onOwnerLockBusy) {
           const open = this.options.recoveryOpen
@@ -1710,6 +1712,7 @@ export class CacheWorkerCore {
           );
           this.engine = opened.engine;
           openOutcome = opened.outcome;
+          schemaChange = opened.schemaChange;
           queue = opened.queue;
         } else if (this.options.recoveryOpen) {
           if (wasm.openCacheForRecoveryWithOutcome) {
@@ -1720,6 +1723,7 @@ export class CacheWorkerCore {
             );
             this.engine = opened.engine;
             openOutcome = opened.outcome;
+            schemaChange = opened.schemaChange;
             queue = opened.queue;
           } else {
             this.engine = await wasm.openCacheForRecovery(scope, hotCapacity);
@@ -1733,6 +1737,7 @@ export class CacheWorkerCore {
           );
           this.engine = opened.engine;
           openOutcome = opened.outcome;
+          schemaChange = opened.schemaChange;
           queue = opened.queue;
         } else {
           this.engine = await wasm.openCache(scope, hotCapacity);
@@ -1752,6 +1757,17 @@ export class CacheWorkerCore {
           outcome: 'success',
           errorCode: 'none',
           openOutcome,
+          ...(schemaChange === undefined
+            ? {}
+            : {
+                schemaChange: schemaChange.change,
+                schemaResetReason: schemaChange.resetReason,
+                schemaChangedTypes: schemaChange.changedTypes,
+                schemaDroppedRecords: schemaChange.droppedRecords,
+                schemaIncompleteDocuments: schemaChange.incompleteDocuments,
+                schemaRetiredOverlays: schemaChange.retiredOverlays,
+                schemaAdoptMs: schemaChange.adoptMs,
+              }),
           ...(queue && queue.outcome !== 'none'
             ? {
                 queueOutcome: queue.outcome,

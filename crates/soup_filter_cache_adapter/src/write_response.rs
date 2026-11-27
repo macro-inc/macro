@@ -85,6 +85,13 @@ impl<'a> WriteResponse<'a> {
         self.data
     }
 
+    /// Whether the response normalizes under the schema. A pass that fails
+    /// on one that does not fails on any retry of it too.
+    #[must_use]
+    pub fn normalizes(&self) -> bool {
+        self.updates().is_ok()
+    }
+
     /// The normalized records of the response, computed on first use. A
     /// failure is not kept, so every pass reports it as before.
     pub(crate) fn updates(&self) -> Result<&RecordUpdates, SoupFilterCacheAdapterError> {

@@ -10,8 +10,10 @@
 //! browser owner loss physically resets the database and discards all three.
 //! Native files keep one path, so there an older storage version with
 //! registered upgrade steps is upgraded in place instead (`cache-turso`'s
-//! `storage/migration.rs`), and a format in
-//! [`MIGRATABLE_CACHE_FORMAT_VERSIONS`] is carried forward.
+//! `storage/migration.rs`), a format in
+//! [`MIGRATABLE_CACHE_FORMAT_VERSIONS`] is carried forward, and a file of
+//! another compatibility epoch ([`namespace_versions`]) drops its records and
+//! keeps its queued writes.
 
 use crate::normalize::RecordUpdates;
 use crate::queue::{PersistedOptimisticLayer, StoredMutation};
@@ -142,6 +144,18 @@ fn may_deflate(len: usize) -> bool {
     (RECORD_COMPRESSION_MIN_BYTES..=RECORD_MAX_INFLATED_BYTES).contains(&len)
 }
 
+/// Decodes a record as cache format 3 stored it: [`encode_record`]'s raw
+/// payload, without the encoding tag format 4 added. Bytes that are not one
+/// whole format 3 record are read as this format's, which a file another
+/// build wrote into may hold: a raw record's tag would otherwise read as an
+/// empty record.
+pub fn decode_format_3_record(bytes: &[u8]) -> Result<Record, CodecError> {
+    match postcard::take_from_bytes::<Record>(bytes) {
+        Ok((record, [])) => Ok(record),
+        _ => decode_record(bytes),
+    }
+}
+
 /// Decodes a normalized record written by [`encode_record`].
 pub fn decode_record(bytes: &[u8]) -> Result<Record, CodecError> {
     let (encoding, payload) = bytes.split_first().ok_or(CodecError::UnknownEncoding(0))?;
@@ -151,6 +165,9 @@ pub fn decode_record(bytes: &[u8]) -> Result<Record, CodecError> {
         other => Err(CodecError::UnknownEncoding(other)),
     }
 }
+
+/// Inflated bytes [`record_keys_sort_after`] reads a first field key from.
+const PROBE_INFLATE_BYTES: usize = 256;
 
 /// Output space a thread's first inflate starts with.
 const INFLATE_INITIAL_BYTES: usize = 64 * 1024;
@@ -215,6 +232,71 @@ fn inflate_record<T>(
     })
 }
 
+/// Whether every field key of the stored record whose leading bytes are
+/// `prefix` ([`encode_record`]'s output, or its start) sorts after each of
+/// `keys`, read without decoding the record. [`encode_record`] writes the
+/// fields in key order, so only the first key is read, and a deflated record
+/// is inflated only that far. False when `prefix` is too short to show that
+/// key or does not read as a record.
+pub fn record_keys_sort_after(prefix: &[u8], keys: &[&str]) -> bool {
+    let Some((encoding, payload)) = prefix.split_first() else {
+        return false;
+    };
+    match *encoding {
+        RECORD_ENCODING_RAW => first_key_sorts_after(payload, keys),
+        RECORD_ENCODING_DEFLATE => {
+            let mut output = [0; PROBE_INFLATE_BYTES];
+            INFLATER
+                .try_with(|cell| {
+                    let stream = &mut cell.borrow_mut().stream;
+                    stream.reset(false);
+                    // A prefix of the stream inflates to a prefix of the record.
+                    let status =
+                        stream.decompress(payload, &mut output, zlib_rs::InflateFlush::NoFlush);
+                    let length = usize::try_from(stream.total_out())
+                        .unwrap_or(usize::MAX)
+                        .min(output.len());
+                    status.is_ok() && first_key_sorts_after(&output[..length], keys)
+                })
+                .unwrap_or(false)
+        }
+        _ => false,
+    }
+}
+
+/// Whether the first key of the postcard record in `bytes` sorts after each
+/// of `keys`; a record without fields has none to sort before them.
+fn first_key_sorts_after(mut bytes: &[u8], keys: &[&str]) -> bool {
+    let Some(fields) = length_prefix(&mut bytes) else {
+        return false;
+    };
+    if fields == 0 {
+        return true;
+    }
+    let Some(length) = length_prefix(&mut bytes) else {
+        return false;
+    };
+    bytes
+        .get(..length)
+        .is_some_and(|first| keys.iter().all(|key| first > key.as_bytes()))
+}
+
+/// Reads one postcard length: a varint of at most four bytes, which any
+/// record [`RECORD_MAX_INFLATED_BYTES`] bounds fits in. A longer one is not
+/// read, so no length wraps.
+fn length_prefix(bytes: &mut &[u8]) -> Option<usize> {
+    let mut length = 0;
+    for shift in [0, 7, 14, 21] {
+        let (&byte, rest) = bytes.split_first()?;
+        *bytes = rest;
+        length |= usize::from(byte & 0x7f) << shift;
+        if byte & 0x80 == 0 {
+            return Some(length);
+        }
+    }
+    None
+}
+
 fn tagged(encoding: u8, payload: &[u8]) -> Vec<u8> {
     let mut bytes = Vec::with_capacity(payload.len() + 1);
     bytes.push(encoding);
@@ -270,6 +352,18 @@ pub const MIGRATABLE_CACHE_FORMAT_VERSIONS: &[u32] = &[3];
 /// Namespace a cache scope used at one cache format version.
 pub fn cache_namespace_at(scope: &str, format_version: u32) -> String {
     format!("graphql-cache:{scope}:s{CACHE_SCHEMA_COMPATIBILITY_EPOCH}:v{format_version}")
+}
+
+/// The schema compatibility epoch and cache format `namespace` names, when
+/// it is `scope`'s namespace under any of them. A native file of another
+/// epoch keeps its queued writes and drops its records.
+pub fn namespace_versions(scope: &str, namespace: &str) -> Option<(u32, u32)> {
+    let (epoch, format) = namespace
+        .strip_prefix("graphql-cache:")?
+        .strip_prefix(scope)?
+        .strip_prefix(":s")?
+        .split_once(":v")?;
+    Some((epoch.parse().ok()?, format.parse().ok()?))
 }
 
 /// Storage versions `(schema compatibility epoch, cache format, storage
@@ -344,6 +438,21 @@ mod tests {
         let bytes = encode_record(&record);
         let decoded = decode_record(&bytes).unwrap();
         assert_eq!(decoded, record);
+    }
+
+    #[test]
+    fn a_format_3_read_takes_this_formats_records_too() {
+        for body in [
+            "short body".to_owned(),
+            "review comment line\n".repeat(2_000),
+        ] {
+            let record = record_with_body(&body);
+            assert_eq!(decode_format_3_record(&encode(&record)).unwrap(), record);
+            assert_eq!(
+                decode_format_3_record(&encode_record(&record)).unwrap(),
+                record
+            );
+        }
     }
 
     #[test]
@@ -556,6 +665,62 @@ mod tests {
         tagged(RECORD_ENCODING_DEFLATE, &compressed)
     }
 
+    #[test]
+    fn a_record_probe_reads_only_the_first_key() {
+        let mut fields = record_with_body("short body");
+        fields
+            .fields
+            .insert("id".into(), CacheValue::String("1".into()));
+        let mut marked = fields.clone();
+        marked
+            .fields
+            .insert("__cacheIdentityTarget".into(), CacheValue::Bool(true));
+        let mut capital = fields.clone();
+        capital.fields.insert("Zeta".into(), CacheValue::Bool(true));
+        // Text that deflates to far more than the probe reads.
+        let body = (0..4_000u64)
+            .map(|i| format!("{:x} ", i.wrapping_mul(2_654_435_761) % 1_000_003))
+            .collect::<String>();
+        let long = record_with_body(&body);
+        let mut long_marked = long.clone();
+        long_marked
+            .fields
+            .insert("__cacheIdentityDeleted".into(), CacheValue::Bool(true));
+        let keys = ["__cacheIdentityDeleted", "__cacheIdentityTarget"];
+        // A start of a record that holds its first key.
+        const PREFIX: usize = 512;
+        for (record, after) in [
+            (Record::default(), true),
+            (fields, true),
+            (marked, false),
+            // A key before `_` could precede the ones probed for.
+            (capital, false),
+            (long, true),
+            (long_marked, false),
+        ] {
+            let bytes = encode_record(&record);
+            let prefix = &bytes[..bytes.len().min(PREFIX)];
+            assert_eq!(record_keys_sort_after(prefix, &keys), after, "{record:?}");
+            assert_eq!(record_keys_sort_after(&bytes, &keys), after, "{record:?}");
+        }
+        let long = encode_record(&record_with_body(&body));
+        assert_eq!(long.first(), Some(&RECORD_ENCODING_DEFLATE));
+        assert!(long.len() > 4 * PREFIX);
+        // Too little of a record to show its first key, or bytes no record
+        // starts with, may hold anything.
+        assert!(!record_keys_sort_after(&long[..3], &keys));
+        assert!(!record_keys_sort_after(
+            &encode_record(&record_with_body("x"))[..4],
+            &keys
+        ));
+        assert!(!record_keys_sort_after(&[], &keys));
+        assert!(!record_keys_sort_after(&[9, 0], &keys));
+        assert!(!record_keys_sort_after(
+            &[RECORD_ENCODING_RAW, 0xff, 0xff, 0xff, 0xff, 0x01],
+            &keys
+        ));
+    }
+
     fn record_with_body(body: &str) -> Record {
         let mut record = Record::default();
         record.fields.insert(
@@ -583,6 +748,29 @@ mod tests {
             "graphql-cache:client-token-1:s4:v3"
         );
         assert!(!MIGRATABLE_CACHE_FORMAT_VERSIONS.contains(&CACHE_FORMAT_VERSION));
+    }
+
+    #[test]
+    fn namespace_versions_reads_only_this_scope() {
+        let scope = "client-token-1";
+        assert_eq!(
+            namespace_versions(scope, &cache_namespace(scope)),
+            Some((CACHE_SCHEMA_COMPATIBILITY_EPOCH, CACHE_FORMAT_VERSION))
+        );
+        assert_eq!(
+            namespace_versions(scope, &format!("graphql-cache:{scope}:s3:v2")),
+            Some((3, 2))
+        );
+        for other in [
+            cache_namespace("client-token-2"),
+            format!("graphql-cache:{scope}:sx:v{CACHE_FORMAT_VERSION}"),
+            format!("graphql-cache:{scope}:s:v{CACHE_FORMAT_VERSION}"),
+            format!("graphql-cache:{scope}:s3:v"),
+            format!("graphql-cache:{scope}:s3"),
+            "wrong".to_owned(),
+        ] {
+            assert_eq!(namespace_versions(scope, &other), None, "{other}");
+        }
     }
 
     #[test]

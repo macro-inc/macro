@@ -685,8 +685,14 @@ export type RecordFieldChange =
 export type WriteResult = CacheChangeHints & {
   /** Effective view changes. Missing metadata requires a conservative reread. */
   fieldChanges?: RecordFieldChange[];
-  /** Bindings omitted while committing an otherwise normalizable response. */
+  /** Bindings omitted while committing a response. */
   identityErrors?: string[];
+  /**
+   * Why a confirmed response's content was not written: it did not normalize,
+   * so its write settled with only the identities it resolved. Nothing is
+   * applied from that response; its queries are revalidated instead.
+   */
+  unwritableResponse?: string;
   mutationUuid?: string;
   /** Effective-view revision installed by this logical mutation. */
   revision: CacheRevision;

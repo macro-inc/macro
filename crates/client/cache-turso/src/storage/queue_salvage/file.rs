@@ -1,13 +1,17 @@
 //! The side file: frames appended one after another, each checked, so a torn
 //! one hides nothing written before it.
 
-use super::{QUEUE_ROW_COLUMNS, RecordKey, SalvagedQueue, Shadow};
+use super::{QUEUE_ROW_COLUMNS, RecordKey, SalvagedQueue, Shadow, StoredRow};
 use turso_core::{Numeric, Value};
 use uuid::Uuid;
 
 /// Length, checksum and kind.
 const FRAME_HEADER: usize = 4 + 8 + 1;
-const FORMAT_VERSION: u8 = 1;
+const FORMAT_VERSION: u8 = 2;
+/// A queue frame from before queues carried their stored schema, as the side
+/// file of a database at storage version 12 holds one: the cleanup of such a
+/// stale database still counts its writes.
+const SCHEMALESS_FORMAT_VERSION: u8 = 1;
 
 const QUEUE: u8 = 1;
 const READ_ATTEMPT: u8 = 2;
@@ -194,6 +198,15 @@ impl SalvagedQueue {
             write_bytes(&mut body, key.id.as_bytes());
             write_bytes(&mut body, value);
         }
+        match &self.schema {
+            Some(schema) => {
+                body.push(1);
+                write_bytes(&mut body, schema.hash.as_bytes());
+                write_bytes(&mut body, schema.incoming_hash.as_bytes());
+                write_bytes(&mut body, &schema.artifact);
+            }
+            None => body.push(0),
+        }
         frame(QUEUE, &body)
     }
 }
@@ -335,7 +348,8 @@ impl<'a> Reader<'a> {
     }
 
     fn queue(mut self) -> Option<SalvagedQueue> {
-        if self.array()? != [FORMAT_VERSION] {
+        let [version] = self.array()?;
+        if version != FORMAT_VERSION && version != SCHEMALESS_FORMAT_VERSION {
             return None;
         }
         let id = Uuid::from_bytes(self.array()?);
@@ -368,6 +382,15 @@ impl<'a> Reader<'a> {
                 reader.bytes()?.to_vec(),
             ))
         })?;
+        let schema = if version == SCHEMALESS_FORMAT_VERSION || !self.flag()? {
+            None
+        } else {
+            Some(StoredRow {
+                hash: self.text()?,
+                incoming_hash: self.text()?,
+                artifact: self.bytes()?.to_vec(),
+            })
+        };
         self.0.is_empty().then_some(SalvagedQueue {
             id,
             source,
@@ -377,6 +400,7 @@ impl<'a> Reader<'a> {
             rows,
             shadows,
             records,
+            schema,
         })
     }
 }

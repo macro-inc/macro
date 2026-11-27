@@ -8,6 +8,8 @@ use std::collections::BTreeMap;
 use super::*;
 
 mod file_type;
+#[cfg(not(target_arch = "wasm32"))]
+mod schema_cost;
 
 #[test]
 fn optimistic_soup_payloads_compile_to_durable_projection_layers() {

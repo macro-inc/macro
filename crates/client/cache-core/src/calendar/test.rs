@@ -605,3 +605,40 @@ fn event_filters_apply_to_overlay_rows() {
     assert!(keys.is_empty());
     assert!(!optimistic);
 }
+
+#[test]
+fn a_range_reads_only_the_occurrence_inputs_it_lists() {
+    // A schema change keeps the records of a type that loses a field unless
+    // a derived row reads it: every occurrence field of the bundled schema
+    // the list leaves out must not change the range.
+    let key = key("GraphqlCalendarOccurrence:e1:2026-10-06T09:00:00+00:00");
+    let base = occurrence(timed(
+        "2026-10-06T09:00:00+00:00",
+        "2026-10-06T09:30:00+00:00",
+    ));
+    let expected = project_calendar_range(&key, &base);
+    assert!(expected.is_some());
+    let ty = crate::meta::bundled_schema_ref()
+        .type_meta(OCCURRENCE_TYPENAME)
+        .expect("a bundled type");
+    for field in ty
+        .fields
+        .iter()
+        .filter(|field| !RANGE_INPUTS.contains(&field.name.as_str()))
+    {
+        for probe in [
+            text("2030-01-01T00:00:00Z"),
+            CacheValue::Bool(true),
+            time(&[]),
+        ] {
+            let mut record = base.clone();
+            record.fields.insert(field.name.clone(), probe.clone());
+            assert_eq!(
+                project_calendar_range(&key, &record),
+                expected,
+                "{} = {probe:?} changed the range",
+                field.name
+            );
+        }
+    }
+}
