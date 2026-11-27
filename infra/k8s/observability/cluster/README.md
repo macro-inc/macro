@@ -242,11 +242,13 @@ CloudWatch Logs reach Loki through Amazon Data Firehose (`../aws`,
 stream in its region, which posts batches to the edge with the OTLP token as
 its access key. `modules/ingest-firehose.alloy` turns each event into a log
 record of its group (`service.name` is the group's name without
-`/aws/lambda/` and the `-prod` or `-dev` suffix, which becomes
-`deployment.environment`) and hands it to the OTLP log path, so emails are
-hashed as in every other log. The group, stream and function name are
-structured metadata (`aws_log_group_names`, `aws_log_stream_names`,
-`faas_name`).
+`/aws/lambda/` or a leading `/`, other slashes as dashes, and without the
+`-prod` or `-dev` suffix, which becomes `deployment.environment`) and hands it
+to the OTLP log path, so emails are hashed as in every other log. The group,
+stream and function name are structured metadata (`aws_log_group_names`,
+`aws_log_stream_names`, `faas_name`). Firehose has its answer once the events
+are read: a batch the memory limiter then refuses is lost, not retried
+(`otelcol_processor_refused_log_records`).
 
 ### Trace sampling
 

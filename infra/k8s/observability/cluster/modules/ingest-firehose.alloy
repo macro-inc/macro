@@ -2,13 +2,17 @@
 // other log group, subscribe to a Firehose stream (../aws, modules/firehose.nix)
 // that delivers here through the edge's /awsfirehose/api/v1/push. Firehose
 // sends the ingest token as its access key. Each event becomes a log record of
-// its log group: service.name is the group's name without `/aws/lambda/` and
-// the stack suffix (`-prod`, `-dev`), which gives deployment.environment. The
+// its log group: service.name is the group's name without `/aws/lambda/` (or
+// a leading `/`; other slashes become dashes) and the stack suffix (`-prod`, `-dev`), which gives deployment.environment. The
 // records then take the OTLP path (memory limiter, email hashing, Loki).
+//
+// Firehose has its 200 once the events are read, so a batch the memory limiter
+// refuses is lost, not retried or kept in Firehose's failed-records bucket:
+// `otelcol_processor_refused_log_records` counts it.
 loki.source.awsfirehose "cloudwatch" {
   http {
     listen_address = "0.0.0.0"
-    listen_port = 4319
+    listen_port = @FIREHOSE_PORT@
   }
   access_key = local.file.otlp_token.content
   // The event's own time, not Firehose's: delivery waits up to a minute.
@@ -62,7 +66,9 @@ otelcol.processor.transform "cloudwatch" {
     context = "log"
     statements = [
       `set(attributes["service.name"], attributes["log_group"])`,
-      `replace_pattern(attributes["service.name"], "^/aws/lambda/", "")`,
+      `replace_pattern(attributes["service.name"], "^/aws/(lambda|vendedlogs)/", "")`,
+      `replace_pattern(attributes["service.name"], "^/+", "")`,
+      `replace_pattern(attributes["service.name"], "/", "-")`,
       `replace_pattern(attributes["service.name"], "-(prod|dev)$", "")`,
       `set(attributes["deployment.environment"], "prod") where IsMatch(attributes["log_group"], "-prod$")`,
       `set(attributes["deployment.environment"], "dev") where IsMatch(attributes["log_group"], "-dev$")`,

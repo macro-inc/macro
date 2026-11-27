@@ -78,12 +78,20 @@ let
       !lib.hasInfix "127.0.0.1" result
     ) "ingest.alloy has a loopback address modules/ingest.nix doesn't replace";
     result + "\n" + firehoseConfig + "\n" + config.macro.derivedMetrics.ingestTap;
-  # The port is also in ingest-firehose.alloy and the edge's route (./edge.nix).
-  firehoseConfig = builtins.readFile ./ingest-firehose.alloy;
-  firehosePort = 4319;
+  firehosePort = config.macro.ingest.firehosePort;
+  firehoseConfig = builtins.replaceStrings [ "@FIREHOSE_PORT@" ] [ (toString firehosePort) ] (
+    builtins.readFile ./ingest-firehose.alloy
+  );
 in
 {
-  applications.alloy-ingest = {
+  options.macro.ingest.firehosePort = lib.mkOption {
+    type = lib.types.port;
+    readOnly = true;
+    default = 4319;
+    description = "Alloy ingest's port for Amazon Data Firehose deliveries; the edge's /awsfirehose/api/v1/push proxies to it.";
+  };
+
+  config.applications.alloy-ingest = {
     inherit namespace;
 
     helm.releases.${name} = {

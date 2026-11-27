@@ -108,7 +108,7 @@ let
       }
       # CloudWatch Logs from Amazon Data Firehose; Alloy checks its access key.
       location = /awsfirehose/api/v1/push {
-        ${ingest (svc "alloy-ingest" 4319) false}
+        ${ingest (svc "alloy-ingest" config.macro.ingest.firehosePort) false}
       }
     }
     ${lib.optionalString (cfg.argocdHosts != [ ]) ''
@@ -316,7 +316,7 @@ in
                 # OTLP, Firehose.
                 ports = workload.tcpPorts [
                   4318
-                  4319
+                  config.macro.ingest.firehosePort
                 ];
               }
               {
