@@ -31,7 +31,6 @@ type HireReceipt = {
   agent: Readonly<TeamAgent>;
   draft: Draft;
   portrait: string;
-  width: number;
 };
 
 const accepted = new Map<
@@ -39,8 +38,8 @@ const accepted = new Map<
   { agent: TeamAgent; request: Readonly<CreateTeamAgent> }
 >();
 
-const [receipt, setReceipt] = createSignal<HireReceipt>();
-export const hireReceipt = receipt;
+const [receipts, setReceipts] = createSignal<readonly HireReceipt[]>([]);
+export const hireReceipts = receipts;
 
 export function saveHireReceipt(value: HireReceipt) {
   if (
@@ -55,7 +54,18 @@ export function saveHireReceipt(value: HireReceipt) {
       request.name === draftName(value.draft) &&
       request.size === value.draft.size
     ) {
-      setReceipt({ ...value, agent: Object.freeze({ ...agent }) });
+      if (hireReceiptFor(agent.teamId, agent.userId)) return;
+
+      const draft = Object.freeze({
+        ...value.draft,
+        look: Object.freeze({ ...value.draft.look }),
+      });
+      const receipt = Object.freeze({
+        ...value,
+        draft,
+        agent: Object.freeze({ ...agent }),
+      });
+      setReceipts((previous) => [...previous, receipt]);
       return;
     }
   }
@@ -66,10 +76,9 @@ export function hireFleetPath(agent: Pick<TeamAgent, 'teamId' | 'userId'>) {
 }
 
 export function hireReceiptFor(teamId: string, userId: string) {
-  const current = hireReceipt();
-  if (current?.agent.teamId === teamId && current.agent.userId === userId) {
-    return current;
-  }
+  return hireReceipts().find(
+    ({ agent }) => agent.teamId === teamId && agent.userId === userId
+  );
 }
 
 export function selectedHireReceipt(search: string) {

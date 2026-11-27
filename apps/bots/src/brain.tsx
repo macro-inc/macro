@@ -133,15 +133,7 @@ function BrainHeader(props: {
               when={bot().portrait}
               fallback={<span aria-hidden="true">{bot().name[0]}</span>}
             >
-              {(portrait) => (
-                <img
-                  src={portrait()}
-                  alt=""
-                  style={{
-                    transform: `scaleX(${1 + (bot().portraitWidth ?? 0) / 100})`,
-                  }}
-                />
-              )}
+              {(portrait) => <img src={portrait()} alt="" />}
             </Show>
           </div>
           <div class="brain-identity">
@@ -174,7 +166,9 @@ function BrainHeader(props: {
             </p>
           </div>
           <div class="brain-header-side">
-            <Schedule />
+            <Show when={!bot().setupPending}>
+              <Schedule />
+            </Show>
             <div class="brain-computer">
               <strong>Computer</strong>
               <span>Unavailable</span>

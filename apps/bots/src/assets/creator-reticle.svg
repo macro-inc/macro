@@ -1,16 +1,6 @@
-<svg class="reticle-svg" viewBox="0 0 480 572" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-  <path d="M 8 28 V 8 H 28" stroke="#363e49" stroke-width="1"/>
-  <path d="M 452 8 H 472 V 28" stroke="#363e49" stroke-width="1"/>
-  <path d="M 8 544 V 564 H 28" stroke="#363e49" stroke-width="1"/>
-  <path d="M 452 564 H 472 V 544" stroke="#363e49" stroke-width="1"/>
-  <rect x="7.5" y="7.5" width="2" height="2" fill="#e2a63a" opacity="0.72"/>
-  <rect x="470.5" y="7.5" width="2" height="2" fill="#e2a63a" opacity="0.72"/>
-  <rect x="7.5" y="562.5" width="2" height="2" fill="#e2a63a" opacity="0.72"/>
-  <rect x="470.5" y="562.5" width="2" height="2" fill="#e2a63a" opacity="0.72"/>
-  <line x1="240" y1="3" x2="240" y2="11" stroke="#363e49" stroke-width="1"/>
-  <line x1="240" y1="561" x2="240" y2="569" stroke="#363e49" stroke-width="1"/>
-  <line x1="3" y1="274" x2="11" y2="274" stroke="#363e49" stroke-width="1"/>
-  <line x1="469" y1="274" x2="477" y2="274" stroke="#363e49" stroke-width="1"/>
-  <path d="M 8 242 H 12 M 8 306 H 12" stroke="#262d37" stroke-width="1"/>
-  <path d="M 468 242 H 472 M 468 306 H 472" stroke="#262d37" stroke-width="1"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 572" fill="none" preserveAspectRatio="none" shape-rendering="crispEdges">
+  <path d="M8 28V8H28M452 8H472V28M8 544V564H28M452 564H472V544" stroke="#647489" opacity=".75" vector-effect="non-scaling-stroke"/>
+  <path d="M240 3V11M240 561V569M3 286H11M469 286H477" stroke="#647489" opacity=".64" vector-effect="non-scaling-stroke"/>
+  <path d="M8 254H12M8 318H12M468 254H472M468 318H472" stroke="#647489" opacity=".37" vector-effect="non-scaling-stroke"/>
+  <path d="M8.5 8.5h2v2h-2zM469.5 8.5h2v2h-2zM8.5 561.5h2v2h-2zM469.5 561.5h2v2h-2z" fill="#e2a63a" opacity=".72"/>
 </svg>

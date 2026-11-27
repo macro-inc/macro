@@ -1,14 +1,9 @@
 import { createMemo } from 'solid-js';
-import atlas from './assets/atlas.svg';
 import atlasSvg from './assets/atlas.svg?raw';
-import echo from './assets/echo.svg';
 import echoSvg from './assets/echo.svg?raw';
-import ledger from './assets/ledger.svg';
 import ledgerSvg from './assets/ledger.svg?raw';
-import patch from './assets/patch.svg';
 import patchSvg from './assets/patch.svg?raw';
 import overlaySvg from './assets/portrait-overlay.svg?raw';
-import scout from './assets/scout.svg';
 import scoutSvg from './assets/scout.svg?raw';
 import {
   portraitFilter,
@@ -18,7 +13,6 @@ import {
 } from './portrait-art';
 import { type Look, type PresetId, presets } from './presets';
 
-const baseImages = { atlas, echo, ledger, patch, scout };
 const baseMarkup = {
   atlas: atlasSvg,
   echo: echoSvg,
@@ -42,7 +36,7 @@ function svgImage(markup: string) {
 }
 
 export function snapshotPortrait(preset: PresetId, look: Look) {
-  // A self-contained image keeps the exact confirmed appearance across views.
+  // The UI and receipt use identical artwork with no external SVG resources.
   return svgImage(
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 120" width="96" height="120">
       <foreignObject width="96" height="120">
@@ -63,34 +57,19 @@ export function Portrait(props: {
   look: Look;
   pose?: number;
 }) {
-  const artwork = createMemo(() => svgImage(overlay(props.preset, props.look)));
+  const artwork = createMemo(() => snapshotPortrait(props.preset, props.look));
 
   return (
     <span class="creator-portrait" aria-hidden="true">
-      <span
-        class="creator-portrait-pose"
+      <img
+        src={artwork()}
+        alt=""
+        draggable={false}
         style={{
-          transform: `perspective(580px) translateX(${(props.pose ?? 0) * 2.5}px) rotateY(${(props.pose ?? 0) * 4.5}deg)`,
+          transform: props.pose
+            ? `perspective(580px) translateX(${props.pose * 2.5}px) rotateY(${props.pose * 4.5}deg)`
+            : undefined,
         }}
-      >
-        <span
-          class="creator-portrait-art"
-          style={{
-            transform: portraitTransform(props.look, props.preset),
-            filter: portraitFilter(props.look, props.preset),
-          }}
-        >
-          <img
-            alt=""
-            src={baseImages[presets[props.preset].base]}
-            draggable={false}
-          />
-          <img alt="" src={artwork()} draggable={false} />
-        </span>
-      </span>
-      <span
-        class="creator-portrait-light"
-        style={{ background: portraitLighting(props.look.light) }}
       />
     </span>
   );

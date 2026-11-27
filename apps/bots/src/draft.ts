@@ -61,7 +61,6 @@ type DraftStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 export const namePartLimit = 24;
 
 const key = 'macro.bots.hire';
-const restoredKey = 'macro.bots.hire.restored';
 const lifetime = 10 * 60 * 1000;
 
 export function storeHireDraft(
@@ -115,17 +114,14 @@ function isDraft(value: unknown): value is Draft {
 }
 
 type StoredDraft = {
-  handoff: string;
+  handoff: string | null;
   draft: Draft;
   expiresAt: number;
   sampleSignedIn: boolean;
 };
 
-function readDraft(
-  storage: DraftStorage,
-  storageKey: string
-): StoredDraft | undefined {
-  const stored = storage.getItem(storageKey);
+function readDraft(storage: DraftStorage): StoredDraft | undefined {
+  const stored = storage.getItem(key);
   if (!stored) return;
 
   try {
@@ -134,7 +130,7 @@ function readDraft(
       value &&
       typeof value === 'object' &&
       'handoff' in value &&
-      typeof value.handoff === 'string' &&
+      (value.handoff === null || typeof value.handoff === 'string') &&
       'expiresAt' in value &&
       typeof value.expiresAt === 'number' &&
       Number.isFinite(value.expiresAt) &&
@@ -154,7 +150,7 @@ function readDraft(
     // Ignore malformed browser storage from other versions.
   }
 
-  storage.removeItem(storageKey);
+  storage.removeItem(key);
 }
 
 export function markFixtureHireSignIn(
@@ -162,7 +158,7 @@ export function markFixtureHireSignIn(
   handoff: string,
   now = Date.now()
 ): boolean {
-  const stored = readDraft(storage, key);
+  const stored = readDraft(storage);
   if (stored?.handoff !== handoff || stored.expiresAt <= now) return false;
 
   storage.setItem(key, JSON.stringify({ ...stored, sampleSignedIn: true }));
@@ -174,31 +170,41 @@ export function takeHireDraft(
   handoff: string,
   now = Date.now()
 ): StoredDraft | undefined {
-  const stored = readDraft(storage, key);
+  const stored = readDraft(storage);
   if (stored?.handoff !== handoff) return;
 
-  storage.removeItem(key);
-  if (stored.expiresAt <= now) return;
+  if (stored.expiresAt <= now) {
+    storage.removeItem(key);
+    return;
+  }
 
-  return stored;
+  // Replace the pending record in one write. A storage failure leaves the
+  // original handoff intact and the caller can retry the same return URL.
+  const restored = { ...stored, handoff: null };
+  storage.setItem(key, JSON.stringify(restored));
+  return restored;
 }
 
 export function saveRestoredHireDraft(
   storage: DraftStorage,
   restored: StoredDraft
 ) {
-  storage.setItem(restoredKey, JSON.stringify(restored));
+  const current = readDraft(storage);
+  if (current?.handoff === null && current.expiresAt === restored.expiresAt) {
+    storage.setItem(key, JSON.stringify(restored));
+  }
 }
 
 export function readRestoredHireDraft(storage: DraftStorage, now = Date.now()) {
-  const restored = readDraft(storage, restoredKey);
-  if (restored && restored.expiresAt > now) return restored;
+  const restored = readDraft(storage);
+  if (restored?.handoff !== null) return;
+  if (restored.expiresAt > now) return restored;
 
-  storage.removeItem(restoredKey);
+  storage.removeItem(key);
 }
 
 export function clearRestoredHireDraft(storage: DraftStorage) {
-  storage.removeItem(restoredKey);
+  if (readDraft(storage)?.handoff === null) storage.removeItem(key);
 }
 
 export function hireReturnUrl(handoff: string): string {

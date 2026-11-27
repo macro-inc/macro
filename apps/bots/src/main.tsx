@@ -94,7 +94,7 @@ function Shell(props: ParentProps) {
         </ErrorBoundary>
       </main>
       <footer>
-        Portraits derived from Lee Perry-Smith, Infinite-Realities · CC BY 3.0
+        Head scan by Lee Perry-Smith, Infinite-Realities · CC BY 3.0 · Modified
       </footer>
     </>
   );

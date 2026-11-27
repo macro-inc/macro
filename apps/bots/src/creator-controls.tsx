@@ -98,6 +98,49 @@ export function CreatorRange(props: {
 }) {
   const inputId = createUniqueId();
 
+  // Presets can sit between slider stops. Keep the native input at that exact
+  // value until the user's next pointer or keyboard movement reaches a stop.
+  function atStop(index: number) {
+    const { min, max, step } = props.range;
+    return Number(Math.max(min, Math.min(max, min + index * step)).toFixed(10));
+  }
+
+  function onKeyDown(event: KeyboardEvent) {
+    const { min, max, step } = props.range;
+    const index = (props.value - min) / step;
+    const lower = Math.ceil(index - 1e-9);
+    const upper = Math.floor(index + 1e-9);
+    let next: number;
+
+    switch (event.key) {
+      case 'Home':
+        next = min;
+        break;
+      case 'End':
+        next = max;
+        break;
+      case 'ArrowUp':
+      case 'ArrowRight':
+        next = atStop(upper + 1);
+        break;
+      case 'ArrowDown':
+      case 'ArrowLeft':
+        next = atStop(lower - 1);
+        break;
+      case 'PageUp':
+        next = atStop(upper + 10);
+        break;
+      case 'PageDown':
+        next = atStop(lower - 10);
+        break;
+      default:
+        return;
+    }
+
+    event.preventDefault();
+    props.onChange(next);
+  }
+
   return (
     <div class="creator-control">
       <div class="creator-control-label">
@@ -111,13 +154,23 @@ export function CreatorRange(props: {
         type="range"
         min={props.range.min}
         max={props.range.max}
-        step={props.range.step}
+        step="any"
+        data-step={props.range.step}
         value={props.value}
         style={{
           '--fill': `${((props.value - props.range.min) / (props.range.max - props.range.min)) * 100}%`,
         }}
         aria-valuetext={props.text}
-        onInput={(event) => props.onChange(event.currentTarget.valueAsNumber)}
+        onInput={(event) => {
+          const input = event.currentTarget;
+          const stop = Math.round(
+            (input.valueAsNumber - props.range.min) / props.range.step
+          );
+          const next = atStop(stop);
+          input.value = String(next);
+          props.onChange(next);
+        }}
+        onKeyDown={onKeyDown}
       />
       <div
         class="creator-range-ticks"

@@ -23,21 +23,51 @@
   font-weight: 500;
   overflow-wrap: anywhere;
 }
+.creator-orbit {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-top: 5px;
+}
+.creator-orbit button {
+  width: 32px;
+  height: 30px;
+  padding: 0;
+  font-size: 14px;
+}
+.creator-orbit button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.creator-orbit output {
+  min-width: 90px;
+  color: var(--muted);
+  font-size: 11px;
+}
 .creator .portrait-frame {
   background: transparent;
 }
 .creator-reticle {
   position: absolute;
-  inset: -2%;
-  width: 104%;
-  height: 104%;
+  inset: -3.2% -3.75%;
+  width: 107.5%;
+  height: 106.4%;
   pointer-events: none;
 }
-.creator-stage-portrait .creator-portrait {
+.creator-scene {
+  position: relative;
+  width: 100%;
   aspect-ratio: 432 / 520;
+  overflow: hidden;
+  background: #020202;
 }
-.creator-portrait-art {
-  transform-origin: 50% 42%;
+.creator-scene .creator-portrait {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 .creator-pose-handle {
   cursor: grab;
@@ -56,18 +86,14 @@
   background: #020202;
   overflow: hidden;
 }
-.creator-portrait-pose,
-.creator-portrait-art,
-.creator-portrait-art img,
-.creator-portrait-light {
+.creator-portrait img {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   display: block;
-}
-.creator-portrait-art img {
   object-fit: cover;
+  image-rendering: pixelated;
 }
 .creator .stage {
   grid-area: stage;
@@ -169,6 +195,10 @@
   outline: 1px solid var(--amber);
   outline-offset: -3px;
 }
+.creator-swatches button:focus-visible {
+  outline: 2px solid #85c2ff;
+  outline-offset: 2px;
+}
 .creator-range {
   display: block;
   appearance: none;
@@ -260,6 +290,7 @@
   justify-content: center;
   gap: clamp(14px, 2.2vw, 32px);
   align-self: center;
+  padding: 12px 16px 0 0;
   text-align: center;
   min-width: 0;
 }
@@ -455,6 +486,10 @@
   padding-block: 8px;
   text-align: center;
 }
+.creator .hire p {
+  margin-top: 6px;
+  color: var(--muted);
+}
 .creator-mobile-hire-summary {
   display: none;
 }
@@ -475,6 +510,7 @@
 .creator-review-heading {
   grid-template-columns: 1fr auto;
   align-items: start;
+  margin-bottom: 10px;
 }
 .creator-review-heading button {
   font-size: 16px;
@@ -493,6 +529,7 @@
   }
   .creator .stage {
     flex-direction: column-reverse;
+    padding: 0;
   }
   .creator-stage-portrait {
     width: min(100%, 380px);
@@ -522,6 +559,10 @@
   .creator-tabs button {
     min-height: 33px;
   }
+  .creator-orbit button {
+    width: 36px;
+    height: 36px;
+  }
   .creator-range {
     height: 28px;
   }
@@ -539,7 +580,7 @@
     width: 100%;
   }
   .creator-stage-portrait {
-    width: min(72vw, 340px);
+    width: min(70vw, 340px);
     margin-top: 7px;
   }
   .creator-stage-portrait h1 {
@@ -563,11 +604,5 @@
   }
   .creator-hire-dialog {
     margin: auto;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .creator-portrait-pose {
-    transition: none;
   }
 }

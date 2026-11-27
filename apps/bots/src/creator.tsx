@@ -1,5 +1,13 @@
 import { useLocation, useNavigate } from '@solidjs/router';
-import { createEffect, createSignal, For, lazy, onMount, Show } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  For,
+  lazy,
+  onMount,
+  Show,
+  Suspense,
+} from 'solid-js';
 import reticle from './assets/creator-reticle.svg';
 import { ChoiceGroup, PortraitControls } from './creator-controls';
 import { OperatingProfile } from './creator-operating-profile';
@@ -48,10 +56,19 @@ export default function Creator() {
   const [storageUnavailable, setStorageUnavailable] = createSignal(false);
   const [pose, setPose] = createSignal(0);
   let dialog: HTMLDialogElement | undefined;
+  let hireButton: HTMLButtonElement | undefined;
   let drag: { id: number; start: number } | undefined;
 
   const name = () => draftName(draft());
   const hireLabel = () => `Hire ${name()}`;
+  const angleLabels = [
+    'Left',
+    'Slightly left',
+    'Front',
+    'Slightly right',
+    'Right',
+  ];
+  const angleLabel = () => angleLabels[pose() + 2];
 
   onMount(() => {
     const params = new URLSearchParams(location.search);
@@ -79,10 +96,10 @@ export default function Creator() {
           setSampleSignedIn(true);
           if (returning) setReviewOpen(true);
         }
-        if (returning) saveRestoredHireDraft(sessionStorage, result);
       }
     } catch {
       setStorageUnavailable(true);
+      return;
     }
 
     if (returning) navigate('/', { replace: true, scroll: false });
@@ -166,6 +183,86 @@ export default function Creator() {
 
   return (
     <div class="creator">
+      <section class="stage" aria-label="Portrait preview">
+        <div class="creator-examples">
+          <h2 class="eyebrow">Examples</h2>
+          <div role="group" aria-label="Examples">
+            <PresetCards ids={stageExamples} />
+          </div>
+        </div>
+        <div class="creator-stage-portrait">
+          <div class="portrait-frame">
+            <div
+              class="creator-pose-handle"
+              title="Drag to angle portrait"
+              role="slider"
+              tabIndex={0}
+              aria-label="Portrait angle"
+              aria-valuemin={-2}
+              aria-valuemax={2}
+              aria-valuenow={pose()}
+              aria-valuetext={angleLabel()}
+              onKeyDown={(event) => {
+                const key = event.key;
+                if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key))
+                  return;
+                event.preventDefault();
+                if (key === 'Home') setAngle(-2);
+                else if (key === 'End') setAngle(2);
+                else setAngle(pose() + (key === 'ArrowLeft' ? -1 : 1));
+              }}
+              onPointerDown={(event) => {
+                if (!event.isPrimary || event.button !== 0) return;
+                drag = {
+                  id: event.pointerId,
+                  start: event.clientX - pose() * 26,
+                };
+                event.currentTarget.setPointerCapture(event.pointerId);
+              }}
+              onPointerMove={(event) => {
+                if (drag?.id === event.pointerId)
+                  setAngle(Math.round((event.clientX - drag.start) / 26));
+              }}
+              onLostPointerCapture={() => {
+                drag = undefined;
+              }}
+            >
+              <div class="creator-scene">
+                <Portrait
+                  preset={draft().preset}
+                  look={draft().look}
+                  pose={pose()}
+                />
+              </div>
+            </div>
+            <img class="creator-reticle" src={reticle} alt="" />
+          </div>
+          <h1>{name()}</h1>
+          <div
+            class="creator-orbit"
+            role="group"
+            aria-label="Portrait rotation"
+          >
+            <button
+              type="button"
+              aria-label="Rotate portrait left"
+              disabled={pose() === -2}
+              onClick={() => setAngle(pose() - 1)}
+            >
+              <span aria-hidden="true">←</span>
+            </button>
+            <output aria-live="polite">{angleLabel()}</output>
+            <button
+              type="button"
+              aria-label="Rotate portrait right"
+              disabled={pose() === 2}
+              onClick={() => setAngle(pose() + 1)}
+            >
+              <span aria-hidden="true">→</span>
+            </button>
+          </div>
+        </div>
+      </section>
       <section class="panel controls" aria-label="Customize portrait">
         <PortraitControls
           look={draft().look}
@@ -192,60 +289,6 @@ export default function Creator() {
               <PresetCards ids={presetShelf} />
             </div>
           </div>
-        </div>
-      </section>
-      <section class="stage" aria-label="Portrait preview">
-        <div class="creator-examples">
-          <h2 class="eyebrow">Examples</h2>
-          <div role="group" aria-label="Examples">
-            <PresetCards ids={stageExamples} />
-          </div>
-        </div>
-        <div class="creator-stage-portrait">
-          <div class="portrait-frame">
-            <div
-              class="creator-pose-handle"
-              title="Drag to angle portrait"
-              role="slider"
-              tabIndex={0}
-              aria-label="Portrait angle"
-              aria-valuemin={-2}
-              aria-valuemax={2}
-              aria-valuenow={pose()}
-              onKeyDown={(event) => {
-                const key = event.key;
-                if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key))
-                  return;
-                event.preventDefault();
-                if (key === 'Home') setAngle(-2);
-                else if (key === 'End') setAngle(2);
-                else setAngle(pose() + (key === 'ArrowLeft' ? -1 : 1));
-              }}
-              onPointerDown={(event) => {
-                if (!event.isPrimary || event.button !== 0) return;
-                drag = {
-                  id: event.pointerId,
-                  start: event.clientX - pose() * 26,
-                };
-                event.currentTarget.setPointerCapture(event.pointerId);
-              }}
-              onPointerMove={(event) => {
-                if (drag?.id === event.pointerId)
-                  setAngle(Math.round((event.clientX - drag.start) / 26));
-              }}
-              onLostPointerCapture={() => {
-                drag = undefined;
-              }}
-            >
-              <Portrait
-                preset={draft().preset}
-                look={draft().look}
-                pose={pose()}
-              />
-            </div>
-            <img class="creator-reticle" src={reticle} alt="" />
-          </div>
-          <h1>{name()}</h1>
         </div>
       </section>
       <section class="panel profile" aria-labelledby="hire-heading">
@@ -305,9 +348,22 @@ export default function Creator() {
               Sample {sampleEstimates[draft().size][draft().intelligence]}
             </span>
           </div>
-          <button type="button" class="primary" onClick={startHire}>
+          <button
+            type="button"
+            class="primary"
+            onClick={startHire}
+            ref={(element) => {
+              hireButton = element;
+            }}
+          >
             {hireLabel()}
           </button>
+          {!__BOTS_FIXTURES__ && (
+            <p>
+              Hire is unavailable until the team and purchase terms can be
+              verified.
+            </p>
+          )}
           <Show when={restored() && !sampleSignedIn()}>
             <p role="status">Draft restored. Sign in to continue hiring.</p>
           </Show>
@@ -323,17 +379,38 @@ export default function Creator() {
           }}
           class="panel creator-hire-dialog"
           aria-labelledby="creator-hire-title"
-          onClose={() => setReviewOpen(false)}
+          onClose={() => {
+            setReviewOpen(false);
+            hireButton?.focus();
+          }}
           onCancel={(event) => {
             if (reviewPending()) event.preventDefault();
           }}
         >
+          <header class="creator-review-heading">
+            <div>
+              <div class="eyebrow">Sample Hire</div>
+              <h2 id="creator-hire-title">{hireLabel()}</h2>
+            </div>
+            <form method="dialog">
+              <button
+                type="submit"
+                aria-label="Close Hire review"
+                disabled={reviewPending()}
+                autofocus
+              >
+                ×
+              </button>
+            </form>
+          </header>
           <Show when={reviewOpen()}>
-            <HirePanel
-              draft={draft()}
-              onAccepted={finishHire}
-              onPending={setReviewPending}
-            />
+            <Suspense fallback={<p role="status">Loading Hire review…</p>}>
+              <HirePanel
+                draft={draft()}
+                onAccepted={finishHire}
+                onPending={setReviewPending}
+              />
+            </Suspense>
           </Show>
         </dialog>
       )}

@@ -81,16 +81,29 @@ test('a Hire draft stays in its own tab, expires, and can only be consumed once'
   expect(takeHireDraft(storage, crypto.randomUUID(), 11)).toBeUndefined();
   expect(markFixtureHireSignIn(otherTab, handoff, 11)).toBe(false);
   expect(markFixtureHireSignIn(storage, handoff, 11)).toBe(true);
+  const failedTransition = {
+    ...storage,
+    setItem() {
+      throw new Error('storage write failed');
+    },
+  };
+  expect(() => takeHireDraft(failedTransition, handoff, 12)).toThrow(
+    'storage write failed'
+  );
+  expect(readRestoredHireDraft(storage, 12)).toBeUndefined();
+
   const result = takeHireDraft(storage, handoff, 12);
   expect(result).toEqual({
-    handoff,
+    handoff: null,
     draft,
     sampleSignedIn: true,
     expiresAt: 600_010,
   });
   if (!result) throw new Error('Expected to restore the draft');
-  saveRestoredHireDraft(storage, result);
-  expect(readRestoredHireDraft(storage, 13)).toEqual(result);
+  expect(readRestoredHireDraft(storage, 12)).toEqual(result);
+  const updated = { ...result, draft: { ...result.draft, first: 'Updated' } };
+  saveRestoredHireDraft(storage, updated);
+  expect(readRestoredHireDraft(storage, 13)).toEqual(updated);
   expect(readRestoredHireDraft(storage, 600_010)).toBeUndefined();
   expect(takeHireDraft(storage, handoff, 13)).toBeUndefined();
 

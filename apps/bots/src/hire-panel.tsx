@@ -53,7 +53,6 @@ export default function HirePanel(props: {
   draft: Draft;
   onAccepted: () => void;
   onPending: (pending: boolean) => void;
-  capturePortrait?: () => string | undefined;
 }) {
   const [state, setState] = createSignal<CheckoutState>({ status: 'idle' });
   const [size, setSize] = createSignal<ComputerSize>(props.draft.size);
@@ -67,7 +66,6 @@ export default function HirePanel(props: {
       saveHireReceipt({
         agent: next.agent,
         ...confirmed,
-        width: 0,
       });
       props.onAccepted();
     }
@@ -102,21 +100,6 @@ export default function HirePanel(props: {
 
   return (
     <div class="hire-checkout">
-      <header class="creator-review-heading">
-        <div>
-          <div class="eyebrow">Sample Hire</div>
-          <h2 id="creator-hire-title">Hire {draftName(props.draft)}</h2>
-        </div>
-        <form method="dialog">
-          <button
-            type="submit"
-            aria-label="Close Hire review"
-            disabled={state().status === 'submitting'}
-          >
-            ×
-          </button>
-        </form>
-      </header>
       <div class="profile-summary">
         <Portrait preset={props.draft.preset} look={props.draft.look} />
         <div>
@@ -142,9 +125,10 @@ export default function HirePanel(props: {
                     size: choice,
                     look: { ...props.draft.look },
                   },
-                  portrait:
-                    props.capturePortrait?.() ??
-                    snapshotPortrait(props.draft.preset, props.draft.look),
+                  portrait: snapshotPortrait(
+                    props.draft.preset,
+                    props.draft.look
+                  ),
                 };
                 void checkout.confirm(
                   {

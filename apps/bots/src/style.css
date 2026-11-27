@@ -95,6 +95,10 @@ nav {
   justify-self: end;
   text-align: right;
   inline-size: 140px;
+  min-block-size: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
   color: var(--muted);
 }
 .top-identity a {
@@ -268,4 +272,10 @@ footer {
 .bot-link[aria-current="true"] {
   outline: 2px solid var(--amber);
   outline-offset: -2px;
+}
+
+@media (max-width: 540px) {
+  :root {
+    scroll-padding-bottom: 76px;
+  }
 }

@@ -151,7 +151,6 @@ export const readBrainFixture: BrainReader = async (scope) => {
         name: agent.name,
         role: agent.jobDescription,
         portrait: receipt.portrait,
-        portraitWidth: receipt.width,
         fleetSearch: hireFleetPath(agent).slice('/fleet'.length),
         teamName: fleetViewer.teamName,
         lifecycle: lifecycleLabel[agent.status],

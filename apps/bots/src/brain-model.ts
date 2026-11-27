@@ -24,7 +24,6 @@ export type BrainSnapshot = Readonly<{
   name: string;
   role: string;
   portrait?: string;
-  portraitWidth?: number;
   fleetSearch?: string;
   teamName: string;
   lifecycle: string;
