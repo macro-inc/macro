@@ -35,7 +35,12 @@ generated SDK storage schemas.
 - `src/billing/` owns the read-only Tower Billing route and its typed,
   team-scoped reader. The default reader is unavailable. The local fixture
   supplies the sample cycle and can exercise pending, denied, empty, and zero
-  observations without contacting any service.
+  observations without contacting any service. `src/billing/signed-sections.tsx`
+  accepts a verified team ID and an injected read of the Auth SDK's team
+  computer usage response. Enforce current-team access in the signed bridge
+  and remount the panel when viewer authorization changes. Keep utilization
+  separate from settled billing and invoke only the team computer usage read
+  for this panel.
 - `src/motion.css` owns the shell's motion and the fixed terrain scene from
   `src/assets/terrain.svg`. Animate only opacity and the transform family
   (`transform`, `translate`, `scale`), and give every new rule a

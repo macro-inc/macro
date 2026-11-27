@@ -1,0 +1,34 @@
+.billing-compute {
+  grid-column: 1 / -1;
+}
+.billing-local .billing-invoices {
+  grid-column: auto;
+}
+.billing-computers {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0 15px 15px;
+  list-style: none;
+}
+.billing-computers li + li {
+  padding-block-start: 12px;
+  border-block-start: 1px solid var(--billing-line);
+}
+.billing-computer-id {
+  overflow-wrap: anywhere;
+}
+.billing-computer-reading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin-block: 4px 0;
+  font-variant-numeric: tabular-nums;
+}
+.billing-computer-reading div {
+  display: flex;
+  gap: 8px;
+}
+.billing-computer-reading dt {
+  color: var(--muted);
+}

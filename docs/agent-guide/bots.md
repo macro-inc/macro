@@ -67,4 +67,11 @@ recurring invoice previews, and modeled spend. The SDK's computer usage read
 reports CPU and memory, and its subscription status read is scoped to the
 caller's seat. Billing is read-only.
 
+The signed Billing panel is prepared for `GET /team/computers/usage`. It uses
+the most recent observed 15-minute interval per computer within the rolling
+24-hour window. Missing CPU and absent intervals stay distinct from measured
+zero. The signed panel requires a current-team bridge. Started-hour charges,
+recurring invoices, and modeled spend remain unavailable in signed mode
+until they have their own authorized sources.
+
 See the [Bots app guide](../../apps/bots/AGENTS.md) for preview commands.
