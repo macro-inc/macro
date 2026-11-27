@@ -123,7 +123,7 @@ function graphqlSoupPage(page: SoupPageFixture) {
   };
 }
 
-function makeFakeClient(): {
+function makeFakeClient(onExecute?: (execution: FakeExecution) => void): {
   client: Client;
   executions: FakeExecution[];
 } {
@@ -138,7 +138,7 @@ function makeFakeClient(): {
       kind: 'query',
       context,
     } as Operation<unknown, Record<string, unknown>>;
-    executions.push({
+    const execution: FakeExecution = {
       document: _request.query,
       context,
       variables: _request.variables,
@@ -157,7 +157,9 @@ function makeFakeClient(): {
           stale: false,
           hasNext: false,
         } as OperationResult<unknown, Record<string, unknown>>),
-    });
+    };
+    executions.push(execution);
+    onExecute?.(execution);
     return subject.source;
   };
 
@@ -168,6 +170,12 @@ function makeFakeClient(): {
     } as unknown as Client,
   };
 }
+
+/** The changes a paging test makes to a live list between its pages. */
+type PagedList = {
+  resetCache: () => void;
+  setLimit: (limit: number | undefined) => void;
+};
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -985,11 +993,6 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       createdAt: '2026-01-01T00:00:00Z',
       updatedAt: '2026-01-01T00:00:00Z',
     };
-    type PagedList = {
-      resetCache: () => void;
-      setLimit: (limit: number | undefined) => void;
-    };
-
     it.each([
       {
         name: 'the cache was reset',
@@ -1029,7 +1032,10 @@ describe('createGraphqlSoupAstItemsQuery', () => {
         const report = new Promise<unknown[]>((resolve) => {
           reported.mockImplementation((...args) => resolve(args));
         });
-        const fake = makeFakeClient();
+        const firstRequest = deferred<FakeExecution>();
+        const fake = makeFakeClient((execution) =>
+          firstRequest.resolve(execution)
+        );
         getGraphqlSoupClientMock.mockReturnValue(fake.client);
         const generations = new Set<() => void>();
         entityFilterMock.mockResolvedValue({
@@ -1074,8 +1080,9 @@ describe('createGraphqlSoupAstItemsQuery', () => {
           dispose,
         }));
         try {
-          await vi.waitFor(() => expect(fake.executions).toHaveLength(1));
-          fake.executions[0].next(
+          const first = await firstRequest.promise;
+          expect(fake.executions).toHaveLength(1);
+          first.next(
             graphqlSoupPage({
               items: [{ ...cached, id: 'first' }],
               next_cursor: 'page-2',
