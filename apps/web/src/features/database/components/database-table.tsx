@@ -507,14 +507,12 @@ export function DatabaseTable(props: DatabaseTableProps) {
         : instance.itemSizeCache.get(
             instance.options.getItemKey(instance.indexFromElement(element))
           );
+      // Resizing this row lays out every unmeasured row at the new estimate.
+      // Clearing the size cache here would also drop the sizes of rows
+      // measured in this batch, and their observer won't report them again.
       if (entry && size && !rowHeightMeasured) {
         rowHeightMeasured = true;
-        // Rows mounted before this were cached at the old estimate; correcting
-        // them one by one would move every row below each, many times over.
-        if (size !== rowHeight()) {
-          setRowHeight(size);
-          queueMicrotask(() => instance.measure());
-        }
+        setRowHeight(size);
       }
       return size || rowHeight();
     },
@@ -1086,8 +1084,11 @@ export function DatabaseTable(props: DatabaseTableProps) {
                           style={{
                             ...position(),
                             // A preview keeps the live row's height, so rows
-                            // below don't move when it turns live.
-                            height: live() ? undefined : `${rowHeight()}px`,
+                            // below don't move when it turns live. It may grow
+                            // past it: a fixed height would clip a taller row.
+                            'min-height': live()
+                              ? undefined
+                              : `${rowHeight()}px`,
                             'grid-template-columns': template(),
                           }}
                           // A touch may start a swipe; turning the row live then

@@ -53,23 +53,31 @@ const MULTILINE_ROWS = [
   },
 ];
 
-// A host owns the records and writes. No database entity, saved view, or app provider.
-function RecordsFixture() {
-  const references = new URLSearchParams(location.search).has('references');
-  const [opened, setOpened] = createSignal('');
-  const rapid = new URLSearchParams(location.search).has('rapid');
-  const links = new URLSearchParams(location.search).has('links');
-  const holdWrites = new URLSearchParams(location.search).has('holdWrites');
-  // The app's text editor and value renderers over wrapped and multi-line notes.
-  const multiline = new URLSearchParams(location.search).has('multiline');
-  const multilineEditor = multiline ? DatabaseTextEditor : undefined;
-  let releaseWrites!: () => void;
-  const writeGate = holdWrites
-    ? new Promise<void>((resolve) => {
-        releaseWrites = resolve;
-      })
-    : Promise.resolve();
-  const initialColumns: DatabaseViewColumn[] = [
+// Synthetic contacts: some names are email addresses (links), some plain names.
+const CONTACT_ROWS = Array.from({ length: 180 }, (_, index) => {
+  const plain = index % 3 === 1;
+  const email = `person.${index}.with.a.long.address@example.com`;
+  return {
+    rowId: `contact-${index}`,
+    cells: {
+      name: plain ? `Person ${index}` : email,
+      count: index,
+      email: index % 4 === 0 ? `Person ${index}` : email,
+      company: index % 5 === 0 ? null : `Example ${index} Ltd`,
+    },
+  };
+});
+
+type FixtureModes = {
+  references: boolean;
+  links: boolean;
+  multiline: boolean;
+  contacts: boolean;
+};
+
+function initialColumns(modes: FixtureModes & { rapid: boolean }) {
+  const { references, links, multiline, contacts, rapid } = modes;
+  const columns: DatabaseViewColumn[] = [
     {
       id: 'name',
       name: 'Name',
@@ -80,47 +88,81 @@ function RecordsFixture() {
     },
   ];
   if (references)
-    initialColumns.push({
-      ...initialColumns[0],
+    columns.push({
+      ...columns[0],
       id: 'file',
       name: 'File',
       dataType: 'ENTITY',
       specificEntityType: 'DOCUMENT',
     });
   if (links)
-    initialColumns.push(
-      { ...initialColumns[0], id: 'notes', name: 'Notes' },
-      { ...initialColumns[0], id: 'website', name: 'Website', dataType: 'LINK' }
+    columns.push(
+      { ...columns[0], id: 'notes', name: 'Notes' },
+      { ...columns[0], id: 'website', name: 'Website', dataType: 'LINK' }
     );
-  if (multiline)
-    initialColumns.push({ ...initialColumns[0], id: 'notes', name: 'Notes' });
+  if (multiline) columns.push({ ...columns[0], id: 'notes', name: 'Notes' });
+  if (contacts)
+    columns.push(
+      { ...columns[0], id: 'count', name: 'Count', dataType: 'NUMBER' },
+      { ...columns[0], id: 'email', name: 'Email' },
+      { ...columns[0], id: 'company', name: 'Company' }
+    );
   if (rapid)
-    initialColumns.push(
+    columns.push(
       ...['notes', 'detail'].map((id) => ({
-        ...initialColumns[0],
+        ...columns[0],
         id,
         name: id,
       }))
     );
-  const [columns, setColumns] = createSignal(initialColumns);
-  const [snapshot, setSnapshot] = createSignal<DatabaseRowsSnapshot>({
-    rows: [
-      {
-        rowId: 'one',
-        cells: {
-          name: 'First record',
-          ...(references ? { file: 'project-plan' } : {}),
-          ...(links
-            ? {
-                notes: 'Spec at https://example.com/spec',
-                website: 'example.com',
-              }
-            : {}),
-          ...(multiline ? { notes: 'Follow up' } : {}),
+  return columns;
+}
+
+function initialRows(modes: FixtureModes) {
+  const { references, links, multiline, contacts } = modes;
+  return contacts
+    ? CONTACT_ROWS
+    : [
+        {
+          rowId: 'one',
+          cells: {
+            name: 'First record',
+            ...(references ? { file: 'project-plan' } : {}),
+            ...(links
+              ? {
+                  notes: 'Spec at https://example.com/spec',
+                  website: 'example.com',
+                }
+              : {}),
+            ...(multiline ? { notes: 'Follow up' } : {}),
+          },
         },
-      },
-      ...(multiline ? MULTILINE_ROWS : []),
-    ],
+        ...(multiline ? MULTILINE_ROWS : []),
+      ];
+}
+
+// A host owns the records and writes. No database entity, saved view, or app provider.
+function RecordsFixture() {
+  const references = new URLSearchParams(location.search).has('references');
+  const [opened, setOpened] = createSignal('');
+  const rapid = new URLSearchParams(location.search).has('rapid');
+  const links = new URLSearchParams(location.search).has('links');
+  const holdWrites = new URLSearchParams(location.search).has('holdWrites');
+  // The app's text editor and value renderers over wrapped and multi-line notes.
+  const multiline = new URLSearchParams(location.search).has('multiline');
+  const contacts = new URLSearchParams(location.search).has('contacts');
+  const multilineEditor = multiline ? DatabaseTextEditor : undefined;
+  let releaseWrites!: () => void;
+  const writeGate = holdWrites
+    ? new Promise<void>((resolve) => {
+        releaseWrites = resolve;
+      })
+    : Promise.resolve();
+  const [columns, setColumns] = createSignal(
+    initialColumns({ references, links, multiline, contacts, rapid })
+  );
+  const [snapshot, setSnapshot] = createSignal<DatabaseRowsSnapshot>({
+    rows: initialRows({ references, links, multiline, contacts }),
     retained: [],
     version: 1,
   });
@@ -213,7 +255,7 @@ function RecordsFixture() {
             )}
             renderMentionPicker={(picker) => <ReferencePicker {...picker} />}
             renderTextValue={
-              links || multiline
+              links || multiline || contacts
                 ? (value) => <DatabaseTextValue value={value} />
                 : undefined
             }
