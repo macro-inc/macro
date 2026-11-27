@@ -46,6 +46,7 @@
               ./modules/edge.nix
               ./modules/alarms.nix
               ./modules/firehose.nix
+              ./modules/log-subscriptions.nix
               ./modules/outputs.nix
             ] settings.state.mainKey;
             bootstrap = render [

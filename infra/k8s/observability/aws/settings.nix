@@ -224,5 +224,35 @@ rec {
     bufferSeconds = 60;
     retrySeconds = 300;
     errorLogDays = 14;
+    # Production log groups no Pulumi stack owns: Lambdas deployed outside
+    # this repository, each with Datadog's subscription filter as its only
+    # one. modules/log-subscriptions.nix gives each a second, to the stream,
+    # with the same pattern as Datadog's. Log groups a stack owns get their
+    # filter from that stack (infra/packages/lambda,
+    # GRAFANA_CLOUDWATCH_LOGS_STREAM_ARN).
+    unownedLogGroups =
+      let
+        # Datadog's patterns on these groups: JSON events only, or every event
+        # but the runtime's per-invocation lines.
+        json = ''{ $.* = "*" }'';
+        runtimeLinesOut = ''- "START RequestId:" - "REPORT RequestId:" - "END RequestId:" - "INIT_START"'';
+        patterns = {
+          docx-upload-job-table-cleanup-lambda = json;
+          job-submission-handler = json;
+          job-to-dpr-table-cleanup-lambda = json;
+          job-update-handler = json;
+          lambda_aggregate_frecency = runtimeLinesOut;
+          pdf-preprocess-lambda = json;
+          ws-api-gateway-authorizer-lambda = json;
+          ws-connect-init-lambda = json;
+          ws-ping-response-handler = json;
+        };
+      in
+      builtins.listToAttrs (
+        map (name: {
+          name = "/aws/lambda/${name}-prod";
+          value = patterns.${name};
+        }) (builtins.attrNames patterns)
+      );
   };
 }
