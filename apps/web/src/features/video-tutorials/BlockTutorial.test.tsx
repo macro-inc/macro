@@ -131,10 +131,10 @@ describe('block tutorial row', () => {
     expect(play).not.toHaveBeenCalled();
     // The play pill names the video and shows its presenter and length.
     const pill = screen.getByRole('button', {
-      name: 'Play Learn how to use Macro Mail, 1:42',
+      name: 'Play Learn how to use Macro Mail, 1:56',
     });
     expect(pill.textContent).toContain('Jacob Beckerman');
-    expect(pill.textContent).toContain('Watch demo · 1:42');
+    expect(pill.textContent).toContain('Watch demo · 1:56');
     expect(video()?.autoplay).toBe(false);
     expect(video()?.controls).toBe(false);
 
@@ -358,7 +358,7 @@ describe('block tutorial sidebar item', () => {
       </>
     ));
     const spreadsheets = screen.getByRole('button', {
-      name: 'Watch tutorial: Learn how to use Macro Spreadsheets, 0:56',
+      name: 'Watch tutorial: Learn how to use Macro Spreadsheets, 1:07',
     });
     expect(spreadsheets.textContent).toContain('Macro Spreadsheets');
     expect(spreadsheets.textContent).not.toContain('Watch tutorial');
