@@ -142,6 +142,7 @@ export const authExcluded = [
   'sendTeamDomainNotice',
   'sessionCreation',
   'sessionLogin',
+  'sessionLoginVerified',
   'setGithubPullRequestDraft',
   'setGithubPullRequestState',
   'setSystemStatus',

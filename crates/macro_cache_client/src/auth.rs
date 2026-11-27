@@ -1,11 +1,14 @@
-use std::time::{Duration, Instant};
-
 use anyhow::Context;
 use redis::AsyncCommands;
 
 use crate::MacroCache;
 
 pub static MACRO_MOBILE_LOGIN_SESSION_PREFIX: &str = "mbl_login:";
+/// Session codes bound to a challenge live under their own prefix, as a hash
+/// of the refresh token and the challenge. An instance that predates binding
+/// looks only at the plain prefix, so it can never redeem a bound code
+/// without its verifier.
+pub static MACRO_BOUND_MOBILE_LOGIN_SESSION_PREFIX: &str = "mbl_login_bound:";
 pub static MACRO_MOBILE_LOGIN_SESSION_EXPIRY_SECONDS: u64 = 5 * 60;
 
 /// This is the length of time a passwordless login code is valid for within FusionAuth
@@ -21,27 +24,72 @@ pub static MACRO_JUST_SIGNED_UP_EXPIRY_SECONDS: u64 = 30 * 60;
 /// webhook. The IdP round trip is the same window as the signup marker.
 pub static MACRO_SIGNUP_META_EXPIRY_SECONDS: u64 = MACRO_JUST_SIGNED_UP_EXPIRY_SECONDS;
 
-/// Reads a mobile login session and deletes it in one step, returning the
-/// stored refresh token and its remaining lifetime in milliseconds.
+const REFRESH_TOKEN_FIELD: &str = "refresh_token";
+const CHALLENGE_FIELD: &str = "challenge";
+
+/// Redeems a session code in one step. A plain code (`KEYS[1]`) is taken
+/// as it is. A bound code (`KEYS[2]`) is taken only when `ARGV[1]` is its
+/// challenge; otherwise it stays, so a caller without the verifier cannot
+/// spend it. Returns `{status, refresh_token, deadline_ms, challenge}`, or
+/// nil when neither key exists. The deadline is on Redis's own clock, so a
+/// restore can keep it whatever time passes in between.
 const TAKE_MOBILE_LOGIN_SESSION: &str = r"
+local clock = redis.call('TIME')
+local now_ms = clock[1] * 1000 + math.floor(clock[2] / 1000)
 local refresh_token = redis.call('GET', KEYS[1])
-if not refresh_token then
+if refresh_token then
+  local deadline_ms = now_ms + redis.call('PTTL', KEYS[1])
+  redis.call('DEL', KEYS[1])
+  return {'taken', refresh_token, deadline_ms, ''}
+end
+local bound = redis.call('HMGET', KEYS[2], 'refresh_token', 'challenge')
+if not bound[1] then
   return false
 end
-local remaining_ms = redis.call('PTTL', KEYS[1])
-redis.call('DEL', KEYS[1])
-return {refresh_token, remaining_ms}
+if bound[2] ~= ARGV[1] then
+  return {'mismatch', '', 0, ''}
+end
+local deadline_ms = now_ms + redis.call('PTTL', KEYS[2])
+redis.call('DEL', KEYS[2])
+return {'taken', bound[1], deadline_ms, bound[2]}
+";
+
+/// Puts a taken session back until its original deadline (`ARGV[2]`, on
+/// Redis's clock), measured when the script runs, so no delay before it can
+/// lengthen the code's life. A bound session (`ARGV[3]` is its challenge)
+/// goes back bound. Restores nothing past the deadline or over a key that
+/// exists again; returns 1 when it restored.
+const RESTORE_MOBILE_LOGIN_SESSION: &str = r"
+local clock = redis.call('TIME')
+local now_ms = clock[1] * 1000 + math.floor(clock[2] / 1000)
+local remaining_ms = tonumber(ARGV[2]) - now_ms
+if remaining_ms <= 0 or redis.call('EXISTS', KEYS[1]) == 1 then
+  return 0
+end
+if ARGV[3] == '' then
+  redis.call('SET', KEYS[1], ARGV[1], 'PX', remaining_ms)
+else
+  redis.call('HSET', KEYS[1], 'refresh_token', ARGV[1], 'challenge', ARGV[3])
+  redis.call('PEXPIRE', KEYS[1], remaining_ms)
+end
+return 1
 ";
 
 fn mobile_login_session_key(session_code: &str) -> String {
     format!("{MACRO_MOBILE_LOGIN_SESSION_PREFIX}{session_code}")
 }
 
-/// A redeemed session code's session: the refresh token it was minted for and
-/// the moment the code expires. `Debug` leaves the token out.
+fn bound_mobile_login_session_key(session_code: &str) -> String {
+    format!("{MACRO_BOUND_MOBILE_LOGIN_SESSION_PREFIX}{session_code}")
+}
+
+/// A redeemed session code's session: the refresh token it was minted for,
+/// the challenge it was bound to, if any, and when the code expires, in
+/// milliseconds on Redis's clock. `Debug` leaves the token and challenge out.
 pub struct MobileLoginSession {
     refresh_token: String,
-    expires_at: Instant,
+    challenge: Option<String>,
+    deadline_ms: i64,
 }
 
 impl MobileLoginSession {
@@ -50,18 +98,31 @@ impl MobileLoginSession {
         &self.refresh_token
     }
 
-    /// How long the code has left, counted from its original deadline.
-    fn remaining(&self) -> Duration {
-        self.expires_at.saturating_duration_since(Instant::now())
+    /// Whether the code was bound to a challenge.
+    pub fn is_bound(&self) -> bool {
+        self.challenge.is_some()
     }
 }
 
 impl std::fmt::Debug for MobileLoginSession {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MobileLoginSession")
-            .field("remaining", &self.remaining())
+            .field("bound", &self.is_bound())
+            .field("deadline_ms", &self.deadline_ms)
             .finish_non_exhaustive()
     }
+}
+
+/// What an attempt to redeem a session code found.
+#[derive(Debug)]
+pub enum MobileLoginRedemption {
+    /// The code redeemed, and it is gone.
+    Taken(MobileLoginSession),
+    /// The code is unknown, expired or already redeemed.
+    Missing,
+    /// The code is bound to a challenge the caller did not present. It stays
+    /// live for the caller that holds the verifier.
+    ChallengeMismatch,
 }
 
 /// Generates the rate limit key for channel invites for a given ip
@@ -118,64 +179,104 @@ impl MacroCache {
             .context("unable to store mobile login session")
     }
 
-    /// Redeems a session code: returns its session and deletes it in one
-    /// atomic step, so a code succeeds at most once however many callers race
-    /// for it. `None` means the code is unknown, expired or already redeemed.
-    pub async fn take_mobile_login_session(
+    /// Stores a mobile login session that redeems only with `challenge`.
+    ///
+    /// Errors never name the key: it embeds the code, and callers log them.
+    pub async fn set_bound_mobile_login_session(
         &self,
         session_code: &str,
-    ) -> anyhow::Result<Option<MobileLoginSession>> {
+        refresh_token: &str,
+        challenge: &str,
+    ) -> anyhow::Result<()> {
         let mut connection = self
             .inner
             .get_multiplexed_async_connection()
             .await
             .context("unable to connect to redis")?;
-        let taken: Option<(String, i64)> = redis::Script::new(TAKE_MOBILE_LOGIN_SESSION)
-            .key(mobile_login_session_key(session_code))
-            .invoke_async(&mut connection)
+        let key = bound_mobile_login_session_key(session_code);
+        let expiry = i64::try_from(MACRO_MOBILE_LOGIN_SESSION_EXPIRY_SECONDS).unwrap_or(i64::MAX);
+        redis::pipe()
+            .atomic()
+            .hset_multiple(
+                &key,
+                &[
+                    (REFRESH_TOKEN_FIELD, refresh_token),
+                    (CHALLENGE_FIELD, challenge),
+                ],
+            )
+            .ignore()
+            .expire(&key, expiry)
+            .ignore()
+            .query_async::<()>(&mut connection)
             .await
-            .context("unable to redeem mobile login session")?;
-        // Fix the deadline now: a restore after a slow refresh must not get
-        // back the time the refresh took.
-        Ok(
-            taken.map(|(refresh_token, remaining_ms)| MobileLoginSession {
-                refresh_token,
-                expires_at: Instant::now()
-                    + Duration::from_millis(u64::try_from(remaining_ms).unwrap_or(0)),
-            }),
-        )
+            .context("unable to store bound mobile login session")
+    }
+
+    /// Redeems a session code: returns its session and deletes it in one
+    /// atomic step, so a code succeeds at most once however many callers race
+    /// for it. A bound code redeems only when `challenge` is the one it was
+    /// stored with.
+    pub async fn take_mobile_login_session(
+        &self,
+        session_code: &str,
+        challenge: Option<&str>,
+    ) -> anyhow::Result<MobileLoginRedemption> {
+        let mut connection = self
+            .inner
+            .get_multiplexed_async_connection()
+            .await
+            .context("unable to connect to redis")?;
+        let taken: Option<(String, String, i64, String)> =
+            redis::Script::new(TAKE_MOBILE_LOGIN_SESSION)
+                .key(mobile_login_session_key(session_code))
+                .key(bound_mobile_login_session_key(session_code))
+                .arg(challenge.unwrap_or_default())
+                .invoke_async(&mut connection)
+                .await
+                .context("unable to redeem mobile login session")?;
+        let Some((status, refresh_token, deadline_ms, stored_challenge)) = taken else {
+            return Ok(MobileLoginRedemption::Missing);
+        };
+        if status != "taken" {
+            return Ok(MobileLoginRedemption::ChallengeMismatch);
+        }
+        Ok(MobileLoginRedemption::Taken(MobileLoginSession {
+            refresh_token,
+            challenge: Some(stored_challenge).filter(|challenge| !challenge.is_empty()),
+            deadline_ms,
+        }))
     }
 
     /// Puts back a session whose redemption failed after it was taken, until
-    /// its original deadline, so the client can retry. Never restores an
-    /// expired code or overwrites one that exists again. Returns whether it
-    /// was restored.
+    /// its original deadline, so the client can retry. A bound session goes
+    /// back bound to the same challenge. Never restores an expired code or
+    /// overwrites one that exists again. Returns whether it was restored.
     pub async fn restore_mobile_login_session(
         &self,
         session_code: &str,
         session: &MobileLoginSession,
     ) -> anyhow::Result<bool> {
-        let remaining_ms = u64::try_from(session.remaining().as_millis()).unwrap_or(u64::MAX);
-        if remaining_ms == 0 {
-            return Ok(false);
-        }
         let mut connection = self
             .inner
             .get_multiplexed_async_connection()
             .await
             .context("unable to connect to redis")?;
-        let options = redis::SetOptions::default()
-            .conditional_set(redis::ExistenceCheck::NX)
-            .with_expiration(redis::SetExpiry::PX(remaining_ms));
-        let restored: Option<String> = connection
-            .set_options(
-                mobile_login_session_key(session_code),
-                &session.refresh_token,
-                options,
-            )
+        let (key, challenge) = match &session.challenge {
+            Some(challenge) => (
+                bound_mobile_login_session_key(session_code),
+                challenge.as_str(),
+            ),
+            None => (mobile_login_session_key(session_code), ""),
+        };
+        let restored: bool = redis::Script::new(RESTORE_MOBILE_LOGIN_SESSION)
+            .key(key)
+            .arg(&session.refresh_token)
+            .arg(session.deadline_ms)
+            .arg(challenge)
+            .invoke_async(&mut connection)
             .await
             .context("unable to restore mobile login session")?;
-        Ok(restored.is_some())
+        Ok(restored)
     }
 
     /// Sets the passwordless login code for a given email

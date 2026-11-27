@@ -2100,6 +2100,25 @@ export type SendMobileWelcomeEmailResponse = {
 };
 
 /**
+ * What a page asks for when it hands its session to an app.
+ */
+export type SessionCreationRequest = {
+    /**
+     * `BASE64URL(SHA-256(verifier))` (PKCE `S256`) of the verifier the
+     * redeeming app holds.
+     */
+    challenge: string;
+};
+
+/**
+ * A session code for the caller's session, redeemable once, within five
+ * minutes, with the verifier behind the request's challenge.
+ */
+export type SessionCreationResponse = {
+    sessionCode: string;
+};
+
+/**
  * A request to mark one pull request as a draft, or as ready for review, on
  * the user's behalf.
  */
@@ -2942,6 +2961,17 @@ export type UserTokensResponse = {
      * The users refresh token
      */
     refresh_token: string;
+};
+
+/**
+ * A session code and the verifier of the challenge it was minted with.
+ */
+export type VerifiedSessionLoginRequest = {
+    sessionCode: string;
+    /**
+     * The PKCE verifier whose `S256` challenge the code was minted with.
+     */
+    verifier: string;
 };
 
 export type DeleteAgentApiKeyData = {
@@ -4448,24 +4478,44 @@ export type SendReferralCodeResponses = {
 export type SendReferralCodeResponse = SendReferralCodeResponses[keyof SendReferralCodeResponses];
 
 export type SessionCreationData = {
-    body?: never;
+    body: SessionCreationRequest;
     path?: never;
     query?: never;
     url: '/session';
 };
 
 export type SessionCreationErrors = {
-    400: string;
+    400: ErrorResponse;
     500: ErrorResponse;
 };
 
 export type SessionCreationError = SessionCreationErrors[keyof SessionCreationErrors];
 
 export type SessionCreationResponses = {
-    200: EmptyResponse;
+    200: SessionCreationResponse;
 };
 
-export type SessionCreationResponse = SessionCreationResponses[keyof SessionCreationResponses];
+export type SessionCreationResponse2 = SessionCreationResponses[keyof SessionCreationResponses];
+
+export type SessionLoginVerifiedData = {
+    body: VerifiedSessionLoginRequest;
+    path?: never;
+    query?: never;
+    url: '/session/login';
+};
+
+export type SessionLoginVerifiedErrors = {
+    400: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SessionLoginVerifiedError = SessionLoginVerifiedErrors[keyof SessionLoginVerifiedErrors];
+
+export type SessionLoginVerifiedResponses = {
+    200: UserTokensResponse;
+};
+
+export type SessionLoginVerifiedResponse = SessionLoginVerifiedResponses[keyof SessionLoginVerifiedResponses];
 
 export type SessionLoginData = {
     body?: never;

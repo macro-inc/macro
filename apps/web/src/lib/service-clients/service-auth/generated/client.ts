@@ -106,6 +106,8 @@ import type {
   SendInviteBody,
   SendMobileWelcomeEmailRequest,
   SendMobileWelcomeEmailResponse,
+  SessionCreationRequest,
+  SessionCreationResponse,
   SetGithubPullRequestDraftRequest,
   SetGithubPullRequestDraftResponse,
   SetGithubPullRequestStateRequest,
@@ -142,6 +144,7 @@ import type {
   UserOrganizationResponse,
   UserQuota,
   UserTokensResponse,
+  VerifiedSessionLoginRequest,
 } from './schemas';
 
 /**
@@ -4160,15 +4163,20 @@ export const sendReferralCode = async (
 };
 
 /**
- * @summary Refreshes a JWT token
+ * A browser that finished sign-up hands its session to the native app this
+way: the code travels in a `macro://` link, which another app could
+claim, so it redeems only with the verifier the app kept
+(`POST /session/login`).
+ * @summary Mints a session code for the caller's session, bound to the app that will
+redeem it.
  */
 export type sessionCreationResponse200 = {
-  data: EmptyResponse;
+  data: SessionCreationResponse;
   status: 200;
 };
 
 export type sessionCreationResponse400 = {
-  data: string;
+  data: ErrorResponse;
   status: 400;
 };
 
@@ -4196,11 +4204,14 @@ export const getSessionCreationUrl = () => {
 };
 
 export const sessionCreation = async (
+  sessionCreationRequest: SessionCreationRequest,
   options?: RequestInit
 ): Promise<sessionCreationResponse> => {
   const res = await fetch(getSessionCreationUrl(), {
     ...options,
     method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(sessionCreationRequest),
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
@@ -4211,6 +4222,67 @@ export const sessionCreation = async (
     status: res.status,
     headers: res.headers,
   } as sessionCreationResponse;
+};
+
+/**
+ * @summary Performs a login via a session code bound to a challenge
+(`POST /session`), presenting the challenge's verifier.
+ */
+export type sessionLoginVerifiedResponse200 = {
+  data: UserTokensResponse;
+  status: 200;
+};
+
+export type sessionLoginVerifiedResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type sessionLoginVerifiedResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type sessionLoginVerifiedResponseSuccess =
+  sessionLoginVerifiedResponse200 & {
+    headers: Headers;
+  };
+export type sessionLoginVerifiedResponseError = (
+  | sessionLoginVerifiedResponse400
+  | sessionLoginVerifiedResponse500
+) & {
+  headers: Headers;
+};
+
+export type sessionLoginVerifiedResponse =
+  | sessionLoginVerifiedResponseSuccess
+  | sessionLoginVerifiedResponseError;
+
+export const getSessionLoginVerifiedUrl = () => {
+  return `/session/login`;
+};
+
+export const sessionLoginVerified = async (
+  verifiedSessionLoginRequest: VerifiedSessionLoginRequest,
+  options?: RequestInit
+): Promise<sessionLoginVerifiedResponse> => {
+  const res = await fetch(getSessionLoginVerifiedUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(verifiedSessionLoginRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: sessionLoginVerifiedResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as sessionLoginVerifiedResponse;
 };
 
 /**

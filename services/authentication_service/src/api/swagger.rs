@@ -177,6 +177,7 @@ use model::user::{
 
                 /// /session
                 session::session_login::handler,
+                session::session_login::verified_handler,
                 session::session_creation::handler,
 
                 /// /email
@@ -280,6 +281,9 @@ use model::user::{
                         GetNamesWithEmailRequestBody,
                         PostGetNamesRequestBody,
                         UserTokensResponse,
+                        crate::api::session::session_creation::SessionCreationRequest,
+                        crate::api::session::session_creation::SessionCreationResponse,
+                        crate::api::session::session_login::VerifiedSessionLoginRequest,
                         UserLinkResponse,
                         MacroApiTokenResponse,
                         ResendFusionauthVerifyUserEmailRequest,
