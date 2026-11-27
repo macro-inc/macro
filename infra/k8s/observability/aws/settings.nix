@@ -204,4 +204,25 @@ rec {
   };
 
   alarms.target5xxPer5Min = 25;
+
+  # CloudWatch Logs to Loki (modules/firehose.nix): an Amazon Data Firehose
+  # stream in production's region that log groups' subscription filters send to.
+  # It posts batches to the edge (../cluster, modules/ingest-firehose.alloy)
+  # with the OTLP token as its access key, read from `secret`, whose value is
+  # set by hand (README "Secrets"). Delivery that fails for `retrySeconds`
+  # goes to `failedBucket`, kept `failedDays`.
+  firehose = {
+    region = "us-east-1";
+    stream = "observability-cloudwatch-logs";
+    secret = "observability/firehose-access-key";
+    failedBucket = "macro-observability-k8s-firehose-failed";
+    failedDays = 14;
+    url = "https://${hosts.otlp.hostname}/awsfirehose/api/v1/push";
+    # Posts at least every minute, as Datadog's stream does. 1 MiB of records
+    # is about 1 MiB gzipped on the wire, far under the edge's 8 MiB.
+    bufferMiB = 1;
+    bufferSeconds = 60;
+    retrySeconds = 300;
+    errorLogDays = 14;
+  };
 }

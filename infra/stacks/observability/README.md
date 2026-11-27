@@ -448,12 +448,14 @@ endpoints such as Tempo `/shutdown` and Loki `/flush`. New data-source features
 may need reviewed additions to the allowlist.
 
 Ingestion permits only POST: `/v1/logs`, `/v1/traces` and `/v1/metrics` with
-the bearer token, which Alloy checks, and `/api/v1/write` and
-`/loki/api/v1/push` with HTTP Basic. The token cannot query telemetry. Requests
-have an 8 MiB limit and a shared 100 requests/second limit with a 200-request
-burst. Only use this token in trusted server-side collectors, never browser or
-mobile clients. The token is shared; provision per-producer credentials before
-expanding beyond trusted internal services.
+the bearer token, which Alloy checks, `/awsfirehose/api/v1/push` with the token
+as the Amazon Data Firehose access key, which Alloy also checks, and
+`/api/v1/write` and `/loki/api/v1/push` with HTTP Basic. The token cannot query
+telemetry. Requests have an 8 MiB limit, and each edge replica allows 400
+requests/second with an 800-request burst. Only use this token in trusted
+server-side collectors, never browser or mobile clients. The token is shared;
+provision per-producer credentials before expanding beyond trusted internal
+services.
 
 ## First deployment
 

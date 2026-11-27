@@ -22,6 +22,10 @@ spec:
       port: 4318
       protocol: TCP
       targetPort: 4318
+    - name: firehose
+      port: 4319
+      protocol: TCP
+      targetPort: 4319
   selector:
     app.kubernetes.io/instance: alloy-ingest
     app.kubernetes.io/name: alloy
