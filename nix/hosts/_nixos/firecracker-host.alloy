@@ -122,7 +122,7 @@ otelcol.receiver.otlp "agent" {
 	}
 
 	output {
-		traces = [otelcol.processor.batch.macro.input]
+		traces = [otelcol.processor.memory_limiter.macro.input]
 	}
 }
 
@@ -142,11 +142,6 @@ loki.relabel "journal" {
 		source_labels = ["__journal__systemd_unit"]
 		target_label  = "unit"
 	}
-
-	rule {
-		source_labels = ["__journal_priority_keyword"]
-		target_label  = "level"
-	}
 }
 
 otelcol.receiver.loki "journal" {
@@ -156,7 +151,9 @@ otelcol.receiver.loki "journal" {
 }
 
 // The same service, host and environment as the agent's spans and the host's
-// metrics.
+// metrics. The agent writes JSON lines to stdout, which the journal records
+// at one priority, so the level comes from the line. Its `dd.trace_id` is
+// Datadog's half of the trace id, so the records don't link to traces.
 otelcol.processor.transform "journal" {
 	error_mode = "ignore"
 
@@ -169,12 +166,36 @@ otelcol.processor.transform "journal" {
 		]
 	}
 
+	log_statements {
+		context    = "log"
+		statements = [
+			`merge_maps(cache, ParseJSON(body), "upsert") where IsMatch(body, "^\\{")`,
+			`set(severity_text, cache["level"]) where cache["level"] != nil`,
+			`delete_matching_keys(attributes, "^(job|loki\\.attribute\\.labels)$")`,
+		]
+	}
+
 	output {
-		logs = [otelcol.processor.batch.macro.input]
+		logs = [otelcol.processor.memory_limiter.macro.input]
+	}
+}
+
+// Alloy's unit has 512M for everything, metrics included: spans and logs are
+// refused before they take it.
+otelcol.processor.memory_limiter "macro" {
+	check_interval = "1s"
+	limit          = "384MiB"
+
+	output {
+		traces = [otelcol.processor.batch.macro.input]
+		logs   = [otelcol.processor.batch.macro.input]
 	}
 }
 
 otelcol.processor.batch "macro" {
+	send_batch_size     = 1024
+	send_batch_max_size = 2048
+
 	output {
 		traces = [otelcol.exporter.otlphttp.macro.input]
 		logs   = [otelcol.exporter.otlphttp.macro.input]
@@ -198,8 +219,9 @@ otelcol.exporter.otlphttp "macro" {
 		auth     = otelcol.auth.bearer.macro.handler
 	}
 
-	// A host cut off from the ingest drops its oldest batches, not memory.
+	// A host cut off from the ingest keeps up to 64 batches and refuses the
+	// rest.
 	sending_queue {
-		queue_size = 256
+		queue_size = 64
 	}
 }

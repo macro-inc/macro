@@ -431,7 +431,7 @@ in
         type = lib.types.nullOr lib.types.str;
         default = null;
         example = "/var/lib/macro/metrics-remote-write-password";
-        description = "Path of the observability stack's ingest token (root 0400, outside the Nix store): remote write's password and OTLP's bearer token.";
+        description = "Path of the observability stack's ingest token (root-only, outside the Nix store): remote write's password and OTLP's bearer token.";
       };
     };
     environment = lib.mkOption {
