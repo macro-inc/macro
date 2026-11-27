@@ -570,9 +570,7 @@ describe('WALSyncer', () => {
     await wal.append(new Uint8Array([1]));
     release();
     await flushed;
-    await vi.waitFor(async () =>
-      expect(await undeliveredCount(walStore)).toBe(0)
-    );
+    expect(await undeliveredCount(walStore)).toBe(0);
   });
 
   it('prunes expired entries on construction so cold-start replay skips them', async () => {
