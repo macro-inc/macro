@@ -8,7 +8,6 @@ use model_owner::Owner;
 use tokio::time::timeout;
 use tokio_retry::Retry;
 
-use crate::domain::models::DocumentError;
 use crate::domain::ports::markdown::{MarkdownInitializationOptions, MarkdownInitializationPort};
 
 /// Runtime options for markdown lifecycle backfill.
@@ -346,7 +345,6 @@ where
             .await
         {
             Ok(_) => CandidateResult::Initialized,
-            Err(error) if sync_snapshot_already_exists(&error) => CandidateResult::Initialized,
             Err(error) => CandidateResult::InitializeError {
                 error: error.to_string(),
             },
@@ -482,8 +480,4 @@ where
         }
     })
     .await
-}
-
-fn sync_snapshot_already_exists(error: &DocumentError) -> bool {
-    error.to_string().contains("snapshot already exists")
 }
