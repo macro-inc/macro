@@ -14,6 +14,9 @@
 //! A full snapshot can be much larger than a shallow one when history below the
 //! root overwrote a lot of content, so a full snapshot too large for readers
 //! gives way to a shallow one that keeps more history, up to a larger budget.
+//! Past that budget the export stays full even when readers would reject it:
+//! the shallow export's cost depends on the content it checks out and is only
+//! known by running it, which can block the document for seconds.
 use std::{cmp::Ordering, collections::BinaryHeap};
 
 use loro::{Counter, ExportMode, Frontiers, ID, Lamport, LoroDoc, LoroEncodeError, PeerID};
@@ -34,7 +37,8 @@ pub const MAX_FULL_SNAPSHOT_BYTES: usize = 2 * 1024 * 1024;
 
 /// Most operations a shallow export may keep above its root when the full
 /// snapshot is larger than [`MAX_FULL_SNAPSHOT_BYTES`]. Exporting this many
-/// text edits costs about a third of a second natively.
+/// text edits costs about a third of a second natively on a long text
+/// document, and less on small ones.
 pub const MAX_SHALLOW_RETAINED_OPS_FOR_LARGE_DOCUMENTS: u32 = 4_000;
 
 /// Which snapshot [`export`] wrote.
