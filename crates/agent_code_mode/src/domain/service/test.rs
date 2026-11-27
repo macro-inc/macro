@@ -81,6 +81,7 @@ impl ExecutionCredentials for Credentials {
             .unwrap()
             .push((identity.owner.to_string(), identity.agent_id));
         Ok(IssuedRun {
+            correlation_id: uuid::Uuid::from_u128(1),
             environment: code_execution::domain::RunEnvironment {
                 token: "run-only-secret".into(),
                 ..Default::default()
@@ -361,6 +362,7 @@ async fn unfinished_journal_reads_and_retries_report_uncertainty_without_replayi
     let session = test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7()));
     let id = ExecutionId::mint();
     let mut record = ExecutionRecord {
+        credential_correlation_id: None,
         acting_as: Some(ai_toolset::actor::ToolActor::Owner),
         turn_id: Some(macro_uuid::Uuid::from_u128(1)),
         execution_id: id,
@@ -593,6 +595,7 @@ async fn persists_live_activity_and_marks_unfinished_requests_unknown() {
 #[test]
 fn activity_rejects_unknown_operations_and_is_bounded() {
     let mut record = ExecutionRecord {
+        credential_correlation_id: None,
         acting_as: Some(ai_toolset::actor::ToolActor::Owner),
         turn_id: Some(macro_uuid::Uuid::from_u128(1)),
         execution_id: ExecutionId::mint(),
@@ -639,7 +642,7 @@ impl ExecutionStore for SlowActivityStore {
         session: AgentSessionId,
         record: &ExecutionRecord,
     ) -> Result<(), CodeModeError> {
-        if record.status == ExecutionStatus::Running {
+        if record.status == ExecutionStatus::Running && !record.activity.is_empty() {
             self.saving.notify_one();
             std::future::pending::<()>().await;
         }
