@@ -262,6 +262,29 @@ describe('removeDocumentsGoneOnPrimary', () => {
     expect([...records.keys()]).toEqual(['restored']);
   });
 
+  it('confirms every deleted document even when one confirmation fails', async () => {
+    const ids = ['a', 'b', 'c', 'd'];
+    const { host, records } = fakeDocumentCache(
+      Object.fromEntries(ids.map((id) => [id, { name: id }]))
+    );
+
+    const result = await removeDocumentsGoneOnPrimary({
+      host,
+      ids,
+      readFromPrimary: async (id, _signal, selection) => {
+        if (selection === 'name') return 'gone';
+        if (id === 'a') throw new Error('offline');
+        // 'd' was restored meanwhile; its read writes it back.
+        if (id === 'd') records.set('d', { name: 'd' });
+        return id === 'd' ? 'readable' : 'gone';
+      },
+      session: () => 's1',
+    });
+
+    expect(result.outcome).toBe('removed_unconfirmed');
+    expect([...records.keys()]).toEqual(['d']);
+  });
+
   it('reports a delete whose second look failed', async () => {
     const { host } = fakeDocumentCache({ trashed: { name: 'Plan' } });
     let reads = 0;
@@ -419,6 +442,36 @@ describe('createDocumentVerifier', () => {
     );
     await new Promise((resolve) => setTimeout(resolve, 10));
 
+    expect(peak).toBe(3);
+  });
+
+  it('keeps checking queued documents after a check fails, a few at a time', async () => {
+    const ids = ['a', 'b', 'c', 'd', 'e', 'f'];
+    const { host } = fakeDocumentCache(
+      Object.fromEntries(ids.map((id) => [id, { name: id }]))
+    );
+    let open = 0;
+    let peak = 0;
+    const read = vi.fn<ReadDocumentFromPrimary>(async (id) => {
+      open += 1;
+      peak = Math.max(peak, open);
+      // 'a' fails at once while its siblings are still being read.
+      await new Promise((resolve) => setTimeout(resolve, id === 'a' ? 0 : 5));
+      open -= 1;
+      if (id === 'a') throw new Error('offline');
+      return 'readable';
+    });
+    const verifier = createDocumentVerifier({
+      host: () => host,
+      readFromPrimary: read,
+      session: () => 's1',
+    });
+
+    verifier.verify(['a', 'b', 'c']);
+    verifier.verify(['d', 'e', 'f']);
+
+    await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(6));
+    await vi.waitFor(() => expect(open).toBe(0));
     expect(peak).toBe(3);
   });
 

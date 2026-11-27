@@ -114,7 +114,8 @@ async function cachedFingerprints(
 }
 
 /** Which of `ids` the primary no longer shows the viewer, a few reads at a
- * time, each sent in `trace`. A failed read throws. */
+ * time, each sent in `trace`. Every id is read even when one fails, and no
+ * read is left running on return; a failed read then throws. */
 async function goneOnPrimary(
   ids: readonly string[],
   read: ReadDocumentFromPrimary,
@@ -123,6 +124,7 @@ async function goneOnPrimary(
   trace: TraceContext
 ): Promise<Set<string>> {
   const gone = new Set<string>();
+  const failures: unknown[] = [];
   for (
     let offset = 0;
     offset < ids.length;
@@ -131,12 +133,15 @@ async function goneOnPrimary(
     signal?.throwIfAborted();
     const batch = ids.slice(offset, offset + PRIMARY_READ_CONCURRENCY);
     const answers = await trace.run(() =>
-      Promise.all(batch.map((id) => read(id, signal, selection)))
+      Promise.allSettled(batch.map((id) => read(id, signal, selection)))
     );
     batch.forEach((id, index) => {
-      if (answers[index] === 'gone') gone.add(id);
+      const answer = answers[index];
+      if (answer?.status === 'rejected') failures.push(answer.reason);
+      else if (answer?.value === 'gone') gone.add(id);
     });
   }
+  if (failures.length > 0) throw failures[0];
   return gone;
 }
 
@@ -297,6 +302,7 @@ export function createDocumentVerifier(
   // One check at a time, so overlapping searches never have more than
   // PRIMARY_READ_CONCURRENCY documents read at once.
   const drain = async (host: DocumentReconcileHost) => {
+    let failure: { error: unknown } | undefined;
     while (queued.size > 0 && !controller.signal.aborted) {
       const ids = [...queued];
       queued.clear();
@@ -318,14 +324,16 @@ export function createDocumentVerifier(
         }
       } catch (error) {
         if (controller.signal.aborted) return;
-        // A failed check is tried again on the next search that features it.
+        // A failed check is tried again on the next search that features it;
+        // the ids queued behind it are still checked now.
         for (const id of ids) checkedAt.delete(id);
-        throw error;
+        failure ??= { error };
       } finally {
         running = undefined;
         featuredAgain.clear();
       }
     }
+    if (failure) throw failure.error;
   };
 
   return {
