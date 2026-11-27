@@ -22,7 +22,7 @@ import XCircleIcon from '@icon/system/regular/x-circle.svg';
 import type { CursorSystemNotificationDecoratorProps } from '@macro-inc/lexical-core';
 import GithubLogoIcon from '@phosphor/github-logo.svg';
 import SlackLogoIcon from '@phosphor/slack-logo.svg';
-import { cn } from '@ui/utils/classname';
+import { Card, cn } from '@ui';
 import { type Component, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
@@ -194,7 +194,7 @@ function DetailChip(props: { detail: Detail }) {
       href={href()}
       title={props.detail.title ?? href()}
       class={cn(
-        'inline-flex max-w-full items-center gap-1 rounded-md border border-edge-muted px-1.5 py-0.5 text-xs text-ink-muted',
+        'inline-flex max-w-full items-center gap-1 rounded-md border border-edge-frame px-1.5 py-0.5 text-xs text-ink-muted',
         href() &&
           'pointer-events-auto no-underline outline-none transition-colors hover:border-edge hover:text-ink focus-visible:text-ink'
       )}
@@ -226,10 +226,12 @@ export function CursorSystemNotification(
   const chips = () => details(props.attributes);
 
   return (
-    <section
+    <Card
+      variant="raised"
+      role="region"
       data-system-notification={props.source}
       aria-label={`${sourceLabel(props.source)} notification`}
-      class="my-1.5 min-w-0 max-w-full overflow-hidden rounded-xl border border-edge-muted bg-panel text-ink"
+      class="my-1.5 max-w-full overflow-hidden"
     >
       <div class="flex items-start gap-3 px-3 pt-3">
         <div class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-accent-bg text-ink-muted">
@@ -277,6 +279,6 @@ export function CursorSystemNotification(
           <For each={chips()}>{(detail) => <DetailChip detail={detail} />}</For>
         </div>
       </Show>
-    </section>
+    </Card>
   );
 }

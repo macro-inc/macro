@@ -288,6 +288,7 @@ export function createSoupLiveQuery(
   });
   const [baselineGeneration, setBaselineGeneration] = createSignal<number>();
   const [baselineInputKey, setBaselineInputKey] = createSignal<string>();
+  const [errorInputKey, setErrorInputKey] = createSignal<string>();
   let previousInitialInput: GraphqlSoupInput | undefined;
   let networkAuthorityInput: GraphqlSoupInput | undefined;
   // The server page fetched only to keep the server pages as deep as a local
@@ -353,73 +354,98 @@ export function createSoupLiveQuery(
     });
   };
 
-  createEffect(() => {
-    const host = getGraphqlSoupCacheHost();
-    if (!host) return;
-    cacheGeneration += 1;
-    const invalidateGeneration = () => {
-      localRequest += 1;
-      setCurrentCacheRevision(undefined);
-      setNetworkAuthorityRevision(undefined);
-      setLocalProjection(undefined);
-      setBaselineGeneration(undefined);
-      setUnpersistedPages(new Map());
-      setLocalMailCurrent(false);
-    };
-    const observeCurrentRevision = async () => {
-      const observedGeneration = cacheGeneration;
-      try {
-        const revision = await host.currentRevision();
-        if (
-          observedGeneration === cacheGeneration &&
-          currentCacheRevision() === undefined
-        ) {
-          setCurrentCacheRevision(revision);
-        }
-      } catch {
-        // Keep network data usable while the local cache is unavailable.
-      }
-    };
-    let latestRevision: CacheRevision | undefined;
-    // Every open tab shares one cache engine. A hidden tab keeps a dirty bit
-    // instead of evaluating this list on each revision or engine replacement.
-    const deferral = createHiddenDeferral(() => {
-      if (latestRevision !== undefined) setCurrentCacheRevision(latestRevision);
-      else fireAndForget(observeCurrentRevision(), 'soup-live-query');
-    });
-    const unsubscribeChanges = host.onCacheChanged(
-      (revision) => {
-        cacheObservation += 1;
-        if (
-          networkAuthorityRevision() !== undefined &&
-          networkAuthorityRevision() !== revision &&
-          staleFallbackStartedAt === undefined
-        ) {
-          staleFallbackStartedAt = performance.now();
-          recordAuthority('stale-fallback');
-        }
-        latestRevision = revision;
-        deferral.request();
-      },
-      // The authority watermark must observe the same writes as the live view.
-      { includeHydration: true }
-    );
-    const unsubscribeGeneration = host.onCacheGenerationChanged(() => {
-      soupCacheTelemetry.record('generation');
+  const cacheHostActive = createMemo(() => options().enabled !== false);
+  createEffect(
+    on(getGraphqlSoupCacheHost, (host) => {
+      if (!host) return;
       cacheGeneration += 1;
-      invalidateGeneration();
-      latestRevision = undefined;
-      deferral.request();
-    });
-    fireAndForget(observeCurrentRevision(), 'soup-live-query');
-    onCleanup(() => {
-      finishStaleFallback(true);
-      cacheGeneration += 1;
-      deferral.dispose();
-      unsubscribeChanges();
-      unsubscribeGeneration();
-    });
-  });
+      let revisionRequest = 0;
+      const invalidateGeneration = () => {
+        revisionRequest += 1;
+        localRequest += 1;
+        setCurrentCacheRevision(undefined);
+        setNetworkAuthorityRevision(undefined);
+        setLocalProjection(undefined);
+        setBaselineGeneration(undefined);
+        setUnpersistedPages(new Map());
+        setLocalMailCurrent(false);
+      };
+      const observeCurrentRevision = async () => {
+        const request = ++revisionRequest;
+        const observedGeneration = cacheGeneration;
+        const observedObservation = cacheObservation;
+        try {
+          const revision = await host.currentRevision();
+          if (
+            request === revisionRequest &&
+            observedGeneration === cacheGeneration &&
+            observedObservation === cacheObservation
+          ) {
+            setCurrentCacheRevision(revision);
+          }
+        } catch {
+          // Keep network data usable while the local cache is unavailable.
+        }
+      };
+      let onGenerationReset: (() => void) | undefined;
+      // Keep generation fencing active even while disabled so a same-host
+      // reset clears cached baselines and authority before a later re-enable.
+      const unsubscribeGeneration = host.onCacheGenerationChanged(() => {
+        soupCacheTelemetry.record('generation');
+        cacheGeneration += 1;
+        invalidateGeneration();
+        onGenerationReset?.();
+      });
+      createEffect(
+        on(cacheHostActive, (active) => {
+          if (!active) return;
+          let latestRevision: CacheRevision | undefined;
+          // Every open tab shares one cache engine. A hidden tab keeps a dirty bit
+          // instead of evaluating this list on each revision or engine replacement.
+          const deferral = createHiddenDeferral(() => {
+            if (latestRevision !== undefined)
+              setCurrentCacheRevision(latestRevision);
+            else fireAndForget(observeCurrentRevision(), 'soup-live-query');
+          });
+          onGenerationReset = () => {
+            latestRevision = undefined;
+            deferral.request();
+          };
+          const unsubscribeChanges = host.onCacheChanged(
+            (revision) => {
+              cacheObservation += 1;
+              if (
+                networkAuthorityRevision() !== undefined &&
+                networkAuthorityRevision() !== revision &&
+                staleFallbackStartedAt === undefined
+              ) {
+                staleFallbackStartedAt = performance.now();
+                recordAuthority('stale-fallback');
+              }
+              latestRevision = revision;
+              deferral.request();
+            },
+            // The authority watermark must observe the same writes as the live view.
+            { includeHydration: true }
+          );
+          fireAndForget(observeCurrentRevision(), 'soup-live-query');
+          onCleanup(() => {
+            revisionRequest += 1;
+            onGenerationReset = undefined;
+            finishStaleFallback(true);
+            deferral.dispose();
+            unsubscribeChanges();
+          });
+        })
+      );
+      onCleanup(() => {
+        revisionRequest += 1;
+        finishStaleFallback(true);
+        cacheGeneration += 1;
+        unsubscribeGeneration();
+      });
+    })
+  );
 
   const selectPages = ({
     pages,
@@ -441,6 +467,21 @@ export function createSoupLiveQuery(
         ),
     };
   };
+
+  // Fence errors to the input scope that produced them. When cache-first
+  // hydration disables the underlying urql query between scopes, the paused
+  // observer retains its previous page error until the new scope's options are
+  // applied; clearing `errorInputKey` before `createUrqlInfiniteQuery` runs
+  // prevents that stale error from flashing back when `networkInput` re-enables.
+  createComputed(
+    on(
+      inputKey,
+      () => {
+        setErrorInputKey(undefined);
+      },
+      { defer: true }
+    )
+  );
 
   const query = createUrqlInfiniteQuery<
     SoupQuery | ChannelListSoupQuery | SoupPreviewPageQuery,
@@ -487,6 +528,9 @@ export function createSoupLiveQuery(
             setBaselineGeneration(cacheGeneration);
             setBaselineInputKey(firstInputKey);
           });
+        }
+        if (result.error) {
+          setErrorInputKey(firstInputKey);
         }
         if (result.error && metadata?.source === 'live-network') {
           // The exchange keeps the rows already shown; a failed response's
@@ -559,6 +603,24 @@ export function createSoupLiveQuery(
       select: selectPages,
     };
   });
+
+  // Stamp errors that bypass `onResult` (pagination, selection, or sync throw)
+  // onto the active input scope when `query.error` transitions.
+  createComputed(
+    on(
+      () => query.error,
+      (nextError) => {
+        setErrorInputKey(nextError ? untrack(inputKey) : undefined);
+      }
+    )
+  );
+
+  const activeQueryError = (): CombinedError | undefined =>
+    query.error &&
+    (!cacheFirstEntities() || networkInput() !== undefined) &&
+    errorInputKey() === inputKey()
+      ? query.error
+      : undefined;
 
   const isEnabled = () =>
     cacheFirstEntities()
@@ -702,6 +764,9 @@ export function createSoupLiveQuery(
     undefined,
     { equals: arrayEquals }
   );
+  const maintainedDisplayedKeys = createMemo(
+    () => new Set(liveRecords().map(soupItemKey))
+  );
   maintainedProjection = createMemo<LocalProjection | undefined>((previous) => {
     const snapshot = live.data();
     const input = firstPageInput();
@@ -717,20 +782,26 @@ export function createSoupLiveQuery(
       return;
     }
     const withoutEmail = options().localReconciliation === 'without-email';
+    const records = liveRecords();
+    const baselineKeys = snapshot.baselineKeys ?? new Set<string>();
+    const displayedKeys = maintainedDisplayedKeys();
+    if (
+      previous &&
+      previous.input === input &&
+      previous.generation === cacheGeneration &&
+      previous.withoutEmail === withoutEmail &&
+      previous.baselineKeys === baselineKeys &&
+      previous.displayedKeys === displayedKeys &&
+      previous.records === records
+    )
+      return previous;
     return {
       input,
       generation: cacheGeneration,
-      baselineKeys: new Set(
-        serverRecords()
-          .filter(
-            (record) =>
-              !withoutEmail || record.__typename !== 'GraphqlSoupEmailThread'
-          )
-          .map(soupItemKey)
-      ),
-      displayedKeys: new Set(liveRecords().map(soupItemKey)),
+      baselineKeys,
+      displayedKeys,
       withoutEmail,
-      records: liveRecords(),
+      records,
     };
   });
 
@@ -744,7 +815,10 @@ export function createSoupLiveQuery(
     const sameScope =
       current?.scope === input && current.generation === cacheGeneration;
     // Keep variables and continuation cursors fixed through success or retry.
-    if (sameScope && (query.isFetching || query.hasNextPage || query.error))
+    if (
+      sameScope &&
+      (query.isFetching || query.hasNextPage || activeQueryError())
+    )
       return;
     if (
       getGraphqlSoupCacheHost()?.liveQueries &&
@@ -821,7 +895,7 @@ export function createSoupLiveQuery(
           (networkAuthorityInput === input &&
             networkAuthorityRevision() === revision &&
             !offline() &&
-            !query.error?.networkError)))
+            !activeQueryError()?.networkError)))
     ) {
       localEvaluationPending = false;
       if (!definition && !hasUnpersistedPages(input)) {
@@ -1050,7 +1124,7 @@ export function createSoupLiveQuery(
       ((!maintainedQueryAvailable() ||
         live.data()?.revision !== currentCacheRevision()) &&
         !offline() &&
-        !query.error?.networkError &&
+        !activeQueryError()?.networkError &&
         networkAuthorityInput === firstPageInput() &&
         networkAuthorityRevision() !== undefined &&
         networkAuthorityRevision() === currentCacheRevision()));
@@ -1124,7 +1198,7 @@ export function createSoupLiveQuery(
     () => !networkIsAuthoritative() && Boolean(displayLocalProjection()?.mail)
   );
   const error = (): CombinedError | undefined => {
-    const error = query.error;
+    const error = activeQueryError();
     // A local Mail list pages from the cache; the server page kept in step
     // behind it is retried on the next scroll and must not replace the list.
     if (query.isFetchNextPageError && cachedMail()) return undefined;
@@ -1188,7 +1262,8 @@ export function createSoupLiveQuery(
                   ? 'initiative'
                   : undefined;
             const appearance =
-              type && pendingAppearance(type, record.id, Boolean(query.error));
+              type &&
+              pendingAppearance(type, record.id, Boolean(activeQueryError()));
             return appearance ? { ...record, appearance } : record;
           }),
           pendingDeleteKeys(),
@@ -1199,10 +1274,11 @@ export function createSoupLiveQuery(
     fetchedRecords: () => query.data?.records() ?? [],
     cachedMail,
     error,
-    fetchError: () => query.error ?? undefined,
+    fetchError: () => activeQueryError(),
     isSupported,
     isEnabled,
     hasPageData: () =>
+      (!cacheFirstEntities() || networkInput() !== undefined) &&
       baselineInputKey() === inputKey() &&
       baselineGeneration() === cacheGeneration &&
       query.data !== undefined,
@@ -1350,9 +1426,15 @@ export function createSoupLiveQuery(
           input,
         });
         await runWithOwner(owner, () =>
-          until(() => !query.isFetching && (query.isSuccess || query.error))
+          until(
+            () =>
+              firstPageInput() !== input ||
+              (!query.isFetching && (query.isSuccess || activeQueryError()))
+          )
         );
-        if (query.error) throw query.error;
+        if (firstPageInput() !== input) return;
+        const refreshError = activeQueryError();
+        if (refreshError) throw refreshError;
         return;
       }
       // An explicit list refresh rebuilds the cursor chain in order. The

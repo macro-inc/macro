@@ -24,6 +24,12 @@ const NO_SCROLL_MS = 150;
 // These stationary snap areas never change identity when a calendar slot moves.
 const snapMarkers = Array.from({ length: TRACK_PAGES }, (_, index) => index);
 
+// CSS sizes each page to the viewport's fractional width and places page N at
+// N widths, so offsets use that width. clientWidth rounds it, which put page
+// 1,000 up to 500px off screen.
+const pageWidth = (element: HTMLElement) =>
+  element.getBoundingClientRect().width;
+
 type SnapPagerPhase = 'idle' | 'scrolling';
 interface PagerState {
   position: number;
@@ -148,15 +154,14 @@ export function createSnapPager(
     const element = viewport;
     if (!element?.clientWidth || locked()) return;
     const left = element.scrollLeft;
-    if (element.clientWidth !== width || needsAlignment) {
+    if (pageWidth(element) !== width || needsAlignment) {
       if (left !== lastLeft) {
         lastLeft = left;
         lastMoveAt = Date.now();
       }
       return;
     }
-    const fractional =
-      trackOrigin() + left / element.clientWidth - TRACK_MIDDLE;
+    const fractional = trackOrigin() + left / pageWidth(element) - TRACK_MIDDLE;
     const center = Math.round(fractional);
     batch(() => {
       assign(center);
@@ -189,14 +194,14 @@ export function createSnapPager(
     if (Math.abs(relative) < 900) return;
     // Only idle track boundaries move the physical origin. Markers stay fixed.
     setTrackOrigin(position());
-    element.scrollLeft = TRACK_MIDDLE * element.clientWidth;
+    element.scrollLeft = TRACK_MIDDLE * pageWidth(element);
     lastLeft = element.scrollLeft;
   };
 
   const writeTarget = (target: number, smooth: boolean) => {
     const element = viewport;
     if (!element?.clientWidth) return;
-    const left = (TRACK_MIDDLE + target - trackOrigin()) * element.clientWidth;
+    const left = (TRACK_MIDDLE + target - trackOrigin()) * pageWidth(element);
     const reduced = window.matchMedia?.(
       '(prefers-reduced-motion: reduce)'
     ).matches;
@@ -213,7 +218,7 @@ export function createSnapPager(
   const finish = () => {
     if (held() || !viewport?.clientWidth) return;
     if (resizePending) {
-      width = viewport.clientWidth;
+      width = pageWidth(viewport);
       resizePending = false;
       viewport.scrollLeft =
         (TRACK_MIDDLE + fractionalPosition() - trackOrigin()) * width;
@@ -407,7 +412,7 @@ export function createSnapPager(
 
   const resize = () => {
     if (!viewport) return;
-    const nextWidth = viewport.clientWidth;
+    const nextWidth = pageWidth(viewport);
     if (nextWidth === width && !resizePending) return;
     resizePending = true;
     if (!nextWidth) return;
@@ -461,7 +466,7 @@ export function createSnapPager(
         setPhase('idle');
       });
       if (viewport?.clientWidth) {
-        viewport.scrollLeft = TRACK_MIDDLE * viewport.clientWidth;
+        viewport.scrollLeft = TRACK_MIDDLE * pageWidth(viewport);
         lastLeft = viewport.scrollLeft;
       }
     },
@@ -485,7 +490,7 @@ export function createSnapPager(
     attachViewport(element) {
       if (viewport) detach(viewport);
       viewport = element;
-      width = element.clientWidth;
+      width = pageWidth(element);
       element.addEventListener('scroll', onScroll);
       element.addEventListener('scrollend', onScrollEnd);
       element.addEventListener('wheel', onWheel, { passive: true });
@@ -543,10 +548,10 @@ export function SnapPagerViewport(props: SnapPagerViewportProps) {
   let element!: HTMLDivElement;
   onMount(() => {
     const detach = controller.attachViewport(element);
-    let width = element.clientWidth;
+    let width = pageWidth(element);
     const observer = new ResizeObserver(() => {
-      if (element.clientWidth === width) return;
-      width = element.clientWidth;
+      if (pageWidth(element) === width) return;
+      width = pageWidth(element);
       controller.resize();
     });
     observer.observe(element);

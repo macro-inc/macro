@@ -1,6 +1,7 @@
 //! Approve exactly the saved selection before scheduling a workspace write.
 
 use super::*;
+use crate::domain::ports::PlanRow;
 
 impl<R, S, C, W, N> ImportServiceImpl<R, S, C, W, N>
 where
@@ -10,7 +11,16 @@ where
     W: SlackWorkspaceSource,
     N: NotionConnections,
 {
-    #[tracing::instrument(name = "notion.start_write", skip_all, fields(review_id = %review_id), err)]
+    #[tracing::instrument(
+        name = "notion.start_write",
+        skip_all,
+        fields(
+            review_id = %review_id,
+            copy_overrides = tracing::field::Empty,
+            copy_override_outcome = tracing::field::Empty,
+        ),
+        err
+    )]
     pub(super) async fn start_write(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -63,6 +73,30 @@ where
             })
             .map(|fact| fact.import_id)
             .collect();
+        let requested_copies: std::collections::HashSet<_> =
+            choices.copy_skipped.iter().copied().collect();
+        let excluded: std::collections::HashSet<_> = choices.excluded.iter().copied().collect();
+        let mut promoted = Vec::new();
+        for (row, item) in &mut planned {
+            if item.kind == ImportKind::Page
+                && item.decision == NotionDecision::Skip
+                && !item.already_imported
+                && requested_copies.contains(&row.id)
+                && !excluded.contains(&row.id)
+            {
+                item.decision = NotionDecision::Copy;
+                row.metadata["plan"]["decision"] = serde_json::json!(NotionDecision::Copy);
+                row.metadata["plan"]["reason"] =
+                    serde_json::json!("Selected in the import review.");
+                promoted.push(PlanRow {
+                    kind: row.kind,
+                    foreign_id: row.foreign_id.clone(),
+                    parent_foreign_id: None,
+                    metadata: row.metadata.clone(),
+                });
+            }
+        }
+        tracing::Span::current().record("copy_overrides", promoted.len());
         let team_id = self
             .repo
             .user_team_id(user)
@@ -78,6 +112,32 @@ where
             .start_reviewed_write(user, self.workspace_source, review_id)
             .await
             .map_err(ImportError::not_started)?;
+        // The reviewed Copy overrides are saved right after the fence, before
+        // the run is held, so a resume rebuilds the same selection and a
+        // failure here leaves the plan as it was, approvable again.
+        let (outcome, persisted) = if promoted.is_empty() {
+            ("none", Ok(()))
+        } else {
+            match self
+                .repo
+                .update_plan_rows(user, self.workspace_source, &promoted)
+                .await
+            {
+                Ok(count) if count == promoted.len() as u64 => ("persisted", Ok(())),
+                Ok(_) => (
+                    "stale",
+                    Err(ImportError::NotReady(
+                        "The Notion plan changed before the selected pages could be saved. Review the plan again.",
+                    )),
+                ),
+                Err(error) => ("failed", Err(error)),
+            }
+        };
+        tracing::Span::current().record("copy_override_outcome", outcome);
+        if let Err(error) = persisted {
+            self.reopen_plan(user, from).await;
+            return Err(error.not_started());
+        }
         // The owner's sharing changes are recorded on the rows before the
         // write starts, so a resumed write shares exactly what they approved.
         let items: Vec<write::WriteItem> = planned.iter().map(|(_, item)| item.clone()).collect();
@@ -99,7 +159,7 @@ where
 
         let mut to_write = Vec::new();
         for (row, item) in planned {
-            let left_out = choices.excluded.contains(&row.id)
+            let left_out = excluded.contains(&row.id)
                 || (!item.dependency_of.is_empty() && !approved_dependencies.contains(&row.id));
             match (left_out, item.decision) {
                 (true, _) | (false, NotionDecision::Skip) => {

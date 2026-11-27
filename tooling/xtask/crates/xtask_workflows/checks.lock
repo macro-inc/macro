@@ -48,6 +48,7 @@ check	cargo_workspace_dependency_check.yml	dependency-check	dependency-check
 check	cargo_workspace_dependency_check.yml	hakari-and-dep-closures	hakari-and-dep-closures
 check	channels_e2e.yml	suite	Channels end-to-end
 check	channels_e2e.yml	email-e2e-alert	Tell Macro Alerts
+check	check_deploy_nix_sources.yml	check-deploy-nix-sources	check deploy nix sources
 check	check_generated.yml	check-workflows	check-workflows
 check	check_generated.yml	lint-workflows	lint-workflows
 check	check_node_modules_nix.yml	check-linux-node-modules-nix	check Linux node_modules nix
@@ -177,6 +178,7 @@ check	pr-ci.yml	generated-workflows/check-workflows	Generated workflows / check-
 check	pr-ci.yml	generated-workflows/lint-workflows	Generated workflows / lint-workflows
 check	pr-ci.yml	node-modules-nix/check-linux-node-modules-nix	node_modules nix / check Linux node_modules nix
 check	pr-ci.yml	node-modules-nix/check-darwin-node-modules-nix	node_modules nix / check Darwin node_modules nix
+check	pr-ci.yml	deploy-nix-sources/check-deploy-nix-sources	Deploy nix sources / check deploy nix sources
 check	pr-ci.yml	tauri-lockfiles/check-tauri-lockfiles	Tauri lockfiles / check Tauri lockfiles
 check	pr-ci.yml	tauri-lockfiles/check-tauri-vendoring	Tauri lockfiles / check Tauri vendoring
 check	pr-ci.yml	desktop/test-linux	Desktop app / Test on Linux

@@ -5133,7 +5133,7 @@
       "FreeTierModel": {
         "type": "string",
         "description": "A `provider/model` id every user may request without professional features.",
-        "enum": ["google/gemini-3.8-flash"]
+        "enum": ["google/gemini-4-hydrogen"]
       },
       "GenerateImageAspectRatio": {
         "type": "string",

@@ -7,11 +7,21 @@
 //! while keeping its turn ([`AccessGuard::yield_to_reads`]): reads run, and
 //! nothing else does. A read that arrives after a command still waiting for
 //! its turn takes a turn too, so a read never overtakes an earlier command.
+//!
+//! Background commands (query responses nobody waits for, contact
+//! verification) go one at a time in arrival order, and each only once no
+//! command waits for its turn: a person's command waits for at most the one
+//! background command holding the engine. One that has watched
+//! [`AGED`] releases go by queues for a turn like a command, so constant
+//! foreground work cannot starve it.
 use std::ops::{Deref, DerefMut};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock, Weak};
 use std::time::{Duration, Instant};
 use tokio::sync::{Mutex, MutexGuard, Notify};
+
+/// Releases a background command watches go by before it queues for a turn.
+const AGED: u64 = 8;
 
 pub(super) struct EngineAccess<T> {
     value: Mutex<T>,
@@ -21,6 +31,10 @@ pub(super) struct EngineAccess<T> {
     turn_waiting: AtomicUsize,
     available: Notify,
     write_epoch: AtomicU64,
+    /// Background commands, in arrival order, for as long as each runs.
+    background_turn: Mutex<()>,
+    /// Background commands that arrived and have not taken the engine.
+    background_waiting: AtomicUsize,
     /// Hydrates waiting for the engine. They wait on `available`, not in the
     /// mutex queue, so idle work checks this instead.
     hydrates_waiting: AtomicUsize,
@@ -35,6 +49,8 @@ impl<T> EngineAccess<T> {
             turn_waiting: AtomicUsize::new(0),
             available: Notify::new(),
             write_epoch: AtomicU64::new(0),
+            background_turn: Mutex::new(()),
+            background_waiting: AtomicUsize::new(0),
             hydrates_waiting: AtomicUsize::new(0),
             quiet: Quiet::default(),
         }
@@ -49,13 +65,19 @@ impl<T> EngineAccess<T> {
         let _ = self.quiet.start.set(Box::new(start));
     }
 
+    /// Whether a command waits for its turn, which a background command gives
+    /// it ([`AccessGuard::step_aside`]).
+    pub(super) fn commands_waiting(&self) -> bool {
+        self.turn_waiting.load(Ordering::SeqCst) > 0
+    }
+
     /// Counts guard releases, so an idle task can tell the engine was used.
     pub(super) fn quiet_releases(&self) -> u64 {
         self.quiet.releases.load(Ordering::SeqCst)
     }
 
     /// Takes the engine for idle work without waiting, or `None` when it is
-    /// held, a command or hydrate is queued for it, or shutdown began. Either
+    /// held, a command, hydrate or background command is queued for it, or shutdown began. Either
     /// way the idle task is done: the next release starts another. Its own
     /// release wakes waiters but starts nothing.
     pub(super) fn try_idle(&self) -> Option<AccessGuard<'_, T>> {
@@ -70,6 +92,7 @@ impl<T> EngineAccess<T> {
         let guard = AccessGuard {
             value: self.value.try_lock().ok()?,
             _turn: Some(turn),
+            _lane: None,
             _release: ReleaseNotice {
                 available: &self.available,
                 quiet: None,
@@ -79,7 +102,9 @@ impl<T> EngineAccess<T> {
         // Checked once the engine is held: a hydrate that starts waiting
         // after this is woken by the guard's release. Dropping the guard here
         // wakes any hydrate already waiting.
-        if self.hydrates_waiting.load(Ordering::SeqCst) > 0 {
+        if self.hydrates_waiting.load(Ordering::SeqCst) > 0
+            || self.background_waiting.load(Ordering::SeqCst) > 0
+        {
             return None;
         }
         Some(guard)
@@ -117,13 +142,25 @@ impl<T> EngineAccess<T> {
     #[tracing::instrument(name = "graphql_cache.native.lock", skip_all, fields(graphql_cache.lock.kind = "foreground", graphql_cache.lock.wait_ms = tracing::field::Empty))]
     pub(super) async fn lock(&self) -> AccessGuard<'_, T> {
         let wait = AcquisitionWait::new();
+        self.take_turn(wait.started).await
+    }
+
+    /// Queues for a turn, then the engine.
+    async fn take_turn(&self, wait_started: Instant) -> AccessGuard<'_, T> {
+        // Declared before the count, so it drops after it: a command
+        // cancelled while it waits wakes background commands once it no
+        // longer counts as waiting.
+        let mut cancelled = Wake(Some(&self.available));
         let _waiting = Counted::new(&self.turn_waiting);
         let turn = self.held(wake_if_dropped(&self.available, self.turn.lock()).await);
+        let value = self.value.lock().await;
+        cancelled.0 = None;
         AccessGuard {
-            value: self.value.lock().await,
+            value,
             _turn: Some(turn),
+            _lane: None,
             _release: self.release_notice(),
-            held: Held::since(wait.started),
+            held: Held::since(wait_started),
         }
     }
 
@@ -139,6 +176,7 @@ impl<T> EngineAccess<T> {
         AccessGuard {
             value: wake_if_dropped(&self.available, self.value.lock()).await,
             _turn: None,
+            _lane: None,
             _release: self.release_notice(),
             held: Held::since(wait.started),
         }
@@ -149,9 +187,114 @@ impl<T> EngineAccess<T> {
         self.lock().await
     }
 
-    #[tracing::instrument(name = "graphql_cache.native.lock", skip_all, fields(graphql_cache.lock.kind = "hydrate", graphql_cache.lock.wait_ms = tracing::field::Empty), err)]
+    /// [`Self::write`] for a background command: it still supersedes waiting
+    /// warming, but takes the engine as [`Self::background`] does.
+    pub(super) async fn background_write(&self) -> AccessGuard<'_, T> {
+        self.write_epoch.fetch_add(1, Ordering::SeqCst);
+        self.background().await
+    }
+
+    /// Takes the engine for a background command, after the background
+    /// commands that came first and once no command waits for its turn. It
+    /// waits by notification, as a hydrate does, so commands that queue
+    /// meanwhile go first; after [`AGED`] releases it queues for a turn.
+    #[tracing::instrument(
+        name = "graphql_cache.native.lock",
+        skip_all,
+        fields(
+            graphql_cache.lock.kind = "background",
+            graphql_cache.lock.wait_ms = tracing::field::Empty,
+            graphql_cache.lock.overtaken = tracing::field::Empty,
+            graphql_cache.lock.aged = tracing::field::Empty,
+        )
+    )]
+    pub(super) async fn background(&self) -> AccessGuard<'_, T> {
+        let wait = AcquisitionWait::new();
+        let _waiting = BackgroundWaiting::new(self);
+        let lane = wake_if_dropped(&self.available, self.background_turn.lock()).await;
+        self.quiet_turn(lane, &wait).await
+    }
+
+    /// Waits until no command waits for its turn, then takes the turn and the
+    /// engine for the background command holding `lane`; after [`AGED`]
+    /// releases, queues for the turn instead.
+    async fn quiet_turn<'a>(
+        &'a self,
+        lane: MutexGuard<'a, ()>,
+        wait: &AcquisitionWait,
+    ) -> AccessGuard<'a, T> {
+        let first = self.quiet_releases();
+        let overtaken = |aged: bool| {
+            wait.span.record(
+                "graphql_cache.lock.overtaken",
+                self.quiet_releases().saturating_sub(first),
+            );
+            wait.span.record("graphql_cache.lock.aged", aged);
+        };
+        // Like a hydrate, one that stops waiting may be the one another found
+        // holding the turn: wake the rest.
+        let mut gave_up = Wake(Some(&self.available));
+        loop {
+            // Register before checking so a release cannot be lost.
+            let notified = self.available.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+            if self.turn_waiting.load(Ordering::SeqCst) == 0
+                && let Ok(turn) = self.turn.try_lock()
+                // Given back without a wake when a read holds the engine, as
+                // a hydrate's is: the read's release wakes this command.
+                && let Ok(value) = self.value.try_lock()
+            {
+                gave_up.0 = None;
+                overtaken(false);
+                return AccessGuard {
+                    value,
+                    _turn: Some(self.held(turn)),
+                    _lane: Some(lane),
+                    _release: self.release_notice(),
+                    held: Held::since(wait.started),
+                };
+            }
+            if self.quiet_releases().saturating_sub(first) >= AGED {
+                gave_up.0 = None;
+                overtaken(true);
+                let mut guard = self.take_turn(wait.started).await;
+                guard._lane = Some(lane);
+                return guard;
+            }
+            notified.await;
+        }
+    }
+
+    /// Writes so far, for [`Self::hydrate_since`].
+    pub(super) fn write_epoch(&self) -> u64 {
+        self.write_epoch.load(Ordering::SeqCst)
+    }
+
+    #[cfg(test)]
     pub(super) async fn hydrate(&self) -> Result<AccessGuard<'_, T>, String> {
-        let epoch = self.write_epoch.load(Ordering::SeqCst);
+        self.hydrate_since(self.write_epoch(), false).await
+    }
+
+    /// Takes the engine for a hydrate once no command or background command
+    /// waits for it, or fails when a write began after write `epoch`: the
+    /// hydrate may hold older data than that write. A hydrate that stepped
+    /// aside for commands takes it back this way, `resumed`.
+    #[tracing::instrument(
+        name = "graphql_cache.native.lock",
+        skip_all,
+        fields(
+            graphql_cache.lock.kind = "hydrate",
+            graphql_cache.lock.resumed = resumed,
+            graphql_cache.lock.wait_ms = tracing::field::Empty,
+        ),
+        err
+    )]
+    pub(super) async fn hydrate_since(
+        &self,
+        epoch: u64,
+        resumed: bool,
+    ) -> Result<AccessGuard<'_, T>, String> {
         let _waiting = Counted::new(&self.hydrates_waiting);
         let wait = AcquisitionWait::new();
         // A hydrate that stops waiting, superseded or cancelled, may be the
@@ -167,7 +310,11 @@ impl<T> EngineAccess<T> {
                     "cache hydration superseded by a foreground write; refetch the page".into(),
                 );
             }
-            if let Ok(turn) = self.turn.try_lock() {
+            // Background commands go first, as they did when they queued for
+            // a turn; a hydrate that waits is superseded by the next write.
+            if self.background_waiting.load(Ordering::SeqCst) == 0
+                && let Ok(turn) = self.turn.try_lock()
+            {
                 // With the turn, only a read can hold the engine. Holding the
                 // turn while it waits would put this hydrate ahead of commands
                 // that queue meanwhile, so give the turn back, without a wake:
@@ -177,6 +324,7 @@ impl<T> EngineAccess<T> {
                     let guard = AccessGuard {
                         value,
                         _turn: Some(self.held(turn)),
+                        _lane: None,
                         _release: self.release_notice(),
                         held: Held::since(wait.started),
                     };
@@ -189,8 +337,51 @@ impl<T> EngineAccess<T> {
                     gave_up.0 = None;
                     return Ok(guard);
                 }
+                #[cfg(test)]
+                if let Some(hook) = WHILE_HYDRATE_HOLDS_TURN.with(|hook| hook.borrow_mut().take()) {
+                    hook();
+                }
+                drop(turn);
+                // A background command that came meanwhile may have found the
+                // turn held and waits for a wake. This hydrate defers to it, so
+                // waking it does not spin this one.
+                if self.background_waiting.load(Ordering::SeqCst) > 0 {
+                    self.available.notify_waiters();
+                }
             }
             notified.await;
+        }
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Runs once while a hydrate holds the turn and finds the engine held,
+    /// so a test can bring a background command in then.
+    static WHILE_HYDRATE_HOLDS_TURN: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Counts a background command waiting for the engine until it returns, on
+/// every exit. The last one to stop waking waiters: a hydrate woken while it
+/// was still counted waits again, and a cancelled one releases nothing.
+struct BackgroundWaiting<'a> {
+    count: &'a AtomicUsize,
+    available: &'a Notify,
+}
+impl<'a> BackgroundWaiting<'a> {
+    fn new<T>(access: &'a EngineAccess<T>) -> Self {
+        access.background_waiting.fetch_add(1, Ordering::SeqCst);
+        Self {
+            count: &access.background_waiting,
+            available: &access.available,
+        }
+    }
+}
+impl Drop for BackgroundWaiting<'_> {
+    fn drop(&mut self) {
+        if self.count.fetch_sub(1, Ordering::SeqCst) == 1 {
+            self.available.notify_waiters();
         }
     }
 }
@@ -237,6 +428,8 @@ impl Drop for AcquisitionWait {
 pub(super) struct AccessGuard<'a, T> {
     value: MutexGuard<'a, T>,
     _turn: Option<Turn<'a>>,
+    /// A background command's place, kept until it finishes.
+    _lane: Option<MutexGuard<'a, ()>>,
     _release: ReleaseNotice<'a>,
     held: Held,
 }
@@ -296,6 +489,7 @@ impl<'a, T> AccessGuard<'a, T> {
         let AccessGuard {
             value,
             _turn: turn,
+            _lane,
             _release,
             held,
         } = self;
@@ -303,6 +497,7 @@ impl<'a, T> AccessGuard<'a, T> {
             return Err(AccessGuard {
                 value,
                 _turn: None,
+                _lane,
                 _release,
                 held,
             });
@@ -311,9 +506,75 @@ impl<'a, T> AccessGuard<'a, T> {
         Ok(HeldTurn {
             access,
             turn,
+            _lane,
             _release,
             held,
         })
+    }
+
+    /// Gives a background command's turn and the engine to the commands
+    /// waiting for them, keeping its place ahead of later background
+    /// commands, or `Err(self)` for any other command's guard.
+    pub(super) fn step_aside(
+        self,
+        access: &'a EngineAccess<T>,
+    ) -> Result<SteppedAside<'a, T>, Self> {
+        let AccessGuard {
+            value,
+            _turn,
+            _lane,
+            _release,
+            held,
+        } = self;
+        let Some(lane) = _lane else {
+            return Err(AccessGuard {
+                value,
+                _turn,
+                _lane: None,
+                _release,
+                held,
+            });
+        };
+        // Counted before the release, so idle work never takes the engine
+        // from a command that stepped aside.
+        let waiting = BackgroundWaiting::new(access);
+        drop((value, _turn, _release, held));
+        Ok(SteppedAside {
+            access,
+            lane,
+            _waiting: waiting,
+        })
+    }
+}
+
+/// A background command that gave its turn to waiting commands.
+pub(super) struct SteppedAside<'a, T> {
+    access: &'a EngineAccess<T>,
+    lane: MutexGuard<'a, ()>,
+    _waiting: BackgroundWaiting<'a>,
+}
+
+impl<'a, T> SteppedAside<'a, T> {
+    /// Takes the turn and the engine back as the command first took them.
+    #[tracing::instrument(
+        name = "graphql_cache.native.lock",
+        skip_all,
+        fields(
+            graphql_cache.lock.kind = "background",
+            graphql_cache.lock.resumed = true,
+            graphql_cache.lock.wait_ms = tracing::field::Empty,
+            graphql_cache.lock.overtaken = tracing::field::Empty,
+            graphql_cache.lock.aged = tracing::field::Empty,
+        )
+    )]
+    pub(super) async fn resume(self) -> AccessGuard<'a, T> {
+        let wait = AcquisitionWait::new();
+        let SteppedAside {
+            access,
+            lane,
+            _waiting,
+        } = self;
+        access.quiet_turn(lane, &wait).await
     }
 }
 
@@ -321,6 +582,7 @@ impl<'a, T> AccessGuard<'a, T> {
 pub(super) struct HeldTurn<'a, T> {
     access: &'a EngineAccess<T>,
     turn: Turn<'a>,
+    _lane: Option<MutexGuard<'a, ()>>,
     _release: ReleaseNotice<'a>,
     held: Held,
 }
@@ -331,12 +593,14 @@ impl<'a, T> HeldTurn<'a, T> {
         let HeldTurn {
             access,
             turn,
+            _lane,
             _release,
             held,
         } = self;
         AccessGuard {
             value: access.value.lock().await,
             _turn: Some(turn),
+            _lane,
             _release,
             held,
         }
@@ -953,6 +1217,314 @@ mod test {
             let access = EngineAccess::new(0);
             let read = access.read().await;
             assert!(read.yield_to_reads(&access).is_err());
+        });
+    }
+
+    /// A command that queues while a background command waits still goes
+    /// first.
+    #[test]
+    fn a_command_goes_before_a_background_command_that_came_first() {
+        pollster::block_on(async {
+            let access = EngineAccess::new(Vec::new());
+            let blocker = access.lock().await;
+            let mut background = std::pin::pin!(access.background());
+            assert!(pending(background.as_mut()));
+            let mut command = std::pin::pin!(access.lock());
+            assert!(pending(command.as_mut()));
+            drop(blocker);
+            assert!(pending(background.as_mut()), "the command goes first");
+            command.await.push("command");
+            background.await.push("background");
+            assert_eq!(*access.lock().await, ["command", "background"]);
+        });
+    }
+
+    /// Background commands run one at a time, in the order they arrived.
+    #[test]
+    fn background_commands_run_one_at_a_time_in_arrival_order() {
+        pollster::block_on(async {
+            let access = EngineAccess::new(Vec::new());
+            let blocker = access.lock().await;
+            let mut first = std::pin::pin!(access.background());
+            let mut second = std::pin::pin!(access.background());
+            assert!(pending(first.as_mut()));
+            assert!(pending(second.as_mut()));
+            drop(blocker);
+            assert!(pending(second.as_mut()), "the first came first");
+            let mut held = first.await;
+            held.push("first");
+            assert!(pending(second.as_mut()));
+            drop(held);
+            second.await.push("second");
+            assert_eq!(*access.lock().await, ["first", "second"]);
+        });
+    }
+
+    /// Commands that keep coming hold off a background command for [`AGED`]
+    /// releases; then it queues for its turn with them.
+    #[test]
+    fn a_background_command_queues_with_commands_once_aged() {
+        pollster::block_on(async {
+            let access = EngineAccess::new(Vec::new());
+            let mut command = access.lock().await;
+            let mut background = std::pin::pin!(access.background());
+            assert!(pending(background.as_mut()));
+            for _ in 0..AGED {
+                assert!(pending(background.as_mut()), "commands keep going first");
+                let mut next = Box::pin(access.lock());
+                assert!(pending(next.as_mut()));
+                drop(command);
+                command = next.await;
+            }
+            assert!(pending(background.as_mut()), "now queued for a turn");
+            let mut later = std::pin::pin!(access.lock());
+            assert!(pending(later.as_mut()));
+            drop(command);
+            assert!(pending(later.as_mut()));
+            background.await.push("background");
+            later.await.push("later");
+            assert_eq!(*access.lock().await, ["background", "later"]);
+        });
+    }
+
+    #[test]
+    fn idle_work_never_overtakes_a_waiting_background_command() {
+        pollster::block_on(async {
+            let access = EngineAccess::new(0);
+            let blocker = access.lock().await;
+            let mut background = std::pin::pin!(access.background());
+            assert!(pending(background.as_mut()));
+            drop(blocker);
+            assert!(access.try_idle().is_none());
+            drop(background.await);
+            assert!(access.try_idle().is_some());
+        });
+    }
+
+    /// A background command that steps aside lets waiting commands run, then
+    /// goes before background commands that arrived after it.
+    #[test]
+    fn a_background_command_that_steps_aside_keeps_its_place() {
+        pollster::block_on(async {
+            let access = EngineAccess::new(Vec::new());
+            let mut first = access.background().await;
+            first.push("first");
+            let mut command = std::pin::pin!(access.lock());
+            let mut second = std::pin::pin!(access.background());
+            let mut hydration = std::pin::pin!(access.hydrate());
+            assert!(pending(command.as_mut()));
+            assert!(pending(second.as_mut()));
+            assert!(pending(hydration.as_mut()));
+            assert!(access.commands_waiting());
+            let aside = first
+                .step_aside(&access)
+                .unwrap_or_else(|_| panic!("a background command"));
+            assert!(access.try_idle().is_none(), "not idle while it is aside");
+            let resumed = std::pin::pin!(aside.resume());
+            command.await.push("command");
+            assert!(pending(second.as_mut()));
+            assert!(pending(hydration.as_mut()));
+            resumed.await.push("first again");
+            second.await.push("second");
+            hydration.await.expect("current").push("hydrate");
+            assert_eq!(
+                *access.lock().await,
+                ["first", "command", "first again", "second", "hydrate"]
+            );
+        });
+    }
+
+    #[test]
+    fn a_hydrate_waits_for_a_background_command_that_stepped_aside() {
+        pollster::block_on(async {
+            let access = EngineAccess::new(Vec::new());
+            let mut first = access.background().await;
+            first.push("first");
+            let mut command = std::pin::pin!(access.lock());
+            let mut hydration = std::pin::pin!(access.hydrate());
+            assert!(pending(command.as_mut()));
+            assert!(pending(hydration.as_mut()));
+            let aside = first
+                .step_aside(&access)
+                .unwrap_or_else(|_| panic!("a background command"));
+            let resumed = std::pin::pin!(aside.resume());
+            command.await.push("command");
+            assert!(
+                pending(hydration.as_mut()),
+                "the background command goes first"
+            );
+            resumed.await.push("first again");
+            hydration.await.expect("current").push("hydrate");
+            assert_eq!(
+                *access.lock().await,
+                ["first", "command", "first again", "hydrate"]
+            );
+        });
+    }
+
+    #[test]
+    fn only_a_background_command_steps_aside() {
+        pollster::block_on(async {
+            let access = EngineAccess::new(0);
+            assert!(access.lock().await.step_aside(&access).is_err());
+            assert!(access.read().await.step_aside(&access).is_err());
+            let hydration = access.hydrate().await.expect("current");
+            assert!(hydration.step_aside(&access).is_err());
+        });
+    }
+
+    /// A command cancelled while it waits for its turn wakes the background
+    /// command it was holding off.
+    #[test]
+    fn a_cancelled_command_wakes_a_background_command_it_held_off() {
+        pollster::block_on(async {
+            let access = EngineAccess::new(0);
+            let holder = access.lock().await;
+            let mut command = Box::pin(access.lock());
+            assert!(pending(command.as_mut()));
+            let woken = Arc::new(Woken(AtomicBool::new(false)));
+            let waker = std::task::Waker::from(Arc::clone(&woken));
+            let mut cx = std::task::Context::from_waker(&waker);
+            let mut background = Box::pin(access.background());
+            assert!(background.as_mut().poll(&mut cx).is_pending());
+            drop(holder);
+            assert!(
+                background.as_mut().poll(&mut cx).is_pending(),
+                "the command waits"
+            );
+            woken.0.store(false, Ordering::SeqCst);
+            drop(command);
+            assert!(woken.0.load(Ordering::SeqCst));
+            assert!(background.as_mut().poll(&mut cx).is_ready());
+        });
+    }
+
+    /// A read waiting for the engine goes before a background command, which
+    /// a read's release wakes.
+    #[test]
+    fn a_read_waiting_for_the_engine_goes_before_a_background_command() {
+        pollster::block_on(async {
+            let access = EngineAccess::new(Vec::new());
+            let staging = access.hydrate().await.expect("current");
+            let turn = staging
+                .yield_to_reads(&access)
+                .unwrap_or_else(|_| panic!("a hydrate holds a turn"));
+            let mut background = std::pin::pin!(access.background());
+            let mut read = access.read().await;
+            assert!(pending(background.as_mut()));
+            drop(turn);
+            assert!(pending(background.as_mut()), "the read holds the engine");
+            read.push("read");
+            drop(read);
+            background.await.push("background");
+            assert_eq!(*access.lock().await, ["read", "background"]);
+        });
+    }
+
+    /// Warming waits for background commands, and the next write supersedes
+    /// it, as it did when they queued for a turn.
+    #[test]
+    fn a_hydrate_waits_for_background_commands() {
+        pollster::block_on(async {
+            let access = EngineAccess::new(0);
+            let blocker = access.lock().await;
+            let mut background = std::pin::pin!(access.background());
+            let mut hydration = std::pin::pin!(access.hydrate());
+            assert!(pending(background.as_mut()));
+            assert!(pending(hydration.as_mut()));
+            drop(blocker);
+            assert!(
+                pending(hydration.as_mut()),
+                "the background command goes first"
+            );
+            let held = background.await;
+            assert!(pending(hydration.as_mut()));
+            drop(held);
+            assert!(hydration.await.is_ok());
+            let blocker = access.lock().await;
+            let mut hydration = std::pin::pin!(access.hydrate());
+            assert!(pending(hydration.as_mut()));
+            let mut write = std::pin::pin!(access.background_write());
+            assert!(pending(write.as_mut()));
+            drop(blocker);
+            drop(write.await);
+            assert!(hydration.await.is_err(), "a background write supersedes it");
+        });
+    }
+
+    /// A background command that finds the turn held by a hydrate, which then
+    /// gives the turn back because a read holds the engine, is woken by the
+    /// hydrate: the read's release came before it waited.
+    #[test]
+    fn a_hydrate_that_gives_the_turn_back_wakes_a_background_command() {
+        pollster::block_on(async {
+            let access: &'static EngineAccess<Vec<&str>> =
+                Box::leak(Box::new(EngineAccess::new(Vec::new())));
+            let read = access.read().await;
+            let woken = Arc::new(Woken(AtomicBool::new(false)));
+            let background =
+                std::rc::Rc::new(std::cell::RefCell::new(Box::pin(access.background())));
+            let in_hook = std::rc::Rc::clone(&background);
+            let waker = std::task::Waker::from(Arc::clone(&woken));
+            WHILE_HYDRATE_HOLDS_TURN.with(|hook| {
+                *hook.borrow_mut() = Some(Box::new(move || {
+                    drop(read);
+                    assert!(
+                        in_hook
+                            .borrow_mut()
+                            .as_mut()
+                            .poll(&mut std::task::Context::from_waker(&waker))
+                            .is_pending(),
+                        "the hydrate holds the turn"
+                    );
+                }));
+            });
+            let mut hydration = std::pin::pin!(access.hydrate());
+            assert!(
+                pending(hydration.as_mut()),
+                "the background command goes first"
+            );
+            assert!(
+                woken.0.load(Ordering::SeqCst),
+                "giving the turn back wakes the background command"
+            );
+            let mut background = background.borrow_mut();
+            background.as_mut().await.push("background");
+            drop(background);
+            hydration.await.expect("current").push("hydrate");
+            assert_eq!(*access.lock().await, ["background", "hydrate"]);
+        });
+    }
+
+    /// A background command dropped while it stood aside wakes the hydrates
+    /// that deferred to it.
+    #[test]
+    fn a_background_command_dropped_while_aside_wakes_waiting_hydrates() {
+        pollster::block_on(async {
+            let access = EngineAccess::new(0);
+            let aside = access
+                .background()
+                .await
+                .step_aside(&access)
+                .unwrap_or_else(|_| panic!("a background command"));
+            let command = access.lock().await;
+            let woken = Arc::new(Woken(AtomicBool::new(false)));
+            let waker = std::task::Waker::from(Arc::clone(&woken));
+            let mut cx = std::task::Context::from_waker(&waker);
+            let mut hydration = std::pin::pin!(access.hydrate());
+            assert!(hydration.as_mut().poll(&mut cx).is_pending());
+            drop(command);
+            assert!(
+                hydration.as_mut().poll(&mut cx).is_pending(),
+                "the background command goes first"
+            );
+            woken.0.store(false, Ordering::SeqCst);
+            drop(aside);
+            assert!(
+                woken.0.load(Ordering::SeqCst),
+                "dropping it wakes the hydrate"
+            );
+            assert!(hydration.as_mut().poll(&mut cx).is_ready());
         });
     }
 }

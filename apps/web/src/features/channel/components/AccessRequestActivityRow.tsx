@@ -1,7 +1,7 @@
-import { formatDate, formatEmailDate } from '@core/util/date';
 import UserPlusIcon from '@icon/system/regular/user-plus.svg';
 import { Button, Tooltip } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
+import { MessageTime } from './MessageTime';
 
 /** What participants can see and do about a request to join. */
 export type AccessRequestOutcome =
@@ -54,13 +54,7 @@ export function AccessRequestActivityRow(props: {
             <Show when={email()}>{(email) => <span>({email()}) </span>}</Show>
             asked to join the channel
           </p>
-          <time
-            class="shrink-0 text-xs/6 text-ink-extra-muted"
-            dateTime={props.occurredAt}
-            title={formatEmailDate(props.occurredAt)}
-          >
-            {formatDate(props.occurredAt, { showTime: true })}
-          </time>
+          <MessageTime at={props.occurredAt} class="shrink-0 text-xs/6" />
         </div>
         <div class="h-7 touch:h-9 flex items-center gap-2 text-xs">
           <Switch>

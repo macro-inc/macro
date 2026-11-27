@@ -45,6 +45,7 @@ import {
   type CacheQueueState,
   cacheDatabaseIdentity,
 } from './coordinator-protocol';
+import { OperationIndex, operationsOf } from './operation-order';
 import {
   type CacheEngine,
   type CacheEngineHydrationResult,
@@ -91,6 +92,10 @@ type QueuedEngineRequest = {
   request: CacheRequest;
   priority: number;
   readSignature?: string;
+  /** The operations it is about (`operationsOf`), which teardowns order. */
+  ops: readonly string[];
+  /** Its place in arrival order, for `OperationIndex`. */
+  seq: number;
   waiters: RequestWaiter[];
   /** When the first of its waiters arrived, on the core's monotonic clock. */
   enqueuedAt: number;
@@ -172,14 +177,17 @@ const USER_VISIBLE_READ_PRIORITY = 1;
 const TYPED_SEARCH_PRIORITY = 2;
 const CACHE_WRITE_PRIORITY = 3;
 
-/** Reads may reorder while they overlap, but never across lifecycle barriers. */
+/**
+ * Reads may reorder while they overlap, but never across lifecycle barriers.
+ * An operation's teardown orders only the requests about that operation
+ * (`operation-order.ts`).
+ */
 function isOrderingBarrier(request: CacheRequest): boolean {
   return (
     request.kind === 'current-authority' ||
     request.kind === 'transition-authority' ||
     request.kind === 'init' ||
     request.kind === 'current-storage-generation' ||
-    request.kind === 'teardown' ||
     request.kind === 'clear'
   );
 }
@@ -288,6 +296,10 @@ export class CacheWorkerCore {
   private scope: string | undefined;
   /** Serializes engine calls while allowing safe read prioritization. */
   private readonly queue: QueuedEngineRequest[] = [];
+  private readonly operations = new OperationIndex<QueuedEngineRequest>();
+  /** The queued ordering barriers, in queue order. */
+  private readonly queuedBarriers: QueuedEngineRequest[] = [];
+  private nextSeq = 0;
   private running = false;
   /** Between two requests, while arrivals join the queue. */
   private yielding = false;
@@ -510,20 +522,25 @@ export class CacheWorkerCore {
       const priority = this.arrivalPriority(request);
       const signature = readSignature(request);
 
-      // Coalesce only within the current lifecycle segment. In particular, a
-      // remount after teardown must perform a fresh read to re-register deps.
-      if (signature !== undefined) {
-        let segmentStart = 0;
-        for (let i = this.queue.length - 1; i >= 0; i -= 1) {
-          const queued = this.queue[i];
-          if (queued && isOrderingBarrier(queued.request)) {
-            segmentStart = i + 1;
-            break;
-          }
-        }
-        const duplicate = this.queue
-          .slice(segmentStart)
-          .find((queued) => queued.readSignature === signature);
+      // Coalesce only within the current lifecycle segment, and never with a
+      // read queued before this operation's teardown: a remount must perform
+      // a fresh read to re-register deps. A signature names its operation, so
+      // a duplicate is among that operation's requests queued since the later
+      // of the two. (A signature holds the query text, so a map keyed by it
+      // would hash all of that text on every arrival.)
+      if (
+        signature !== undefined &&
+        request.kind === 'read' &&
+        request.opId !== undefined
+      ) {
+        const barrier = this.queuedBarriers[this.queuedBarriers.length - 1];
+        const teardown = this.operations.lastTeardownOf(request.opId);
+        const fence = Math.max(barrier?.seq ?? -1, teardown?.seq ?? -1);
+        const duplicate = this.operations.lastOf(
+          request.opId,
+          fence,
+          (queued) => queued.readSignature === signature
+        );
         if (duplicate) {
           duplicate.priority = Math.max(duplicate.priority, priority);
           duplicate.waiters.push({ resolve, reject });
@@ -532,15 +549,31 @@ export class CacheWorkerCore {
         }
       }
 
-      this.queue.push({
+      const queued: QueuedEngineRequest = {
         request,
         priority,
         readSignature: signature,
+        ops: operationsOf(request),
+        seq: this.nextSeq,
         waiters: [{ resolve, reject }],
         enqueuedAt: this.now(),
-      });
+      };
+      this.nextSeq += 1;
+      this.queue.push(queued);
+      this.operations.add(queued);
+      if (isOrderingBarrier(request)) this.queuedBarriers.push(queued);
       this.collectArrivalsThenDrain();
     });
+  }
+
+  /** Takes the request at `index` out of the queue and the indexes over it. */
+  private dequeue(index: number): QueuedEngineRequest | undefined {
+    const [queued] = this.queue.splice(index, 1);
+    if (!queued) return undefined;
+    this.operations.remove(queued);
+    const barrier = this.queuedBarriers.indexOf(queued);
+    if (barrier !== -1) this.queuedBarriers.splice(barrier, 1);
+    return queued;
   }
 
   /**
@@ -556,36 +589,42 @@ export class CacheWorkerCore {
     );
     if (segmentEnd === -1) segmentEnd = this.queue.length;
 
-    const firstAuthoritativeWrite = this.queue
-      .slice(0, segmentEnd)
-      .findIndex((queued) => isAuthoritativeWrite(queued.request));
-    let index = 0;
-    if (segmentEnd > 0) {
-      for (let i = 1; i < segmentEnd; i += 1) {
-        const candidate = this.queue[i];
-        const selected = this.queue[index];
-        const preservesWriteOrder =
-          !candidate ||
-          !isAuthoritativeWrite(candidate.request) ||
-          i === firstAuthoritativeWrite;
-        if (
-          candidate &&
-          selected &&
-          preservesWriteOrder &&
-          candidate.priority > selected.priority
-        ) {
-          index = i;
-        }
+    let firstAuthoritativeWrite = -1;
+    for (let i = 0; i < segmentEnd && firstAuthoritativeWrite === -1; i += 1) {
+      const queued = this.queue[i];
+      if (queued && isAuthoritativeWrite(queued.request)) {
+        firstAuthoritativeWrite = i;
       }
     }
+    const pick = (
+      end: number,
+      priorityAt: (index: number) => number | undefined
+    ) => {
+      let index = 0;
+      let selected = priorityAt(0) ?? Number.NEGATIVE_INFINITY;
+      for (let i = 1; i < end; i += 1) {
+        const priority = priorityAt(i);
+        if (priority === undefined || priority <= selected) continue;
+        const candidate = this.queue[i];
+        // Authoritative writes keep their order: only the first can run.
+        if (
+          candidate &&
+          isAuthoritativeWrite(candidate.request) &&
+          i !== firstAuthoritativeWrite
+        ) {
+          continue;
+        }
+        index = i;
+        selected = priority;
+      }
+      return this.pickPastFences(index, selected, end);
+    };
 
-    index = this.pickPastFences(
-      index,
-      this.queue[index]?.priority ?? Number.NEGATIVE_INFINITY,
-      segmentEnd
-    );
+    let index = pick(segmentEnd, this.runnablePriority(segmentEnd, false));
+    const search = this.typedSearchBeforeTeardown(segmentEnd, pick);
+    if (search !== undefined) index = search;
 
-    const [queued] = this.queue.splice(index, 1);
+    const queued = this.dequeue(index);
     if (!queued) return;
     this.running = true;
     const startedAt = this.now();
@@ -720,8 +759,89 @@ export class CacheWorkerCore {
   }
 
   /**
+   * The priority each of the first `segmentEnd` queued requests runs at, for
+   * those an operation's teardown does not hold back: its own, or that of a
+   * request queued behind it that waits for it. A held-back request has none.
+   *
+   * Authoritative writes run in queue order, so one behind the first lends
+   * nothing (it can't run yet), and a request waiting on such a write lends
+   * to the first one instead. With `writesHeld` only reads run (a hydrate's
+   * commit waits), so a loan could only hurry what can't run: nothing lends.
+   */
+  private runnablePriority(
+    segmentEnd: number,
+    writesHeld: boolean
+  ): (index: number) => number | undefined {
+    const operations = this.operations;
+    // Without a teardown nothing waits for anything but the write order.
+    if (!operations.hasTeardowns) return (i) => this.queue[i]?.priority;
+
+    let firstWrite: QueuedEngineRequest | undefined;
+    if (!writesHeld) {
+      for (let i = 0; i < segmentEnd && firstWrite === undefined; i += 1) {
+        const queued = this.queue[i];
+        if (queued && isAuthoritativeWrite(queued.request)) firstWrite = queued;
+      }
+    }
+    const waitsOnWriteOrder = (queued: QueuedEngineRequest) =>
+      isAuthoritativeWrite(queued.request) && queued !== firstWrite;
+
+    const priorities: (number | undefined)[] = [];
+    const lent = new Map<QueuedEngineRequest, number>();
+    const roots = new Map<QueuedEngineRequest, QueuedEngineRequest>();
+    for (let i = 0; i < segmentEnd; i += 1) {
+      const queued = this.queue[i];
+      if (!queued) continue;
+      if (operations.blockerOf(queued) === undefined) {
+        priorities[i] = queued.priority;
+        continue;
+      }
+      if (writesHeld || waitsOnWriteOrder(queued)) continue;
+      let target = operations.rootOf(queued, roots);
+      if (waitsOnWriteOrder(target)) {
+        if (firstWrite === undefined) continue;
+        target = operations.rootOf(firstWrite, roots);
+      }
+      if (queued.priority > (lent.get(target) ?? target.priority))
+        lent.set(target, queued.priority);
+    }
+    return (i) => {
+      const own = priorities[i];
+      const queued = this.queue[i];
+      if (own === undefined || !queued) return own;
+      return Math.max(own, lent.get(queued) ?? own);
+    };
+  }
+
+  /**
+   * The typed search a picker ran when a teardown still ended the segment,
+   * if it picked one: that picker's choice over the requests queued before
+   * the first teardown, at their own priorities, then past the fences. A
+   * search keeps that lead over everything queued past a teardown, writes
+   * included, which now compete with it.
+   */
+  private typedSearchBeforeTeardown(
+    segmentEnd: number,
+    pick: (
+      end: number,
+      priorityAt: (index: number) => number | undefined
+    ) => number
+  ): number | undefined {
+    if (!this.operations.hasTeardowns) return undefined;
+    let firstTeardown = -1;
+    for (let i = 0; i < segmentEnd && firstTeardown === -1; i += 1) {
+      if (this.queue[i]?.request.kind === 'teardown') firstTeardown = i;
+    }
+    if (firstTeardown === -1) return undefined;
+    const index = pick(firstTeardown, (i) => this.queue[i]?.priority);
+    return this.queue[index]?.priority === TYPED_SEARCH_PRIORITY
+      ? index
+      : undefined;
+  }
+
+  /**
    * A typed search registers nothing and writes nothing, so the generation
-   * checks and operation teardowns that fence other reads do not order it.
+   * checks that fence other reads do not order it.
    * After an engine restart those fences sit between it and the head of the
    * replayed backlog. It can then run before a write queued ahead of it:
    * its rows are only older, and that write's cache change refreshes them.
@@ -764,20 +884,33 @@ export class CacheWorkerCore {
       isOrderingBarrier(queued.request)
     );
     if (segmentEnd === -1) segmentEnd = this.queue.length;
-    let index = -1;
-    let priority = BACKGROUND_HYDRATION_PRIORITY;
-    for (let i = 0; i < segmentEnd; i += 1) {
-      const candidate = this.queue[i];
-      if (
-        candidate &&
-        !isAuthoritativeWrite(candidate.request) &&
-        candidate.priority > priority
-      ) {
-        index = i;
-        priority = candidate.priority;
+    const pick = (
+      end: number,
+      priorityAt: (index: number) => number | undefined
+    ) => {
+      let index = -1;
+      let priority = BACKGROUND_HYDRATION_PRIORITY;
+      for (let i = 0; i < end; i += 1) {
+        const candidatePriority = priorityAt(i);
+        if (candidatePriority === undefined || candidatePriority <= priority) {
+          continue;
+        }
+        const candidate = this.queue[i];
+        if (
+          candidate &&
+          !isAuthoritativeWrite(candidate.request) &&
+          // A teardown can't run here, and holds back only its own operation.
+          candidate.request.kind !== 'teardown'
+        ) {
+          index = i;
+          priority = candidatePriority;
+        }
       }
-    }
-    index = this.pickPastFences(index, priority, segmentEnd);
+      return this.pickPastFences(index, priority, end);
+    };
+    let index = pick(segmentEnd, this.runnablePriority(segmentEnd, true));
+    const search = this.typedSearchBeforeTeardown(segmentEnd, pick);
+    if (search !== undefined) index = search;
     const picked = this.queue[index];
     return picked && isReadOnlyCacheRequest(picked.request.kind)
       ? index
@@ -807,7 +940,7 @@ export class CacheWorkerCore {
         index !== undefined;
         index = this.pickReadBeforeHydrateCommit()
       ) {
-        const [queued] = this.queue.splice(index, 1);
+        const queued = this.dequeue(index);
         if (!queued) break;
         ran = true;
         const startedAt = this.now();
@@ -1144,6 +1277,9 @@ export class CacheWorkerCore {
             revision: result.revision,
             ...(result.searchChangedBuckets !== undefined
               ? { searchChangedBuckets: result.searchChangedBuckets }
+              : {}),
+            ...(result.unchangedViews !== undefined
+              ? { unchangedViews: result.unchangedViews }
               : {}),
           });
         }
@@ -1727,6 +1863,9 @@ export class CacheWorkerCore {
         revision: result.revision,
         ...(!result.reset && result.searchChangedBuckets !== undefined
           ? { searchChangedBuckets: result.searchChangedBuckets }
+          : {}),
+        ...(!result.reset && result.unchangedViews !== undefined
+          ? { unchangedViews: result.unchangedViews }
           : {}),
         ...(result.reset ? { reset: true } : {}),
       });

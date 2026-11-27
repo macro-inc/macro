@@ -10,7 +10,7 @@ describe('model catalog sections', () => {
     const options: CatalogModelOption[] = [
       { id: 'sol-high', label: 'GPT-5.6 Sol High' },
       { id: 'opus-fast', label: 'Opus 5.5 Fast' },
-      { id: 'google/gemini-3.8-flash', label: 'Gemini 3.8 Flash' },
+      { id: 'google/gemini-4-hydrogen', label: 'Gemini 4 Hydrogen' },
       { id: 'openai/gpt-6-astra', label: 'GPT-6 Astra' },
       { id: 'sonnet', label: 'Sonnet 5.5' },
       { id: 'sol', label: 'GPT-5.6 Sol' },
@@ -23,7 +23,7 @@ describe('model catalog sections', () => {
       'sonnet',
       'sol',
       'openai/gpt-6-astra',
-      'google/gemini-3.8-flash',
+      'google/gemini-4-hydrogen',
     ]);
     expect(
       catalog.providers

@@ -2790,7 +2790,9 @@ Title navigation preserves the reference's block parameters, including message,
 thread, annotation, and document locations.
 Click the card frame to select its editor node; controls and embedded content
 handle their own clicks. Full embeds remain vertically resizable and scroll
-inside the inset preview. When verifying, check a canvas embed, a metadata-only
+inside the inset preview. Panning and zooming a canvas embed are local to the
+open preview. A previously saved canvas view supplies the initial position.
+When verifying, check a canvas embed, a metadata-only
 reference, and an editable task, including resize, menu actions, and keyboard
 access to the title and property controls.
 
@@ -2949,9 +2951,8 @@ preview replies per thread. Expand a thread to load its replies;
 `Load earlier messages` pages backward. Live updates preserve unsent replies
 and edits while updating the surrounding thread.
 
-Discussion and comment headers include the date for older messages (for example,
-`Yesterday at 4:37 PM` or `09/24/26 at 4:37 PM`). Regular channel timelines retain
-their date dividers and time-only message headers.
+Discussion and comment headers show when a message was sent
+[as channels do](channels.md#message-times).
 
 When verifying `@` mentions, compare the same person query in the document body
 and the Discussion composer: shared contacts use the same recent-interaction

@@ -1,4 +1,3 @@
-import { formatDate, formatEmailDate } from '@core/util/date';
 import PhoneIcon from '@icon/system/fill/phone-fill.svg';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
@@ -13,6 +12,7 @@ import {
   type SystemActivity,
   systemActivityDescription,
 } from '../core/system-activity';
+import { MessageTime } from './MessageTime';
 
 const ACTIVITY_ICONS = {
   renamed: PencilIcon,
@@ -117,13 +117,7 @@ export function SystemActivityLine(props: {
           </Show>
         </span>
       </Tooltip>
-      <time
-        class="shrink-0 text-xs text-ink-extra-muted"
-        dateTime={props.occurredAt}
-        title={formatEmailDate(props.occurredAt)}
-      >
-        {formatDate(props.occurredAt, { showTime: true })}
-      </time>
+      <MessageTime at={props.occurredAt} class="shrink-0" />
     </div>
   );
 }

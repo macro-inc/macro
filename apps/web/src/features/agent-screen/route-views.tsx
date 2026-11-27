@@ -20,6 +20,7 @@ import {
 import { ResultAsync } from 'neverthrow';
 import { createSignal, Show } from 'solid-js';
 import { match } from 'ts-pattern';
+import { agentScreenName } from './agent-name';
 import {
   type ScreenCapabilities,
   ScreenCapabilitiesProvider,
@@ -64,14 +65,7 @@ function AgentScreenModelProvider(props: {
   const canDrive = () => harness()?.access === 'owner';
   // Until the list has loaded, nobody is known to manage: don't connect yet.
   const accessKnown = () => !harnesses.isPending;
-  const agentName = () => {
-    const agentUserId = harness()?.team_agent_user_id;
-    return (
-      (agentUserId ? getDisplayName(tryMacroId(agentUserId)) : '') ||
-      harness()?.name ||
-      ''
-    );
-  };
+  const agentName = () => agentScreenName(harness());
   useSplitDisplayName(agentName);
 
   const flow = useFlow();

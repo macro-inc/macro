@@ -16,7 +16,7 @@ import {
   waitFor,
 } from '@solidjs/testing-library';
 import { $getNodeByKey, $getRoot } from 'lexical';
-import { createResource, type JSX, onCleanup } from 'solid-js';
+import { createResource, createSignal, type JSX, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, expect, it, vi } from 'vitest';
 import {
@@ -44,6 +44,7 @@ const mocks = vi.hoisted(() => {
   return {
     disposed: 0,
     created: [] as string[],
+    canvasParams: [] as unknown[],
     read: undefined as (() => void) | undefined,
     access: 'access' as 'access' | 'no_access' | 'does_not_exist',
   };
@@ -74,8 +75,15 @@ vi.mock('@core/component/ItemPreview', () => ({
 }));
 vi.mock('@core/orchestrator', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/orchestrator')>()),
-  createBlockInstance: (blockName: string, id: string) => {
+  createBlockInstance: (
+    blockName: string,
+    id: string,
+    options?: Parameters<
+      typeof import('@core/orchestrator').createBlockInstance
+    >[2]
+  ) => {
     mocks.created.push(`${blockName} ${id}`);
+    if (blockName === 'canvas') mocks.canvasParams.push(options?.params);
     return {
       element: () => {
         onCleanup(() => {
@@ -121,6 +129,7 @@ afterEach(() => {
   cleanup();
   mocks.read = undefined;
   mocks.access = 'access';
+  mocks.canvasParams.length = 0;
 });
 
 it('tells a channel member without access to a posted poll that they have no access, instead of an empty card', async () => {
@@ -388,6 +397,29 @@ it.each(['code', 'canvas'] as const)(
     expect(card.style.height).toBe('560px');
   }
 );
+
+it('uses the stored canvas view only to seed a newly mounted preview', async () => {
+  const initial = { view: { x: 10, y: 20, scale: 125 } };
+  const [previewData, setPreviewData] = createSignal(initial);
+  render(() => (
+    <MarkdownHostContext.Provider value="md">
+      <DocumentCard
+        key="canvas-node"
+        documentId="form-1"
+        documentName="Canvas"
+        blockName="canvas"
+        previewData={previewData()}
+        theme={{}}
+      />
+    </MarkdownHostContext.Provider>
+  ));
+  const preview = await screen.findByText('form-1');
+  expect(mocks.canvasParams).toEqual([initial]);
+
+  setPreviewData({ view: { x: 50, y: 60, scale: 150 } });
+  expect(screen.getByText('form-1')).toBe(preview);
+  expect(mocks.canvasParams).toEqual([initial]);
+});
 
 it('shows convert back to mention when the editor becomes editable and preserves the reference', async () => {
   const wrapper = createLexicalWrapper({

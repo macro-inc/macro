@@ -16,12 +16,19 @@ use crate::domain::model::{
     NotionDataSource, NotionId, NotionPage, NotionParent, NotionUser, NotionValue, PageMarkdown,
     Paged, SearchHit, SearchObject,
 };
-use crate::domain::ports::{NotionApi, NotionError};
+use crate::domain::ports::{NotionApi, NotionError, TransportClass};
+
+/// One scripted answer: Notion's response, or a request that did not
+/// complete.
+enum Step {
+    Answer(TransportResponse),
+    Fail(TransportClass),
+}
 
 /// Answers requests in order from a script and records what was sent.
 struct ScriptedTransport {
     started: Instant,
-    responses: Mutex<VecDeque<TransportResponse>>,
+    responses: Mutex<VecDeque<Step>>,
     requests: Mutex<Vec<SentRequest>>,
 }
 
@@ -35,9 +42,13 @@ struct SentRequest {
 
 impl ScriptedTransport {
     fn new(responses: Vec<TransportResponse>) -> Arc<Self> {
+        Self::steps(responses.into_iter().map(Step::Answer).collect())
+    }
+
+    fn steps(steps: Vec<Step>) -> Arc<Self> {
         Arc::new(Self {
             started: Instant::now(),
-            responses: Mutex::new(responses.into()),
+            responses: Mutex::new(steps.into()),
             requests: Mutex::new(Vec::new()),
         })
     }
@@ -55,8 +66,17 @@ impl NotionTransport for Arc<ScriptedTransport> {
             body: read.body().cloned(),
             after: self.started.elapsed(),
         });
-        let response = self.responses.lock().unwrap().pop_front();
-        Ok(response.expect("the script has a response for every request"))
+        let step = self.responses.lock().unwrap().pop_front();
+        match step.expect("the script has a response for every request") {
+            Step::Answer(response) => Ok(response),
+            Step::Fail(class) => Err(NotionError::Transport {
+                class,
+                report: rootcause::report!(
+                    "proxy request to https://api.notion.com/v1/pages/598337872cf94fdf8782e53db20768a5 failed"
+                )
+                .into_dynamic(),
+            }),
+        }
     }
 }
 
@@ -1095,3 +1115,5 @@ async fn a_lost_connection_is_told_apart_from_an_object_that_is_not_shared() {
         "Macro couldn't use your Notion connection; reconnect Notion"
     );
 }
+
+mod telemetry;

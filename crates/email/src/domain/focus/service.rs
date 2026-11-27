@@ -85,6 +85,10 @@ pub struct SweepReport {
     /// out; the sweep goes on to the others and the next sweep tries them
     /// again.
     pub inboxes_failed: usize,
+    /// Inboxes whose stale threads were all read, not only those with recent
+    /// mail: each about once a day, and every inbox in the first sweep after a
+    /// start.
+    pub inboxes_read_in_full: usize,
     /// Threads the sweep found stale.
     pub candidates: usize,
     /// Threads classified.
@@ -136,9 +140,36 @@ impl DueDates {
 /// Stale threads one backfill read asks for at a time.
 const BACKFILL_PAGE: i64 = 500;
 
+/// How often the sweep reads each inbox's stale threads in full. In between
+/// it reads only threads with mail from the last [`REREAD_MAIL`] and signal
+/// threads: the others had the same mail when last read in full, so what can
+/// put them in now is the owner writing to a sender for the first time, or a
+/// thread back in the inbox without new mail, which waits for the next full
+/// read. A full read costs a page read per message in the window's threads,
+/// which are seldom in memory an hour on.
+const FULL_READ_EVERY: Duration = Duration::days(1);
+
+/// Mail this recent is read again by every sweep between full reads, so mail
+/// that syncs late or a read that fails is covered by the next sweep.
+const REREAD_MAIL: Duration = Duration::days(1);
+
+/// How long before a start an inbox's first full read counts as made: a
+/// share of [`FULL_READ_EVERY`] set by the inbox, so the inboxes that start
+/// reads in full come due again spread over the day, not in one sweep.
+fn full_read_offset(link_id: Uuid) -> Duration {
+    let every = u128::try_from(FULL_READ_EVERY.num_seconds())
+        .unwrap_or(1)
+        .max(1);
+    Duration::seconds(i64::try_from(link_id.as_u128() % every).unwrap_or_default())
+}
+
 /// How one inbox's stale threads are walked.
+#[derive(Clone, Copy)]
 struct Walk {
     since: DateTime<Utc>,
+    /// Only threads with mail since then, and signal threads; all of them
+    /// when `None`.
+    mail_since: Option<DateTime<Utc>>,
     /// Stale threads read at a time.
     page: i64,
     /// Checks the whole sweep may make; no limit when `None`.
@@ -146,6 +177,16 @@ struct Walk {
     /// Threads at the classifier at once.
     at_once: usize,
     due_dates: DueDates,
+}
+
+/// How a walk through one inbox's stale threads ended.
+enum WalkEnd {
+    /// Every page was read, though a thread may have failed to classify.
+    Read,
+    /// The inbox left the rollout partway; the sweep goes on to the next.
+    Left,
+    /// The sweep stops here: out of budget, or the classifier said to stop.
+    Stop,
 }
 
 /// Where one sweep stands as it moves from inbox to inbox.
@@ -176,8 +217,13 @@ pub struct FocusService<S, P, C, N, D, E> {
     /// (rejected, nothing to classify, or a result already stored), so later
     /// sweeps skip them until new mail arrives. Never a thread found out of
     /// the rollout: that depends on who reads its inbox, not on its mail. In
-    /// memory: a restart retries each once.
-    settled: Mutex<HashMap<Uuid, DateTime<Utc>>>,
+    /// memory: a restart retries each once. Keyed by thread, with its inbox and
+    /// latest mail.
+    settled: Mutex<HashMap<Uuid, (Uuid, DateTime<Utc>)>>,
+    /// When the sweep last read each inbox's stale threads in full; see
+    /// [`FULL_READ_EVERY`]. In memory: the first sweep after a start reads
+    /// every inbox in full.
+    full_reads: Mutex<HashMap<Uuid, DateTime<Utc>>>,
     /// Inboxes being backfilled, which the sweep leaves to the backfill so no
     /// thread goes to the classifier twice at once.
     backfilling: Mutex<HashSet<Uuid>>,
@@ -226,6 +272,7 @@ where
             enrollment,
             enrolled: Mutex::default(),
             settled: Mutex::default(),
+            full_reads: Mutex::default(),
             backfilling: Mutex::default(),
         }
     }
@@ -236,8 +283,14 @@ where
             .unwrap_or_else(PoisonError::into_inner)
     }
 
-    fn settled(&self) -> MutexGuard<'_, HashMap<Uuid, DateTime<Utc>>> {
+    fn settled(&self) -> MutexGuard<'_, HashMap<Uuid, (Uuid, DateTime<Utc>)>> {
         self.settled.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn full_reads(&self) -> MutexGuard<'_, HashMap<Uuid, DateTime<Utc>>> {
+        self.full_reads
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
     }
 
     fn enrolled(&self) -> MutexGuard<'_, HashMap<Uuid, FocusInboxOwner>> {
@@ -617,6 +670,7 @@ where
         progress.report.inboxes = 1;
         let walk = Walk {
             since: Utc::now() - window,
+            mail_since: None,
             page: BACKFILL_PAGE,
             budget: None,
             at_once: at_once.max(1),
@@ -645,10 +699,15 @@ where
     /// store, so the sweep pages past those: taking only the newest `limit`
     /// would hand every sweep the same threads once enough of them pile up, and
     /// never reach older ones.
+    ///
+    /// Each inbox is read in full about once every [`FULL_READ_EVERY`], and in
+    /// between only its threads with recent mail and its signal threads.
     #[tracing::instrument(skip(self), err)]
     pub async fn sweep(&self, window: Duration, limit: i64) -> Result<SweepReport, Report> {
+        let started = Utc::now();
         let walk = Walk {
-            since: Utc::now() - window,
+            since: started - window,
+            mail_since: None,
             page: limit,
             budget: Some(limit),
             at_once: 1,
@@ -668,9 +727,11 @@ where
 
         let mut progress = SweepProgress::default();
         let mut saw_them_all = true;
+        let mut swept = HashSet::new();
         for (link_id, inbox) in inboxes {
             if self.backfilling().contains(&link_id) {
                 saw_them_all = false;
+                swept.insert(link_id);
                 continue;
             }
             match self
@@ -687,9 +748,32 @@ where
                 }
             }
             progress.report.inboxes += 1;
+            swept.insert(link_id);
+            let last_full_read = self.full_reads().get(&link_id).copied();
+            let in_full = last_full_read.is_none_or(|at| started - at >= FULL_READ_EVERY);
+            let walk = Walk {
+                mail_since: (!in_full).then(|| (started - REREAD_MAIL).max(walk.since)),
+                ..walk
+            };
             match self.sweep_inbox(link_id, &walk, &mut progress).await {
-                Ok(true) => {}
-                Ok(false) => {
+                Ok(WalkEnd::Read) => {
+                    if in_full {
+                        progress.report.inboxes_read_in_full += 1;
+                        // Spread over the day the full reads that a start
+                        // lined up, so each sweep reads about as many.
+                        let at = match last_full_read {
+                            Some(_) => started,
+                            None => started - full_read_offset(link_id),
+                        };
+                        self.full_reads().insert(link_id, at);
+                        // Threads of the inbox not read now aren't stale.
+                        self.settled().retain(|thread_id, (link, _)| {
+                            *link != link_id || progress.seen.contains(thread_id)
+                        });
+                    }
+                }
+                Ok(WalkEnd::Left) => {}
+                Ok(WalkEnd::Stop) => {
                     saw_them_all = false;
                     break;
                 }
@@ -702,35 +786,37 @@ where
             }
         }
 
-        // Only stale threads can be skipped, so the map stays as small as one
-        // full sweep. A sweep that stopped short hasn't seen the rest.
+        // A full read of an inbox forgets its threads that are no longer
+        // stale. A sweep that got through every inbox also forgets the inboxes
+        // it no longer covers; one that stopped short hasn't seen the rest.
         if saw_them_all {
             self.settled()
-                .retain(|thread_id, _| progress.seen.contains(thread_id));
+                .retain(|_, (link_id, _)| swept.contains(link_id));
+            self.full_reads()
+                .retain(|link_id, _| swept.contains(link_id));
         }
         Ok(progress.report)
     }
 
     /// Page through one inbox's stale threads as `walk` says, until the sweep
-    /// has made its budget of checks. Returns whether the sweep can go on to
-    /// the next inbox: false once it hits the budget or must stop early.
+    /// has made its budget of checks.
     async fn sweep_inbox(
         &self,
         link_id: Uuid,
         walk: &Walk,
         progress: &mut SweepProgress,
-    ) -> Result<bool, Report> {
+    ) -> Result<WalkEnd, Report> {
         let mut after = None;
         loop {
             let threads = self
                 .store
-                .stale_threads(link_id, walk.since, after, walk.page)
+                .stale_threads(link_id, walk.since, walk.mail_since, after, walk.page)
                 .await?;
             progress.report.candidates += threads.len();
             let last_page = i64::try_from(threads.len()).is_ok_and(|len| len < walk.page);
             after = threads.last().copied();
             if after.is_none() {
-                return Ok(true);
+                return Ok(WalkEnd::Read);
             }
             let mut to_check = Vec::with_capacity(threads.len());
             let mut out_of_budget = false;
@@ -740,7 +826,7 @@ where
             } in threads
             {
                 progress.seen.insert(thread_id);
-                if self.settled().get(&thread_id) == Some(&latest_at) {
+                if self.settled().get(&thread_id) == Some(&(link_id, latest_at)) {
                     progress.report.skipped += 1;
                     continue;
                 }
@@ -805,7 +891,7 @@ where
                     }
                     Ok(ClassifyOutcome::Rejected) => {
                         report.failed += 1;
-                        self.settled().insert(thread_id, latest_at);
+                        self.settled().insert(thread_id, (link_id, latest_at));
                         progress.rejections_in_a_row += 1;
                         if progress.rejections_in_a_row >= MAX_REJECTIONS_IN_A_ROW
                             && !stop.swap(true, Ordering::Relaxed)
@@ -828,7 +914,7 @@ where
                     }
                     Ok(_) => {
                         report.skipped += 1;
-                        self.settled().insert(thread_id, latest_at);
+                        self.settled().insert(thread_id, (link_id, latest_at));
                     }
                     Err(error) => {
                         tracing::warn!(error = ?error, %thread_id, "focus sweep could not classify a thread");
@@ -837,10 +923,13 @@ where
                 }
             }
             if progress.report.stopped_early || out_of_budget {
-                return Ok(false);
+                return Ok(WalkEnd::Stop);
             }
-            if last_page || left.load(Ordering::Relaxed) {
-                return Ok(true);
+            if left.load(Ordering::Relaxed) {
+                return Ok(WalkEnd::Left);
+            }
+            if last_page {
+                return Ok(WalkEnd::Read);
             }
         }
     }

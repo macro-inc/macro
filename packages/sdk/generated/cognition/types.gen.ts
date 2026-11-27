@@ -892,7 +892,7 @@ export type FileType = 'docx' | 'pdf' | 'md' | 'spreadsheet' | 'canvas' | 'coffe
 /**
  * A `provider/model` id every user may request without professional features.
  */
-export type FreeTierModel = 'google/gemini-3.8-flash';
+export type FreeTierModel = 'google/gemini-4-hydrogen';
 
 /**
  * Shape of the generated image.

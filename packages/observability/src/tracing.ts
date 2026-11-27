@@ -70,6 +70,10 @@ export class Tracing {
     return this.#startSpan(name, suppressUserId(ROOT_CONTEXT), {});
   }
 
+  recordAnonymousSample(name: string, attributes: Attributes): void {
+    this.#provider?.recordAnonymousSample?.(name, attributes);
+  }
+
   /** Export a timestamped measurement without retaining a long-lived span. */
   recordSample(
     name: string,

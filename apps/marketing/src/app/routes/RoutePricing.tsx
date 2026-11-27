@@ -46,7 +46,7 @@ const plans: readonly Plan[] = [
     cta: 'Start for free',
     event: 'pricing_free_connect_google',
     features: [
-      'Gemini Flash · Limited AI usage',
+      'Gemini 4 Hydrogen · Limited AI usage',
       '2 email accounts · 5 GB storage',
     ],
   },
@@ -121,7 +121,7 @@ const comparisonGroups: Array<{
       },
       {
         label: 'AI models',
-        free: 'Gemini Flash',
+        free: 'Gemini 4 Hydrogen',
         pro: 'All',
         business: 'All',
         max: 'All',

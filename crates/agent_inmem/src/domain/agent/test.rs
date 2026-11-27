@@ -672,7 +672,7 @@ async fn new_session_advertises_the_engine_supported_models() {
         vec![
             ("anthropic/claude-sonnet-5-5", "anthropic/claude-sonnet-5-5"),
             ("other-model", "other-model"),
-            (chat::domain::models::FREE_MODEL, "Gemini 3.8 Flash")
+            (chat::domain::models::FREE_MODEL, "Gemini 4 Hydrogen")
         ]
     );
 
@@ -967,6 +967,75 @@ async fn a_streamed_tool_call_opens_pending_and_is_peeked_at_while_written() {
         Some(serde_json::json!({"macro": {"toolName": "NameSearch"}})),
         "the fold reads the tool's name from the opening frame"
     );
+}
+
+/// A call the loop dropped - its reply was retried - closes failed the
+/// moment it is dropped, saying why, not when the turn ends.
+#[tokio::test]
+async fn a_dropped_call_closes_when_dropped() {
+    let engine = Arc::new(ScriptedEngine::new(vec![
+        StreamPart::ToolCallStarted(agent::ToolCallStart {
+            id: "call-1".into(),
+            name: "NameSearch".into(),
+            mcp: None,
+        }),
+        StreamPart::ToolCallArgs {
+            id: "call-1".into(),
+            delta: "{\"query\":\"road".into(),
+        },
+        StreamPart::ToolCallDropped {
+            id: "call-1".into(),
+        },
+        StreamPart::ToolCallStarted(agent::ToolCallStart {
+            id: "call-2".into(),
+            name: "NameSearch".into(),
+            mcp: None,
+        }),
+        StreamPart::ToolCall(agent::ToolCall {
+            id: "call-2".into(),
+            name: "NameSearch".into(),
+            json: serde_json::json!({"query": "roadmap"}),
+            mcp: None,
+        }),
+        StreamPart::ToolResponse(agent::ToolResponse::Json {
+            id: "call-2".into(),
+            json: serde_json::json!({"hits": 1}),
+            name: "NameSearch".into(),
+        }),
+    ]));
+
+    let (notifications, _, _) = with_agent(Arc::clone(&engine), async |connection, session| {
+        connection
+            .send_request(text_prompt(&session, "find the roadmap"))
+            .block_task()
+            .await
+            .expect("the prompt should complete")
+    })
+    .await;
+
+    assert_eq!(
+        tool_frames(&notifications),
+        vec![
+            r#"open call-1 NameSearch "pending" -"#,
+            r#"update call-1 - {"query":"road"}"#,
+            r#"update call-1 "failed" -"#,
+            r#"open call-2 NameSearch "pending" -"#,
+            r#"update call-2 "in_progress" {"query":"roadmap"}"#,
+            r#"update call-2 "completed" -"#,
+        ]
+    );
+    let reason = notifications
+        .iter()
+        .find_map(|notification| match &notification.update {
+            SessionUpdate::ToolCallUpdate(update)
+                if update.fields.status == Some(ToolCallStatus::Failed) =>
+            {
+                update.fields.raw_output.clone()
+            }
+            _ => None,
+        })
+        .expect("the dropped call says why");
+    assert_eq!(reason, serde_json::json!({ "error": DROPPED_TOOL_CALL }));
 }
 
 /// A turn that ends while the model is still writing a call closes the

@@ -5,9 +5,13 @@ import { useUnfurl } from '@core/signal/unfurl';
 import { openExternalUrl } from '@core/util/url';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui';
-import { createSignal, type ParentProps, Show } from 'solid-js';
+import { createMemo, createSignal, type ParentProps, Show } from 'solid-js';
 import { floatWithElement } from '../../directive/floatWithElement';
-import { useAppLinkDescriber, useAppLinkOpener } from './app-link-opener';
+import {
+  useAppLinkChip,
+  useAppLinkDescriber,
+  useAppLinkOpener,
+} from './app-link-opener';
 import { previewCardMiddleware } from './scroll-column';
 
 false && floatWithElement;
@@ -19,6 +23,17 @@ type LinkWithPreviewProps = ParentProps<{
 }>;
 
 export function LinkWithPreview(props: LinkWithPreviewProps) {
+  // A link the surface knows as a typed reference is drawn as its chip.
+  const chipFor = useAppLinkChip();
+  const chip = createMemo(() => chipFor?.(props.url));
+  return (
+    <Show when={chip()} fallback={<PlainLinkWithPreview {...props} />}>
+      {chip()}
+    </Show>
+  );
+}
+
+function PlainLinkWithPreview(props: LinkWithPreviewProps) {
   const [previewOpen, setPreviewOpen] = createSignal(false);
   const debouncedSetPreviewOpen = debounce((val: boolean) => {
     setPreviewOpen(val);

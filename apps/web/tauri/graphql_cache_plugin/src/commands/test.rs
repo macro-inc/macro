@@ -77,6 +77,7 @@ fn scoped_first_binding_preserves_the_generation_without_notifying_windows() {
                         data,
                         identity,
                         None,
+                        None,
                     )
                     .await
                     .unwrap();
@@ -337,4 +338,73 @@ fn only_a_well_formed_traceparent_names_an_upstream_trace() {
         );
     }
     assert_eq!(super::upstream_trace_id(None), None);
+}
+
+/// The bundle and the binary ship apart. An older bundle sends no
+/// `background` and its writes keep today's order; an older binary has no
+/// such argument, and Tauri drops a key a command does not declare, so its
+/// writes keep today's order too. A read stands in for the older binary's
+/// write: it declares no `background` either.
+#[test]
+fn background_writes_cross_both_older_pairings_unchanged() {
+    let handle = crate::engine::EngineHandle::new(
+        cache_turso::TursoStorage::open_in_memory("pairing-profile").unwrap(),
+        None,
+    );
+    let app = tauri::test::mock_builder()
+        .manage(crate::CacheState(std::sync::Mutex::new(Some(
+            crate::InitializedCache {
+                scope: "pairing-profile".into(),
+                handle,
+            },
+        ))))
+        .invoke_handler(tauri::generate_handler![
+            super::graphql_cache_write,
+            super::graphql_cache_read,
+        ])
+        .build(tauri::test::mock_context(tauri::test::noop_assets()))
+        .unwrap();
+    let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+        .build()
+        .unwrap();
+    let invoke = |command: &str, body: serde_json::Value| {
+        tauri::test::get_ipc_response(
+            &webview,
+            tauri::webview::InvokeRequest {
+                cmd: command.into(),
+                callback: tauri::ipc::CallbackFn(0),
+                error: tauri::ipc::CallbackFn(1),
+                url: if cfg!(any(windows, target_os = "android")) {
+                    "http://tauri.localhost"
+                } else {
+                    "tauri://localhost"
+                }
+                .parse()
+                .unwrap(),
+                body: tauri::ipc::InvokeBody::Json(body),
+                headers: Default::default(),
+                invoke_key: tauri::test::INVOKE_KEY.into(),
+            },
+        )
+        .map(|response| response.deserialize::<serde_json::Value>().unwrap())
+    };
+    for (id, background) in [
+        ("older-bundle", None),
+        ("newer-bundle", Some(true)),
+        ("newer-bundle-foreground", Some(false)),
+    ] {
+        let mut body =
+            serde_json::json!({"query": "{ user { id } }", "data": {"user": {"id": id}}});
+        if let Some(background) = background {
+            body["background"] = background.into();
+        }
+        invoke("graphql_cache_write", body).expect("the write lands");
+        let read = invoke(
+            "graphql_cache_read",
+            // What an older binary's write sees of a newer bundle's flag.
+            serde_json::json!({"query": "{ user { id } }", "background": true}),
+        )
+        .expect("an undeclared key is ignored");
+        assert_eq!(read["data"], serde_json::json!({"user": {"id": id}}));
+    }
 }

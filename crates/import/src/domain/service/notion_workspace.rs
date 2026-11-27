@@ -255,6 +255,12 @@ where
         self.current_report(user).await
     }
 
+    #[tracing::instrument(
+        name = "workspace_import.attach_review",
+        skip(self, user),
+        fields(review_id = %review_id, agent_session_id = %session_id),
+        err
+    )]
     async fn attach_notion_review(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -373,10 +379,16 @@ where
         scope: ImportScope,
         sharing: NotionSharing,
     ) -> futures::future::BoxFuture<'a, ()> {
+        let explicit_roots = match &scope {
+            ImportScope::Everything => 0,
+            ImportScope::Roots { ids } => ids.len(),
+        };
         let span = tracing::info_span!(
             "workspace_import.plan",
             source = self.workspace_source.as_ref(),
             sharing = sharing.as_ref(),
+            explicit_roots,
+            outcome = tracing::field::Empty,
             already_in_macro = tracing::field::Empty,
             stopped = tracing::field::Empty,
         );
@@ -393,6 +405,7 @@ where
                 Some(outcome) => outcome,
                 // Planning only reads, so the next process plans again.
                 None if control.handed_over() => {
+                    tracing::Span::current().record("outcome", "handed_over");
                     if control.reason() == Some(Stop::Shutdown) {
                         self.release_run(user).await;
                     }
@@ -410,9 +423,17 @@ where
                 }
             };
             // A cancelled run is `dismissed` already, so this moves nothing.
-            if let Err(error) = self.end_plan(user, to, error.as_deref(), kind).await {
-                tracing::warn!(error = ?error, "could not record the notion planning outcome");
-            }
+            let stop = control.reason();
+            let outcome = match self.end_plan(user, to, error.as_deref(), kind).await {
+                Ok(moved) => stop
+                    .as_ref()
+                    .map_or(if moved { to.as_ref() } else { "unchanged" }, AsRef::as_ref),
+                Err(error) => {
+                    tracing::warn!(error = ?error, "could not record the notion planning outcome");
+                    "settlement_failed"
+                }
+            };
+            tracing::Span::current().record("outcome", outcome);
             self.notify(user).await;
         }
         .instrument(span)
@@ -461,7 +482,7 @@ where
         if control.reason().is_some() {
             return Ok(());
         }
-        let tree = plan::PlanTree::with_databases(&discovery);
+        let tree = plan::PlanTree::with_databases(&discovery).for_scope(&scope);
         let team = self.repo.user_team_id(user).await?.is_some();
         let already_imported = self.already_in_macro(user, &tree).await?;
         tracing::Span::current().record("already_in_macro", already_imported.len());
@@ -956,7 +977,7 @@ pub fn failure_kind(error: &ImportError) -> RunErrorKind {
             // An incomplete saved-view list is the source's to finish; a
             // later retry can read it.
             NotionError::Upstream { .. }
-            | NotionError::Transport(_)
+            | NotionError::Transport { .. }
             | NotionError::IncompleteViewList => RunErrorKind::Unreachable,
             NotionError::Decode(_) => RunErrorKind::Internal,
         },
@@ -1084,7 +1105,7 @@ fn notion_failure_text(error: &NotionError) -> Option<&'static str> {
         } => "Notion couldn’t return this item’s content.",
         NotionError::Decode(_) => "Notion returned data Macro couldn’t read.",
         NotionError::IncompleteViewList => "Notion only returned part of the database’s tab list.",
-        NotionError::Transport(_) | NotionError::Upstream { .. } => {
+        NotionError::Transport { .. } | NotionError::Upstream { .. } => {
             "Notion couldn’t complete the request."
         }
     })

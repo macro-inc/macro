@@ -29,7 +29,7 @@ export interface SuggestionsReview {
   readonly newLeft: number;
 }
 
-/** One thing in the user's work that suggestions are grouped under, such as a customer or an event. */
+/** One result in the user's work that the suggestions grouped under it all end at, such as a renewal or an event. */
 export interface SuggestionTopic {
   /** Names the topic across nights. */
   readonly key: string;
@@ -48,7 +48,7 @@ export interface SuggestionTopicReason {
 
 /** A topic to name, or to name again: its key's name and reason are replaced. */
 export interface SuggestionTopicInput {
-  /** A short lowercase key, the same every night for the same topic, such as `customer:northwind`. */
+  /** A short lowercase key, the same every night for the same topic, such as `renewal:northwind`. */
   key: string;
   /** What it is, in one to four words. Names no one's email address, phone number or street address. */
   name: string;
@@ -228,7 +228,7 @@ export class SuggestionNamespace {
    *
    * @example
    * const outcome = await macro.suggestions.nameTopic({
-   *   key: 'customer:northwind',
+   *   key: 'renewal:northwind',
    *   name: 'Northwind renewal',
    *   reason: { text: 'Renewal is November 30', source: { entity: contract } },
    * });

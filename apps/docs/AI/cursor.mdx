@@ -8,7 +8,7 @@ description: "Run coding agents on your Cursor plan from Macro, and see the sess
 Connect Cursor so your coding agents run as Cursor cloud agents on your own Cursor plan. You start and follow a session from Macro; the work runs in Cursor Cloud and streams into the session in Macro.
 
 <Note>
-  Your Cursor plan must include [cloud agents](https://cursor.com/docs/cloud-agent), and a Cursor account admin must connect source control for your Cursor account.
+  Your Cursor plan must include [cloud agents](https://cursor.com/docs/cloud-agent), and a Cursor account admin must connect source control for your Cursor account. Each session is billed to your Cursor account, so it also needs [usage left to pay for it](#cursor-usage-and-billing).
 </Note>
 
 ## Connect Cursor
@@ -37,6 +37,17 @@ In **Settings → Agents**, create an agent (or edit one) and set where it runs 
 A session needs access to its repository on both sides. Macro lists the repositories your [GitHub](/integrations/github) connection covers, and Cursor needs source control connected for that repository too. Connecting one does not connect the other, so a repository missing from either side fails to start.
 
 Each session works like any other coding session in Macro: you see its progress, tool calls, and linked pull request, and you can send follow-ups or stop it.
+
+## Cursor usage and billing
+
+Cursor bills every message you send to a Cursor agent to the account behind your API key, at the rate of the agent's model. A valid key with every permission isn't enough on its own: when the account is out of prepaid credit, or too close to its spend limit, Cursor refuses the run and the session shows **Cursor billing stopped this message**. Nothing was sent, and nothing is wrong with your key or with Macro.
+
+What to change depends on your Cursor plan:
+
+- **The X Subscription (Premium, Super, Ultra):** add credit or turn on Auto Top-up under **Additional usage credits** at [grok.com/dashboard/billing](https://grok.com/dashboard/billing). If you reached the monthly additional usage limit you set there, raise it. Third-party models such as Claude and GPT always draw on this credit. Cursor's own models, such as Grok and Composer, use your plan's weekly usage first.
+- **A legacy Cursor plan:** turn on on-demand usage or raise your spend limit on the **Spending** tab of the [Cursor dashboard](https://cursor.com/dashboard).
+
+On a Cursor team, only an admin may be able to change these. Then send your message again. Cursor's [usage-based charges](https://cursor.com/help/account-and-billing/overages) page has the details for each plan.
 
 ## See Macro's sessions in Cursor
 

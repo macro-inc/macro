@@ -37,11 +37,23 @@ export class CacheChangeBatch {
               ]),
             ]
           : undefined;
+      // A view stays unchanged across coalesced writes only if every write
+      // proved it unchanged; missing metadata conservatively drops the proof.
+      const previousUnchanged = previous.push.unchangedViews;
+      const nextUnchanged = push.unchangedViews;
+      const unchangedViews =
+        previousUnchanged !== undefined && nextUnchanged !== undefined
+          ? (() => {
+              const kept = new Set(previousUnchanged);
+              return nextUnchanged.filter((view) => kept.has(view));
+            })()
+          : undefined;
       // Missing scope means all buckets, and dominates any narrower hint.
       push = {
         kind: push.kind,
         revision: push.revision,
         ...(buckets === undefined ? {} : { searchChangedBuckets: buckets }),
+        ...(unchangedViews === undefined ? {} : { unchangedViews }),
       };
     }
     // Emit the channels in revision order without promoting hydration to an

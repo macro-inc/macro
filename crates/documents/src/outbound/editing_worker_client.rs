@@ -519,11 +519,12 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
                     { "provider": "anthropic", "model": "claude-haiku-4-5" },
                 ],
                 // The fast path's single model; mirrors the web client's chain
-                // (apps/web ai-editing-worker/client.ts). Gemini 3.8 Flash ran
-                // a real inline edit in 1.5-5 s with no thinking tokens where
-                // 3.7 Flash took 3.8-5.4 s; Haiku is the provider-error fallback.
+                // (apps/web ai-editing-worker/client.ts). On a 12.7k-token
+                // inline edit at `low` thinking, Gemini 4 Hydrogen answered in
+                // a median 2.8 s where Gemini 3.8 Flash took 4.9 s (11 runs
+                // each); Haiku is the provider-error fallback.
                 "fast": [
-                    { "provider": "google", "model": "gemini-3.8-flash" },
+                    { "provider": "google", "model": "gemini-4-hydrogen" },
                     { "provider": "anthropic", "model": "claude-haiku-4-5" },
                 ],
             },

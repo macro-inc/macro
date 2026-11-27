@@ -700,7 +700,6 @@ export function ExternalChatView(props: {
                                     listMeta={meta()}
                                   />
                                   <ChannelMessage
-                                    timestampFormat="time"
                                     message={messageData(message)}
                                     actions={actions}
                                     listMeta={meta()}

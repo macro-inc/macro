@@ -196,7 +196,7 @@ fn notion(error: &NotionError) -> Failure {
         NotionError::Upstream {
             status: 500..=599, ..
         }
-        | NotionError::Transport(_) => Failure::NotionUnavailable,
+        | NotionError::Transport { .. } => Failure::NotionUnavailable,
         NotionError::Upstream { .. } => {
             Failure::RunWide("Notion could not complete the request; retry this import")
         }

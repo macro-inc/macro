@@ -133,7 +133,8 @@ export function storeValue(
   value: unknown,
   shape?: QueryShape,
   previous?: unknown,
-  previousSnapshot?: unknown
+  previousSnapshot?: unknown,
+  unchanged?: WeakSet<object>
 ): unknown {
   // Untouched, untyped entities must not receive fresh identity symbols on
   // structural reads. Reuse only when their entire selected value is unchanged.
@@ -143,8 +144,10 @@ export function storeValue(
     previous !== null &&
     typeof previous === 'object' &&
     equalQueryValue(value, previousSnapshot)
-  )
+  ) {
+    unchanged?.add(previous);
     return Reflect.get(previous, $PROXY) ?? previous;
+  }
   if (Array.isArray(value)) {
     const before = Array.isArray(previous) ? previous : [];
     const snapshot = Array.isArray(previousSnapshot) ? previousSnapshot : [];
@@ -181,7 +184,8 @@ export function storeValue(
         item,
         shape,
         matched?.value ?? (usePosition ? positional : undefined),
-        matched?.snapshot ?? (usePosition ? snapshot[index] : undefined)
+        matched?.snapshot ?? (usePosition ? snapshot[index] : undefined),
+        unchanged
       );
     });
   }
@@ -202,7 +206,8 @@ export function storeValue(
         before?.[key],
         previousSnapshot !== null && typeof previousSnapshot === 'object'
           ? Reflect.get(previousSnapshot, key)
-          : undefined
+          : undefined,
+        unchanged
       ),
     ])
   );

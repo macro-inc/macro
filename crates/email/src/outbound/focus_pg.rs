@@ -371,6 +371,7 @@ impl FocusStore for FocusPgRepository {
         &self,
         link_id: Uuid,
         since: DateTime<Utc>,
+        mail_since: Option<DateTime<Utc>>,
         after: Option<StaleThread>,
         limit: i64,
     ) -> Result<Vec<StaleThread>, Report> {
@@ -379,74 +380,109 @@ impl FocusStore for FocusPgRepository {
         sqlx::query!("SET LOCAL statement_timeout = '30s'")
             .execute(&mut *tx)
             .await?;
-        // `stale` reads only the inbox's threads with mail in the window,
-        // through its indexes on latest inbound and latest outbound time, and
-        // drops those already classified at their latest mail; it is
-        // materialized so the calendar and recent contact checks, a subquery
-        // each per thread, never run on anything else. A thread below the
-        // cursor has both times at or below it, so a later page starts each
-        // index range at the cursor instead of reading the window from the
-        // top again.
+        // `stale` reads the inbox's threads with mail in the window through
+        // its indexes on latest inbound and latest outbound time, row and
+        // all, and drops those already classified at their latest mail. A
+        // thread below the cursor has both times at or below it, so a later
+        // page starts each index range at the cursor. With `mail_since`, only
+        // threads with mail since then are read, plus signal threads through
+        // their own index, since a thread can turn signal without new mail.
+        // `kept` marks the threads the thread row alone keeps.
         //
-        // Whether a sender is someone the owner wrote to lately is decided
-        // once per distinct sender of the threads nothing cheaper keeps, not
-        // once per thread. A sender named on few messages is looked up
-        // through them (`ADDRESSED_PROBE_LIMIT`), stopping at the first the
-        // owner sent in the look-back. A sender named on more, such as a
-        // mailing list, which is both the sender and a recipient of all its
-        // mail, is looked up in the owner's recipients of the look-back
-        // instead, read once and only when such a sender comes up: probing
-        // through a list's history costs a page per message, and reading the
-        // owner's sent mail on every page costs thousands of cold pages,
-        // which pushed the sweep's pages toward the statement timeout.
+        // The others are kept by their received mail, read once in `inbound`
+        // for both checks: a calendar change, and a sender the owner has
+        // written to lately. Whether a sender is someone the owner wrote to
+        // is decided once per distinct sender, not once per thread. A sender
+        // named on few messages is looked up through them
+        // (`ADDRESSED_PROBE_LIMIT`), stopping at the first the owner sent in
+        // the look-back. A sender named on more, such as a mailing list,
+        // which is both the sender and a recipient of all its mail, is looked
+        // up in the owner's recipients of the look-back instead, read once
+        // from `idx_email_messages_link_id_sent_date` and only when such a
+        // sender comes up. Each piece of mail is read once: the pages are
+        // seldom in memory when the hourly sweep comes round, and each read
+        // of them costs a page per message.
         let rows = sqlx::query!(
             r#"
             WITH stale AS MATERIALIZED (
-                SELECT t.id, t.is_signal, t.latest_inbound_message_ts,
-                       t.latest_outbound_message_ts,
-                       GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts)
-                           AS latest_at,
-                       f.rule_version
-                FROM email_threads t
-                LEFT JOIN email_thread_focus f ON f.thread_id = t.id
-                WHERE t.id IN (
-                        SELECT w.id FROM email_threads w
-                        WHERE w.link_id = $1
-                          AND w.inbox_visible
-                          AND w.latest_inbound_message_ts >= $2
-                          AND w.latest_inbound_message_ts <= COALESCE($7, 'infinity'::timestamptz)
-                        UNION
-                        SELECT w.id FROM email_threads w
-                        WHERE w.link_id = $1
-                          AND w.latest_outbound_message_ts >= $2
-                          AND w.latest_outbound_message_ts <= COALESCE($7, 'infinity'::timestamptz)
-                    )
-                  AND t.inbox_visible
+                SELECT t.id, t.latest_at,
+                       COALESCE(
+                           t.is_signal
+                           OR t.latest_outbound_message_ts > t.latest_inbound_message_ts
+                           OR f.rule_version < $4,
+                           false
+                       ) AS kept
+                FROM (
+                    SELECT w.id, w.is_signal, w.inbox_visible,
+                           w.latest_inbound_message_ts, w.latest_outbound_message_ts,
+                           GREATEST(w.latest_inbound_message_ts, w.latest_outbound_message_ts)
+                               AS latest_at
+                    FROM email_threads w
+                    WHERE w.link_id = $1
+                      AND w.inbox_visible
+                      AND w.latest_inbound_message_ts >= COALESCE($10::timestamptz, $2)
+                      AND w.latest_inbound_message_ts <= COALESCE($7, 'infinity'::timestamptz)
+                    UNION
+                    SELECT w.id, w.is_signal, w.inbox_visible,
+                           w.latest_inbound_message_ts, w.latest_outbound_message_ts,
+                           GREATEST(w.latest_inbound_message_ts, w.latest_outbound_message_ts)
+                    FROM email_threads w
+                    WHERE w.link_id = $1
+                      AND w.latest_outbound_message_ts >= COALESCE($10::timestamptz, $2)
+                      AND w.latest_outbound_message_ts <= COALESCE($7, 'infinity'::timestamptz)
+                    UNION
+                    SELECT w.id, w.is_signal, w.inbox_visible,
+                           w.latest_inbound_message_ts, w.latest_outbound_message_ts,
+                           GREATEST(w.latest_inbound_message_ts, w.latest_outbound_message_ts)
+                    FROM email_threads w
+                    WHERE $10::timestamptz IS NOT NULL
+                      AND w.link_id = $1
+                      AND w.inbox_visible
+                      AND w.is_signal
+                      AND w.latest_inbound_message_ts >= $2
+                      AND w.latest_inbound_message_ts <= COALESCE($7, 'infinity'::timestamptz)
+                ) t
+                -- One primary-key lookup per thread: the fence keeps the
+                -- planner from hashing the whole table instead.
+                LEFT JOIN LATERAL (
+                    SELECT f.rule_version, f.classified_message_ts
+                    FROM email_thread_focus f
+                    WHERE f.thread_id = t.id
+                    OFFSET 0
+                ) f ON true
+                WHERE t.inbox_visible
                   AND t.latest_inbound_message_ts IS NOT NULL
                   AND (
-                      f.thread_id IS NULL
+                      f.classified_message_ts IS NULL
                       OR f.rule_version < $4
-                      OR f.classified_message_ts
-                         < GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts)
+                      OR f.classified_message_ts < t.latest_at
                   )
-                  AND (GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts), t.id)
+                  AND (t.latest_at, t.id)
                       < (COALESCE($7, 'infinity'::timestamptz),
                          COALESCE($8, 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid))
             ),
-            sender AS MATERIALIZED (
-                SELECT DISTINCT inbound.from_contact_id AS contact_id
+            inbound AS MATERIALIZED (
+                SELECT m.thread_id, m.from_contact_id,
+                       -- A calendar change. The service judges whether it is
+                       -- the latest message and its event isn't over; a new
+                       -- invite or an RSVP never gets this far.
+                       LOWER(m.subject) ~ $6
+                       OR EXISTS (
+                           SELECT 1 FROM email_message_calendar_invites i
+                           WHERE i.message_id = m.id
+                             AND (
+                                 i.snapshot->>'method' IN ('cancel', 'counter')
+                                 OR (
+                                     i.snapshot->>'method' = 'request'
+                                     AND i.snapshot->'sequence' > '0'::jsonb
+                                 )
+                             )
+                       ) AS is_change
                 FROM stale s
-                JOIN email_messages inbound ON inbound.thread_id = s.id
-                -- Only threads the checks before the contact check don't keep.
-                WHERE NOT COALESCE(
-                          s.is_signal
-                          OR s.latest_outbound_message_ts > s.latest_inbound_message_ts
-                          OR s.rule_version < $4,
-                          false
-                      )
-                  AND NOT inbound.is_sent
-                  AND NOT inbound.is_draft
-                  AND inbound.from_contact_id IS NOT NULL
+                JOIN email_messages m ON m.thread_id = s.id
+                WHERE NOT s.kept
+                  AND NOT m.is_sent
+                  AND NOT m.is_draft
             ),
             sent_recipient AS MATERIALIZED (
                 SELECT DISTINCT r.contact_id
@@ -459,7 +495,11 @@ impl FocusStore for FocusPgRepository {
             ),
             recent_contact AS MATERIALIZED (
                 SELECT c.contact_id
-                FROM sender c
+                FROM (
+                    SELECT DISTINCT from_contact_id AS contact_id
+                    FROM inbound
+                    WHERE from_contact_id IS NOT NULL
+                ) c
                 WHERE CASE
                     WHEN (
                         SELECT count(*)
@@ -469,16 +509,24 @@ impl FocusStore for FocusPgRepository {
                             LIMIT $9::bigint + 1
                         ) addressed
                     ) <= $9::bigint
-                    -- A scalar, not EXISTS: the planner turns an EXISTS into
-                    -- a hashed read of everyone's sent mail.
+                    -- Through the sender's few messages, each by its primary
+                    -- key: a scalar per message, which no plan can turn into a
+                    -- read of sent mail. As a join or an EXISTS, plans started
+                    -- from the inbox's or everyone's sent mail instead.
                     THEN COALESCE((
                         SELECT true
-                        FROM email_message_recipients r
-                        JOIN email_messages sent ON sent.id = r.message_id
-                        WHERE r.contact_id = c.contact_id
-                          AND sent.is_sent
-                          AND NOT sent.is_draft
-                          AND sent.internal_date_ts >= $5
+                        FROM (
+                            SELECT r.message_id FROM email_message_recipients r
+                            WHERE r.contact_id = c.contact_id
+                            LIMIT $9::bigint
+                        ) addressed
+                        WHERE (
+                            SELECT sent.is_sent
+                                   AND NOT sent.is_draft
+                                   AND sent.internal_date_ts >= $5
+                            FROM email_messages sent
+                            WHERE sent.id = addressed.message_id
+                        )
                         LIMIT 1
                     ), false)
                     ELSE c.contact_id IN (SELECT contact_id FROM sent_recipient)
@@ -486,43 +534,18 @@ impl FocusStore for FocusPgRepository {
             )
             SELECT s.id AS "id!", s.latest_at AS "latest_at!"
             FROM stale s
-            WHERE s.is_signal
-               OR s.latest_outbound_message_ts > s.latest_inbound_message_ts
-               OR s.rule_version < $4
-               -- A calendar change. The service judges whether it is the
-               -- latest message and its event isn't over; a new invite or an
-               -- RSVP never gets this far.
-               OR EXISTS (
-                   SELECT 1
-                   FROM email_messages notice
-                   WHERE notice.thread_id = s.id
-                     AND NOT notice.is_sent
-                     AND NOT notice.is_draft
-                     AND (
-                         LOWER(notice.subject) ~ $6
-                         OR EXISTS (
-                             SELECT 1 FROM email_message_calendar_invites i
-                             WHERE i.message_id = notice.id
-                               AND (
-                                   i.snapshot->>'method' IN ('cancel', 'counter')
-                                   OR (
-                                       i.snapshot->>'method' = 'request'
-                                       AND i.snapshot->'sequence' > '0'::jsonb
-                                   )
-                               )
-                         )
-                     )
-               )
-               -- A sender the owner has written to lately. The service judges
-               -- whether it really is a recent contact; mail no event covers,
-               -- such as an initial sync, only arrives this way.
-               OR EXISTS (
-                   SELECT 1
-                   FROM email_messages inbound
-                   WHERE inbound.thread_id = s.id
-                     AND NOT inbound.is_sent
-                     AND NOT inbound.is_draft
-                     AND inbound.from_contact_id IN (SELECT contact_id FROM recent_contact)
+            WHERE s.kept
+               -- A calendar change, or a sender the owner has written to
+               -- lately. The service judges whether it really is a recent
+               -- contact; mail no event covers, such as an initial sync, only
+               -- arrives this way. Each `IN` sits under an `OR`, so it stays
+               -- one hashed set: as a join, a generic plan rescanned `inbound`
+               -- once per recent contact.
+               OR s.id IN (
+                   SELECT i.thread_id
+                   FROM inbound i
+                   WHERE i.is_change
+                      OR i.from_contact_id IN (SELECT contact_id FROM recent_contact)
                )
             ORDER BY s.latest_at DESC, s.id DESC
             LIMIT $3
@@ -536,6 +559,7 @@ impl FocusStore for FocusPgRepository {
             after.map(|after| after.latest_at),
             after.map(|after| after.thread_id),
             ADDRESSED_PROBE_LIMIT,
+            mail_since,
         )
         .fetch_all(&mut *tx)
         .await?;

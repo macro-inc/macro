@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+anyhow = { workspace = true }
 chrono = { workspace = true }
 futures = { workspace = true }
 http = { workspace = true }
@@ -15,9 +16,11 @@ macro_user_id = { path = "../macro_user_id" }
 models_databases = { path = "../models_databases" }
 connectors = { path = "../connectors" }
 rand = { workspace = true }
+reqwest = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["time"] }
 tracing = { workspace = true }
@@ -28,3 +31,4 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 connectors = { path = "../connectors", features = ["test-fakes"] }
 tokio = { workspace = true, features = ["test-util"] }
+tracing-subscriber = { workspace = true }
