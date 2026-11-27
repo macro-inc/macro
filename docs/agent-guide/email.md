@@ -1191,6 +1191,11 @@ before suggestions loaded. Name-word prefixes outrank substring matches;
 `jo sm` and `sm jo` both find John Smith. A domain (`gmail.com`) or a local part
 unlike the name finds the contact, below name matches. Within each name tier, and on empty
 input, personal suggestions are recent-first rather than domain/brevity-weighted.
+While the contact read for newly typed text is pending, the contacts already
+listed who still match it stay listed and no other contact shows before it
+lands (thread participants and a typed address can). Pasting a listed
+contact's address and pressing Enter then adds that contact's chip; if the
+contact cache changed generation in between, Enter adds the address alone.
 A chip shows the name followed by the address in muted ink.
 A quick click or tap in the message body moves the caret where it lands; check
 it by tapping mid-word and on another line of a two-line body, then typing.

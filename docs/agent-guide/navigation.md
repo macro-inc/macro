@@ -2226,7 +2226,10 @@ the share at tablet width and then narrow the window. In the drawer, the title
 row ends in Share, the selected items sit under it, and the To box wraps its
 chips, followed by `Send As Group Message`, an `Access:` row, and the message.
 Focus starts in `To: Email or group`, which lists people and every channel and
-group chat except DMs, whatever its size. With two or more people and no channel,
+group chat except DMs, whatever its size. Check typing there with thousands of
+groups: the text keeps up with the keys, and the people already listed who
+still match it stay listed until the contact read for it lands, while no other
+person shows before then. With two or more people and no channel,
 `Send As Group Message` is on and sends one group message; turned off, each
 person gets their own message. The access selector at the end of the To row
 (the `Access:` row on phones) sets the access level for items you own. It
