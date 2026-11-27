@@ -91,6 +91,8 @@ let
         datasourceUid = "cloudwatch";
         model = {
           inherit expression region;
+          # Unused by an expression, but Grafana refuses a query without one.
+          statistic = "Average";
           period = "60";
           metricQueryType = 0;
           metricEditorMode = 1;
@@ -109,6 +111,8 @@ let
         datasourceUid = "cloudwatch";
         model = {
           sqlExpression = sql;
+          # Unused by Metrics Insights, but Grafana refuses a query without one.
+          statistic = "Average";
           inherit region;
           period = "60";
           metricQueryType = 1;
@@ -221,7 +225,9 @@ let
       condition = "C";
       for = "0s";
       noDataState = monitor.noData or "OK";
-      execErrState = "Error";
+      # A shadow rule that cannot run says nothing in Macro Alerts: its rule
+      # health shows in Grafana, and the comparison with Datadog catches it.
+      execErrState = "KeepLast";
       isPaused = false;
       labels = {
         shadow = "datadog";
