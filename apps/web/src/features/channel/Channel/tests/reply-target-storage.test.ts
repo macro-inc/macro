@@ -140,6 +140,24 @@ describe('replyTargetStorage', () => {
     again.dispose();
   });
 
+  it('forgets a stored binding written in another form once its reply is closed', () => {
+    localStorage.setItem(
+      'channel-reply-target:channel-1',
+      '{ "replyId": "reply-1", "threadId": "root-1" }'
+    );
+    const first = mount(['root-1']);
+    expect(first.manager.replyTarget()).toEqual({
+      threadId: 'root-1',
+      replyId: 'reply-1',
+    });
+    first.manager.closeReply();
+    first.dispose();
+
+    const second = mount(['root-1']);
+    expect(second.manager.replyTarget()).toBeUndefined();
+    second.dispose();
+  });
+
   it('ignores a stored binding it cannot read', () => {
     localStorage.setItem('channel-reply-target:channel-1', '{"threadId":');
     const second = mount(['root-1']);

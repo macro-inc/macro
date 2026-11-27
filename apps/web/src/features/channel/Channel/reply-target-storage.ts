@@ -1,4 +1,5 @@
 import type { PersistenceStorage } from '@app/lib/persistence';
+import { Result } from 'neverthrow';
 import { z } from 'zod';
 import type { UnifiedReplyTarget } from './unified-input-manager';
 
@@ -9,6 +10,12 @@ const storedTargetSchema = z.object({
   threadId: z.string().min(1),
   replyId: z.string().min(1).optional(),
 });
+
+type StoredTarget = z.infer<typeof storedTargetSchema>;
+
+const parseJson = Result.fromThrowable((json: string): unknown =>
+  JSON.parse(json)
+);
 
 /**
  * The message the unified input was replying to in one channel, by ids, in
@@ -33,18 +40,15 @@ export function replyTargetStorage(
         bound = storedForm(current);
         return undefined;
       }
-      const raw = localStorage.getItem(key);
-      if (!raw) return undefined;
-      const parsed = storedTargetSchema.safeParse(JSON.parse(raw));
-      if (!parsed.success || !hasReplyDraft(parsed.data.threadId)) {
-        return undefined;
-      }
-      bound = storedForm(parsed.data);
-      return parsed.data;
+      const stored = readStoredTarget(key);
+      if (!stored || !hasReplyDraft(stored.threadId)) return undefined;
+      bound = storedForm(stored);
+      return stored;
     },
     write: (target) => {
       if (!target) {
-        if (bound !== null && localStorage.getItem(key) === bound) {
+        const stored = readStoredTarget(key);
+        if (bound !== null && stored && storedForm(stored) === bound) {
           localStorage.removeItem(key);
         }
         bound = null;
@@ -56,6 +60,16 @@ export function replyTargetStorage(
   };
 }
 
-function storedForm(target: { threadId: string; replyId?: string }): string {
+/** The binding stored under `key`, or nothing when what is there is not one. */
+function readStoredTarget(key: string): StoredTarget | undefined {
+  const raw = localStorage.getItem(key);
+  if (!raw) return undefined;
+  const json = parseJson(raw);
+  if (json.isErr()) return undefined;
+  const parsed = storedTargetSchema.safeParse(json.value);
+  return parsed.success ? parsed.data : undefined;
+}
+
+function storedForm(target: StoredTarget): string {
   return JSON.stringify({ threadId: target.threadId, replyId: target.replyId });
 }
