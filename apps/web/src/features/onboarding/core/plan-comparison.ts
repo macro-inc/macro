@@ -53,7 +53,7 @@ export const PLAN_COMPARISON = [
     feature: 'AI models',
     short: 'AI models',
     values: {
-      free: 'Gemini Flash',
+      free: 'Gemini 4 Hydrogen',
       premium: 'All models',
       business: 'All models',
       max: 'All models',

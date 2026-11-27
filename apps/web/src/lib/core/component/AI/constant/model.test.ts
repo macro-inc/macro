@@ -30,7 +30,7 @@ describe('modelsForPlan / defaultModelForPlan', () => {
   it('gives free users only the free model, defaulted to it', () => {
     const free = modelsForPlan(false);
     expect(free).toEqual([FREE_DEFAULT_MODEL]);
-    expect(FREE_DEFAULT_MODEL).toBe(Model.gemini38Flash);
+    expect(FREE_DEFAULT_MODEL).toBe(Model.gemini4Hydrogen);
     expect(free).not.toContain(Model.haiku55);
     expect(defaultModelForPlan(false)).toBe(FREE_DEFAULT_MODEL);
     // The premium models are *not* in a free user's selectable set.
@@ -81,6 +81,7 @@ describe('parseModel', () => {
     expect(parseModel('openai/gpt-5.5')).toBe(Model.gpt62Sol);
     expect(parseModel('openai/gpt-5.6-mini')).toBe(Model.gpt6Luna);
     expect(parseModel('openai/gpt-5-mini')).toBe(Model.gpt6Luna);
+    expect(parseModel('google/gemini-3.8-flash')).toBe(Model.gemini4Hydrogen);
     for (const replacement of Object.values(RETIRED_MODELS)) {
       expect(PAID_MODELS).toContain(replacement);
     }
@@ -101,7 +102,7 @@ describe('parseModel', () => {
 describe('alternateProviderModel', () => {
   it('does not offer a paid fallback when the free provider fails', () => {
     expect(
-      alternateProviderModel(Model.gemini38Flash, {
+      alternateProviderModel(Model.gemini4Hydrogen, {
         candidates: modelsForPlan(false),
       })
     ).toBeUndefined();
