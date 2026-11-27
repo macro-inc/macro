@@ -594,7 +594,10 @@ export function Channel(props: ChannelProps) {
   ) => {
     const threadId = message.thread_id ?? message.id;
     const state = threadManager.getOrCreateThreadState(threadId);
-    const beforeSnapshot = state.replyInputState();
+    // An open reply box holds a draft it restored from storage without
+    // reporting it, so ask the box first; the quote goes above that draft.
+    const beforeSnapshot =
+      state.replyInputHandle?.()?.snapshot() ?? state.replyInputState();
     const nextSnapshot: InputSnapshot = {
       value: buildReplyTargetValue({
         channelId: props.channelId,

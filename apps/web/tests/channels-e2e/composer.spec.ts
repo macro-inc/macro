@@ -164,6 +164,39 @@ test('CMP-14 a reply I was writing is still open with its text after I look at a
   await expect(firstView.composerText).toHaveText('');
 });
 
+// If this fails, a person who comes back to a reply they were writing and
+// then replies to one of the thread's replies loses what they had written:
+// the quote of that reply takes its place.
+test('CMP-16 replying to a reply in a thread keeps the reply I came back to', async ({
+  page,
+  ada,
+  ben,
+  people,
+}) => {
+  const first = await ada.createChannel({ members: [people.ben] });
+  const second = await ada.createChannel({ members: [people.ben] });
+  const root = await ben.post(first.id, 'a question');
+  const answer = await ben.post(first.id, 'an answer', { threadId: root.id });
+  const firstView = new Conversation(page, first.id);
+  const secondView = new ChannelView(page, second.id);
+  await firstView.open();
+
+  const reply = await firstView.startReply(root.id);
+  await reply.click();
+  await page.keyboard.type('half a reply');
+  await findConversations(page, second.name);
+  await conversationRow(page, second.name).click();
+  await secondView.shown();
+  await findConversations(page, first.name);
+  await conversationRow(page, first.name).click();
+  await firstView.shown();
+  await expect(firstView.replyComposer(root.id)).toHaveText('half a reply');
+
+  await firstView.action(firstView.messageById(answer.id), 'reply');
+  await expect(firstView.replyComposer(root.id)).toContainText('an answer');
+  await expect(firstView.replyComposer(root.id)).toContainText('half a reply');
+});
+
 test.describe('on a phone', () => {
   test.use({
     viewport: { width: 390, height: 844 },
