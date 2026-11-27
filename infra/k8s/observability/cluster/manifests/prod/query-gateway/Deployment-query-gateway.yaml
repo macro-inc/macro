@@ -18,7 +18,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 4f1a9044e56f720561030086ff02638c8a1976db5a1ec13d5e518a2a89baf17e
+        checksum/config: a9cf410492b68d62041529cd65de145b00c1303b96b0c479d6b4c035e075ddf9
       labels:
         app.kubernetes.io/name: query-gateway
         observability.macro.com/telemetry-read: "true"

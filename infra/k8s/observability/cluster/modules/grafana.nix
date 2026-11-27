@@ -347,6 +347,18 @@ let
       # A replaced pod's address never comes back.
       ha_reconnect_timeout = "2m";
     };
+    # Rule state history: Grafana's database (annotations) for its own views,
+    # and Loki, where queries can compare rules' firing with Datadog's
+    # (grafana-provisioning/datadog/). Writes go through the query gateway's
+    # one push path, reads through its Loki query endpoints.
+    "unified_alerting.state_history" = {
+      enabled = true;
+      backend = "multiple";
+      primary = "annotations";
+      secondaries = "loki";
+      loki_remote_read_url = config.macro.edge.datasourceUrls.loki;
+      loki_remote_write_url = config.macro.edge.stateHistoryUrl;
+    };
   };
 
   optionalSecretEnv = secret: key: {

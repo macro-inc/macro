@@ -29,7 +29,7 @@ modules/*.nix ──nix run .#render──▶ manifests/prod/ (committed) ──
 | `reloader` | `observability` | Restarts a Deployment when a Secret it names in `secret.reloader.stakater.com/reload` changes (Grafana's rotated database password). |
 | `grafana` | `observability` | Grafana, two replicas on RDS Postgres with HA alerting between them, provisioned from the host's `nixos/grafana-provisioning`. Sends no notification until the switch, except the watchdog heartbeat (below). |
 | `edge` | `observability` | nginx, the only target of the ALB: Grafana and Argo CD by hostname, OTLP to `alloy-ingest`, basic-auth remote write and Loki push. Runs only in the ALB's zones. |
-| `query-gateway` | `observability` | nginx between Grafana's datasources and the backends: only query endpoints and methods pass. |
+| `query-gateway` | `observability` | nginx between Grafana's datasources and the backends: only query endpoints and methods pass, and Grafana's alert state history push. |
 | `alloy-ingest` | `observability` | Two Alloys running the host's `nixos/ingest.alloy`: check the OTLP token, send logs to Loki, metrics to Mimir and traces to the sampler. |
 | `derived-metrics` | `observability` | Two Alloys that compute the metrics Datadog derives from spans and write them to Mimir ("Derived metrics"). |
 | `alloy-sampler` | `observability` | Three Alloys that each see whole traces: count span metrics and service graphs, keep or drop each trace, send the kept ones to Tempo ("Trace sampling" below). |
@@ -323,7 +323,10 @@ group in `modules/grafana.nix` (today: Tempo compaction stalled), routed to
 GoAlert notify. Datadog's monitors run beside Datadog as shadow rules (folder
 `Datadog shadow`, label `shadow=datadog`, the host stack's
 `grafana-provisioning/datadog/MAPPING.md`): they route to GoAlert notify and
-never page, even critical ones, until the paging moves over group by group. Muting covers notification policies only: a contact point's
+never page, even critical ones, until the paging moves over group by group.
+Every rule's state changes also go to Loki (`{from="state-history"}`), through
+the query gateway's one write path, so they can be compared with Datadog's
+without the Grafana API. Muting covers notification policies only: a contact point's
 **Test** button in the UI sends for real even while muted; don't press it
 before the switch.
 

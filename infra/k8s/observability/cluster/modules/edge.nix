@@ -10,7 +10,9 @@
 # - `query-gateway`: Grafana's datasources go through it. Grafana users can
 #   send arbitrary paths through a datasource proxy, so only the query
 #   endpoints of Mimir, Loki and Tempo pass, and only with the methods
-#   queries use; maintenance and write APIs answer 404 or 403.
+#   queries use; maintenance and write APIs answer 404 or 403. The one write
+#   is Grafana's alert state history, a Loki push under a prefix no
+#   datasource has (`stateHistoryUrl`).
 #
 # Rate limits are per replica: each edge replica allows 400 ingest requests/s
 # with a burst of 800.
@@ -173,6 +175,14 @@ let
       location ~ ^/loki/loki/api/v1/(labels|label/[^/]+/values|series|index/stats|index/volume|index/volume_range|patterns|tail|status/buildinfo|format_query|detected_fields|detected_labels|detected_field/[^/]+/values)$ {
         ${query endpoints.loki.query "GET" websocketHeaders}
       }
+      # Grafana's alert state history (`unified_alerting.state_history`).
+      # `$request_uri` is the path as sent: a datasource proxy path that
+      # climbs out of its prefix with `..` normalizes to this location but
+      # fails the check.
+      location = /state-history/loki/api/v1/push {
+        if ($request_uri != "/state-history/loki/api/v1/push") { return 403; }
+        ${query endpoints.loki.query "POST" ""}
+      }
       location ~ ^/tempo/api/(echo|search|search/tags|search/tag/[^/]+/values|traces/[a-fA-F0-9]+|v2/traces/[a-fA-F0-9]+|v2/search/tags|v2/search/tag/[^/]+/values|metrics/query|metrics/query_range|status/buildinfo)$ {
         ${query endpoints.tempo.query "GET" ""}
       }
@@ -248,6 +258,12 @@ in
           tempo = "${base}/tempo";
         };
       description = "Grafana datasource URLs through the query gateway.";
+    };
+    stateHistoryUrl = mkOption {
+      type = types.str;
+      readOnly = true;
+      default = "${svc "query-gateway" config.macro.edge.gatewayPort}/state-history";
+      description = "Where Grafana pushes alert state history: Loki's push API under it, through the query gateway.";
     };
   };
 
