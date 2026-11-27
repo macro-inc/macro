@@ -79,7 +79,7 @@ pub static CODE_MODE_SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROM
 pub static DATABASE_READ_ONLY_TOOL_USE_PROMPT: ComposedPrompt =
     BASE_PROMPT.compose(&databases::READ_ONLY_PROMPT);
 
-/// Citation, do-not, Macro-terms and pull-request rules surfaced
+/// Citation, do-not, Macro-terms, pull-request and GitHub-link rules surfaced
 /// to external MCP clients, composed together. These are static; the
 /// item-linking rules for the model's own replies are not, because they
 /// depend on the runtime app base URL — see [`mcp_instructions`].
@@ -92,7 +92,8 @@ pub static DATABASE_READ_ONLY_TOOL_USE_PROMPT: ComposedPrompt =
 static MCP_STATIC_INSTRUCTIONS: ComposedPrompt = citations::PROMPT
     .compose(&do_not::PROMPT)
     .compose(&about_macro::PROMPT)
-    .compose(&pull_requests::PROMPT);
+    .compose(&pull_requests::PROMPT)
+    .compose(&pull_requests::GITHUB_FILE_LINKS_PROMPT);
 
 /// Builds the instructions surfaced to external MCP clients via the server
 /// `instructions` field.
@@ -318,6 +319,11 @@ mod tests {
         assert!(instructions.contains("\"blockName\":\"initiative\""));
         assert!(instructions.contains("\"blockName\":\"pipeline\""));
         assert!(instructions.contains("\"blockName\":\"routine\""));
+    }
+
+    #[test]
+    fn mcp_instructions_carry_github_file_links() {
+        assert!(mcp_instructions("https://macro.com").contains(pull_requests::GITHUB_FILE_LINKS));
     }
 
     #[test]
