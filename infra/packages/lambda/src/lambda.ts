@@ -3,10 +3,17 @@ import * as pulumi from '@pulumi/pulumi';
 import {
   CLOUDWATCH_KINESIS_STREAM_ROLE_ARN,
   DATADOG_KINESIS_FIREHOSE_STREAM_ARN,
+  GRAFANA_CLOUDWATCH_LOGS_ROLE_ARN,
+  GRAFANA_CLOUDWATCH_LOGS_STACKS,
+  GRAFANA_CLOUDWATCH_LOGS_STREAM_ARN,
   stack,
 } from '../../shared';
 import { generateContentHash } from './hash';
 import { SourceCodeHash } from './source_code_hash';
+
+// Every event but the runtime's per-invocation lines.
+const LOG_FILTER_PATTERN =
+  '- "START RequestId:" - "REPORT RequestId:" - "END RequestId:" - "INIT_START"';
 
 type LambdaArgs<T extends Record<string, any>> = {
   baseName: string;
@@ -120,14 +127,28 @@ export class Lambda<
         name: `${baseName}-${stack}`,
         logGroup: this.logGroup.name,
         destinationArn: DATADOG_KINESIS_FIREHOSE_STREAM_ARN,
-        filterPattern:
-          '- "START RequestId:" - "REPORT RequestId:" - "END RequestId:" - "INIT_START"',
+        filterPattern: LOG_FILTER_PATTERN,
         roleArn: CLOUDWATCH_KINESIS_STREAM_ROLE_ARN,
       }
       // TODO: uncommenting this will cause a ResourceAlreadyExistsException
       // you will need to manually delete the log group
       // { parent: this }
     );
+
+    // The same events to Grafana's Loki.
+    if (GRAFANA_CLOUDWATCH_LOGS_STACKS.includes(stack)) {
+      new aws.cloudwatch.LogSubscriptionFilter(
+        `${baseName}-grafana-log-subscription-filter`,
+        {
+          name: `${baseName}-${stack}-grafana`,
+          logGroup: this.logGroup.name,
+          destinationArn: GRAFANA_CLOUDWATCH_LOGS_STREAM_ARN,
+          filterPattern: LOG_FILTER_PATTERN,
+          roleArn: GRAFANA_CLOUDWATCH_LOGS_ROLE_ARN,
+        },
+        { parent: this }
+      );
+    }
 
     this.lambda = new aws.lambda.Function(
       `${baseName}-${stack}`,
