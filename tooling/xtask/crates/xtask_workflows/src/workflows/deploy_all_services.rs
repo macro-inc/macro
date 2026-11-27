@@ -8,12 +8,12 @@
 //! `deploy-all-services.yml`).
 
 use gh_workflow::expr::typed::{
-    Expr, Flag, JobHandle, JobOutput, Json, StepHandle, StepOutput, Str, all_needs_results, always,
-    cancelled, format, from_json, github, input, matrix, runner, to_json, whole_needs,
+    Bool, Expr, Flag, JobHandle, JobOutput, Json, StepHandle, StepOutput, Str, all_needs_results,
+    always, cancelled, format, from_json, github, input, matrix, runner, to_json, whole_needs,
 };
 use gh_workflow::{
-    Concurrency, Env, Event, Job, Run, Step, Strategy, Use, Workflow, WorkflowCall,
-    WorkflowCallSecret, WorkflowDispatch, WorkflowInput,
+    Concurrency, Env, Event, Job, Level, Permissions, Run, Step, Strategy, Use, Workflow,
+    WorkflowCall, WorkflowCallSecret, WorkflowDispatch, WorkflowInput,
 };
 
 use crate::workflows::actions::{
@@ -69,6 +69,8 @@ pub(crate) const BUILD_SERVICE_BINARIES: JobHandle<()> =
 pub(crate) const BUILD_LAMBDA_ARTIFACTS: JobHandle<()> =
     JobHandle::new("build-lambda-artifacts", ());
 pub(crate) const MIGRATE_DB: JobHandle<()> = JobHandle::new("migrate-db", ());
+pub(crate) const MIGRATION_RUNNER_WATCHDOG: JobHandle<()> =
+    JobHandle::new("migration-runner-watchdog", ());
 pub(crate) const DEPLOY_SERVICES: JobHandle<()> = JobHandle::new("deploy-services", ());
 
 pub(crate) struct CheckArtifactsOutputs {
@@ -177,6 +179,7 @@ pub fn deploy_all_services() -> Workflow {
         .add_job(BUILD_SERVICE_BINARIES, build_service_binaries())
         .add_job(BUILD_LAMBDA_ARTIFACTS, build_lambda_artifacts())
         .add_job(MIGRATE_DB, migrate_db())
+        .add_job(MIGRATION_RUNNER_WATCHDOG, migration_runner_watchdog())
         .add_job(DEPLOY_SERVICES, deploy_services())
         .add_job("deployment-summary", deployment_summary())
 }
@@ -368,25 +371,72 @@ fn log_lambda_receipt() -> Step<Run> {
         .shell("bash")
 }
 
+/// The migration job's name, which [`migration_runner_watchdog`] looks for.
+pub(crate) const MIGRATE_DB_NAME: &str = "Run Database Migrations";
+/// [`migration_runner_watchdog`]'s name, which it skips among the jobs it waits for.
+pub(crate) const MIGRATION_RUNNER_WATCHDOG_NAME: &str = "Wait for the migration runner";
+/// How long the migration may wait for a `db-migrator` runner before the
+/// watchdog cancels the deploy.
+pub(crate) const MIGRATION_RUNNER_WAIT_MINUTES: u32 = 20;
+
+/// The jobs the migration waits for; its watchdog waits for the same.
+fn migrate_db_needs() -> Vec<String> {
+    vec![
+        SETUP.to_string(),
+        WARM_BINARIES.to_string(),
+        WARM_LAMBDAS.to_string(),
+        BUILD_SERVICE_BINARIES.to_string(),
+        BUILD_LAMBDA_ARTIFACTS.to_string(),
+    ]
+}
+
+/// When the migration runs; its watchdog runs then too.
+fn migrate_db_cond() -> Expr<Bool> {
+    (!cancelled())
+        .and(SETUP.outputs.services.read().ne("[]"))
+        .and(!all_needs_results().contains("failure"))
+        .and(!all_needs_results().contains("cancelled"))
+}
+
+/// Runs on the in-VPC `db-migrator` runner, which reaches the databases. It
+/// must not build anything there (see [`runners::DB_MIGRATOR`]).
 fn migrate_db() -> Job {
     Job::default()
-        .name("Run Database Migrations")
-        .needs(vec![
-            SETUP.to_string(),
-            WARM_BINARIES.to_string(),
-            WARM_LAMBDAS.to_string(),
-            BUILD_SERVICE_BINARIES.to_string(),
-            BUILD_LAMBDA_ARTIFACTS.to_string(),
-        ])
-        .cond(
-            (!cancelled())
-                .and(SETUP.outputs.services.read().ne("[]"))
-                .and(!all_needs_results().contains("failure"))
-                .and(!all_needs_results().contains("cancelled")),
-        )
+        .name(MIGRATE_DB_NAME)
+        .needs(migrate_db_needs())
+        .cond(migrate_db_cond())
         .runs_on(runners::DB_MIGRATOR)
         .add_step(steps::checkout_v4_action().sparse_checkout(".github/"))
         .add_step(run_migrations())
+}
+
+/// A self-hosted job no runner takes waits a day in the queue, and the deploy
+/// with it. Runs beside [`migrate_db`] on Namespace and cancels the run, with
+/// an error saying why, when no `db-migrator` runner has taken the migration
+/// after [`MIGRATION_RUNNER_WAIT_MINUTES`] (`scripts/migration_runner_watchdog.ts`).
+/// The time limit covers that wait and the jobs it lets finish first.
+fn migration_runner_watchdog() -> Job {
+    Job::default()
+        .name(MIGRATION_RUNNER_WATCHDOG_NAME)
+        .needs(migrate_db_needs())
+        .cond(migrate_db_cond())
+        .runs_on(runners::Runner::TinyNoCache.to_string())
+        .timeout_minutes(MIGRATION_RUNNER_WAIT_MINUTES + 40)
+        .permissions(Permissions {
+            actions: Some(Level::Write),
+            ..Default::default()
+        })
+        .add_step(
+            Step::new("Cancel the deploy if no runner takes the migration")
+                .run(steps::node_script(include_str!(
+                    "scripts/migration_runner_watchdog.ts"
+                )))
+                .add_env(("GH_TOKEN", github().token()))
+                .add_env(("MIGRATION_JOB", MIGRATE_DB_NAME))
+                .add_env(("MIGRATION_RUNNER_LABEL", runners::DB_MIGRATOR))
+                .add_env(("WATCHDOG_JOB", MIGRATION_RUNNER_WATCHDOG_NAME))
+                .add_env(("WAIT_MINUTES", MIGRATION_RUNNER_WAIT_MINUTES.to_string())),
+        )
 }
 
 fn run_migrations() -> Step<Use> {
