@@ -5,11 +5,8 @@ import type { SoupLoadMoreRow } from '@app/features/soup';
 import { useInfiniteScrollSentinel } from '@app/lib/primitives/infinite-scroll-sentinel';
 import { UserIcon } from '@core/component/UserIcon';
 import { fireAndForget } from '@core/util/fireAndForget';
-import {
-  getPropertyOptionLabel,
-  getTaskStatusOptionId,
-  type TaskEntityWithProperties,
-} from '@entity';
+import { getPropertyOptionLabel, type TaskEntityWithProperties } from '@entity';
+import { TaskPropertyControl } from '@entity/extractors-property/task-property-control';
 import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import ProjectIcon from '@icon/system/regular/cube.svg';
@@ -230,23 +227,21 @@ export function TaskGanttView(props: {
                                 () => item().entity,
                                 <Gantt.Label>
                                   <Layer depth={2}>
-                                    <button
-                                      type="button"
-                                      class="flex h-7 w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-md px-2 text-left text-xs outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
-                                      title={item().entity.name}
-                                      onClick={(event) =>
-                                        props.onOpen(item().entity, event)
-                                      }
-                                    >
-                                      <PropertyValueIcon
-                                        optionId={
-                                          getTaskStatusOptionId(
-                                            item().entity
-                                          ) ?? ''
+                                    <div class="flex h-7 w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-md px-2 text-xs hover:bg-hover">
+                                      <span data-gantt-no-drag>
+                                        <TaskPropertyControl
+                                          entity={item().entity}
+                                          property="status"
+                                        />
+                                      </span>
+                                      <button
+                                        type="button"
+                                        class="h-full min-w-0 flex-1 text-left leading-3.5 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+                                        title={item().entity.name}
+                                        onClick={(event) =>
+                                          props.onOpen(item().entity, event)
                                         }
-                                        class="size-3.5 shrink-0"
-                                      />
-                                      <span class="min-w-0 flex-1 leading-3.5">
+                                      >
                                         <span class="block truncate">
                                           {item().entity.name}
                                         </span>
@@ -257,8 +252,8 @@ export function TaskGanttView(props: {
                                           )}
                                           class="leading-3"
                                         />
-                                      </span>
-                                    </button>
+                                      </button>
+                                    </div>
                                   </Layer>
                                 </Gantt.Label>
                               )}

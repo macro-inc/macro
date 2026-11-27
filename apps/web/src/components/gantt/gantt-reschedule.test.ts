@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, waitFor } from '@solidjs/testing-library';
-import { createComponent } from 'solid-js';
+import { createComponent, type JSX } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { GanttCreation } from './create-gantt-creation';
 import { Gantt } from './gantt';
@@ -25,7 +25,8 @@ afterEach(() => {
 
 /** A 1000px chart from day 0 at 20px a day after a 260px label column, so x 500 is day 12. */
 function barFixture(
-  onReschedule?: (dates: GanttCreation) => Promise<unknown> | void
+  onReschedule?: (dates: GanttCreation) => Promise<unknown> | void,
+  leading?: JSX.Element
 ) {
   const onClick = vi.fn();
   const viewport = document.createElement('div');
@@ -47,6 +48,7 @@ function barFixture(
               title: 'Launch',
               onClick,
               onReschedule,
+              leading,
             }),
           ];
         }, {});
@@ -71,6 +73,27 @@ function barFixture(
     view.container.querySelector<HTMLElement>(`[data-gantt-resize="${side}"]`);
   return { ...view, pointer, bar, body, edge, onClick };
 }
+
+it('keeps a label action independent from opening and rescheduling the bar', () => {
+  const onAction = vi.fn();
+  const onReschedule = vi.fn();
+  const action = document.createElement('button');
+  action.textContent = 'Change status';
+  action.onclick = onAction;
+  const { pointer, getByRole, onClick } = barFixture(onReschedule, action);
+
+  pointer(action, 'pointerdown', 500);
+  pointer(window, 'pointermove', 560);
+  pointer(window, 'pointerup', 560);
+  fireEvent.click(getByRole('button', { name: 'Change status' }));
+
+  expect(onAction).toHaveBeenCalledOnce();
+  expect(onClick).not.toHaveBeenCalled();
+  expect(onReschedule).not.toHaveBeenCalled();
+
+  fireEvent.click(getByRole('button', { name: /^Launch:/ }));
+  expect(onClick).toHaveBeenCalledOnce();
+});
 
 it('moves a whole bar by the days it was dragged, without opening it', () => {
   const onReschedule = vi.fn();
