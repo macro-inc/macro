@@ -50,7 +50,7 @@ let
 in
 {
   source = "monitors/rds.ts";
-  interval = "5m";
+  interval = "1m";
   monitors = [
     {
       monitor = "rds-proxy-connections";
@@ -64,7 +64,8 @@ in
           id = "connections";
           reducer = "mean";
           query = q.cloudwatchMath {
-            expression = "AVG(SEARCH('Namespace=\"AWS/RDS\" MetricName=\"DatabaseConnections\" ProxyName=\"macrodb-proxy-prod\" TargetGroup=\"default\"', 'Sum', 60))";
+            # Over the series that reported: AVG counts a gap as 0.
+            expression = "SUM(SEARCH('Namespace=\"AWS/RDS\" MetricName=\"DatabaseConnections\" ProxyName=\"macrodb-proxy-prod\" TargetGroup=\"default\"', 'Sum', 60)) / DATAPOINT_COUNT(SEARCH('Namespace=\"AWS/RDS\" MetricName=\"DatabaseConnections\" ProxyName=\"macrodb-proxy-prod\" TargetGroup=\"default\"', 'Sum', 60))";
           };
         }
       ];
@@ -72,7 +73,7 @@ in
       delay = 900;
       comparator = ">";
       critical = 500;
-      translation = "Datadog's `aws.rds.proxy.database_connections` is CloudWatch's per-minute Sum (not Average) of each of the proxy's target series (read-write role, read-only role, target), averaged across them: about 54 when Datadog showed 54.08.";
+      translation = "Datadog's `aws.rds.proxy.database_connections` is CloudWatch's per-minute Sum (not Average) of each of the proxy's target series (read-write role, read-only role, target), averaged across the ones that reported each minute (CloudWatch's `AVG` would count a gap as 0): about 54 when Datadog showed 54.08.";
     }
     {
       monitor = "rds-high-cpu";

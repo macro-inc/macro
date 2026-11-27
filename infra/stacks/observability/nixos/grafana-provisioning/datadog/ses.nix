@@ -23,7 +23,7 @@ let
 in
 {
   source = "monitors/ses.ts";
-  interval = "5m";
+  interval = "1m";
   monitors = [
     (monitor {
       monitor = "ses-complaint-rate";
@@ -49,7 +49,7 @@ in
       inputs = [ (ses "Send" "Sum") ];
       critical = 250;
       warning = 200;
-      translation = "Sends summed over the hour, as Datadog's `sum(last_1h)` of per-minute sums.";
+      translation = "Sends summed over the hour, as Datadog's `sum(last_1h)` of per-minute sums (`aws.ses.send.sum`). Datadog groups by account, but has SES data from one, the account Grafana reads, and only in us-east-1; CloudWatch has no SES sends in us-east-2, us-west-2 or eu-west-1: 37 in both when compared.";
     })
   ];
 }

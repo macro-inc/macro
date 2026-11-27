@@ -3,8 +3,9 @@
 Generated from `infra/stacks/observability/nixos/grafana-provisioning/datadog/`
 by `nix run .#render` in `infra/k8s/observability/cluster`; edit those files.
 
-Every Datadog monitor in `infra/stacks/monitoring/monitors/`, and the
-Grafana alert rules it became. Ported rules run in shadow, in the folder
+Datadog monitors from `infra/stacks/monitoring/monitors/`, by source file,
+and the Grafana alert rules each became; a monitor not listed is not ported
+yet. Ported rules run in shadow, in the folder
 `Datadog shadow` with the label `shadow=datadog`: they notify GoAlert's
 Notify service and never page, and a monitor that sends nothing in Datadog
 sends nothing here. A group moves to paging once its rules have fired when
@@ -17,7 +18,7 @@ the threshold. Warning and critical are exclusive bands. No datapoints
 never fires unless noted. Rule state history is in Loki,
 `{from="state-history", group=~"Datadog .*"} | json`.
 
-Of 24 monitors, 23 are ported and 1 not.
+Of 24 monitors, 20 are ported and 4 not.
 
 | Monitor | Datadog | Route | Grafana |
 | --- | --- | --- | --- |
@@ -41,10 +42,10 @@ Of 24 monitors, 23 are ported and 1 not.
 | `lambda-error-count` | [1065393](https://us5.datadoghq.com/monitors/1065393) | page | ported, 2 rules |
 | `web-app-source-errors-prod` | [1189349](https://us5.datadoghq.com/monitors/1189349) | page | not ported |
 | `ai-provider-account-unavailable` | not deployed | page | ported, 1 rule |
-| `firecracker-golden-secret-refused` | not deployed | page | ported, 1 rule |
+| `firecracker-golden-secret-refused` | not deployed | page | not ported |
 | `firecracker-host-memory` | not deployed | page | ported, 1 rule |
-| `firecracker-host-unhealthy` | not deployed | page | ported, 1 rule |
-| `macrodb-blocked-connections` | [23404623](https://us5.datadoghq.com/monitors/23404623) | page | ported, 2 rules |
+| `firecracker-host-unhealthy` | not deployed | page | not ported |
+| `macrodb-blocked-connections` | [23404623](https://us5.datadoghq.com/monitors/23404623) | page | not ported |
 
 ## `monitors/computers.ts`
 
@@ -122,7 +123,7 @@ Comparison: Nothing to compare with: the monitor is in `infra/stacks/monitoring`
 
 ## `monitors/rds.ts`
 
-Rule group `Datadog rds`, every 5m.
+Rule group `Datadog rds`, every 1m.
 
 ### `rds-proxy-connections`
 
@@ -131,9 +132,9 @@ Rule group `Datadog rds`, every 5m.
 Comparison: Not compared yet.
 
 - Rules: `dd-808d1b622224-crit` (critical, > 500)
-- `connections`: mean over 1h, 15m late. CloudWatch us-east-1: `AVG(SEARCH('Namespace="AWS/RDS" MetricName="DatabaseConnections" ProxyName="macrodb-proxy-prod" TargetGroup="default"', 'Sum', 60))`
+- `connections`: mean over 1h, 15m late. CloudWatch us-east-1: `SUM(SEARCH('Namespace="AWS/RDS" MetricName="DatabaseConnections" ProxyName="macrodb-proxy-prod" TargetGroup="default"', 'Sum', 60)) / DATAPOINT_COUNT(SEARCH('Namespace="AWS/RDS" MetricName="DatabaseConnections" ProxyName="macrodb-proxy-prod" TargetGroup="default"', 'Sum', 60))`
 - Value: `$connections`.
-- Translation: Datadog's `aws.rds.proxy.database_connections` is CloudWatch's per-minute Sum (not Average) of each of the proxy's target series (read-write role, read-only role, target), averaged across them: about 54 when Datadog showed 54.08.
+- Translation: Datadog's `aws.rds.proxy.database_connections` is CloudWatch's per-minute Sum (not Average) of each of the proxy's target series (read-write role, read-only role, target), averaged across the ones that reported each minute (CloudWatch's `AVG` would count a gap as 0): about 54 when Datadog showed 54.08.
 
 ### `rds-high-cpu`
 
@@ -217,7 +218,7 @@ Comparison: Not compared yet.
 
 ## `monitors/ses.ts`
 
-Rule group `Datadog ses`, every 5m.
+Rule group `Datadog ses`, every 1m.
 
 ### `ses-complaint-rate`
 
@@ -250,11 +251,11 @@ Comparison: Not compared yet.
 - Rules: `dd-2ac9f2f73291-crit` (critical, > 250), `dd-2ac9f2f73291-warn` (warning, > 200)
 - `ses`: sum over 1h, 15m late. CloudWatch us-east-1: `AWS/SES Send {} Sum` per minute
 - Value: `$ses`.
-- Translation: Sends summed over the hour, as Datadog's `sum(last_1h)` of per-minute sums.
+- Translation: Sends summed over the hour, as Datadog's `sum(last_1h)` of per-minute sums (`aws.ses.send.sum`). Datadog groups by account, but has SES data from one, the account Grafana reads, and only in us-east-1; CloudWatch has no SES sends in us-east-2, us-west-2 or eu-west-1: 37 in both when compared.
 
 ## `monitors/cache.ts`
 
-Rule group `Datadog cache`, every 5m.
+Rule group `Datadog cache`, every 1m.
 
 ### `macro-cache-available-memory-low`
 
@@ -263,13 +264,13 @@ Rule group `Datadog cache`, every 5m.
 Comparison: Not compared yet.
 
 - Rules: `dd-aa7ed1a64641-crit` (critical, > 90), `dd-aa7ed1a64641-warn` (warning, > 80)
-- `memory`: mean over 1h, 15m late. CloudWatch us-east-1: `AVG(SEARCH('{AWS/ElastiCache,CacheClusterId} MetricName="DatabaseMemoryUsagePercentage" (CacheClusterId="macro-cache-prod-001" OR CacheClusterId="macro-cache-prod-002")', 'Average', 60))`
+- `memory`: mean over 1h, 15m late. CloudWatch us-east-1: `SUM(SEARCH('{AWS/ElastiCache,CacheClusterId} MetricName="DatabaseMemoryUsagePercentage" (CacheClusterId="macro-cache-prod-001" OR CacheClusterId="macro-cache-prod-002")', 'Average', 60)) / DATAPOINT_COUNT(SEARCH('{AWS/ElastiCache,CacheClusterId} MetricName="DatabaseMemoryUsagePercentage" (CacheClusterId="macro-cache-prod-001" OR CacheClusterId="macro-cache-prod-002")', 'Average', 60))`
 - Value: `$memory`.
-- Translation: Datadog's `name:macro-cache-prod*` as the two nodes it matches today, averaged as Datadog's ungrouped `avg:` does: 18.50 in both when compared. A node added later needs adding here.
+- Translation: Datadog's `name:macro-cache-prod*` as the two nodes it matches today, averaged as Datadog's ungrouped `avg:` does, over the nodes that reported each minute (CloudWatch's `AVG` would count a gap as 0): 18.50 in both when compared. A node added later needs adding here.
 
 ## `monitors/graphql-soup.ts`
 
-Rule group `Datadog graphql-soup`, every 5m.
+Rule group `Datadog graphql-soup`, every 1m.
 
 ### `graphql-soup-dss-5xx`
 
@@ -295,7 +296,7 @@ Comparison: Not compared yet.
 
 ## `monitors/load-balancer.ts`
 
-Rule group `Datadog load-balancer`, every 5m.
+Rule group `Datadog load-balancer`, every 1m.
 
 ### `alb-low-healthy-hosts`
 
@@ -341,7 +342,7 @@ Comparison: Not compared yet.
 
 ## `monitors/compute.ts`
 
-Rule group `Datadog compute`, every 5m.
+Rule group `Datadog compute`, every 1m.
 
 ### `lambda-error-count`
 
@@ -356,7 +357,7 @@ Comparison: Not compared yet.
 
 ## `monitors/rum.ts`
 
-Rule group `Datadog rum`, every 1m.
+No rule group: none of its monitors listed here is ported.
 
 ### `web-app-source-errors-prod`
 
@@ -387,12 +388,7 @@ Rule group `Datadog firecracker`, every 1m.
 
 [PROD] Firecracker golden secret scan refused · Datadog not deployed · pages in Datadog
 
-Comparison: Nothing to compare with: the monitor is in `infra/stacks/monitoring` but not deployed to Datadog.
-
-- Rules: `dd-0272e3f5fcf0-crit` (critical, >= 1)
-- `refused`: instant query. Mimir: `sum by (host_name) (increase(firecracker_host_golden_builds_total{deployment_environment="prod", outcome="secret_refused"}[10m]))`
-- Value: `$refused`.
-- Translation: The golden build counter's increase over 10 minutes. `increase` misses a host's very first refusal (the counter appears at 1), which Datadog's `default_zero` counts. No data until the host sends its metrics to the cluster.
+Not ported. Reads the host agent's `firecracker_host.golden.builds` counter, which reaches only the host's Datadog agent. OTLP sent to the cluster's ingest would keep `host.name` and `deployment.environment` on `target_info`, not on the series, so the labels a rule needs depend on how the host sends them (its Alloy's `host` and `deployment_environment` external labels, as for the fleet dashboard, would do). Port it with that change.
 
 ### `firecracker-host-memory`
 
@@ -401,32 +397,22 @@ Comparison: Nothing to compare with: the monitor is in `infra/stacks/monitoring`
 Comparison: Nothing to compare with: the monitor is in `infra/stacks/monitoring` but not deployed to Datadog.
 
 - Rules: `dd-8e0cdaa55797-crit` (critical, > 1)
-- `pressure`: instant query. Mimir: `max by (host) (avg_over_time(computer_host_memory_used_ratio{deployment_environment="prod"}[5m])) / min by (host) (avg_over_time(computer_host_memory_high_watermark_ratio{deployment_environment="prod"}[5m]))`
+- `pressure`: instant query. Mimir: `avg_over_time((max by (host) (computer_host_memory_used_ratio{deployment_environment="prod"}) / min by (host) (computer_host_memory_high_watermark_ratio{deployment_environment="prod"}))[5m:1m])`
 - Value: `$pressure`.
-- Translation: Used over high-watermark memory per host, from the gauges agent-harness-service reports (seen in Mimir from local stacks, labelled `host`). Datadog averages the ratio over 5 minutes; this divides the 5-minute averages. No data until agent-harness-service's prod sending is turned on.
+- Translation: Used over high-watermark memory per host, averaged over 5 minutes at one-minute steps, from the gauges agent-harness-service reports per host (`host` is the gauges' own attribute; in Mimir from local stacks). On ECS the telemetry sidecar sets `deployment.environment` on every datapoint (`infra/packages/resources/src/resources/ecs-telemetry.alloy`), so the series carry `deployment_environment` as dev's do today. No data until agent-harness-service's prod sending is turned on.
 
 ### `firecracker-host-unhealthy`
 
 [PROD] Firecracker host agent unhealthy · Datadog not deployed · pages in Datadog
 
-Comparison: Nothing to compare with: the monitor is in `infra/stacks/monitoring` but not deployed to Datadog.
-
-- Rules: `dd-c749477496aa-crit` (critical, < 1)
-- `ready`: instant query. Mimir: `min by (host_name) (min_over_time(firecracker_host_ready_ratio{deployment_environment="prod"}[2m])) or (0 * (max by (host_name) (max_over_time(firecracker_host_ready_ratio{deployment_environment="prod"}[1h])) unless max by (host_name) (max_over_time(firecracker_host_ready_ratio{deployment_environment="prod"}[5m]))))`
-- Value: `$ready`.
-- Translation: The readiness gauge's minimum over 2 minutes per host. Datadog's no-data alert (5 minutes) becomes 0 for a host seen in the last hour that stopped sending; a host gone for over an hour, or every host at once before any arrive, is no data, which is OK here. No data until the host sends its metrics to the cluster.
+Not ported. Reads the host agent's `firecracker_host.ready` gauge, which reaches only the host's Datadog agent; as for the golden secret refusals, port it once the host sends its metrics to the cluster with per-host labels. Datadog's query is the per-host minimum's maximum over 2 minutes, below 1, with a 5-minute no-data alert per host.
 
 ## `monitors/macrodb.ts`
 
-Rule group `Datadog macrodb`, every 1m.
+No rule group: none of its monitors listed here is ported.
 
 ### `macrodb-blocked-connections`
 
 [PROD] macro-db-prod connections blocked on locks · Datadog [23404623](https://us5.datadoghq.com/monitors/23404623) · pages in Datadog
 
-Comparison: Not compared yet.
-
-- Rules: `dd-23658483b745-crit` (critical, > 50), `dd-23658483b745-warn` (warning, > 20)
-- `blocked`: instant query. Mimir: `avg_over_time((sum(pg_stat_activity_count{db_instance="macro-db-prod", wait_event_type="Lock"}) or vector(0))[10m:1m])`
-- Value: `$blocked`.
-- Translation: Backends waiting on a lock (`wait_event_type="Lock"`) from the Postgres collector, averaged over 10 minutes, for Datadog DBM's blocked connections. The collector reads only the dev databases today, so this reads 0 until one reads macro-db-prod; on dev the query returns 0.
+Not ported. Datadog Database Monitoring's blocked connections have no Grafana source yet. The Postgres collector (`nixos/database-collector/`) reads only the dev databases, and its exporter has no series for backends waiting on a lock (`pg_stat_activity_count` has no wait event). Porting needs a collector on macro-db-prod and its replica with a query counting `wait_event_type = 'Lock'` per instance.

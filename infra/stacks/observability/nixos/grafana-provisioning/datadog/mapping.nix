@@ -136,8 +136,9 @@ in
   Generated from `infra/stacks/observability/nixos/grafana-provisioning/datadog/`
   by `nix run .#render` in `infra/k8s/observability/cluster`; edit those files.
 
-  Every Datadog monitor in `infra/stacks/monitoring/monitors/`, and the
-  Grafana alert rules it became. Ported rules run in shadow, in the folder
+  Datadog monitors from `infra/stacks/monitoring/monitors/`, by source file,
+  and the Grafana alert rules each became; a monitor not listed is not ported
+  yet. Ported rules run in shadow, in the folder
   `Datadog shadow` with the label `shadow=datadog`: they notify GoAlert's
   Notify service and never page, and a monitor that sends nothing in Datadog
   sends nothing here. A group moves to paging once its rules have fired when
@@ -160,6 +161,11 @@ in
 
   ${lib.concatMapStringsSep "\n" (
     file:
-    "## `${file.source}`\n\nRule group `Datadog ${lib.removeSuffix ".ts" (baseNameOf file.source)}`, every ${file.interval}.\n\n"
+    "## `${file.source}`\n\n${
+      if builtins.any ported file.monitors then
+        "Rule group `Datadog ${lib.removeSuffix ".ts" (baseNameOf file.source)}`, every ${file.interval}."
+      else
+        "No rule group: none of its monitors listed here is ported."
+    }\n\n"
     + lib.concatMapStringsSep "\n" section (byMonitor file.monitors)
   ) files}''

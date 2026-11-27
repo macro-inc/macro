@@ -2,7 +2,7 @@
 { q, ... }:
 {
   source = "monitors/compute.ts";
-  interval = "5m";
+  interval = "1m";
   monitors = [
     {
       monitor = "lambda-error-count";

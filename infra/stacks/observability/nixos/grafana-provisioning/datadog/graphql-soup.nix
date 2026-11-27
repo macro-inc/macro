@@ -2,7 +2,7 @@
 { q, ... }:
 {
   source = "monitors/graphql-soup.ts";
-  interval = "5m";
+  interval = "1m";
   monitors = [
     {
       monitor = "graphql-soup-dss-5xx";

@@ -78,7 +78,7 @@ let
 in
 {
   source = "monitors/load-balancer.ts";
-  interval = "5m";
+  interval = "1m";
   monitors = [
     (healthy "us-east-1")
     (healthy "us-east-2")
