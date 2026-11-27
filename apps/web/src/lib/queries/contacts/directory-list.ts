@@ -36,8 +36,8 @@ type ListedPages = {
   readIn: number;
 };
 
-/** A re-read of the first page keeps the pages already listed below it, and
- * with them the generation they were read in. */
+/** A re-read of the first page keeps the pages already listed below it, up
+ * to the bound, and with them the generation they were read in. */
 function rereadFirstPage(
   listed: ListedPages,
   page: ContactDirectoryPage,
@@ -45,7 +45,10 @@ function rereadFirstPage(
   generation: number
 ): ListedPages {
   const first = new Set(fresh.map((user) => user.id));
-  const later = listed.later.filter((user) => !first.has(user.id));
+  // Rows past the bound are never listed, so they can't hold an old generation.
+  const later = listed.later
+    .filter((user) => !first.has(user.id))
+    .slice(0, Math.max(MAX_LISTED_CONTACTS - fresh.length, 0));
   return {
     key: listed.key,
     first: fresh,
