@@ -51,14 +51,16 @@ export type MarkdownResponse =
 const BODY_IMPORT_TRANSFORMERS = [...INTERNAL_TRANSFORMERS, E_TABLE_NODE];
 
 /** One step turning the current top-level blocks into the requested ones. */
-type BlockStep =
+export type BlockStep =
   | { kind: 'keep'; current: number }
   | { kind: 'remove'; current: number }
   | { kind: 'insert'; requested: number };
 
 /** The markdown of each top-level block, each rendered on its own. */
-function blockMarkdown(blocks: SerializedLexicalNode[]): string[] {
-  const scratch = createEditingSession();
+export function blockMarkdown(
+  blocks: SerializedLexicalNode[],
+  scratch = createEditingSession()
+): string[] {
   return blocks.map((block) => {
     scratch.editor.setEditorState(
       scratch.editor.parseEditorState({
@@ -88,7 +90,10 @@ const MAX_LCS_CELLS = 4 * 1024 * 1024;
  * Keep/remove/insert steps in document order. Blocks shared at the start and
  * end are kept; the changed middle keeps its longest common subsequence.
  */
-function blockSteps(current: string[], requested: string[]): BlockStep[] {
+export function blockSteps(
+  current: string[],
+  requested: string[]
+): BlockStep[] {
   let prefix = 0;
   while (
     prefix < current.length &&
@@ -217,7 +222,7 @@ export async function readMarkdownBody(
   }
 }
 
-async function sessionFromSnapshot(
+export async function sessionFromSnapshot(
   manager: LoroManager<typeof MARKDOWN_LORO_SCHEMA>,
   snapshot: Uint8Array
 ): Promise<LexicalSession> {
