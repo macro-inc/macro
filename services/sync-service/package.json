@@ -2,14 +2,14 @@
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.9",
     "bebop-tools": "^3.1.3",
-    "miniflare": "^4.20260617.0",
+    "miniflare": "^5.20260926.1-alpha",
     "vitest": "5.0.1"
   },
   "dependencies": {
     "bebop": "^3.1.3",
     "jsonwebtoken": "^9.0.2",
     "loro-crdt": "^1.13.7",
-    "wrangler": "^4.102.0"
+    "wrangler": "^4.143.1"
   },
   "overrides": {
     "undici": ">=6.24.0",
