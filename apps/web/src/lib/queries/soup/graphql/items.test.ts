@@ -1005,6 +1005,14 @@ describe('createGraphqlSoupAstItemsQuery', () => {
         },
       },
       {
+        name: 'the cache was reset as the request lost its GraphQL translation',
+        reason: 'cache-reset',
+        change: (list: PagedList) => {
+          list.resetCache();
+          list.setLimit(undefined);
+        },
+      },
+      {
         name: 'the request changed',
         reason: 'by-id-unresolved',
         change: (list: PagedList) => list.setLimit(3),
@@ -1017,9 +1025,10 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     ])(
       'is reported with its reason and surface when $name',
       async ({ reason, change }) => {
-        const reported = vi
-          .spyOn(Telemetry, 'error')
-          .mockImplementation(() => {});
+        const reported = vi.spyOn(Telemetry, 'error');
+        const report = new Promise<unknown[]>((resolve) => {
+          reported.mockImplementation((...args) => resolve(args));
+        });
         const fake = makeFakeClient();
         getGraphqlSoupClientMock.mockReturnValue(fake.client);
         const generations = new Set<() => void>();
@@ -1086,8 +1095,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
             fireAndForget(query.fetchNextPage(), 'channels-by-id');
           });
 
-          await vi.waitFor(() => expect(reported).toHaveBeenCalledOnce());
-          expect(reported).toHaveBeenCalledWith(
+          await expect(report).resolves.toEqual([
             expect.objectContaining({
               name: 'SoupMissingInputError',
               telemetryAttributes: {
@@ -1096,8 +1104,9 @@ describe('createGraphqlSoupAstItemsQuery', () => {
                 'soup.missing_input_count': 1,
               },
             }),
-            { surface: 'channels-by-id' }
-          );
+            { surface: 'channels-by-id' },
+          ]);
+          expect(reported).toHaveBeenCalledOnce();
           // No next page went out; a changed request starts its own first page.
           for (const { variables } of fake.executions)
             expect(variables).toEqual({

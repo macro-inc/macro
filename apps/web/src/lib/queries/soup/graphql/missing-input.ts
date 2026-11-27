@@ -22,12 +22,12 @@ export type SoupMissingInputPage = 'first' | 'continuation';
 type ResolvedInput = { scope: object; generation: number };
 
 /**
- * Classifies a missing input from the last by-ID resolution. For a first
+ * Classifies a missing input from the last by-ID resolution. A next page
+ * belongs to the page chain started from that resolution, so a reset since
+ * then ends it whatever the request is now, translatable or not. For a first
  * page, a reset counts only when that resolution was for the scope asked for
- * now; otherwise the new scope is simply not resolved yet. A next page belongs
- * to the page chain started from that resolution, so a reset since then ends
- * it whatever the scope is now. Scopes compare by identity, as the live
- * query's own input check does.
+ * now; otherwise the new scope is simply not resolved yet. Scopes compare by
+ * identity, as the live query's own input check does.
  */
 export function missingSoupInputReason(current: {
   scope: object | undefined;
@@ -36,11 +36,12 @@ export function missingSoupInputReason(current: {
   /** The last by-ID resolution; absent for a list that is not by ID. */
   resolved: ResolvedInput | undefined;
 }): SoupMissingInputReason {
-  if (current.scope === undefined) return 'untranslatable';
   const { resolved } = current;
-  if (resolved === undefined || resolved.generation === current.generation)
-    return 'by-id-unresolved';
-  return current.page === 'continuation' || resolved.scope === current.scope
+  const reset =
+    resolved !== undefined && resolved.generation !== current.generation;
+  if (reset && current.page === 'continuation') return 'cache-reset';
+  if (current.scope === undefined) return 'untranslatable';
+  return reset && resolved.scope === current.scope
     ? 'cache-reset'
     : 'by-id-unresolved';
 }

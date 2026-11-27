@@ -5,15 +5,27 @@ const scope = { initial: { limit: 2 } };
 const earlierScope = { initial: { limit: 1 } };
 
 describe('missingSoupInputReason', () => {
-  it.each(['first', 'continuation'] as const)(
-    'names a request without a GraphQL translation (%s page)',
-    (page) => {
+  it.each([
+    { name: 'list not by ID', page: 'continuation', resolved: undefined },
+    {
+      name: 'first page after a reset',
+      page: 'first',
+      resolved: { scope, generation: 1 },
+    },
+    {
+      name: 'next page of a chain from this generation',
+      page: 'continuation',
+      resolved: { scope, generation: 2 },
+    },
+  ] as const)(
+    'names a request without a GraphQL translation ($name)',
+    ({ page, resolved }) => {
       expect(
         missingSoupInputReason({
           scope: undefined,
           generation: 2,
           page,
-          resolved: { scope, generation: 1 },
+          resolved,
         })
       ).toBe('untranslatable');
     }
@@ -54,23 +66,37 @@ describe('missingSoupInputReason', () => {
     {
       name: 'first page of the same ID set',
       page: 'first',
+      requested: scope,
       resolved: { scope, generation: 2 },
     },
     {
       name: 'next page of the same ID set',
       page: 'continuation',
+      requested: scope,
       resolved: { scope, generation: 2 },
     },
     {
       name: 'next page of a chain whose ID set also changed',
       page: 'continuation',
+      requested: scope,
       resolved: { scope: earlierScope, generation: 2 },
+    },
+    {
+      name: 'next page of a chain whose request lost its translation',
+      page: 'continuation',
+      requested: undefined,
+      resolved: { scope, generation: 2 },
     },
   ] as const)(
     'names a by-ID input resolved before the cache generation changed ($name)',
-    ({ page, resolved }) => {
+    ({ page, requested, resolved }) => {
       expect(
-        missingSoupInputReason({ scope, generation: 3, page, resolved })
+        missingSoupInputReason({
+          scope: requested,
+          generation: 3,
+          page,
+          resolved,
+        })
       ).toBe('cache-reset');
     }
   );
