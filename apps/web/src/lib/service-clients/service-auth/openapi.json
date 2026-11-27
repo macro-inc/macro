@@ -6363,6 +6363,253 @@
         }
       }
     },
+    "/team_agents/{user_id}/email/address": {
+      "get": {
+        "tags": ["team-agents"],
+        "summary": "Read the configured address under the viewer's current human authorization.",
+        "operationId": "get_brain_mailbox_address",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "teamId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrainMailboxAddress"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrainMailboxErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team_agents/{user_id}/email/inbox": {
+      "get": {
+        "tags": ["team-agents"],
+        "summary": "List authorized inbound messages in the selected teammate's mailbox.",
+        "operationId": "get_brain_mailbox_inbox",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "teamId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "subject",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrainMailboxPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrainMailboxErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team_agents/{user_id}/email/threads/{thread_id}": {
+      "get": {
+        "tags": ["team-agents"],
+        "summary": "Open one independently authorized thread in the selected mailbox.",
+        "operationId": "get_brain_mailbox_thread",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "thread_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "teamId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrainMailboxThread"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrainMailboxErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/user/agent_setup": {
       "post": {
         "tags": ["user::agent_setup"],
@@ -7987,6 +8234,125 @@
           "ended",
           "comped"
         ]
+      },
+      "BrainMailboxAddress": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Canonical provisioned address.",
+            "required": ["address", "state"],
+            "properties": {
+              "address": {
+                "type": "string",
+                "description": "Exact mailbox address."
+              },
+              "state": {
+                "type": "string",
+                "enum": ["provisioned"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The mailbox is still being provisioned.",
+            "required": ["state"],
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": ["in_progress"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The selected agent has no verified active address.",
+            "required": ["state"],
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": ["unavailable"]
+              }
+            }
+          }
+        ],
+        "description": "Address is present only for an exact active mailbox binding."
+      },
+      "BrainMailboxErrorBody": {
+        "type": "object",
+        "description": "Generic error without mailbox metadata.",
+        "required": ["message"],
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "BrainMailboxMessage": {
+        "type": "object",
+        "description": "Viewer-safe fields for an inbox row.",
+        "required": ["id", "threadId", "from", "subject", "receivedAt"],
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "receivedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "threadId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "BrainMailboxPage": {
+        "type": "object",
+        "description": "A page of authorized inbound mail.",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BrainMailboxMessage"
+            }
+          },
+          "nextCursor": {
+            "type": ["string", "null"]
+          }
+        }
+      },
+      "BrainMailboxThread": {
+        "type": "object",
+        "description": "Independently authorized thread.",
+        "required": ["messages"],
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BrainMailboxThreadMessage"
+            }
+          }
+        }
+      },
+      "BrainMailboxThreadMessage": {
+        "type": "object",
+        "description": "One checked thread message and its plain-text body, when present.",
+        "required": ["summary"],
+        "properties": {
+          "summary": {
+            "$ref": "#/components/schemas/BrainMailboxMessage"
+          },
+          "text": {
+            "type": ["string", "null"]
+          }
+        }
       },
       "CardBrand": {
         "type": "string",

@@ -1034,6 +1034,12 @@ async fn run_server() -> anyhow::Result<()> {
         ),
     ));
 
+    let brain_mailbox = crate::outbound::brain_mailbox_fixture::configure(
+        config.environment,
+        &db,
+        entity_access_service_impl.clone(),
+        authorization_state.clone(),
+    );
     let server_result = api::setup_and_serve(
         ApiContext {
             inbox_connections: Arc::new(email::domain::inbox_entitlement::InboxConnectionService(
@@ -1085,6 +1091,7 @@ async fn run_server() -> anyhow::Result<()> {
             stripe_inbox,
             computer_service,
             team_agents_service,
+            brain_mailbox,
             domain_notice_service,
             channel_service: Arc::new(channel_service),
             channel_messages,

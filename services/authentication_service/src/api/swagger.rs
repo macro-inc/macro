@@ -216,6 +216,9 @@ use model::user::{
                 team_agents::inbound::axum_router::set_team_agent_voice_handler::<crate::api::context::TeamAgentsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 team_agents::inbound::axum_router::get_team_agent_inbox_handler::<crate::api::context::TeamAgentsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 team_agents::inbound::axum_router::add_team_agent_inbox_handler::<crate::api::context::TeamAgentsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                team_agents::inbound::brain_mailbox::brain_mailbox_address::<crate::outbound::brain_mailbox_fixture::LocalBrainMailboxSource, team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo, crate::outbound::brain_mailbox_fixture::LocalBrainMailboxFlags, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                team_agents::inbound::brain_mailbox::brain_mailbox_inbox::<crate::outbound::brain_mailbox_fixture::LocalBrainMailboxSource, team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo, crate::outbound::brain_mailbox_fixture::LocalBrainMailboxFlags, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                team_agents::inbound::brain_mailbox::brain_mailbox_thread::<crate::outbound::brain_mailbox_fixture::LocalBrainMailboxSource, team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo, crate::outbound::brain_mailbox_fixture::LocalBrainMailboxFlags, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::domain_notice::handler::<crate::api::context::DomainNoticeServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::toggle_non_admin_invites::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::reject_invitation::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
@@ -443,12 +446,59 @@ use model::user::{
     )]
 pub struct ApiDoc;
 
+pub(super) fn runtime_openapi(brain_mailbox_enabled: bool) -> utoipa::openapi::OpenApi {
+    let mut spec = ApiDoc::openapi();
+    if !brain_mailbox_enabled {
+        spec.paths
+            .paths
+            .retain(|path, _| !path.starts_with("/team_agents/{user_id}/email/"));
+        if let Some(components) = &mut spec.components {
+            components
+                .schemas
+                .retain(|name, _| !name.starts_with("BrainMailbox"));
+        }
+    }
+    spec
+}
+
 #[cfg(test)]
 mod test;
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn brain_mailbox_openapi_is_local_and_keeps_the_wire_contract() {
+        let local = serde_json::to_value(runtime_openapi(true)).unwrap();
+        let standard = serde_json::to_value(runtime_openapi(false)).unwrap();
+        for (suffix, operation_id, schema) in [
+            (
+                "address",
+                "get_brain_mailbox_address",
+                "BrainMailboxAddress",
+            ),
+            ("inbox", "get_brain_mailbox_inbox", "BrainMailboxPage"),
+            (
+                "threads/{thread_id}",
+                "get_brain_mailbox_thread",
+                "BrainMailboxThread",
+            ),
+        ] {
+            let path = format!("/team_agents/{{user_id}}/email/{suffix}");
+            assert!(standard["paths"].get(&path).is_none());
+            assert!(standard["components"]["schemas"].get(schema).is_none());
+            let operation = &local["paths"][&path]["get"];
+            assert_eq!(operation["operationId"], operation_id);
+            assert!(operation["parameters"].as_array().unwrap().iter().any(
+                |parameter| parameter["name"] == "teamId" && parameter["required"] == true
+            ));
+            assert_eq!(
+                operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+                format!("#/components/schemas/{schema}")
+            );
+        }
+    }
 
     #[test]
     fn github_pull_requests_openapi_includes_enrich_path() {

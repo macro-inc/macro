@@ -121,12 +121,27 @@ impl IntoResponse for MacroAuthorizationRejection {
 /// Axum state containing the service used by authorization extractors.
 pub struct MacroAuthorizationState<Svc> {
     pub(super) service: Arc<Svc>,
+    pub(super) verified_user_only: bool,
 }
 
 impl<Svc> MacroAuthorizationState<Svc> {
     /// Create authorization state backed by the supplied service.
     pub fn new(service: Arc<Svc>) -> Self {
-        Self { service }
+        Self {
+            service,
+            verified_user_only: false,
+        }
+    }
+
+    /// Accept only verified user JWTs sent in a cookie or bearer header.
+    ///
+    /// The local auth override and other credential families are excluded.
+    #[must_use]
+    pub fn require_verified_user(self) -> Self {
+        Self {
+            verified_user_only: true,
+            ..self
+        }
     }
 }
 
@@ -134,6 +149,7 @@ impl<Svc> Clone for MacroAuthorizationState<Svc> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
+            verified_user_only: self.verified_user_only,
         }
     }
 }

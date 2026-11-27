@@ -2333,11 +2333,13 @@ dependencies = [
 name = "authentication_service"
 version = "0.1.0"
 dependencies = [
+ "account_manager",
  "aes-gcm 0.10.3",
  "agent_api_keys",
  "agent_correlation",
  "agent_credentials",
  "agent_git",
+ "agent_mailbox",
  "ai_billing",
  "ai_usage",
  "analytics_client",

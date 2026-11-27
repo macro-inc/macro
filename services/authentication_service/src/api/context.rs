@@ -347,6 +347,8 @@ pub(crate) struct ApiContext {
     pub stripe_inbox: Arc<StripeInboxType>,
     /// Invites and removes agent teammates, and issues their enrollments.
     pub team_agents_service: Arc<TeamAgentsServiceType>,
+    /// The signed Brain Email fixture on its dedicated local database.
+    pub brain_mailbox: Option<crate::outbound::brain_mailbox_fixture::BrainMailboxState>,
     /// AI allowances, credits, and overage
     pub ai_billing_service: Arc<AiBillingServiceType>,
     pub ai_payment_gateway: Arc<ai_billing::outbound::StripePaymentGateway>,

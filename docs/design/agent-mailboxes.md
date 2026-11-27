@@ -162,7 +162,7 @@ matching text.
 
 ## Human mailbox reads
 
-The `team_agents` domain fixture requires the viewer's personal session, a
+The `team_agents` reader requires the viewer's personal session, a
 current owner or admin role in the selected agent's team, and both inbox
 rollout flags. The address appears only when the active inbox mirror and
 canonical mailbox agree on the exact agent, team, mailbox ID and provisioned
@@ -172,14 +172,32 @@ The reader scopes inbox pages to inbound mail. It applies sender and subject
 filters before pagination, counts the returned rows and ties the continuation
 to the viewer, mailbox generation and filters. Opening a thread reauthorizes
 the viewer and verifies each message against the selected mailbox and thread.
-The proof uses in-process ports. A full thread fetch requires a provider read
-adapter because the existing `MailboxClient` implements message list and
-single-message reads.
+The signed local fixture mounts three read-only Auth routes for the selected
+agent. Each route requires the selected team's `teamId` query parameter.
+
+| GET under `/team_agents/{user_id}/email` | Result |
+| --- | --- |
+| `/address` | `provisioned` with the verified address, `in_progress`, or `unavailable` |
+| `/inbox` | Inbound metadata and an opaque continuation. Optional `subject` and `from` terms are case-insensitive and both must match when supplied. |
+| `/threads/{thread_id}` | Individually scoped messages and any available plain text |
+
+The Auth build needs the `local` feature, local environment, and dedicated
+loopback Postgres database `macro_brain_email_fixture` to mount these routes.
+With the fixture enabled, Auth listens on IPv4 loopback.
+Apply the normal MacroDB migrations and then
+`services/authentication_service/tests/fixtures/brain_mailbox.sql` to that
+database. The fixture uses Postgres for current account, membership and mailbox
+identity and uses in-process synthetic messages. It has no mail transport or
+provider credentials. Cursors live for up to five minutes in the local server
+process. Requests that fail scope checks return a generic 404. Identity,
+inbox and thread responses use `Cache-Control: private, no-store`. The live
+provider integration still needs a reviewed full-thread read adapter. The
+existing `MailboxClient` only reads message lists and one message at a time.
 
 ## Follow-ups
 
 - Waking the agent on new mail (no provider webhook is consumed in v1).
-- Wire the human mailbox reader to reviewed read adapters and UI.
+- Wire the human mailbox reader to approved provider transport and UI.
 - Attaching the mailbox through IMAP/SMTP once that provider lands, and
   bring-your-own-domain hosting.
 - Attachments, and native AI tools for direct-tool hosts.

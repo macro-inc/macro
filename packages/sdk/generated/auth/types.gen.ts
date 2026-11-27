@@ -165,6 +165,62 @@ export type BillingInterval = 'month' | 'year';
 export type BillingStatus = 'purchasing' | 'active' | 'past_due' | 'ending' | 'ended' | 'comped';
 
 /**
+ * Address is present only for an exact active mailbox binding.
+ */
+export type BrainMailboxAddress = {
+    /**
+     * Exact mailbox address.
+     */
+    address: string;
+    state: 'provisioned';
+} | {
+    state: 'in_progress';
+} | {
+    state: 'unavailable';
+};
+
+/**
+ * Generic error without mailbox metadata.
+ */
+export type BrainMailboxErrorBody = {
+    message: string;
+};
+
+/**
+ * Viewer-safe fields for an inbox row.
+ */
+export type BrainMailboxMessage = {
+    from: string;
+    id: string;
+    receivedAt: string;
+    subject: string;
+    threadId: string;
+};
+
+/**
+ * A page of authorized inbound mail.
+ */
+export type BrainMailboxPage = {
+    items: Array<BrainMailboxMessage>;
+    nextCursor?: string | null;
+};
+
+/**
+ * Independently authorized thread.
+ */
+export type BrainMailboxThread = {
+    messages: Array<BrainMailboxThreadMessage>;
+};
+
+/**
+ * One checked thread message and its plain-text body, when present.
+ */
+export type BrainMailboxThreadMessage = {
+    summary: BrainMailboxMessage;
+    text?: string | null;
+};
+
+/**
  * A card network.
  */
 export type CardBrand = 'amex' | 'diners' | 'discover' | 'eftpos_au' | 'jcb' | 'mastercard' | 'unionpay' | 'visa' | 'unknown';
@@ -5574,6 +5630,86 @@ export type SetTeamAgentVoiceResponses = {
 };
 
 export type SetTeamAgentVoiceResponse = SetTeamAgentVoiceResponses[keyof SetTeamAgentVoiceResponses];
+
+export type GetBrainMailboxAddressData = {
+    body?: never;
+    path: {
+        user_id: string;
+    };
+    query: {
+        teamId: string;
+    };
+    url: '/team_agents/{user_id}/email/address';
+};
+
+export type GetBrainMailboxAddressErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: BrainMailboxErrorBody;
+};
+
+export type GetBrainMailboxAddressError = GetBrainMailboxAddressErrors[keyof GetBrainMailboxAddressErrors];
+
+export type GetBrainMailboxAddressResponses = {
+    200: BrainMailboxAddress;
+};
+
+export type GetBrainMailboxAddressResponse = GetBrainMailboxAddressResponses[keyof GetBrainMailboxAddressResponses];
+
+export type GetBrainMailboxInboxData = {
+    body?: never;
+    path: {
+        user_id: string;
+    };
+    query: {
+        teamId: string;
+        subject?: string;
+        from?: string;
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/team_agents/{user_id}/email/inbox';
+};
+
+export type GetBrainMailboxInboxErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: BrainMailboxErrorBody;
+};
+
+export type GetBrainMailboxInboxError = GetBrainMailboxInboxErrors[keyof GetBrainMailboxInboxErrors];
+
+export type GetBrainMailboxInboxResponses = {
+    200: BrainMailboxPage;
+};
+
+export type GetBrainMailboxInboxResponse = GetBrainMailboxInboxResponses[keyof GetBrainMailboxInboxResponses];
+
+export type GetBrainMailboxThreadData = {
+    body?: never;
+    path: {
+        user_id: string;
+        thread_id: string;
+    };
+    query: {
+        teamId: string;
+    };
+    url: '/team_agents/{user_id}/email/threads/{thread_id}';
+};
+
+export type GetBrainMailboxThreadErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: BrainMailboxErrorBody;
+};
+
+export type GetBrainMailboxThreadError = GetBrainMailboxThreadErrors[keyof GetBrainMailboxThreadErrors];
+
+export type GetBrainMailboxThreadResponses = {
+    200: BrainMailboxThread;
+};
+
+export type GetBrainMailboxThreadResponse = GetBrainMailboxThreadResponses[keyof GetBrainMailboxThreadResponses];
 
 export type AgentSetupData = {
     body?: never;

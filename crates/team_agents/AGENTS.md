@@ -120,7 +120,9 @@ settles after 15 minutes.
 - `src/domain/admission.rs`: agent admission for the vault.
 - `src/domain/inbox.rs`: the agent's email inbox lifecycle.
 - `src/domain/mailbox_read.rs`: human-only address, list and thread projection
-  over read ports, tested in process with synthetic data.
+  over read ports.
+- `src/inbound/brain_mailbox.rs`: signed local-only GET handlers that reuse
+  human team receipts and keep pagination state scoped to the viewer.
 
 ## Scope
 

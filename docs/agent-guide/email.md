@@ -2068,3 +2068,12 @@ the view and confirm results stay within it.
 Opening a row clears its unread state immediately; direct details mark read when
 ready. See [reading items](notifications.md#reading-items) for failure, keyboard,
 mobile, and email inbox checks.
+
+
+## Signed local Brain Email
+
+The isolated Brain Email fixture reads a teammate's verified address and
+synthetic inbound messages through Auth. Use a personal session for the
+fixture owner or admin, then check the selected teammate's address, filter
+inbox rows and open a thread directly. Fixture setup and the read contract
+are in [Agent mailboxes](../design/agent-mailboxes.md#human-mailbox-reads).

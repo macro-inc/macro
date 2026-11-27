@@ -16,6 +16,8 @@ behind provider-neutral ports. Design: `docs/design/agent-mailboxes.md`.
 - `src/inbound/axum_router.rs`: agent routes (`/email/agent-mailbox`) and the
   internal lifecycle routes (`/internal/agent-mailboxes`).
 - `src/wire.rs`: bodies shared with `email_service_client`.
+- `src/outbound/pg.rs` exposes the active address and binding for the signed
+  local human fixture without reading the stored grant ciphertext.
 
 ## Scope
 
