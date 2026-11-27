@@ -27,6 +27,8 @@ use super::ports::{
 use super::voice::AgentVoice;
 
 #[cfg(test)]
+mod hire_intent;
+#[cfg(test)]
 mod test;
 
 /// The PostHog flag for agent teammates, shared with the web app. Off, or
