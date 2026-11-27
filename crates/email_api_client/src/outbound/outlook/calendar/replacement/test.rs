@@ -808,3 +808,63 @@ fn an_occurrence_with_its_own_reminders_keeps_them_whole_when_the_series_reminde
     assert_eq!(occurrence, own);
     assert_eq!(like_series, edited);
 }
+
+#[tokio::test]
+async fn dropping_teams_drops_its_meeting_place_and_counts_guests_without_the_organizer() {
+    let (server, api) = setup().await;
+    let target = target();
+    let mut meeting = teams_meeting("old");
+    meeting["location"] = json!({"displayName":"Microsoft Teams Meeting","locationType":"default","uniqueIdType":"private"});
+    meeting["locations"] =
+        json!([{"displayName":"Microsoft Teams Meeting"}, {"displayName":"Room 4"}]);
+    meeting["organizer"] = json!({"emailAddress":{"address":"Organizer@example.com"}});
+    meeting["attendees"] = json!([
+        {"emailAddress":{"address":"organizer@example.com"},"type":"required","status":{"response":"organizer"}},
+        {"emailAddress":{"address":"guest@example.com"},"type":"required","status":{"response":"accepted"}},
+    ]);
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/calendars/calendar/events/old"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&meeting))
+        .mount(&server)
+        .await;
+
+    let snapshot = api
+        .inspect_replacement(
+            "token",
+            &target,
+            "old",
+            None,
+            true,
+            &CalendarEventPatch::default(),
+        )
+        .await
+        .unwrap();
+
+    let body = &snapshot.payload["body"];
+    assert_eq!(body["location"]["displayName"], "");
+    assert_eq!(body["locations"], json!([{"displayName":"Room 4"}]));
+    assert_eq!(snapshot.attendee_count, 1);
+    // A replacement that keeps Teams keeps its place too.
+    assert_eq!(
+        copy_body(&meeting, false).unwrap()["location"]["displayName"],
+        "Microsoft Teams Meeting"
+    );
+}
+
+#[test]
+fn a_typed_place_that_mentions_teams_survives_dropping_teams() {
+    let mut meeting = teams_meeting("old");
+    meeting["location"] = json!({"displayName":"Room 4A / Microsoft Teams","uniqueId":"Room 4A / Microsoft Teams","uniqueIdType":"private"});
+    meeting["locations"] = json!([
+        {"displayName":"Room 4A / Microsoft Teams","uniqueId":"Room 4A / Microsoft Teams"},
+        {"displayName":"Microsoft Teams Meeting","uniqueId":"Microsoft Teams Meeting"},
+    ]);
+
+    let body = copy_body(&meeting, true).unwrap();
+
+    assert_eq!(body["location"]["displayName"], "Room 4A / Microsoft Teams");
+    assert_eq!(
+        body["locations"],
+        json!([{"displayName":"Room 4A / Microsoft Teams","uniqueId":"Room 4A / Microsoft Teams"}])
+    );
+}
