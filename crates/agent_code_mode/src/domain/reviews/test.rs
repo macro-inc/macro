@@ -780,6 +780,7 @@ async fn an_import_review_keeps_the_source_it_was_presented_with() {
         revision: row.revision,
         item,
         draft: Box::new(ReviewDraft::Import(ImportDraft {
+            copy_skipped: Vec::new(),
             source,
             excluded: vec![],
             shared: vec![],
@@ -886,6 +887,7 @@ async fn an_edit_must_match_the_review_kind_and_a_submit_needs_a_complete_draft(
                     revision: row.revision,
                     item,
                     draft: Box::new(ReviewDraft::Import(ImportDraft {
+                        copy_skipped: Vec::new(),
                         source: ImportReviewSource::Notion,
                         excluded: vec![],
                         shared: vec![],

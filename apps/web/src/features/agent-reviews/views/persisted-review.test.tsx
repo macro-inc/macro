@@ -82,7 +82,7 @@ const importReview: Review = {
   items: [
     {
       id: 'item',
-      draft: { source: 'notion' },
+      draft: { source: 'notion', excluded: [], shared: [], personal: [] },
       status: 'pending',
       error: null,
       result: null,

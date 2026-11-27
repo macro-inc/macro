@@ -176,7 +176,12 @@ it.each([
           items: [
             {
               ...saved.items[0],
-              draft: decision.draft.draft,
+              draft: {
+                ...decision.draft.draft,
+                excluded: decision.draft.draft.excluded ?? [],
+                shared: decision.draft.draft.shared ?? [],
+                personal: decision.draft.draft.personal ?? [],
+              },
             },
           ],
         };
