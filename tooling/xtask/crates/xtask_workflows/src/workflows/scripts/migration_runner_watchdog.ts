@@ -12,12 +12,14 @@
 // reaches it, and the run's failed job says why.
 //
 // Another job of the run that has started or is about to (a prod release's
-// website deploy, a build) is never cut short: the script waits up to
-// DRAIN_MINUTES more for those to end before it cancels, and fails without
-// cancelling if they are still running then. No service deploys before the
-// migration has run, so a cancelled run has deployed no service. If the
-// migration job is missing from the run, its name or label no longer match
-// the workflow's: the script fails without cancelling anything.
+// website deploy, a build) is left to end first: the script waits up to
+// DRAIN_MINUTES more for those, and then cancels the run with them, since a
+// job of these runs that takes that long is stuck too. No service deploys
+// before the migration has run, so a cancelled run has deployed no service.
+// Right before cancelling, it reads the migration job again, alone, and lets
+// the run go on if a runner took it meanwhile. If the migration job is missing
+// from the run, its name or label no longer match the workflow's: the script
+// fails without cancelling anything.
 
 import { appendFileSync } from 'node:fs';
 
@@ -43,8 +45,8 @@ export type Names = {
 export type Decision =
   | { kind: 'started'; job: Job }
   | { kind: 'wait' }
-  | { kind: 'drain'; running: Job[] }
-  | { kind: 'cancel' }
+  | { kind: 'drain'; migration: Job; running: Job[] }
+  | { kind: 'cancel'; migration: Job }
   | { kind: 'missing' };
 
 /** Where the error sends a reader. */
@@ -69,7 +71,8 @@ const active = (job: Job, names: Names) =>
 /**
  * How many reads of the jobs in a row may fail before the script gives up and
  * passes: a watchdog that fails a deploy because GitHub's API did is worse
- * than none, and the hourly canceller still ends a stuck deploy.
+ * than none, and the hourly canceller still ends a stuck deploy. A cancel that
+ * fails is retried as many times before the script reports it.
  */
 export const READ_FAILURES = 5;
 
@@ -86,7 +89,7 @@ export function decide(jobs: Job[], names: Names, timeIsUp: boolean): Decision {
     return { kind: 'missing' };
   }
   const running = jobs.filter((job) => active(job, names));
-  return running.length > 0 ? { kind: 'drain', running } : { kind: 'cancel' };
+  return running.length > 0 ? { kind: 'drain', migration, running } : { kind: 'cancel', migration };
 }
 
 export function unavailable(names: Names, minutes: number): string {
@@ -99,12 +102,18 @@ export function unavailable(names: Names, minutes: number): string {
 /** What the loop reads and does; the workflow passes GitHub and the clock. */
 export type World = {
   jobs: () => Promise<Job[]>;
+  job: (id: number) => Promise<Job>;
   cancel: () => Promise<void>;
   now: () => number;
   sleep: (ms: number) => Promise<void>;
   log: (line: string) => void;
   summary: (markdown: string) => void;
 };
+
+function startedOn(world: World, names: Names, job: Job): number {
+  world.log(`"${names.migration}" is ${job.status} on ${job.runner_name ?? 'a runner'}.`);
+  return 0;
+}
 
 /** Reports the runner as unavailable, with what was done about the run. */
 function report(world: World, names: Names, minutes: number, outcome: string) {
@@ -128,6 +137,7 @@ export async function watch(
   const deadline = world.now() + minutes * 60_000;
   const drainDeadline = deadline + drainMinutes * 60_000;
   let failures = 0;
+  let cancelFailures = 0;
   let draining = '';
   for (;;) {
     let jobs: Job[];
@@ -145,37 +155,57 @@ export async function watch(
       continue;
     }
     const decision = decide(jobs, names, world.now() >= deadline);
+    /** The migration job when the run is to be cancelled, and what to report then. */
+    let ending: { migration: Job; outcome: string } | undefined;
     switch (decision.kind) {
       case 'started':
-        world.log(`"${names.migration}" is ${decision.job.status} on ${decision.job.runner_name ?? 'a runner'}.`);
-        return 0;
+        return startedOn(world, names, decision.job);
       case 'missing':
         world.log(`::error title=Migration job not found::This run has no "${names.migration}" job on ${names.label}.`);
         return 1;
       case 'wait':
         break;
       case 'cancel':
-        report(world, names, minutes, 'The run was cancelled before the migration and the service deploys.');
-        await world.cancel();
-        world.log('Cancelled the run.');
-        return 1;
+        ending = {
+          migration: decision.migration,
+          outcome: 'The run was cancelled before the migration and the service deploys.',
+        };
+        break;
       case 'drain': {
         const running = decision.running.map((job) => job.name).join(', ');
         if (world.now() >= drainDeadline) {
-          report(
-            world,
-            names,
-            minutes,
-            `The run was not cancelled: ${running} did not end within ${drainMinutes} more minutes.`,
-          );
-          return 1;
-        }
-        if (running !== draining) {
+          ending = {
+            migration: decision.migration,
+            outcome: `The run was cancelled, cutting short ${running}, still running ${drainMinutes} minutes later.`,
+          };
+        } else if (running !== draining) {
           world.log(`"${names.migration}" is still queued. Cancelling the run once these end: ${running}`);
           draining = running;
         }
         break;
       }
+    }
+    if (ending) {
+      try {
+        // A listing of several pages can be stale by its last one, and a
+        // runner may have taken the migration since.
+        const migration = await world.job(ending.migration.id);
+        if (started(migration)) {
+          return startedOn(world, names, migration);
+        }
+        await world.cancel();
+      } catch (error) {
+        cancelFailures += 1;
+        if (cancelFailures >= READ_FAILURES) {
+          report(world, names, minutes, `The run could not be cancelled: ${error}`);
+          return 1;
+        }
+        world.log(`Could not cancel the run (${cancelFailures} of ${READ_FAILURES}): ${error}`);
+        await world.sleep(pollMs);
+        continue;
+      }
+      report(world, names, minutes, ending.outcome);
+      return 1;
     }
     await world.sleep(pollMs);
   }
@@ -197,6 +227,7 @@ async function github(method: 'GET' | 'POST', path: string): Promise<any> {
       authorization: `Bearer ${env('GH_TOKEN')}`,
       'x-github-api-version': '2022-11-28',
     },
+    signal: AbortSignal.timeout(30_000),
   });
   const body = await response.text();
   if (!response.ok) {
@@ -206,7 +237,8 @@ async function github(method: 'GET' | 'POST', path: string): Promise<any> {
 }
 
 export async function main() {
-  const run = `/repos/${env('GITHUB_REPOSITORY')}/actions/runs/${env('GITHUB_RUN_ID')}`;
+  const repo = `/repos/${env('GITHUB_REPOSITORY')}`;
+  const run = `${repo}/actions/runs/${env('GITHUB_RUN_ID')}`;
   const attempt = env('GITHUB_RUN_ATTEMPT');
   const names: Names = {
     migration: env('MIGRATION_JOB'),
@@ -226,6 +258,7 @@ export async function main() {
         }
       }
     },
+    job: (id) => github('GET', `${repo}/actions/jobs/${id}`),
     cancel: async () => {
       await github('POST', `${run}/cancel`);
     },
