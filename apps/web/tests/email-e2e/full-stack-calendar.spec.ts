@@ -368,9 +368,8 @@ async function composerFor(page: Page, grace: string): Promise<Locator> {
   await expect(composer.getByRole('textbox', { name: 'Title' })).toHaveValue(
     TITLE
   );
-  await expect(composer.getByRole('button', { name: 'Guests' })).toContainText(
-    grace
-  );
+  // The guests fold into a summary that names them.
+  await expect(composer.getByRole('button', { name: grace })).toBeVisible();
   return composer;
 }
 

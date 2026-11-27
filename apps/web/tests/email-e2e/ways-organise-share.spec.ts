@@ -8,6 +8,7 @@
 // composers open filled from the thread on the screen.
 
 import { loadAppSteadily } from './harness/drafts';
+import { guestSummary } from './harness/event-composer';
 import { expect, test } from './harness/fixtures';
 import { openThreadId, rowIds } from './harness/list';
 import { answerSharingAsUser, grantView } from './harness/sharing';
@@ -168,8 +169,6 @@ test('the menu after the subject starts a task and an event from the thread', as
   await expect(composer.getByRole('textbox', { name: 'Title' })).toHaveValue(
     'Agenda'
   );
-  // One guest is named in place of a count.
-  await expect(composer.getByRole('button', { name: 'Guests' })).toHaveText(
-    'grace@example.com'
-  );
+  // The sender is the one guest.
+  await expect(guestSummary(composer, ['grace@example.com'])).toBeVisible();
 });

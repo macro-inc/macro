@@ -1,4 +1,5 @@
 import { loadAppSteadily } from './harness/drafts';
+import { guestSummary } from './harness/event-composer';
 import { expect, test } from './harness/fixtures';
 import { replyEditor } from './harness/send';
 import { replyScrollBox, replyToLong } from './harness/ways-compose-more';
@@ -210,10 +211,10 @@ test("a reply's Create event opens an event with the subject and the people of t
   await expect(composer.getByRole('textbox', { name: 'Title' })).toHaveValue(
     /Harbour walk/
   );
-  // The guests fold into a count; their list opens from it.
-  const guests = composer.getByRole('button', { name: 'Guests' });
-  await expect(guests).toHaveText('2 guests');
-  await guests.click();
-  await expect(page.getByText(XAVIER, { exact: true })).toBeVisible();
-  await expect(page.getByText(YARA, { exact: true })).toBeVisible();
+  // The guests fold into a summary that names them; their field opens
+  // from it.
+  await guestSummary(composer, [XAVIER, YARA]).click();
+  await expect(composer.getByRole('button', { name: 'Guests' })).toContainText(
+    `${XAVIER}, ${YARA}`
+  );
 });

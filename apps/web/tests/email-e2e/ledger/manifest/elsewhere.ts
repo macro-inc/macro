@@ -760,11 +760,11 @@ export const elsewhere = {
       surface: 'SX-27',
       fn: ['F-157'],
       state:
-        'Setup status "Connect your calendar" / "Enable calendar" / "Calendar is off" / "Reconnect calendar": overlay on an empty grid, pill when events show',
+        'Setup status "Connect your calendar" / "Enable calendar" / "Calendar is off" / "Reconnect calendar": a notice above the grid',
       trigger:
         'no own inbox / calendar permission missing / calendar turned off / re-auth needed',
       source: ['src/features/calendar-view/components/SetupStatus.tsx'],
-      note: 'tested: the overlay on an empty grid. The pill shown over events is not',
+      note: 'tested above an empty grid; the same notice shows above events',
     },
     {
       id: 'STX-035',
