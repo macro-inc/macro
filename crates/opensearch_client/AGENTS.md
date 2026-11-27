@@ -106,14 +106,21 @@ projects.
   (`email_delete_task`, a raw request because the typed tasks API is behind
   the `opensearch` crate's `experimental-apis` feature). The task's throttle
   applies to that task alone; callers bound how many run at once.
-- A single-message email delete forces no refresh: it deletes the event
-  thread's document by id, then delete-by-queries the message's copies under
-  other threads with that thread left out, since the query sees only
-  refreshed documents and would count the one just deleted as a conflict. A forced
-  refresh per event refreshes every shard of the index, and a run of such
-  events stalls their partition. A delete-by-query that only met conflicts
-  deleted nothing and so forces no refresh either: refresh before failing on
-  them, or the caller's retry meets the same stale documents.
+- Email documents are written only by `write_email_documents`: one `_bulk`
+  of index and delete actions by id, each carrying the caller's version as
+  `external_gte`. Keep every email write versioned and by id: a partial
+  `_update` refuses version parameters, `_update_by_query` and
+  `_delete_by_query` cannot carry one, and an unversioned write bumps the
+  document's version by one, after which an older writer's write applies
+  again. `classify_versioned_bulk_response` counts a 409
+  `version_conflict_engine_exception` as `refused_stale` (a later writer got
+  there first), a delete that found nothing as deleted, and fails the call on
+  any other item failure. A message's copies under other threads are found
+  with `email_message_documents`, which sees only refreshed documents, then
+  deleted by id; nothing forces a refresh. A forced refresh per event
+  refreshes every shard of the index, and a run of such events stalls their
+  partition. The fence needs the index to remember deletes: `gc_deletes` 15m
+  on the emails index.
 - OpenSearch answers `_bulk` with 200 while failing items, for a full write
   queue (429) as for a mapping error. Classify every bulk answer item by item
   (`upsert::classify_bulk_response`): any failed item fails the call with

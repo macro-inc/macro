@@ -113,6 +113,10 @@ pub(crate) enum Handled {
     NoIndexChange,
     /// The event's source is gone for good, so there is nothing to index.
     SourceMissing,
+    /// The index refused some of the event's writes as stale: a later writer
+    /// already wrote or deleted those documents. Not a failure, and not
+    /// indexed by this event.
+    RefusedStale,
 }
 
 /// How a handled event ended, and after how many attempts.

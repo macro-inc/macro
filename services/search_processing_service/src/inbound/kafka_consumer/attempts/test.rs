@@ -14,7 +14,7 @@ fn refused_items() -> OpensearchClientError {
         total: 3,
         refusal: Some(WriteRefusal::TooManyRequests),
         errors: vec!["rejected_execution_exception: rejected execution".to_owned()],
-        operation: OpensearchOperation::BulkUpsertEmailMessages,
+        operation: OpensearchOperation::WriteEmailDocuments,
     }
 }
 

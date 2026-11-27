@@ -343,8 +343,6 @@ fn draft_email_event(is_spam_or_trash: bool) -> EmailTopicEvent {
 }
 
 fn email_event_cases() -> Vec<(EmailTopicEvent, EmailEventDescription)> {
-    let owner = "macro|owner@example.com".to_string();
-
     vec![
         (
             EmailTopicEvent::LinkConnected(LinkConnectedMetadata {
@@ -394,7 +392,7 @@ fn email_event_cases() -> Vec<(EmailTopicEvent, EmailEventDescription)> {
             EmailEventDescription {
                 action: EmailIndexAction::UpsertMessage {
                     message_id: MESSAGE_ID,
-                    owner: owner.clone(),
+                    thread_id: EMAIL_THREAD_ID,
                 },
                 link_id: EMAIL_LINK_ID,
                 event_type: "email.message_received",
@@ -429,7 +427,7 @@ fn email_event_cases() -> Vec<(EmailTopicEvent, EmailEventDescription)> {
             EmailEventDescription {
                 action: EmailIndexAction::UpsertSentMessage {
                     message_id: MESSAGE_ID,
-                    owner: owner.clone(),
+                    thread_id: EMAIL_THREAD_ID,
                 },
                 link_id: EMAIL_LINK_ID,
                 event_type: "email.message_sent",
@@ -453,7 +451,7 @@ fn email_event_cases() -> Vec<(EmailTopicEvent, EmailEventDescription)> {
             EmailEventDescription {
                 action: EmailIndexAction::UpsertMessage {
                     message_id: MESSAGE_ID,
-                    owner: owner.clone(),
+                    thread_id: EMAIL_THREAD_ID,
                 },
                 link_id: EMAIL_LINK_ID,
                 event_type: "email.message_sent",
@@ -519,7 +517,6 @@ fn email_event_cases() -> Vec<(EmailTopicEvent, EmailEventDescription)> {
             EmailEventDescription {
                 action: EmailIndexAction::ReindexThread {
                     thread_id: EMAIL_THREAD_ID,
-                    owner: owner.clone(),
                 },
                 link_id: EMAIL_LINK_ID,
                 event_type: "email.thread_archived",
@@ -537,7 +534,6 @@ fn email_event_cases() -> Vec<(EmailTopicEvent, EmailEventDescription)> {
             EmailEventDescription {
                 action: EmailIndexAction::ReindexThread {
                     thread_id: EMAIL_THREAD_ID,
-                    owner: owner.clone(),
                 },
                 link_id: EMAIL_LINK_ID,
                 event_type: "email.thread_trashed",
@@ -555,7 +551,6 @@ fn email_event_cases() -> Vec<(EmailTopicEvent, EmailEventDescription)> {
             EmailEventDescription {
                 action: EmailIndexAction::ReindexThread {
                     thread_id: EMAIL_THREAD_ID,
-                    owner: owner.clone(),
                 },
                 link_id: EMAIL_LINK_ID,
                 event_type: "email.thread_read",
@@ -573,7 +568,6 @@ fn email_event_cases() -> Vec<(EmailTopicEvent, EmailEventDescription)> {
             EmailEventDescription {
                 action: EmailIndexAction::ReindexThread {
                     thread_id: EMAIL_THREAD_ID,
-                    owner: owner.clone(),
                 },
                 link_id: EMAIL_LINK_ID,
                 event_type: "email.thread_starred",
@@ -591,7 +585,6 @@ fn email_event_cases() -> Vec<(EmailTopicEvent, EmailEventDescription)> {
             EmailEventDescription {
                 action: EmailIndexAction::ReindexThread {
                     thread_id: EMAIL_THREAD_ID,
-                    owner: owner.clone(),
                 },
                 link_id: EMAIL_LINK_ID,
                 event_type: "email.thread_spam_changed",
@@ -628,7 +621,6 @@ fn email_event_cases() -> Vec<(EmailTopicEvent, EmailEventDescription)> {
             EmailEventDescription {
                 action: EmailIndexAction::ReindexThread {
                     thread_id: EMAIL_THREAD_ID,
-                    owner: owner.clone(),
                 },
                 link_id: EMAIL_LINK_ID,
                 event_type: "email.thread_labels_updated",
@@ -643,7 +635,6 @@ fn email_event_cases() -> Vec<(EmailTopicEvent, EmailEventDescription)> {
             EmailEventDescription {
                 action: EmailIndexAction::ReindexThread {
                     thread_id: EMAIL_THREAD_ID,
-                    owner: owner.clone(),
                 },
                 link_id: EMAIL_LINK_ID,
                 event_type: "email.thread_backfilled",
@@ -659,7 +650,6 @@ fn email_event_cases() -> Vec<(EmailTopicEvent, EmailEventDescription)> {
             EmailEventDescription {
                 action: EmailIndexAction::ReindexThreads {
                     thread_ids: vec![EMAIL_THREAD_ID, SECOND_EMAIL_THREAD_ID],
-                    owner,
                 },
                 link_id: EMAIL_LINK_ID,
                 event_type: "email.threads_reindex_requested",
@@ -1649,9 +1639,32 @@ fn email_message_sync_actions_remove_spam_or_trash_and_upsert_other_messages() {
         describe_email_event(&draft_email_event(false)).action,
         EmailIndexAction::UpsertMessage {
             message_id: MESSAGE_ID,
-            owner: "macro|owner@example.com".to_string(),
+            thread_id: EMAIL_THREAD_ID,
         }
     );
+}
+
+/// Imports and reindex requests count as bulk writes, deletes as deletes, and
+/// everything else a person or provider changes as live writes.
+#[test]
+fn email_events_say_what_kind_of_write_they_are() {
+    let writers: Vec<(&str, crate::domain::email_index::EmailWriter)> = email_event_cases()
+        .into_iter()
+        .map(|(event, _)| {
+            let description = describe_email_event(&event);
+            (description.event_type, description.writer())
+        })
+        .collect();
+
+    use crate::domain::email_index::EmailWriter::{Bulk, Delete, Live};
+    for (event_type, writer) in writers {
+        let expected = match event_type {
+            "email.thread_backfilled" | "email.threads_reindex_requested" => Bulk,
+            "email.message_deleted" | "email.message_draft_synced" => Delete,
+            _ => Live,
+        };
+        assert_eq!(writer, expected, "{event_type}");
+    }
 }
 
 #[test]
@@ -3863,8 +3876,16 @@ async fn property_writes_that_change_nothing_indexed_are_not_counted_as_indexed(
     use super::metrics::{LAG, test::Recorded};
     use properties::domain::events::PropertyMacroEvent;
 
-    let opensearch = property_write_opensearch().await;
-    let (pool, opensearch) = (&pool, &opensearch);
+    let opensearch = std::sync::Arc::new(property_write_opensearch().await);
+    let email_indexer = crate::EmailIndexer::new(
+        crate::outbound::email_index_source::PgEmailIndexSource::new(pool.clone()),
+        crate::outbound::email_thread_leases::PgEmailThreadLeases::new(
+            (*pool.connect_options()).clone(),
+            2,
+        ),
+        crate::outbound::email_search::OpenSearchEmailIndex::new(opensearch.clone()),
+    );
+    let (pool, opensearch, email_indexer) = (&pool, &*opensearch, &email_indexer);
     let thread_id = EMAIL_THREAD_ID.to_string();
     let cases = [
         (PROJECT_ID, EntityType::Project, "indexed"),
@@ -3906,6 +3927,7 @@ async fn property_writes_that_change_nothing_indexed_are_not_counted_as_indexed(
                 property::process_property_event(
                     pool,
                     opensearch,
+                    email_indexer,
                     event,
                     received.partition,
                     received.offset,

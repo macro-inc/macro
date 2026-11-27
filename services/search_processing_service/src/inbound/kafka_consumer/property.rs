@@ -6,8 +6,15 @@ use opensearch_client::OpensearchClient;
 use properties::domain::events::{PropertyMacroEvent, PropertyTopicEvent};
 use sqlx::PgPool;
 
-use super::{Attempted, Attempts, Handled};
-use crate::process::properties::{PropertyRefresh, process_entity_property_update};
+use super::{
+    Attempted, Attempts, Handled,
+    attempts::{AttemptError, Diagnosis},
+};
+use crate::{
+    EmailIndexer,
+    domain::email_index::LeasePool,
+    process::properties::{PropertyRefresh, PropertyRefreshError, process_entity_property_update},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum PropertyIndexAction<'a> {
@@ -70,9 +77,19 @@ pub(super) fn describe_property_event(event: &PropertyTopicEvent) -> PropertyEve
     }
 }
 
+impl AttemptError for PropertyRefreshError {
+    fn diagnose(&self) -> Diagnosis {
+        match self {
+            Self::EmailThread(report) => report.diagnose(),
+            Self::Other(error) => error.diagnose(),
+        }
+    }
+}
+
 pub(super) async fn process_property_event(
     db: &PgPool,
     opensearch_client: &OpensearchClient,
+    email_indexer: &EmailIndexer,
     event: &PropertyMacroEvent,
     partition: i32,
     offset: i64,
@@ -104,13 +121,20 @@ pub(super) async fn process_property_event(
                 attempt,
                 "processing property search-index event"
             );
-            let refresh =
-                process_entity_property_update(opensearch_client, db, entity_id, entity_type)
-                    .await?;
-            Ok::<_, anyhow::Error>(match refresh {
+            let refresh = process_entity_property_update(
+                opensearch_client,
+                email_indexer,
+                db,
+                entity_id,
+                entity_type,
+                LeasePool::Live,
+            )
+            .await?;
+            Ok::<_, PropertyRefreshError>(match refresh {
                 PropertyRefresh::Written => Handled::Indexed,
                 PropertyRefresh::NotIndexed => Handled::NoIndexChange,
                 PropertyRefresh::UnindexedType => Handled::Ignored,
+                PropertyRefresh::RefusedStale => Handled::RefusedStale,
             })
         })
         .await

@@ -58,6 +58,39 @@ for future imports. Running `create_indices.ts` alone does not clear an existing
 `copy_to` parameter. After applying, verify a body search returns
 `highlight.content` and an imported-author search still finds its message.
 
+## Email index writes are versioned
+
+Every write of the email index carries its writer's version as an
+`external_gte` version (search-processing's README, "Email indexing fence").
+Never run a script that writes it without one, such as an update-by-query
+(`copy_entity_id.ts`, `update_updated_at_seconds_for_email.ts`,
+`remove_field_from_index.ts`), while search-processing is writing: an
+unversioned write raises a document's version by one, so an older writer's
+write applies again.
+
+`gc_deletes: '15m'` in the emails body is what lets a delete's version refuse a
+slower writer; with OpenSearch's default of 60 s, a writer that read a message
+before its delete can bring it back. A new email index gets it from
+`create_indices.ts`; an existing one takes
+`PUT <index>/_settings {"index": {"gc_deletes": "15m"}}`.
+
+A rebuild through `reindex_with_alias_swap.ts` copies with internal
+versioning, so the copies start at version 1 and the new index remembers none
+of the old one's deletes. For an email index:
+
+1. Pause email writes: stop search-processing's email consumers and queue
+   workers, and pause direct backfills (`PUT /internal/backfill/pause` with
+   `{"paused": true}`), which rewrite email threads for property backfills.
+   Then wait 2 minutes, the longest a writer works under one lease, so the
+   writes already admitted have finished.
+2. Create the new index with `create_indices.ts`, then copy and swap.
+3. Before email writes resume, check the new index's setting with
+   `GET <new index>/_settings/index.gc_deletes`. When it does not say `15m`
+   (an index created some other way), set it with
+   `PUT <new index>/_settings {"index": {"gc_deletes": "15m"}}` and read it
+   back.
+4. Resume email writes.
+
 ## Channel message links
 
 `links` on the channels index holds each message's link URLs, analyzed by the

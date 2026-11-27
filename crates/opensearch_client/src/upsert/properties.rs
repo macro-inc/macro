@@ -22,8 +22,7 @@ pub struct IndexedProperty {
 /// What a write of an entity's indexed properties did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PropertyUpdate {
-    /// The index holds the entity's documents and took the write. For an
-    /// email thread, a message a concurrent write changed first counts too.
+    /// The index holds the entity's document and took the write.
     Applied,
     /// The index holds no document for the entity yet, so nothing changed; its
     /// next full index carries the properties.

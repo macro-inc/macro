@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT max(granted_at) AS \"granted_at!\"\n            FROM (\n                SELECT clock_timestamp() AS granted_at\n                FROM (\n                    SELECT DISTINCT hashtextextended('email-thread-search:' || thread_id::text, 0) AS lock_key\n                    FROM unnest($1::uuid[]) AS thread_id\n                    ORDER BY lock_key\n                ) AS keys,\n                LATERAL pg_advisory_xact_lock(keys.lock_key)\n            ) AS granted\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "granted_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "577e28d92c111fb366ff4424e689e8900a152b29dea5b54b36f93e89c279de86"
+}

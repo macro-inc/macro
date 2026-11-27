@@ -4,24 +4,33 @@ use std::borrow::Cow;
 
 use ::email::domain::events::{EmailEventOrigin, EmailMacroEvent, EmailTopicEvent};
 use macro_event_broker::MacroEvent as _;
-use opensearch_client::OpensearchClient;
-use sqlx::PgPool;
+use rootcause::Report;
 use uuid::Uuid;
 
-use super::{Attempted, Attempts, Handled};
-use crate::process::email::{mailbox_delete::MailboxDeletes, remove, upsert};
+use super::{
+    Attempted, Attempts, Handled,
+    attempts::{AttemptError, Diagnosis},
+};
+use crate::{
+    EmailIndexer,
+    domain::email_index::{EmailWriter, LeasePool, MessageReconcile},
+    process::email::mailbox_delete::MailboxDeletes,
+};
 
+/// What an email event asks of the index. Every action rereads the source
+/// under the thread's lease: the event names what to reread, never what to
+/// write.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum EmailIndexAction {
     UpsertMessage {
         message_id: Uuid,
-        owner: String,
+        thread_id: Uuid,
     },
     /// Index a sent message under its thread and drop the copies it left
     /// under threads the send moved it from.
     UpsertSentMessage {
         message_id: Uuid,
-        owner: String,
+        thread_id: Uuid,
     },
     RemoveMessage {
         message_id: Uuid,
@@ -29,11 +38,9 @@ pub(super) enum EmailIndexAction {
     },
     ReindexThread {
         thread_id: Uuid,
-        owner: String,
     },
     ReindexThreads {
         thread_ids: Vec<Uuid>,
-        owner: String,
     },
     RemoveLink {
         link_id: Uuid,
@@ -46,6 +53,27 @@ pub(super) struct EmailEventDescription {
     pub(super) action: EmailIndexAction,
     pub(super) link_id: Uuid,
     pub(super) event_type: &'static str,
+}
+
+impl EmailEventDescription {
+    /// The kind of work the event's writes are, as refused writes and lease
+    /// waits are counted.
+    pub(super) fn writer(&self) -> EmailWriter {
+        match &self.action {
+            EmailIndexAction::RemoveMessage { .. } => EmailWriter::Delete,
+            EmailIndexAction::ReindexThreads { .. } => EmailWriter::Bulk,
+            EmailIndexAction::ReindexThread { .. }
+                if self.event_type == "email.thread_backfilled" =>
+            {
+                EmailWriter::Bulk
+            }
+            EmailIndexAction::UpsertMessage { .. }
+            | EmailIndexAction::UpsertSentMessage { .. }
+            | EmailIndexAction::ReindexThread { .. }
+            | EmailIndexAction::RemoveLink { .. }
+            | EmailIndexAction::Ignore => EmailWriter::Live,
+        }
+    }
 }
 
 /// Worker-sharding key for an email event.
@@ -144,7 +172,7 @@ pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescrip
             } else {
                 EmailIndexAction::UpsertMessage {
                     message_id: metadata.message_id,
-                    owner: metadata.owner.to_string(),
+                    thread_id: metadata.thread_id,
                 }
             },
             link_id: metadata.link_id,
@@ -159,7 +187,7 @@ pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescrip
             } else {
                 EmailIndexAction::UpsertMessage {
                     message_id: metadata.message_id,
-                    owner: metadata.owner.to_string(),
+                    thread_id: metadata.thread_id,
                 }
             },
             link_id: metadata.link_id,
@@ -172,11 +200,11 @@ pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescrip
             action: match metadata.origin {
                 EmailEventOrigin::UserAction => EmailIndexAction::UpsertSentMessage {
                     message_id: metadata.message_id,
-                    owner: metadata.owner.to_string(),
+                    thread_id: metadata.thread_id,
                 },
                 EmailEventOrigin::ProviderSync => EmailIndexAction::UpsertMessage {
                     message_id: metadata.message_id,
-                    owner: metadata.owner.to_string(),
+                    thread_id: metadata.thread_id,
                 },
             },
             link_id: metadata.link_id,
@@ -203,7 +231,6 @@ pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescrip
         EmailTopicEvent::ThreadArchived(metadata) => EmailEventDescription {
             action: EmailIndexAction::ReindexThread {
                 thread_id: metadata.thread_id,
-                owner: metadata.owner.to_string(),
             },
             link_id: metadata.link_id,
             event_type: "email.thread_archived",
@@ -211,7 +238,6 @@ pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescrip
         EmailTopicEvent::ThreadTrashed(metadata) => EmailEventDescription {
             action: EmailIndexAction::ReindexThread {
                 thread_id: metadata.thread_id,
-                owner: metadata.owner.to_string(),
             },
             link_id: metadata.link_id,
             event_type: "email.thread_trashed",
@@ -219,7 +245,6 @@ pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescrip
         EmailTopicEvent::ThreadRead(metadata) => EmailEventDescription {
             action: EmailIndexAction::ReindexThread {
                 thread_id: metadata.thread_id,
-                owner: metadata.owner.to_string(),
             },
             link_id: metadata.link_id,
             event_type: "email.thread_read",
@@ -227,7 +252,6 @@ pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescrip
         EmailTopicEvent::ThreadStarred(metadata) => EmailEventDescription {
             action: EmailIndexAction::ReindexThread {
                 thread_id: metadata.thread_id,
-                owner: metadata.owner.to_string(),
             },
             link_id: metadata.link_id,
             event_type: "email.thread_starred",
@@ -235,7 +259,6 @@ pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescrip
         EmailTopicEvent::ThreadSpamChanged(metadata) => EmailEventDescription {
             action: EmailIndexAction::ReindexThread {
                 thread_id: metadata.thread_id,
-                owner: metadata.owner.to_string(),
             },
             link_id: metadata.link_id,
             event_type: "email.thread_spam_changed",
@@ -248,7 +271,6 @@ pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescrip
         EmailTopicEvent::ThreadLabelsUpdated(metadata) => EmailEventDescription {
             action: EmailIndexAction::ReindexThread {
                 thread_id: metadata.thread_id,
-                owner: metadata.owner.to_string(),
             },
             link_id: metadata.link_id,
             event_type: "email.thread_labels_updated",
@@ -256,7 +278,6 @@ pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescrip
         EmailTopicEvent::ThreadBackfilled(metadata) => EmailEventDescription {
             action: EmailIndexAction::ReindexThread {
                 thread_id: metadata.thread_id,
-                owner: metadata.owner.to_string(),
             },
             link_id: metadata.link_id,
             event_type: "email.thread_backfilled",
@@ -264,7 +285,6 @@ pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescrip
         EmailTopicEvent::ThreadsReindexRequested(metadata) => EmailEventDescription {
             action: EmailIndexAction::ReindexThreads {
                 thread_ids: metadata.thread_ids.clone(),
-                owner: metadata.owner.to_string(),
             },
             link_id: metadata.link_id,
             event_type: "email.threads_reindex_requested",
@@ -272,45 +292,91 @@ pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescrip
     }
 }
 
-async fn process_email_index_action(
-    db: &PgPool,
-    opensearch_client: &OpensearchClient,
-    mailbox_deletes: &MailboxDeletes,
-    action: EmailIndexAction,
-) -> anyhow::Result<()> {
-    match action {
-        EmailIndexAction::UpsertMessage { message_id, owner } => {
-            upsert::process_upsert_message(opensearch_client, db, message_id, &owner).await
-        }
-        EmailIndexAction::UpsertSentMessage { message_id, owner } => {
-            upsert::process_upsert_sent_message(opensearch_client, db, message_id, &owner).await
-        }
-        EmailIndexAction::RemoveMessage {
-            message_id,
-            thread_id,
-        } => remove::process_remove_message(opensearch_client, message_id, thread_id, None).await,
-        EmailIndexAction::ReindexThread { thread_id, owner } => {
-            upsert::process_upsert_thread_message(opensearch_client, db, thread_id, &owner, None)
-                .await
-        }
-        EmailIndexAction::ReindexThreads { thread_ids, owner } => {
-            upsert::process_upsert_thread_batch_message(
-                opensearch_client,
-                db,
-                &thread_ids,
-                &owner,
-                None,
-            )
-            .await
-        }
-        EmailIndexAction::RemoveLink { link_id } => mailbox_deletes.start(link_id).await,
-        EmailIndexAction::Ignore => Ok(()),
+/// Why an email event's attempt failed: its reconcile, or starting an inbox
+/// delete.
+#[derive(Debug)]
+enum EmailActionError {
+    Reconcile(Report),
+    MailboxDelete(anyhow::Error),
+}
+
+impl From<Report> for EmailActionError {
+    fn from(report: Report) -> Self {
+        Self::Reconcile(report)
     }
 }
 
+impl AttemptError for EmailActionError {
+    fn diagnose(&self) -> Diagnosis {
+        match self {
+            Self::Reconcile(report) => report.diagnose(),
+            Self::MailboxDelete(error) => error.diagnose(),
+        }
+    }
+}
+
+async fn process_email_index_action(
+    email_indexer: &EmailIndexer,
+    mailbox_deletes: &MailboxDeletes,
+    action: EmailIndexAction,
+    writer: EmailWriter,
+) -> Result<Handled, EmailActionError> {
+    let message = |message_id, thread_id, remove_moved_copies| MessageReconcile {
+        message_id,
+        thread_id,
+        remove_moved_copies,
+        writer,
+        pool: LeasePool::Live,
+    };
+    let reconciled = match action {
+        EmailIndexAction::UpsertMessage {
+            message_id,
+            thread_id,
+        }
+        | EmailIndexAction::RemoveMessage {
+            message_id,
+            thread_id,
+        } => {
+            email_indexer
+                .reconcile_message(message(message_id, thread_id, false))
+                .await?
+        }
+        EmailIndexAction::UpsertSentMessage {
+            message_id,
+            thread_id,
+        } => {
+            email_indexer
+                .reconcile_message(message(message_id, thread_id, true))
+                .await?
+        }
+        EmailIndexAction::ReindexThread { thread_id } => {
+            email_indexer
+                .reconcile_threads(&[thread_id], None, writer, LeasePool::Live)
+                .await?
+        }
+        EmailIndexAction::ReindexThreads { thread_ids } => {
+            email_indexer
+                .reconcile_threads(&thread_ids, None, writer, LeasePool::Live)
+                .await?
+        }
+        EmailIndexAction::RemoveLink { link_id } => {
+            mailbox_deletes
+                .start(link_id)
+                .await
+                .map_err(EmailActionError::MailboxDelete)?;
+            return Ok(Handled::Indexed);
+        }
+        EmailIndexAction::Ignore => return Ok(Handled::Ignored),
+    };
+    Ok(if reconciled.writes.refused_stale > 0 {
+        Handled::RefusedStale
+    } else {
+        Handled::Indexed
+    })
+}
+
 pub(super) async fn process_email_event(
-    db: &PgPool,
-    opensearch_client: &OpensearchClient,
+    email_indexer: &EmailIndexer,
     mailbox_deletes: &MailboxDeletes,
     event: &EmailMacroEvent,
     partition: i32,
@@ -329,8 +395,9 @@ pub(super) async fn process_email_event(
         return Ok((Handled::Ignored, 0));
     }
 
+    let writer = description.writer();
     attempts
-        .run(|attempt| {
+        .run_handled(|attempt| {
             let action = description.action.clone();
             async move {
                 tracing::trace!(
@@ -341,7 +408,7 @@ pub(super) async fn process_email_event(
                     attempt,
                     "processing email search-index event"
                 );
-                process_email_index_action(db, opensearch_client, mailbox_deletes, action).await
+                process_email_index_action(email_indexer, mailbox_deletes, action, writer).await
             }
         })
         .await

@@ -230,6 +230,9 @@
     "stacks/search-processing-service": {
       "name": "search-processing-service-stack",
       "version": "0.0.0",
+      "dependencies": {
+        "@pulumi/command": "^1.1.0",
+      },
     },
     "stacks/search-text-extractor-queue": {
       "name": "search-text-extractor-queue-stack",

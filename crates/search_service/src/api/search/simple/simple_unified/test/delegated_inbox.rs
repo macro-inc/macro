@@ -100,29 +100,34 @@ async fn insert_thread(
     .await?;
 
     let now = EpochMillis::new(chrono::Utc::now().timestamp_millis())?;
-    index
-        .upsert_email_message(&UpsertEmailArgs {
-            thread_id: thread_id.to_string(),
-            message_id: message_id.to_string(),
-            sender,
-            sender_name: None,
-            reply_to: None,
-            recipients: Vec::new(),
-            recipient_names: Vec::new(),
-            cc: Vec::new(),
-            cc_names: Vec::new(),
-            bcc: Vec::new(),
-            bcc_names: Vec::new(),
-            labels: Vec::new(),
-            link_id: link_id.to_string(),
-            user_id: owner.to_string(),
-            updated_at_millis: now,
-            subject: Some(subject.to_string()),
-            sent_at_millis: Some(now),
-            content: format!("{subject} {WORD}"),
-            properties: Vec::new(),
-        })
+    let document = UpsertEmailArgs {
+        thread_id: thread_id.to_string(),
+        message_id: message_id.to_string(),
+        sender,
+        sender_name: None,
+        reply_to: None,
+        recipients: Vec::new(),
+        recipient_names: Vec::new(),
+        cc: Vec::new(),
+        cc_names: Vec::new(),
+        bcc: Vec::new(),
+        bcc_names: Vec::new(),
+        labels: Vec::new(),
+        link_id: link_id.to_string(),
+        user_id: owner.to_string(),
+        updated_at_millis: now,
+        subject: Some(subject.to_string()),
+        sent_at_millis: Some(now),
+        content: format!("{subject} {WORD}"),
+        properties: Vec::new(),
+    };
+    // Email writes are fenced, so a seed carries a version later than any
+    // delete of the same document, as a real writer's lease grant does.
+    let version = u64::try_from(chrono::Utc::now().timestamp_micros())?;
+    let writes = index
+        .write_email_documents(version, &[document], &[], None)
         .await?;
+    anyhow::ensure!(writes.indexed == 1, "the seeded message was not written");
     Ok(thread_id)
 }
 

@@ -39,6 +39,18 @@
 //   per item), `bulk_items` when it failed them otherwise. Only bulk writes
 //   report items (documents, email messages, call segments, chat repair);
 //   a refusal of the whole request, and single-document writes, count none.
+// - `search.index.refused_stale`: email index writes and deletes OpenSearch
+//   refused because the document already held a later writer's version
+//   (counter), tagged `entity_type` (`email`) and `writer` (`live`, `bulk`,
+//   `property`, `delete`). Each writer leases its thread first, so a refusal
+//   means a lease was lost or a writer outlived its deadline. Recorded in
+//   services/search_processing_service/src/outbound/email_search.rs.
+// - `search.index.lease_wait_ms`: how long an email writer waited for its
+//   thread leases (histogram), tagged `stage` (`connection` for a lock
+//   connection, `lock` for the locks themselves), `pool` (`live` for the Kafka
+//   workers, `bulk` for queue batches and direct backfills) and `writer`.
+//   A live writer that meets a queue batch's lease waits out the batch.
+//   Recorded in src/outbound/email_thread_leases.rs.
 // - `kafka.consumer.offset_resets`: partition positions librdkafka reset after
 //   an error (counter), tagged `topic`. Usually the position was out of range,
 //   older than the topic's retention, and the consumer moved to the newest
@@ -120,6 +132,7 @@ const DROPPED = `sum:search.index.dropped_events{${PROD}} by {entity_type}.as_co
 // recover the alert every 5 minutes.
 const FAILED_ITEMS = `default_zero(sum:search.index.failed_bulk_items{${PROD}} by {entity_type,failure}.as_rate().rollup(avg, 300)) * 300`;
 const OFFSET_RESETS = `sum:kafka.consumer.offset_resets{${PROD}} by {topic}.as_count()`;
+const REFUSED_STALE = `sum:search.index.refused_stale{${PROD}} by {entity_type,writer}.as_count()`;
 // Per lane: each task reads email and the live topics on separate consumers,
 // and one that stops reporting must not hide behind the other's readings.
 const LIVE_READINGS = `max:search.index.oldest_pending_ms{${PROD},!${EMAIL}}.fill(null)`;
@@ -157,6 +170,7 @@ const TITLES = {
   dropped: 'Search events committed without reaching the index',
   failedItems: 'Search bulk index writes keep failing items',
   offsetReset: 'Search indexer reset a Kafka position after an error',
+  refusedStale: 'Search email writes refused as stale',
   silent: 'Search indexer reports no live backlog readings',
   emailSilent: 'Search indexer reports no email backlog readings',
   probeLate: 'Search shows changes late end to end',
@@ -254,6 +268,12 @@ export const searchFreshnessDashboard = new datadog.Dashboard(
           critical: '0',
         }),
         thresholdGraph({
+          title: TITLES.refusedStale,
+          query: `${REFUSED_STALE}.rollup(sum, 1800)`,
+          critical: '100',
+          warning: '0',
+        }),
+        thresholdGraph({
           title: TITLES.silent,
           query: LIVE_READINGS,
           critical: '0',
@@ -342,6 +362,14 @@ export const searchFreshnessDashboard = new datadog.Dashboard(
           `default_zero(sum:search.index.dropped_events{${INDEXER}} by {entity_type,failure}.as_count())`
         ),
         bars(
+          'Email writes refused as stale by writer',
+          `default_zero(sum:search.index.refused_stale{${INDEXER}} by {writer}.as_count())`
+        ),
+        lines(
+          'Longest email lease wait by pool and stage (s)',
+          `max:search.index.lease_wait_ms{${INDEXER}} by {pool,stage}.fill(null)${MS_TO_S}`
+        ),
+        bars(
           'Offset resets by topic',
           `default_zero(sum:kafka.consumer.offset_resets{${INDEXER}} by {topic}.as_count())`
         ),
@@ -427,6 +455,20 @@ prodMonitor('search-failed-bulk-items', {
   alertDetail: '{{value}} items in the quietest 5 minutes',
   recoveryDetail: '{{value}} items in the quietest 5 minutes',
   evaluationDelay: 420,
+});
+
+prodMonitor('search-refused-stale', {
+  title: TITLES.refusedStale,
+  service: SERVICE,
+  query: `sum(last_30m):${REFUSED_STALE} > 100`,
+  monitorThresholds: { critical: '100', warning: '0' },
+  pages: false,
+  description:
+    'In the last 30 minutes OpenSearch refused {{entity_type.name}} index writes from {{writer.name}} writers because a later writer had already written or deleted those documents. Nothing is lost: the later write stands. But every writer leases its thread before reading, so a refusal means a writer lost its lease or outlived its 2-minute deadline, and the fence then rests on the index remembering deletes for 15 minutes alone.',
+  dashboard,
+  runbook: `${RUNBOOK}#refused-stale-writes`,
+  alertDetail: '{{value}} refused writes',
+  recoveryDetail: '{{value}} refused writes',
 });
 
 prodMonitor('search-dropped-events', {

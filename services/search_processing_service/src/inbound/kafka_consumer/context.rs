@@ -13,6 +13,7 @@ use super::IndexMetrics;
 #[derive(Clone)]
 pub(crate) struct KafkaProcessingContext {
     pub(crate) agent_session_indexer: Arc<crate::AgentSessionIndexer>,
+    pub(crate) email_indexer: Arc<crate::EmailIndexer>,
     pub(crate) db: PgPool,
     pub(crate) opensearch_client: Arc<OpensearchClient>,
     pub(crate) s3_client: Arc<S3>,

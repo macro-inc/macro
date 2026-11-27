@@ -21,15 +21,14 @@ pub struct BulkUpsertResult {
     pub successful: usize,
 }
 
-/// Classify a `_bulk` answer. OpenSearch answers 200 while failing items, for
-/// a full write queue (429) as for a mapping error, so any failed item fails
-/// the call: the request's work is not done. A refused request or item is a
-/// [`crate::error::WriteRefusal`] the caller can back off on.
-pub(crate) fn classify_bulk_response(
+/// The items of a `_bulk` answer, or the error a failed request is. A refused
+/// request or item is a [`crate::error::WriteRefusal`] the caller can back
+/// off on.
+fn bulk_items(
     status: u16,
     body: &str,
     operation: OpensearchOperation,
-) -> crate::Result<BulkUpsertResult> {
+) -> crate::Result<Vec<serde_json::Value>> {
     let parsed = serde_json::from_str::<serde_json::Value>(body);
 
     if !(200..300).contains(&status) {
@@ -51,59 +50,159 @@ pub(crate) fn classify_bulk_response(
         });
     }
 
-    let response = parsed.map_err(|error| OpensearchClientError::DeserializationFailed {
+    let mut response = parsed.map_err(|error| OpensearchClientError::DeserializationFailed {
         details: error.to_string(),
         operation,
     })?;
     // A success without per-item results acknowledges nothing.
-    let items = response["items"].as_array().ok_or_else(|| {
-        OpensearchClientError::DeserializationFailed {
+    match response.get_mut("items").map(serde_json::Value::take) {
+        Some(serde_json::Value::Array(items)) => Ok(items),
+        _ => Err(OpensearchClientError::DeserializationFailed {
             details: "bulk response has no items array".to_owned(),
             operation,
-        }
-    })?;
+        }),
+    }
+}
 
-    let mut successful = 0;
-    let mut failed = 0;
-    let mut refusal = None;
-    let mut errors: Vec<String> = Vec::new();
-    for item in items {
-        // Each item is keyed by its action: `index`, `create`, `update` or `delete`.
-        let Some(result) = item.as_object().and_then(|item| item.values().next()) else {
-            failed += 1;
-            continue;
+/// One item of a `_bulk` answer: its action (`index`, `create`, `update` or
+/// `delete`), status and result.
+struct BulkItem<'a> {
+    action: &'a str,
+    status: u16,
+    result: &'a serde_json::Value,
+}
+
+fn bulk_item(item: &serde_json::Value) -> Option<BulkItem<'_>> {
+    let (action, result) = item.as_object()?.iter().next()?;
+    let status = result["status"]
+        .as_u64()
+        .and_then(|status| u16::try_from(status).ok())
+        .unwrap_or_default();
+    Some(BulkItem {
+        action,
+        status,
+        result,
+    })
+}
+
+/// The failed items of a `_bulk` answer, kept to fail the call with.
+#[derive(Default)]
+struct FailedItems {
+    failed: usize,
+    refusal: Option<crate::error::WriteRefusal>,
+    errors: Vec<String>,
+}
+
+impl FailedItems {
+    fn record(&mut self, item: Option<&BulkItem<'_>>) {
+        self.failed += 1;
+        let Some(item) = item else {
+            return;
         };
-        let status = result["status"]
-            .as_u64()
-            .and_then(|status| u16::try_from(status).ok())
-            .unwrap_or_default();
-        if (200..300).contains(&status) {
-            successful += 1;
-            continue;
-        }
-        failed += 1;
-        let error = &result["error"];
-        refusal = refusal.or(write_refusal(status, error));
+        let error = &item.result["error"];
+        self.refusal = self.refusal.or(write_refusal(item.status, error));
         let described = format!(
             "{}: {}",
             error["type"].as_str().unwrap_or("unknown"),
-            error["reason"].as_str().unwrap_or_default()
+            without_field_preview(error["reason"].as_str().unwrap_or_default())
         );
-        if errors.len() < REPORTED_ITEM_ERRORS && !errors.contains(&described) {
-            errors.push(described);
+        if self.errors.len() < REPORTED_ITEM_ERRORS && !self.errors.contains(&described) {
+            self.errors.push(described);
         }
     }
 
-    if failed > 0 {
-        return Err(OpensearchClientError::BulkItemsFailed {
-            failed,
-            total: items.len(),
-            refusal,
-            errors,
+    /// Any failed item fails the call: the request's work is not done.
+    fn into_result(self, total: usize, operation: OpensearchOperation) -> crate::Result<()> {
+        if self.failed == 0 {
+            return Ok(());
+        }
+        Err(OpensearchClientError::BulkItemsFailed {
+            failed: self.failed,
+            total,
+            refusal: self.refusal,
+            errors: self.errors,
             operation,
-        });
+        })
     }
+}
+
+/// A mapping error's reason ends with a preview of the value it could not
+/// parse, which can be a document's text: keep it out of errors and traces.
+fn without_field_preview(reason: &str) -> &str {
+    reason
+        .split_once(". Preview of field's value")
+        .map_or(reason, |(kept, _)| kept)
+}
+
+/// Classify a `_bulk` answer. OpenSearch answers 200 while failing items, for
+/// a full write queue (429) as for a mapping error, so any failed item fails
+/// the call: the request's work is not done.
+pub(crate) fn classify_bulk_response(
+    status: u16,
+    body: &str,
+    operation: OpensearchOperation,
+) -> crate::Result<BulkUpsertResult> {
+    let items = bulk_items(status, body, operation)?;
+    let mut successful = 0;
+    let mut failed = FailedItems::default();
+    for item in &items {
+        let item = bulk_item(item);
+        match &item {
+            Some(item) if (200..300).contains(&item.status) => successful += 1,
+            _ => failed.record(item.as_ref()),
+        }
+    }
+    failed.into_result(items.len(), operation)?;
     Ok(BulkUpsertResult { successful })
+}
+
+/// Result of a versioned `_bulk` whose every item either applied or was
+/// refused as stale.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(crate) struct VersionedBulkResult {
+    /// Documents written.
+    pub(crate) indexed: usize,
+    /// Documents deleted, or already absent.
+    pub(crate) deleted: usize,
+    /// Actions refused because the document holds a later version.
+    pub(crate) refused_stale: usize,
+}
+
+/// Classify the answer to a `_bulk` of `external_gte` versioned actions. A
+/// version conflict (409) is a stale action the index refused, which is
+/// neither a failure nor a write; a delete of a document that is not there
+/// (404 `not_found`) leaves it absent, which is what it asked for. Any other
+/// failed item fails the call, as in [`classify_bulk_response`].
+pub(crate) fn classify_versioned_bulk_response(
+    status: u16,
+    body: &str,
+    operation: OpensearchOperation,
+) -> crate::Result<VersionedBulkResult> {
+    let items = bulk_items(status, body, operation)?;
+    let mut result = VersionedBulkResult::default();
+    let mut failed = FailedItems::default();
+    for item in &items {
+        let item = bulk_item(item);
+        let Some(applied) = &item else {
+            failed.record(None);
+            continue;
+        };
+        let is_delete = applied.action == "delete";
+        let not_found = applied.status == 404 && applied.result["result"] == "not_found";
+        let stale = applied.status == 409
+            && applied.result["error"]["type"] == "version_conflict_engine_exception";
+        if stale {
+            result.refused_stale += 1;
+        } else if is_delete && ((200..300).contains(&applied.status) || not_found) {
+            result.deleted += 1;
+        } else if !is_delete && (200..300).contains(&applied.status) {
+            result.indexed += 1;
+        } else {
+            failed.record(item.as_ref());
+        }
+    }
+    failed.into_result(items.len(), operation)?;
+    Ok(result)
 }
 
 pub(crate) async fn bulk_upsert_to_index(
