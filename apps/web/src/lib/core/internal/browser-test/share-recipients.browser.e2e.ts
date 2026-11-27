@@ -1,40 +1,44 @@
 import { expect, type Page, test } from '@playwright/test';
 
-// Each contact read takes 4 s, so the list can be checked between the start
-// of the read for new text and its answer.
-const URL = '/?share-recipients&groups=400&dms=50&people=600&latency=4000';
+const URL = '/?share-recipients&groups=400&dms=50&people=600';
 
-/** The fixture's contact reads started and not yet answered. */
-type PendingRead = { id: number; query: string; cursor: string | null };
+/** A contact read as the fixture reports it: a first page has no cursor. */
+type ContactRead = { query: string; cursor: string | null };
+/** A first-page read the test holds: it starts, then lands when answered. */
+type HeldRead = {
+  started: PromiseWithResolvers<void>;
+  answer: PromiseWithResolvers<void>;
+};
 
 const people = (page: Page) =>
   page.getByRole('option').filter({ hasText: '@' });
-/** The id of the pending first-page read for `query`, if one is pending. */
-const pendingFirstPage = async (page: Page, query: string) => {
-  const list = await page.getByTestId('pending-read-list').textContent();
-  const pending: PendingRead[] = JSON.parse(list || '[]');
-  return (
-    pending.find((read) => read.query === query && read.cursor === null)?.id ??
-    null
+
+/** Holds the first-page read of each query until the test answers it; every
+ * other read is answered at once. Call before the page loads. */
+const holdReads = async (page: Page, queries: string[]) => {
+  const held = new Map<string, HeldRead>(
+    queries.map((query) => [
+      query,
+      { started: Promise.withResolvers(), answer: Promise.withResolvers() },
+    ])
   );
-};
-/** Waits until the first-page read for `query` has started and returns its
- * id; while that same read is still pending after a check, the check saw the
- * list before it landed. */
-const readStarted = async (page: Page, query: string) => {
-  let id = null as number | null;
-  await expect
-    .poll(async () => {
-      id = await pendingFirstPage(page, query);
-      return id;
-    })
-    .not.toBeNull();
-  return id;
+  await page.exposeFunction('holdContactRead', async (read: ContactRead) => {
+    const hold = read.cursor === null ? held.get(read.query) : undefined;
+    if (!hold) return;
+    hold.started.resolve();
+    await hold.answer.promise;
+  });
+  return (query: string) => {
+    const hold = held.get(query);
+    if (!hold) throw new Error(`No read held for ${query}`);
+    return hold;
+  };
 };
 
 test('keeps the people still matching typed text listed until its read lands', async ({
   page,
 }) => {
+  const read = await holdReads(page, ['sar', 'sarq']);
   await page.goto(URL);
   const input = page.getByRole('combobox');
   await input.click();
@@ -42,22 +46,22 @@ test('keeps the people still matching typed text listed until its read lands', a
   await expect(people(page).first()).toBeVisible({ timeout: 15_000 });
 
   await input.press('r');
-  // The read for "sar" has started and not landed: these rows were listed
-  // for "sa" and still match "sar" as the contact cache matches, letters in
-  // order.
-  const sar = await readStarted(page, 'sar');
-  await expect(people(page).first()).toBeVisible({ timeout: 1 });
+  // The read for "sar" has started and is held, so it cannot land during
+  // these checks: the rows were listed for "sa" and still match "sar" as the
+  // contact cache matches, letters in order.
+  await read('sar').started.promise;
+  await expect(people(page).first()).toBeVisible();
   for (const row of await people(page).all()) {
-    await expect(row).toContainText(/s.*a.*r/i, { timeout: 1 });
+    await expect(row).toContainText(/s.*a.*r/i);
   }
-  expect(await pendingFirstPage(page, 'sar')).toBe(sar);
 
-  // Nobody matches "sarq": none of them stays while its read is pending.
+  // Nobody matches "sarq": none of them stays while its read is held.
   await input.press('q');
-  const sarq = await readStarted(page, 'sarq');
-  await expect(people(page)).toHaveCount(0, { timeout: 1 });
-  expect(await pendingFirstPage(page, 'sarq')).toBe(sarq);
+  await read('sarq').started.promise;
+  await expect(people(page)).toHaveCount(0);
 
+  read('sar').answer.resolve();
+  read('sarq').answer.resolve();
   await input.press('Backspace');
   await expect(people(page).first()).toBeVisible({ timeout: 15_000 });
   const first = people(page).first();

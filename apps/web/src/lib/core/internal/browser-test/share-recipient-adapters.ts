@@ -12,8 +12,10 @@ import { createSignal } from 'solid-js';
  * Stand-ins for the Share field's recipient source at an account's real scale:
  * every channel the account is in (`useChannelDirectory`) and a local contact
  * cache that answers ranked people searches after a set delay. Sizes come from
- * the page URL: `groups`, `dms`, `people`, `latency` (milliseconds). The data
- * is built on first use, so other fixtures in this bundle never pay for it.
+ * the page URL: `groups`, `dms`, `people`, `latency` (milliseconds). A browser
+ * test that exposes `holdContactRead` answers each read itself instead. The
+ * data is built on first use, so other fixtures in this bundle never pay for
+ * it.
  */
 
 const VIEWER = 'macro|viewer@example.com';
@@ -167,15 +169,26 @@ export const useChannelDirectory = () => {
 
 export const useIsConnectedSecondaryInbox = () => () => false;
 
-/** A contact read started and not yet answered: a first page has no cursor. */
-type PendingRead = { id: number; query: string; cursor: string | null };
+/** A contact read as a browser test sees it: a first page has no cursor. */
+type ContactRead = { query: string; cursor: string | null };
+
+declare global {
+  interface Window {
+    /** Exposed by a browser test: the fixture answers a read once it resolves. */
+    holdContactRead?: (read: ContactRead) => Promise<void>;
+  }
+}
 
 const [reads, setReads] = createSignal(0);
 /** Contact reads started and not yet answered. */
-const [pending, setPending] = createSignal<readonly PendingRead[]>([]);
-const pendingReads = () => pending().length;
+const [pendingReads, setPendingReads] = createSignal(0);
 
-export { pending, pendingReads, reads };
+export { pendingReads, reads };
+
+/** Waits out the page's read latency, or for the test holding the read. */
+const answerWhenDue = (read: ContactRead) =>
+  window.holdContactRead?.(read) ??
+  new Promise((resolve) => setTimeout(resolve, world().latencyMs));
 
 /** Ranked like the cache: names starting with the query, then other names or
  * addresses containing it, most recent first in each group. */
@@ -213,15 +226,13 @@ const HOST: ContactWindowHost = {
       throw new Error('Fixture has no publisher');
     },
     search: async (request) => {
-      const read: PendingRead = {
-        id: reads() + 1,
+      setReads((value) => value + 1);
+      setPendingReads((value) => value + 1);
+      await answerWhenDue({
         query: request.query,
         cursor: request.cursor ?? null,
-      };
-      setReads(read.id);
-      setPending((value) => [...value, read]);
-      await new Promise((resolve) => setTimeout(resolve, world().latencyMs));
-      setPending((value) => value.filter((other) => other !== read));
+      });
+      setPendingReads((value) => value - 1);
       const { page, next } = search(
         request.query,
         request.cursor ? Number(request.cursor) : 0,
