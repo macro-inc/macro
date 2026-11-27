@@ -103,10 +103,20 @@ describe('per-type search hits', () => {
     ]);
 
     const names = [];
-    for await (const chat of new ChatNamespace(client).search('spend'))
+    const mentions = [];
+    for await (const chat of new ChatNamespace(client).search('spend')) {
       names.push(await chat.name());
+      mentions.push(
+        JSON.parse(
+          /<m-document-mention>(.*)<\/m-document-mention>/.exec(
+            chat.toMention().tag,
+          )?.[1] ?? '{}',
+        ).documentName,
+      );
+    }
 
     expect(names).toEqual(['Spend questions']);
+    expect(mentions).toEqual(['Spend questions']);
     expect(detailRequests).toEqual([]);
   });
 

@@ -243,7 +243,8 @@ export class Chat extends PropertiedEntity<ChatDetail> implements Mentionable {
     return {
       tag: wrapXml('m-document-mention', {
         documentId: this.id,
-        documentName: this.detail.peek()?.name ?? '',
+        documentName:
+          this.detail.peek()?.name ?? this.detail.listedField('name') ?? '',
         blockName: 'chat',
         blockParams: {},
       }),
