@@ -3,6 +3,7 @@ import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
 import { type EntityData, isChannelEntity } from '@entity/types/entity';
 import type { WithSearch } from '@entity/types/search';
+import { useVerifiedDocuments } from '@queries/soup/graphql/verify-documents';
 import {
   type SearchSoupQueryArgs,
   useSearchSoupQuery,
@@ -167,6 +168,15 @@ export function createSearchState(options: CreateSearchStateOptions) {
 
     return [...channels, ...nonChannels];
   });
+
+  // The cache can hold a featured document that is gone on the server.
+  useVerifiedDocuments(() =>
+    options.searchPaused?.()
+      ? []
+      : localFuzzyResults()
+          .filter((entity) => entity.type === 'document')
+          .map((entity) => entity.id)
+  );
 
   const serviceSearchResults = createMemo<EntityData[]>(() => {
     if (

@@ -665,6 +665,15 @@ stranger, even one the viewer messages. While the roster loads, nobody is
 outside.
 A row whose letters merely appear in order ranks below every row containing the
 typed words.
+Local name search trusts the cache, which keeps a document deleted, trashed
+or unshared while the client missed its realtime patch. `useVerifiedDocuments`
+(`queries/soup/graphql/verify-documents.ts`) reads the first few document
+matches of `createSearchState`, Cmd+K and mobile name search on the primary
+once typing settles, at most once per document per five minutes, and
+`removeDocumentsGoneOnPrimary` deletes the ones the server no longer shows,
+keeping a record rewritten or pending meanwhile; the real-engine regression is
+`deleted-documents.browser.e2e.ts` in the cache worker browser suite. Pass it
+only the few featured rows, never a whole list.
 Soup's local search pool (`createSearchState`) stays lazy: it builds only when
 local search has text. Its cache rows (`SearchProvider`'s `entityPool`) are
 read only while a caller passes a `searching` accessor that is true

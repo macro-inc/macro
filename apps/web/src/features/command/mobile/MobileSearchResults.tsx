@@ -32,6 +32,7 @@ import {
   type SearchLocation,
 } from '@entity';
 import { Telemetry } from '@macro-inc/observability';
+import { useVerifiedDocuments } from '@queries/soup/graphql/verify-documents';
 import { useDatabaseDiscoverySync } from '@queries/storage/databases';
 import { Button, CommandMenuListItem } from '@ui';
 import {
@@ -49,6 +50,7 @@ import { useUniversalInputEnabled } from '../../universal-input/use-universal-in
 import { ItemDisplay } from '../CommandItem';
 import { searchIndexCategory } from '../category-search-filters';
 import { commandSearchResultKey } from '../contact-items';
+import { featuredCommandDocumentIds } from '../core/featured-documents';
 import {
   type EntitySearchCategory,
   useEntitySearch,
@@ -129,6 +131,9 @@ function MobileNameResults(props: {
   useDatabaseDiscoverySync(() => true);
   const incoming = createMemo(() =>
     source.rankItems(source.items(), props.query())
+  );
+  useVerifiedDocuments(() =>
+    featuredCommandDocumentIds(incoming(), props.query())
   );
   const itemKey = (item: QuickAccessItem) =>
     commandSearchResultKey(item, props.accountId);

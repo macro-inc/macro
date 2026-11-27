@@ -61,6 +61,11 @@ tasks itself.
   it uncommitted for redelivery, so downstream consumers must tolerate
   duplicate patches. The Soup-topic receiver (`SoupRealtimeConsumerService::run`)
   instead returns after five failed receives for its supervisor to restart.
+- A patch for a user with no live subscriber is dropped, and a subscriber
+  whose buffer fills is closed; nothing is replayed. A client that was closed
+  or reconnecting misses `Deleted` patches and must reconcile on its own: the
+  web app reads its featured search documents on the server
+  (`apps/web/src/lib/queries/soup/graphql/document-reconcile.ts`).
 - Property definition/option lifecycle events are intentionally ignored; they
   don't identify every affected entity.
 - Channel threads use their containing channel as the access source.

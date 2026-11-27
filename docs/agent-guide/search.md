@@ -47,6 +47,10 @@ search (a status, a tag, a channel, a sender), which name matches cannot be
 checked against. Featured documents and tasks show the same properties as the
 rows below them. Other list views (Home, Chat, Drive) still feature every
 name match under `Featured Results`.
+Name matches come from the local cache, so once typing settles the first few
+document matches (here, and in `Ctrl+K` and touch Search) are read on the
+server: one moved to the Trash or unshared while the app was closed leaves
+the results, and a renamed one shows its new name.
 
 Routines are found by name in a typed `Ctrl+K` **All** query, in touch Search's
 **All** name results, and in the desktop Search page's `Best Matches`. They
