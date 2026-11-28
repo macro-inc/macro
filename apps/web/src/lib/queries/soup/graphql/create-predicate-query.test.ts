@@ -394,3 +394,32 @@ it('skips entityFilter reads when cache-change hints prove the observation uncha
   state.change('6', { unchangedViews: ['obs-2'] });
   expect(state.requests).toHaveLength(4);
 });
+
+it('does not read again for a change the running read already reached', async () => {
+  const state = setup();
+  state.requests[0].resolve(snapshot());
+  await flush();
+  state.change('2');
+  expect(state.requests).toHaveLength(2);
+  // The write lands before the read runs: the reply is at its revision.
+  state.change('3');
+  state.requests[1].resolve(patch('3'));
+  await flush();
+  expect(state.query.data()?.revision).toBe('3');
+  expect(state.requests).toHaveLength(2);
+});
+
+it('reads again for a change seen during a read that fails', async () => {
+  const state = setup();
+  state.requests[0].resolve(snapshot());
+  await flush();
+  state.change('2');
+  state.change('3');
+  state.requests[1].reject(new Error('owner gone'));
+  await flush();
+  expect(state.requests).toHaveLength(3);
+  state.requests[2].resolve(patch('3'));
+  await flush();
+  expect(state.query.status()).toBe('ready');
+  expect(state.query.data()?.revision).toBe('3');
+});

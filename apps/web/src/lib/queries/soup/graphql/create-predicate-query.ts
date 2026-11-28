@@ -114,6 +114,9 @@ export function createPredicateQuery<T extends object>(options: {
       let active = true;
       let running = false;
       let pending = false;
+      // A cache change seen while a read is in flight. The reply covers it when
+      // its revision is at or past the change's, so only an error asks again.
+      let changedDuringRead = false;
       let unsupported = false;
       let runPromise: Promise<void> | undefined;
       const args = (release = false): EntityFilterCacheArgs => ({
@@ -135,6 +138,7 @@ export function createPredicateQuery<T extends object>(options: {
         try {
           while (pending && active) {
             pending = false;
+            changedDuringRead = false;
             const observedEpoch = epoch;
             let outcome: 'success' | 'unsupported' | 'error' | 'discarded' =
               'discarded';
@@ -166,13 +170,14 @@ export function createPredicateQuery<T extends object>(options: {
                 if (staleReads >= MAX_STALE_READS) {
                   // Preserve an invalidation that arrived during this read, but
                   // yield before starting another bounded attempt.
-                  if (pending) {
+                  if (pending || changedDuringRead) {
                     retryTimer = setTimeout(() => {
                       retryTimer = undefined;
                       deferral.request();
                     }, 0);
                   }
                   pending = false;
+                  changedDuringRead = false;
                   throw new Error(
                     'Cache predicate repeatedly returned a stale revision'
                   );
@@ -273,6 +278,7 @@ export function createPredicateQuery<T extends object>(options: {
               }
               outcome = 'error';
               observationId = undefined;
+              if (changedDuringRead) pending = true;
               setError(() => cause);
               setStatus('error');
             } finally {
@@ -317,6 +323,12 @@ export function createPredicateQuery<T extends object>(options: {
           }
           observationId = undefined;
           latest = revision;
+          // The running read either reaches this revision, or is stale and
+          // reads again (the check against `latest`).
+          if (running) {
+            changedDuringRead = true;
+            return;
+          }
           deferral.request();
         },
         { includeHydration: true }
