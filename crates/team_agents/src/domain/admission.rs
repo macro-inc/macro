@@ -11,6 +11,7 @@
 //! It needs only two reads, both on the database pool, so the storage
 //! service composes it without the computer service.
 
+use entity_access::domain::models::TeamRole;
 use hosted_runtimes::domain::agent::ComputerAgents;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -35,6 +36,20 @@ pub struct AgentAccountFacts {
     pub created_by: Option<MacroUserIdStr<'static>>,
     /// Whether the creator's account is itself an agent.
     pub created_by_is_agent: bool,
+}
+
+/// A uniquely resolved agent account and its current team membership.
+/// The caller still authorizes its viewer against the resolved team.
+#[derive(Clone, PartialEq, Eq)]
+pub struct CanonicalTeamAgent {
+    /// Stable opaque account UUID used for routing.
+    pub account_id: Uuid,
+    /// Internal Macro profile identifier. Keep it server-side.
+    pub user_id: MacroUserIdStr<'static>,
+    /// Team with the active agent membership.
+    pub team_id: Uuid,
+    /// Role held by the agent in that team.
+    pub role: TeamRole,
 }
 
 /// An admitted agent, with the human responsible for it.

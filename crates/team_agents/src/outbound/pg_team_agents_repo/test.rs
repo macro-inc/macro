@@ -111,6 +111,150 @@ async fn an_agent_account_round_trips_and_is_marked_as_an_agent(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn opaque_account_keys_require_one_current_agent_membership(pool: PgPool) {
+    insert_team(&pool).await;
+    let repo = PgTeamAgentsRepo::new(pool.clone());
+    let account = sam();
+    assert_eq!(
+        repo.opaque_key_for_account(&account.user_id).await.unwrap(),
+        None
+    );
+    assert_eq!(
+        repo.account_for_opaque_key(Uuid::nil()).await.unwrap(),
+        None
+    );
+    assert!(
+        repo.resolve_team_agent(Uuid::nil())
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        repo.resolve_team_agent(Uuid::now_v7())
+            .await
+            .unwrap()
+            .is_none()
+    );
+    let human = repo
+        .opaque_key_for_account(&account.created_by)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(repo.resolve_team_agent(human).await.unwrap().is_none());
+
+    repo.create_account(&account).await.unwrap();
+    let key = repo
+        .opaque_key_for_account(&account.user_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        repo.account_for_opaque_key(key).await.unwrap(),
+        Some(account.user_id.clone())
+    );
+    assert!(repo.resolve_team_agent(key).await.unwrap().is_none());
+
+    sqlx::query!(
+        "INSERT INTO team_user (team_id, user_id, team_role) VALUES ($1, $2, 'member')",
+        TEAM,
+        account.user_id.as_ref(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let resolved = repo.resolve_team_agent(key).await.unwrap().unwrap();
+    assert_eq!(resolved.account_id, key);
+    assert_eq!(resolved.user_id, account.user_id);
+    assert_eq!(resolved.team_id, TEAM);
+    assert_eq!(resolved.role, TeamRole::Member);
+
+    sqlx::query!(
+        "UPDATE team_user SET team_role = 'admin' WHERE team_id = $1 AND user_id = $2",
+        TEAM,
+        account.user_id.as_ref(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        repo.resolve_team_agent(key).await.unwrap().unwrap().role,
+        TeamRole::Admin
+    );
+
+    for (is_agent, resolves) in [(false, false), (true, true)] {
+        sqlx::query!(
+            r#"UPDATE "User" SET "isAgent" = $1 WHERE id = $2"#,
+            is_agent,
+            account.user_id.as_ref(),
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            repo.resolve_team_agent(key).await.unwrap().is_some(),
+            resolves
+        );
+    }
+
+    sqlx::query!(
+        r#"INSERT INTO "User" (id, email, macro_user_id)
+           VALUES ('macro|prior-profile@example.test', 'prior-profile@example.test', $1)"#,
+        key
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(repo.account_for_opaque_key(key).await.unwrap(), None);
+    assert!(repo.resolve_team_agent(key).await.unwrap().is_none());
+    assert_eq!(
+        repo.opaque_key_for_account(&account.user_id).await.unwrap(),
+        None
+    );
+
+    sqlx::query!("DELETE FROM \"User\" WHERE id = 'macro|prior-profile@example.test'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(repo.resolve_team_agent(key).await.unwrap().is_some());
+
+    let other_owner = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO macro_user (id, username, email, stripe_customer_id)
+         VALUES ($1, 'Other', 'other@example.com', 'cus_other')",
+        other_owner,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO "User" (id, email, macro_user_id)
+           VALUES ('macro|other@example.com', 'other@example.com', $1)"#,
+        other_owner,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let other_team = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO team (id, name, owner_id) VALUES ($1, 'Other', 'macro|other@example.com')",
+        other_team,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE team_user SET team_id = $1 WHERE team_id = $2 AND user_id = $3",
+        other_team,
+        TEAM,
+        account.user_id.as_ref(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(repo.resolve_team_agent(key).await.unwrap().is_none());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_repeated_purchase_key_returns_the_first_agent_and_creates_no_account(pool: PgPool) {
     insert_team(&pool).await;
     let repo = PgTeamAgentsRepo::new(pool.clone());

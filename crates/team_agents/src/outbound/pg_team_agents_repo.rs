@@ -1,12 +1,13 @@
 //! Postgres adapter for agent teammate accounts.
 
 use chrono::{DateTime, Utc};
+use entity_access::domain::models::TeamRole;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::domain::admission::AgentAccountFacts;
+use crate::domain::admission::{AgentAccountFacts, CanonicalTeamAgent};
 use crate::domain::models::{CreatedAccount, NewAgentAccount, PersonaSeed, TeamAgentRecord};
 use crate::domain::ports::{AgentAccounts, TeamAgentRepository};
 
@@ -25,6 +26,9 @@ pub enum PgTeamAgentsError {
     /// A stored user id is malformed; the value is not repeated.
     #[error("a stored user id is malformed")]
     MalformedUserId,
+    /// A stored membership role is unsupported.
+    #[error("a stored team membership role is unsupported")]
+    InvalidMembershipRole,
     /// The invite with this purchase key was taken back while this one
     /// waited on it; a retry starts afresh.
     #[error("the invite with this purchase key was taken back")]
@@ -41,6 +45,99 @@ impl PgTeamAgentsRepo {
     /// Build the repository on a pool.
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
+    }
+
+    /// Resolve an opaque key to one active agent account and its current role.
+    /// Callers authorize the viewer against the returned team and agent.
+    #[tracing::instrument(skip_all, err)]
+    pub async fn resolve_team_agent(
+        &self,
+        account_id: Uuid,
+    ) -> Result<Option<CanonicalTeamAgent>, PgTeamAgentsError> {
+        if account_id.is_nil() {
+            return Ok(None);
+        }
+
+        // Check global profile uniqueness before narrowing to agent rows or
+        // memberships. A historical profile must still make the key ambiguous.
+        // Keep the profile, roster and role reads in one statement snapshot.
+        let row = sqlx::query!(
+            r#"
+            WITH profiles AS MATERIALIZED (
+                SELECT id, "isAgent" FROM "User" WHERE macro_user_id = $1 LIMIT 2
+            )
+            SELECT agent.user_id, agent.team_id, membership.team_role::text AS "role!"
+            FROM profiles profile
+            JOIN team_agents agent ON agent.user_id = profile.id
+            JOIN team_user membership
+              ON membership.user_id = agent.user_id AND membership.team_id = agent.team_id
+            WHERE profile."isAgent" AND (SELECT count(*) FROM profiles) = 1
+            "#,
+            account_id,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(|row| {
+            let role = match row.role.as_str() {
+                "member" => TeamRole::Member,
+                "admin" => TeamRole::Admin,
+                "owner" => TeamRole::Owner,
+                _ => return Err(PgTeamAgentsError::InvalidMembershipRole),
+            };
+            Ok(CanonicalTeamAgent {
+                account_id,
+                user_id: user_id(row.user_id)?,
+                team_id: row.team_id,
+                role,
+            })
+        })
+        .transpose()
+    }
+
+    /// Resolve an opaque account key only if it identifies exactly one profile.
+    /// The caller must check the profile's current team and agent facts.
+    pub async fn account_for_opaque_key(
+        &self,
+        key: Uuid,
+    ) -> Result<Option<MacroUserIdStr<'static>>, PgTeamAgentsError> {
+        if key.is_nil() {
+            return Ok(None);
+        }
+
+        // Historical profiles can share one account UUID. Bound the
+        // reverse lookup to the rows needed to detect ambiguity.
+        let accounts = sqlx::query_scalar!(
+            r#"SELECT id FROM "User" WHERE macro_user_id = $1 LIMIT 2"#,
+            key,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let [account] = accounts.as_slice() else {
+            return Ok(None);
+        };
+        user_id(account.clone()).map(Some)
+    }
+
+    /// Return the account's opaque key only if it resolves back to this
+    /// exact profile. The key is independent of any computer assignment.
+    pub async fn opaque_key_for_account(
+        &self,
+        account: &MacroUserIdStr<'_>,
+    ) -> Result<Option<Uuid>, PgTeamAgentsError> {
+        let key = sqlx::query_scalar!(
+            r#"SELECT macro_user_id FROM "User" WHERE id = $1"#,
+            account.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let Some(key) = key else {
+            return Ok(None);
+        };
+        let confirmed = self.account_for_opaque_key(key).await?;
+        Ok((confirmed.as_ref() == Some(account)).then_some(key))
     }
 }
 

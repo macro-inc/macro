@@ -89,6 +89,11 @@ agent runtime reports the same way.
 - `src/domain/service.rs`: invite, list, remove and enrollment issuance.
 - `src/domain/ports.rs`: what the service needs from other crates.
 - `src/domain/admission.rs`: agent admission for the vault.
+- `src/outbound/pg_team_agents_repo.rs`: maps an account to its opaque
+  account UUID only if it resolves back to one exact profile.
+  `resolve_team_agent` reads that unique profile, its active agent roster
+  row and team membership role in one statement. Keep internal user IDs
+  server-side and check the viewer's current team and feature grants.
 
 ## Scope
 
