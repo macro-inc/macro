@@ -96,6 +96,7 @@ export function PrDetailsSection(props: {
 export function PrChecksList(props: {
   page: PrPageReadModel;
   density?: PrListDensity;
+  spacious?: boolean;
 }) {
   const { actions } = usePrPage();
   const [expanded, setExpanded] = createSignal(false);
@@ -103,7 +104,7 @@ export function PrChecksList(props: {
   const visible = createMemo(() => prVisibleChecks(checks(), expanded()));
   const canExpand = () => checks().length > 5;
   return (
-    <div class="flex flex-col">
+    <div class={cn('flex flex-col', props.spacious && 'gap-2')}>
       <For
         each={visible()}
         fallback={
@@ -123,7 +124,10 @@ export function PrChecksList(props: {
             return 'skipped';
           };
           return (
-            <PrListRow density={props.density}>
+            <PrListRow
+              density={props.density}
+              class={props.spacious ? 'gap-3 px-3 py-4 touch:py-2' : undefined}
+            >
               <CheckStateIcon state={state()} circle size="md" />
               <span class="min-w-0 flex-1 truncate">{check.name}</span>
               <span class="text-xs text-ink-muted">
@@ -136,7 +140,7 @@ export function PrChecksList(props: {
                     target="_blank"
                     rel="noreferrer"
                     aria-label={check.name}
-                    class="inline-flex size-6 shrink-0 items-center justify-center"
+                    class="inline-flex size-6 shrink-0 items-center justify-center touch:size-11"
                   >
                     <ArrowSquareOut class="size-3.5 text-ink-muted" />
                   </a>
@@ -187,7 +191,6 @@ export function PrChecksDialog(props: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   returnFocus?: HTMLButtonElement;
-  density?: PrListDensity;
 }) {
   return (
     <Dialog
@@ -195,16 +198,16 @@ export function PrChecksDialog(props: {
       onOpenChange={props.onOpenChange}
       position="center"
       animate
-      class="w-96 max-h-[80dvh] overflow-y-auto rounded-xl"
+      class="w-160 max-h-[80dvh] overflow-y-auto rounded-xl"
       onCloseAutoFocus={(event) => {
         if (!props.returnFocus?.isConnected) return;
         event.preventDefault();
         props.returnFocus.focus({ preventScroll: true });
       }}
     >
-      <div class="menu-surface flex flex-col gap-3 rounded-xl p-4">
+      <div class="flex flex-col gap-6 p-6">
         <div class="flex items-center justify-between gap-3">
-          <Dialog.Title class="text-sm font-medium">
+          <Dialog.Title class="text-base font-medium">
             {t('prPage.checks')}
           </Dialog.Title>
           <Dialog.CloseButton
@@ -216,7 +219,7 @@ export function PrChecksDialog(props: {
             <X class="size-4" />
           </Dialog.CloseButton>
         </div>
-        <PrChecksList page={props.page} density={props.density} />
+        <PrChecksList page={props.page} density="touch" spacious />
       </div>
     </Dialog>
   );

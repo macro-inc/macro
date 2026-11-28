@@ -27,7 +27,8 @@ links use `/app/reviews/pr/<foreignEntityId>`.
 The lifecycle icon shows open, draft, merged, or closed. The header's top fade
 also reflects requested changes and failing checks, without replacing the
 lifecycle icon. The title wraps rather than truncates. Its checks icon summarizes
-stored check runs; activating it opens a checks-only dialog.
+stored check runs; activating it opens a checks-only dialog with a wider surface,
+24px padding and section spacing, and larger padded rows. Phones retain a drawer.
 
 The pills show the author, opened date when known, a GitHub link, branch names,
 linked tasks, and GitHub labels. The GitHub link retains its number and external
@@ -79,7 +80,11 @@ opens in a popover. Search and filters belong to its header. Selecting a file
 reveals that file in the diff. Hiding the tree gives its width back to the diff.
 This PR-specific composition does not change the agent-session Changes pane.
 
-The diff toolbar sticks below the page chrome. It offers Unified/Split when the
+One main-content background and page scroller serve Overview and Changes. The
+whole diff region has its own background. The title band scrolls naturally;
+the top bar stays visible, and the existing tabs pin at the page's top edge.
+The diff toolbar, file headers, and docked tree stick to that same page
+scroller, not an inner diff scroller. The toolbar offers Unified/Split when the
 diff has enough width, collapse/expand all, refresh, and the tree toggle. Below
 720px the diff is unified only; the narrowest toolbar folds secondary controls
 into a menu. Each file header shows its name before its directory, status,
@@ -89,16 +94,11 @@ Changes does not add a back button.
 New captures expand files with at most 40 changed lines; explicit collapse
 choices for that capture take precedence.
 
-On desktop, scrolling down beyond the title band replaces the full header with
-a slim bar containing the title, state, checks, tabs, and merge action. Scrolling
-up reveals the app top bar again and moves the sticky toolbar and file headers
-with it. Header rows and inverse scroll spacers share a 200ms transition to
-preserve the scroll range without a layout jump. Reduced motion disables both
-transitions. Each tab retains its own scroll chrome; tab changes restore that
-layout without interpolating between unrelated scroll positions.
-The slim bar does not add a second Details toggle. Phones keep their
-MobileHeader islands and pin touch-size tabs beneath them instead of using a
-slim bar. Bottom review actions use the pane's floating chrome region.
+The top bar does not auto-hide in either tab. The former slim bar and animated
+scroll compensation are not routed; no replacement slim bar is available yet.
+Each tab restores its own position in the shared page scroller. Phones keep
+their MobileHeader islands and pin touch-size tabs below them. Bottom review
+actions remain in the pane's floating chrome region.
 
 ## Unavailable review capabilities
 
@@ -129,8 +129,9 @@ without offering generic actions against a synthetic entity.
 
 Browser and touch verification use the running preview. Check tab alignment,
 sidebar-open and collapsed widths, a second split, Details docking and Escape,
-branch copying, check links, hide-bots behavior, scroll direction, narrow diff
-controls, phone safe areas, and drawer focus restoration. A failed first load
+branch copying, check links, hide-bots behavior, whole-page scrolling and sticky
+controls, narrow diff controls, phone safe areas, and drawer focus restoration.
+A failed first load
 shows a local Retry control without blanking unrelated app chrome.
 Description screenshots hosted on GitHub (including `blob/…?raw=true` links)
 render in the body, in the browser and the desktop app; they must not show
