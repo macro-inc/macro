@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM database_syncs WHERE id = $1 AND database_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1fc66cbe009cc52aecdbc6f4655003ad81b4dc96531d46486633757f86cbf9f7"
+}

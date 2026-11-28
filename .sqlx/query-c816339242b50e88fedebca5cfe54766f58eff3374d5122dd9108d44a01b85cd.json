@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM database_sync_rows WHERE sync_id = $1 AND external_id = ANY($2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c816339242b50e88fedebca5cfe54766f58eff3374d5122dd9108d44a01b85cd"
+}

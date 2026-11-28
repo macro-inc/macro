@@ -116,6 +116,15 @@ pub type DcsOnboardingService = onboarding::domain::service::OnboardingServiceIm
     connectors::Connectors,
 >;
 
+/// Synced tables over the harness's databases service, entity access,
+/// users' Notion connections and teams.
+pub type DcsDatabaseSyncsService = database_syncs::wiring::PgDatabaseSyncsService<
+    ai_tools::ToolDatabasesService,
+    DcsEntityAccessService,
+    import_notion::outbound::connected::ConnectedNotion<connectors::Connectors>,
+    ai_tools::ToolTeamService,
+>;
+
 /// Redis-backed rate limiting for the web routes.
 pub type WebRateLimiter =
     rate_limit::RateLimitServiceImpl<rate_limit::RedisRateLimitAdapter<redis::Client>>;
@@ -169,6 +178,9 @@ pub struct ApiContext {
     pub connectors: connectors::Connectors,
     pub granola_sync: Option<Arc<dyn granola_sync::domain::service::SyncService>>,
     pub import_service: Arc<DcsImportService>,
+    /// Synced tables: the `/databases/syncs` routes; its worker runs in
+    /// `cognition::build`.
+    pub database_syncs_service: Arc<DcsDatabaseSyncsService>,
     pub onboarding_service: Arc<DcsOnboardingService>,
     /// Kafka-backed macro event broker for publishing domain events.
     pub macro_event_broker: DcsEventBroker,
