@@ -224,7 +224,7 @@ impl ExecutionService {
             .await
         {
             Ok(diagnostics) if diagnostics.is_empty() => Ok(()),
-            Ok(diagnostics) => Err(("rejected", type_errors(&diagnostics))),
+            Ok(diagnostics) => Err(("rejected", type_errors(&diagnostics, shape))),
             Err(CheckError::Busy) => Err((
                 "busy",
                 ExecutionFailure::new(
@@ -422,7 +422,7 @@ const MAX_REPORTED_DIAGNOSTICS: usize = 20;
 
 /// The checker's problems, as the model reads them to fix the program. Each
 /// message names its file, line and column (`at main.ts:2:18`).
-fn type_errors(diagnostics: &[Diagnostic]) -> ExecutionFailure {
+fn type_errors(diagnostics: &[Diagnostic], shape: ContextShape) -> ExecutionFailure {
     let mut message = String::from(
         "The program wasn't run: it doesn't type-check against the Macro SDK. Fix these errors and run it again.\n",
     );
@@ -431,7 +431,8 @@ fn type_errors(diagnostics: &[Diagnostic]) -> ExecutionFailure {
         message.push_str(&diagnostic.message);
         message.push('\n');
         let hint = missing_member_hint(&diagnostic.message)
-            .or_else(|| string_union_hint(&diagnostic.message));
+            .or_else(|| string_union_hint(&diagnostic.message))
+            .or_else(|| missing_name_hint(&diagnostic.message, shape));
         if let Some(hint) = hint {
             message.push_str(&hint);
             message.push('\n');
@@ -507,6 +508,56 @@ fn string_union_hint(message: &str) -> Option<String> {
     let values = sdk_string_literals(type_name)?;
     let values: Vec<String> = values.iter().map(|value| format!("'{value}'")).collect();
     Some(format!("  {type_name} is one of: {}.", values.join(", ")))
+}
+
+/// The fields of `CodeContext` every run's `main` is passed (`domain/context.rs`).
+const CONTEXT_FIELDS: [&str; 4] = ["macro", "token", "hosts", "webAppUrl"];
+/// The fields a run in an agent session is passed besides.
+const SESSION_FIELDS: [&str; 2] = ["session", "sessionId"];
+/// The fields one of a session's code executions is passed besides.
+const EXECUTION_FIELDS: [&str; 2] = ["execution", "executionId"];
+
+/// For a name the program uses but never declares (TS2304): a field of
+/// `main`'s argument, which a program written as a script has no `main` to
+/// take from, or a name the SDK root exports, used without importing it.
+fn missing_name_hint(message: &str, shape: ContextShape) -> Option<String> {
+    use nom::Parser as _;
+    use nom::bytes::complete::{tag, take_until, take_while1};
+    let (rest, _) = take_until::<_, _, ()>("TS2304 [ERROR]: Cannot find name '")
+        .parse(message)
+        .ok()?;
+    let (_, (_, name, _)) = (
+        tag::<_, _, ()>("TS2304 [ERROR]: Cannot find name '"),
+        take_while1(|c: char| c.is_ascii_alphanumeric() || c == '_'),
+        tag("'."),
+    )
+        .parse(rest)
+        .ok()?;
+    let passed = CONTEXT_FIELDS.contains(&name)
+        || (shape.session && SESSION_FIELDS.contains(&name))
+        || (shape.execution && EXECUTION_FIELDS.contains(&name));
+    if passed {
+        let fields = if name == "macro" {
+            "macro".to_owned()
+        } else {
+            format!("macro, {name}")
+        };
+        return Some(format!(
+            "  `{name}` is a field of main's argument: export async function main({{ {fields} }}: CodeContext) {{ ... }}"
+        ));
+    }
+    if SESSION_FIELDS.contains(&name) || EXECUTION_FIELDS.contains(&name) {
+        return Some(format!(
+            "  `{name}` is passed to main only in an agent session's code executions, and this run isn't one."
+        ));
+    }
+    let import = match sdk_root_export(name)? {
+        RootExport::Type => "import type",
+        RootExport::Value => "import",
+    };
+    Some(format!(
+        "  {name} comes from the SDK: {import} {{ {name} }} from '@macro-inc/sdk';"
+    ))
 }
 
 #[cfg(test)]

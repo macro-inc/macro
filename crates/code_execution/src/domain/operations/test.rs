@@ -46,3 +46,15 @@ fn sdk_string_literals_lists_a_string_union_aliases_values() {
     assert_eq!(sdk_string_literals("SearchNamespace"), None);
     assert_eq!(sdk_string_literals("NoSuchType"), None);
 }
+
+#[test]
+fn sdk_root_export_says_how_the_root_exports_a_name() {
+    // `export type { Channel }`, a multi-line `export { ConnectedApp, … }`,
+    // `export declare class Macro` and a function in `export { msg, … }`.
+    assert_eq!(sdk_root_export("Channel"), Some(RootExport::Type));
+    assert_eq!(sdk_root_export("ConnectedTool"), Some(RootExport::Value));
+    assert_eq!(sdk_root_export("Macro"), Some(RootExport::Value));
+    assert_eq!(sdk_root_export("msg"), Some(RootExport::Value));
+    assert_eq!(sdk_root_export("NoSuchType"), None);
+    assert_eq!(sdk_root_export("type"), None);
+}
