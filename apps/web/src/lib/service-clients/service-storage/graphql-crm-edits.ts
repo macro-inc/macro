@@ -13,7 +13,7 @@ import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import { getActiveGraphqlSoupRevalidations } from '@queries/soup/graphql/active-queries';
 import { crmExternalWriteTypes } from '@queries/soup/graphql/external-write-scope';
-import type { AnyVariables, CombinedError } from '@urql/core';
+import type { AnyVariables, CombinedError, OperationResult } from '@urql/core';
 import {
   CommitCrmMergeDocument,
   type CommitCrmMergeInput,
@@ -85,6 +85,37 @@ function hasAllEffects(payload: EffectPayload) {
   );
 }
 
+function requireCommittedPayload<T>(
+  payload: T | undefined,
+  error: CombinedError | undefined
+): T {
+  if (
+    error &&
+    (!payload ||
+      error.networkError ||
+      error.graphQLErrors.some(
+        ({ path }) => path?.[1] !== 'result' || path[2] !== 'effects'
+      ))
+  ) {
+    if (!error.graphQLErrors.length) throw error;
+    throw new CrmGraphqlWriteError(error);
+  }
+  if (!payload) throw new Error('CRM write returned no outcome');
+  return payload;
+}
+
+function acceptedEffects(result: OperationResult) {
+  const metadata = normalizedCacheResultMetadata(result);
+  return (
+    !result.error &&
+    !(
+      metadata?.source === 'live-network' &&
+      metadata.cacheEffectsApplied === false
+    ) &&
+    queuedMutationCommitOf(result)?.cacheEffectsApplied !== false
+  );
+}
+
 async function edit<
   Data,
   Variables extends AnyVariables,
@@ -98,13 +129,15 @@ async function edit<
   const client = getGraphqlSoupClient();
   const host = getGraphqlCacheHost();
   const uuid = crypto.randomUUID();
-  const settlement = Promise.withResolvers<MutationSettlement | undefined>();
+  let settle: (event: MutationSettlement | undefined) => void;
+  const settlement = new Promise<MutationSettlement | undefined>((resolve) => {
+    settle = resolve;
+  });
   const stopSettled = host?.onMutationSettled((event) => {
-    if (event.mutationUuid === uuid) settlement.resolve(event);
+    if (event.mutationUuid === uuid) settle(event);
   });
   const stopSession =
-    host &&
-    cacheSessionGeneration.onChanged(() => settlement.resolve(undefined));
+    host && cacheSessionGeneration.onChanged(() => settle(undefined));
 
   try {
     const result = await client
@@ -133,7 +166,7 @@ async function edit<
     if (optimisticMutationDispositionOf(result)?.kind === 'queued') {
       // The dialogs report a saved write only once it commits.
       // Keep waiting for the durable command if its first delivery went offline.
-      const event = await settlement.promise;
+      const event = await settlement;
       if (event?.status === 'permanently-failed') {
         throw new ThrownResultError([
           { code: event.errorCode ?? 'UNKNOWN', message: event.error },
@@ -149,28 +182,12 @@ async function edit<
       };
     }
 
-    const payload = result.data && select(result.data);
-    if (
-      result.error &&
-      (!payload ||
-        result.error.networkError ||
-        result.error.graphQLErrors.some(
-          (error) => error.path?.[1] !== 'result' || error.path[2] !== 'effects'
-        ))
-    ) {
-      if (result.error.graphQLErrors.length === 0) throw result.error;
-      throw new CrmGraphqlWriteError(result.error);
-    }
-    if (!payload) throw new Error('CRM write returned no outcome');
-    const cache = normalizedCacheResultMetadata(result);
+    const payload = requireCommittedPayload(
+      result.data && select(result.data),
+      result.error
+    );
     const queuedCommit = queuedMutationCommitOf(result);
-    const effectsResolved =
-      !result.error &&
-      hasAllEffects(payload) &&
-      !(
-        cache?.source === 'live-network' && cache.cacheEffectsApplied === false
-      ) &&
-      queuedCommit?.cacheEffectsApplied !== false;
+    const effectsResolved = acceptedEffects(result) && hasAllEffects(payload);
     return {
       payload,
       effectsResolved,
