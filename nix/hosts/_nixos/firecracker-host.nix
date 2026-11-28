@@ -9,7 +9,8 @@
 # its guest tables, prefix `fch`, at start), an optional WireGuard tunnel to
 # the control plane, TLS as root-only credentials, the Datadog agent the
 # agent's OTLP goes to, Grafana Alloy shipping host and per-computer cgroup
-# metrics to Macro's Prometheus, and a health check. Security findings it implements
+# metrics to Macro's Prometheus and a copy of the agent's spans and journal
+# to its OTLP ingest, and a health check. Security findings it implements
 # are named S-<n> (docs/architecture/firecracker-computers-security.md).
 {
   config,
@@ -34,6 +35,8 @@ let
     '';
   };
   tlsDirectory = "/var/lib/firecracker-host-tls";
+  # Alloy's OTLP receiver for the agent's copy of its spans.
+  alloyOtlpAddress = "127.0.0.1:14317";
   tunnelInterface = "wg0";
   movesInterface = "wg-moves";
   minimumZfsVersion = "2.4.1";
@@ -406,24 +409,30 @@ in
       default = if cfg.datadog.enable then "http://127.0.0.1:4317" else null;
       defaultText = lib.literalExpression ''if datadog.enable then "http://127.0.0.1:4317" else null'';
       example = "http://10.0.0.5:4317";
-      description = "Where the host agent sends its spans (OTLP gRPC): the local Datadog agent by default, or a collector on a host without one. Null sends none.";
+      description = "Where the host agent's primary exporter sends its spans (OTLP gRPC): the local Datadog agent by default, or a collector on a host without one. Null leaves `OTEL_EXPORTER_OTLP_ENDPOINT` unset, so the exporter tries its default, http://127.0.0.1:4317, and its spans are lost where nothing listens there. Alloy's copy for Grafana (`alloy.enable`) doesn't depend on it.";
     };
     alloy = {
       enable = lib.mkOption {
         type = lib.types.bool;
         default = false;
-        description = "Run Grafana Alloy: host metrics and each computer's CPU, memory and disk IO from its VM's cgroup, written to Macro's Prometheus for the fleet dashboard. Nothing runs in guests.";
+        description = "Run Grafana Alloy: host metrics and each computer's CPU, memory and disk IO from its VM's cgroup, written to Macro's Prometheus for the fleet dashboard, and a copy of the agent's spans and its units' journal, sent to the observability stack's OTLP ingest. Nothing runs in guests.";
+      };
+      otlpUrl = lib.mkOption {
+        type = lib.types.str;
+        default = "https://otlp.macro-internal.com";
+        description = "OTLP/HTTP endpoint of the observability stack (infra/k8s/observability), for the agent's spans and journal.";
       };
       remoteWriteUrl = lib.mkOption {
         type = lib.types.str;
-        default = "https://otlp.macro-internal.com/api/v1/write";
-        description = "Prometheus remote-write endpoint of the observability stack (infra/stacks/observability).";
+        default = "${cfg.alloy.otlpUrl}/api/v1/write";
+        defaultText = lib.literalExpression ''"''${alloy.otlpUrl}/api/v1/write"'';
+        description = "Prometheus remote-write endpoint of the observability stack (infra/k8s/observability), on the same origin as its OTLP ingest by default.";
       };
       passwordFile = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
         default = null;
         example = "/var/lib/macro/metrics-remote-write-password";
-        description = "Path of the remote-write password (root 0400, outside the Nix store).";
+        description = "Path of the observability stack's ingest token (root-only, outside the Nix store): remote write's password and OTLP's bearer token.";
       };
     };
     environment = lib.mkOption {
@@ -713,10 +722,18 @@ in
           RUST_LOG = "info";
         }
         # Spans and metrics go to the local Datadog agent, or the collector
-        # `otlpEndpoint` names; host.name joins them to the host's own
-        # metrics and to the fleet's host rows.
+        # `otlpEndpoint` names.
         // lib.optionalAttrs (cfg.otlpEndpoint != null) {
           OTEL_EXPORTER_OTLP_ENDPOINT = cfg.otlpEndpoint;
+        }
+        # A copy of every span to Alloy, for Grafana; the exporter above is
+        # unaffected.
+        // lib.optionalAttrs cfg.alloy.enable {
+          GRAFANA_OTLP_ENDPOINT = "http://${alloyOtlpAddress}";
+        }
+        # host.name joins both to the host's own metrics and to the fleet's
+        # host rows.
+        // lib.optionalAttrs (cfg.otlpEndpoint != null || cfg.alloy.enable) {
           OTEL_RESOURCE_ATTRIBUTES = "host.name=${config.networking.hostName}";
         };
         serviceConfig = {
@@ -938,11 +955,15 @@ in
               "@HOST@"
               "@ENVIRONMENT@"
               "@REMOTE_WRITE_URL@"
+              "@OTLP_URL@"
+              "@OTLP_ADDRESS@"
             ]
             [
               config.networking.hostName
               cfg.environment
               cfg.alloy.remoteWriteUrl
+              cfg.alloy.otlpUrl
+              alloyOtlpAddress
             ]
             (builtins.readFile ./firecracker-host.alloy)
         );
@@ -952,8 +973,8 @@ in
         ];
       };
       systemd.services.alloy.serviceConfig = {
-        # The password reaches Alloy as a root-only credential, like the
-        # agent's keys (S-18).
+        # The token reaches Alloy as a root-only credential, like the
+        # agent's keys (S-18). nixpkgs' unit is in `systemd-journal`.
         LoadCredential = [ "remote-write-password:${cfg.alloy.passwordFile}" ];
         # Metrics never starve computers of memory.
         MemoryMax = "512M";

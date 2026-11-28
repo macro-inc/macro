@@ -294,7 +294,8 @@ impl MacroEntrypoint {
                 let env = DdEnv::new()
                     .map(|e| e.to_string())
                     .unwrap_or_else(|_| "unknown".to_string());
-                // Set only in ECS tasks that run the Alloy sidecar.
+                // Set only where Alloy runs beside the binary: ECS tasks with
+                // its sidecar and Firecracker hosts with `alloy.enable`.
                 let grafana_endpoint = GrafanaOtlpEndpoint::new();
                 let meter_provider = init_otel_metrics(env.clone());
                 let tracer_provider = init_opentelemetry(env, grafana_endpoint.as_deref());
