@@ -12,10 +12,11 @@ import { createOtelCacheTelemetrySink } from './telemetry-otel';
 // Shared by every open build. A reporter drops an observation that has a field
 // its build does not know, so a build that adds a field moves to a new version:
 // otherwise an older build's reporter drops this build's events whole.
-// v2 adds `unavailableReason`.
-const CACHE_TELEMETRY_CHANNEL = 'macro:graphql-cache-telemetry:v2';
+// v2 adds `unavailableReason`; v4 adds the storage and checkpoint fields.
+// (v3 is taken by the slow-query template; a build with both moves to v5.)
+const CACHE_TELEMETRY_CHANNEL = 'macro:graphql-cache-telemetry:v4';
 const CACHE_TELEMETRY_REPORTER_LOCK =
-  'macro:graphql-cache-telemetry-reporter:v2';
+  'macro:graphql-cache-telemetry-reporter:v4';
 
 type BroadcastChannelLike = Pick<
   BroadcastChannel,

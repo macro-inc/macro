@@ -43,10 +43,13 @@ import {
 } from './stale-databases';
 import { OWNER_LOCK_RETRY_DELAYS_MS } from './startup';
 import {
+  type CacheStorageIoTotals,
   type CacheWasmModule,
   cacheWasmLinearMemoryBytes,
+  cacheWasmStorageIoTotals,
   loadCacheWasm,
   setCompiledEngineExchange,
+  storageIoFields,
 } from './wasm-module';
 import { CacheWorkerCore, type CacheWorkerCoreOptions } from './worker-core';
 
@@ -108,6 +111,8 @@ export interface CacheEngineRuntimeOptions {
   loadWasm?: () => Promise<CacheWasmModule>;
   listOpfsRootNames?: () => Promise<string[]>;
   readLinearMemoryBytes?: () => number;
+  /** The engine's COMMIT and storage I/O totals, reported with memory. */
+  readStorageIoTotals?: () => CacheStorageIoTotals | undefined;
   memoryTelemetryIntervalMs?: number;
 }
 
@@ -183,6 +188,45 @@ async function activate(
   const memoryTelemetryIntervalMs = options.memoryTelemetryIntervalMs ?? 60_000;
   let lastMemoryTelemetryAt = Number.NEGATIVE_INFINITY;
   let linearMemoryHighWaterBytes = 0;
+  const readStorageIoTotals =
+    options.readStorageIoTotals ?? cacheWasmStorageIoTotals;
+  let reportedStorageIo: CacheStorageIoTotals | undefined;
+  // What the engine committed, wrote and flushed since the last report, so a
+  // session's reports add up to its totals: flushes per COMMIT, and how much
+  // of the COMMIT time the flushes took.
+  const recordStorageIo = (): void => {
+    try {
+      const totals = readStorageIoTotals();
+      if (!totals) return;
+      const previous = reportedStorageIo;
+      reportedStorageIo = totals;
+      const since = (key: keyof CacheStorageIoTotals): number =>
+        totals[key] - (previous?.[key] ?? 0);
+      if (
+        since('commits') <= 0 &&
+        since('writes') <= 0 &&
+        since('flushes') <= 0
+      ) {
+        return;
+      }
+      telemetry.record({
+        name: 'graphql_cache.storage_io',
+        operationCategory: 'storage',
+        outcome: 'success',
+        commits: since('commits'),
+        commitMs: since('commitMs'),
+        ...storageIoFields({
+          writes: since('writes'),
+          writeBytes: since('writeBytes'),
+          writeMs: since('writeMs'),
+          flushes: since('flushes'),
+          flushMs: since('flushMs'),
+        }),
+      });
+    } catch {
+      // A build without the totals only drops this observation.
+    }
+  };
   const recordLinearMemory = (force: boolean): void => {
     const observedAt = now();
     if (
@@ -205,6 +249,7 @@ async function activate(
     } catch {
       // A missing memory export only drops this observation.
     }
+    recordStorageIo();
   };
   const emitEvent = (event: CacheEngineRuntimeEvent): void => {
     try {

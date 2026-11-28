@@ -72,6 +72,29 @@ export type CacheOpenOutcome =
   | 'reset-corrupt'
   | 'reset-storage-uncertain';
 
+/** OPFS writes and flushes Turso made, as totals or over one span. */
+export type CacheStorageIo = {
+  writes: number;
+  writeBytes: number;
+  writeMs: number;
+  flushes: number;
+  flushMs: number;
+};
+
+/** A WAL copy run right after the COMMIT that took the WAL to its cap. */
+export type CacheCappedCheckpoint = CacheStorageIo & {
+  durationMs: number;
+  success: boolean;
+  walFrames: number;
+  backfilledFrames: number;
+};
+
+/** The COMMITs that wrote and the storage I/O on this worker so far. */
+export type CacheStorageIoTotals = CacheStorageIo & {
+  commits: number;
+  commitMs: number;
+};
+
 /** What `checkpointIfDue` did; frame counts are far below 2^53. */
 export type CacheWalCheckpoint = {
   ran: boolean;
@@ -352,14 +375,20 @@ export interface CacheWasmModule {
     scope: string,
     identity: string
   ): Promise<StaleDatabaseRemovalOutcome>;
-  /** Optional while older cached WASM artifacts are still in circulation. */
+  /** Optional while older cached WASM artifacts are still in circulation.
+   * `io` is what storage wrote and flushed during the slow statement; older
+   * artifacts call the first callback without it and never the second. */
   setSlowQueryCallback?(
     callback: (
       fingerprint: string,
       durationMs: number,
-      success: boolean
-    ) => void
+      success: boolean,
+      io?: CacheStorageIo
+    ) => void,
+    cappedCheckpoint?: (checkpoint: CacheCappedCheckpoint) => void
   ): void;
+  /** What the engine has committed and written so far on this worker. */
+  storageIoTotals?(): CacheStorageIoTotals;
   schemaHash(): string;
   /** Read-only binary metadata; optional so fixtures can diagnose stale artifacts. */
   cacheBuildInfo?(): unknown;
@@ -368,6 +397,23 @@ export interface CacheWasmModule {
 let modulePromise: Promise<CacheWasmModule> | undefined;
 let compiledEngineExchange: CompiledEngineExchange | undefined;
 let wasmMemory: WebAssembly.Memory | undefined;
+let storageIoTotalsReader: (() => CacheStorageIoTotals) | undefined;
+
+/** Telemetry fields for storage I/O over one span. */
+export function storageIoFields(io: CacheStorageIo) {
+  return {
+    storageWrites: io.writes,
+    storageWriteBytes: io.writeBytes,
+    storageWriteMs: io.writeMs,
+    storageFlushes: io.flushes,
+    storageFlushMs: io.flushMs,
+  };
+}
+
+/** What the engine committed and wrote so far, from builds that count it. */
+export function cacheWasmStorageIoTotals(): CacheStorageIoTotals | undefined {
+  return storageIoTotalsReader?.();
+}
 
 /** Returns the combined module's current unshared linear-memory allocation. */
 type EngineExports = { memory?: WebAssembly.Memory };
@@ -412,16 +458,31 @@ export function loadCacheWasm(): Promise<CacheWasmModule> {
           }
           wasmMemory = exports.memory;
           mod.setSlowQueryCallback?.(
-            (queryFingerprint, durationMs, success) => {
+            (queryFingerprint, durationMs, success, io) => {
               telemetry.record({
                 name: 'graphql_cache.slow_query',
                 operationCategory: 'storage',
                 queryFingerprint,
                 durationMs,
                 outcome: success ? 'success' : 'error',
+                ...(io ? storageIoFields(io) : {}),
+              });
+            },
+            (checkpoint) => {
+              telemetry.record({
+                name: 'graphql_cache.wal_checkpoint',
+                operationCategory: 'storage',
+                checkpointKind: 'capped',
+                outcome: checkpoint.success ? 'success' : 'error',
+                errorCode: checkpoint.success ? 'none' : 'unknown',
+                durationMs: checkpoint.durationMs,
+                count: checkpoint.backfilledFrames,
+                walFrames: checkpoint.walFrames,
+                ...storageIoFields(checkpoint),
               });
             }
           );
+          storageIoTotalsReader = mod.storageIoTotals?.bind(mod);
           telemetry.record({
             name: 'graphql_cache.wasm_instantiate',
             operationCategory: 'initialization',

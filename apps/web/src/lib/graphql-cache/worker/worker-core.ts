@@ -708,6 +708,7 @@ export class CacheWorkerCore {
         this.telemetry.record({
           name: 'graphql_cache.wal_checkpoint',
           operationCategory: 'storage',
+          checkpointKind: 'idle',
           outcome: 'success',
           errorCode: 'none',
           durationMs: this.now() - startedAt,
@@ -721,6 +722,7 @@ export class CacheWorkerCore {
       this.telemetry.record({
         name: 'graphql_cache.wal_checkpoint',
         operationCategory: 'storage',
+        checkpointKind: 'idle',
         outcome: 'error',
         ...describeCacheError(error),
         durationMs: this.now() - startedAt,

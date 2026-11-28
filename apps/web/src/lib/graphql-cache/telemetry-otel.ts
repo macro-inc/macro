@@ -35,6 +35,38 @@ function setSchemaAttributes(span: CacheSpan, event: SchemaAttributes): void {
   }
 }
 
+type StorageAttributes = Pick<
+  CacheTelemetryEnvelope,
+  | 'checkpointKind'
+  | 'storageWrites'
+  | 'storageWriteBytes'
+  | 'storageWriteMs'
+  | 'storageFlushes'
+  | 'storageFlushMs'
+  | 'commits'
+  | 'commitMs'
+>;
+
+/** Storage writes and flushes, and COMMITs, as span and log attributes. */
+function storageAttributes(event: StorageAttributes) {
+  return {
+    'cache.checkpoint_kind': event.checkpointKind,
+    'cache.storage.writes': event.storageWrites,
+    'cache.storage.write_bytes': event.storageWriteBytes,
+    'cache.storage.write_ms': event.storageWriteMs,
+    'cache.storage.flushes': event.storageFlushes,
+    'cache.storage.flush_ms': event.storageFlushMs,
+    'cache.storage.commits': event.commits,
+    'cache.storage.commit_ms': event.commitMs,
+  };
+}
+
+function setStorageAttributes(span: CacheSpan, event: StorageAttributes): void {
+  for (const [key, value] of Object.entries(storageAttributes(event))) {
+    if (value !== undefined) span.setAttr(key, value);
+  }
+}
+
 /**
  * Privacy-safe OpenTelemetry adapter. It uses the anonymous span API so the
  * browser provider cannot enrich cache metrics with `usr.id`.
@@ -132,6 +164,7 @@ export function createOtelCacheTelemetrySink(): CacheTelemetrySink {
         if (event.walFrames !== undefined) {
           span.setAttr('cache.wal_frames', event.walFrames);
         }
+        setStorageAttributes(span, event);
         if (event.requestKind !== undefined) {
           span.setAttr('cache.request_kind', event.requestKind);
         }
@@ -147,6 +180,11 @@ export function createOtelCacheTelemetrySink(): CacheTelemetrySink {
               'cache.duration_ms': event.durationMs,
               'cache.outcome': event.outcome,
               'cache.slow_query_threshold_ms': 200,
+              ...Object.fromEntries(
+                Object.entries(storageAttributes(event)).filter(
+                  ([, value]) => value !== undefined
+                )
+              ),
             };
             for (const [key, value] of Object.entries(attributes)) {
               if (value !== undefined) span.setAttr(key, value);
