@@ -81,14 +81,22 @@ pub fn frontend_path_prefixes() -> Vec<&'static str> {
 /// differs (dev has no local LocalStack). With `static_frontend` the proxy also
 /// serves the built app bundle at `/app`, making it the one origin for the
 /// whole product.
-pub fn write_caddyfile(instance: &Instance, mode: Mode, static_frontend: bool) -> Result<PathBuf> {
+pub fn write_caddyfile(
+    instance: &Instance,
+    mode: Mode,
+    static_frontend: bool,
+    bots_frontend: bool,
+) -> Result<PathBuf> {
     let path = caddyfile_path(instance);
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)
             .with_context(|| format!("creating proxy dir {}", dir.display()))?;
     }
-    std::fs::write(&path, caddyfile(instance, mode, static_frontend))
-        .with_context(|| format!("writing {}", path.display()))?;
+    std::fs::write(
+        &path,
+        caddyfile(instance, mode, static_frontend, bots_frontend),
+    )
+    .with_context(|| format!("writing {}", path.display()))?;
     Ok(path)
 }
 
@@ -96,7 +104,12 @@ pub fn write_caddyfile(instance: &Instance, mode: Mode, static_frontend: bool) -
 /// the generated per-service routes (from the inventory), the special
 /// non-inventory routes, the mode's static-file block, the optional
 /// static-frontend block, then the tail.
-pub(super) fn caddyfile(instance: &Instance, mode: Mode, static_frontend: bool) -> String {
+pub(super) fn caddyfile(
+    instance: &Instance,
+    mode: Mode,
+    static_frontend: bool,
+    bots_frontend: bool,
+) -> String {
     let static_block = if mode.spec().static_files_via_localstack {
         STATIC_FILE_LOCAL
     } else {
@@ -145,8 +158,9 @@ pub(super) fn caddyfile(instance: &Instance, mode: Mode, static_frontend: bool) 
     } else {
         String::new()
     };
+    let bots_block = if bots_frontend { BOTS_STATIC } else { "" };
     format!(
-        "{CADDY_HEAD}{cookie_block}{cors_block}{routes}{special_routes}{mailpit_block}{static_block}{frontend_block}{CADDY_TAIL}{preview_block}{computer_gateway}",
+        "{CADDY_HEAD}{cookie_block}{cors_block}{routes}{special_routes}{mailpit_block}{static_block}{bots_block}{frontend_block}{CADDY_TAIL}{preview_block}{computer_gateway}",
         routes = service_routes(mode)
     )
 }
@@ -450,6 +464,37 @@ const FRONTEND_STATIC: &str = r#"    redir / "/app/?{query}" 302
         root * /srv/frontend
         try_files {path} /index.html
         file_server
+    }
+"#;
+
+// Bots shares the Auth origin but owns only its document routes and assets.
+const BOTS_STATIC: &str = r#"    redir /bots "/bots/?{query}" 308
+    handle_path /bots/* {
+        @read method GET HEAD
+        handle @read {
+            @doc path_regexp (?i)^/(|fleet/?|passwords/?|billing/?|sign-in/?|teams/[^/]+/bots/[^/]+/(overview|activity(/[^/]+)?|email|access)/?)$
+            handle @doc {
+                root * /srv/bots/current
+                rewrite * /index.html
+                file_server
+            }
+            handle /assets/* {
+                @currentAsset file {
+                    root /srv/bots/current
+                    try_files {path}
+                }
+                handle @currentAsset {
+                    root * /srv/bots/current
+                    file_server
+                }
+                handle {
+                    root * /srv/bots/current/.previous
+                    file_server
+                }
+            }
+            respond 404
+        }
+        respond 405
     }
 "#;
 

@@ -282,9 +282,21 @@ pub(crate) fn bring_up(
     // bundle is a snapshot: rebuilding service binaries leaves it alone, and
     // live frontend edits show on the dev server, not on it. Dry run:
     // synchronously, so the command preview prints in order.
+    let bots_frontend = mode == Mode::Local && (plan.vite || plan.static_bundle);
+    if bots_frontend {
+        build::prepare_js_dependencies(stage)?;
+        if stage.is_dry_run() {
+            frontend::build_bots(stage, instance)?;
+        }
+    }
     if plan.static_bundle && stage.is_dry_run() {
         frontend::build_static(stage, instance, mode)?;
     }
+    let bots_lane = (bots_frontend && !stage.is_dry_run()).then(|| {
+        let instance = instance.clone();
+        let stage = stage.background(telemetry::FRONTEND_LANE);
+        std::thread::spawn(move || frontend::build_bots(&stage, &instance))
+    });
     let frontend_lane = (!stage.is_dry_run() && (plan.static_bundle || plan.vite)).then(|| {
         let instance = instance.clone();
         let stage = stage.background(telemetry::FRONTEND_LANE);
@@ -407,6 +419,7 @@ pub(crate) fn bring_up(
         instance,
         args,
         plan.static_bundle,
+        bots_frontend,
         plan.infra_only,
         plan.infra_only,
         local_env::Tunnels {
@@ -464,6 +477,9 @@ pub(crate) fn bring_up(
                 .map_err(|_| anyhow::anyhow!("frontend build panicked"))?
         })
     };
+    if let Some(handle) = bots_lane {
+        join_frontend("Staging Bots frontend", handle)?;
+    }
     let frontend_lane = match frontend_lane {
         Some(handle) if plan.static_bundle => {
             join_frontend("Building frontend (static bundle)", handle)?;
@@ -587,6 +603,9 @@ pub(crate) fn print_stack_summary(
         &mailpit_url,
         up.shared_app_url.as_deref(),
     );
+    if mode == Mode::Local && (plan.vite || plan.static_bundle) {
+        stage.note(&format!("Bots: {}/bots/", proxy::url(instance)));
+    }
     up.computers.print_hint(stage);
     Ok(())
 }
@@ -949,6 +968,7 @@ fn prepare(
     instance: &Instance,
     args: &cli::RunArgs,
     static_frontend: bool,
+    bots_frontend: bool,
     pull_app_images: bool,
     infra_only: bool,
     tunnels: local_env::Tunnels<'_>,
@@ -1009,10 +1029,11 @@ fn prepare(
         instance,
         &binaries,
         static_frontend,
+        bots_frontend,
         sidecars,
         computers,
     )?;
-    proxy::write_caddyfile(instance, mode, static_frontend)?;
+    proxy::write_caddyfile(instance, mode, static_frontend, bots_frontend)?;
     if mode == Mode::Local {
         portmap::write(instance)?;
     }
@@ -1051,6 +1072,7 @@ fn prepare_on_free_window(
     instance: &mut Instance,
     args: &cli::RunArgs,
     static_frontend: bool,
+    bots_frontend: bool,
     pull_app_images: bool,
     infra_only: bool,
     tunnels: local_env::Tunnels<'_>,
@@ -1064,6 +1086,7 @@ fn prepare_on_free_window(
             instance,
             args,
             static_frontend,
+            bots_frontend,
             pull_app_images,
             infra_only,
             tunnels,
@@ -1885,6 +1908,7 @@ pub fn gen_compose_only(args: &cli::ComposeArgs) -> Result<()> {
         Mode::Local,
         &instance,
         &binaries,
+        false,
         false,
         sidecars,
         &computers,

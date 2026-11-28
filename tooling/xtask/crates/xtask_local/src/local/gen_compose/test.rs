@@ -64,7 +64,7 @@ fn generated_services_have_bounded_console_logs_in_every_mode() {
                 services.insert(svc.compose_name.to_string(), Some(dct::Service::default()));
             }
             add_localstack_service(&mut services, &instance);
-            add_proxy_service(&mut services, &instance, false, false);
+            add_proxy_service(&mut services, &instance, false, false, false);
             let compose = dct::Compose {
                 services: dct::Services(services),
                 ..Default::default()

@@ -169,6 +169,94 @@ pub fn prepare(stage: &Stage) -> Result<()> {
     prepare_dependencies(stage)
 }
 
+/// Build the native Bots document without disturbing the bundle a live proxy
+/// may still be serving. Switch its relative link only after validation.
+pub fn build_bots(stage: &Stage, instance: &Instance) -> Result<()> {
+    let root = bots_dir(instance);
+    if stage.is_dry_run() {
+        return stage.run(
+            "Building Bots frontend",
+            &mut bots_build_command(&root.join("bundle")),
+        );
+    }
+
+    std::fs::create_dir_all(&root)?;
+    let lock = File::create(root.join(".build.lock"))?;
+    lock.lock()?;
+    let staged = tempfile::Builder::new()
+        .prefix("bundle-")
+        .tempdir_in(&root)?;
+
+    stage.run(
+        "Building Bots frontend",
+        &mut bots_build_command(staged.path()),
+    )?;
+    stage.run_step("Publishing Bots frontend", || {
+        let previous = std::fs::read_link(root.join("current")).ok();
+        publish_bots_bundle(&root, staged.path(), previous.as_deref())?;
+        let current = staged.keep();
+
+        // Retain the previous generation for inspection or rollback.
+        if let Err(error) = prune_bots_bundles(&root, &current, previous.as_deref()) {
+            stage.note(&format!("Could not prune old Bots bundles: {error:#}"));
+        }
+        Ok(())
+    })
+}
+
+fn bots_build_command(out_dir: &Path) -> Command {
+    let mut cmd = Command::new("bun");
+    cmd.current_dir(repo_root()).args([
+        "run",
+        "--filter",
+        "@macro-inc/bots",
+        "build",
+        "--mode",
+        "local-native",
+        "--outDir",
+    ]);
+    cmd.arg(out_dir).arg("--emptyOutDir");
+    cmd
+}
+
+fn publish_bots_bundle(root: &Path, staged: &Path, previous: Option<&Path>) -> Result<()> {
+    let manifest: serde_json::Value =
+        serde_json::from_reader(File::open(staged.join(".vite/manifest.json"))?)?;
+    let asset = manifest["index.html"]["file"]
+        .as_str()
+        .context("Bots bundle has no document entry in the Vite manifest")?;
+    if !staged.join("index.html").is_file() || !staged.join(asset).is_file() {
+        anyhow::bail!("Bots bundle is missing its document or entry asset");
+    }
+
+    let name = staged.file_name().context("Bots bundle has no name")?;
+    if let Some(previous) = previous.and_then(Path::file_name) {
+        // The activation flips the document and its previous asset fallback together.
+        std::os::unix::fs::symlink(Path::new("..").join(previous), staged.join(".previous"))?;
+    }
+    let next = staged.join(".activate");
+    std::os::unix::fs::symlink(name, &next)?;
+    std::fs::rename(next, root.join("current")).context("switching Bots bundle")
+}
+
+fn prune_bots_bundles(root: &Path, current: &Path, previous: Option<&Path>) -> Result<()> {
+    for entry in std::fs::read_dir(root)? {
+        let entry = entry?;
+        if entry.file_type()?.is_dir()
+            && entry.file_name().to_string_lossy().starts_with("bundle-")
+            && entry.path() != current
+            && previous != Some(Path::new(&entry.file_name()))
+        {
+            std::fs::remove_dir_all(entry.path())?;
+        }
+    }
+    Ok(())
+}
+
+pub fn bots_dir(instance: &Instance) -> PathBuf {
+    instance.artifact_dir().join("bots")
+}
+
 /// Host-facing frontend URL.
 pub fn url(instance: &Instance) -> String {
     format!("http://localhost:{}/app", instance.port(Port::Frontend))

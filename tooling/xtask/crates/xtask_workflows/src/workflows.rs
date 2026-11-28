@@ -23,6 +23,7 @@ mod android_release_drift;
 mod android_release_watch;
 mod assign_author;
 mod assign_labels;
+mod bots_check;
 mod build_agent_daemon_on_tag;
 mod build_appimage_on_tag;
 mod build_cef_codecs;
@@ -514,6 +515,11 @@ pub(crate) const WORKFLOWS: &[WorkflowFile] = &[
         slug: "web_app_check_main",
         file_name: "web-app-check-main.yml",
         render_yaml: || render_gh_workflow(web_app_check_main::web_app_check_main)(),
+    },
+    WorkflowFile {
+        slug: "bots_check",
+        file_name: "bots-check.yml",
+        render_yaml: || render_gh_workflow(bots_check::bots_check)(),
     },
     WorkflowFile {
         slug: "sdk_check",

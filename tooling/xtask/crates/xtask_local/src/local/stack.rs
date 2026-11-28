@@ -110,6 +110,9 @@ struct StackState {
     /// The proxy also serves a static bundle alongside Vite (`--with-cf-tunnel`).
     #[serde(default)]
     shares_bundle: bool,
+    /// This stack staged and mounted the local Bots bundle.
+    #[serde(default)]
+    bots_frontend: bool,
     #[serde(default)]
     no_doppler: bool,
     #[serde(default)]
@@ -186,6 +189,7 @@ pub(super) fn record(
             frontend: frontend.to_string(),
             binaries_dir,
             shares_bundle: plan.vite && plan.static_bundle,
+            bots_frontend: mode == Mode::Local && (plan.vite || plan.static_bundle),
             no_doppler: args.env.no_doppler,
             env_file: args.env.env_file.clone(),
             egress_url,
@@ -459,7 +463,7 @@ fn adopt_proxy_config(
     env: &env_layer::ResolvedEnv,
     state: &StackState,
 ) -> Result<()> {
-    let config = proxy::caddyfile(instance, mode, state.serves_bundle());
+    let config = proxy::caddyfile(instance, mode, state.serves_bundle(), state.bots_frontend);
     let mut up = super::compose_cmd(instance, env);
     up.args(["up", "-d", "--force-recreate", "--no-deps", "proxy"]);
     replace_running_config(
@@ -513,6 +517,7 @@ fn remount(
         instance,
         new,
         state.serves_bundle(),
+        state.bots_frontend,
         sidecars,
         &state.computers(mode, instance),
     )?;
@@ -547,6 +552,7 @@ fn remount(
             frontend: state.frontend.clone(),
             binaries_dir: Some(new.host_dir().to_path_buf()),
             shares_bundle: state.shares_bundle,
+            bots_frontend: state.bots_frontend,
             no_doppler: state.no_doppler,
             env_file: state.env_file.clone(),
             egress_url: state.egress_url.clone(),

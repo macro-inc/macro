@@ -116,9 +116,10 @@ The local stack runs on Linux. The Nix dev shell supplies the Docker CLI, daemon
 
 The service binaries are built natively and link the Nix shell's libraries, so a macOS build can't run in the stack's Linux containers. On macOS, `run_local` and `stack up` stop before building and say so; for frontend-only work, [run the frontend against hosted services](#run-the-frontend-against-hosted-services).
 
-The first build in a checkout or worktree runs `bun install --frozen-lockfile`
-at the repository root and in `packages/sdk` when either has no `node_modules`:
-a Rust build script bundles the SDK from them.
+The stack runs `bun install --frozen-lockfile` before the first build in a
+checkout, when the workspace lockfile changes, or when required dependencies
+are missing. It also prepares `packages/sdk` if needed. The native Bots build
+and the Rust build script that bundles the SDK share this setup.
 
 Run the preflight check before the first start:
 
@@ -160,6 +161,12 @@ This command:
 - Starts the local proxy and the frontend
 
 When startup finishes, the command prints the frontend URL and the important service URLs.
+With the frontend enabled, open `/bots/` on the printed instance HTTPS origin
+to open Bots. The frontend lane builds a separate fixture-free bundle, and
+the instance proxy serves it beside `/app/` and `/auth/`. The previous
+bundle stays available until the new build validates. For Creator changes,
+restart the named instance to rebuild the Bots bundle. The Web app
+keeps its normal Vite development server.
 
 In a terminal it stays attached with hotkeys. Without one (an agent's shell, a pipe,
 CI), it runs in the background and returns once the stack is ready. See

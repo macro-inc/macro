@@ -1,0 +1,222 @@
+.brain-access {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+}
+
+.brain-access .brain-access-panel {
+  padding: 0;
+  overflow-wrap: anywhere;
+}
+
+.brain-access-panel > header,
+.brain-access-panel > footer,
+.brain-access-panel-body,
+.brain-access-section-label {
+  padding: 12px 16px;
+}
+
+.brain-access-panel > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.brain-access-panel > header > span,
+.brain-access-panel > footer,
+.brain-access-panel h2 > span,
+.brain-access-panel-body p,
+.brain-access-columns,
+.brain-access-disclosure,
+.brain-access-meta {
+  color: var(--muted);
+}
+
+.brain-access-panel h2 > span {
+  margin-inline-start: 6px;
+  font-size: 12px;
+  font-weight: normal;
+}
+
+.brain-access-panel-body,
+.brain-access-panel > footer,
+.brain-access-section-label,
+.brain-access-item,
+.brain-access-columns {
+  border-top: 1px solid var(--border);
+}
+
+.brain-access-section-label {
+  margin: 0;
+  font-size: 13px;
+}
+
+.brain-access-item > summary,
+.brain-access-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1fr) minmax(
+      0,
+      1fr
+    ) 65px;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+}
+
+.brain-access-item > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.brain-access-item > summary::-webkit-details-marker {
+  display: none;
+}
+
+.brain-access-item > summary:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+}
+
+.brain-access-item > summary:hover,
+.brain-access-item[open] > summary,
+.brain-access-form {
+  background: oklab(from var(--panel) calc(l + 0.03) a b);
+}
+
+.brain-access-disclosure::after {
+  content: "▴" / "";
+  margin-inline-start: 4px;
+  display: inline-block;
+}
+
+.brain-access-item[open] .brain-access-disclosure::after {
+  transform: rotate(180deg);
+}
+
+.brain-access-kind,
+.brain-access-status {
+  display: inline-block;
+  justify-self: start;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.brain-access-kind {
+  margin-inline-end: 6px;
+}
+
+.brain-access-status[data-state="pending"],
+.brain-access-status[data-state="awaiting-human"],
+.brain-access-card-policy {
+  color: var(--amber);
+}
+
+.brain-access-details,
+.brain-access-form,
+.brain-access-fields,
+.brain-access-form fieldset {
+  display: grid;
+  gap: 8px;
+}
+
+.brain-access-details {
+  padding: 12px 16px 16px;
+}
+
+.brain-access-meta,
+.brain-access-actions,
+.brain-access-choice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.brain-access-form {
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.brain-access-form fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.brain-access-form legend {
+  margin-bottom: 8px;
+}
+
+.brain-access-choice {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.brain-access-fields {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 175px), 1fr));
+}
+
+.brain-access-fields label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.brain-access-fields input {
+  min-width: 0;
+  width: 100%;
+}
+
+@media (max-width: 600px) {
+  .brain-access-columns {
+    display: none;
+  }
+
+  .brain-access-item > summary {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .brain-access-item > summary > :first-child {
+    grid-column: 1 / -1;
+  }
+
+  .brain-access-disclosure {
+    justify-self: end;
+  }
+}
+
+@media (min-width: 941px) {
+  .brain-access {
+    grid-template-columns: minmax(0, 0.7fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.brain-access-account-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+  margin: 12px 0 0;
+}
+
+.brain-access-account-meta > div {
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.brain-access-account-meta dt {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.brain-access-account-meta dd {
+  margin: 0;
+}

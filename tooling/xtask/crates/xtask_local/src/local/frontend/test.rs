@@ -174,3 +174,45 @@ fn frontend_ready_timeout_rejects_values_that_are_not_positive_seconds() {
         );
     }
 }
+
+#[test]
+fn bots_publish_keeps_the_current_bundle_when_staging_is_incomplete() {
+    let root = tempfile::tempdir().unwrap();
+    let old = root.path().join("bundle-old");
+    let next = root.path().join("bundle-new");
+    std::fs::create_dir_all(&old).unwrap();
+    std::fs::create_dir_all(next.join(".vite")).unwrap();
+    std::fs::write(old.join("index.html"), "old document").unwrap();
+    std::os::unix::fs::symlink("bundle-old", root.path().join("current")).unwrap();
+    std::fs::write(
+        next.join(".vite/manifest.json"),
+        r#"{"index.html":{"file":"entry.js"}}"#,
+    )
+    .unwrap();
+    std::fs::write(next.join("index.html"), "new document").unwrap();
+
+    assert!(publish_bots_bundle(root.path(), &next, Some(Path::new("bundle-old"))).is_err());
+    assert_eq!(
+        std::fs::read_to_string(root.path().join("current/index.html")).unwrap(),
+        "old document"
+    );
+
+    std::fs::write(next.join("entry.js"), "").unwrap();
+    publish_bots_bundle(root.path(), &next, Some(Path::new("bundle-old"))).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(root.path().join("current/index.html")).unwrap(),
+        "new document"
+    );
+
+    assert_eq!(
+        std::fs::read_to_string(root.path().join("current/.previous/index.html")).unwrap(),
+        "old document"
+    );
+
+    let removed = root.path().join("bundle-retired");
+    std::fs::create_dir_all(&removed).unwrap();
+    prune_bots_bundles(root.path(), &next, Some(Path::new("bundle-old"))).unwrap();
+    assert!(old.is_dir());
+    assert!(next.is_dir());
+    assert!(!removed.exists());
+}

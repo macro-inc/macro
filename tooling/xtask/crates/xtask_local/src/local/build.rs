@@ -19,6 +19,10 @@ use super::arch::Target;
 use super::inventory::RustService;
 use super::stage::Stage;
 
+pub(super) fn prepare_js_dependencies(stage: &Stage) -> Result<()> {
+    cargo_build::ensure_js_dependencies(stage, &super::repo_root())
+}
+
 /// How the caller wants binaries sourced.
 pub struct BuildOptions {
     /// Skip building; reuse whatever is already in the default target dir.

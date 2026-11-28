@@ -13,6 +13,7 @@ verified live against a local stack (`just run_local`, which needs no terminal: 
 | [databases.md](databases.md) | Properties, records, kanban boards, saved views, AI questions, live answers |
 | [forms.md](forms.md) | Forms: create doors, builder (drag and drop, gates), respond route, Responses grid, sharing, polls |
 | [ai-chat.md](ai-chat.md) | Standalone and doc-scoped AI chat |
+| [bots.md](bots.md) | Standalone Bots on the local stack, Creator drafts and native sign-in |
 | [channels.md](channels.md) | Channels: create, invite, message, participants, bots |
 | [tasks.md](tasks.md) | Task list and creation dialog |
 | [view-tours.md](view-tours.md) | Desktop feature flyovers, dismissal, targeting, and embedded videos |
