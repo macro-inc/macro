@@ -17,4 +17,9 @@ pub struct LiveQueryRequest {
     /// Release the retained view when its subscription ends.
     #[serde(default)]
     pub release: bool,
+    /// The row each update carries (`channel-list`), or the selected record.
+    /// Only hosts that advertise row shapes accept it; an older host refuses
+    /// the unknown field.
+    #[serde(default)]
+    pub row: Option<String>,
 }

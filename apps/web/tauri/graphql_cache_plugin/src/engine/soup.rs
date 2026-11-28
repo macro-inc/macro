@@ -186,6 +186,8 @@ pub(super) async fn filter(
                     .map(|revision| revision.parse::<cache_core::revision::CacheRevision>())
                     .transpose()
                     .map_err(|error| error.to_string())?;
+                let row = soup_filter_cache_adapter::channel_list_row::live_row_shape(live.row.as_deref())
+                    .map_err(|error| error.to_string())?;
                 let update = engine
                     .read_live_query(
                         &live.id,
@@ -193,6 +195,7 @@ pub(super) async fn filter(
                             query,
                             baseline,
                             selection,
+                            row,
                         },
                         since,
                     )

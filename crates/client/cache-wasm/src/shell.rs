@@ -2282,6 +2282,10 @@ impl CacheEngine {
                             .map(|revision| revision.parse::<cache_core::revision::CacheRevision>())
                             .transpose()
                             .map_err(err_js)?;
+                        let row = soup_filter_cache_adapter::channel_list_row::live_row_shape(
+                            live.row.as_deref(),
+                        )
+                        .map_err(err_js)?;
                         let result = state
                             .engine_mut()?
                             .read_live_query(
@@ -2290,6 +2294,7 @@ impl CacheEngine {
                                     query,
                                     baseline,
                                     selection,
+                                    row,
                                 },
                                 since,
                             )
