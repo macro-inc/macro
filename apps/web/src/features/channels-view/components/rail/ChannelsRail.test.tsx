@@ -118,6 +118,7 @@ const mocks = vi.hoisted(() => ({
   },
   hotkeys: new Map<string, () => unknown>(),
   realRenderer: false,
+  optionMounts: 0,
 }));
 vi.mock('@app/components/list', () => ({
   createListController: (options: {
@@ -324,6 +325,16 @@ vi.mock('@ui', async () => ({
   confirmDialog: mocks.confirmDialog,
   Tabs: () => null,
   Hotkey: () => null,
+  EmptyStatePanel: () => null,
+  Tooltip: () => null,
+  Button: (props: { children?: JSX.Element }) => (
+    <button type="button">{props.children}</button>
+  ),
+  // The legacy rail's sections scroll inside this.
+  Scroll: (props: {
+    scrollRef: (element: HTMLDivElement) => void;
+    children: JSX.Element;
+  }) => <div ref={props.scrollRef}>{props.children}</div>,
 }));
 vi.mock('@app/features/routine-suggestions/routine-suggestions', () => ({
   SidebarRoutineSuggestions: () => null,
@@ -537,6 +548,7 @@ vi.mock('./ChannelOption', async () => {
       rowId: ChannelRailRow['id'];
     }) => {
       const rail = useChannelsRail();
+      mocks.optionMounts += 1;
       return (
         <button
           type="button"
@@ -1027,6 +1039,78 @@ it('opens search over mounted section rows', async () => {
 
   expect(screen.getByRole('button', { name: 'Found' })).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'One' })).toBeNull();
+});
+
+it('keeps a legacy rail row mounted and focused when its channel object changes', async () => {
+  mocks.realRenderer = true;
+  mocks.sectionsEnabled = false;
+  vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(
+    function (this: HTMLElement) {
+      return this.parentElement;
+    }
+  );
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
+    function (this: HTMLElement) {
+      return this.hasAttribute('data-index') ? 34 : 200;
+    }
+  );
+  vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(300);
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(
+        private readonly report: (entries: ResizeObserverEntry[]) => void
+      ) {}
+      // The virtualizer sizes its viewport and rows from these reports.
+      observe(target: HTMLElement) {
+        const height = target.hasAttribute('data-index') ? 34 : 200;
+        this.report([
+          {
+            target,
+            contentRect: { width: 300, height },
+            borderBoxSize: [{ inlineSize: 300, blockSize: height }],
+            contentBoxSize: [{ inlineSize: 300, blockSize: height }],
+          } as unknown as ResizeObserverEntry,
+        ]);
+      }
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+  // Live rows are immutable: an unread update arrives as a new object.
+  const [row, setRow] = createSignal<ChannelEntity>(channel);
+  const live = { ...source, items: () => [row()] };
+  render(() => (
+    <ChannelsRail
+      sources={{
+        ...sources,
+        channels: live,
+        direct_messages: { ...source, items: () => [] },
+      }}
+      searchQuery=""
+      onSearchQueryChange={() => {}}
+      searchOpen={false}
+      onSearchOpenChange={() => {}}
+    />
+  ));
+  await Promise.resolve();
+  const option = screen.getByRole('button', { name: 'One' });
+  option.focus();
+  const mounts = mocks.optionMounts;
+
+  setRow({
+    ...channel,
+    name: 'One renamed',
+    unreadNotifications: [
+      ...(channel.unreadNotifications ?? []),
+      { id: 'second', state: 'unseen', createdAt: '2026-01-02' },
+    ],
+  });
+  await Promise.resolve();
+
+  expect(mocks.optionMounts).toBe(mounts);
+  expect(screen.getByRole('button', { name: 'One renamed' })).toBe(option);
+  expect(document.activeElement).toBe(option);
 });
 
 describe('section heading navigation', () => {
