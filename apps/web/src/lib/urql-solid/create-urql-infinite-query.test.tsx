@@ -510,6 +510,43 @@ describe('createUrqlInfiniteQuery', () => {
     expect(fake.executions[3]?.unsubscribed).toBe(true);
   });
 
+  it('keeps a failed strict refetch from failing the actions that wait on it', async () => {
+    const fake = makeFakeClient();
+    let query!: ReturnType<
+      typeof createUrqlInfiniteQuery<Page, Variables, string | null, string[]>
+    >;
+    const dispose = createRoot((rootDispose) => {
+      query = createUrqlInfiniteQuery<Page, Variables, string | null, string[]>(
+        () => ({
+          query: DOCUMENT,
+          client: fake.client,
+          initialPageParam: null,
+          variables: (cursor) => ({ cursor }),
+          getNextPageParam: (lastPage) => lastPage.nextCursor,
+          select: ({ pages }) => pages.flatMap((page) => page.values),
+        })
+      );
+      return rootDispose;
+    });
+    disposals.push(dispose);
+    fake.executions[0]?.next({ values: ['first'], nextCursor: 'cursor-1' });
+
+    // A background reread after a write, then the user's own actions.
+    const strict = query.refetch({ throwOnError: true });
+    const joined = query.refetch();
+    const loadMore = query.fetchNextPage();
+    const offline = new CombinedError({ networkError: new Error('offline') });
+    fake.executions[1]?.fail(offline);
+
+    await expect(strict).rejects.toBe(offline);
+    await expect(joined).resolves.toBeDefined();
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(3));
+    expect(fake.executions[2]?.variables).toEqual({ cursor: 'cursor-1' });
+    fake.executions[2]?.next({ values: ['second'], nextCursor: null });
+    await expect(loadMore).resolves.toBeDefined();
+    expect(query.data).toEqual(['first', 'second']);
+  });
+
   it('releases a pending replacement page as soon as the refetch is cancelled', async () => {
     const fake = makeFakeClient();
     let query!: ReturnType<

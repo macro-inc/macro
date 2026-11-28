@@ -80,6 +80,10 @@ type SelectionCache<PageData, PageParam, SelectedData> = {
   selection: ReactiveSelection<SelectedData>;
 };
 
+/** Waits for a promise to settle, whatever its outcome. */
+const settled = (promise: Promise<unknown>): Promise<unknown> =>
+  ResultAsync.fromPromise(promise, () => undefined).then(() => undefined);
+
 function sameReferences<T>(left: readonly T[], right: readonly T[]): boolean {
   return (
     left.length === right.length &&
@@ -360,8 +364,11 @@ export class InfiniteQueryObserver<
 
     const signal = this.actionController.signal;
     const pendingRefetch = this.refetchPromise;
+    // A failed refetch belongs to whoever started it; this page still loads.
     const action = pendingRefetch
-      ? pendingRefetch.then(() => this.runFetchNextPage(refetchOptions, signal))
+      ? settled(pendingRefetch).then(() =>
+          this.runFetchNextPage(refetchOptions, signal)
+        )
       : this.runFetchNextPage(refetchOptions, signal);
     const trackedAction = action.finally(() => {
       if (this.fetchNextPromise === trackedAction) {
@@ -386,12 +393,18 @@ export class InfiniteQueryObserver<
       refetchOptions.throwOnError === true && !this.refetchThrows;
     if (pending && (fresh || stricter))
       return this.refetchAfter(pending, refetchOptions);
-    if (pending) return pending;
+    // One that keeps failures never inherits a strict refetch's rejection.
+    if (pending)
+      return this.refetchThrows && refetchOptions.throwOnError !== true
+        ? settled(pending).then(() => this.actionResult())
+        : pending;
 
     const signal = this.actionController.signal;
     const pendingFetchNext = this.fetchNextPromise;
     const action = pendingFetchNext
-      ? pendingFetchNext.then(() => this.runRefetch(refetchOptions, signal))
+      ? settled(pendingFetchNext).then(() =>
+          this.runRefetch(refetchOptions, signal)
+        )
       : this.runRefetch(refetchOptions, signal);
     const trackedAction = action.finally(() => {
       if (this.refetchPromise === trackedAction) {
@@ -411,7 +424,7 @@ export class InfiniteQueryObserver<
     refetchOptions: UrqlQueryRefetchOptions
   ): Promise<InfiniteResult<PageData, Variables, PageParam, SelectedData>> {
     // Its outcome belongs to whoever started it.
-    await ResultAsync.fromPromise(pending, () => undefined);
+    await settled(pending);
     // One started after `pending` settled is late enough to join.
     return this.refetch(refetchOptions);
   }
