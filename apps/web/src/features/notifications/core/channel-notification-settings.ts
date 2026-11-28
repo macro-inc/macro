@@ -200,9 +200,21 @@ export type SectionChange =
   | { kind: 'mute' };
 
 /**
- * The section's channels that a change to it would not reach: those with
- * their own different kinds, or, for a mute, those set to keep notifying in
- * muted sections.
+ * Whether a channel's own settings keep a section change from reaching it:
+ * its own different kinds, or, for a mute, keeping on in muted sections.
+ */
+export function ownSettingsResist(
+  own: ChannelOwnSettings,
+  change: SectionChange
+): boolean {
+  return change.kind === 'mute'
+    ? own.overridesSectionMute
+    : own.enabled !== undefined && !sameKinds(own.enabled, change.kinds);
+}
+
+/**
+ * The section's channels that a change to it would not reach: those whose
+ * own settings resist it (`ownSettingsResist`).
  */
 export function sectionConflicts(args: {
   section: NotificationSectionKey;
@@ -217,11 +229,7 @@ export function sectionConflicts(args: {
 }): string[] {
   const { change } = args;
   return args.channels
-    .filter(({ own }) =>
-      change.kind === 'mute'
-        ? own.overridesSectionMute
-        : own.enabled !== undefined && !sameKinds(own.enabled, change.kinds)
-    )
+    .filter(({ own }) => ownSettingsResist(own, change))
     .filter((channel) =>
       sectionsHoldingChannel({
         channelId: channel.channelId,

@@ -45,6 +45,7 @@ import {
   effectiveChannelNotifications,
   type NotificationPreset,
   type NotificationSectionKey,
+  ownSettingsResist,
   PRESET_KINDS,
   presetFor,
   type SectionChange,
@@ -323,14 +324,17 @@ export function createChannelNotificationSettings(sources: Sources) {
   /**
    * The section's channels a change to it would not reach, or nothing when
    * the check failed (reported here) or its host went. A Direct messages or
-   * team section first reads its joined channels whole when a channel with
-   * its own settings has no record here.
+   * team section first reads its joined channels whole when a channel whose
+   * own settings resist the change has no record here.
    */
   const conflictsFor = async (
     key: NotificationSectionKey,
     change: SectionChange
   ): Promise<SectionConflict[] | undefined> => {
-    const candidates = ownSettingsIds().map((channelId): ConflictCandidate => {
+    const resisting = ownSettingsIds().filter((channelId) =>
+      ownSettingsResist(ownSettings(channelId), change)
+    );
+    const candidates = resisting.map((channelId): ConflictCandidate => {
       const channel = conflictChannel(channelId);
       return {
         channelId,

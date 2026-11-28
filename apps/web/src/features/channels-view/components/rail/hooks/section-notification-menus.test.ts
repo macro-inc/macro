@@ -71,6 +71,7 @@ vi.mock('@queries/notification/unsubscribes', () => ({
   useMutedEntitiesQuery: () => ({ data: [] }),
 }));
 
+import { CHANNEL_NOTIFICATION_KINDS } from '@notifications/core/channel-notification-settings';
 import { createChannelNotificationSettings } from '@notifications/primitives/create-channel-notification-settings';
 import { sectionNotificationMenus } from './section-notification-menus';
 
@@ -154,6 +155,21 @@ describe('section notification conflicts', () => {
     await settle();
 
     expect(read).toHaveBeenCalledOnce();
+    expect(mocks.conflictDialogs).toEqual([]);
+    expect(mocks.sectionWrites).toHaveLength(1);
+  });
+
+  it('reads nothing when no channel’s own settings resist the change', async () => {
+    mocks.ownSettings = ids.map((channelId) => ({
+      channelId,
+      enabled: [...CHANNEL_NOTIFICATION_KINDS],
+    }));
+    const read = vi.fn(async () => joined);
+    const { menus } = setup(read);
+    menus('team_channels', 'Team')!.settings.onPreset('all');
+    await settle();
+
+    expect(read).not.toHaveBeenCalled();
     expect(mocks.conflictDialogs).toEqual([]);
     expect(mocks.sectionWrites).toHaveLength(1);
   });
