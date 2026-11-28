@@ -217,6 +217,7 @@ impl QueryRoot {
         }
     }
 
+    /// A committed appearance write whose Soup loader is unavailable.
     async fn appearance_with_unavailable_soup(
         &self,
     ) -> super::GraphqlMutationSuccess<TestSoupEdges> {

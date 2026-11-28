@@ -1,4 +1,5 @@
 import { TRACE_PARENT_CONTEXT_KEY } from '@app/lib/urql-solid/trace-parent-exchange';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
 import { committedWithMissingRows } from '@graphql-cache/exchange/effect-errors';
 import { networkRevalidated } from '@graphql-cache/exchange/network-revalidation-exchange';
@@ -7,16 +8,20 @@ import {
   optimisticMutationDispositionOf,
   type QueryRevalidation,
 } from '@graphql-cache/exchange/optimistic';
+import type { CacheHost } from '@graphql-cache/host/types';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { type Span, Telemetry } from '@macro-inc/observability';
+import { buildGraphqlEntitySoupInput } from '@queries/soup/graphql/entity-input';
 import type { AnyVariables, OperationContext } from '@urql/core';
 import type { GraphQLError } from 'graphql';
+import { createEffect, createRoot, onCleanup } from 'solid-js';
 import {
   DeleteEntitiesPermanentlyDocument,
   DuplicateEntitiesDocument,
   type DuplicateEntityInput,
+  type EntityMutationPayloadFieldsFragment,
   type EntityRefInput,
-  type GraphqlEntityMutationErrorCode,
+  ItemPreviewDocument,
   MoveEntitiesDocument,
   type MoveEntityInput,
   RestoreEntitiesDocument,
@@ -26,22 +31,11 @@ import {
   UpdateEntitySharePoliciesDocument,
   type UpdateEntitySharePolicyInput,
 } from './graphql/generated/graphql';
-import { getEntityGraphqlClient } from './graphql-soup';
+import { getEntityGraphqlClient, getGraphqlCacheHost } from './graphql-soup';
 
 /** An error resolving `<mutation>.results[n].effects`. */
 const isEffectsError = (error: GraphQLError) =>
   error.path?.[1] === 'results' && error.path[3] === 'effects';
-
-type MutationPayload<Effect> = {
-  results: Array<
-    | { __typename: 'GraphqlMutationSuccess'; effects: Effect[] }
-    | {
-        __typename: 'GraphqlMutationError';
-        errorCode: GraphqlEntityMutationErrorCode;
-        message: string;
-      }
-  >;
-};
 
 /** Predicted writes can resolve once durably queued. A result whose
  * effects failed to resolve, or whose rows or deletions the cache failed to
@@ -51,26 +45,29 @@ type MutationPayload<Effect> = {
  * client's exchange read every mounted list again, each successfully, before
  * the write settled (no live cache).
  * Never retry a failed/ambiguous GraphQL write through the REST transport. */
-async function mutateEntity<Data, Variables extends AnyVariables, Effect>(
+function mutateEntity<Data, Variables extends AnyVariables>(
   operation: string,
   entity: EntityRefInput,
   document: TypedDocumentNode<Data, Variables>,
   variables: Variables,
-  payload: (data: Data) => MutationPayload<Effect>,
+  payload: (data: Data) => EntityMutationPayloadFieldsFragment,
   context: Partial<OperationContext> = {}
+) {
+  return traceEntityMutation(operation, entity, (span) =>
+    sendEntityMutation(span, operation, document, variables, payload, context)
+  );
+}
+
+function traceEntityMutation<T>(
+  operation: string,
+  entity: EntityRefInput,
+  send: (span: Span) => Promise<T>
 ) {
   return Telemetry.span(`entity.${operation}`, async (span) => {
     span.setAttr('entity.id', entity.id);
     span.setAttr('entity.type', entity.type);
     try {
-      return await sendEntityMutation(
-        span,
-        operation,
-        document,
-        variables,
-        payload,
-        context
-      );
+      return await send(span);
     } catch (error) {
       // A fixed message: server errors can echo entity names.
       span.error(`Entity ${operation} failed`);
@@ -79,12 +76,12 @@ async function mutateEntity<Data, Variables extends AnyVariables, Effect>(
   });
 }
 
-async function sendEntityMutation<Data, Variables extends AnyVariables, Effect>(
+async function sendEntityMutation<Data, Variables extends AnyVariables>(
   span: Span,
   operation: string,
   document: TypedDocumentNode<Data, Variables>,
   variables: Variables,
-  payload: (data: Data) => MutationPayload<Effect>,
+  payload: (data: Data) => EntityMutationPayloadFieldsFragment,
   context: Partial<OperationContext>
 ) {
   // Its request, queue attempt and cache writes join this span's trace.
@@ -139,19 +136,102 @@ async function sendEntityMutation<Data, Variables extends AnyVariables, Effect>(
   };
 }
 
+export type AppearanceSettlement =
+  | 'committed'
+  | 'permanently-failed'
+  | undefined;
+
+function observeAppearanceSettlement(host: CacheHost, uuid: string) {
+  let resolve!: (status: AppearanceSettlement) => void;
+  const promise = new Promise<AppearanceSettlement>((finish) => {
+    resolve = finish;
+  });
+  const stop = createRoot((dispose) => {
+    function finish(status: AppearanceSettlement) {
+      dispose();
+      resolve(status);
+    }
+    onCleanup(
+      host.onMutationSettled((result) => {
+        if (result.mutationUuid === uuid)
+          finish(result.status === 'superseded' ? undefined : result.status);
+      })
+    );
+    onCleanup(
+      host.onCacheGenerationChanged((change) => {
+        if (change.queue === 'reset') finish(undefined);
+      })
+    );
+    // A retired host drops its subscribers while preserving its durable queue.
+    createEffect(() => {
+      if (getGraphqlCacheHost() !== host) finish(undefined);
+    });
+    return () => finish(undefined);
+  });
+  return { promise, stop };
+}
+
 export const setGraphqlEntityAppearance = (
   input: SetEntityAppearanceInput,
   revalidations: readonly QueryRevalidation[],
-  uuid?: string
+  isCurrent: () => boolean
 ) =>
-  mutateEntity(
-    'set_appearance',
-    input.entity,
-    SetEntityAppearanceDocument,
-    { input },
-    (data) => ({ results: [data.setEntityAppearance] }),
-    { optimisticMutation: { revalidations, uuid } }
-  );
+  traceEntityMutation('set_appearance', input.entity, async (span) => {
+    const client = getEntityGraphqlClient();
+    const host = getGraphqlCacheHost();
+    const uuid = host && crypto.randomUUID();
+    // Subscribe before submission so a fast replay cannot outrun the listener.
+    const observed =
+      host && uuid ? observeAppearanceSettlement(host, uuid) : undefined;
+    let queued = false;
+    try {
+      const result = await client
+        .mutation(
+          SetEntityAppearanceDocument,
+          { input },
+          {
+            optimisticMutation: { revalidations, uuid },
+            [TRACE_PARENT_CONTEXT_KEY]: span,
+          }
+        )
+        .toPromise();
+      const disposition = optimisticMutationDispositionOf(result);
+      queued = disposition?.kind === 'queued';
+      if (queued)
+        return { queued, listsReadAgain: false, settlement: observed?.promise };
+      if (disposition?.kind === 'permanently-failed') throw disposition.error;
+      if (result.error) throw result.error;
+      const effects = result.data?.setEntityAppearance?.effects;
+      if (!effects) throw new Error('Appearance mutation returned no result');
+      const { type, id } = input.entity;
+      if (
+        effects.length === 0 &&
+        isCurrent() &&
+        (type === 'DOCUMENT' || type === 'INITIATIVE')
+      ) {
+        const lookup = buildGraphqlEntitySoupInput(type, String(id));
+        if (lookup) {
+          const rereadAppearance = async () => {
+            const { error } = await client
+              .query(
+                ItemPreviewDocument,
+                { input: lookup },
+                {
+                  requestPolicy: 'network-only',
+                  [TRACE_PARENT_CONTEXT_KEY]: span,
+                }
+              )
+              .toPromise();
+            if (error) throw error;
+          };
+          fireAndForget(rereadAppearance(), 'appearance row recovery');
+        }
+      }
+      return { queued, listsReadAgain: networkRevalidated(result) };
+    } finally {
+      if (!queued) observed?.stop();
+    }
+  });
 
 /** A move the cache predicts is queued, so the lists it cannot keep current are
  * named here and read again once the move commits, including on replay. */

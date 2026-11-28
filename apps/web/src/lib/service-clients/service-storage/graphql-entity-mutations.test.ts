@@ -3,6 +3,7 @@ import {
   withOptimisticMutationDisposition,
 } from '@graphql-cache/exchange/optimistic';
 import { optimisticResolversExchange } from '@graphql-cache/exchange/optimistic-resolvers';
+import type { CacheHost } from '@graphql-cache/host/types';
 import { entityOptimisticResolvers } from '@queries/entity-optimistic-resolvers';
 import {
   type Client,
@@ -13,11 +14,13 @@ import {
   type OperationResult,
   stringifyDocument,
 } from '@urql/core';
-import { describe, expect, it, vi } from 'vitest';
+import { createSignal } from 'solid-js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { filter, map, pipe } from 'wonka';
 import { MoveEntitiesDocument } from './graphql/generated/graphql';
 
 let graphql: Client | undefined;
+const [cacheHost, setCacheHost] = createSignal<CacheHost>();
 // The cache's result metadata, set by the normalized exchange this test skips.
 vi.mock(
   '@graphql-cache/exchange/normalized-cache-exchange',
@@ -28,13 +31,21 @@ vi.mock(
   })
 );
 vi.mock('./graphql-soup', () => ({
+  getGraphqlCacheHost: () => cacheHost(),
   getEntityGraphqlClient: () => {
     if (!graphql) throw new Error('The test must inject a client');
     return graphql;
   },
 }));
 
-import { moveGraphqlEntity } from './graphql-entity-mutations';
+import {
+  moveGraphqlEntity,
+  setGraphqlEntityAppearance,
+} from './graphql-entity-mutations';
+
+afterEach(() => {
+  setCacheHost(undefined);
+});
 
 function replyWith(reply: (operation: Operation) => OperationResult) {
   const exchange: Exchange = () => (operations) =>
@@ -48,6 +59,90 @@ function replyWith(reply: (operation: Operation) => OperationResult) {
     exchanges: [exchange],
   });
 }
+
+describe('entity appearance transport', () => {
+  const input = {
+    entity: { type: 'DOCUMENT', id: 'document' },
+    color: 'GREEN',
+  } as const;
+
+  it('reports an older server schema refusal for a direct write', async () => {
+    const reply = vi.fn(
+      (operation: Operation): OperationResult => ({
+        operation,
+        stale: false,
+        hasNext: false,
+        error: new CombinedError({
+          graphQLErrors: [
+            { message: 'Unknown type "SetEntityAppearanceInput"' },
+            {
+              message:
+                'Unknown field "setEntityAppearance" on type "CompleteMutationRoot".',
+            },
+          ],
+        }),
+      })
+    );
+    replyWith(reply);
+    await expect(
+      setGraphqlEntityAppearance(input, [], () => true)
+    ).rejects.toThrow('Unknown type "SetEntityAppearanceInput"');
+    expect(reply).toHaveBeenCalledOnce();
+  });
+
+  it('reads only the affected row when a live write commits without effects', async () => {
+    const reply = vi.fn(
+      (operation: Operation): OperationResult => ({
+        operation,
+        stale: false,
+        hasNext: false,
+        data:
+          operation.kind === 'mutation'
+            ? { setEntityAppearance: { effects: [] } }
+            : { user: { id: 'viewer', soup: { items: [] } } },
+      })
+    );
+    replyWith(reply);
+    await expect(
+      setGraphqlEntityAppearance(input, [], () => true)
+    ).resolves.toMatchObject({ queued: false });
+    expect(reply).toHaveBeenCalledTimes(2);
+    expect(reply.mock.calls[1]?.[0]).toMatchObject({
+      kind: 'query',
+      context: { requestPolicy: 'network-only' },
+      variables: {
+        input: {
+          initial: {
+            limit: 1,
+            filters: { documentFilter: { literal: { id: 'document' } } },
+          },
+        },
+      },
+    });
+  });
+
+  it('acknowledges a durable queue without response data and releases its retired host', async () => {
+    const stopSettlements = vi.fn();
+    const stopGeneration = vi.fn();
+    setCacheHost({
+      onMutationSettled: () => stopSettlements,
+      onCacheGenerationChanged: () => stopGeneration,
+    } as unknown as CacheHost);
+    replyWith((operation) =>
+      withOptimisticMutationDisposition(
+        { operation, stale: false, hasNext: false },
+        { kind: 'queued', transactionId: 'queued-appearance' }
+      )
+    );
+    const receipt = await setGraphqlEntityAppearance(input, [], () => true);
+    expect(receipt.queued).toBe(true);
+    expect(receipt.settlement).toBeInstanceOf(Promise);
+    setCacheHost(undefined);
+    await expect(receipt.settlement).resolves.toBeUndefined();
+    expect(stopSettlements).toHaveBeenCalledOnce();
+    expect(stopGeneration).toHaveBeenCalledOnce();
+  });
+});
 
 describe('entity move transport', () => {
   it('accepts a move the cache queued behind an earlier write', async () => {

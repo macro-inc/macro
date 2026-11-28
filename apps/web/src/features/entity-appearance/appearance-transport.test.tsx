@@ -1,8 +1,16 @@
 import { networkRevalidationExchange } from '@graphql-cache/exchange/network-revalidation-exchange';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/protocol';
+import { queryClient } from '@queries/client';
 import { registerActiveGraphqlSoupQuery } from '@queries/soup/graphql/active-queries';
+import { entityKeys } from '@queries/storage/keys';
 import { render } from '@solidjs/testing-library';
-import { type Client, createClient, gql, type Operation } from '@urql/core';
+import {
+  type Client,
+  CombinedError,
+  createClient,
+  gql,
+  type Operation,
+} from '@urql/core';
 import { getOperationAST, print } from 'graphql';
 import { ok } from 'neverthrow';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -87,6 +95,58 @@ afterEach(() => {
   adapters.cached = false;
   adapters.save = undefined;
   vi.clearAllMocks();
+});
+
+it('reports an older server refusal and rolls back legacy document metadata', async () => {
+  const document = {
+    id: 'appearance-rollout-document',
+    name: 'Example',
+    ownerId: 'viewer',
+    type: 'document',
+    fileType: 'md',
+  } as const;
+  const queryKey = entityKeys.documentMetadata(document.id).queryKey;
+  const legacy = { appearance: null };
+  queryClient.setQueryData(queryKey, legacy);
+  adapters.client = createClient({
+    url: 'http://appearance.fixture/graphql',
+    exchanges: [
+      () => (operations) =>
+        pipe(
+          operations,
+          filter((operation) => operation.kind === 'mutation'),
+          map((operation) => ({
+            operation,
+            error: new CombinedError({
+              graphQLErrors: [
+                { message: 'Unknown type "SetEntityAppearanceInput"' },
+              ],
+            }),
+            stale: false,
+            hasNext: false,
+          }))
+        ),
+    ],
+  });
+  const renderer = render(() => (
+    <AppearanceDialog
+      entity={document}
+      isCurrent={() => true}
+      userId="viewer"
+      open={true}
+      onOpenChange={vi.fn()}
+    />
+  ));
+  try {
+    const save = adapters.save;
+    if (!save) throw new Error('Expected the appearance editor to mount');
+    expect((await save({ color: 'green' })).isErr()).toBe(true);
+    expect(queryClient.getQueryData(queryKey)).toEqual(legacy);
+    expect(adapters.rest).not.toHaveBeenCalled();
+  } finally {
+    renderer.unmount();
+    queryClient.removeQueries({ queryKey, exact: true });
+  }
 });
 
 it.each(

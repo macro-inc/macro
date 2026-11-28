@@ -472,6 +472,7 @@ pub struct GraphqlMutationError(
 );
 
 impl GraphqlMutationError {
+    /// Keep the batch result and single-write GraphQL error wording consistent.
     fn user_message(&self) -> &'static str {
         match self.0 {
             EntityMutationErrorCode::UnsupportedOperation(_) => {

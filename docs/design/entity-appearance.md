@@ -35,7 +35,9 @@ through `setEntityAppearance`. The editor selects the committed Soup identity
 and appearance from the primary. Mounted lists update from the normalized cache,
 including after offline replay. The editor confirms a queued choice when replay
 commits and restores the prior choice when replay rejects it. The network
-exchange refreshes mounted queries when the cache is unavailable.
+exchange refreshes mounted queries when the cache is unavailable. A live
+commit with missing effects recovers the one entity by ID. On replay, the
+queue rereads mounted lists when a committed response contains no rows.
 Headers and breadcrumbs use the lightweight preview identity selection, without
 loading document properties.
 Existing duplication/template flows copy appearance; blank creation uses defaults.
