@@ -110,12 +110,14 @@ type IndexEntry = {
 /**
  * full item and version hash.
  */
-type CacheEntry = {
-  item: QuickAccessItem;
-  version: string;
-  /** The row a channel item was built from, compared in place of `version`. */
-  channel?: CachedGraphqlChannel;
-};
+type CacheEntry =
+  | { item: QuickAccessItem; version: string; channel?: undefined }
+  | {
+      item: QuickAccessItem;
+      version?: undefined;
+      /** The row a channel item was built from, compared in place of a version. */
+      channel: CachedGraphqlChannel;
+    };
 
 function historyItemToEntity(item: HistoryItem): QuickAccessEntity {
   const base = {
@@ -598,7 +600,6 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         const quickAccessItem = channelToQuickAccessItem(channel);
         itemCache.set(channel.id, {
           item: quickAccessItem,
-          version: '',
           channel,
         });
         allEntries.push({

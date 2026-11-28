@@ -131,6 +131,36 @@ describe('showsQuickAccessChannel', () => {
     (row) => ({ ...row, participantIds: [...row.participantIds].reverse() }),
   ];
 
+  // The comparison names its fields; this keeps it to every field. `Required`
+  // fails the type check when the row gains a field this row lacks, and the
+  // loop then fails until the comparison reads it.
+  it('notices a change to any field of the row', () => {
+    const row: Required<CachedGraphqlChannel> = {
+      id: 'channel-1',
+      name: 'general',
+      ownerId: 'user-1',
+      channelType: 'public',
+      participantIds: ['user-1', 'bot|bot-1'],
+      createdAt: '2026-08-01T00:00:00.000Z',
+      updatedAt: '2026-08-02T00:00:00.000Z',
+      viewedAt: '2026-08-03T00:00:00.000Z',
+      interactedAt: '2026-08-04T00:00:00.000Z',
+    };
+    expect(showsQuickAccessChannel(row, { ...row }, row.viewedAt)).toBe(true);
+    expect(showsQuickAccessChannel(row, row, undefined)).toBe(false);
+    for (const field of Object.keys(row) as (keyof typeof row)[]) {
+      if (field === 'viewedAt') continue;
+      const value = row[field];
+      const changed = {
+        ...row,
+        [field]: Array.isArray(value) ? [...value, 'other'] : `${value}-other`,
+      };
+      expect(showsQuickAccessChannel(row, changed, row.viewedAt), field).toBe(
+        false
+      );
+    }
+  });
+
   it('agrees with comparing the serialized rows (5,000 generated pairs)', () => {
     const next = random(9_001);
     for (let index = 0; index < 5_000; index += 1) {
