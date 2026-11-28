@@ -47,6 +47,18 @@ export type HeadlessCacheRuntime = {
 
 const REQUEST_TIMEOUT_MS = 60_000;
 
+/** Every channel the page and workers open, so `dispose` can close them. */
+function trackedMessageChannel(
+  opened: LinkedMessageChannel[]
+): typeof LinkedMessageChannel {
+  return class extends LinkedMessageChannel {
+    constructor() {
+      super();
+      opened.push(this);
+    }
+  };
+}
+
 /**
  * Installs the worker, OPFS and lock globals and loads the engine. One runtime
  * at a time: the globals are stubbed with `vi.stubGlobal` and restored on
@@ -69,7 +81,9 @@ export async function installHeadlessCacheRuntime(
     verifyTabLockHeld: async () => true,
     watchTabLock: () => () => undefined,
   });
-  vi.stubGlobal('MessageChannel', LinkedMessageChannel);
+  const channels: LinkedMessageChannel[] = [];
+  const TrackedMessageChannel = trackedMessageChannel(channels);
+  vi.stubGlobal('MessageChannel', TrackedMessageChannel);
   vi.stubGlobal(
     'SharedWorker',
     class {
@@ -77,7 +91,7 @@ export async function installHeadlessCacheRuntime(
       readonly port: LinkedMessagePort;
 
       constructor() {
-        const channel = new LinkedMessageChannel();
+        const channel = new TrackedMessageChannel();
         this.port = channel.port1;
         installCacheCoordinatorWorker({
           endpoint: channel.port2 as unknown as MessagePort,
@@ -139,6 +153,13 @@ export async function installHeadlessCacheRuntime(
     },
     async dispose() {
       for (const host of hosts.splice(0)) await host.dispose();
+      // A host's dispose starts its departure and returns: the workers keep
+      // answering it for a while. Closed ports drop those messages, so none
+      // reaches a port after the test's environment is gone.
+      for (const channel of channels.splice(0)) {
+        channel.port1.close();
+        channel.port2.close();
+      }
       setCurrentRealCacheWasm(undefined);
       vi.unstubAllGlobals();
     },
