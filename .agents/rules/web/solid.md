@@ -82,7 +82,7 @@ State ownership, reactivity, and async error handling.
   further down does not save you. This has blanked the calendar grid twice — see
   `focusTarget` in `src/features/block-calendar/CalendarBlockAdapter.tsx` and
   `useSystemSkillsQuery`.
-- **FE-70** A computation that walks a whole large query result (thousands of
+- **FE-75** A computation that walks a whole large query result (thousands of
   rows, or rows with nested arrays) reads `unwrap(query.data)` from
   `solid-js/store`, not `query.data`. The result is a store proxy, so every
   field read in a tracked scope creates a signal: walking a 14,700-channel
@@ -90,10 +90,12 @@ State ownership, reactivity, and async error handling.
   `query.data` still tracks the result being replaced, which is every update
   of a query without `reconcile`. A query with `reconcile` updates rows in
   place without replacing `data`, so an unwrapped walk would miss them: keep
-  its reads tracked, or for Soup `LiveQuery` and `createPredicateQuery` rows
-  reconciled in place, read through `readRowSnapshot(record)` from
-  `@graphql-cache/exchange/live-query` to subscribe at row granularity and walk
-  unwrapped records.
+  its reads tracked, or read `querySnapshot(query.data)` from
+  `@graphql-cache/exchange/live-query`. For a normalized-cache result that is
+  an immutable snapshot, which keeps each unchanged row's object across
+  results, so a reader compares rows by identity; for any other result it is
+  the value itself (Soup copies an uncached result with `serverSnapshot`).
+  Soup mappers take only plain records (`plainSoupRecord`).
 - **FE-52** Read reactive values (feature flags, `isEditable()`, the current
   user) inside a reactive scope, never as a snapshot at mount. A flag that is
   still loading is not "off".

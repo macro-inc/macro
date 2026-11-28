@@ -1,6 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { OperationResult } from '@urql/core';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
+import { liveQueryData } from '../../../graphql-cache/exchange/live-query';
 import { normalizedCacheResultMetadata } from '../../../graphql-cache/exchange/normalized-cache-exchange';
 import type {
   GroupSoupQuery,
@@ -74,7 +75,13 @@ export function createGroupedPageEvidence(scope: Accessor<string>) {
         metadata?.source === 'live-network' ? metadata.persistence : undefined;
       const page = {
         scope: requestScope,
-        data: result.data,
+        // Without the normalized cache, urql-solid's store adopts a result's
+        // data and updates it in place: keep a copy, so a later result cannot
+        // rewrite the membership this page proves.
+        data:
+          liveQueryData(result) === result.data
+            ? structuredClone(result.data)
+            : result.data,
         persisted: !persistence,
         network: metadata?.source === 'live-network',
       };

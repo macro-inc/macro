@@ -335,8 +335,9 @@ records into UI entities through one keyed mapper. Fetched versions remain
 separate from local display versions so pagination coverage cannot drift.
 
 Inside `createSoupLiveQuery`, a Soup-internal binding owns subscription,
-coalescing, cleanup and engine-generation recovery, preserving keyed row stores
-and applying patches in one batch. Its only source is a reconciled flat Soup
+coalescing, cleanup and engine-generation recovery. It keeps the rows as
+immutable values: each reply replaces the rows it changes, keeps every other
+row's object, and applies in one batch. Its only source is a reconciled flat Soup
 filter; it is not a general query API.
 
 Mutations still use ordinary GraphQL execution and the registered local resolver.
@@ -692,7 +693,9 @@ leaves the WAL whole and resets the cache only when the error means corruption.
 ## Slow request telemetry
 
 The engine worker reports each request that answers **1 s or more** after it
-arrived as `graphql_cache.slow_request`, unsampled. A page gives up on a
+arrived as `graphql_cache.slow_request`, unsampled, and also any write whose
+live-view proof failed, however fast (`cache.proof_failed`; filter it out when
+counting stalls). A page gives up on a
 request after 10 s; these spans say what held the engine meanwhile. Search
 Datadog spans for `service:web-app resource_name:graphql_cache.slow_request`:
 
@@ -701,6 +704,8 @@ Datadog spans for `service:web-app resource_name:graphql_cache.slow_request`:
 - `cache.duration_ms`: time it ran, from start to its answer.
 - `cache.queue_depth`: requests still queued when it started.
 - `cache.outcome`, `cache.error_code`: `success`/`none`, or the error class.
+- `cache.proof_ms`: on a write, how long proving its unchanged live views took.
+- `cache.proof_failed`: set when that proof failed, so every live view read again.
 
 A stall shows as one request with a long `duration_ms` and the requests behind
 it with long `queue_wait_ms`.

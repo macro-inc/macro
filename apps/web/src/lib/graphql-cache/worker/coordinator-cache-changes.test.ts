@@ -394,3 +394,46 @@ it.each([
     ]);
   }
 );
+
+it.each([
+  ['cache-changed', 'g1', 'g1', 'g1'],
+  ['cache-changed', 'g1', 'g2', undefined],
+  ['cache-changed', 'g1', undefined, undefined],
+  ['cache-changed', undefined, 'g1', undefined],
+  ['cache-hydrated', 'g1', 'g1', 'g1'],
+  ['cache-hydrated', 'g1', 'g2', undefined],
+] as const)(
+  'keeps a shared authority generation on a coalesced %s push (%s + %s -> %s)',
+  (kind, first, second, expected) => {
+    const { push, reply } = resume([
+      { id: 1, kind: 'write', query: '{ a }', data: { a: 1 } },
+      { id: 2, kind: 'write', query: '{ b }', data: { b: 2 } },
+    ]);
+    push({
+      ...(first === undefined ? {} : { authorityGeneration: first }),
+      kind,
+      revision: parseCacheRevision('1'),
+      unchangedViews: ['a'],
+    });
+    reply(0);
+    expect(
+      push({
+        ...(second === undefined ? {} : { authorityGeneration: second }),
+        kind,
+        revision: parseCacheRevision('2'),
+        unchangedViews: ['a'],
+      })
+    ).toEqual([
+      {
+        kind: 'broadcast-push',
+        push: {
+          ...(expected === undefined ? {} : { authorityGeneration: expected }),
+          kind,
+          revision: '2',
+          unchangedViews: ['a'],
+        },
+        coalescedCount: 2,
+      },
+    ]);
+  }
+);

@@ -387,6 +387,8 @@ async fn resolved(promise: js_sys::Promise) -> JsValue {
 fn empty_js_write_result() -> JsWriteResult {
     JsWriteResult {
         unchanged_views: None,
+        proof_ms: None,
+        proof_failed: false,
         field_changes: None,
         identity_errors: Vec::new(),
         unwritable_response: None,

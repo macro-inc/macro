@@ -55,8 +55,8 @@ wasm-bindgen shell exposing `cache-core` + `cache-turso` + `turso-opfs` as a
 
 - Keep first account binding without a stored policy generation-neutral, including after reopening OPFS; policy-bearing binding and account replacement retain the shared core's fence.
 
-- Preserve successful hydration replies when optional window-proof computation
-  fails; empty proofs retain broad invalidation after the durable write.
+- Preserve successful hydration and write replies when optional window-proof
+  computation fails; empty proofs retain broad invalidation after the durable write.
 - Pass the existing entity-filter `baseline` to Mail pagination too; `retainedKeys`
   tells the frontend which server rows still lack canonical local metadata.
 

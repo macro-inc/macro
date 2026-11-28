@@ -1,6 +1,9 @@
 import { createComputed, createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
-import { LiveQuery } from '../../../graphql-cache/exchange/live-query';
+import {
+  LiveQuery,
+  querySnapshot,
+} from '../../../graphql-cache/exchange/live-query';
 import { applyQueryPatches } from '../../../graphql-cache/exchange/query-patches';
 import type { GroupSoupQuery } from '../../../service-clients/service-storage/graphql/generated/graphql';
 import type { GraphqlSoupItem } from '../../../service-clients/service-storage/graphql-soup';
@@ -113,7 +116,7 @@ describe('grouped Soup projections', () => {
         const initial = page(1000);
         const view = new LiveQuery(initial);
         const projected = createGraphqlGroupedSoupProjection(
-          () => view.data as GroupSoupQuery,
+          () => querySnapshot(view.data) as GroupSoupQuery,
           () => ({ type: 'property', propertyDefinitionId: 'status' }),
           () => ({})
         );

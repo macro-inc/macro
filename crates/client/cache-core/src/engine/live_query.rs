@@ -25,6 +25,50 @@ pub struct LiveQuerySpec {
     pub baseline: Vec<PredicateBaselineEntry>,
     /// Selected fields, including nested normalized records.
     pub selection: Arc<RecordSelection>,
+    /// The row each update carries; `None` sends the selected record.
+    pub row: Option<RowShape>,
+}
+
+/// A host-defined row derived from a complete selected record.
+///
+/// The selection still decides completeness and dependencies; the shape only
+/// narrows what the view retains, diffs and sends. It must be a pure function
+/// of the record, since unchanged records are never shaped again.
+#[derive(Clone, Copy)]
+pub struct RowShape {
+    name: &'static str,
+    shape: fn(&Json) -> Json,
+}
+
+impl RowShape {
+    /// Names a shape; two shapes are the same when their names are.
+    pub const fn new(name: &'static str, shape: fn(&Json) -> Json) -> Self {
+        Self { name, shape }
+    }
+
+    /// The name a request selects this shape by.
+    pub fn name(&self) -> &'static str {
+        self.name
+    }
+
+    /// The row for one complete selected record.
+    pub fn apply(&self, record: &Json) -> Json {
+        (self.shape)(record)
+    }
+}
+
+impl PartialEq for RowShape {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+impl Eq for RowShape {}
+
+impl std::fmt::Debug for RowShape {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("RowShape").field(&self.name).finish()
+    }
 }
 
 /// Identity of one retained live-view specification, not a persistent cache key.
@@ -47,7 +91,8 @@ pub struct LiveQueryUpdate {
     /// New display order; omitted when membership and order did not change.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub keys: Option<Vec<PredicateRecordKey>>,
-    /// Changed or newly materialized rows. Unchanged projections are omitted.
+    /// Changed or newly materialized rows, shaped when the spec names a row
+    /// shape. Unchanged projections are omitted.
     pub upserts: Vec<SelectedRecord>,
     /// Field changes within already materialized rows, using response paths.
     pub patches: Vec<LiveRowPatch>,
@@ -380,7 +425,10 @@ impl<S: PredicateIndexStorage> Engine<S> {
             for key in chunk {
                 view.replace_dependencies(key, tracked.remove(key));
                 match selected.remove(key) {
-                    Some(row) => {
+                    Some(mut row) => {
+                        if let Some(shape) = spec.row {
+                            row.record = shape.apply(&row.record);
+                        }
                         if view.rows.get(key) != Some(&row) {
                             if let Some(previous) = view.rows.get(key) {
                                 let mut fields = Vec::new();
@@ -415,7 +463,7 @@ impl<S: PredicateIndexStorage> Engine<S> {
             patches.clear();
         }
         let observation_id = self
-            .observe_live_query_window(&spec, &membership, &view.dependencies)
+            .observe_live_query_window(id, &spec, &membership, &view.dependencies)
             .await?;
         let result = LiveQueryUpdate {
             registration_id: view.registration_id,
@@ -438,6 +486,7 @@ impl<S: PredicateIndexStorage> Engine<S> {
     /// Releases the in-memory view; persisted records and mutations are unaffected.
     pub fn release_live_query(&mut self, id: &str) {
         self.live_queries.views.pop(id);
+        self.forget_view_observation(id);
     }
 }
 

@@ -138,6 +138,12 @@ export function createOtelCacheTelemetrySink(): CacheTelemetrySink {
         if (event.queueWaitMs !== undefined) {
           span.setAttr('cache.queue_wait_ms', event.queueWaitMs);
         }
+        if (event.proofMs !== undefined) {
+          span.setAttr('cache.proof_ms', event.proofMs);
+        }
+        if (event.proofFailed === true) {
+          span.setAttr('cache.proof_failed', true);
+        }
         try {
           if (event.name === 'graphql_cache.slow_query') {
             const attributes = {

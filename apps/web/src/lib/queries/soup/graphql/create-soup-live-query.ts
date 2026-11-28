@@ -57,6 +57,7 @@ import type { UrqlInfiniteData } from '../../../urql-solid/types';
 import { createHiddenDeferral } from '../../visible-refresh';
 import { registerGraphqlSoupRevalidations } from './active-queries';
 import { soupCacheTelemetry } from './cache-activity-telemetry';
+import { CHANNEL_LIST_LIVE_ROW, type ChannelListRow } from './channel-list-row';
 import { createPredicateQuery } from './create-predicate-query';
 import {
   buildGraphqlEntitiesSoupInput,
@@ -81,9 +82,13 @@ import {
   soupReconciliationBaseline,
   unreconciledServerRecords,
 } from './reconciliation';
+import { serverSnapshot, shareServerRows } from './server-snapshot';
 
 /** A Soup query declaration. The source owns page cursors and cache baselines. */
 export type SoupLiveQueryInput = Omit<SoupInitialInput, 'expand'>;
+
+/** A record a Soup live query shows: selected, or a shaped channel-list row. */
+export type SoupLiveRecord = GraphqlSoupItem | ChannelListRow;
 
 export type SoupProjection = 'channel-list' | 'preview';
 
@@ -230,7 +235,7 @@ export function createSoupLiveQuery(
     baselineKeys: ReadonlySet<string>;
     displayedKeys: ReadonlySet<string>;
     withoutEmail: boolean;
-    records: GraphqlSoupItem[];
+    records: SoupLiveRecord[];
     mail?: {
       nextCursor: string | null;
       revision: CacheRevision;
@@ -457,10 +462,13 @@ export function createSoupLiveQuery(
     const soupPages = pages.filter(hasSoupPage);
     return {
       pageParams,
-      // Accessors keep raw payloads outside deep store reconciliation. Rows from
-      // live urql pages retain their field subscriptions; baselines are snapshots.
+      // Read when called, not here: the observer caches this selection by page,
+      // and a page keeps its object through in-place updates. Snapshots are
+      // immutable and keep each unchanged row's object across results.
       records: () =>
-        soupPages.flatMap<GraphqlSoupItem>((page) => page.user.soup.items),
+        soupPages.flatMap<GraphqlSoupItem>(
+          (page) => serverSnapshot(page).user.soup.items
+        ),
       baseline: () =>
         soupPages.flatMap<GraphqlSoupItem>(
           (page) => querySnapshot(page).user.soup.items
@@ -701,6 +709,10 @@ export function createSoupLiveQuery(
       select: queryOptions.projection
         ? projectionSelections[queryOptions.projection]
         : soupItemSelection,
+      row:
+        queryOptions.projection === 'channel-list'
+          ? CHANNEL_LIST_LIVE_ROW
+          : undefined,
       source: {
         filters: withoutEmail
           ? {
@@ -715,7 +727,7 @@ export function createSoupLiveQuery(
       },
     };
   });
-  const live = createPredicateQuery<GraphqlSoupItem>({
+  const live = createPredicateQuery<SoupLiveRecord>({
     host: getGraphqlSoupCacheHost,
     query: () => {
       const definition = localSource();
@@ -729,6 +741,7 @@ export function createSoupLiveQuery(
       return {
         source: { ...definition.source, baseline: definition.source.baseline },
         select: definition.select,
+        ...(definition.row ? { row: definition.row } : {}),
       };
     },
   });
@@ -764,8 +777,15 @@ export function createSoupLiveQuery(
     undefined,
     { equals: arrayEquals }
   );
+  // A patched row is a new record object: keep the set while its keys hold.
   const maintainedDisplayedKeys = createMemo(
-    () => new Set(liveRecords().map(soupItemKey))
+    () => new Set(liveRecords().map(soupItemKey)),
+    undefined,
+    {
+      equals: (previous, next) =>
+        previous.size === next.size &&
+        [...next].every((key) => previous.has(key)),
+    }
   );
   maintainedProjection = createMemo<LocalProjection | undefined>((previous) => {
     const snapshot = live.data();
@@ -1118,9 +1138,9 @@ export function createSoupLiveQuery(
   const networkIsAuthoritative = (): boolean =>
     !displayLocalProjection()?.mail?.optimistic &&
     (hasUnpersistedPages(firstPageInput()) ||
-      // Once the maintained view has caught up, keep its row stores visible.
-      // Switching from network objects on the first edit would strand readers
-      // holding the original row and replace identities during the interaction.
+      // Once the maintained view has caught up, keep its rows visible: switching
+      // back to network rows on the first edit would replace every row's object
+      // during the interaction.
       ((!maintainedQueryAvailable() ||
         live.data()?.revision !== currentCacheRevision()) &&
         !offline() &&
@@ -1129,14 +1149,19 @@ export function createSoupLiveQuery(
         networkAuthorityRevision() !== undefined &&
         networkAuthorityRevision() === currentCacheRevision()));
 
+  // Server rows as immutable values, each keeping its object while unchanged.
+  const fetchedRows = createMemo((previous: GraphqlSoupItem[] | undefined) => {
+    const records = query.data?.records();
+    return records && shareServerRows(records, previous);
+  });
   // An overlay covers only the server rows that existed when it was evaluated.
   // New server pages must render immediately, even if the next evaluation stalls
   // or fails. Preserve covered decisions and local additions, then append new
   // rows in server-page order until a successful reconciliation orders the union.
-  const displayData = createMemo((): GraphqlSoupItem[] | undefined => {
+  const displayData = createMemo((): SoupLiveRecord[] | undefined => {
     const local = displayLocalProjection();
     if (networkIsAuthoritative()) {
-      const fetched = query.data?.records();
+      const fetched = fetchedRows();
       if (!cacheFirstEntities() || !local) return fetched;
       return [
         ...new Map(
@@ -1147,7 +1172,7 @@ export function createSoupLiveQuery(
         ).values(),
       ];
     }
-    if (!local) return query.data?.records();
+    if (!local) return fetchedRows();
     // Mail merges new server evidence in its ordered through-read. Appending
     // it here would bypass membership decisions and the local cursor order.
     if (local.mail) return local.records;
@@ -1180,7 +1205,7 @@ export function createSoupLiveQuery(
             catchUp.generation === pagingGeneration &&
             query.hasNextPage &&
             !offline() &&
-            (query.data?.records().length ?? 0) < catchUp.rows
+            (fetchedRows()?.length ?? 0) < catchUp.rows
           ) {
             const pages = query.data?.pageParams.length ?? 0;
             inStepPageIndex = pages;
@@ -1238,6 +1263,12 @@ export function createSoupLiveQuery(
     return local.records.length === 0 && !offline() && !options().networkPaused;
   };
   usePending('soup.network', isLoading);
+  // One overlaid row per record and pending appearance, so an update keeps the
+  // object of every row it left alone.
+  const appearanceRows = new WeakMap<
+    object,
+    { appearance: string; row: SoupLiveRecord }
+  >();
   return {
     cacheMaintained,
     revalidationQueries,
@@ -1264,14 +1295,20 @@ export function createSoupLiveQuery(
             const appearance =
               type &&
               pendingAppearance(type, record.id, Boolean(activeQueryError()));
-            return appearance ? { ...record, appearance } : record;
+            if (!appearance) return record;
+            const key = JSON.stringify(appearance);
+            const cached = appearanceRows.get(record);
+            if (cached?.appearance === key) return cached.row;
+            const row = { ...record, appearance };
+            appearanceRows.set(record, { appearance: key, row });
+            return row;
           }),
           pendingDeleteKeys(),
           soupItemKey
         )
       );
     }),
-    fetchedRecords: () => query.data?.records() ?? [],
+    fetchedRecords: () => fetchedRows() ?? [],
     cachedMail,
     error,
     fetchError: () => activeQueryError(),
@@ -1354,7 +1391,10 @@ export function createSoupLiveQuery(
         const selected = await readSoupPage(host, {
           page: result,
           select: mailItemSelection,
-          baseline: reconcile ? definition.records : local.records,
+          // A Mail view reads selected records; only channel lists shape rows.
+          baseline: reconcile
+            ? definition.records
+            : (local.records as GraphqlSoupItem[]),
           keys,
           mailView,
         });

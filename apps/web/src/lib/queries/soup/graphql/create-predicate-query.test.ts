@@ -1,7 +1,7 @@
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { Telemetry } from '@macro-inc/observability';
 import { gql } from '@urql/core';
-import { createComputed, createRoot, createSignal } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { selectRecords } from '../../../graphql-cache/exchange/record-selection';
 import { createNoopCacheHost } from '../../../graphql-cache/host/noop-host';
@@ -127,37 +127,25 @@ const flush = async () => {
   await Promise.resolve();
 };
 
-it('updates only subscribed fields and retains row and array identity', async () => {
+it('replaces only the patched row, sharing what the patch left', async () => {
   const state = setup();
   state.requests[0].resolve(snapshot());
   await flush();
   const rows = state.query.data()!.records;
-  const first = rows[0].record;
-  let reads = 0;
-  let names = 0;
-  let others = 0;
-  createRoot((dispose) => {
-    cleanups.push(dispose);
-    createComputed(() => {
-      first.read;
-      reads++;
-    });
-    createComputed(() => {
-      first.name;
-      names++;
-    });
-    createComputed(() => {
-      rows[1].record.read;
-      others++;
-    });
-  });
+  const [first, second] = rows;
   state.change('2');
   expect(state.requests[1].args.liveQuery?.since).toBe('1');
   state.requests[1].resolve(patch());
   await flush();
-  expect(state.query.data()!.records).toBe(rows);
-  expect(state.query.data()!.records[0].record).toBe(first);
-  expect([reads, names, others]).toEqual([2, 1, 1]);
+  const next = state.query.data()!.records;
+  expect(next).not.toBe(rows);
+  expect(next[0]).not.toBe(first);
+  expect(next[0].record).toMatchObject({ id: 'a', read: true });
+  expect(first.record).toMatchObject({ read: false });
+  expect((next[0].record as { nested: object }).nested).toBe(
+    (first.record as { nested: object }).nested
+  );
+  expect(next[1]).toBe(second);
 });
 
 it('applies membership and value changes atomically', async () => {
@@ -393,4 +381,146 @@ it('skips entityFilter reads when cache-change hints prove the observation uncha
   await flush();
   state.change('6', { unchangedViews: ['obs-2'] });
   expect(state.requests).toHaveLength(4);
+});
+
+it('does not read again for a change the running read already reached', async () => {
+  const state = setup();
+  state.requests[0].resolve(snapshot());
+  await flush();
+  state.change('2');
+  expect(state.requests).toHaveLength(2);
+  // The write lands before the read runs: the reply is at its revision.
+  state.change('3');
+  state.requests[1].resolve(patch('3'));
+  await flush();
+  expect(state.query.data()?.revision).toBe('3');
+  expect(state.requests).toHaveLength(2);
+});
+
+it('reads again for a change seen during a read that fails', async () => {
+  const state = setup();
+  state.requests[0].resolve(snapshot());
+  await flush();
+  state.change('2');
+  state.change('3');
+  state.requests[1].reject(new Error('owner gone'));
+  await flush();
+  expect(state.requests).toHaveLength(3);
+  state.requests[2].resolve(patch('3'));
+  await flush();
+  expect(state.query.status()).toBe('ready');
+  expect(state.query.data()?.revision).toBe('3');
+});
+
+it('reads again when an older change arrives after a newer one during a read', async () => {
+  const state = setup();
+  state.requests[0].resolve(snapshot());
+  await flush();
+  state.change('2');
+  expect(state.requests).toHaveLength(2);
+  // A write's and a hydration's notifications can cross on their way here.
+  state.change('3');
+  state.change('2');
+  state.requests[1].resolve(patch('2'));
+  await flush();
+  expect(state.requests).toHaveLength(3);
+  state.requests[2].resolve(patch('3'));
+  await flush();
+  expect(state.query.data()?.revision).toBe('3');
+});
+
+it('waits for the tab to show before reading again after a failed read', async () => {
+  const visibility = vi.spyOn(document, 'visibilityState', 'get');
+  try {
+    const state = setup();
+    state.requests[0].resolve(snapshot());
+    await flush();
+    state.change('2');
+    visibility.mockReturnValue('hidden');
+    state.change('3');
+    state.requests[1].reject(new Error('owner gone'));
+    await flush();
+    expect(state.requests).toHaveLength(2);
+
+    visibility.mockReturnValue('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(state.requests).toHaveLength(3);
+    state.requests[2].resolve(patch('3'));
+    await flush();
+    expect(state.query.data()?.revision).toBe('3');
+  } finally {
+    visibility.mockRestore();
+  }
+});
+
+it('reads a shaped view afresh when the host stops shaping its rows', async () => {
+  // A native binary without the rows command turns `liveQueryRows` off once;
+  // its next reply is a delta against selected records, not shaped rows. A
+  // reply says whether it is shaped, whatever the host says by then.
+  let shapes = true;
+  const listeners = new Set<CacheChangeListener>();
+  const requests: Array<{
+    args: EntityFilterCacheArgs;
+    resolve: (value: EntityFilterCacheResult) => void;
+  }> = [];
+  const host: CacheHost = {
+    ...createNoopCacheHost(),
+    get liveQueryRows() {
+      return shapes;
+    },
+    onCacheChanged: (cb) => {
+      listeners.add(cb);
+      return () => {
+        listeners.delete(cb);
+      };
+    },
+    entityFilter: (args) =>
+      args.liveQuery?.release
+        ? Promise.resolve({ kind: 'unsupported' })
+        : new Promise((resolve) => requests.push({ args, resolve })),
+  };
+  const query = createRoot((dispose) => {
+    cleanups.push(dispose);
+    return createPredicateQuery({
+      host: () => host,
+      query: () => ({
+        ...request,
+        row: {
+          name: 'channel-list' as const,
+          toRow: (record: object, shaped: boolean) =>
+            ({ ...record, shaped }) as unknown as Row,
+        },
+      }),
+    });
+  });
+  const shapedOf = () =>
+    query
+      .data()
+      ?.records.map(
+        (row) => (row.record as unknown as { shaped: boolean }).shaped
+      );
+  expect(requests[0].args.liveQuery?.row).toBe('channel-list');
+  // The host turns off while the shaped read is in flight.
+  shapes = false;
+  requests[0].resolve({ ...snapshot(), row: 'channel-list' });
+  await flush();
+  expect(shapedOf()).toEqual([true, true]);
+  shapes = true;
+
+  listeners.forEach((cb) => cb(revision('2')));
+  await flush();
+  expect(requests).toHaveLength(2);
+  expect(requests[1].args.liveQuery?.since).toBe('1');
+  shapes = false;
+  requests[1].resolve(patch());
+  await flush();
+
+  expect(requests).toHaveLength(3);
+  expect(requests[2].args.liveQuery?.since).toBeUndefined();
+  expect(requests[2].args.liveQuery?.row).toBeUndefined();
+  // The delta was not applied over rows of the other shape.
+  expect(shapedOf()).toEqual([true, true]);
+  requests[2].resolve({ ...snapshot(), revision: revision('2') });
+  await flush();
+  expect(shapedOf()).toEqual([false, false]);
 });

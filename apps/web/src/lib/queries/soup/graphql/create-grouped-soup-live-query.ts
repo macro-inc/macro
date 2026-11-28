@@ -37,6 +37,7 @@ import {
 } from './grouped-local-projection';
 import { createGroupedPageEvidence } from './grouped-page-evidence';
 import { soupItemKey, soupReconciliationBaseline } from './reconciliation';
+import { serverSnapshot, shareServerRows } from './server-snapshot';
 
 /** Paging capabilities; rows for all loaded groups are owned by the parent source. */
 export type GroupedSoupPaging = {
@@ -360,15 +361,20 @@ export function createGroupedSoupLiveQuery(
   );
   onCleanup(resetContinuations);
 
-  const serverPages = createMemo(() => {
+  // Immutable snapshots, which keep each unchanged row's object across
+  // results, so the projection maps only the rows that changed.
+  const serverPages = createMemo((previous: GroupSoupQuery[] | undefined) => {
     const initial = currentInitial();
     if (!initial) return [];
-    return [
+    const pages = [
       initial,
       ...[...continuations().values()].flatMap(
         (continuation) => continuation.query.data?.pages() ?? []
       ),
-    ].filter((page) => page.user.id === initial.user.id);
+    ]
+      .filter((page) => page.user.id === initial.user.id)
+      .map(serverSnapshot);
+    return shareServerRows(pages, previous);
   });
   const baseline = createMemo(() => {
     const initial = initialEvidence.data();
@@ -513,9 +519,12 @@ export function createGroupedSoupLiveQuery(
       const error = refreshErrors().values().next().value;
       if (error) throw error;
     },
-    data: createMemo((): GroupSoupQuery | undefined => {
+    data: createMemo((previous: GroupSoupQuery | undefined) => {
       const initial = currentInitial();
-      if (!initial) return query.data?.data;
+      if (!initial) {
+        const data = query.data && serverSnapshot(query.data.data);
+        return data && shareServerRows(data, previous);
+      }
       return {
         ...initial,
         user: {

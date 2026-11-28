@@ -153,6 +153,12 @@ export interface CacheHost {
   readonly authority?: CacheAuthorityHost;
   /** The host understands engine-maintained fragment query requests. */
   readonly liveQueries?: boolean;
+  /**
+   * The host shapes the live-view rows a request names (`liveQuery.row`).
+   * May turn false once, when a native binary turns out not to have them;
+   * a reply read after that was not shaped.
+   */
+  readonly liveQueryRows?: boolean;
   /** Stable id of this context; used to namespace operation ids. */
   readonly clientId: string;
   /** True for the storage-free fallback when browser cache APIs are unsupported,

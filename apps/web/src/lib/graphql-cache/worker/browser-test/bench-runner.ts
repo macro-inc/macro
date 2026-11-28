@@ -38,6 +38,7 @@ const { values: args } = parseArgs({
     port: { type: 'string', default: '4189' },
     headed: { type: 'boolean', default: false },
     'skip-contended': { type: 'boolean', default: false },
+    channels: { type: 'boolean', default: false },
   },
 });
 if (!args.data) throw new Error('--data is required');
@@ -69,6 +70,16 @@ function lines(path: string): Buffer[] {
 }
 
 const seedOps = lines(`${dataDir}/seed.ndjson`);
+// `--channels`: the inputs `native_channel_batches_bench` dumps with
+// `CACHE_BENCH_CHANNEL_DUMP=<data>/channels`.
+const channelDir = `${dataDir}/channels`;
+const channelSets: Record<string, Buffer[]> = args.channels
+  ? {
+      'channels-by-ids': lines(`${channelDir}/by-ids.ndjson`),
+      'channels-writes': lines(`${channelDir}/writes.ndjson`),
+      'channels-requests': [readFileSync(`${channelDir}/requests.json`)],
+    }
+  : {};
 const foregroundOps = lines(`${dataDir}/foreground.ndjson`);
 const meta = JSON.parse(readFileSync(`${dataDir}/meta.json`, 'utf8')) as {
   tier: string;
@@ -260,7 +271,12 @@ async function runBench(
   await context.route(`${origin}/bench-data/**`, async (route) => {
     const url = new URL(route.request().url());
     const [, , set, index] = url.pathname.split('/');
-    const source = set === 'seed' ? seedOps : foregroundOps;
+    const source =
+      set === 'seed'
+        ? seedOps
+        : set === 'foreground'
+          ? foregroundOps
+          : (channelSets[set ?? ''] ?? []);
     const body = source[Number(index)];
     if (!body) return route.fulfill({ status: 404 });
     return route.fulfill({
@@ -321,6 +337,10 @@ async function runBench(
   const lifecycle: unknown[] = [];
   const telemetry: unknown[] = [];
   let counts: unknown;
+  if (args.channels) {
+    await runChannels(context, result);
+    return;
+  }
   for (let run = 0; run < runs; run++) {
     const { page, loadMs } = await openPage(context);
     const opened = await call<{
@@ -393,6 +413,38 @@ async function runBench(
   log('backgroundHydrate', result.backgroundHydrate);
   log('counts', counts);
   const out = args.out ?? `${dataDir}/results-${Date.now()}.json`;
+  writeFileSync(out, JSON.stringify(result, null, 2));
+  process.stderr.write(`wrote ${out}\n`);
+}
+
+/** `--channels`: each run opens a page and replays the channel pass. */
+async function runChannels(
+  context: Awaited<ReturnType<typeof chromium.launchPersistentContext>>,
+  result: Record<string, unknown>
+) {
+  const steps: Record<string, number[]> = {};
+  const counts: Record<string, number[]> = {};
+  const views = channelSets['channels-by-ids']?.length ?? 0;
+  const writes = channelSets['channels-writes']?.length ?? 0;
+  for (let run = 0; run < runs; run++) {
+    const { page } = await openPage(context);
+    await call(page, 'open', SCOPE);
+    const pass = await call<{
+      steps: Step[];
+      counts: Record<string, number[]>;
+    }>(page, 'channelPass', views, writes);
+    collect(steps, pass.steps);
+    for (const [name, values] of Object.entries(pass.counts))
+      for (const value of values) append(counts, name, value);
+    await call(page, 'close');
+    await page.close();
+    process.stderr.write(`channel run ${run + 1}/${runs} done\n`);
+  }
+  result.channels = summarize(steps);
+  result.channelCounts = counts;
+  log('channels', result.channels);
+  log('channelCounts', counts);
+  const out = args.out ?? `${dataDir}/channels-${Date.now()}.json`;
   writeFileSync(out, JSON.stringify(result, null, 2));
   process.stderr.write(`wrote ${out}\n`);
 }

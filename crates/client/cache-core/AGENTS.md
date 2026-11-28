@@ -19,7 +19,7 @@ GraphQL response shape for callers. A concrete `Storage` impl (e.g.
 
 - `src/engine.rs`: the `CacheEngine` — the crate's entry point, owns queued
   mutations, watched queries, and optimistic resolution. `with_response_records` composes application sidecars from already-normalized updates into the response transaction. `normalize_network` normalizes a response before its write (schema and parsed documents only, no storage) so a host derives its projections from the same records; `write_normalized_query` / `hydrate_normalized_query(_in_scope)` take that result instead of normalizing again, and hydration never installs its dependencies.
-- `src/engine/window_observation.rs`: bounded immutable predicate-window proofs
+- `src/engine/window_observation.rs`: bounded immutable predicate-window proofs, one per live view (a read replaces its view's last observation; release drops it),
   over the complete change journal, selected dependencies and catalog input fields;
   unknown evidence never suppresses invalidation.
 - `src/normalize.rs` / `src/denormalize.rs`: GraphQL response ↔ normalized record
@@ -73,6 +73,11 @@ identifies one retained specification, not the caller's reusable view id.
 `resume_live_query` hydrates durable optimistic state before token lookup;
 the engine owner serializes token lookup and the read. Replacement, release,
 eviction and reset make it miss. A miss requires full registration and never reuses another specification.
+
+A specification can name a row shape (`LiveQuerySpec.row`). The view then
+retains, diffs and sends the shaped row: shaping runs before the diff, so a
+patch names a row field. The shape is part of the specification, so a request
+with another shape (or none) is a new specification and the view resets.
 
 ## Checks
 

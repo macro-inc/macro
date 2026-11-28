@@ -56,6 +56,7 @@ import {
   parseStorageGeneration,
   validateCacheSearchArgs,
   validateRecordSelectionKeys,
+  withLiveRowShape,
 } from '../protocol';
 import { emitNativeSchemaInit, type NativeSchemaInit } from '../telemetry-otel';
 import { CacheWriteSupersededError, isNativeWriteSuperseded } from './errors';
@@ -125,6 +126,14 @@ export interface TauriHostOptions {
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 const ENTITY_FILTER_COMMAND = 'graphql_cache_entity_filter';
 const ENTITY_FILTER_RESUME_COMMAND = 'graphql_cache_entity_filter_resume';
+// The same read for pages that name a row shape; absent on older binaries.
+const ENTITY_FILTER_ROWS_COMMAND = 'graphql_cache_entity_filter_rows';
+/** The request for a binary without row shapes: the same view, selected records. */
+function withoutRow(args: EntityFilterCacheArgs): EntityFilterCacheArgs {
+  if (args.liveQuery?.row === undefined) return args;
+  const { row: _row, ...liveQuery } = args.liveQuery;
+  return { ...args, liveQuery };
+}
 // Match the engine view bound. Retention is only a request-size optimization.
 export const LIVE_QUERY_CAPACITY = 256;
 const WATCH_COMMAND = 'graphql_cache_watch';
@@ -149,6 +158,7 @@ const TIMED_COMMANDS: ReadonlySet<string> = new Set([
   'graphql_cache_read_records_by_keys',
   'graphql_cache_search',
   ENTITY_FILTER_COMMAND,
+  ENTITY_FILTER_ROWS_COMMAND,
   ENTITY_FILTER_RESUME_COMMAND,
   CALENDAR_RANGE_COMMAND,
   PEOPLE_CONTEXT_COMMAND,
@@ -238,6 +248,8 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   // no longer receive these OTA bundles. OTA updates cannot add Rust commands.
   // Keep this per host so a new native binary is probed again after restarting.
   let entityFilterUnavailable = false;
+  // Binaries before live-view row shapes send selected records instead.
+  let entityFilterRowsUnavailable = false;
   // Binaries before incremental watches still serve full reads.
   let watchUnavailable = false;
   let peopleUnavailable = false;
@@ -250,6 +262,60 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   let calendarUnavailable = false;
   const isMissingCommand = (error: unknown, command: string): boolean =>
     error instanceof Error && error.message === `Command ${command} not found`;
+
+  // One live-view or plain entity-filter read through `command`, resuming a
+  // registered view when the binary still holds it.
+  const readEntityFilter = async (
+    args: EntityFilterCacheArgs,
+    command: 'graphql_cache_entity_filter' | 'graphql_cache_entity_filter_rows'
+  ): Promise<EntityFilterCacheResult> => {
+    const live = args.liveQuery;
+    if (live?.release) liveQueries.delete(live.id);
+    let registration:
+      | { descriptor: string; registrationId?: string }
+      | undefined;
+    if (live && !live.release) {
+      const descriptor = JSON.stringify({
+        ...args,
+        liveQuery: { ...live, since: undefined },
+      });
+      registration = liveQueries.get(live.id);
+      if (registration?.descriptor !== descriptor)
+        registration = { descriptor };
+      liveQueries.delete(live.id);
+      liveQueries.set(live.id, registration);
+      if (liveQueries.size > LIVE_QUERY_CAPACITY) {
+        const oldest = liveQueries.keys().next().value;
+        if (oldest !== undefined) liveQueries.delete(oldest);
+      }
+      if (registration.registrationId) {
+        const registered = registration;
+        const registrationId = registered.registrationId;
+        const update = await request<LiveQueryUpdate | null>(
+          ENTITY_FILTER_RESUME_COMMAND,
+          {
+            id: live.id,
+            registrationId,
+            since: live.since,
+          }
+        );
+        if (update !== null) return withLiveRowShape(update, live.row);
+      }
+    }
+    const result = await request<EntityFilterCacheResult>(command, {
+      request: args,
+    });
+    // A source change, release, reset or disposal may have happened in flight.
+    if (
+      live &&
+      registration &&
+      liveQueries.get(live.id) === registration &&
+      result.kind === 'live-query'
+    ) {
+      registration.registrationId = result.registrationId;
+    }
+    return withLiveRowShape(result, live?.row);
+  };
 
   // Revisions are monotonic for the native engine's lifetime. This also gates
   // repeated no-op hydrations on older binaries without revisionAdvanced.
@@ -649,6 +715,9 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       },
     },
     liveQueries: true,
+    get liveQueryRows() {
+      return !entityFilterRowsUnavailable;
+    },
     people: createPeopleCache({
       async snapshot(args, traceparent) {
         await ready;
@@ -848,69 +917,28 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     },
 
     async entityFilter(
-      args: EntityFilterCacheArgs
+      requested: EntityFilterCacheArgs
     ): Promise<EntityFilterCacheResult> {
       await ready;
       if (entityFilterUnavailable) return { kind: 'unsupported' };
+      const shaped = requested.liveQuery?.row !== undefined;
+      if (shaped && !entityFilterRowsUnavailable) {
+        try {
+          return await readEntityFilter(requested, ENTITY_FILTER_ROWS_COMMAND);
+        } catch (error) {
+          if (!isMissingCommand(error, ENTITY_FILTER_ROWS_COMMAND)) throw error;
+          // Read selected records from here on: `liveQueryRows` turns false,
+          // so the page shapes this reply and the ones after it.
+          entityFilterRowsUnavailable = true;
+        }
+      }
+      const args = withoutRow(requested);
       try {
-        const live = args.liveQuery;
-        if (live?.release) liveQueries.delete(live.id);
-        let registration:
-          | { descriptor: string; registrationId?: string }
-          | undefined;
-        if (live && !live.release) {
-          const descriptor = JSON.stringify({
-            ...args,
-            liveQuery: { ...live, since: undefined },
-          });
-          registration = liveQueries.get(live.id);
-          if (registration?.descriptor !== descriptor)
-            registration = { descriptor };
-          liveQueries.delete(live.id);
-          liveQueries.set(live.id, registration);
-          if (liveQueries.size > LIVE_QUERY_CAPACITY) {
-            const oldest = liveQueries.keys().next().value;
-            if (oldest !== undefined) liveQueries.delete(oldest);
-          }
-          if (registration.registrationId) {
-            const registered = registration;
-            const registrationId = registered.registrationId;
-            const update = await request<LiveQueryUpdate | null>(
-              ENTITY_FILTER_RESUME_COMMAND,
-              {
-                id: live.id,
-                registrationId,
-                since: live.since,
-              }
-            );
-            if (update !== null) return update;
-          }
-        }
-        const result = await request<EntityFilterCacheResult>(
-          ENTITY_FILTER_COMMAND,
-          {
-            request: args,
-          }
-        );
-        // A source change, release, reset or disposal may have happened in flight.
-        if (
-          live &&
-          registration &&
-          liveQueries.get(live.id) === registration &&
-          result.kind === 'live-query'
-        ) {
-          registration.registrationId = result.registrationId;
-        }
-        return result;
+        return await readEntityFilter(args, ENTITY_FILTER_COMMAND);
       } catch (error) {
         // Match Tauri's exact unknown-command response, not storage, validation,
         // ACL or timeout failures. Preserve the pre-OTA behavior on old binaries.
-        if (
-          !(error instanceof Error) ||
-          error.message !== `Command ${ENTITY_FILTER_COMMAND} not found`
-        ) {
-          throw error;
-        }
+        if (!isMissingCommand(error, ENTITY_FILTER_COMMAND)) throw error;
         entityFilterUnavailable = true;
         return { kind: 'unsupported' };
       }

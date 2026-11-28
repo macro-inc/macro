@@ -156,6 +156,9 @@ export type SearchCachePage = {
   nextCursor: SearchCursor | null;
 };
 
+/** The live-view row names a host with `liveQueryRows` shapes. */
+export const CHANNEL_LIST_ROW_NAME = 'channel-list';
+
 /** Maximum server-page membership evidence in one reconciliation request. */
 export const MAX_RECONCILIATION_BASELINE = 5_000;
 
@@ -168,6 +171,11 @@ export type EntityFilterCacheArgs = {
     fragmentName: string;
     since?: CacheRevision;
     release?: boolean;
+    /**
+     * A row shape the engine sends instead of the selected record
+     * (`live_row_shape`); only on hosts with `liveQueryRows`.
+     */
+    row?: typeof CHANNEL_LIST_ROW_NAME;
   };
   filters: Record<string, unknown>;
   sortMethod: 'CREATED_AT' | 'UPDATED_AT' | 'VIEWED_AT' | 'VIEWED_UPDATED';
@@ -240,7 +248,22 @@ export type LiveQueryUpdate = {
   removed: string[];
   retainedKeys: string[];
   optimistic: boolean;
+  /**
+   * The row shape the records are in, when the engine shaped them. The page's
+   * host sets it from the request it sent; no engine sends it.
+   */
+  row?: typeof CHANNEL_LIST_ROW_NAME;
 };
+
+/** Marks a live-view reply to a request that named a row shape as shaped. */
+export function withLiveRowShape<T extends EntityFilterCacheResult>(
+  result: T,
+  row: typeof CHANNEL_LIST_ROW_NAME | undefined
+): T {
+  return row !== undefined && result.kind === 'live-query'
+    ? { ...result, row }
+    : result;
+}
 
 /** Unit of a calendar span: UTC milliseconds, or local days since 1970-01-01. */
 export type CalendarSpanKind = 'timed' | 'allDay';
@@ -694,6 +717,10 @@ export type WriteResult = CacheChangeHints & {
    */
   unwritableResponse?: string;
   mutationUuid?: string;
+  /** How long proving `unchangedViews` took, on browser writes that ran the proof. */
+  proofMs?: number;
+  /** Set on a browser write whose proof failed: every live view reads again. */
+  proofFailed?: true;
   /** Effective-view revision installed by this logical mutation. */
   revision: CacheRevision;
   /** Whether this write advanced `revision`. */
