@@ -36,6 +36,8 @@ export const CACHE_TELEMETRY_EVENT_NAMES = [
   'graphql_cache.linear_memory',
   'graphql_cache.queue_diagnostics',
   'graphql_cache.wal_checkpoint',
+  // A failed flush of the WAL that cache COMMITs appended to.
+  'graphql_cache.wal_flush',
   // The engine's COMMITs and storage writes and flushes since its last report.
   'graphql_cache.storage_io',
   'graphql_cache.navigation',

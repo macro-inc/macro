@@ -653,7 +653,8 @@ Search Datadog logs for `service:web-app "graphql_cache.slow_query"`:
 - `cache.storage.writes`, `cache.storage.write_bytes`, `cache.storage.write_ms`,
   `cache.storage.flushes`, `cache.storage.flush_ms`: the OPFS writes and flushes
   made during the statement. A slow `COMMIT` splits into its WAL append (writes)
-  and its flush; any other statement shows the page writes it caused.
+  and, for a queue write, its flush; any other statement shows the page writes
+  it caused.
 
 Parameters, results, raw SQL, and user identity are not exported. Logging uses
 an anonymous span context. A throwing JS telemetry callback cannot change query
@@ -706,6 +707,28 @@ completed OPFS writes and flushes (`cache.storage.*`) since its last report.
 The OPFS counts cover every file of the worker, so
 `cache.storage.flushes / cache.storage.commits` is the worker's flushes per
 COMMIT, checkpoint and close flushes included.
+
+## WAL flushes
+
+The browser's connection runs `synchronous = NORMAL` (`DEFER_COMMIT_FLUSH` in
+turso-opfs), so a COMMIT appends to the WAL without flushing it. A closed or
+crashed tab, or a killed browser, keeps every COMMIT; an OS crash or power
+loss can drop the newest ones and leaves the database as of an earlier
+COMMIT, which opens whole.
+
+- Queue writes flush before they answer: an enqueue (one transaction with its
+  first claim), claim, defer, complete and discard, the queue reset and the
+  salvage import. A failed flush leaves the write's outcome unknown, and the
+  cache needs a physical reset (`TransactionOutcomeUncertain`).
+- Cache writes hold data the server sends again. After a request that can
+  write, the engine worker calls `flushWal` once nothing has run for 250 ms,
+  or before the next request once the first unflushed write is 2 s old, so up
+  to 2 s of cache writes are exposed to a power loss. A drain cancels a flush
+  not yet started: closing the engine on release, handoff or close flushes
+  and copies the WAL itself. A wipe deletes the file.
+- A failed deferred flush is reported as `graphql_cache.wal_flush` with its
+  error class. A lost OPFS handle resets the cache at the next request;
+  otherwise the flush after the next write tries again.
 
 ## Slow request telemetry
 
