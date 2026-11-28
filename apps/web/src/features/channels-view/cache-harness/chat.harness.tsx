@@ -15,7 +15,6 @@ import type * as ListEntity from '@queries/channel/list-entity';
 import type * as TransformUtils from '@queries/soup/transform-utils';
 import type * as StorageClient from '@service-storage/client';
 import type * as GraphqlSoup from '@service-storage/graphql-soup';
-import type { AnyVariables, DocumentInput } from '@urql/core';
 import { ok } from 'neverthrow';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createChatFixture } from './fixture';
@@ -100,7 +99,10 @@ vi.mock('../components/rail/hooks/useChannelCalls', () => ({
 }));
 
 // The app's Soup module reads its own client and host; point it at the
-// harness's. Mapping goes through the counted mapper.
+// harness's. Its fetch and hydration run over the harness's client
+// (`queryGraphqlSoupData`, `hydrateGraphqlSoupWith`), and mapping goes through
+// the counted mapper: the module's own calls to `mapGraphqlSoupItem` are not
+// mockable.
 vi.mock('@service-storage/graphql-soup', async (importOriginal) => {
   const original = await importOriginal<typeof GraphqlSoup>();
   const { countMapper, harnessState } = await import('./harness-state');
@@ -115,6 +117,7 @@ vi.mock('@service-storage/graphql-soup', async (importOriginal) => {
     countMapper('mapGraphqlSoupItem', [args[0]], () =>
       original.mapGraphqlSoupItem(...args)
     );
+  // `mapGraphqlSoupPage`, over the counted item mapper.
   const mapGraphqlSoupPage: typeof original.mapGraphqlSoupPage = (data) => ({
     items: data.user.soup.items
       .map((item) => mapGraphqlSoupItem(item))
@@ -125,26 +128,21 @@ vi.mock('@service-storage/graphql-soup', async (importOriginal) => {
     document,
     variables,
     options = {}
-  ) => {
-    const requestPolicy = options.requestPolicy ?? 'cache-and-network';
-    const result = await client()
-      .query(document, variables, {
-        requestPolicy,
-        ...(options.signal ? { fetchOptions: { signal: options.signal } } : {}),
-      })
-      .toPromise();
-    if (result.error) {
-      if (options.allowOfflineFallback !== false && result.error.networkError) {
-        const cached = await client()
-          .query(document, variables, { requestPolicy: 'cache-only' })
-          .toPromise();
-        if (cached.data) return mapGraphqlSoupPage(cached.data);
-      }
-      throw result.error;
-    }
-    if (!result.data) throw new Error('GraphQL Soup query returned no data');
-    return mapGraphqlSoupPage(result.data);
-  };
+  ) =>
+    mapGraphqlSoupPage(
+      await original.queryGraphqlSoupData(
+        client(),
+        true,
+        document,
+        variables,
+        options
+      )
+    );
+  const hydrateGraphqlSoup: typeof original.hydrateGraphqlSoup = (
+    document,
+    variables,
+    options
+  ) => original.hydrateGraphqlSoupWith(client(), document, variables, options);
   return {
     ...original,
     getGraphqlSoupClient: client,
@@ -163,15 +161,7 @@ vi.mock('@service-storage/graphql-soup', async (importOriginal) => {
     mapGraphqlSoupItem,
     mapGraphqlSoupPage,
     fetchGraphqlSoup,
-    hydrateGraphqlSoup: (
-      document: DocumentInput<unknown, AnyVariables>,
-      variables: AnyVariables,
-      options?: { signal?: AbortSignal }
-    ) => {
-      const hydrate = harnessState().hydrate;
-      if (!hydrate) throw new Error('The harness has no cache to hydrate');
-      return hydrate(document, variables, options);
-    },
+    hydrateGraphqlSoup,
     fetchGraphqlGroupedSoup: () => {
       throw new Error('Grouped Soup is not on the Chat sidebar path');
     },

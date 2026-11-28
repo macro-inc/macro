@@ -6,7 +6,7 @@
  * the same state.
  */
 import type { CacheHost } from '@graphql-cache/host/types';
-import type { AnyVariables, Client, DocumentInput } from '@urql/core';
+import type { Client } from '@urql/core';
 import { getListener } from 'solid-js';
 import { $RAW } from 'solid-js/store';
 import type { ChatFixture } from './fixture';
@@ -18,12 +18,6 @@ export type ChatHarnessState = {
   /** The fetch-only client (`getGraphqlSoupNetworkClient`). */
   networkClient?: Client;
   host?: CacheHost;
-  /** `hydrateGraphqlSoup` over `client` (see `hydrateThroughHarness`). */
-  hydrate?: (
-    document: DocumentInput<unknown, AnyVariables>,
-    variables: AnyVariables,
-    options?: { signal?: AbortSignal }
-  ) => Promise<{ nextCursor: string | null; entityIds?: string[] }>;
   /** Each counted mapper's work, by name. */
   mappers: Record<string, MapperCounter>;
   /** Feature flags the code under test read, by key, with the answer. */

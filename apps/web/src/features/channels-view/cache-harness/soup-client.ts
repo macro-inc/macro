@@ -9,13 +9,9 @@ import {
   captureTraceParentExchange,
   traceParentExchange,
 } from '@app/lib/urql-solid/trace-parent-exchange';
-import { firstOrAborted } from '@core/util/abort-signal';
 import { entityFromArgument } from '@graphql-cache/exchange/entity-resolvers';
 import { networkRevalidationExchange } from '@graphql-cache/exchange/network-revalidation-exchange';
-import {
-  HYDRATE_ONLY_CONTEXT_KEY,
-  normalizedCacheExchange,
-} from '@graphql-cache/exchange/normalized-cache-exchange';
+import { normalizedCacheExchange } from '@graphql-cache/exchange/normalized-cache-exchange';
 import { optimisticResolversExchange } from '@graphql-cache/exchange/optimistic-resolvers';
 import {
   createCacheSessionExchange,
@@ -26,21 +22,12 @@ import type { CacheHost } from '@graphql-cache/host/types';
 import { delegateChannelNotificationRefresh } from '@queries/channel/notification-refresh';
 import { soupOptimisticResolvers } from '@queries/optimistic-resolvers';
 import { channelMembershipReceiptExchange } from '@service-storage/channel-membership';
-import type {
-  SoupBackfillResult,
-  SoupQuery,
-} from '@service-storage/graphql/generated/graphql';
+import type { SoupQuery } from '@service-storage/graphql/generated/graphql';
 import { isActivityUpdatesSubscription } from '@service-storage/graphql-activity-updates';
 import { notificationReceiptExchange } from '@service-storage/graphql-notification-receipt';
 import { publishNotificationPatch } from '@service-storage/graphql-soup-websocket';
-import {
-  type AnyVariables,
-  type Client,
-  createClient,
-  type DocumentInput,
-} from '@urql/core';
+import { type Client, createClient } from '@urql/core';
 import { type DocumentNode, visit } from 'graphql';
-import { filter, pipe } from 'wonka';
 
 /** `graphql-soup.ts`'s private `stripGraphqlSoupClientDirectives`. */
 function stripClientDirectives(document: DocumentNode): DocumentNode {
@@ -104,48 +91,5 @@ export function createHarnessClients(
     client,
     networkClient,
     dispose: () => lifetime.abort(),
-  };
-}
-
-/**
- * `hydrateGraphqlSoup` over the harness client. The app's own calls its
- * module's private client, which a mock cannot replace, so the harness's
- * `graphql-soup` mock serves this instead; keep it in step with the original.
- */
-export async function hydrateThroughHarness<Variables extends AnyVariables>(
-  client: Client,
-  document: DocumentInput<unknown, Variables>,
-  variables: Variables,
-  options: { signal?: AbortSignal } = {}
-): Promise<{ nextCursor: string | null; entityIds?: string[] }> {
-  const settled = await firstOrAborted(
-    pipe(
-      client.query<SoupBackfillResult, Variables>(
-        document as DocumentInput<SoupBackfillResult, Variables>,
-        variables,
-        { requestPolicy: 'network-only', [HYDRATE_ONLY_CONTEXT_KEY]: true }
-      ),
-      filter((result) => !result.stale && !result.hasNext)
-    ),
-    options.signal
-  );
-  if (settled.kind === 'aborted') {
-    options.signal?.throwIfAborted();
-    throw new Error('GraphQL Soup hydration was cancelled');
-  }
-  if (settled.kind === 'ended')
-    throw new Error('GraphQL Soup hydration ended without an answer');
-  const result = settled.value;
-  if (result.error) throw result.error;
-  if (!result.data)
-    throw new Error('GraphQL Soup hydration returned no cursor projection');
-  const soup = result.data.user.soup as typeof result.data.user.soup & {
-    scopeIds?: Array<{ id: string }>;
-  };
-  return {
-    nextCursor: soup.nextCursor,
-    ...(soup.scopeIds
-      ? { entityIds: soup.scopeIds.map((item) => item.id) }
-      : {}),
   };
 }

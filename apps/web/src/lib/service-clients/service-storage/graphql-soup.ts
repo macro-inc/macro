@@ -2893,6 +2893,20 @@ export async function hydrateGraphqlSoup<
   if (!getGraphqlCacheHost()) {
     throw new Error('GraphQL cache hydration requires an active cache');
   }
+  return await hydrateGraphqlSoupWith(client, document, variables, options);
+}
+
+/** `hydrateGraphqlSoup` over `client`, a cached Soup client. The Chat cache
+ * harness hydrates through its own client with it. */
+export async function hydrateGraphqlSoupWith<
+  Data extends GraphqlSoupPageData,
+  Variables extends AnyVariables,
+>(
+  client: Client,
+  document: DocumentInput<Data, Variables>,
+  variables: Variables,
+  options: Pick<FetchGraphqlSoupOptions, 'signal'> = {}
+): Promise<GraphqlSoupHydrationPage> {
   // An abort leaves the query's result source, which is what ends urql's
   // request: urql replaces a `fetchOptions.signal` with its own.
   const settled = await firstOrAborted(
@@ -2938,8 +2952,30 @@ export async function fetchGraphqlSoup<
   variables: Variables,
   options: FetchGraphqlSoupOptions = {}
 ): Promise<SoupPage> {
-  const client = getGraphqlSoupClient();
-  const useCache = graphqlCacheEnabled();
+  return mapGraphqlSoupPage(
+    await queryGraphqlSoupData(
+      getGraphqlSoupClient(),
+      graphqlCacheEnabled(),
+      document,
+      variables,
+      options
+    )
+  );
+}
+
+/** What `fetchGraphqlSoup` maps: the query's data over `client`, falling back
+ * to the cached page on a network failure when `useCache`. The Chat cache
+ * harness reads through its own client with it. */
+export async function queryGraphqlSoupData<
+  Data extends GraphqlSoupPageData,
+  Variables extends AnyVariables,
+>(
+  client: Client,
+  useCache: boolean,
+  document: DocumentInput<Data, Variables>,
+  variables: Variables,
+  options: FetchGraphqlSoupOptions = {}
+): Promise<Data> {
   const requestPolicy =
     options.requestPolicy ?? (useCache ? 'cache-and-network' : undefined);
   const result = await client
@@ -2961,7 +2997,7 @@ export async function fetchGraphqlSoup<
           requestPolicy: 'cache-only',
         })
         .toPromise();
-      if (cached.data) return mapGraphqlSoupPage(cached.data);
+      if (cached.data) return cached.data;
     }
     throw result.error;
   }
@@ -2970,7 +3006,7 @@ export async function fetchGraphqlSoup<
     throw new Error('GraphQL Soup query returned no data');
   }
 
-  return mapGraphqlSoupPage(result.data);
+  return result.data;
 }
 
 /** Fetch grouped Soup bins through the GraphQL endpoint. */

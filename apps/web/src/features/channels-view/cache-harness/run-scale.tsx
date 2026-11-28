@@ -62,7 +62,7 @@ import {
   ChatDataPathMount,
   type SectionRange,
 } from './mount';
-import { createHarnessClients, hydrateThroughHarness } from './soup-client';
+import { createHarnessClients } from './soup-client';
 
 /** Both loads open the same cache scope, as one browser profile does. */
 const CACHE_SCOPE = 'chat-cache-harness';
@@ -179,8 +179,6 @@ async function openGraph(
   state.client = clients.client;
   state.networkClient = clients.networkClient;
   state.host = host;
-  state.hydrate = (document, variables, options) =>
-    hydrateThroughHarness(clients.client, document, variables, options);
   queryClient.setQueryData(authKeys.userInfo.queryKey, {
     id: VIEWER_ID,
     authenticated: true,
@@ -199,7 +197,6 @@ async function openGraph(
       state.client = undefined;
       state.networkClient = undefined;
       state.host = undefined;
-      state.hydrate = undefined;
       await runtime.dispose();
     },
   };
