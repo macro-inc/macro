@@ -22128,24 +22128,7 @@ export const CodeToolsDescription = z.object({
 export const ExecuteCode = z
   .object({
     execution_id: z.union([z.string(), z.null()]).optional(),
-    acting_as: z.any().superRefine((x, ctx) => {
-      const schemas = [z.literal('requester'), z.literal('owner')];
-      const errors = schemas.reduce<z.ZodError[]>(
-        (errors, schema) =>
-          ((result) => (result.error ? [...errors, result.error] : errors))(
-            schema.safeParse(x)
-          ),
-        []
-      );
-      if (schemas.length - errors.length !== 1) {
-        ctx.addIssue({
-          path: ctx.path,
-          code: 'invalid_union',
-          unionErrors: errors,
-          message: 'Invalid input: Should pass single schema',
-        });
-      }
-    }),
+    acting_as: z.enum(['requester', 'owner']),
     turn_id: z.string().uuid(),
     source: z.string(),
     timeout_ms: z.number().int().gte(0).optional(),

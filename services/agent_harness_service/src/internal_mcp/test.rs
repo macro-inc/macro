@@ -219,6 +219,7 @@ async fn rpc_host(
             params["name"].as_str(),
             Some("DescribeCodeTools" | "ReadCodeDocs")
         )
+        && params["arguments"].get("acting_as").is_none()
     {
         params["arguments"]["acting_as"] = serde_json::json!("owner");
     }
@@ -503,6 +504,7 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
     }
 }
 
+mod acting_as;
 mod code_mode;
 mod trace;
 

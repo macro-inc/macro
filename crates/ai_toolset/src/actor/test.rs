@@ -23,3 +23,72 @@ fn routing_schema_preserves_required_arguments_and_is_idempotent() {
     assert_eq!(schema["properties"]["query"], json!({"type":"string"}));
     assert_eq!(schema["additionalProperties"], false);
 }
+
+#[derive(schemars::JsonSchema)]
+#[expect(dead_code, reason = "only its schema is read")]
+struct Input {
+    acting_as: ToolActor,
+}
+
+#[test]
+fn derived_and_injected_schemas_are_the_same_plain_enum() {
+    let derived = schemars::schema_for!(Input).to_value();
+    let mut injected = json!({"type":"object"}).as_object().unwrap().clone();
+    add_actor_schema(&mut injected);
+    assert_eq!(
+        derived["properties"]["acting_as"],
+        injected["properties"]["acting_as"]
+    );
+    assert_eq!(
+        derived["properties"]["acting_as"]["enum"],
+        json!(["requester", "owner"])
+    );
+    assert!(derived.get("$defs").is_none(), "{derived}");
+}
+
+#[test]
+fn only_a_role_deserializes_and_a_refusal_never_repeats_the_value() {
+    assert_eq!(
+        serde_json::from_value::<ToolActor>(json!("requester")).unwrap(),
+        ToolActor::Requester
+    );
+    assert_eq!(
+        serde_json::from_value::<ToolActor>(json!("owner")).unwrap(),
+        ToolActor::Owner
+    );
+    for refused in [
+        json!("macro|owner@example.com"),
+        json!("owner@example.com"),
+        json!("Owner"),
+        json!(15551234567_u64),
+        json!(-15551234567_i64),
+        json!(1555.5),
+        json!(true),
+        json!(null),
+        json!(["owner@example.com"]),
+        json!({"id": "owner@example.com"}),
+    ] {
+        let message = serde_json::from_value::<ToolActor>(refused.clone())
+            .unwrap_err()
+            .to_string();
+        assert!(
+            message.contains("expected requester or owner (a role, never a person id)"),
+            "{refused}: {message}"
+        );
+        assert!(!message.contains("example.com"), "{refused}: {message}");
+        assert!(!message.contains("1555"), "{refused}: {message}");
+    }
+    // Every role serializes to a name the schema lists and reads back as itself.
+    let schema = schemars::schema_for!(Input).to_value();
+    for actor in [ToolActor::Requester, ToolActor::Owner] {
+        let name = serde_json::to_value(actor).unwrap();
+        assert!(
+            schema["properties"]["acting_as"]["enum"]
+                .as_array()
+                .unwrap()
+                .contains(&name),
+            "{name}"
+        );
+        assert_eq!(serde_json::from_value::<ToolActor>(name).unwrap(), actor);
+    }
+}

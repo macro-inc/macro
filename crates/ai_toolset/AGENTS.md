@@ -21,7 +21,7 @@ deliberately stable and widely depended on.
   generation for both the model-facing JSON schema and frontend TS types.
 - `src/annotations.rs`: required MCP tool annotations (every tool must set
   these).
-- `src/actor.rs`: session-only `acting_as` schema injection, required selection, and trusted owner/requester resolution; public tool inputs remain unchanged.
+- `src/actor.rs`: session-only `acting_as` schema injection, required selection, and trusted owner/requester resolution; public tool inputs remain unchanged. Keep `ToolActor`'s hand-written `JsonSchema` (ExecuteCode's) the same plain enum `add_actor_schema` injects; never derive it. Its refusal names the roles and never echoes the value.
 - `src/context.rs`: `RequestContext`/`ServiceContext` and the `FromRef`
   extraction pattern.
 

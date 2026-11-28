@@ -4954,10 +4954,6 @@ export type SelectionStatus =
  */
 export type ExecutionId = string;
 /**
- * Which authenticated participant's access a tool call requests.
- */
-export type ToolActor = 'requester' | 'owner';
-/**
  * The recorded outcome of a program.
  */
 export type ExecutionStatus =
@@ -17210,7 +17206,10 @@ export interface ExecuteCode {
    * Optional; usually omit it. The server assigns an ID and the receipt reports it as executionId. Pass a new random UUID only when a repeated write would be harmful: if the reply is lost, resending the same execution_id with identical source returns the saved receipt instead of running again. Never use an example or placeholder UUID or an ID from another session; an ID already taken runs under a new ID.
    */
   execution_id?: ExecutionId | null;
-  acting_as: ToolActor;
+  /**
+   * Whose account authenticates every SDK operation in this execution: the role "requester" or "owner", never a person's id. Prefer requester.
+   */
+  acting_as: 'requester' | 'owner';
   /**
    * Copy the current server-issued turn_id from the prompt's execution context.
    * Never reuse an ID from another turn or discover a replacement for a stale call.
