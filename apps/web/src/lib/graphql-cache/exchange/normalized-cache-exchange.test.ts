@@ -6639,6 +6639,9 @@ describe('normalizedCacheExchange', () => {
           'graphql.mutation.cache_write',
           'graphql.mutation.cache_effects',
         ]);
+        expect(normalizedCacheResultMetadata(results[0]!)).toMatchObject({
+          cacheEffectsApplied: true,
+        });
       });
 
       it('marks the phase when a cache write fails, and still answers', async () => {
@@ -6661,6 +6664,22 @@ describe('normalizedCacheExchange', () => {
         expect(spans[0]?.attributes).toMatchObject({
           'cache.effects_applied': false,
           'cache.failure': expect.any(String),
+        });
+      });
+
+      it('tells the caller when the rows of a mutation did not reach the cache', async () => {
+        vi.spyOn(host, 'writeQuery').mockRejectedValue(new Error('engine'));
+        const { ops, results } = harness(host, (op) =>
+          op.kind === 'mutation' ? { data } : {}
+        );
+
+        ops.next(makeRenameMutationOp(23));
+        await tick();
+
+        expect(results[0]?.data).toBe(data);
+        expect(normalizedCacheResultMetadata(results[0]!)).toMatchObject({
+          source: 'live-network',
+          cacheEffectsApplied: false,
         });
       });
 
