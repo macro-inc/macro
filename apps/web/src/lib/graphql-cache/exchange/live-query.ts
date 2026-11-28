@@ -5,6 +5,7 @@ import { supportsStoreReconciliation } from '../../urql-solid/reactive-selection
 import { queryDelta } from './query-patches';
 import {
   isIdentityPath,
+  isObject,
   type QueryShape,
   RECONCILE_KEY,
   shapeAtPath,
@@ -48,9 +49,6 @@ export function liveQueryData(result: OperationResult): unknown {
     result.data
   );
 }
-
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === 'object' && !Array.isArray(value);
 
 /** A query keeps its own selected shape, aliases, and stable reactive objects. */
 export class LiveQuery {

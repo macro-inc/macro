@@ -73,10 +73,10 @@ export function isIdentityPath(
     : last === 'id' || last === '__typename';
 }
 
-/** Clone selected data for store ownership and attach alias-aware entity keys. */
-const isObject = (value: unknown): value is Record<string, unknown> =>
+export const isObject = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
+/** Clone selected data for store ownership and attach alias-aware entity keys. */
 function entityKey(source: Record<string, unknown>, shape?: QueryShape) {
   const selected = (name: string): unknown => {
     if (!shape) return source[name];
@@ -104,7 +104,7 @@ function entityKey(source: Record<string, unknown>, shape?: QueryShape) {
 }
 
 /** Compare immutable selected values before reconciliation mutates owned stores. */
-function equalQueryValue(value: unknown, previous: unknown): boolean {
+export function equalQueryValue(value: unknown, previous: unknown): boolean {
   if (Object.is(value, previous)) return true;
   if (
     value === null ||
@@ -221,6 +221,27 @@ export function storeValue(
   return copy;
 }
 
+// A shared row stays the previous value of the next result, so its key is read
+// once per object and shape rather than once per result.
+const sharedKeys = new WeakMap<
+  object,
+  { shape: QueryShape | undefined; key: string }
+>();
+function listItemKey(item: unknown, shape?: QueryShape): string | undefined {
+  if (!isObject(item)) return undefined;
+  const known = sharedKeys.get(item);
+  if (known !== undefined && known.shape === shape) return known.key;
+  const key = entityKey(item, shape);
+  if (typeof key !== 'string') return undefined;
+  sharedKeys.set(item, { shape, key });
+  return key;
+}
+
+const isPlainObject = (value: object): boolean => {
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+};
+
 /**
  * `next`, taking from `previous` every subtree whose selected content is
  * unchanged, so a reader can compare rows by identity across results. Keyed
@@ -230,19 +251,6 @@ export function storeValue(
  * from it (a patched result keeps every path it did not touch) takes its
  * shared value without a walk. It allocates only along changes.
  */
-// A shared row stays the previous value of the next result, so its key is read
-// once per object rather than once per result.
-const sharedKeys = new WeakMap<object, string>();
-function listItemKey(item: unknown, shape?: QueryShape): string | undefined {
-  if (!isObject(item)) return undefined;
-  const known = sharedKeys.get(item);
-  if (known !== undefined) return known;
-  const key = entityKey(item, shape);
-  if (typeof key !== 'string') return undefined;
-  sharedKeys.set(item, key);
-  return key;
-}
-
 export function shareQueryValue(
   next: unknown,
   previous: unknown,
@@ -256,7 +264,8 @@ export function shareQueryValue(
     typeof next !== 'object' ||
     previous === null ||
     typeof previous !== 'object' ||
-    Array.isArray(next) !== Array.isArray(previous)
+    Array.isArray(next) !== Array.isArray(previous) ||
+    (!Array.isArray(next) && !(isPlainObject(next) && isPlainObject(previous)))
   )
     return next;
   if (Array.isArray(next)) {
@@ -330,8 +339,9 @@ export function shareQueryValue(
 }
 
 /**
- * `previous` with each patch shared in at its path: only the containers along
- * a patch path are copied, so a patch costs its path, not the result.
+ * `previous` with each patch shared in at its path: each container along a
+ * patch path is copied at most once per call, so the patches cost their
+ * paths, not the result times the patch count.
  * `previousSource` is the result `previous` mirrors; it speeds up a subtree
  * only where no earlier patch in the list has changed `previous`. Returns
  * undefined when a path leaves `previous`, for a full share instead.
@@ -346,6 +356,8 @@ export function shareQueryPatches(
   shape?: QueryShape
 ): unknown {
   let shared = previous;
+  // Containers this call copied: later patches write into them in place.
+  const fresh = new WeakSet<object>();
   for (const { path, value } of patches) {
     const next = shareAtPath(
       shared,
@@ -354,7 +366,8 @@ export function shareQueryPatches(
       path,
       0,
       value,
-      shape
+      shape,
+      fresh
     );
     if (next === undefined) return undefined;
     shared = next.value;
@@ -369,7 +382,8 @@ function shareAtPath(
   path: readonly (string | number)[],
   index: number,
   value: unknown,
-  shape: QueryShape | undefined
+  shape: QueryShape | undefined,
+  fresh: WeakSet<object>
 ): { value: unknown } | undefined {
   if (index === path.length)
     return {
@@ -386,7 +400,9 @@ function shareAtPath(
   if (!Object.hasOwn(container, part)) return undefined;
   const child = shareAtPath(
     container[part],
-    shared === original && original !== null && typeof original === 'object'
+    // The node `previous` has on this path: the source hint holds only where
+    // the shared node is still that one.
+    original !== null && typeof original === 'object'
       ? (original as Record<string | number, unknown>)[part]
       : undefined,
     source !== null && typeof source === 'object'
@@ -395,14 +411,19 @@ function shareAtPath(
     path,
     index + 1,
     value,
-    typeof part === 'string' ? shape?.get(part)?.shape : shape
+    typeof part === 'string' ? shape?.get(part)?.shape : shape,
+    fresh
   );
   if (child === undefined) return undefined;
   if (Object.is(child.value, container[part])) return { value: shared };
-  if (Array.isArray(shared)) {
-    const copy = shared.slice();
-    copy[part as number] = child.value;
-    return { value: copy };
+  if (fresh.has(container)) {
+    container[part] = child.value;
+    return { value: shared };
   }
-  return { value: { ...container, [part]: child.value } };
+  const copy = (
+    Array.isArray(shared) ? shared.slice() : { ...container }
+  ) as Record<string | number, unknown>;
+  copy[part] = child.value;
+  fresh.add(copy);
+  return { value: copy };
 }
