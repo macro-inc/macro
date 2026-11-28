@@ -36,6 +36,7 @@ mod cargo_deny;
 mod cargo_deny_advisories;
 mod cargo_workspace_dependency_check;
 mod channels_e2e;
+mod chat_scale;
 mod check_deploy_nix_sources;
 mod check_generated;
 mod check_node_modules_nix;
@@ -188,6 +189,11 @@ pub(crate) const WORKFLOWS: &[WorkflowFile] = &[
         slug: "channels_e2e",
         file_name: "channels_e2e.yml",
         render_yaml: || render_gh_workflow(channels_e2e::channels_e2e)(),
+    },
+    WorkflowFile {
+        slug: "chat_scale",
+        file_name: "chat_scale.yml",
+        render_yaml: || render_gh_workflow(chat_scale::chat_scale)(),
     },
     WorkflowFile {
         slug: "test_macrod_update",

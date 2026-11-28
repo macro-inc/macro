@@ -160,6 +160,15 @@ export default defineConfig({
         },
       },
       {
+        // The Chat scale tier's limits; the tier itself is `*.spec.ts` and
+        // runs under Playwright.
+        extends: false,
+        test: {
+          include: ['tests/chat-scale/**/*.test.ts'],
+          name: 'chat-scale-limits',
+        },
+      },
+      {
         // The coverage ledger of the email browser suite; the suite's own
         // tests are `*.spec.ts` and run under Playwright.
         extends: false,

@@ -1,0 +1,981 @@
+/**
+ * A deterministic Chat account at production scale, served by the Chat scale
+ * tier's server (`backend.ts`): channels with their
+ * participants, latest messages, notifications, favorites and sections, and a
+ * root value that answers the Soup reads the Chat data path makes, counting
+ * the rows each read asks for and returns.
+ *
+ * The mix follows the "chat" tier of the cache-pressure benchmark: member
+ * channels of about 75 participants each. One seed gives one account, and 2N
+ * is N plus older channels (`ERA_CHANNELS`), so the two differ only in what
+ * the account holds beyond its first pages. Its sections grow with it: they
+ * hold nearly every channel a section can hold, at every size, as an account
+ * that has organized thousands of channels does.
+ */
+import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
+import type { ChannelLabelRule } from '@service-storage/generated/schemas/channelLabelRule';
+import type { ChannelLabelsList } from '@service-storage/generated/schemas/channelLabelsList';
+import { match } from 'ts-pattern';
+
+export const VIEWER_ID = 'user-1';
+/** The viewer's team, which owns the team channels and team sections. */
+export const TEAM_ID = '0190b6a0-0000-7000-8000-000000000001';
+/** The team's owner, one of the account's people; the viewer is a member,
+ * as most people in a team this size are, so admin-only surfaces stay shut. */
+export const TEAM_OWNER_ID = personId(0);
+const ORGANIZATION_ID = '1';
+const PEOPLE = 400;
+const PARTICIPANTS_PER_CHANNEL = 75;
+const FAVORITES = 12;
+/** Favorites from the account's older half, which no first page shows; the
+ * rest come from its first 1,750 channels. */
+const OLD_FAVORITES = 6;
+/** The share of the channels each kind of section can hold that one holds:
+ * team sections hold team channels, and the viewer's own sections public
+ * ones (`canLabelChannel`; a name rule holds every private one). Direct
+ * messages go in no section. */
+const SECTION_COVERAGE = 0.92;
+/** Team sections by their share of the team channels sections hold: one
+ * large section, then smaller ones. */
+const TEAM_SECTION_WEIGHTS = [0.4, 0.2, 0.15, 0.1, 0.1, 0.05] as const;
+/** The viewer's hand-picked sections by their share of the public channels
+ * sections hold. */
+const PERSONAL_SECTION_WEIGHTS = [0.5, 0.3, 0.2] as const;
+/** The viewer's name-rule section matches every private channel
+ * (`private-channel-<n>`), about a sixth of the account. */
+const NAME_RULE = 'private-channel';
+/** The server's page size when a request names none (GraphQL Soup's
+ * `limit.unwrap_or(20)`), and the bounds it clamps a requested one to
+ * (Soup's `limit.clamp(1, 500)`). */
+const DEFAULT_LIMIT = 20;
+const MIN_LIMIT = 1;
+const MAX_LIMIT = 500;
+/** The most recent channels a first page can show: Soup's largest page. */
+export const FIRST_PAGE_CHANNELS = MAX_LIMIT;
+/** The least of the channels a section can hold that the sections must hold
+ * before a run measures them (`sectionCoverage`). */
+export const MIN_SECTION_COVERAGE = 0.9;
+/** The least share of the channels sections and favorites name that must be
+ * outside the account's newest 500, so the rail has channels to resolve by
+ * ID. */
+export const MIN_OUTSIDE_FIRST_PAGES = 0.5;
+const U16_MAX = 65_535;
+/** The channel literals the fixture matches; any other is a fault. */
+const LITERAL_KEYS = new Set([
+  'channelId',
+  'channelType',
+  'importance',
+  'isParticipant',
+  'notificationState',
+  'teamId',
+  'organizationId',
+]);
+/** The fixture's clock: every timestamp is before it. */
+export const FIXTURE_NOW = Date.parse('2026-11-20T12:00:00.000Z');
+const TWO_YEARS_MS = 2 * 365 * 24 * 60 * 60 * 1000;
+/** Channels come in eras of this many: each era's activity spans the two
+ * years before the next one's, so the first 3,500 channels are the same, and
+ * the most recent, at every size. 2N adds only an older tail that no first
+ * page shows, and a count that differs between N and 2N grows with the
+ * account rather than with what is on screen. */
+const ERA_CHANNELS = 3_500;
+
+type FixtureChannelType = 'public' | 'private' | 'direct_message' | 'team';
+
+type FixtureNotification = {
+  id: string;
+  eventType: 'channel_message_send' | 'channel_mention';
+  state: 'UNSEEN' | 'SEEN';
+  createdAt: string;
+  senderId: string;
+  messageId: string;
+  topLevel: boolean;
+};
+
+type FixtureMessage = {
+  messageId: string;
+  senderId: string;
+  content: string;
+  createdAt: string;
+};
+
+type FixtureChannel = {
+  id: string;
+  name: string;
+  channelType: FixtureChannelType;
+  ownerId: string;
+  teamId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  viewedAt: string | null;
+  interactedAt: string | null;
+  participantIds: string[];
+  latestMessage: FixtureMessage | null;
+  notifications: FixtureNotification[];
+};
+
+/** What the fixture's resolvers served, counted per read. */
+export type FixtureReads = {
+  /** Root `user` field calls by field name (`soup`, `soupEntity`, ...). */
+  fields: Record<string, number>;
+  /** Rows the reads asked for: page limits, plus 1 per entity read. */
+  rowsRequested: number;
+  /** Channel ids named by `channelId` literals (by-id reads). */
+  idsRequested: number;
+  /** Rows the reads returned. */
+  rowsReturned: number;
+  /** Filter shapes the fixture does not evaluate; a faithful run has none. */
+  unsupported: string[];
+};
+
+/** The Chat state the viewer saved (`macro:channels:view-state:v1`, in
+ * `features/channels-view/persistence.ts`). */
+export type SavedChatView = {
+  version: 1;
+  tab: 'browse';
+  expandedGroups: {
+    favorites: boolean;
+    team_channels: boolean;
+    channels: boolean;
+    direct_messages: boolean;
+  };
+  collapsedLabels: string[];
+};
+
+/** One channel of `/dss/channels/preview`'s answer. */
+export type ChannelPreview =
+  | {
+      type: 'access';
+      channel_id: string;
+      channel_name: string;
+      channel_type: FixtureChannelType;
+    }
+  | { type: 'does_not_exist'; channel_id: string };
+
+export type ChatFixture = {
+  channels: readonly FixtureChannel[];
+  favoriteChannelIds: readonly string[];
+  labels(scope: string | undefined): ChannelLabelsList;
+  /** Favorites, Direct messages and the smallest team section open, every
+   * other section collapsed, as a viewer with this many sections keeps
+   * them. */
+  savedView: SavedChatView;
+  /** The root value for `createFixtureNetwork`. */
+  rootValue(): unknown;
+  /** Reads served so far; `readsSince` subtracts a snapshot. */
+  reads(): FixtureReads;
+  readsSince(mark: FixtureReads): FixtureReads;
+  /** `/dss/channels/preview`'s answer for these channels, counted with the
+   * Soup reads: each ID is a row asked for, and each channel found a row
+   * returned. */
+  channelPreviews(channelIds: readonly string[]): ChannelPreview[];
+  /** A new top-level message from another member: the channel's latest
+   * message, update time and an unseen notification change, as the server's
+   * record would after the send. Returns the frames the server pushes to the
+   * viewer for it, by subscription. */
+  deliverMessage(channelId: string, at: number): MessageFrames;
+};
+
+/** Root values for the subscriptions a delivered message reaches: the
+ * channel's hydrated record (`SoupUpdates`) and the viewer's new notification
+ * (`NotificationUpdates`). */
+type MessageFrames = {
+  SoupUpdates: { soupUpdates: unknown[] };
+  NotificationUpdates: { notificationUpdates: unknown };
+};
+
+/** mulberry32: small, fast and the same on every run. */
+function createRandom(seed: number) {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296;
+  };
+}
+
+function uuidFor(prefix: number, index: number): string {
+  const tail = index.toString(16).padStart(12, '0');
+  return `00000000-0000-4000-8${prefix.toString(16).padStart(3, '0')}-${tail}`;
+}
+
+function personId(index: number): string {
+  return `person-${String(index).padStart(4, '0')}`;
+}
+
+function personName(id: string): string {
+  return `Person ${id.slice('person-'.length)}`;
+}
+
+function iso(ms: number): string {
+  return new Date(ms).toISOString();
+}
+
+function pickParticipants(random: () => number, count: number): string[] {
+  const chosen = new Set<string>();
+  while (chosen.size < count)
+    chosen.add(personId(1 + Math.floor(random() * PEOPLE)));
+  return [VIEWER_ID, ...chosen];
+}
+
+function channelTypeFor(roll: number): FixtureChannelType {
+  if (roll < 0.1) return 'team';
+  if (roll < 0.45) return 'public';
+  if (roll < 0.6) return 'private';
+  return 'direct_message';
+}
+
+function createChannel(random: () => number, index: number): FixtureChannel {
+  const id = uuidFor(1, index);
+  const channelType = channelTypeFor(random());
+  const groupDm = channelType === 'direct_message' && random() < 0.2;
+  const participantCount = match(channelType)
+    .with('direct_message', () => (groupDm ? 2 + Math.floor(random() * 6) : 1))
+    .otherwise(() => PARTICIPANTS_PER_CHANNEL - 1);
+  const participantIds = pickParticipants(random, participantCount);
+  const others = participantIds.slice(1);
+  const eraEnd = FIXTURE_NOW - Math.floor(index / ERA_CHANNELS) * TWO_YEARS_MS;
+  const createdAt = eraEnd - TWO_YEARS_MS * random();
+  const active = random() < 0.85;
+  const lastActivity = active
+    ? createdAt + (eraEnd - createdAt) * random()
+    : createdAt;
+  const latestMessage: FixtureMessage | null = active
+    ? {
+        messageId: uuidFor(2, index),
+        senderId: others[Math.floor(random() * others.length)] ?? VIEWER_ID,
+        content: `Message ${index}`,
+        createdAt: iso(lastActivity),
+      }
+    : null;
+  const viewed = random() < 0.6;
+  const interacted = random() < 0.4;
+  const notifications: FixtureNotification[] = [];
+  const addNotification = (
+    eventType: FixtureNotification['eventType'],
+    state: FixtureNotification['state']
+  ) => {
+    notifications.push({
+      id: uuidFor(3, index * 4 + notifications.length),
+      eventType,
+      state,
+      createdAt: iso(lastActivity),
+      senderId: latestMessage?.senderId ?? VIEWER_ID,
+      messageId: latestMessage?.messageId ?? uuidFor(2, index),
+      // The latest message is top level, so every notification of it is,
+      // mentions included, as the server's `topLevelMessagesOnly` reads it.
+      topLevel: true,
+    });
+  };
+  if (latestMessage) {
+    if (random() < 0.08) addNotification('channel_message_send', 'UNSEEN');
+    if (random() < 0.02) addNotification('channel_mention', 'UNSEEN');
+    if (random() < 0.3) addNotification('channel_message_send', 'SEEN');
+  }
+  const name = match(channelType)
+    .with('direct_message', () => others.slice(0, 3).map(personName).join(', '))
+    .otherwise((type) => `${type}-channel-${index}`);
+  return {
+    id,
+    name,
+    channelType,
+    ownerId:
+      channelType === 'direct_message' ? VIEWER_ID : (others[0] ?? VIEWER_ID),
+    teamId: channelType === 'team' ? TEAM_ID : null,
+    createdAt: iso(createdAt),
+    updatedAt: iso(lastActivity),
+    viewedAt: viewed
+      ? iso(lastActivity + (eraEnd - lastActivity) * random())
+      : null,
+    interactedAt: interacted ? iso(lastActivity) : null,
+    participantIds,
+    latestMessage,
+    notifications,
+  };
+}
+
+type ChannelLiteral = {
+  channelId?: string;
+  channelType?: string;
+  importance?: boolean;
+  isParticipant?: boolean;
+  notificationState?: string;
+  teamId?: string;
+  organizationId?: number;
+};
+
+/** A filter's truth for one row, as SQL has it: comparing a NULL column is
+ * unknown (`null`), `not` keeps it unknown, and only a true filter matches. */
+type Truth = boolean | null;
+
+type ChannelExpr = {
+  and?: { left: ChannelExpr; right: ChannelExpr };
+  or?: { left: ChannelExpr; right: ChannelExpr };
+  not?: ChannelExpr;
+  literal?: ChannelLiteral;
+};
+
+type SoupInitial = {
+  limit?: number | null;
+  sortMethod?: string | null;
+  sortDirection?: string | null;
+  filters?: Record<string, unknown> | null;
+};
+
+type SoupInput = {
+  initial?: SoupInitial | null;
+  continuation?: { cursor: string } | null;
+};
+
+type Page = { ids: readonly string[]; offset: number; limit: number };
+
+function literalIds(expr: ChannelExpr | undefined): number {
+  if (!expr) return 0;
+  return (
+    (expr.literal?.channelId ? 1 : 0) +
+    literalIds(expr.and?.left) +
+    literalIds(expr.and?.right) +
+    literalIds(expr.or?.left) +
+    literalIds(expr.or?.right) +
+    literalIds(expr.not)
+  );
+}
+
+function timestamp(value: string | null): number {
+  return value === null ? Number.NEGATIVE_INFINITY : Date.parse(value);
+}
+
+function sortKey(channel: FixtureChannel, method: string): number {
+  return match(method)
+    .with('CREATED_AT', () => timestamp(channel.createdAt))
+    .with('VIEWED_AT', () => timestamp(channel.viewedAt))
+    .with('VIEWED_UPDATED', () =>
+      timestamp(channel.viewedAt ?? channel.updatedAt)
+    )
+    .otherwise(() => timestamp(channel.updatedAt));
+}
+
+/** The index whose running total of `weights` first passes `roll`, a draw
+ * in [0, 1). */
+function weightedIndex(weights: readonly number[], roll: number): number {
+  let total = 0;
+  for (const [index, weight] of weights.entries()) {
+    total += weight;
+    if (roll < total) return index;
+  }
+  return weights.length - 1;
+}
+
+/** A section as `/channel-sections` answers it: hand-picked, or a name rule
+ * whose matches the server has resolved. */
+function sectionLabel(section: {
+  scope: 'team' | 'personal';
+  index: number;
+  channelIds: string[];
+  rule?: ChannelLabelRule;
+}): ChannelLabel {
+  const { scope, index, channelIds, rule } = section;
+  return {
+    id: uuidFor(scope === 'team' ? 4 : 5, index),
+    name: `${scope} section ${index + 1}`,
+    channelCount: channelIds.length,
+    channelIds,
+    explicitChannelIds: rule ? [] : channelIds,
+    ...(rule ? { rule } : {}),
+    createdAt: iso(FIXTURE_NOW - TWO_YEARS_MS / 2),
+    updatedAt: iso(FIXTURE_NOW - TWO_YEARS_MS / 4),
+    sortOrder: index,
+    teamId: scope === 'team' ? TEAM_ID : undefined,
+  };
+}
+
+/** How much of the account the sections name. */
+export type SectionCoverage = {
+  /** Channels a section can hold: team, public and private ones. */
+  holdable: number;
+  /** Of those, the ones a section holds. */
+  held: number;
+  /** Channels a section or favorite names, which the rail resolves. */
+  referenced: number;
+  /** Of those, the ones outside the `FIRST_PAGE_CHANNELS` most recently
+   * updated. */
+  outsideFirstPages: number;
+};
+
+export function sectionCoverage(fixture: ChatFixture): SectionCoverage {
+  const held = new Set(
+    (['team', 'personal'] as const).flatMap((scope) =>
+      fixture.labels(scope).labels.flatMap((label) => label.channelIds)
+    )
+  );
+  const referenced = new Set([...held, ...fixture.favoriteChannelIds]);
+  const firstPages = new Set(
+    [...fixture.channels]
+      .sort((a, b) => timestamp(b.updatedAt) - timestamp(a.updatedAt))
+      .slice(0, FIRST_PAGE_CHANNELS)
+      .map((channel) => channel.id)
+  );
+  return {
+    holdable: fixture.channels.filter(
+      (channel) => channel.channelType !== 'direct_message'
+    ).length,
+    held: held.size,
+    referenced: referenced.size,
+    outsideFirstPages: [...referenced].filter((id) => !firstPages.has(id))
+      .length,
+  };
+}
+
+/** Builds the account for `channelCount` channels. */
+export function createChatFixture(
+  channelCount: number,
+  seed = 0x5eed
+): ChatFixture {
+  const random = createRandom(seed);
+  const channels = Array.from({ length: channelCount }, (_, index) =>
+    createChannel(random, index)
+  );
+  const byId = new Map(channels.map((channel) => [channel.id, channel]));
+  // Every channel takes the same two draws, whatever its type, in index
+  // order: the channels N and 2N share sit in the same sections, and 2N's
+  // sections are N's plus its older channels.
+  const memberRandom = createRandom(seed ^ 0xa11);
+  const teamMembers = TEAM_SECTION_WEIGHTS.map((): string[] => []);
+  const personalMembers = PERSONAL_SECTION_WEIGHTS.map((): string[] => []);
+  const ruleMembers: string[] = [];
+  for (const channel of channels) {
+    const held = memberRandom() < SECTION_COVERAGE;
+    const roll = memberRandom();
+    if (channel.name.includes(NAME_RULE)) ruleMembers.push(channel.id);
+    if (!held) continue;
+    if (channel.channelType === 'team')
+      teamMembers[weightedIndex(TEAM_SECTION_WEIGHTS, roll)]?.push(channel.id);
+    if (channel.channelType === 'public')
+      personalMembers[weightedIndex(PERSONAL_SECTION_WEIGHTS, roll)]?.push(
+        channel.id
+      );
+  }
+  const teamLabels = teamMembers.map((channelIds, index) =>
+    sectionLabel({ scope: 'team', index, channelIds })
+  );
+  const personalLabels = [
+    ...personalMembers.map((channelIds, index) =>
+      sectionLabel({ scope: 'personal', index, channelIds })
+    ),
+    sectionLabel({
+      scope: 'personal',
+      index: personalMembers.length,
+      channelIds: ruleMembers,
+      rule: { attribute: 'name', contains: NAME_RULE },
+    }),
+  ];
+  const openLabel = teamLabels.at(-1)?.id;
+  const savedView: SavedChatView = {
+    version: 1,
+    tab: 'browse',
+    expandedGroups: {
+      favorites: true,
+      team_channels: false,
+      channels: false,
+      direct_messages: true,
+    },
+    collapsedLabels: [...teamLabels, ...personalLabels]
+      .map((label) => label.id)
+      .filter((id) => id !== openLabel),
+  };
+
+  // Recent favorites from the first 1,750 channels, old ones from the
+  // account's older half, each from its own stream.
+  const favoriteRandom = createRandom(seed ^ 0xfa7);
+  const favorites = new Set<string>();
+  const drawFavorites = (from: number, to: number, count: number) => {
+    const target = Math.min(favorites.size + count, channels.length);
+    for (let tries = 0; favorites.size < target && tries < 1_000; tries += 1) {
+      const channel =
+        channels[from + Math.floor(favoriteRandom() * (to - from))];
+      if (channel) favorites.add(channel.id);
+    }
+  };
+  drawFavorites(0, Math.min(channels.length, 1_750), FAVORITES - OLD_FAVORITES);
+  drawFavorites(
+    Math.floor(channels.length / 2),
+    channels.length,
+    OLD_FAVORITES
+  );
+  const favoriteChannelIds = [...favorites];
+  const favoriteSet = new Set(favoriteChannelIds);
+
+  const reads: FixtureReads = {
+    fields: {},
+    rowsRequested: 0,
+    idsRequested: 0,
+    rowsReturned: 0,
+    unsupported: [],
+  };
+  const countField = (name: string) => {
+    reads.fields[name] = (reads.fields[name] ?? 0) + 1;
+  };
+  const unsupported = (shape: string) => {
+    if (!reads.unsupported.includes(shape)) reads.unsupported.push(shape);
+  };
+
+  const matchesLiteral = (
+    channel: FixtureChannel,
+    literal: ChannelLiteral
+  ): Truth => {
+    // `checkExpr` faults a literal with other than one key.
+    const [key] = Object.keys(literal);
+    return (
+      match(key)
+        .with('channelId', () => channel.id === literal.channelId)
+        .with(
+          'channelType',
+          () => channel.channelType === literal.channelType?.toLowerCase()
+        )
+        .with(
+          'importance',
+          () =>
+            (channel.interactedAt !== null || channel.viewedAt !== null) ===
+            literal.importance
+        )
+        .with('isParticipant', () => literal.isParticipant === true)
+        .with('notificationState', () =>
+          channel.notifications.some(
+            (notification) => notification.state === literal.notificationState
+          )
+        )
+        .with('teamId', () =>
+          channel.teamId === null ? null : channel.teamId === literal.teamId
+        )
+        // Only team channels have an organization (`channelObject`).
+        .with('organizationId', () =>
+          channel.channelType === 'team'
+            ? String(literal.organizationId) === ORGANIZATION_ID
+            : null
+        )
+        .otherwise(() => {
+          unsupported(`channel literal ${key}`);
+          return false;
+        })
+    );
+  };
+  const matchesExpr = (channel: FixtureChannel, expr: ChannelExpr): Truth => {
+    if (expr.and) {
+      const left = matchesExpr(channel, expr.and.left);
+      const right = matchesExpr(channel, expr.and.right);
+      if (left === false || right === false) return false;
+      return left === null || right === null ? null : true;
+    }
+    if (expr.or) {
+      const left = matchesExpr(channel, expr.or.left);
+      const right = matchesExpr(channel, expr.or.right);
+      if (left === true || right === true) return true;
+      return left === null || right === null ? null : false;
+    }
+    if (expr.not) {
+      const inner = matchesExpr(channel, expr.not);
+      return inner === null ? null : !inner;
+    }
+    if (expr.literal) return matchesLiteral(channel, expr.literal);
+    unsupported('empty channel expression');
+    return false;
+  };
+  // A request's whole expression is checked once, before any row is
+  // matched, so a literal the fixture cannot read is a fault even when the
+  // account has no row to match it against.
+  const checkExpr = (expr: ChannelExpr): void => {
+    const branches = [
+      expr.and?.left,
+      expr.and?.right,
+      expr.or?.left,
+      expr.or?.right,
+      expr.not,
+    ].filter((branch): branch is ChannelExpr => Boolean(branch));
+    for (const branch of branches) checkExpr(branch);
+    if (expr.literal) {
+      const keys = Object.keys(expr.literal);
+      if (keys.length !== 1) unsupported(`literal with keys ${keys}`);
+      for (const key of keys)
+        if (!LITERAL_KEYS.has(key)) unsupported(`channel literal ${key}`);
+    }
+    if (branches.length === 0 && !expr.literal)
+      unsupported('empty channel expression');
+  };
+
+  const cursors = new Map<string, Page>();
+  let deliveries = 0;
+  const serve = (page: Page) => {
+    const ids = page.ids.slice(page.offset, page.offset + page.limit);
+    const next = page.offset + page.limit;
+    let nextCursor: string | null = null;
+    // As the server pages (`models_pagination`'s cursor): a full page gets a
+    // cursor even when no row follows, so a client that reads to the end
+    // asks for one more, empty page.
+    if (ids.length >= page.limit) {
+      nextCursor = `cursor-${cursors.size + 1}`;
+      cursors.set(nextCursor, { ...page, offset: next });
+    }
+    reads.rowsRequested += page.limit;
+    reads.rowsReturned += ids.length;
+    return {
+      items: ids.flatMap((id) => {
+        const channel = byId.get(id);
+        return channel ? [channelObject(channel)] : [];
+      }),
+      nextCursor,
+    };
+  };
+  const soup = ({ input }: { input: SoupInput }) => {
+    countField('soup');
+    if (input.continuation) {
+      const page = cursors.get(input.continuation.cursor);
+      if (!page) {
+        unsupported('unknown cursor');
+        return { items: [], nextCursor: null };
+      }
+      return serve(page);
+    }
+    const initial = input.initial ?? {};
+    const filters = initial.filters ?? undefined;
+    // An explicit null is an absent filter, as on the server.
+    const channelFilter = (filters?.channelFilter ?? undefined) as
+      | ChannelExpr
+      | undefined;
+    // Filters on other entity types restrict only those types, and the
+    // account holds none; anything else is a shape the fixture does not read.
+    for (const key of Object.keys(filters ?? {}))
+      if (!key.endsWith('Filter')) unsupported(`filter ${key}`);
+    reads.idsRequested += literalIds(channelFilter);
+    if (channelFilter !== undefined) checkExpr(channelFilter);
+    // Soup's own default when a query names no sort.
+    const method = initial.sortMethod ?? 'VIEWED_AT';
+    const direction = initial.sortDirection === 'ASC' ? 1 : -1;
+    // Soup reads an absent type filter as every item of that type.
+    const matched = channels.filter(
+      (channel) =>
+        channelFilter === undefined ||
+        matchesExpr(channel, channelFilter) === true
+    );
+    matched.sort(
+      (a, b) =>
+        direction * (sortKey(a, method) - sortKey(b, method)) ||
+        a.id.localeCompare(b.id)
+    );
+    const requested = initial.limit ?? DEFAULT_LIMIT;
+    // The schema takes a page size as a `u16`: anything else is an input
+    // error there, not a page.
+    if (!Number.isInteger(requested) || requested < 0 || requested > U16_MAX) {
+      unsupported(`limit ${requested}`);
+      return { items: [], nextCursor: null };
+    }
+    return serve({
+      ids: matched.map((channel) => channel.id),
+      offset: 0,
+      limit: Math.min(Math.max(requested, MIN_LIMIT), MAX_LIMIT),
+    });
+  };
+
+  const notificationObject = (
+    channel: FixtureChannel,
+    notification: FixtureNotification
+  ) => ({
+    __typename: 'GraphqlNotification',
+    id: notification.id,
+    eventType: notification.eventType,
+    entityType: 'CHANNEL',
+    targetEntityType: 'CHANNEL',
+    entityId: channel.id,
+    sent: true,
+    state: notification.state,
+    createdAt: notification.createdAt,
+    viewedAt: notification.state === 'SEEN' ? notification.createdAt : null,
+    updatedAt: notification.createdAt,
+    senderId: notification.senderId,
+    metadata:
+      notification.eventType === 'channel_mention'
+        ? {
+            __typename: 'GraphqlChannelMentionMetadata',
+            messageId: notification.messageId,
+            messageContent: 'A mention',
+            hasAttachments: false,
+            threadId: null,
+            senderDisplayName: personName(notification.senderId),
+            channelType: channel.channelType.toUpperCase(),
+            channelName: channel.name,
+            senderProfilePictureUrl: null,
+          }
+        : {
+            __typename: 'GraphqlChannelMessageSendMetadata',
+            sender: notification.senderId,
+            senderDisplayName: personName(notification.senderId),
+            messageContent: 'A message',
+            messageId: notification.messageId,
+            hasAttachments: false,
+            channelType: channel.channelType.toUpperCase(),
+            channelName: channel.name,
+            senderProfilePictureUrl: null,
+          },
+  });
+
+  type NotificationArgs = {
+    filter?: {
+      states?: string[] | null;
+      eventTypes?: string[] | null;
+      topLevelMessagesOnly?: boolean | null;
+      channelFeedOnly?: boolean | null;
+    } | null;
+    limit?: number | null;
+  };
+
+  const messageObject = (channel: FixtureChannel) =>
+    channel.latestMessage && {
+      messageId: channel.latestMessage.messageId,
+      channelId: channel.id,
+      threadId: null,
+      senderId: channel.latestMessage.senderId,
+      content: channel.latestMessage.content,
+      createdAt: channel.latestMessage.createdAt,
+      updatedAt: channel.latestMessage.createdAt,
+      deletedAt: null,
+      mentions: [],
+    };
+
+  function channelObject(channel: FixtureChannel) {
+    return {
+      __typename: 'GraphqlSoupChannel',
+      id: channel.id,
+      entityType: 'CHANNEL',
+      cacheProjection: null,
+      displayName: channel.name,
+      metadata: {
+        ownerId: channel.ownerId,
+        ownerType: 'USER',
+        parent: null,
+        createdAt: channel.createdAt,
+        updatedAt: channel.updatedAt,
+        viewedAt: channel.viewedAt,
+        deletedAt: null,
+      },
+      name: channel.name,
+      channelType: channel.channelType,
+      ownerId: channel.ownerId,
+      organizationId: channel.channelType === 'team' ? ORGANIZATION_ID : null,
+      teamId: channel.teamId,
+      autoJoinTeam: channel.channelType === 'team',
+      agentDm: null,
+      createdAt: channel.createdAt,
+      updatedAt: channel.updatedAt,
+      viewedAt: channel.viewedAt,
+      interactedAt: channel.interactedAt,
+      isParticipant: true,
+      participantCount: channel.participantIds.length,
+      participantIds: channel.participantIds,
+      participants: () =>
+        channel.participantIds.map((userId) => ({
+          channelId: channel.id,
+          userId,
+          role: userId === channel.ownerId ? 'owner' : 'member',
+          joinedAt: channel.createdAt,
+          leftAt: null,
+        })),
+      botParticipants: [],
+      latestMessage: () => messageObject(channel),
+      latestNonThreadMessage: () => messageObject(channel),
+      properties: [],
+      notifications: ({ filter, limit }: NotificationArgs) =>
+        channel.notifications
+          .filter(
+            (notification) =>
+              (!filter?.states || filter.states.includes(notification.state)) &&
+              (!filter?.eventTypes ||
+                filter.eventTypes.includes(notification.eventType)) &&
+              (!filter?.topLevelMessagesOnly || notification.topLevel)
+          )
+          .slice(0, limit ?? undefined)
+          .map((notification) => notificationObject(channel, notification)),
+      isFavorited: favoriteSet.has(channel.id),
+      viewerPermission: null,
+      activity: () => [],
+      frecencyScore: null,
+    };
+  }
+
+  const user = {
+    __typename: 'GraphqlUser',
+    id: VIEWER_ID,
+    emailLinks: () => {
+      countField('emailLinks');
+      return [];
+    },
+    soup,
+    soupEntity: ({
+      input,
+    }: {
+      input: { entityType: string; entityId: string };
+    }) => {
+      countField('soupEntity');
+      reads.rowsRequested += 1;
+      const channel =
+        input.entityType === 'CHANNEL' ? byId.get(input.entityId) : undefined;
+      if (!channel) return null;
+      reads.rowsReturned += 1;
+      return channelObject(channel);
+    },
+    channelViewedAt: ({ channelId }: { channelId: string }) => {
+      countField('channelViewedAt');
+      return byId.get(channelId)?.viewedAt ?? null;
+    },
+    directMessageChannelId: ({ userId }: { userId: string }) => {
+      countField('directMessageChannelId');
+      return (
+        channels.find(
+          (channel) =>
+            channel.channelType === 'direct_message' &&
+            channel.participantIds.length === 2 &&
+            channel.participantIds.includes(userId)
+        )?.id ?? null
+      );
+    },
+    favorites: ({
+      filter,
+    }: {
+      filter?: { entityTypes?: string[]; entityIds?: string[] } | null;
+    }) => {
+      countField('favorites');
+      const types = filter?.entityTypes ?? [];
+      if (types.length > 0 && !types.includes('CHANNEL')) return [];
+      const ids = filter?.entityIds ?? [];
+      return favoriteChannelIds.flatMap((id, index) => {
+        const channel = byId.get(id);
+        if (!channel || (ids.length > 0 && !ids.includes(id))) return [];
+        reads.rowsReturned += 1;
+        return [
+          {
+            __typename: 'GraphqlFavorite',
+            id: uuidFor(6, index),
+            entityType: 'CHANNEL',
+            entityId: id,
+            sortOrder: index,
+            createdAt: channel.createdAt,
+            fileType: null,
+            documentSubType: null,
+            channelType: channel.channelType,
+            channelId: id,
+          },
+        ];
+      });
+    },
+  };
+
+  const snapshot = (): FixtureReads => ({
+    fields: { ...reads.fields },
+    rowsRequested: reads.rowsRequested,
+    idsRequested: reads.idsRequested,
+    rowsReturned: reads.rowsReturned,
+    unsupported: [...reads.unsupported],
+  });
+
+  return {
+    channels,
+    favoriteChannelIds,
+    savedView,
+    labels: (scope) => {
+      const personal = scope === 'personal';
+      return {
+        labels: personal ? personalLabels : teamLabels,
+        scope: personal ? 'personal' : 'team',
+        teamId: personal ? undefined : TEAM_ID,
+      };
+    },
+    rootValue: () => ({ user }),
+    channelPreviews: (channelIds) => {
+      reads.rowsRequested += channelIds.length;
+      reads.idsRequested += channelIds.length;
+      // As the server answers: one answer per channel found, however often
+      // the batch names it, and a marker for each ID it names that is not.
+      const answered = new Set<string>();
+      return channelIds.flatMap((id): ChannelPreview[] => {
+        const channel = byId.get(id);
+        if (!channel) return [{ type: 'does_not_exist', channel_id: id }];
+        if (answered.has(id)) return [];
+        answered.add(id);
+        reads.rowsReturned += 1;
+        return [
+          {
+            type: 'access',
+            channel_id: id,
+            channel_name: channel.name,
+            channel_type: channel.channelType,
+          },
+        ];
+      });
+    },
+    reads: snapshot,
+    readsSince: (mark) => {
+      const now = snapshot();
+      const fields: Record<string, number> = {};
+      for (const [name, count] of Object.entries(now.fields)) {
+        const delta = count - (mark.fields[name] ?? 0);
+        if (delta) fields[name] = delta;
+      }
+      return {
+        fields,
+        rowsRequested: now.rowsRequested - mark.rowsRequested,
+        idsRequested: now.idsRequested - mark.idsRequested,
+        rowsReturned: now.rowsReturned - mark.rowsReturned,
+        unsupported: now.unsupported.filter(
+          (shape) => !mark.unsupported.includes(shape)
+        ),
+      };
+    },
+    deliverMessage: (channelId, at) => {
+      const channel = byId.get(channelId);
+      if (!channel) throw new Error(`no fixture channel ${channelId}`);
+      // A sequence, not the channel, so two messages in one channel stay
+      // two messages and two notifications.
+      deliveries += 1;
+      const sender =
+        channel.participantIds.find((id) => id !== VIEWER_ID) ?? VIEWER_ID;
+      const messageId = uuidFor(7, deliveries);
+      channel.latestMessage = {
+        messageId,
+        senderId: sender,
+        content: 'A new message',
+        createdAt: iso(at),
+      };
+      channel.updatedAt = iso(at);
+      const notification: FixtureNotification = {
+        id: uuidFor(8, deliveries),
+        eventType: 'channel_message_send',
+        state: 'UNSEEN',
+        createdAt: iso(at),
+        senderId: sender,
+        messageId,
+        topLevel: true,
+      };
+      // Newest first, as the server lists them.
+      channel.notifications.unshift(notification);
+      // The frames resolve their fields when they are pushed, so they read
+      // this delivery's copy: a later message changes none of them.
+      const delivered: FixtureChannel = {
+        ...channel,
+        notifications: [...channel.notifications],
+      };
+      return {
+        SoupUpdates: {
+          soupUpdates: [
+            { __typename: 'SoupUpdated', item: channelObject(delivered) },
+          ],
+        },
+        NotificationUpdates: {
+          notificationUpdates: {
+            __typename: 'GraphqlNewNotification',
+            notification: notificationObject(delivered, notification),
+          },
+        },
+      };
+    },
+  };
+}

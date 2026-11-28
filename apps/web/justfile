@@ -266,6 +266,19 @@ test-calendar-details-browser *ARGS:
 test-agent-screen-browser *ARGS:
     env -u LD_LIBRARY_PATH bunx playwright test --config src/features/agent-screen/browser-test/playwright.config.ts {{ARGS}}
 
+# The built app the Chat scale tier loads (tests/chat-scale/AGENTS.md): every
+# service at the page's own origin, where the tier's server answers from its
+# fixture, with Chat's redesigned sidebar and channel tags on.
+# Written to node_modules/.chat-scale-dist, beside `dist` rather than over it.
+build-chat-scale: build-wasm
+    MODE=development NODE_ENV=production VITE_LOCAL_SERVERS=ALL VITE_LOCAL_BACKEND_ORIGIN=same-origin VITE_LOCAL_ONLY=true VITE_ENABLE_BROWSER_OTEL=false VITE_ENABLE_CHAT_SIDEBAR_SECTIONS=true VITE_ENABLE_CHANNEL_TAGS=true NODE_OPTIONS="{{node_heap}}" bunx vite build -c vite.config.ts --outDir node_modules/.chat-scale-dist
+
+# Chat in Chromium over 3,500 and 7,000 channels, against loose limits on page
+# heap after a forced collection and on long tasks; run `build-chat-scale`
+# first. Same LD_LIBRARY_PATH caveat as the sign-up browser tests above.
+test-chat-scale-browser *ARGS:
+    env -u LD_LIBRARY_PATH bunx playwright test --config tests/chat-scale/playwright.config.ts {{ARGS}}
+
 # Optimistic mutations through the real worker/WASM cache in Chromium. Same
 # LD_LIBRARY_PATH caveat as the sign-up browser tests above.
 test-functional *ARGS:

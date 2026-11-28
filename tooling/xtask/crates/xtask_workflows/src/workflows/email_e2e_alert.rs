@@ -1,7 +1,8 @@
 //! The last job of the three email end-to-end workflows (`email_e2e.rs`,
 //! `email_e2e_browser.rs`, `email_e2e_full_stack.rs`), of the channels
-//! end-to-end workflow (`channels_e2e.rs`) and of the connectors end-to-end
-//! workflow (`connectors_e2e.rs`): after every other job of a push to `main`
+//! end-to-end workflow (`channels_e2e.rs`), of the connectors end-to-end
+//! workflow (`connectors_e2e.rs`) and of the nightly Chat scale tier
+//! (`chat_scale.rs`): after every other job of a push to `main`
 //! or of the daily sweep, it tells a Macro channel (Macro Alerts, or the
 //! [`Channel`] the workflow names) when the workflow turns red, and when it
 //! turns green again. Not on a run by hand. `scripts/email_e2e_alert.ts` decides whether a run posts,
