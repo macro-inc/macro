@@ -132,6 +132,8 @@ export type ScenarioCounts = {
 export type ChatScaleResult = {
   channels: number;
   scenarios: Record<ScenarioName, ScenarioCounts>;
+  /** The earlier visit's totals, reported and not gated: a visit that outlasts
+   * a mutation queue poll counts its drain too. */
   seed: {
     wallMs: number;
     engineCalls: number;
@@ -438,14 +440,20 @@ async function measureStep(
   };
 }
 
-/** Fails the run when `section` has no rows in view: a toggle the viewer
- * could not make measures nothing they see. */
-function assertOnScreen(view: ChatView, section: ChannelsRailSection): void {
+/** Fails the run unless `section`'s rows are in view exactly when `shown`:
+ * before the toggle (a heading the viewer can see) and after each one (the
+ * toggle took effect), so a toggle that did nothing cannot pass as a cheap
+ * one. */
+function assertSectionShown(
+  view: ChatView,
+  section: ChannelsRailSection,
+  shown: boolean
+): void {
   const ranges = view.path()?.viewport().ranges ?? [];
-  if (ranges.some((range) => range.sectionKey === section)) return;
-  const shown = ranges.map((range) => range.sectionKey).join(', ');
+  if (ranges.some((range) => range.sectionKey === section) === shown) return;
+  const onScreen = ranges.map((range) => range.sectionKey).join(', ');
   throw new Error(
-    `The ${section} section is not on screen (${shown || 'none'})`
+    `The ${section} section's rows are ${shown ? 'not ' : ''}on screen (${onScreen || 'none'})`
   );
 }
 
@@ -598,17 +606,20 @@ export async function measureChat(
     });
     // Expand from collapsed, then collapse again; the setup collapse is not
     // counted.
-    assertOnScreen(view, TOGGLED_SECTION);
+    assertSectionShown(view, TOGGLED_SECTION, true);
     view.path()?.setExpanded(TOGGLED_SECTION, false);
     await settle(graph);
+    assertSectionShown(view, TOGGLED_SECTION, false);
     scenarios.expand = await measureStep(graph, view, solid, async () => {
       view.path()?.setExpanded(TOGGLED_SECTION, true);
       await settle(graph);
       await loadViewport(graph, view);
     });
+    assertSectionShown(view, TOGGLED_SECTION, true);
     scenarios.collapse = await measureStep(graph, view, solid, () =>
       view.path()?.setExpanded(TOGGLED_SECTION, false)
     );
+    assertSectionShown(view, TOGGLED_SECTION, false);
     return {
       channels: fixture.channels.length,
       scenarios,

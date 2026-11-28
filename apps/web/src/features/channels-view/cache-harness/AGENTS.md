@@ -60,6 +60,10 @@ Per scenario, each its own number:
 - `rows`: rows the rail built, resolved to a channel, and mounted.
 
 ## Gate
+The earlier visit's totals (`seed`: engine calls, SQL, file bytes) are
+reported, not gated: the visit is not a measured step, so a slow machine whose
+visit outlasts a mutation queue poll (Gotchas) adds a drain to them.
+
 
 `gate.ts` fails the run on:
 
@@ -100,7 +104,9 @@ in the PR. Reviewers read its diff as the change's cost.
   not an empty answer, so add it to `fixture.ts`.
 - Expand and collapse toggle Direct messages (`TOGGLED_SECTION`), whose rows
   are on screen when Chat opens; the run fails if that section is not, since
-  a viewer can only click a heading they see.
+  a viewer can only click a heading they see, and fails if its rows are not
+  gone after each collapse or back after the expand, so a toggle that did
+  nothing cannot pass as a cheap one.
 - A step has settled once nothing moved for `QUIET_MS`, longer than the
   channel directory's 2 s refresh spacing; a shorter wait lets the refresh a
   step caused land in the next step's counts.
@@ -108,7 +114,8 @@ in the PR. Reviewers read its diff as the change's cost.
   wakes the runners first (`chat.harness.tsx` keeps them), so the poll starts
   over and lands in no step; a step that still claims a mutation ran past the
   poll and fails the run, since its counts would depend on the machine.
-  Two runs give the same counts, every one of them.
+  Two runs give the same gated counts. File I/O (`opfs`) is reported, not
+  gated: one write and flush can land in a different step from run to run.
 - The app reaches the harness only through `harness-state.ts`, on
   `globalThis`: each load is a new module graph, and the mocks of both graphs
   must read the same state.
