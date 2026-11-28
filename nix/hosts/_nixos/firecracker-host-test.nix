@@ -286,7 +286,7 @@ pkgs.testers.runNixOSTest {
         for job in ["host", "computers"]:
             host.succeed(f"curl -sf http://127.0.0.1:12345/api/v0/web/components/discovery.relabel.{job} | grep -qF '\"key\":\"job\",\"value\":{{\"type\":\"string\",\"value\":\"firecracker-host/{job}\"}}'")
 
-    with subtest("the agent sends Alloy a copy of its spans, and Alloy reads its journal"):
+    with subtest("the agent is pointed at Alloy for its spans, and Alloy reads its journal"):
         host.succeed("systemctl show -P Environment firecracker-host | grep -q 'GRAFANA_OTLP_ENDPOINT=http://127.0.0.1:14317'")
         host.wait_until_succeeds("ss -Hltn 'sport = :14317' | grep -q 127.0.0.1")
         host.succeed("curl -sf http://127.0.0.1:12345/api/v0/web/components/loki.source.journal.agent | grep -q '\"health\":{\"state\":\"healthy\"'")

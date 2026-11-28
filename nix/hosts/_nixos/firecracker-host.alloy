@@ -142,6 +142,11 @@ loki.relabel "journal" {
 		source_labels = ["__journal__systemd_unit"]
 		target_label  = "unit"
 	}
+
+	rule {
+		source_labels = ["__journal_priority_keyword"]
+		target_label  = "priority"
+	}
 }
 
 otelcol.receiver.loki "journal" {
@@ -152,8 +157,9 @@ otelcol.receiver.loki "journal" {
 
 // The same service, host and environment as the agent's spans and the host's
 // metrics. The agent writes JSON lines to stdout, which the journal records
-// at one priority, so the level comes from the line. Its `dd.trace_id` is
-// Datadog's half of the trace id, so the records don't link to traces.
+// at one priority, so the level comes from the line, and from the journal's
+// priority for any other line. Its `dd.trace_id` is Datadog's half of the
+// trace id, so the records don't link to traces.
 otelcol.processor.transform "journal" {
 	error_mode = "ignore"
 
@@ -171,7 +177,14 @@ otelcol.processor.transform "journal" {
 		statements = [
 			`merge_maps(cache, ParseJSON(body), "upsert") where IsMatch(body, "^\\{")`,
 			`set(severity_text, cache["level"]) where cache["level"] != nil`,
-			`delete_matching_keys(attributes, "^(job|loki\\.attribute\\.labels)$")`,
+			`set(severity_text, attributes["priority"]) where cache["level"] == nil and attributes["priority"] != nil`,
+			`set(severity_number, SEVERITY_NUMBER_TRACE) where IsMatch(severity_text, "(?i)^trace$")`,
+			`set(severity_number, SEVERITY_NUMBER_DEBUG) where IsMatch(severity_text, "(?i)^debug$")`,
+			`set(severity_number, SEVERITY_NUMBER_INFO) where IsMatch(severity_text, "(?i)^(info|notice)$")`,
+			`set(severity_number, SEVERITY_NUMBER_WARN) where IsMatch(severity_text, "(?i)^warn(ing)?$")`,
+			`set(severity_number, SEVERITY_NUMBER_ERROR) where IsMatch(severity_text, "(?i)^err(or)?$")`,
+			`set(severity_number, SEVERITY_NUMBER_FATAL) where IsMatch(severity_text, "(?i)^(crit|alert|emerg)$")`,
+			`delete_matching_keys(attributes, "^(job|priority|loki\\.attribute\\.labels)$")`,
 		]
 	}
 
@@ -180,11 +193,12 @@ otelcol.processor.transform "journal" {
 	}
 }
 
-// Alloy's unit has 512M for everything, metrics included: spans and logs are
-// refused before they take it.
+// Alloy's unit has 512M for everything, metrics included; Alloy sets Go's
+// memory limit to 90% of it from the cgroup. Spans and logs are refused well
+// before that.
 otelcol.processor.memory_limiter "macro" {
 	check_interval = "1s"
-	limit          = "384MiB"
+	limit          = "288MiB"
 
 	output {
 		traces = [otelcol.processor.batch.macro.input]
