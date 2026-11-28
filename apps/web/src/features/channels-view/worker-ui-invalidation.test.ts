@@ -43,6 +43,7 @@ vi.mock('../../lib/graphql-cache/worker/wasm-module', async () => {
   );
   return {
     cacheWasmLinearMemoryBytes: () => 0,
+    cacheWasmStorageIoTotals: () => undefined,
     setCompiledEngineExchange: () => {},
     loadCacheWasm: async () => ({
       cacheDatabaseIdentity,
