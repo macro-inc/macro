@@ -776,10 +776,9 @@ test('MSG-18 messages two people send at the same moment end in one order for bo
     for (const text of everyMessage.filter((t) => t.startsWith(other))) {
       if (await missedLive(view.message(text))) missed.push(text);
     }
+    // A missed message may still come, but only once.
     await expect
-      .poll(async () =>
-        (await view.topLevel()).filter((text) => !missed.includes(text)).sort()
-      )
+      .poll(async () => withoutOneOf(await view.topLevel(), missed).sort())
       .toEqual(everyMessage.filter((text) => !missed.includes(text)));
     // Known defect on main, seen once in 62 runs: a person's own quick
     // messages are out of the order they sent them in.
@@ -815,3 +814,13 @@ test('MSG-18 messages two people send at the same moment end in one order for bo
     }
   }).toPass({ timeout: 15_000 });
 });
+
+/** `shown` less one copy of each of `texts` it holds. */
+function withoutOneOf(shown: string[], texts: string[]): string[] {
+  const rest = [...shown];
+  for (const text of texts) {
+    const at = rest.indexOf(text);
+    if (at >= 0) rest.splice(at, 1);
+  }
+  return rest;
+}

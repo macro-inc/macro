@@ -303,6 +303,9 @@ test('UNR-07 a member who never opened a channel sees it unread, and opening it 
   // someone else sent; the check then requires it after a reload.
   await arrivesLive(view, view.message('fourth, live'));
   await view.expectEndsWith(['third, from ada', 'fourth, live']);
+  // A reload clears the search that keeps the row on the page.
+  await findConversations(cyPage, made.tag);
+  await expect(row).toBeVisible();
   await expect(unreadDot(row)).toHaveCount(0);
 });
 
