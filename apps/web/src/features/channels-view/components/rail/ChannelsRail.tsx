@@ -635,7 +635,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     !state.collapsedLabels.includes(labelId);
 
   // Each open section walks its unknown members once, from a cursor that
-  // only moves forward, and waits for Show more after a run of misses; a
+  // only moves forward, and waits for Load more after a run of misses; a
   // closed section starts again when it opens. An Unread only section lists
   // what the unread projection holds, so it discovers nothing.
   const [discoveryExtensions, setDiscoveryExtensions] = createStore<
@@ -737,7 +737,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     }
     // An open section with members nobody has looked up yet ends in a loading
     // row; while that row is on screen, the window looks up the next ones.
-    // After a run of misses it ends in Show more instead.
+    // After a run of misses it ends in Load more instead.
     for (const label of labels()) {
       const next = labelDiscoveryStatus(label);
       if (!next || next.kind === 'done') continue;

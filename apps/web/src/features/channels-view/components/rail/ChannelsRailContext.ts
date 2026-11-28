@@ -43,7 +43,7 @@ export type ChannelRailRow =
       group: ChannelsGroup;
     }
   | {
-      /** Loading, retry or Show more after an open section's available channels. */
+      /** Loading, retry or Load more after an open section's available channels. */
       kind: 'reference-status';
       id: `reference-status:${ChannelSectionKey}`;
       section: ChannelSectionKey;
@@ -135,7 +135,7 @@ export type ChannelSectionRange = { start: number; end: number };
 
 /**
  * What an open section's members still need: a lookup in progress, a failed
- * one to retry, or Show more after a run of members no lookup found.
+ * one to retry, or Load more after a run of members no lookup found.
  */
 export type ChannelReferenceStatus = 'loading' | 'error' | 'more';
 

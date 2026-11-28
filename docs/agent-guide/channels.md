@@ -1433,9 +1433,18 @@ scrolls the sidebar, including while the pointer stays still. Resize drags
 compensate for that movement and retain pointer capture until release or cancellation.
 
 Section membership comes from the server's complete visible channel-ID lists.
-The sidebar shows available channel rows immediately. One shared by-ID query
-per batch supplies cached channel data and fetches only missing records using
-Soup's generic explicit-entity hydration. Channel batching and unread refreshes
+The sidebar shows available channel rows immediately, from the channel
+directory's records. Only the rows on screen in open sections (on a phone, the
+selected section tab), with a few beyond each end, are looked up by ID, at most
+200 at a time: one shared by-ID query per batch of up to 25 supplies cached
+channel data and fetches only missing records using Soup's generic
+explicit-entity hydration. A collapsed or scrolled-away section looks up
+nothing; its count comes from the 100 newest unread channels, so beyond 100
+unread a count is a lower bound. Members no record holds are looked up 25 at a
+time as an open section's loading row comes on screen, and after 100 that turn
+out unavailable the section shows **Load more** in place of further loading
+(the phone list too, under its rows or in place of its empty state). Unread
+only sections look up no such members. Channel batching and unread refreshes
 stay in the channel query layer; the sidebar does not coordinate separate cache
 and network queries. Reading a channel notification retains already-resolved
 section members while their unread state refreshes. Only unresolved members show
