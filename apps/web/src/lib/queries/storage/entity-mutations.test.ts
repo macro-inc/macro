@@ -197,6 +197,52 @@ it('shows a confirmed restore immediately while retaining unrelated and newer de
   }
 });
 
+it('shows the restored rows the server returned when another could not be read back', async () => {
+  mocks.refresh.mockReturnValue(new Promise<void>(() => {}));
+  const deletion = createGraphqlSoupDeletion([
+    'GraphqlSoupProject:restored',
+    'GraphqlSoupDocument:child',
+    'GraphqlSoupDocument:unreadable',
+  ]);
+  deletion.settle(deletion.keys());
+  mocks.mutation.mockReturnValue({
+    toPromise: async () => ({
+      data: {
+        restoreEntities: {
+          results: [
+            {
+              __typename: 'GraphqlMutationSuccess',
+              effects: [
+                {
+                  __typename: 'SoupUpdated',
+                  item: { __typename: 'GraphqlSoupDocument', id: 'child' },
+                },
+              ],
+            },
+          ],
+        },
+      },
+      error: new CombinedError({
+        graphQLErrors: [
+          {
+            message: 'A changed item could not be read back',
+            path: ['restoreEntities', 'results', 0, 'effects'],
+          },
+        ],
+      }),
+    }),
+  });
+  try {
+    await restoreEntity({ type: 'PROJECT', id: 'restored' });
+    expect(deletion.keys()).toEqual(['GraphqlSoupDocument:unreadable']);
+    expect(mocks.refresh).toHaveBeenCalledWith({
+      unmaintainedOnly: false,
+    });
+  } finally {
+    deletion.release();
+  }
+});
+
 it('keeps prior deletion markers when the server refuses restoration', async () => {
   mocks.refresh.mockReturnValue(new Promise<void>(() => {}));
   const deletion = createGraphqlSoupDeletion(['GraphqlSoupDocument:deleted']);

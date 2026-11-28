@@ -101,11 +101,11 @@ async function sendEntityMutation<Data, Variables extends AnyVariables>(
     ]);
   }
   if (effectErrors.length > 0) {
-    // The caller reads its lists again for what the patches would carry.
+    // The server returns the rows it could render and reports the others; the
+    // caller keeps the returned rows and reads its lists again for the rest.
     span.setAttr('entity.effects_error', effectErrors[0]?.message ?? '');
     return {
       ...outcome,
-      effects: [],
       effectsResolved: false,
       queued: false,
       listsReadAgain: networkRevalidated(result),

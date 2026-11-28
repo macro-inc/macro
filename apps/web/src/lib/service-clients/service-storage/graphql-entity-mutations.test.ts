@@ -127,20 +127,26 @@ const input = {
 };
 
 describe('moveGraphqlEntity', () => {
-  it('reports a committed move whose cache patches failed to render', async () => {
+  it('keeps the rows a committed move rendered and reports the rest missing', async () => {
+    const rendered = {
+      __typename: 'SoupUpdated',
+      item: { __typename: 'GraphqlSoupDocument', id: 'document' },
+    };
     replyWith((operation) => ({
       operation,
       stale: false,
       hasNext: false,
       data: {
         moveEntities: {
-          results: [{ __typename: 'GraphqlMutationSuccess', effects: null }],
+          results: [
+            { __typename: 'GraphqlMutationSuccess', effects: [rendered] },
+          ],
         },
       },
       error: new CombinedError({
         graphQLErrors: [
           {
-            message: 'entity type database is not represented in Soup',
+            message: 'A changed item could not be read back',
             path: ['moveEntities', 'results', 0, 'effects'],
           },
         ],
@@ -149,7 +155,7 @@ describe('moveGraphqlEntity', () => {
 
     await expect(moveGraphqlEntity(input, [])).resolves.toEqual({
       __typename: 'GraphqlMutationSuccess',
-      effects: [],
+      effects: [rendered],
       effectsResolved: false,
       queued: false,
       listsReadAgain: false,
