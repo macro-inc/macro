@@ -370,7 +370,8 @@ pub struct GraphqlMutationSuccess<E> {
 }
 
 /// A failure selecting fields on a post-commit row must also leave the write
-/// outcome intact. Expose the ordinary GraphQL list type for these effects.
+/// outcome intact, and only that row out. Expose the ordinary GraphQL list
+/// type for these effects.
 struct CommittedEffects<T>(Vec<T>);
 
 impl<T: OutputType> OutputType for CommittedEffects<T> {
@@ -387,13 +388,28 @@ impl<T: OutputType> OutputType for CommittedEffects<T> {
         ctx: &ContextSelectionSet<'_>,
         field: &Positioned<Field>,
     ) -> ServerResult<Value> {
-        match self.0.resolve(ctx, field).await {
-            Ok(value) => Ok(value),
-            Err(error) => {
-                ctx.add_error(error);
-                Ok(Value::List(Vec::new()))
+        // Each row resolves on its own, so one that fails is left out and
+        // reported at its index while its siblings, deletions included, stay.
+        // A row whose own field fails resolves to null with that error
+        // recorded; leaving it out keeps the list non-null.
+        let rows = async_graphql::futures_util::future::join_all(self.0.iter().enumerate().map(
+            |(index, row)| async move {
+                let ctx = ctx.with_index(index);
+                OutputType::resolve(row, &ctx, field)
+                    .await
+                    .map_err(|error| ctx.set_error_path(error))
+            },
+        ))
+        .await;
+        let mut values = Vec::with_capacity(rows.len());
+        for row in rows {
+            match row {
+                Ok(Value::Null) => {}
+                Ok(value) => values.push(value),
+                Err(error) => ctx.add_error(error),
             }
         }
+        Ok(Value::List(values))
     }
 }
 

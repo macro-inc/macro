@@ -123,6 +123,31 @@ impl SoupEntityEdges for TestSoupEdges {
     }
 }
 
+/// A returned row whose field fails for the row numbered 1.
+struct Row(i32);
+
+#[Object]
+impl Row {
+    /// The row number, or an error for row 1.
+    async fn number(&self) -> async_graphql::Result<i32> {
+        if self.0 == 1 {
+            return Err("the row could not be read".into());
+        }
+        Ok(self.0)
+    }
+}
+
+/// A returned row that nests a row whose field can fail.
+struct Outer(i32);
+
+#[Object]
+impl Outer {
+    /// The nested row.
+    async fn inner(&self) -> Row {
+        Row(self.0)
+    }
+}
+
 /// Minimal query root used to exercise the mutation module in isolation.
 struct QueryRoot;
 
@@ -165,6 +190,16 @@ impl QueryRoot {
                 edges: std::marker::PhantomData,
             }),
         ]
+    }
+
+    /// Return three rows whose middle one fails to resolve a nested field.
+    async fn partly_readable_nested(&self) -> super::CommittedEffects<Outer> {
+        super::CommittedEffects(vec![Outer(0), Outer(1), Outer(2)])
+    }
+
+    /// Return three rows whose middle one fails to resolve a field.
+    async fn partly_readable_rows(&self) -> super::CommittedEffects<Row> {
+        super::CommittedEffects(vec![Row(0), Row(1), Row(2)])
     }
 
     /// Return a successful outcome whose effects touch only entities listed outside Soup.
@@ -624,5 +659,58 @@ async fn batch_span_records_per_item_failures() {
     assert_eq!(
         fields.get("entity_mutation.error_code").as_deref(),
         Some("UnsupportedOperation")
+    );
+}
+
+#[tokio::test]
+async fn a_row_that_fails_to_resolve_leaves_its_siblings() {
+    let response = Schema::build(QueryRoot, async_graphql::EmptyMutation, EmptySubscription)
+        .finish()
+        .execute(Request::new("{ partlyReadableRows { number } }"))
+        .await;
+
+    assert_eq!(response.errors.len(), 1);
+    assert_eq!(
+        response.errors[0].path,
+        [
+            async_graphql::PathSegment::Field("partlyReadableRows".into()),
+            async_graphql::PathSegment::Index(1),
+            async_graphql::PathSegment::Field("number".into()),
+        ],
+    );
+    assert_eq!(
+        response.data,
+        value!({ "partlyReadableRows": [{ "number": 0 }, { "number": 2 }] }),
+    );
+}
+
+#[tokio::test]
+async fn a_nested_field_that_fails_leaves_the_other_rows() {
+    let response = Schema::build(QueryRoot, async_graphql::EmptyMutation, EmptySubscription)
+        .finish()
+        .execute(Request::new(
+            "{ partlyReadableNested { inner { number } } }",
+        ))
+        .await;
+
+    assert_eq!(response.errors.len(), 1);
+    assert_eq!(
+        response.errors[0].path,
+        [
+            async_graphql::PathSegment::Field("partlyReadableNested".into()),
+            async_graphql::PathSegment::Index(1),
+            async_graphql::PathSegment::Field("inner".into()),
+            async_graphql::PathSegment::Field("number".into()),
+        ],
+    );
+    assert_eq!(
+        response.data,
+        value!({
+            "partlyReadableNested": [
+                { "inner": { "number": 0 } },
+                { "inner": null },
+                { "inner": { "number": 2 } },
+            ],
+        }),
     );
 }
