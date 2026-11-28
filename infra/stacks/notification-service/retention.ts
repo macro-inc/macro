@@ -180,14 +180,7 @@ export class NotificationRetention extends pulumi.ComponentResource {
           DD_SERVERLESS_LOGS_ENABLED: 'false',
           ...(grafana && {
             GRAFANA_OTLP_ENDPOINT: `http://${GRAFANA_COLLECTOR_ADDRESS}`,
-            // Through the key's policy, so the function takes the collector
-            // only once its role may read the key: the schedule already
-            // exists and can invoke the function at any point of an update.
-            GRAFANA_COLLECTOR_CONFIG: grafanaCollectorConfig(
-              pulumi
-                .all([grafana.secretArn, grafana.policy.id])
-                .apply(([secretArn]) => secretArn)
-            ),
+            GRAFANA_COLLECTOR_CONFIG: grafanaCollectorConfig(grafana.secretArn),
             OPENTELEMETRY_COLLECTOR_CONFIG_URI: 'env:GRAFANA_COLLECTOR_CONFIG',
             OPENTELEMETRY_EXTENSION_LOG_LEVEL: 'warn',
           }),
@@ -200,15 +193,19 @@ export class NotificationRetention extends pulumi.ComponentResource {
         memorySize: 256,
         timeout: 120,
         reservedConcurrentExecutions: 1,
+        // The extensions fetch their keys at init, and the function fails
+        // without them. Creating or updating the function waits for its
+        // role's policies, and the schedule's target waits for the function.
+        // IAM can still take a few seconds to apply a new policy: a run in
+        // that window fails, and the next hour's runs again.
+        dependsOn: grafana
+          ? [datadogSecretPolicy, grafana.policy]
+          : [datadogSecretPolicy],
         tags,
       },
       { parent: this }
     ).lambda;
 
-    // Ensure the extensions can fetch their keys before EventBridge can invoke
-    // the function. The collector can't start without its key, and then the
-    // function's init fails. This orders a new schedule; the collector's
-    // config above orders the function's own update.
     const rule = new aws.cloudwatch.EventRule(
       `${BASE_NAME}-schedule`,
       {
@@ -216,12 +213,7 @@ export class NotificationRetention extends pulumi.ComponentResource {
         state: enabled ? 'ENABLED' : 'DISABLED',
         tags,
       },
-      {
-        parent: this,
-        dependsOn: grafana
-          ? [datadogSecretPolicy, grafana.policy]
-          : [datadogSecretPolicy],
-      }
+      { parent: this }
     );
     new aws.cloudwatch.EventTarget(
       `${BASE_NAME}-target`,

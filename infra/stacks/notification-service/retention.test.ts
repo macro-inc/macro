@@ -153,6 +153,47 @@ test('spans also go to Grafana through a collector that reads its own key', () =
   ]);
 });
 
+test('the function waits for the policies of both keys', async () => {
+  const seen: pulumi.ResourceTransformationArgs[] = [];
+  const { NotificationRetention } = await import('./retention');
+  new NotificationRetention(
+    'retention-ordering',
+    {
+      databaseUrl: pulumi.secret('test-database'),
+      enabled: true,
+      dryRun: true,
+      vpc: {
+        vpcId: 'vpc-test',
+        publicSubnetIds: [],
+        privateSubnetIds: ['subnet-test'],
+      },
+      tags: {},
+      grafanaIngestSecretArn: pulumi.output(grafanaSecretArn),
+    },
+    {
+      transformations: [
+        (args) => {
+          seen.push(args);
+          return undefined;
+        },
+      ],
+    }
+  );
+  await pulumi.runtime.waitForRPCs();
+  const fn = seen.find((r) => r.type === 'aws:lambda/function:Function');
+  const dependsOn = fn?.opts.dependsOn;
+  if (!Array.isArray(dependsOn)) throw new Error('Missing dependsOn');
+  const names = dependsOn.map(
+    (dep) => seen.find((r) => r.resource === dep)?.name
+  );
+  expect(names).toEqual(
+    expect.arrayContaining([
+      'notification_retention_handler-datadog-key',
+      'notification_retention_handler-grafana-key',
+    ])
+  );
+});
+
 test('without the Grafana key, only Datadog gets the spans', async () => {
   const start = resources.length;
   const { NotificationRetention } = await import('./retention');
