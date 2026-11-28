@@ -1062,8 +1062,9 @@ not to account-wide paired machine count; a user can pair several computers.
   Sent retain their own canonical membership.
 - Spam and Trash are GraphQL server pages (`emailView: SPAM | TRASH`) with no
   local predicate or service search. Their rows show the folder message and date
-  from `pagePreview(view: $view)`, keyed by view, because opening the thread or
-  reading another view rewrites the shared `name`, `snippet` and `sortTs`;
+  from `pagePreview(page: $page)`, keyed by the list (view, filters, sort),
+  because opening the thread or reading another view rewrites the shared
+  `name`, `snippet` and `sortTs`;
   restore through the provider-neutral thread-state mutation. The cache cannot
   keep their membership current, so read-state writes pass them as unmaintained
   revalidations, and provider sync events, settled Outlook operations, inbox

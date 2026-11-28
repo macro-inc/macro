@@ -2646,7 +2646,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }
   });
 
-  it('reads Spam and Trash pages with their folder date on every page', async () => {
+  it('reads Spam and Trash pages with their folder row on every page', async () => {
     const fake = makeFakeClient();
     getGraphqlSoupClientMock.mockReturnValue(fake.client);
     makeGraphqlSoupInputMock.mockImplementation(({ cursor }) =>
@@ -2672,19 +2672,54 @@ describe('createGraphqlSoupAstItemsQuery', () => {
         graphqlSoupPage({ items: [], next_cursor: null })
       );
       await more;
+      // The folder row is keyed by the page's list, apart from shared fields,
+      // and a continuation page shares its first page's key.
+      const pageKeys = new Set<unknown>();
       for (const entry of getActiveGraphqlSoupRevalidations()) {
         expect(print(entry.document)).toContain('query MailFolderSoup');
-        expect(entry.variables).toMatchObject({ view: 'SPAM' });
+        pageKeys.add(entry.variables?.page);
       }
       for (const execution of fake.executions) {
         expect(print(execution.document)).toContain('query MailFolderSoup');
-        // The folder row is keyed by the page's view, apart from shared fields.
-        expect(print(execution.document)).toContain('pagePreview(view: $view)');
-        expect(execution.variables).toMatchObject({ view: 'SPAM' });
+        expect(print(execution.document)).toContain('pagePreview(page: $page)');
+        pageKeys.add(execution.variables.page);
       }
+      expect([...pageKeys]).toEqual([expect.stringMatching(/^SPAM:/)]);
     } finally {
       dispose();
     }
+  });
+
+  it('keys a filtered Trash folder row apart from the whole Trash', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    const pageKey = (filters: object | undefined) => {
+      makeGraphqlSoupInputMock.mockImplementation(() => ({
+        initial: {
+          limit: 50,
+          sortMethod: 'UPDATED_AT',
+          emailView: 'TRASH',
+          filters,
+        },
+      }));
+      const dispose = createRoot((dispose) => {
+        createGraphqlSoupAstItemsQuery(
+          () => ({ params: {}, body: {} }),
+          () => ({ enabled: true, projection: 'mail-folder' })
+        );
+        return dispose;
+      });
+      const key = fake.executions.at(-1)?.variables.page;
+      dispose();
+      return key;
+    };
+    const whole = pageKey(undefined);
+    const alias = pageKey({
+      emailFilter: { tree: { literal: { recipient: 'alias@example.com' } } },
+    });
+    expect(whole).toMatch(/^TRASH:/);
+    expect(alias).toMatch(/^TRASH:/);
+    expect(alias).not.toBe(whole);
   });
 
   it('reads a list the network answered within its staleTime from the cache', async () => {

@@ -12,10 +12,11 @@ query Soup($input: SoupInput!) {
 }
 
 # Spam and Trash pages: the list rows plus the row each page shows. The folder
-# date and the folder message are the fetching view's, not thread facts, so
-# they are keyed by `$view` (the input's `emailView`): opening the thread or
-# reading another view rewrites the shared `name`, `snippet` and `sortTs`.
-query MailFolderSoup($input: SoupInput!, $view: GraphqlEmailView!) {
+# date and the folder message depend on the page's view and filters, not only
+# on the thread, so they are keyed by `$page`, a key of the list: opening the
+# thread or reading another view rewrites the shared `name`, `snippet` and
+# `sortTs`.
+query MailFolderSoup($input: SoupInput!, $page: String!) {
 	user {
 		id
 		emailLinks @cacheOnly { ...MailAccountFields }
@@ -23,7 +24,7 @@ query MailFolderSoup($input: SoupInput!, $view: GraphqlEmailView!) {
 			items {
 				...SoupItemFields
 				... on GraphqlSoupEmailThread {
-					pagePreview(view: $view) {
+					pagePreview(page: $page) {
 						sortTs
 						subject
 						snippet

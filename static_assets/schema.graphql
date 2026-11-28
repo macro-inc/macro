@@ -5459,11 +5459,11 @@ enum GraphqlEmailView {
 	"""
 	OTHER
 	"""
-	Threads in the spam folder, newest folder message first.
+	Threads in the spam folder, sorted by their newest folder message.
 	"""
 	SPAM
 	"""
-	Threads in the trash folder, newest folder message first.
+	Threads in the trash folder, sorted by their newest folder message.
 	"""
 	TRASH
 }
@@ -10335,9 +10335,9 @@ type GraphqlSoupEmailMessageLabel {
 }
 
 """
-One page's row for an email thread, embedded in the thread per `view`.
+One page's row for an email thread, embedded in the thread per list.
 
-An embedded value with no `id`: each view's page picks its own message, so
+An embedded value with no `id`: each list picks its own message, so
 these fields must not overwrite the thread's shared preview fields.
 """
 type GraphqlSoupEmailPagePreview {
@@ -10514,14 +10514,15 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	sortTs: String!
 	"""
 	The row the page that returned this thread shows: its sort timestamp
-	and the message its `emailView` picks (for Spam and Trash, the newest
-	message in the folder). The plain `name`, `snippet`, sender and
-	`sortTs` fields carry the same values, but a client cache shares those
-	across every view and the thread itself. Pass the page's own
-	`emailView` as `view` to cache this row per view: `view` only keys the
-	cache and never changes the value.
+	and the message its `emailView` and filters pick (for Spam and Trash,
+	the newest matching message in the folder). The plain `name`,
+	`snippet`, sender and `sortTs` fields carry the same values, but a
+	client cache shares those across every view and the thread itself.
+	Pass a key of the page's list (its view, filters and sort) as `page`
+	to cache this row per list: `page` only keys the cache and never
+	changes the value.
 	"""
-	pagePreview(view: GraphqlEmailView!): GraphqlSoupEmailPagePreview!
+	pagePreview(page: String!): GraphqlSoupEmailPagePreview!
 	"""
 	The created timestamp in RFC 3339 format.
 	"""

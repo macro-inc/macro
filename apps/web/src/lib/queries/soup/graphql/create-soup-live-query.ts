@@ -125,10 +125,30 @@ const SOUP_DOCUMENTS = {
 const soupDocumentFor = (projection: SoupProjection | undefined) =>
   projection ? SOUP_DOCUMENTS[projection] : SoupDocument;
 
-// A folder page keys its folder date by the page's view (`MailFolderSoup`).
+// A 53-bit string hash (cyrb53): short, stable cache keys for long list keys.
+const hashListKey = (key: string): string => {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < key.length; i += 1) {
+    const code = key.charCodeAt(i);
+    h1 = Math.imul(h1 ^ code, 2654435761);
+    h2 = Math.imul(h2 ^ code, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
+  h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
+  h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+};
+
+// A folder page keys the row it shows (`MailFolderSoup`'s `pagePreview`) by
+// its list: the view and filters pick each thread's folder message, so an
+// alias-filtered Trash and the whole Trash keep their own rows. Continuation
+// pages share their first page's key.
 const soupVariables = (
   projection: SoupProjection | undefined,
-  input: GraphqlSoupInput
+  input: GraphqlSoupInput,
+  listKey: string
 ): SoupQueryVariables | MailFolderSoupQueryVariables => {
   if (projection !== 'mail-folder') return { input };
   const view =
@@ -136,7 +156,7 @@ const soupVariables = (
       ? input.initial?.emailView
       : input.continuation?.emailView;
   if (!view) throw new Error('a mail folder page needs an email view');
-  return { input, view };
+  return { input, page: `${view}:${hashListKey(listKey)}` };
 };
 
 // A page result can carry the viewer without its `soup` field. Selection runs
@@ -539,7 +559,7 @@ export function createSoupLiveQuery(
         if (!input) {
           throw new Error('GraphQL Soup input became unsupported');
         }
-        return soupVariables(queryOptions.projection, input);
+        return soupVariables(queryOptions.projection, input, firstInputKey);
       },
       getNextPageParam: (lastPage) =>
         hasSoupPage(lastPage)
@@ -666,7 +686,7 @@ export function createSoupLiveQuery(
         ? [
             {
               document: queryDocument(),
-              variables: soupVariables(options().projection, input),
+              variables: soupVariables(options().projection, input, inputKey()),
             },
           ]
         : [];
@@ -678,7 +698,7 @@ export function createSoupLiveQuery(
         ? [
             {
               document: queryDocument(),
-              variables: soupVariables(options().projection, input),
+              variables: soupVariables(options().projection, input, inputKey()),
             },
           ]
         : [];

@@ -39,7 +39,6 @@ use soup::domain::models::{EnrichedSoupItem, SoupProjectionHydration, grouping::
 use soup_filter_projection::{encode_cache_projection_supplement, project_soup_cache_supplement};
 use uuid::Uuid;
 
-use crate::inputs::GraphqlEmailView;
 use crate::loaders::SoupItemDataLoader;
 
 /// Opaque, version-framed server-fact supplement selected only by cache-aware
@@ -1708,9 +1707,9 @@ impl GraphqlSoupEmailParticipant {
     }
 }
 
-/// One page's row for an email thread, embedded in the thread per `view`.
+/// One page's row for an email thread, embedded in the thread per list.
 ///
-/// An embedded value with no `id`: each view's page picks its own message, so
+/// An embedded value with no `id`: each list picks its own message, so
 /// these fields must not overwrite the thread's shared preview fields.
 #[derive(SimpleObject)]
 pub struct GraphqlSoupEmailPagePreview {
@@ -1929,15 +1928,16 @@ where
     }
 
     /// The row the page that returned this thread shows: its sort timestamp
-    /// and the message its `emailView` picks (for Spam and Trash, the newest
-    /// message in the folder). The plain `name`, `snippet`, sender and
-    /// `sortTs` fields carry the same values, but a client cache shares those
-    /// across every view and the thread itself. Pass the page's own
-    /// `emailView` as `view` to cache this row per view: `view` only keys the
-    /// cache and never changes the value.
+    /// and the message its `emailView` and filters pick (for Spam and Trash,
+    /// the newest matching message in the folder). The plain `name`,
+    /// `snippet`, sender and `sortTs` fields carry the same values, but a
+    /// client cache shares those across every view and the thread itself.
+    /// Pass a key of the page's list (its view, filters and sort) as `page`
+    /// to cache this row per list: `page` only keys the cache and never
+    /// changes the value.
     async fn page_preview(
         &self,
-        #[graphql(name = "view")] _view: GraphqlEmailView,
+        #[graphql(name = "page")] _page: String,
     ) -> GraphqlSoupEmailPagePreview {
         let thread = &self.0.thread;
         GraphqlSoupEmailPagePreview {

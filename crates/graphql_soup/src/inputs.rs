@@ -448,7 +448,7 @@ fn email_preview_view(
 
 /// GraphQL input representing the email view.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
-pub(crate) enum GraphqlEmailView {
+enum GraphqlEmailView {
     /// The inbox option.
     Inbox,
     /// The drafts option.
@@ -463,9 +463,9 @@ pub(crate) enum GraphqlEmailView {
     Important,
     /// The other option.
     Other,
-    /// Threads in the spam folder, newest folder message first.
+    /// Threads in the spam folder, sorted by their newest folder message.
     Spam,
-    /// Threads in the trash folder, newest folder message first.
+    /// Threads in the trash folder, sorted by their newest folder message.
     Trash,
 }
 
