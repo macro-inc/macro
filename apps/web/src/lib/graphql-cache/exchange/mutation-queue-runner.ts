@@ -140,6 +140,9 @@ export type QueueAttemptContext = AttemptToken & {
   mutation?: ClaimedMutation;
   attemptCount: number;
   serverFailureCount: number;
+  /** A kept response that committed without its rows: its lists are read
+   * again when it is applied. */
+  rowsMissing?: boolean;
   /** Transport-only metadata; urql drops the response on error-free payloads. */
   response?: Response;
   telemetry?: MutationAttemptTelemetry;
@@ -265,8 +268,30 @@ function mutationErrorCode(
   return typeof code === 'string' ? code : undefined;
 }
 
+const EFFECT_FIELDS = new Set(['effect', 'effects']);
+
+/**
+ * Errors only inside the rows a write returns: the write itself committed, and
+ * only reading its rows back failed. The server reports a row it could not
+ * read back the same way, so a reply without its rows always says so.
+ */
+function onlyEffectErrors(error: CombinedError | undefined): boolean {
+  if (!error || error.networkError || error.graphQLErrors.length === 0)
+    return false;
+  return error.graphQLErrors.every((graphqlError) =>
+    (graphqlError.path ?? [])
+      .slice(1)
+      .some((segment) => EFFECT_FIELDS.has(String(segment)))
+  );
+}
+
 /** Server response kept until its local commit succeeds. */
-type ConfirmedMutation = { transactionId: string; result: OperationResult };
+type ConfirmedMutation = {
+  transactionId: string;
+  result: OperationResult;
+  /** Its effect errors were cleared before it was kept. */
+  rowsMissing: boolean;
+};
 
 /** Phase of the claimed queue head; at most one attempt is active. */
 type HeadState =
@@ -560,6 +585,7 @@ export function createMutationQueueRunner(
       // hooks run, so they can never veto or resend a confirmed head.
       if (!transition(attempt, { kind: 'settling', confirmed })) return;
       deferredUntil = undefined;
+      attempt.rowsMissing = confirmed.rowsMissing;
       await writeThrough({
         ...confirmed.result,
         operation: withQueueAttempt(confirmed.result.operation, attempt),
@@ -1150,6 +1176,16 @@ export function createMutationQueueRunner(
           }),
         };
       }
+      // The write committed and only its returned rows failed: settle it, and
+      // read the lists again below, rather than retry or roll back a write
+      // the server kept. A server failure keeps its retry. A kept response
+      // had its errors cleared already.
+      const rowsMissing =
+        attempt.rowsMissing === true ||
+        (!httpServerFailure &&
+          result.data != null &&
+          onlyEffectErrors(result.error));
+      if (rowsMissing) result = { ...result, error: undefined };
       if (result.error || result.data == null) {
         details = failureDetails(result.error, response);
         let retry = false;
@@ -1236,6 +1272,7 @@ export function createMutationQueueRunner(
         const confirmed: ConfirmedMutation = {
           transactionId: attempt.transactionId,
           result,
+          rowsMissing,
         };
         if (!transition(attempt, confirm(confirmed))) return detachedResult();
         await recordAttemptResult(attempt, result, false);
@@ -1340,11 +1377,16 @@ export function createMutationQueueRunner(
               isCurrent(attempt)
             );
             if (replay) await replay;
+            // The saved reads cover only the lists the cache cannot keep.
+            // A write that committed without its rows leaves the others
+            // stale, and after a replay no caller is left to read them.
+            if (rowsMissing) details = { ...details, rowsMissing: true };
             if (isCurrent(attempt))
               await deps.revalidate(
                 committed.revalidations ?? [],
                 op,
-                deleted.attempted || replay ? undefined : committed.affectedOps
+                deleted.attempted || replay ? undefined : committed.affectedOps,
+                rowsMissing
               );
           }
         }

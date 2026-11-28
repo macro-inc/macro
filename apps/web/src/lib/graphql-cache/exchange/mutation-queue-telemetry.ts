@@ -96,6 +96,8 @@ export type MutationAttemptDetails = {
   commitMs?: number;
   /** The native engine's wait and hold for the commit. */
   commitEngine?: EngineLockTiming;
+  /** The write committed without the rows it returns; every list read again. */
+  rowsMissing?: boolean;
 };
 
 export interface MutationAttemptTelemetry {
@@ -316,6 +318,7 @@ function detailAttributes(
     attributes['mutation_queue.retry_delay_ms'] = details.retryDelayMs;
   if (details.commitMs !== undefined)
     attributes['mutation_queue.commit_ms'] = details.commitMs;
+  if (details.rowsMissing) attributes['mutation_queue.rows_missing'] = 1;
   Object.assign(
     attributes,
     engineAttributes('mutation_queue.commit', details.commitEngine)

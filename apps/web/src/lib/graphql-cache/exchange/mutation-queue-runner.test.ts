@@ -116,7 +116,9 @@ function fixture(
     currentRevision: async () => INITIAL_CACHE_REVISION,
     claimNextMutation: async () => undefined,
   } as unknown as CacheHost;
-  const revalidate = vi.fn(async () => {});
+  const revalidate = vi.fn<MutationQueueRunnerDeps['revalidate']>(
+    async () => {}
+  );
   const replayExplicitEffects = vi.fn(() => undefined);
   const deleteReportedRecords = vi.fn(async () => ({ attempted: false }));
   let runner!: MutationQueueRunner;
@@ -898,4 +900,182 @@ it('lets its owner go at once, and sends nothing more, with no request unanswere
   await admitted;
   expect(forwarded).toEqual([]);
   expect(host.deferOptimisticWrite).toHaveBeenCalledOnce();
+});
+
+// A nullable `effect`, as on the property-option and create mutations: a
+// field error under it nulls only the effect, not the committed write.
+function effectError(path: (string | number)[]) {
+  return new CombinedError({
+    graphQLErrors: [{ message: 'row unavailable', path }],
+  });
+}
+const WITHOUT_EFFECT = {
+  updateSoupEntityPropertyOptions: { __typename: 'Committed', effect: null },
+};
+
+it('settles a write whose only errors are in its returned rows, reading every list again', async () => {
+  const { runner, forwarded, commit, host, revalidate } = fixture();
+  const op = operation();
+  await runner.admit(op, enqueue(op, '1'), runner.epoch());
+  const settled = await runner.settle(
+    {
+      operation: forwarded[0],
+      data: WITHOUT_EFFECT,
+      error: effectError([
+        'updateSoupEntityPropertyOptions',
+        'effect',
+        'properties',
+      ]),
+      stale: false,
+      hasNext: false,
+    },
+    queueAttemptOf(forwarded[0])!
+  );
+  expect(settled.error).toBeUndefined();
+  expect(settled.extensions?.normalizedCacheMutationDisposition).toMatchObject({
+    kind: 'committed',
+  });
+  expect(commit).toHaveBeenCalledOnce();
+  expect(host.rollbackOptimisticWrite).not.toHaveBeenCalled();
+  expect(revalidate).toHaveBeenCalledWith([], expect.anything(), [], true);
+});
+
+it('fails a write with an error outside its returned rows', async () => {
+  const { runner, forwarded, commit, revalidate } = fixture();
+  const op = operation();
+  await runner.admit(op, enqueue(op, '1'), runner.epoch());
+  const settled = await runner.settle(
+    {
+      operation: forwarded[0],
+      data: { ...WITHOUT_EFFECT, setEntityProperty: null },
+      error: new CombinedError({
+        graphQLErrors: [
+          {
+            message: 'row unavailable',
+            path: ['updateSoupEntityPropertyOptions', 'effect'],
+          },
+          { message: 'No access', path: ['setEntityProperty'] },
+        ],
+      }),
+      stale: false,
+      hasNext: false,
+    },
+    queueAttemptOf(forwarded[0])!
+  );
+  expect(settled.error).toBeDefined();
+  expect(commit).not.toHaveBeenCalled();
+  expect(revalidate).not.toHaveBeenCalledWith(
+    expect.anything(),
+    expect.anything(),
+    expect.anything(),
+    true
+  );
+});
+
+it('keeps the retry for rows missing from an HTTP 5xx reply', async () => {
+  const { runner, forwarded, commit } = fixture({
+    shouldRetryMutation: () => true,
+  });
+  const op = operation();
+  await runner.admit(op, enqueue(op, '1'), runner.epoch());
+  const attempt = queueAttemptOf(forwarded[0])!;
+  attempt.response = new Response(null, { status: 503 });
+  const settled = await runner.settle(
+    {
+      operation: forwarded[0],
+      data: WITHOUT_EFFECT,
+      error: effectError(['updateSoupEntityPropertyOptions', 'effect']),
+      stale: false,
+      hasNext: false,
+    },
+    attempt
+  );
+  expect(commit).not.toHaveBeenCalled();
+  expect(settled.extensions?.normalizedCacheMutationDisposition).toMatchObject({
+    kind: 'queued',
+  });
+});
+
+const MOVED = {
+  moveEntities: {
+    results: [{ __typename: 'GraphqlMutationSuccess', effects: [] }],
+  },
+};
+const MOVED_ROW_UNREADABLE = effectError([
+  'moveEntities',
+  'results',
+  0,
+  'effects',
+]);
+
+it.each([
+  { error: MOVED_ROW_UNREADABLE, refetchAll: true },
+  { error: undefined, refetchAll: false },
+])(
+  'reads every list again after a replay commits without its rows: $refetchAll',
+  async ({ error, refetchAll }) => {
+    const { runner, forwarded, host, revalidate } = fixture();
+    const queued = enqueue(operation(), '5');
+    if (queued.initialClaim.kind !== 'claimed')
+      throw new Error('Missing claim');
+    vi.spyOn(host, 'claimNextMutation').mockResolvedValueOnce(
+      queued.initialClaim.mutation
+    );
+    runner.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(forwarded).toHaveLength(1);
+    await runner.settle(
+      {
+        // The page's exchange sends a replay under the current cache session.
+        operation: withQueueRequestTimeout(forwarded[0]),
+        data: MOVED,
+        error,
+        stale: false,
+        hasNext: false,
+      },
+      queueAttemptOf(forwarded[0])!
+    );
+    expect(revalidate).toHaveBeenCalledOnce();
+    expect(revalidate.mock.lastCall?.[3]).toBe(refetchAll);
+  }
+);
+
+it('leaves a live write with nothing to render to its caller', async () => {
+  const { runner, forwarded, revalidate } = fixture();
+  const op = operation();
+  await runner.admit(op, enqueue(op, '1'), runner.epoch());
+  await runner.settle(
+    { operation: forwarded[0], data: MOVED, stale: false, hasNext: false },
+    queueAttemptOf(forwarded[0])!
+  );
+  expect(revalidate).toHaveBeenCalledWith([], expect.anything(), [], false);
+});
+
+it('reads every list again when a kept response without its rows commits later', async () => {
+  const { runner, forwarded, commit, host, revalidate } = fixture();
+  commit.mockRejectedValueOnce(new Error('native commit lost'));
+  const op = operation();
+  const queued = enqueue(op, '1');
+  await runner.admit(op, queued, runner.epoch());
+  await runner.settle(
+    {
+      operation: forwarded[0],
+      data: MOVED,
+      error: MOVED_ROW_UNREADABLE,
+      stale: false,
+      hasNext: false,
+    },
+    queueAttemptOf(forwarded[0])!
+  );
+  expect(revalidate).not.toHaveBeenCalled();
+  if (queued.initialClaim.kind !== 'claimed') throw new Error('Missing claim');
+  vi.spyOn(host, 'claimNextMutation').mockResolvedValue({
+    ...queued.initialClaim.mutation,
+    leaseGeneration: '2',
+  });
+  runner.start();
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(commit).toHaveBeenCalledTimes(2);
+  expect(forwarded).toHaveLength(1);
+  expect(revalidate).toHaveBeenCalledWith([], expect.anything(), [], true);
 });
