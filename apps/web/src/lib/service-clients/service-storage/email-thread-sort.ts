@@ -17,13 +17,16 @@ function latestTimestamp(
 /** The server's per-view sort key, recomputed from the thread's own facts so a
  * cache re-read never dates a row by the view that fetched the thread last.
  * Mirrors `get_sort_timestamp_field` in crates/email; INBOX is the server's
- * default view. */
+ * default view. Spam and Trash sort by the latest message in the folder, which
+ * no thread fact gives, so they read the server's `sortTs`: those lists are
+ * network pages, and a thread only they list is fetched by no other view. */
 export function emailThreadSortTs(
   thread: {
     latestInboundMessageTs?: string | null;
     reminderReturnedAt?: string | null;
     latestOutboundMessageTs?: string | null;
     latestNonSpamMessageTs?: string | null;
+    sortTs?: string | null;
     updatedAt: string;
   },
   emailView: GraphqlEmailView | null | undefined
@@ -33,6 +36,7 @@ export function emailThreadSortTs(
     .with('INBOX', P.nullish, () =>
       latestTimestamp(thread.latestInboundMessageTs, thread.reminderReturnedAt)
     )
+    .with('SPAM', 'TRASH', () => thread.sortTs)
     .otherwise(() => thread.latestNonSpamMessageTs);
   return key ?? thread.updatedAt;
 }

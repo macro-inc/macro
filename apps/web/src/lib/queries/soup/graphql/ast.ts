@@ -78,7 +78,7 @@ type AstBody = Partial<Record<TargetAstKey, RestAst>> & {
   /** CRM-address and CRM-domain filters are REST-only today. */
   eca?: string[];
   ecd?: string[];
-  emailView?: 'inbox' | 'drafts' | 'sent' | 'all';
+  emailView?: 'inbox' | 'drafts' | 'sent' | 'all' | 'spam' | 'trash';
 };
 
 type LiteralMapper<TLiteral> = (literal: unknown) => TLiteral;
@@ -846,6 +846,10 @@ function mapEmailView(
       return 'SENT';
     case 'all':
       return 'ALL';
+    case 'spam':
+      return 'SPAM';
+    case 'trash':
+      return 'TRASH';
     case undefined:
       return undefined;
     default:

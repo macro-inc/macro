@@ -10,7 +10,6 @@ import {
 } from '@app/features/soup';
 import type { SoupAstBody, SoupAstItemsQueryArgs } from '@queries/soup/items';
 import { match } from 'ts-pattern';
-import { isExcludedEmailFolder } from '../constants';
 import {
   EMAIL_ATTACHMENT_KINDS,
   EMAIL_FACETS,
@@ -285,9 +284,6 @@ export function buildEmailQuery(
 
   // Newest activity first: `updated_at` is the thread's latest message time.
   return {
-    ...(isExcludedEmailFolder(context.tab)
-      ? { transport: 'rest' as const }
-      : {}),
     params: {
       expand: true,
       limit: 100,

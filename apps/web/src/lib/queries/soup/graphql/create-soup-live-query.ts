@@ -34,6 +34,9 @@ import {
   ChannelListItemFieldsFragmentDoc,
   ChannelListSoupDocument,
   type ChannelListSoupQuery,
+  MailFolderItemFieldsFragmentDoc,
+  MailFolderSoupDocument,
+  type MailFolderSoupQuery,
   MailItemFieldsFragmentDoc,
   SoupDocument,
   type SoupInitialInput,
@@ -85,7 +88,7 @@ import {
 /** A Soup query declaration. The source owns page cursors and cache baselines. */
 export type SoupLiveQueryInput = Omit<SoupInitialInput, 'expand'>;
 
-export type SoupProjection = 'channel-list' | 'preview';
+export type SoupProjection = 'channel-list' | 'preview' | 'mail-folder';
 
 export type SoupLiveQueryOptions = {
   enabled?: boolean;
@@ -95,7 +98,8 @@ export type SoupLiveQueryOptions = {
   localOnly?: boolean;
   /**
    * `channel-list` selects bounded unread evidence for channel navigation;
-   * `preview` selects rows without notifications, for lists that show none.
+   * `preview` selects rows without notifications, for lists that show none;
+   * `mail-folder` adds the folder date to Spam and Trash server pages.
    */
   projection?: SoupProjection;
   /** Select known entities locally, then fetch only missing records. */
@@ -115,6 +119,7 @@ type FreshDecision = { key: string; client: object; fresh: boolean };
 const SOUP_DOCUMENTS = {
   'channel-list': ChannelListSoupDocument,
   preview: SoupPreviewPageDocument,
+  'mail-folder': MailFolderSoupDocument,
 } satisfies Record<SoupProjection, unknown>;
 
 const soupDocumentFor = (projection: SoupProjection | undefined) =>
@@ -124,7 +129,11 @@ const soupDocumentFor = (projection: SoupProjection | undefined) =>
 // over every loaded page, so such a page reads as unloaded instead of failing
 // the whole list.
 const hasSoupPage = (
-  page: SoupQuery | ChannelListSoupQuery | SoupPreviewPageQuery
+  page:
+    | SoupQuery
+    | ChannelListSoupQuery
+    | SoupPreviewPageQuery
+    | MailFolderSoupQuery
 ): boolean => page.user?.soup != null;
 
 /** Owns network pages, live cache records, Mail cursors, and fallback selection.
@@ -270,6 +279,7 @@ export function createSoupLiveQuery(
   const projectionSelections = {
     'channel-list': channelListItemSelection,
     preview: previewItemSelection,
+    'mail-folder': selectRecords(MailFolderItemFieldsFragmentDoc),
   } satisfies Record<SoupProjection, unknown>;
   const mailItemSelection = selectRecords(MailItemFieldsFragmentDoc);
   let localRequest = 0;
@@ -451,7 +461,10 @@ export function createSoupLiveQuery(
     pages,
     pageParams,
   }: UrqlInfiniteData<
-    SoupQuery | ChannelListSoupQuery | SoupPreviewPageQuery,
+    | SoupQuery
+    | ChannelListSoupQuery
+    | SoupPreviewPageQuery
+    | MailFolderSoupQuery,
     string | null
   >): ServerProjection => {
     const soupPages = pages.filter(hasSoupPage);
@@ -484,7 +497,10 @@ export function createSoupLiveQuery(
   );
 
   const query = createUrqlInfiniteQuery<
-    SoupQuery | ChannelListSoupQuery | SoupPreviewPageQuery,
+    | SoupQuery
+    | ChannelListSoupQuery
+    | SoupPreviewPageQuery
+    | MailFolderSoupQuery,
     SoupQueryVariables,
     string | null,
     ServerProjection
@@ -673,6 +689,9 @@ export function createSoupLiveQuery(
       return;
     const initial = input.initial;
     if (!isLocallySortable(initial.sortMethod)) return;
+    // Spam and Trash have no local membership or folder dates: their lists
+    // are server pages, which a predicate over all mail would widen.
+    if (initial.emailView && !isCachedMailView(initial.emailView)) return;
     const withoutEmail = queryOptions.localReconciliation === 'without-email';
     const mailView =
       !withoutEmail && isCachedMailView(initial.emailView)

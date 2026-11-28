@@ -1637,6 +1637,73 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }
   });
 
+  it.each([
+    [undefined, true],
+    ['SPAM', false],
+    ['TRASH', false],
+  ] as const)(
+    'lists %s mail from server pages, evaluating locally: %s',
+    async (emailView, evaluatesLocally) => {
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      makeGraphqlSoupInputMock.mockReturnValue({
+        initial: { limit: 50, sortMethod: 'UPDATED_AT', emailView },
+      });
+      getGraphqlSoupCacheHostMock.mockReturnValue({
+        liveQueries: true,
+        currentRevision: async () => REVISION_1,
+        entityFilter: entityFilterMock,
+        onCacheChanged: () => () => {},
+        onCacheGenerationChanged: () => () => {},
+      });
+      entityFilterMock.mockResolvedValue({
+        kind: 'live-query',
+        revision: parseCacheRevision(REVISION_1),
+        reset: true,
+        keys: [],
+        upserts: [],
+        patches: [],
+        removed: [],
+        retainedKeys: [],
+        optimistic: false,
+      });
+      const { query, dispose } = createRoot((dispose) => ({
+        dispose,
+        query: createGraphqlSoupAstItemsQuery(
+          () => ({ params: {}, body: {} }) as never,
+          () => ({ enabled: true })
+        ),
+      }));
+      try {
+        fake.executions[0].next(
+          graphqlSoupPage({
+            items: [{ __typename: 'GraphqlSoupEmailThread', id: 'folder' }],
+            next_cursor: null,
+          }),
+          { source: 'live-network', revision: REVISION_1 }
+        );
+        await vi.waitFor(() =>
+          expect(query.data()?.entities.map((entity) => entity.id)).toEqual([
+            'folder',
+          ])
+        );
+        if (evaluatesLocally) {
+          await vi.waitFor(() => expect(entityFilterMock).toHaveBeenCalled());
+        } else {
+          await Promise.resolve();
+          await Promise.resolve();
+          expect(entityFilterMock).not.toHaveBeenCalled();
+        }
+        expect(mapGraphqlSoupItemMock).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'folder' }),
+          { emailView }
+        );
+      } finally {
+        dispose();
+      }
+    }
+  );
+
   it('owns fetching, continuation arguments, refresh and reset from a Soup declaration', async () => {
     const fake = makeFakeClient();
     getGraphqlSoupClientMock.mockReturnValue(fake.client);
@@ -2573,6 +2640,44 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       for (const execution of fake.executions) {
         expect(print(execution.document)).toContain('query SoupPreviewPage');
         expect(print(execution.document)).not.toContain('notifications');
+      }
+    } finally {
+      dispose();
+    }
+  });
+
+  it('reads Spam and Trash pages with their folder date on every page', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    makeGraphqlSoupInputMock.mockImplementation(({ cursor }) =>
+      cursor
+        ? { continuation: { cursor, emailView: 'SPAM' } }
+        : {
+            initial: { limit: 50, sortMethod: 'UPDATED_AT', emailView: 'SPAM' },
+          }
+    );
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: {}, body: {} }),
+        () => ({ enabled: true, projection: 'mail-folder' })
+      ),
+    }));
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({ items: [], next_cursor: 'next' })
+      );
+      const more = query.fetchNextPage();
+      fake.executions[1].next(
+        graphqlSoupPage({ items: [], next_cursor: null })
+      );
+      await more;
+      for (const entry of getActiveGraphqlSoupRevalidations()) {
+        expect(print(entry.document)).toContain('query MailFolderSoup');
+      }
+      for (const execution of fake.executions) {
+        expect(print(execution.document)).toContain('query MailFolderSoup');
+        expect(print(execution.document)).toContain('sortTs');
       }
     } finally {
       dispose();
