@@ -2,9 +2,8 @@
 
 ## What it is
 
-Backs the CRM feature: the typed GraphQL inbound adapter for CRM pipeline
-records (rows that reference a company or contact), composed onto their Soup
-entities.
+Backs the CRM feature with typed record mutations and pipeline entries
+composed onto CRM Soup entities.
 
 ## Start here
 
@@ -14,17 +13,24 @@ entities.
   record (company/contact) across a query.
 - `src/context.rs`: `CrmGraphqlContext` and the object-safe `CrmPipelineApi`
   forwarding trait over `crm::domain::pipelines::PipelineService`.
+- `src/mutations.rs`: `createCrmCompany` and `createCrmContact` call the
+  same authorized CRM domain methods as the REST routes. Both take a stable
+  client request ID for replay and return primary-backed Soup effects.
+- `src/mutations.rs` and `src/mutations/record_merge.rs`: company rename,
+  domain edits, and reviewed merges use the same domain receipts as their
+  REST counterparts. Merges return source tombstones and the survivor.
 
 ## Scope
 
-- Owns: the GraphQL shape over CRM pipeline entries.
+- Owns: the GraphQL shape over CRM record writes and pipeline entries.
 - Not here: pipeline domain logic and storage → `crates/crm` (built on
   `crates/databases`).
 
 ## Boundaries
 
 - Depends on: `crm` (ports), `databases` (ports), `entity_access` (ports),
-  `graphql_common`, `graphql_properties`.
+  `graphql_common`, `graphql_entity_mutation`, `graphql_properties`, and
+  `graphql_soup`.
 - Used by: `complete_graph`, `document_storage_service`.
 
 ## Recipes

@@ -208,7 +208,8 @@ const NORMALIZED_CACHE_RESULT_METADATA_KEY = '__macroNormalizedCache';
 export type NormalizedCacheResultMetadata =
   | {
       source: 'live-network';
-      /** Subscription effects finished successfully in this cache generation. */
+      /** Subscription or direct mutation effects (rows and deletions) finished
+       * successfully in this cache generation. */
       cacheEffectsApplied?: boolean;
       revision?: CacheRevision;
       /** Local-only acknowledgement; never rejects or republishes response data. */
@@ -1713,13 +1714,27 @@ export function normalizedCacheExchange(
        * its caller named, so a trace shows how long the caller waited on the
        * cache after the server answered.
        */
+      /** Whether a direct mutation's rows and deletions all reached the cache. */
+      async function applyUntracedMutationCacheEffects(
+        result: OperationResult
+      ): Promise<boolean> {
+        const applied = await applyOperationCacheEffects(
+          result.operation,
+          operationCacheEffects(result.data)
+        );
+        const deletion = await deleteReportedRecords(result);
+        return (
+          applied && (!deletion.attempted || deletion.revision !== undefined)
+        );
+      }
+
       async function applyTracedMutationCacheEffects(
         result: OperationResult,
         parent: TraceContext
-      ): Promise<void> {
+      ): Promise<boolean> {
         const op = result.operation;
         const effects = operationCacheEffects(result.data);
-        await parent.run(() =>
+        return parent.run(() =>
           Telemetry.span('graphql.mutation.cache_effects', async (span) => {
             span.setAttr(
               'graphql.operation.name',
@@ -1737,6 +1752,7 @@ export function normalizedCacheExchange(
             const deleted =
               !deletion.attempted || deletion.revision !== undefined;
             span.setAttr('cache.effects_applied', applied && deleted);
+            return applied && deleted;
           })
         );
       }
@@ -1959,23 +1975,27 @@ export function normalizedCacheExchange(
 
           const optimistic = optimisticContextOf(op);
           const parent = mutationTraceParentOf(op);
-          if (result.data != null && !result.error && parent) {
-            await applyTracedMutationCacheEffects(result, parent);
-          } else if (result.data != null && !result.error) {
-            await applyOperationCacheEffects(
-              op,
-              operationCacheEffects(result.data)
-            );
-            await deleteReportedRecords(result);
+          let settled = result;
+          if (result.data != null && !result.error) {
+            // Callers that skip their own reads rely on the rows reaching
+            // the cache; a failed write or deletion says so.
+            const cacheEffectsApplied = parent
+              ? await applyTracedMutationCacheEffects(result, parent)
+              : await applyUntracedMutationCacheEffects(result);
+            settled = withResultMetadata(result, {
+              source: 'live-network',
+              cacheEffectsApplied,
+            });
           }
           if (optimistic) {
-            return withOptimisticMutationDisposition(result, {
+            return withOptimisticMutationDisposition(settled, {
               kind:
                 result.data != null && !result.error
                   ? 'committed'
                   : 'permanently-failed',
             });
           }
+          return settled;
         }
         return output;
       }

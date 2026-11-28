@@ -1,0 +1,17 @@
+mutation CreateCrmCompany($input: CreateCrmCompanyInput!) {
+  createCrmCompany(input: $input) {
+    recordId
+    result {
+      ...EntityMutationResultFields
+    }
+  }
+}
+
+mutation CreateCrmContact($input: CreateCrmContactInput!) {
+  createCrmContact(input: $input) {
+    recordId
+    result {
+      ...EntityMutationResultFields
+    }
+  }
+}

@@ -1022,7 +1022,34 @@ grouping, email view and targets, never ids or values (an unknown email view
 shows as `other`); the reason holds fixed text only: no filter value and no unrecognized literal key. A request made with
 `transport: 'rest'` is a choice, not a fallback, and is not recorded.
 
-Without the cache, writes read mounted Soup lists again
+Without the cache, a committed GraphQL mutation reads every mounted query
+again before it settles (`networkRevalidationExchange`). A flat Soup list
+or a project list reads its loaded pages again in cursor order, through the
+`networkRevalidation` its pages carry (`createPagedNetworkRevalidation`), so a
+moved page boundary neither repeats nor drops a row; a refetch already running
+when the write commits is followed by another, and a page whose request is
+still in flight is sent again, since urql joins a new read onto it. The owner
+reads only while its list reads the network (enabled, not paused), and a paused
+list's pages are left alone; once the list leaves a chain, a page key of it is
+sent again for any reader still holding it. Each owner is also registered with
+its client, because a list mounted while another list's request for the same
+page is in flight never sends its own operation. The exchange records a
+`graphql.mutation.network_revalidation` span, in the trace the write's caller
+named, with the queries it sent, the lists it read, failed or cut off at 15 s,
+and `revalidation.complete`; every query it sends, and every page a paged list
+sends before the exchange stops waiting at 15 s, joins that span for that send
+only, and a page sent later joins nothing. Other paged queries, grouped Soup lists included,
+are sent again page by page. A write whose response was lost (a network error)
+may still have committed, so its queries are read again in the background,
+without holding back its error. Mail archive and read-state writes add no
+refresh of their own. Notification status writes and renames add none when
+`networkRevalidated(result)` says every read succeeded; when
+`networkRevalidationIncomplete(result)` says one failed or timed out, they
+read every mounted Soup list again through its own refresh
+(`refreshActiveGraphqlSoupQueries`, which starts after any read of the list
+already in flight), with their other readers, in the background, so the write
+settles at once. Those reads start their own traces, since the refresh
+coalesces callers; the write's span records `revalidation.fallback`. Other writes read mounted Soup lists again
 (`refreshActiveGraphqlSoupQueries`), and so do agent-session metadata events
 (`agent-session/list-sync.ts`), which otherwise only read the session's row
 into the cache. A row read while the engine is still opening is written only
@@ -1034,8 +1061,7 @@ without them is always ready, and a retired host
 reads into it. The reread runs after its pass, so
 later events never wait for the engine, and gives up after 60 s. A list that never shows, filters or sorts
 by unread state (the Quick Access and menu feeds) passes
-`ignoresNotifications: true`, and notification and email read-state writes
-refresh with `notificationsOnly: true`, which skips it. Such a list also reads
+`ignoresNotifications: true`. Such a list reads
 its rows with `SoupPreviewPage` (the `preview` projection), so the server does
 not look up notifications for rows it never shows.
 

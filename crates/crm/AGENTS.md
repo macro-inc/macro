@@ -35,6 +35,9 @@ tools/HTTP/GraphQL surfaces over them.
   existing deal entry is found from its company's entries
   (`record_entries`, indexed by record), never by scanning the pipeline.
 - `src/inbound/axum_router.rs` (+ `axum_router/*.rs`): HTTP handlers.
+- `../graphql_crm/src/mutations.rs`: the web's GraphQL company and contact
+  creates, company rename, domain edits, and merge commits use these domain
+  services and return Soup effects. The SDK also uses the HTTP write routes.
 - `src/inbound/pipeline_workflows.rs`: HTTP routes over the pipeline workflows
   and CSV transfers (entries by record, fields by name, options by label),
   merged into `/crm` beside `src/inbound/pipelines.rs`; the SDK's pipeline
@@ -176,8 +179,9 @@ tools/HTTP/GraphQL surfaces over them.
 - A company merged away keeps answering to its old id through
   `crm_company_aliases`: the `/crm/companies/{company_id}` routes, the company and
   pipeline tools, a contact's company, record associations and `/crm/previews`.
-  The company extractor and `company_receipt` mint the receipt for the company
-  the id names now, so act on the receipt's id, never on the path or argument.
+  The company extractor and GraphQL contact create share
+  `CrmCompanyReceipt::for_user`. It mints the receipt for the company the id
+  names now, so act on the receipt's id. The tools use `company_receipt`.
   A contact merged away does the same through `crm_contact_aliases`: the
   `/crm/contacts/{contact_id}` routes (the contact extractor), pipeline entries,
   record associations, `/crm/previews`, and a contact's discussion and

@@ -52,9 +52,11 @@ it('tracks enabled state without reading data, preserves the query pagination, a
 
   mocks.query.isEnabled = true;
   await revalidateNotificationReaders(mocks.client);
+  // Never joins a read in flight, which may predate the write.
   expect(mocks.query.refetch).toHaveBeenCalledExactlyOnceWith({
     requestPolicy: 'network-only',
     throwOnError: true,
+    fresh: true,
   });
 
   dispose();

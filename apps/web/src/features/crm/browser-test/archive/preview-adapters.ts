@@ -1,3 +1,4 @@
+import { ThrownResultError } from '@core/util/result';
 import type { EntityData } from '@entity';
 import type { storageServiceClient as Storage } from '@service-storage/client';
 import type { CrmCompanyResponse } from '@service-storage/generated/schemas/crmCompanyResponse';
@@ -294,44 +295,6 @@ export const storageServiceClient = {
     contacts = contacts.map((contact) => ({ ...contact, hidden }));
     return ok(undefined);
   },
-  async addCompanyDomain({ domain }) {
-    const added = domain.trim().toLowerCase();
-    // Another company of the team already has this one.
-    if (added === 'example.net')
-      return err([{ code: 'CONFLICT', message: 'Second company' }]);
-    if (!(await save()))
-      return err([{ code: 'BAD_REQUEST', message: 'Save rejected' }]);
-    if (!company.domains.some((held) => held.domain === added))
-      company = {
-        ...company,
-        domains: [
-          ...company.domains,
-          {
-            id: `domain-${company.domains.length + 1}`,
-            companyId: company.id,
-            domain: added,
-            createdAt: '2026-11-23',
-          },
-        ],
-      };
-    return ok({ ...company, contacts: [] });
-  },
-  async removeCompanyDomain({ domain }) {
-    // The company is named after its primary domain.
-    if (company.domains[0]?.domain === domain)
-      return err([{ code: 'BAD_REQUEST', message: 'Save rejected' }]);
-    if (!(await save()))
-      return err([{ code: 'FORBIDDEN', message: 'Save rejected' }]);
-    company = {
-      ...company,
-      domains: company.domains.filter((held) => held.domain !== domain),
-    };
-    return ok({ ...company, contacts: [] });
-  },
-  async setCompanyName({ name }) {
-    company = { ...company, name };
-    return ok(undefined);
-  },
   async setContactName({ contactId, name }) {
     contacts = contacts.map((contact) =>
       contact.id === contactId ? { ...contact, name } : contact
@@ -354,15 +317,77 @@ export const storageServiceClient = {
   | 'getContact'
   | 'setCompanyHidden'
   | 'setContactHidden'
-  | 'setCompanyName'
-  | 'addCompanyDomain'
-  | 'removeCompanyDomain'
   | 'setContactName'
   | 'setEmailSync'
 >;
+
+const writeOutcome = {
+  effectsResolved: true,
+  cacheRevalidates: false,
+  listsReadAgain: false,
+};
+
+export async function editGraphqlCrmCompanyDomain({
+  change,
+  domain,
+}: {
+  change: 'ADD' | 'REMOVE';
+  domain: string;
+}) {
+  if (change === 'ADD') {
+    const added = domain.trim().toLowerCase();
+    // Another company of the team already has this one.
+    if (added === 'example.net')
+      throw new ThrownResultError([
+        { code: 'CONFLICT', message: 'Second company' },
+      ]);
+    if (!(await save()))
+      throw new ThrownResultError([
+        { code: 'BAD_REQUEST', message: 'Save rejected' },
+      ]);
+    if (!company.domains.some((held) => held.domain === added))
+      company = {
+        ...company,
+        domains: [
+          ...company.domains,
+          {
+            id: `domain-${company.domains.length + 1}`,
+            companyId: company.id,
+            domain: added,
+            createdAt: '2026-11-23',
+          },
+        ],
+      };
+  } else {
+    // The company is named after its primary domain.
+    if (company.domains[0]?.domain === domain)
+      throw new ThrownResultError([
+        { code: 'BAD_REQUEST', message: 'Save rejected' },
+      ]);
+    if (!(await save()))
+      throw new ThrownResultError([
+        { code: 'FORBIDDEN', message: 'Save rejected' },
+      ]);
+    company = {
+      ...company,
+      domains: company.domains.filter((held) => held.domain !== domain),
+    };
+  }
+  return {
+    ...writeOutcome,
+    payload: { companyId: company.id, domains: company.domains },
+  };
+}
+
+export async function renameGraphqlCrmCompany({ name }: { name: string }) {
+  company = { ...company, name };
+  return { ...writeOutcome, payload: undefined };
+}
+
 const deps = {
   client,
   storage: storageServiceClient as unknown as typeof Storage,
+  hasLiveCache: () => false,
 };
 const references: EntityData[] = ['Kickoff notes', 'Pricing review'].map(
   (name, index) => ({

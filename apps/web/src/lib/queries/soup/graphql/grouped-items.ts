@@ -168,12 +168,17 @@ export function createGraphqlGroupedSoupAstItemsQuery(
   );
 
   onCleanup(
-    registerGraphqlSoupRevalidations(() => {
-      const queryInput = input();
-      return query.isEnabled && queryInput
-        ? [{ document: GroupSoupDocument, variables: { input: queryInput } }]
-        : [];
-    })
+    registerGraphqlSoupRevalidations(
+      () => {
+        const queryInput = input();
+        return query.isEnabled && queryInput
+          ? [{ document: GroupSoupDocument, variables: { input: queryInput } }]
+          : [];
+      },
+      undefined,
+      undefined,
+      () => input()?.initial?.filters
+    )
   );
 
   const cachedMail = createMemo(() => {

@@ -6,15 +6,9 @@ import {
   setGraphqlEmailThreadArchived,
   setGraphqlEmailThreadsArchived,
 } from '@service-storage/graphql-email-archive-state';
-import {
-  getGraphqlSoupClient,
-  graphqlCacheEnabled,
-} from '@service-storage/graphql-soup';
+import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { invalidateEmailReminderCollection } from '../reminders/email-collection';
-import {
-  getUnmaintainedGraphqlSoupRevalidations,
-  refreshActiveGraphqlSoupQueries,
-} from '../soup/graphql/active-queries';
+import { getUnmaintainedGraphqlSoupRevalidations } from '../soup/graphql/active-queries';
 import { updateEntitySharePolicy } from '../storage/entity-mutations';
 
 /** Provider operations used by email's production adapters alongside shared mutations. */
@@ -27,7 +21,9 @@ export type EmailArchiveDisposition = 'committed' | 'queued';
  * GraphQL owns optimistic state and durable replay. The optimistic
  * `inboxVisible` and the committed record update every list the cache
  * maintains (FE-58); only the others, such as grouped lists, are read again
- * when the write commits, including on a replay after reload. */
+ * when the write commits, including on a replay after reload. Without a
+ * working cache the client's revalidation exchange reads every mounted list
+ * again before the write settles. */
 export async function archiveEmailThread({
   id,
   value,
@@ -41,14 +37,8 @@ export async function archiveEmailThread({
     value,
     getUnmaintainedGraphqlSoupRevalidations()
   );
-  if (disposition === 'committed') {
-    if (!graphqlCacheEnabled()) {
-      await refreshActiveGraphqlSoupQueries({
-        target: { kind: 'email-archive', threadId: id },
-      });
-    }
+  if (disposition === 'committed')
     fireAndForget(invalidateEmailReminderCollection(), 'email-reminders');
-  }
   return disposition;
 }
 
@@ -104,16 +94,6 @@ async function archiveThreadsRequest(
     );
     if (result.kind === 'queued' || result.kind === 'committed-without-content')
       return ids.map(() => ({ status: 'fulfilled', value: 'queued' }));
-    if (!graphqlCacheEnabled())
-      await Promise.all(
-        ids
-          .filter((threadId) => !result.failedThreadIds.has(threadId))
-          .map((threadId) =>
-            refreshActiveGraphqlSoupQueries({
-              target: { kind: 'email-archive', threadId },
-            })
-          )
-      );
     return settle(result.failedThreadIds);
   } catch (reason) {
     return ids.map(() => ({ status: 'rejected', reason }));

@@ -1,7 +1,14 @@
 import type { CellWrite, DatabaseOp } from '@core/database-sql/generated/types';
-import { ThrownResultError, throwOnErr } from '@core/util/result';
-import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
+import {
+  catchToResult,
+  ThrownResultError,
+  throwOnErr,
+} from '@core/util/result';
 import { soupKeys } from '@queries/soup/keys';
+import {
+  createGraphqlCrmCompany,
+  createGraphqlCrmContact,
+} from '@service-storage/graphql-crm-create';
 import { v7 as uuidv7 } from 'uuid';
 import { missingOptionLabels } from '../../database/core/cell-ops';
 import type { PipelineTransfer } from '../context/pipelines';
@@ -12,10 +19,10 @@ import {
   PipelineImportRefusal,
 } from '../core/pipeline-csv';
 import { runConcurrently } from '../core/run-concurrently';
-import type { CrmRecordDependencies } from './dependencies';
+import { refreshCrmCreateLists } from './create-refresh';
+import type { CrmCreateDependencies } from './dependencies';
 import { fetchCrmExportCompanies } from './export';
 import { crmKeys } from './keys';
-import { listCanIncludeCrm } from './list-refresh';
 import { pipelineCell, pipelineViewColumn } from './pipeline-data';
 
 const CONCURRENCY = 4;
@@ -24,7 +31,7 @@ const INSERT_BATCH = 500;
 
 /** Bulk reads and writes of one pipeline, over its own routes. */
 export function createPipelineTransfer(
-  deps: CrmRecordDependencies,
+  deps: CrmCreateDependencies,
   pipeline: Pipeline
 ): PipelineTransfer {
   const { storage } = deps;
@@ -42,10 +49,9 @@ export function createPipelineTransfer(
     const known = domains.get(domain);
     if (known) return known;
     const created = (async () => {
-      const company = await storage.createCompany({
-        name: record.name,
-        domain,
-      });
+      const company = await catchToResult(() =>
+        createGraphqlCrmCompany({ name: record.name, domain }, 'batch')
+      );
       return company.isOk() ? company.value.id : undefined;
     })();
     domains.set(domain, created);
@@ -67,11 +73,12 @@ export function createPipelineTransfer(
       domain
     );
     if (!company) return undefined;
-    const created = await storage.createContact({
-      companyId: company,
-      name: record.name,
-      email: record.key,
-    });
+    const created = await catchToResult(() =>
+      createGraphqlCrmContact(
+        { companyId: company, name: record.name, email: record.key },
+        'batch'
+      )
+    );
     return created.isOk() ? created.value.id : undefined;
   }
   return {
@@ -223,8 +230,7 @@ export function createPipelineTransfer(
     async refresh() {
       await Promise.all([
         deps.client.invalidateQueries({ queryKey: soupKeys._def }),
-        // Imported records come back as no Soup rows for the GraphQL cache.
-        refreshActiveGraphqlSoupQueries({ where: listCanIncludeCrm }),
+        refreshCrmCreateLists(deps.hasLiveCache()),
         deps.client.invalidateQueries({
           queryKey: crmKeys.pipelineTable(pipeline.id).queryKey,
         }),

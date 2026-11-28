@@ -345,6 +345,36 @@ type ClearNotificationInboxPayload {
 }
 
 """
+Confirmation of a reviewed CRM merge.
+"""
+input CommitCrmMergeInput {
+	"""
+	What type of CRM record to combine.
+	"""
+	recordType: CrmMergeRecordType!
+	"""
+	The record that stays.
+	"""
+	survivorId: ID!
+	"""
+	The records to merge into the survivor.
+	"""
+	sourceIds: [ID!]!
+	"""
+	The review revision the caller confirmed.
+	"""
+	revision: String!
+	"""
+	The same key must be used for every delivery of this confirmation.
+	"""
+	requestKey: ID!
+	"""
+	What happens to teammates' email sharing rules on the source records.
+	"""
+	sharingRules: CrmMergeSharing!
+}
+
+"""
 Mutation root combining independent domain GraphQL adapters.
 """
 type CompleteMutationRoot {
@@ -579,6 +609,26 @@ type CompleteMutationRoot {
 	"""
 	inviteCalendarEventGuests(input: InviteCalendarEventGuestsInput!): GraphqlCalendarMutationPayload!
 	"""
+	Commit a previously reviewed CRM merge.
+	"""
+	commitCrmMerge(input: CommitCrmMergeInput!): CrmMergePayload!
+	"""
+	Change a CRM company's name for its owning team.
+	"""
+	renameCrmCompany(input: RenameCrmCompanyInput!): CrmCompanyEditPayload!
+	"""
+	Add or remove a website domain from a CRM company.
+	"""
+	editCrmCompanyDomain(input: EditCrmCompanyDomainInput!): CrmCompanyEditPayload!
+	"""
+	Create a company for the authenticated user's team.
+	"""
+	createCrmCompany(input: CreateCrmCompanyInput!): CreateCrmRecordPayload!
+	"""
+	Create a contact for a visible company or for the authenticated user's team.
+	"""
+	createCrmContact(input: CreateCrmContactInput!): CreateCrmRecordPayload!
+	"""
 	Mark work feed items done for the authenticated user: acknowledge the
 	notifications each entry showed and archive inbox email.
 	Notifications newer than an entry's `revision` stay active. Own work
@@ -805,6 +855,60 @@ input CreateCalendarEventInput {
 }
 
 """
+Manual company creation request.
+"""
+input CreateCrmCompanyInput {
+	"""
+	Client-generated request ID, retained across retries of this write.
+	"""
+	requestId: ID!
+	"""
+	Display name of the company.
+	"""
+	name: String!
+	"""
+	Optional company's website domain.
+	"""
+	domain: String
+}
+
+"""
+Manual contact creation request.
+"""
+input CreateCrmContactInput {
+	"""
+	Client-generated request ID, retained across retries of this write.
+	"""
+	requestId: ID!
+	"""
+	Display name of the contact.
+	"""
+	name: String!
+	"""
+	Optional contact email address.
+	"""
+	email: String
+	"""
+	Existing parent company. When omitted, the team may file the contact by email domain.
+	"""
+	companyId: ID
+}
+
+"""
+The persisted record identity and its normalized Soup effects.
+"""
+type CreateCrmRecordPayload {
+	"""
+	ID of the created record.
+	"""
+	recordId: ID!
+	"""
+	Cache effects, including the parent company when a team contact files there by domain.
+	"""
+	result: GraphqlEntityMutationResult
+}
+
+"""
 Create an initiative owned by the authenticated viewer.
 """
 input CreateInitiativeInput {
@@ -885,6 +989,106 @@ input CreateSavedViewInput {
 	Initial icon and color metadata, validated on first creation.
 	"""
 	appearance: JSON
+}
+
+"""
+A domain assigned to a CRM company.
+"""
+type CrmCompanyDomain {
+	"""
+	The domain record's identifier.
+	"""
+	id: ID!
+	"""
+	The canonical domain name.
+	"""
+	domain: String!
+	"""
+	When the domain was assigned.
+	"""
+	createdAt: String!
+}
+
+"""
+Whether to associate or separate a website domain.
+"""
+enum CrmCompanyDomainChange {
+	"""
+	Associate the domain with the company.
+	"""
+	ADD
+	"""
+	Remove the domain from the company.
+	"""
+	REMOVE
+}
+
+"""
+A committed company change and its normalized cache effects.
+"""
+type CrmCompanyEditPayload {
+	"""
+	The current company identifier, after resolving any alias.
+	"""
+	companyId: ID!
+	"""
+	The persisted domains for a domain edit.
+	"""
+	domains: [CrmCompanyDomain!]
+	"""
+	Primary Soup effects. The company edit has already committed if hydration fails.
+	"""
+	result: GraphqlEntityMutationResult
+}
+
+"""
+The committed merge's identity and cache effects.
+"""
+type CrmMergePayload {
+	"""
+	The merge log identifier.
+	"""
+	mergeId: ID!
+	"""
+	The record that stays.
+	"""
+	survivorId: ID!
+	"""
+	Source records removed by the merge.
+	"""
+	mergedIds: [ID!]!
+	"""
+	Source tombstones and the primary Soup row for the survivor.
+	"""
+	result: GraphqlEntityMutationResult
+}
+
+"""
+The type of CRM record combined by a merge.
+"""
+enum CrmMergeRecordType {
+	"""
+	The merge combines companies.
+	"""
+	COMPANY
+	"""
+	The merge combines contacts.
+	"""
+	CONTACT
+}
+
+"""
+How to preserve a teammate's email sharing for the source records.
+"""
+enum CrmMergeSharing {
+	"""
+	Keep sharing exactly the domains or addresses previously shared.
+	"""
+	KEEP
+	"""
+	Remove sharing rules attached to source records.
+	"""
+	STOP
 }
 
 """
@@ -1457,6 +1661,24 @@ input DuplicateEntityInput {
 	Optional display name for the new entity.
 	"""
 	displayName: String
+}
+
+"""
+Change one company's website domains.
+"""
+input EditCrmCompanyDomainInput {
+	"""
+	The company whose domains change.
+	"""
+	companyId: ID!
+	"""
+	Website domain to add or remove.
+	"""
+	domain: String!
+	"""
+	The requested change.
+	"""
+	change: CrmCompanyDomainChange!
 }
 
 """
@@ -12911,6 +13133,20 @@ input RecordChannelActivityInput {
 	Kind of activity to record.
 	"""
 	activityType: ChannelActivityType!
+}
+
+"""
+Rename a company's team-local display name.
+"""
+input RenameCrmCompanyInput {
+	"""
+	The company to rename.
+	"""
+	companyId: ID!
+	"""
+	The new display name.
+	"""
+	name: String!
 }
 
 """

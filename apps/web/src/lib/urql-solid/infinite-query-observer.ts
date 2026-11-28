@@ -6,6 +6,7 @@ import {
   type OperationContext,
   type OperationResult,
 } from '@urql/core';
+import { ResultAsync } from 'neverthrow';
 import type { UrqlObserver } from './observer';
 import { QueryObserver } from './query-observer';
 import {
@@ -15,6 +16,7 @@ import {
 import type {
   UrqlInfiniteData,
   UrqlInfiniteQueryOptions,
+  UrqlInfiniteQueryRefetchOptions,
   UrqlInfiniteQueryResult,
   UrqlQueryOptions,
   UrqlQueryRefetchOptions,
@@ -77,6 +79,20 @@ type SelectionCache<PageData, PageParam, SelectedData> = {
   previousData: SelectedData | undefined;
   selection: ReactiveSelection<SelectedData>;
 };
+
+/** Waits for a promise to settle, whatever its outcome. */
+async function settled(promise: Promise<unknown>): Promise<void> {
+  await ResultAsync.fromPromise(promise, () => undefined);
+}
+
+/** Runs `next` once `pending` settles; `pending`'s failure stays its own. */
+async function afterSettled<T>(
+  pending: Promise<unknown>,
+  next: () => Promise<T>
+): Promise<T> {
+  await settled(pending);
+  return next();
+}
 
 function sameReferences<T>(left: readonly T[], right: readonly T[]): boolean {
   return (
@@ -162,6 +178,8 @@ export class InfiniteQueryObserver<
   private refetchPromise:
     | Promise<InfiniteResult<PageData, Variables, PageParam, SelectedData>>
     | undefined;
+  /** Whether the refetch in `refetchPromise` throws its failures. */
+  private refetchThrows = false;
 
   constructor(
     client: Client,
@@ -356,8 +374,11 @@ export class InfiniteQueryObserver<
 
     const signal = this.actionController.signal;
     const pendingRefetch = this.refetchPromise;
+    // A failed refetch belongs to whoever started it; this page still loads.
     const action = pendingRefetch
-      ? pendingRefetch.then(() => this.runFetchNextPage(refetchOptions, signal))
+      ? afterSettled(pendingRefetch, () =>
+          this.runFetchNextPage(refetchOptions, signal)
+        )
       : this.runFetchNextPage(refetchOptions, signal);
     const trackedAction = action.finally(() => {
       if (this.fetchNextPromise === trackedAction) {
@@ -370,15 +391,30 @@ export class InfiniteQueryObserver<
     return trackedAction;
   };
 
-  readonly refetch = (
-    refetchOptions: UrqlQueryRefetchOptions = {}
-  ): Promise<InfiniteResult<PageData, Variables, PageParam, SelectedData>> => {
-    if (this.refetchPromise) return this.refetchPromise;
+  readonly refetch = ({
+    fresh = false,
+    ...refetchOptions
+  }: UrqlInfiniteQueryRefetchOptions = {}): Promise<
+    InfiniteResult<PageData, Variables, PageParam, SelectedData>
+  > => {
+    const pending = this.refetchPromise;
+    // A caller that needs failures thrown never joins a refetch that keeps them.
+    const stricter =
+      refetchOptions.throwOnError === true && !this.refetchThrows;
+    if (pending && (fresh || stricter))
+      return this.refetchAfter(pending, refetchOptions);
+    // One that keeps failures never inherits a strict refetch's rejection.
+    if (pending)
+      return this.refetchThrows && refetchOptions.throwOnError !== true
+        ? afterSettled(pending, async () => this.actionResult())
+        : pending;
 
     const signal = this.actionController.signal;
     const pendingFetchNext = this.fetchNextPromise;
     const action = pendingFetchNext
-      ? pendingFetchNext.then(() => this.runRefetch(refetchOptions, signal))
+      ? afterSettled(pendingFetchNext, () =>
+          this.runRefetch(refetchOptions, signal)
+        )
       : this.runRefetch(refetchOptions, signal);
     const trackedAction = action.finally(() => {
       if (this.refetchPromise === trackedAction) {
@@ -387,9 +423,21 @@ export class InfiniteQueryObserver<
     });
 
     this.refetchPromise = trackedAction;
+    this.refetchThrows = refetchOptions.throwOnError === true;
 
     return trackedAction;
   };
+
+  /** A refetch that starts after `pending`, which may have read too early. */
+  private async refetchAfter(
+    pending: Promise<unknown>,
+    refetchOptions: UrqlQueryRefetchOptions
+  ): Promise<InfiniteResult<PageData, Variables, PageParam, SelectedData>> {
+    // Its outcome belongs to whoever started it.
+    await settled(pending);
+    // One started after `pending` settled is late enough to join.
+    return this.refetch(refetchOptions);
+  }
 
   private applyOptions(
     options: InfiniteOptions<PageData, Variables, PageParam, SelectedData>,
@@ -781,7 +829,15 @@ export class InfiniteQueryObserver<
     signal.addEventListener('abort', abort, { once: true });
     let replaced = false;
     try {
-      await replacement.observer.refetch(refetchOptions);
+      try {
+        await replacement.observer.refetch(refetchOptions);
+      } catch (cause) {
+        // A strict refetch throws before the result below is read; the
+        // detached page is destroyed, so the list keeps its error here.
+        if (!signal.aborted && !this.destroyed)
+          this.setState({ refetchError: toCombinedError(cause) });
+        throw cause;
+      }
       if (signal.aborted || this.destroyed) return false;
       const result = replacement.observer.getCurrentResult();
       if (result.data === undefined) {

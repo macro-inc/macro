@@ -77,52 +77,30 @@ describe('active GraphQL Soup queries', () => {
     expect(getActiveGraphqlSoupRevalidations()).toEqual([descriptor]);
   });
 
-  it('excludes targeted detail readers from generic Soup refreshes', async () => {
-    const list = vi.fn(async () => {});
-    const detail = vi.fn(async () => {
-      throw new Error('must not refresh');
-    });
-    register({ isEnabled: () => true, refresh: list });
-    register({
-      isEnabled: () => true,
-      refresh: detail,
-      target: () => ({ kind: 'email-archive', threadId: 'thread-1' }),
-    });
-    await refreshActiveGraphqlSoupQueries({ throwOnError: true });
-    expect(list).toHaveBeenCalledOnce();
-    expect(detail).not.toHaveBeenCalled();
-  });
-
-  it('refreshes only a matching detail target, while preserving list refreshes', async () => {
-    const list = vi.fn(async () => {});
-    const first = vi.fn(async () => {});
-    const second = vi.fn(async () => {});
-    let firstId = 'first';
-    register({ isEnabled: () => true, refresh: list });
-    register({
-      isEnabled: () => true,
-      refresh: first,
-      target: () => ({ kind: 'email-archive', threadId: firstId }),
-    });
-    register({
-      isEnabled: () => true,
-      refresh: second,
-      target: () => ({ kind: 'email-archive', threadId: 'second' }),
-    });
-    await refreshActiveGraphqlSoupQueries({
-      throwOnError: true,
-      target: { kind: 'email-archive', threadId: 'first' },
-    });
-    expect(list).toHaveBeenCalledOnce();
-    expect(first).toHaveBeenCalledOnce();
-    expect(second).not.toHaveBeenCalled();
-    firstId = 'moved';
-    await refreshActiveGraphqlSoupQueries({
-      throwOnError: true,
-      target: { kind: 'email-archive', threadId: 'first' },
-    });
-    expect(first).toHaveBeenCalledOnce();
-    expect(list).toHaveBeenCalledTimes(2);
+  it('uses the initial filters to scope continuations and skips maintained readers', () => {
+    const document = gql`query Soup($cursor: String) { soup(cursor: $cursor) { nextCursor } }`;
+    const contact = { document, variables: { cursor: 'contact' } };
+    const company = { document, variables: { cursor: 'company' } };
+    const maintained = { document, variables: { cursor: 'maintained' } };
+    for (const [descriptor, hasContacts, cacheMaintained] of [
+      [contact, true, false],
+      [company, false, false],
+      [maintained, true, true],
+    ] as const)
+      onTestFinished(
+        registerGraphqlSoupRevalidations(
+          () => [descriptor],
+          undefined,
+          () => cacheMaintained,
+          () => hasContacts
+        )
+      );
+    expect(
+      getActiveGraphqlSoupRevalidations(undefined, {
+        unmaintainedOnly: true,
+        where: (filters) => filters === true,
+      })
+    ).toEqual([contact]);
   });
 
   it('coalesces refreshes requested while one is in flight into one follow-up', async () => {
@@ -327,25 +305,6 @@ describe('active GraphQL Soup queries', () => {
     current = true;
     await refreshActiveGraphqlSoupQueries();
     expect(maintained).toHaveBeenCalledTimes(2);
-  });
-
-  it('skips lists without unread state after a notification-only write', async () => {
-    const menuFeed = vi.fn(async () => {});
-    const inbox = vi.fn(async () => {});
-    register({
-      isEnabled: () => true,
-      refresh: menuFeed,
-      ignoresNotifications: () => true,
-    });
-    register({ isEnabled: () => true, refresh: inbox });
-
-    await refreshActiveGraphqlSoupQueries({ notificationsOnly: true });
-    expect(menuFeed).not.toHaveBeenCalled();
-    expect(inbox).toHaveBeenCalledOnce();
-
-    // Any other write still reads the feed again.
-    await refreshActiveGraphqlSoupQueries();
-    expect(menuFeed).toHaveBeenCalledOnce();
   });
 
   it('leaves maintained pages out of the revalidations a write carries', () => {
