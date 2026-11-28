@@ -10,7 +10,7 @@ use entity_mutation::{
 };
 use graphql_common::GraphqlEntityType;
 use graphql_permission::GraphqlEntityAccessLevel;
-use graphql_soup::{SoupEntityEdges, SoupItemDataLoader, SoupPatch};
+use graphql_soup::{PrimarySoupItemLoader, SoupEntityEdges, SoupPatch};
 use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::{
     LinkShare, UpdateSharePermissionRequestV2,
@@ -373,7 +373,11 @@ impl<E: SoupEntityEdges> GraphqlMutationSuccess<E> {
     /// Ordered normalized-cache effects produced by the mutation.
     async fn effects(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<SoupPatch<E>>> {
         let user_id = mutation_actor(ctx)?.user_id;
-        let loader = ctx.data_opt::<SoupItemDataLoader>();
+        // The rows a write just committed, which a replica may not have
+        // replayed yet: a replica read would return the old row or none.
+        let loader = ctx
+            .data_opt::<PrimarySoupItemLoader>()
+            .map(PrimarySoupItemLoader::loader);
         let patches = async_graphql::futures_util::future::try_join_all(
             self.effects
                 .iter()
