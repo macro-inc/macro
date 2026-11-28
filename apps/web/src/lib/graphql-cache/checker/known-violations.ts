@@ -20,8 +20,11 @@ export const KNOWN_VIOLATIONS: KnownViolation[] = [
     reordered: false,
     cause:
       'A tab frozen while its head is on the way to the server settles it only ' +
-      'after SETTLEMENT_WAIT_MS, when the newer build has the database: the ' +
-      'head stays queued and is sent again, at least once as for a lost page.',
+      'after SETTLEMENT_WAIT_MS, when the newer build has the database; or, ' +
+      'elected to keep an engine for the head with every tab hidden, opens ' +
+      'none, and a newer build opening before another tab tries takes the ' +
+      'free lock. Either way the head stays queued and is sent again, at ' +
+      'least once as for a lost page.',
   },
   {
     symptom: 'S8:answered head still queued (unsettled)',
