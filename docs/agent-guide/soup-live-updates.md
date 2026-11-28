@@ -40,8 +40,9 @@ evaluate locally from the `mail-attachment` facts the Mail projection reads off 
 thread's attachments, so a pushed thread moves between them. On a host whose engine
 predates these facts (an older desktop or mobile binary, whatever JavaScript it
 runs) or whose cache is cold, mounted lists with that filter still refetch when a pushed thread carries
-attachments, as lists that can contain calls do for calls. A push the cache did
-not apply refetches every mounted list with that filter. After the Soup socket
+attachments, as lists that can contain calls do for calls. A push carrying
+attachments that the cache did not apply refetches every mounted list with that
+filter. After the Soup socket
 reconnects, every mounted list with that filter refetches, maintained or not,
 since nothing replays what it pushed while it was down.
 
