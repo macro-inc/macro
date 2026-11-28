@@ -388,12 +388,17 @@ export function createGraphqlSoupSubscriptionsLifecycle(
             if (document === SoupUpdatesDocument && result.data != null) {
               const patches = (result.data as SoupUpdatesSubscription)
                 .soupUpdates;
+              const metadata = normalizedCacheResultMetadata(result);
               fireAndForget(
                 revalidateCallListsForSoupUpdates(patches),
                 'graphql-soup-subscriptions'
               );
               fireAndForget(
-                revalidateMailAttachmentListsForSoupUpdates(patches),
+                revalidateMailAttachmentListsForSoupUpdates(
+                  patches,
+                  metadata?.source === 'live-network' &&
+                    metadata.cacheEffectsApplied === true
+                ),
                 'graphql-soup-subscriptions'
               );
               channelHandler.onSoupUpdates(patches);

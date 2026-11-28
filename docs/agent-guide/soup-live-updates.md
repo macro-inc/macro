@@ -37,9 +37,9 @@ Changing filters or resetting the cache discards prior reconciliation evidence.
 Unsupported filters/sorts and non-cache transports keep their existing
 network behavior. Mail lists filtered by attachment kind (PDF, image, document)
 evaluate locally from the `mail-attachment` facts the Mail projection reads off a
-thread's attachments, so a pushed thread moves between them. On a host that does
-not evaluate Mail locally (the desktop app's legacy Mail profile, older native
-builds), mounted lists with that filter still refetch when a pushed thread carries
+thread's attachments, so a pushed thread moves between them. On a host whose engine
+predates these facts (an older desktop or mobile binary, whatever JavaScript it
+runs) or whose cache is cold, mounted lists with that filter still refetch when a pushed thread carries
 attachments, as lists that can contain calls do for calls. After the Soup socket
 reconnects, every mounted list with that filter refetches, maintained or not,
 since nothing replays what it pushed while it was down.

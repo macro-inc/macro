@@ -54,18 +54,20 @@ function carriesAttachment(patch: SoupPatch): boolean {
 
 /**
  * A host that evaluates Mail locally keeps lists filtered by attachment kind
- * current from the threads' attachment facts. Elsewhere (the desktop app's
- * legacy Mail profile, older native builds, a cold cache) such a list reads the
+ * current from the threads' attachment facts. Elsewhere (a desktop or mobile
+ * binary whose engine predates them, a cold cache) such a list reads the
  * server and the cache cannot place an arriving thread in it, so mounted lists
- * the cache does not maintain refetch when one arrives.
+ * the cache does not maintain refetch when one arrives. When the cache did not
+ * take the push (`cacheApplied` false), maintained lists lack it too and refetch.
  */
 export async function revalidateMailAttachmentListsForSoupUpdates(
-  patches: readonly SoupPatch[]
+  patches: readonly SoupPatch[],
+  cacheApplied: boolean
 ): Promise<void> {
   if (!patches.some(carriesAttachment)) return;
   await refreshActiveGraphqlSoupQueries({
     where: filtersByAttachment,
-    unmaintainedOnly: true,
+    unmaintainedOnly: cacheApplied,
   });
 }
 
