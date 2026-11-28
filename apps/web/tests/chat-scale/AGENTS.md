@@ -114,5 +114,6 @@ reading under one is a measurement that did not happen.
   the viewer's key, only when nothing is there yet.
 - The rail virtualizes sections at estimated heights: one jump to its end
   lands short once they are measured, so the headings check jumps until the
-  end holds (the scroll height steady for a few frames), then pages up,
-  and starts over from the end while a heading is missing.
+  end holds (the scroll height steady for a few frames there), then pages
+  up, and starts over from the end while a heading is missing or the end
+  never held.

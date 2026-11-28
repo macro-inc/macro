@@ -72,9 +72,8 @@ const SETTLE_FRAMES = 120;
 /** Passes from the end up, each from a fresh jump to the end, before the
  * headings check gives up on a heading. */
 const HEADING_PASSES = 3;
-/** How often, and for how long, a load waits for the channel lane to
- * record its finished pass after the last page was served. */
-const LANE_POLL_MS = 250;
+/** How long a load waits for the channel lane to record its finished pass
+ * after the last page was served. */
 const LANE_TIMEOUT_MS = 120_000;
 const TOGGLED_SECTION = 'Direct messages';
 /** Chat's saved view (`features/channels-view/persistence.ts`), per viewer. */
@@ -82,6 +81,9 @@ const SAVED_VIEW_KEY = 'macro:channels:view-state:v1';
 /** `CHANNEL_DIRECTORY_CHECKPOINT_ID` (`lib/queries/channel/directory-lane.ts`),
  * the last part of the channel lane's checkpoint key in `localStorage`. */
 const CHANNEL_LANE_KEY_SUFFIX = ':channel-directory-reconciled';
+/** `CHECKPOINT_SAVED_EVENT` (`lib/queries/soup/backfill-checkpoint.ts`): the
+ * window event the app sends after it saves a lane's checkpoint. */
+const CHECKPOINT_SAVED_EVENT = 'graphql-soup-backfill-checkpoint';
 const PERFORMANCE_METRICS = [
   'LayoutCount',
   'RecalcStyleCount',
@@ -235,28 +237,50 @@ async function readLaneCheckpoint(page: Page): Promise<LaneCheckpoint> {
 }
 
 /** Waits until the channel lane's checkpoint records a finished pass that
- * completed after `after` (any finished pass when null). */
+ * completed after `after` (any finished pass when null): checked now and
+ * each time the app says it saved a checkpoint, failing after
+ * `LANE_TIMEOUT_MS`. */
 async function laneFinished(page: Page, after: string | null): Promise<void> {
-  await page.waitForFunction(
-    ({ suffix, after }) => {
-      const key = Object.keys(localStorage).find(
-        (each) =>
-          each.startsWith('graphql-soup-backfill:') && each.endsWith(suffix)
-      );
-      const text = key === undefined ? null : localStorage.getItem(key);
-      if (text === null) return false;
-      const stored = JSON.parse(text) as {
-        completed?: boolean;
-        completedAt?: string | null;
-      };
-      return (
-        stored.completed === true &&
-        typeof stored.completedAt === 'string' &&
-        (after === null || Date.parse(stored.completedAt) > Date.parse(after))
-      );
-    },
-    { suffix: CHANNEL_LANE_KEY_SUFFIX, after },
-    { polling: LANE_POLL_MS, timeout: LANE_TIMEOUT_MS }
+  await page.evaluate(
+    ({ suffix, after, event, timeoutMs }) =>
+      new Promise<void>((resolve, reject) => {
+        const finished = () => {
+          const key = Object.keys(localStorage).find(
+            (each) =>
+              each.startsWith('graphql-soup-backfill:') && each.endsWith(suffix)
+          );
+          const text = key === undefined ? null : localStorage.getItem(key);
+          if (text === null) return false;
+          const stored = JSON.parse(text) as {
+            completed?: boolean;
+            completedAt?: string | null;
+          };
+          return (
+            stored.completed === true &&
+            typeof stored.completedAt === 'string' &&
+            (after === null ||
+              Date.parse(stored.completedAt) > Date.parse(after))
+          );
+        };
+        if (finished()) return resolve();
+        const onSave = () => {
+          if (!finished()) return;
+          clearTimeout(timer);
+          window.removeEventListener(event, onSave);
+          resolve();
+        };
+        const timer = setTimeout(() => {
+          window.removeEventListener(event, onSave);
+          reject(new Error('the channel lane recorded no finished pass'));
+        }, timeoutMs);
+        window.addEventListener(event, onSave);
+      }),
+    {
+      suffix: CHANNEL_LANE_KEY_SUFFIX,
+      after,
+      event: CHECKPOINT_SAVED_EVENT,
+      timeoutMs: LANE_TIMEOUT_MS,
+    }
   );
 }
 
@@ -443,10 +467,16 @@ async function headingsFromTheEnd(
     return Object.keys(expected).every((key) => seen.has(key));
   };
   for (let pass = 0; pass < HEADING_PASSES; pass += 1) {
-    for (let jump = 0; jump < END_JUMPS; jump += 1) {
+    let held = false;
+    let found = false;
+    for (let jump = 0; jump < END_JUMPS && !held && !found; jump += 1) {
       const { settled, atEnd } = await scrollAndSettle(scroller, 'end');
-      if ((await collect()) || (settled && atEnd)) break;
+      held = settled && atEnd;
+      found = await collect();
     }
+    if (found) break;
+    // A rail still moving at its end has nothing settled to read up from.
+    if (!held) continue;
     for (let page = 0; page < HEADING_PAGES; page += 1) {
       if (await collect()) break;
       const { from } = await scrollAndSettle(scroller, 'pageUp');
