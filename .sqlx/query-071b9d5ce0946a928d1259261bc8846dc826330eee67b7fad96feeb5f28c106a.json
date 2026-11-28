@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH profiles AS MATERIALIZED (\n                SELECT id, \"isAgent\" FROM \"User\" WHERE macro_user_id = $1 LIMIT 2\n            )\n            SELECT agent.user_id, agent.team_id, membership.team_role::text AS \"role!\"\n            FROM profiles profile\n            JOIN team_agents agent ON agent.user_id = profile.id\n            JOIN team_user membership\n              ON membership.user_id = agent.user_id AND membership.team_id = agent.team_id\n            WHERE profile.\"isAgent\" AND (SELECT count(*) FROM profiles) = 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "role!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "071b9d5ce0946a928d1259261bc8846dc826330eee67b7fad96feeb5f28c106a"
+}
