@@ -116,10 +116,13 @@ activity in a separate channel thread must not. Redo targets the original exact
 notification IDs, not notifications received since the original action. A newer
 Done must win over an older retained overlay. Delay reconciliation past a minute:
 pending/stale state must not simply expire and resurrect the row. Once committed,
-mounted cache readers must acknowledge the intent before its overlay is released.
+mounted cache readers must acknowledge the returned state before its overlay is
+released. With the cache disabled, the same acknowledgement comes from the
+post-write pages published by the network revalidation exchange. Once the write
+settles, the overlay itself issues no requests.
 GraphQL display intents are scoped to the authenticated viewer and login session.
 Login/logout retires old buckets; even same-account native reauthentication must
-not let old overlay Undo/Redo handles or a late refresh republish old intent.
+not let old overlay Undo/Redo handles or a late acknowledgement republish old intent.
 Verify account changes with overlapping entity IDs and a pending/failed refresh.
 After a successful Done, verify that the row stays gone after a reload.
 Test GraphQL list optimism independently of REST: block REST Soup, email-thread,

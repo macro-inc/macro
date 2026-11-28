@@ -1,5 +1,4 @@
 import { scopeChannelNotificationsForEntity } from '@app/features/soup/entity-notifications';
-import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity/types/entity';
 import type { Notification } from '@entity/types/notification';
 import { skipToken, useQuery } from '@tanstack/solid-query';
@@ -7,11 +6,10 @@ import type { Accessor } from 'solid-js';
 import { authKeys } from '../../auth/keys';
 import type { UserInfoData } from '../../auth/user-info';
 import { queryClient } from '../../client';
-import { refreshActiveGraphqlSoupQueries } from './active-queries';
 import { getGraphqlSoupDoneSession } from './done-session';
 import { graphqlSoupKeys } from './keys';
 
-/** Retry reconciliation, or collect a settled intent with no mounted readers. */
+/** Grace period for a settled intent with no mounted readers. */
 export const GRAPHQL_SOUP_DONE_RETENTION_MS = 60_000;
 
 export type PendingGraphqlSoupDone = {
@@ -90,7 +88,7 @@ export function hideGraphqlSoupEntitiesAsDone(args: {
   let active = false;
   let settled = false;
   let checking = false;
-  let refreshing = false;
+  let retentionElapsed = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const readers = new Map<object, { version: number; acknowledged: boolean }>();
 
@@ -132,46 +130,17 @@ export function hideGraphqlSoupEntitiesAsDone(args: {
         release();
         return;
       }
-      if (
-        active &&
-        settled &&
-        readers.size > 0 &&
-        [...readers.values()].every((reader) => reader.acknowledged)
-      ) {
+      // Cached readers see the mutation's rows in their local projection.
+      // Uncached readers see the pages reread by the mutation's exchange.
+      // Either can lag settlement, so retire only after the raw state agrees.
+      const acknowledged =
+        readers.size === 0
+          ? retentionElapsed
+          : [...readers.values()].every((reader) => reader.acknowledged);
+      if (active && settled && acknowledged) {
         release(true);
       }
     });
-  };
-  const retry = async () => {
-    const version = generation;
-    if (!active) return;
-    if (!ownsSession()) {
-      release();
-      return;
-    }
-    if (settled && readers.size === 0) {
-      release(true);
-      return;
-    }
-    // Keep cleanup independent of a hung refresh, without starting overlapping
-    // network retries. A later tick can collect an intent whose readers unmounted.
-    timer = setTimeout(
-      () => fireAndForget(retry(), 'soup-optimistic-done'),
-      GRAPHQL_SOUP_DONE_RETENTION_MS
-    );
-    if (settled && !refreshing) {
-      refreshing = true;
-      try {
-        await refreshActiveGraphqlSoupQueries({ throwOnError: true });
-      } catch {
-        // A failed/stale refresh must not resurrect rows. Mounted readers keep
-        // their intent until they actually observe it, or the user reverses it.
-      } finally {
-        refreshing = false;
-      }
-    }
-    if (version !== generation) return;
-    check();
   };
   const observations = (
     version: number
@@ -197,6 +166,7 @@ export function hideGraphqlSoupEntitiesAsDone(args: {
     const now = Date.now();
     active = true;
     settled = false;
+    retentionElapsed = false;
     readers.clear();
     current = {
       operation,
@@ -219,10 +189,10 @@ export function hideGraphqlSoupEntitiesAsDone(args: {
         current,
       ]
     );
-    timer = setTimeout(
-      () => fireAndForget(retry(), 'soup-optimistic-done'),
-      GRAPHQL_SOUP_DONE_RETENTION_MS
-    );
+    timer = setTimeout(() => {
+      retentionElapsed = true;
+      check();
+    }, GRAPHQL_SOUP_DONE_RETENTION_MS);
   };
   publish(args.done ?? true);
 

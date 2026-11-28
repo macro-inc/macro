@@ -234,31 +234,27 @@ describe('hideGraphqlSoupEntitiesAsDone', () => {
     await vi.waitFor(() => expect(read()).toEqual([]));
   });
 
-  it('retains intent when reconciliation is stale or fails past the old expiry', async () => {
+  it('waits for the returned Done state without rereading a stale list', async () => {
     vi.useFakeTimers();
-    refresh.mockRejectedValue(new Error('offline'));
     const read = observePending();
     const overlay = hideGraphqlSoupEntitiesAsDone({
       entityIds: ['a'],
       notificationIds: [],
     });
     await vi.advanceTimersByTimeAsync(1);
-    read()[0].observe({}, false);
+    const reader = {};
+    read()[0].observe(reader, false);
     overlay.settle();
     await vi.advanceTimersByTimeAsync(GRAPHQL_SOUP_DONE_RETENTION_MS);
-    expect(refresh).toHaveBeenCalledOnce();
+    expect(refresh).not.toHaveBeenCalled();
     expect(read()).toHaveLength(1);
-    overlay.release();
+    read()[0].observe(reader, true);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(read()).toEqual([]);
   });
 
-  it('collects an unmounted settled intent even when its refresh never responds', async () => {
+  it('collects a settled intent after its last stale reader unmounts', async () => {
     vi.useFakeTimers();
-    let finish!: () => void;
-    refresh.mockReturnValue(
-      new Promise<void>((resolve) => {
-        finish = resolve;
-      })
-    );
     const read = observePending();
     const overlay = hideGraphqlSoupEntitiesAsDone({
       entityIds: ['a'],
@@ -269,12 +265,11 @@ describe('hideGraphqlSoupEntitiesAsDone', () => {
     read()[0].observe(reader, false);
     overlay.settle();
     await vi.advanceTimersByTimeAsync(GRAPHQL_SOUP_DONE_RETENTION_MS * 2);
-    expect(refresh).toHaveBeenCalledOnce();
+    expect(refresh).not.toHaveBeenCalled();
     expect(read()).toHaveLength(1);
     read()[0].unobserve(reader);
     await vi.advanceTimersByTimeAsync(GRAPHQL_SOUP_DONE_RETENTION_MS);
     expect(read()).toEqual([]);
-    finish();
   });
 
   it('retires superseded intent after acknowledgement without losing other bulk targets', async () => {
@@ -468,24 +463,19 @@ describe('hideGraphqlSoupEntitiesAsDone', () => {
     overlay.release();
   });
 
-  it('ignores a late refresh and Undo from a retired session', async () => {
+  it('ignores a late acknowledgement and Undo from a retired session', async () => {
     vi.useFakeTimers();
-    let finish!: () => void;
-    refresh.mockReturnValue(
-      new Promise<void>((resolve) => {
-        finish = resolve;
-      })
-    );
     const read = observePending();
     const previous = hideGraphqlSoupEntitiesAsDone({
       entityIds: ['a'],
       notificationIds: [],
     });
     await vi.advanceTimersByTimeAsync(1);
-    read()[0].observe({}, false);
+    const entry = read()[0];
+    const reader = {};
+    entry.observe(reader, false);
     previous.settle();
     await vi.advanceTimersByTimeAsync(GRAPHQL_SOUP_DONE_RETENTION_MS);
-    expect(refresh).toHaveBeenCalledOnce();
     client.setQueryData(authKeys.userInfo.queryKey, {
       userId: 'bob',
       authenticated: true,
@@ -496,11 +486,11 @@ describe('hideGraphqlSoupEntitiesAsDone', () => {
       notificationIds: [],
     });
     await vi.advanceTimersByTimeAsync(1);
-    finish();
+    entry.observe(reader, true);
     previous.setDone(false);
     previous.settle();
     await vi.advanceTimersByTimeAsync(GRAPHQL_SOUP_DONE_RETENTION_MS);
-    expect(refresh).toHaveBeenCalledOnce();
+    expect(refresh).not.toHaveBeenCalled();
     expect(read().map((e) => [e.viewerId, e.done])).toEqual([['bob', true]]);
     current.release();
   });
