@@ -14,7 +14,10 @@ import {
   createReactiveSelection,
   type ReactiveSelection,
 } from './reactive-selection';
-import { TRACE_PARENT_CONTEXT_KEY } from './trace-parent-exchange';
+import {
+  firstRequestIn,
+  TRACE_PARENT_CONTEXT_KEY,
+} from './trace-parent-exchange';
 import type {
   UrqlInfiniteData,
   UrqlInfiniteQueryOptions,
@@ -821,7 +824,9 @@ export class InfiniteQueryObserver<
           pageParam,
           {
             requestPolicy: 'network-only',
-            context: { [TRACE_PARENT_CONTEXT_KEY]: span },
+            // The page stays subscribed after the pass ends; a request it
+            // sends later joins no trace rather than this one.
+            context: { [TRACE_PARENT_CONTEXT_KEY]: firstRequestIn(span) },
           },
           signal,
           {

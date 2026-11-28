@@ -1,4 +1,4 @@
-import { Telemetry } from '@macro-inc/observability';
+import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import {
   type Client,
   CombinedError,
@@ -718,7 +718,7 @@ describe('createUrqlInfiniteQuery', () => {
       },
       error: vi.fn(),
       end: vi.fn(),
-      run: <T,>(work: () => T) => work(),
+      run: vi.fn(<T,>(work: () => T) => work()),
     };
     const span = Telemetry.span.bind(Telemetry) as (
       ...args: unknown[]
@@ -734,9 +734,13 @@ describe('createUrqlInfiniteQuery', () => {
 
     pushMemberAcross(fake);
     await vi.waitFor(() => expect(fake.executions).toHaveLength(3));
-    expect(fake.executions[2]?.context[TRACE_PARENT_CONTEXT_KEY]).toBe(
-      repairSpan
-    );
+    // The read's request runs in the pass; the kept page re-sent later (cache
+    // recovery) joins no trace, since the pass has ended by then.
+    const trace: TraceContext | undefined =
+      fake.executions[2]?.context[TRACE_PARENT_CONTEXT_KEY];
+    trace?.run(() => 'sent');
+    trace?.run(() => 're-sent');
+    expect(repairSpan.run).toHaveBeenCalledOnce();
     fake.executions[2]?.next({ values: ['member', 'c'], nextCursor: null });
     await vi.waitFor(() => expect(repairSpan.end).toHaveBeenCalledOnce());
     expect(recorded).toEqual({
