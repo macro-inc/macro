@@ -2223,12 +2223,16 @@ describe('CacheWorkerCore', () => {
   });
 
   it.each([
-    { searchChangedBuckets: [], reset: false },
-    { searchChangedBuckets: ['note'], reset: false },
-    { searchChangedBuckets: [], reset: true },
+    { searchChangedBuckets: [], unchangedViews: [], reset: false },
+    {
+      searchChangedBuckets: ['note'],
+      unchangedViews: ['view-1'],
+      reset: false,
+    },
+    { searchChangedBuckets: [], unchangedViews: ['view-1'], reset: true },
   ])(
     'scopes ordinary writes but not resets: %j',
-    async ({ searchChangedBuckets, reset }) => {
+    async ({ searchChangedBuckets, unchangedViews, reset }) => {
       loadCacheWasmMock.mockResolvedValue({
         openCache: vi.fn().mockResolvedValue({
           writeQuery: vi.fn().mockResolvedValue({
@@ -2238,6 +2242,7 @@ describe('CacheWorkerCore', () => {
             affectedOps: [],
             reset,
             searchChangedBuckets,
+            unchangedViews,
           }),
         }),
       });
@@ -2259,7 +2264,7 @@ describe('CacheWorkerCore', () => {
       expect(messages).toContainEqual({
         kind: 'cache-changed',
         revision: INITIAL_CACHE_REVISION,
-        ...(reset ? { reset: true } : { searchChangedBuckets }),
+        ...(reset ? { reset: true } : { searchChangedBuckets, unchangedViews }),
       });
     }
   );
@@ -2918,6 +2923,109 @@ describe('CacheWorkerCore', () => {
         durationMs: 0,
         queueDepth: 0,
       },
+    ]);
+  });
+
+  it('reports how long a slow write spent on its view proof', async () => {
+    let monotonicNow = 0;
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        writeQuery: async () => {
+          monotonicNow += 1_500;
+          return {
+            revision: '2',
+            revisionAdvanced: true,
+            changed: [],
+            affectedOps: [],
+            reset: false,
+            revalidations: [],
+            unchangedViews: ['view-1'],
+            proofMs: 40,
+          };
+        },
+      }),
+    });
+    const observations: Array<Record<string, unknown>> = [];
+    const core = new CacheWorkerCore({
+      monotonicNow: () => monotonicNow,
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    const port = { postMessage: vi.fn() };
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+    await core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
+      id: 2,
+      kind: 'write',
+      query: 'query Read { value }',
+      data: { value: true },
+    });
+
+    expect(
+      observations.filter(
+        (observation) => observation.name === 'graphql_cache.slow_request'
+      )
+    ).toEqual([
+      expect.objectContaining({
+        requestKind: 'write',
+        outcome: 'success',
+        durationMs: 1_500,
+        proofMs: 40,
+      }),
+    ]);
+  });
+
+  it('reports a failed view proof even on a fast write', async () => {
+    let monotonicNow = 0;
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        writeQuery: async () => {
+          monotonicNow += 5;
+          return {
+            revision: '2',
+            revisionAdvanced: true,
+            changed: [],
+            affectedOps: [],
+            reset: false,
+            revalidations: [],
+            proofMs: 3,
+            proofFailed: true,
+          };
+        },
+      }),
+    });
+    const observations: Array<Record<string, unknown>> = [];
+    const core = new CacheWorkerCore({
+      monotonicNow: () => monotonicNow,
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    const port = { postMessage: vi.fn() };
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+    await core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
+      id: 2,
+      kind: 'write',
+      query: 'query Read { value }',
+      data: { value: true },
+    });
+
+    expect(
+      observations.filter(
+        (observation) => observation.name === 'graphql_cache.slow_request'
+      )
+    ).toEqual([
+      expect.objectContaining({
+        requestKind: 'write',
+        outcome: 'success',
+        durationMs: 5,
+        proofMs: 3,
+        proofFailed: true,
+      }),
     ]);
   });
 

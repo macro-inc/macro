@@ -352,6 +352,10 @@ export type CacheTelemetryObservation = {
   requestKind?: CacheRequest['kind'];
   /** How long a `slow_request` waited in the engine queue before it ran. */
   queueWaitMs?: number;
+  /** How long a reported write spent proving which live views it left unchanged. */
+  proofMs?: number;
+  /** A write whose view proof failed, reported even when the write was fast. */
+  proofFailed?: boolean;
 };
 
 /** The only cohort/browser/backend dimensions permitted on exported events. */
@@ -544,6 +548,10 @@ function sanitizeObservation(
     ...(boundedNumber(input.queueWaitMs, 3_600_000) !== undefined
       ? { queueWaitMs: boundedNumber(input.queueWaitMs, 3_600_000) }
       : {}),
+    ...(boundedNumber(input.proofMs, 3_600_000) !== undefined
+      ? { proofMs: boundedNumber(input.proofMs, 3_600_000) }
+      : {}),
+    ...(input.proofFailed === true ? { proofFailed: true } : {}),
   };
 }
 
@@ -987,6 +995,8 @@ export function isCacheTelemetryObservation(
       'walFrames',
       'requestKind',
       'queueWaitMs',
+      'proofMs',
+      'proofFailed',
     ].includes(key)
   );
 }

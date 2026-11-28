@@ -48,8 +48,15 @@ export class CacheChangeBatch {
               return nextUnchanged.filter((view) => kept.has(view));
             })()
           : undefined;
+      // Hints are honoured only from the current authority, so a batch keeps
+      // its generation when every push shares it, and drops it otherwise.
+      const authorityGeneration =
+        previous.push.authorityGeneration === push.authorityGeneration
+          ? push.authorityGeneration
+          : undefined;
       // Missing scope means all buckets, and dominates any narrower hint.
       push = {
+        ...(authorityGeneration === undefined ? {} : { authorityGeneration }),
         kind: push.kind,
         revision: push.revision,
         ...(buckets === undefined ? {} : { searchChangedBuckets: buckets }),

@@ -1,0 +1,14 @@
+query ThinProject {
+  user {
+    id
+    soup(input: { initial: { limit: 100 } }) {
+      items {
+        __typename
+        id
+        ... on GraphqlSoupProject {
+          updatedAt
+        }
+      }
+    }
+  }
+}

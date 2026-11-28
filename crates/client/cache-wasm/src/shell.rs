@@ -158,6 +158,12 @@ struct JsQueryRegistration {
 struct JsWriteResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     unchanged_views: Option<Vec<String>>,
+    /// How long proving `unchanged_views` took, whether or not it succeeded.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    proof_ms: Option<f64>,
+    /// Set when the proof ran and failed, so every view reads again.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    proof_failed: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     field_changes: Option<Vec<cache_core::field_changes::RecordFieldChange>>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -540,6 +546,8 @@ enum JsRollbackOptimisticWriteResult {
 fn js_write_result(result: WriteResult, ops: &OpInterner) -> JsWriteResult {
     JsWriteResult {
         unchanged_views: None,
+        proof_ms: None,
+        proof_failed: false,
         field_changes: result.field_changes,
         identity_errors: result.identity_errors,
         unwritable_response: result.unwritable_response,
@@ -2450,8 +2458,21 @@ impl CacheEngine {
                 }
             };
             let result = state.engine_result(result)?;
-
-            to_js(&js_write_result(result, &ops.borrow()))
+            let mut written = js_write_result(result, &ops.borrow());
+            // The live views this write left as they were, which a hydrate
+            // already reports, so their readers skip a read. Optional: a
+            // failed proof leaves every view to read again.
+            if written.revision_advanced
+                && !written.reset
+                && let Ok(engine) = state.engine_mut()
+            {
+                let started = crate::query_telemetry::now_ms();
+                let proof = engine.unchanged_observed_windows().await;
+                written.proof_failed = proof.is_err();
+                written.unchanged_views = proof.ok();
+                written.proof_ms = Some(crate::query_telemetry::now_ms() - started);
+            }
+            to_js(&written)
         })
     }
 

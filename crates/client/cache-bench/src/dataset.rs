@@ -20,6 +20,8 @@ pub struct Tier {
     pub metadata_threads: usize,
     pub mean_messages: f64,
     pub contacts: usize,
+    /// Members of each channel; 0 keeps the faker's default of zero or one.
+    pub channel_participants: usize,
     pub body: BodyProfile,
 }
 
@@ -39,6 +41,7 @@ pub fn tier(name: &str) -> Option<Tier> {
             metadata_threads: 100,
             mean_messages: 2.5,
             contacts: 100,
+            channel_participants: 0,
             body,
         }),
         "p50" => Some(Tier {
@@ -50,6 +53,7 @@ pub fn tier(name: &str) -> Option<Tier> {
             metadata_threads: 600,
             mean_messages: 2.5,
             contacts: 400,
+            channel_participants: 0,
             body,
         }),
         "p90" => Some(Tier {
@@ -61,6 +65,21 @@ pub fn tier(name: &str) -> Option<Tier> {
             metadata_threads: 15_000,
             mean_messages: 2.5,
             contacts: 6_000,
+            channel_participants: 0,
+            body,
+        }),
+        // A workspace with thousands of channels: p50 otherwise, so channel
+        // reads are what it measures.
+        "chat" => Some(Tier {
+            channels: 6_500,
+            documents: 600,
+            chats: 120,
+            projects: 30,
+            body_threads: 160,
+            metadata_threads: 600,
+            mean_messages: 2.5,
+            contacts: 400,
+            channel_participants: 75,
             body,
         }),
         _ => None,
@@ -68,7 +87,7 @@ pub fn tier(name: &str) -> Option<Tier> {
 }
 
 /// Row fragments read back by key.
-pub const FRAGMENTS: &[&str] = &["MailItemFields", "SoupItemFields"];
+pub const FRAGMENTS: &[&str] = &["MailItemFields", "SoupItemFields", "ChannelListItemFields"];
 
 pub const DOCUMENTS: &[&str] = &[
     "SoupBackfill",
@@ -234,6 +253,7 @@ fn soup_lane(
             viewer_id: &identity.viewer_id,
             link_ids: &identity.link_ids,
             body: tier.body,
+            channel_participants: tier.channel_participants,
             revision: 0,
         };
         let data = faker.response(&documents[doc], &plan, mix(page as u64, lane));
@@ -326,6 +346,7 @@ pub fn seed_ops(
             viewer_id: &identity.viewer_id,
             link_ids: &identity.link_ids,
             body: tier.body,
+            channel_participants: tier.channel_participants,
             revision: 0,
         };
         let data = faker.response(
@@ -369,6 +390,7 @@ pub fn foreground_ops(
         viewer_id: &identity.viewer_id,
         link_ids: &identity.link_ids,
         body: tier.body,
+        channel_participants: tier.channel_participants,
         revision: variant,
     };
     let data = faker.response(&documents["Soup"], &plan, mix(variant, "home"));
@@ -394,6 +416,7 @@ pub fn foreground_ops(
             viewer_id: &identity.viewer_id,
             link_ids: &identity.link_ids,
             body: tier.body,
+            channel_participants: tier.channel_participants,
             revision: variant,
         };
         let data = faker.response(

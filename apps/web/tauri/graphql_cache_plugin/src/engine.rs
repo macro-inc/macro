@@ -835,7 +835,12 @@ impl EngineHandle {
     #[tracing::instrument(
         name = "graphql_cache.native.write",
         skip_all,
-        fields(graphql_cache.write.background = false),
+        fields(
+            graphql_cache.write.background = false,
+            graphql_cache.write.proof_ms = tracing::field::Empty,
+            graphql_cache.write.unchanged_views = tracing::field::Empty,
+            graphql_cache.write.proof_failed = tracing::field::Empty,
+        ),
         err
     )]
     pub async fn write(&self, request: WriteRequest) -> Result<WriteResultWire, String> {
@@ -919,7 +924,30 @@ impl EngineHandle {
         };
         self.commits.settle(commits, || stored);
         self.publish_bound_generation(engine);
-        Ok(wire_write_result(ops, result))
+        let mut wire = wire_write_result(ops, result);
+        // The live views this write left as they were, which a hydrate
+        // already reports, so their readers skip a read. Optional: a failed
+        // proof leaves every view to read again.
+        if wire.revision_advanced && !wire.reset {
+            let started = std::time::Instant::now();
+            let proof = engine.unchanged_observed_windows().await;
+            let span = tracing::Span::current();
+            span.record(
+                "graphql_cache.write.proof_ms",
+                started.elapsed().as_secs_f64() * 1_000.0,
+            );
+            match proof {
+                Ok(views) => {
+                    span.record("graphql_cache.write.unchanged_views", views.len());
+                    wire.unchanged_views = Some(views);
+                }
+                Err(error) => {
+                    span.record("graphql_cache.write.proof_failed", true);
+                    tracing::warn!(%error, "write proof failed; every live view reads again");
+                }
+            }
+        }
+        Ok(wire)
     }
 
     /// Stores a query response nobody waits for, as a background command: in

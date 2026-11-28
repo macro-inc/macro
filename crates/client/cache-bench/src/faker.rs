@@ -38,6 +38,8 @@ pub struct Plan<'a> {
     pub viewer_id: &'a str,
     pub link_ids: &'a [String],
     pub body: BodyProfile,
+    /// Members of each channel (`GraphqlSoupChannel.participants`); 0 keeps the default.
+    pub channel_participants: usize,
     /// 0 for the seed; a foreground variant rewrites the same entities, under
     /// the same ids, with other field values.
     pub revision: u64,
@@ -337,7 +339,14 @@ impl Faker {
                     .collect(),
             );
         }
-        let len = list_len(name, rng);
+        let len = if name == "participants"
+            && parent == "GraphqlSoupChannel"
+            && plan.channel_participants > 0
+        {
+            plan.channel_participants
+        } else {
+            list_len(name, rng)
+        };
         Value::Array(
             (0..len)
                 .map(|index| {
@@ -525,6 +534,10 @@ fn leaf(
             "inboxVisible" => rng.chance(0.4),
             "isSignal" => rng.chance(0.4),
             "hasAttachments" => rng.chance(0.2),
+            // A chat-tier workspace lists the channels its viewer is in.
+            "isParticipant" if parent == "GraphqlSoupChannel" && plan.channel_participants > 0 => {
+                true
+            }
             _ => rng.chance(0.3),
         }),
         "Int" | "Float" => {

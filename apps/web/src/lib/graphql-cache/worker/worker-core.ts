@@ -633,7 +633,7 @@ export class CacheWorkerCore {
     void this.dispatch(queued.request)
       .then(
         async (result) => {
-          this.recordSlowRequest(queued, startedAt, queueDepth);
+          this.recordSlowRequest(queued, startedAt, queueDepth, { result });
           // Resolve the cache result before the bounded observation checkpoint.
           for (const waiter of queued.waiters) waiter.resolve(result);
           if (isStorageTransactionRequest(queued.request)) {
@@ -737,16 +737,27 @@ export class CacheWorkerCore {
   /**
    * Reports a request answered a second or more after it arrived, split into
    * the time it waited behind others and the time it ran, so a page timeout
-   * can be traced to the request that held the engine.
+   * can be traced to the request that held the engine. A write whose view
+   * proof failed is reported however fast, since its extra reads show nowhere
+   * else.
    */
   private recordSlowRequest(
     queued: QueuedEngineRequest,
     startedAt: number,
     queueDepth: number,
-    failure?: { error: unknown }
+    outcome: { result: unknown } | { error: unknown }
   ): void {
     const finishedAt = this.now();
-    if (finishedAt - queued.enqueuedAt < SLOW_REQUEST_MS) return;
+    const proof = 'result' in outcome ? writeProof(outcome.result) : undefined;
+    // A failed proof is reported however fast the write was: it costs every
+    // live view a read, which no other signal shows.
+    if (
+      finishedAt - queued.enqueuedAt < SLOW_REQUEST_MS &&
+      proof?.failed !== true
+    )
+      return;
+    const failure = 'error' in outcome ? outcome : undefined;
+    const proofMs = proof?.ms;
     this.telemetry.record({
       name: 'graphql_cache.slow_request',
       operationCategory: operationCategoryForRequest(queued.request),
@@ -756,6 +767,8 @@ export class CacheWorkerCore {
       queueWaitMs: startedAt - queued.enqueuedAt,
       durationMs: finishedAt - startedAt,
       queueDepth,
+      ...(proofMs === undefined ? {} : { proofMs }),
+      ...(proof?.failed === true ? { proofFailed: true } : {}),
     });
   }
 
@@ -948,7 +961,7 @@ export class CacheWorkerCore {
         const queueDepth = this.queue.length;
         try {
           const result = await this.dispatch(queued.request);
-          this.recordSlowRequest(queued, startedAt, queueDepth);
+          this.recordSlowRequest(queued, startedAt, queueDepth, { result });
           for (const waiter of queued.waiters) waiter.resolve(result);
         } catch (error) {
           this.executingAuthority = authority;
@@ -1903,4 +1916,23 @@ export class CacheWorkerCore {
     }
     return this.engine;
   }
+}
+
+/** The view proof a write result reports, inside its authority envelope. */
+function writeProof(
+  dispatched: unknown
+): { ms: number | undefined; failed: boolean } | undefined {
+  const result =
+    typeof dispatched === 'object' &&
+    dispatched !== null &&
+    'result' in dispatched
+      ? dispatched.result
+      : dispatched;
+  if (typeof result !== 'object' || result === null) return undefined;
+  const ms =
+    'proofMs' in result && typeof result.proofMs === 'number'
+      ? result.proofMs
+      : undefined;
+  const failed = 'proofFailed' in result && result.proofFailed === true;
+  return ms === undefined && !failed ? undefined : { ms, failed };
 }

@@ -755,3 +755,229 @@ fn rotating_subscribers_beyond_one_pane_keep_receiving_deltas() {
         }
     });
 }
+
+#[test]
+fn a_window_read_under_optimism_is_never_proven_unchanged() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        seed(&mut engine, "a", 1).await;
+        // An optimistic edit to a row the view never shows, in its scope.
+        let variables = json!({"input":{"threadId":"c"}})
+            .as_object()
+            .unwrap()
+            .clone();
+        let (id, _) = engine.begin_optimistic_write_with_projections(None, BeginOptimisticWrite {
+            client_metadata: None,
+            uuid: "00000000-0000-4000-8000-000000000002",
+            query: "mutation Read($input: MarkEmailThreadSeenInput!) { markEmailThreadSeen(input: $input) { id isRead } }",
+            operation_name: None, variables: &variables, data: &json!({"markEmailThreadSeen":{"id":"c","isRead":true}}),
+            link_patches: &[], revalidations: &[], identity_bindings: &[], created_at_ms: 0,
+        }, vec![OptimisticProjectionMutation::Replace(projection("c", true, 3))]).await.unwrap();
+        let shown = engine.read_live_query("view", spec(), None).await.unwrap();
+        assert!(shown.optimistic);
+        let claim = engine
+            .claim_next_mutation(MutationClaimRequest {
+                owner: "test".into(),
+                now_ms: 1,
+                lease_expires_at_ms: 100,
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        engine
+            .rollback_optimistic_write(
+                id,
+                MutationClaimToken {
+                    owner: "test".into(),
+                    generation: claim.lease_generation,
+                },
+            )
+            .await
+            .unwrap();
+        // An unrelated write: the window's rows are as they were, but a read
+        // now reports it is no longer optimistic, so it is not unchanged.
+        engine
+            .put_records_with_projections(
+                None,
+                vec![(
+                    EntityKey::entity("GraphqlUser", &["viewer"]),
+                    Record {
+                        fields: BTreeMap::from([(
+                            "id".into(),
+                            CacheValue::String("viewer".into()),
+                        )]),
+                    },
+                )],
+                vec![],
+            )
+            .await
+            .unwrap();
+        assert!(
+            !engine
+                .unchanged_observed_windows()
+                .await
+                .unwrap()
+                .contains(&shown.observation_id)
+        );
+        let again = engine
+            .read_live_query("view", spec(), Some(shown.revision.parse().unwrap()))
+            .await
+            .unwrap();
+        assert!(!again.optimistic);
+    });
+}
+
+#[test]
+fn a_view_keeps_only_its_last_reads_observation() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        seed(&mut engine, "a", 1).await;
+        let unrelated = |n: u8| {
+            (
+                EntityKey::entity("GraphqlUser", &["viewer"]),
+                Record {
+                    fields: BTreeMap::from([("n".into(), CacheValue::String(n.to_string()))]),
+                },
+            )
+        };
+        let first = engine.read_live_query("view", spec(), None).await.unwrap();
+        let released = engine.read_live_query("gone", spec(), None).await.unwrap();
+        engine
+            .put_records_with_projections(None, vec![unrelated(1)], vec![])
+            .await
+            .unwrap();
+        // A reader that ignores the proof reads again: its new token replaces the old.
+        let second = engine
+            .read_live_query("view", spec(), Some(first.revision.parse().unwrap()))
+            .await
+            .unwrap();
+        engine.release_live_query("gone");
+        engine
+            .put_records_with_projections(None, vec![unrelated(2)], vec![])
+            .await
+            .unwrap();
+        let unchanged = engine.unchanged_observed_windows().await.unwrap();
+        assert_eq!(unchanged, [second.observation_id]);
+        assert!(!unchanged.contains(&first.observation_id));
+        assert!(!unchanged.contains(&released.observation_id));
+    });
+}
+
+#[test]
+fn a_view_drops_its_old_observation_after_many_other_views_read() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        seed(&mut engine, "a", 1).await;
+        let unrelated = |n: usize| {
+            (
+                EntityKey::entity("GraphqlUser", &["viewer"]),
+                Record {
+                    fields: BTreeMap::from([("n".into(), CacheValue::String(n.to_string()))]),
+                },
+            )
+        };
+        let first = engine.read_live_query("view", spec(), None).await.unwrap();
+        // Proofs after each write keep the first window recent while more views
+        // than the live-view bound read.
+        for n in 0..300 {
+            engine
+                .read_live_query(&format!("other-{n}"), spec(), None)
+                .await
+                .unwrap();
+            engine
+                .put_records_with_projections(None, vec![unrelated(n)], vec![])
+                .await
+                .unwrap();
+            engine.unchanged_observed_windows().await.unwrap();
+        }
+        let second = engine.read_live_query("view", spec(), None).await.unwrap();
+        engine
+            .put_records_with_projections(None, vec![unrelated(300)], vec![])
+            .await
+            .unwrap();
+        let unchanged = engine.unchanged_observed_windows().await.unwrap();
+        assert!(unchanged.contains(&second.observation_id));
+        assert!(!unchanged.contains(&first.observation_id));
+    });
+}
+
+/// A record whose projection is incomplete (a document holding too few fields
+/// to project) is never a reconciliation candidate, so it leaves a live view's
+/// window as it was. An exact read of the same scope turns incomplete, so a
+/// window observed from one still wakes.
+#[test]
+fn an_incomplete_newcomer_leaves_only_reconciled_windows_unchanged() {
+    block_on(async {
+        let mut engine = Engine::with_capacity(InMemoryStorage::new(), 1);
+        for id in 0..40 {
+            seed(&mut engine, &id.to_string(), id).await;
+        }
+        let first = engine
+            .read_live_query("visible", spec(), None)
+            .await
+            .unwrap();
+        let exact = spec();
+        let exact_keys = match engine
+            .query_predicate_index(&exact.query)
+            .await
+            .unwrap()
+            .value
+        {
+            PredicateQueryResult::Complete(keys) => keys,
+            other => panic!("expected a complete exact read, got {other:?}"),
+        };
+        let selected: Vec<_> = exact_keys
+            .iter()
+            .map(|key| EntityKey(key.as_str().to_owned().into()))
+            .collect();
+        let exact_id = engine.observe_predicate_window(
+            exact.query.clone(),
+            &exact_keys,
+            None,
+            BTreeSet::new(),
+        );
+        engine
+            .read_records_by_keys(&exact.selection, &selected)
+            .await
+            .unwrap();
+        engine
+            .put_records_with_projections(
+                None,
+                vec![(
+                    key("incomplete"),
+                    Record {
+                        fields: BTreeMap::from([(
+                            "__typename".into(),
+                            CacheValue::String("GraphqlSoupEmailThread".into()),
+                        )]),
+                    },
+                )],
+                vec![ProjectionMutation::MarkIncomplete {
+                    record_key: PredicateRecordKey::new(key("incomplete").to_string()).unwrap(),
+                    profile: Profile::new(token("test-live")),
+                    partition: token("email"),
+                    kind: predicate_index::ProjectionIncompleteKind::Missing,
+                }],
+            )
+            .await
+            .unwrap();
+        let unchanged = engine.unchanged_observed_windows().await.unwrap();
+        assert_eq!(unchanged, vec![first.observation_id.clone()]);
+        assert!(!unchanged.contains(&exact_id));
+        // What the proof claims: the view's rows are the same, and the exact
+        // read is not.
+        let again = engine
+            .read_live_query("visible", spec(), Some(first.revision.parse().unwrap()))
+            .await
+            .unwrap();
+        assert!(again.upserts.is_empty() && again.keys.is_none() && !again.reset);
+        assert!(matches!(
+            engine
+                .query_predicate_index(&exact.query)
+                .await
+                .unwrap()
+                .value,
+            PredicateQueryResult::Incomplete
+        ));
+    });
+}

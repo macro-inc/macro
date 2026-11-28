@@ -13,7 +13,12 @@ pub(super) struct WindowObservation {
     boundary: Option<(i64, PredicateRecordKey)>,
     dependencies: BTreeSet<EntityKey<'static>>,
     bound: BTreeSet<EntityKey<'static>>,
+    /// A live view's window, read by reconciliation, whose candidates are
+    /// complete projections only (`PredicateIndexStorage::reconcile_predicate_index`).
+    reconciled: bool,
     fields: BTreeMap<(EntityKey<'static>, String), Option<CacheValue>>,
+    /// The live view whose latest read this is; a later read of it replaces it.
+    view: Option<String>,
 }
 
 pub(super) struct WindowObservations {
@@ -63,6 +68,23 @@ impl<S: Storage> Engine<S> {
         }
     }
 
+    /// Drops the observation of a live view's previous read. The view is kept
+    /// on the observation, so the two leave the LRU together. Its reader holds
+    /// the new token once the read returns; a proof that no longer lists the
+    /// old one only makes a reader that still holds it read again.
+    pub(super) fn forget_view_observation(&mut self, view: &str) {
+        let previous: Vec<_> = self
+            .window_observations
+            .windows
+            .iter()
+            .filter(|(_, window)| window.view.as_deref() == Some(view))
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in previous {
+            self.window_observations.windows.pop(&id);
+        }
+    }
+
     fn next_window_id(&mut self) -> String {
         self.window_observations.next_id += 1;
         format!(
@@ -92,6 +114,8 @@ impl<S: Storage> Engine<S> {
                 boundary,
                 dependencies,
                 fields: BTreeMap::new(),
+                view: None,
+                reconciled: bound,
                 bound: if bound {
                     keys.iter()
                         .map(|key| EntityKey(key.as_str().to_owned().into()))
@@ -220,7 +244,11 @@ impl<S: PredicateIndexStorage> Engine<S> {
                         return false;
                     }
                     let ProjectionState::Complete(document) = state else {
-                        return true;
+                        // An incomplete record turns an exact read incomplete, but
+                        // is never a reconciliation candidate. One outside the
+                        // window's keys and baseline (both dependencies) leaves a
+                        // reconciled window as it was.
+                        return !window.reconciled;
                     };
                     let query = window.query.as_query();
                     if !query.partitions.iter().any(|part| {
@@ -253,10 +281,18 @@ impl<S: PredicateIndexStorage> Engine<S> {
 
     pub(super) async fn observe_live_query_window(
         &mut self,
+        view: &str,
         spec: &live_query::LiveQuerySpec,
         membership: &PredicateReconciliation,
         dependencies: &live_query::RowDependencies,
     ) -> Result<String, EngineError<S::Error>> {
+        self.forget_view_observation(view);
+        // A window composed with optimism reports `optimistic`, which a rollback
+        // or commit outside the window changes without touching its rows. Its
+        // token is never installed, so no proof covers it.
+        if membership.optimistic {
+            return Ok(self.next_window_id());
+        }
         let mut boundary = None;
         if membership.retained_keys.is_empty()
             && membership.keys.len() >= usize::from(spec.query.as_query().limit)
@@ -299,6 +335,9 @@ impl<S: PredicateIndexStorage> Engine<S> {
                 .collect(),
             true,
         );
+        if let Some(window) = self.window_observations.windows.peek_mut(&id) {
+            window.view = Some(view.to_owned());
+        }
         Ok(id)
     }
 }
