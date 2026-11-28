@@ -204,6 +204,18 @@ async function openWorkColor() {
 }
 
 describe("a calendar's color on the phone", () => {
+  it("shows the person's color beside the calendar's name", () => {
+    state.sources = [work(true)];
+    render(() => <MobileCalendarSidebar />);
+
+    const swatch = screen
+      .getByText('Work')
+      .closest('label')
+      ?.querySelector<HTMLElement>('[aria-hidden="true"][style]');
+
+    expect(swatch?.style.backgroundColor).toBe('rgb(87, 182, 176)');
+  });
+
   // Class web-cal-calendar-color: when this fails, a color picked on the
   // phone stays in that browser and never reaches the account or other
   // devices.

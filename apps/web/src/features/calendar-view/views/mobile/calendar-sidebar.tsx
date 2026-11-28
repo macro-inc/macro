@@ -1,6 +1,7 @@
 import { useViewShell, ViewSidebar } from '@app/components/view-shell';
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { CopyAvailabilityButton } from '@app/features/calendar/availability/CopyAvailabilityButton';
+import { CalendarSwatch } from '@app/features/calendar/components/CalendarSwatch';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { CalendarColorPicker } from '@app/features/calendar/components/calendar-color-picker';
 import { CalendarSourceLabel } from '@app/features/calendar/components/SourceControls';
@@ -245,6 +246,7 @@ export function MobileCalendarSidebar() {
                               >
                                 <Checkbox.Control />
                                 <Checkbox.Label class="flex min-w-0 flex-1 items-center gap-3">
+                                  <CalendarSwatch color={source.color} />
                                   <CalendarSourceLabel source={source} />
                                 </Checkbox.Label>
                               </Checkbox>
