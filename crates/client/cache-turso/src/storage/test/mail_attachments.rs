@@ -519,9 +519,18 @@ fn open_cost_on_a_retained_cache() {
     );
 }
 
-/// A Mail document with `owner` as a fact of its own and these attachment kinds.
+/// A Mail document of thread `t-0` with `owner` as a fact of its own and these
+/// attachment kinds.
 fn mail_document(owner: &str, kinds: &[AttachmentKind]) -> predicate_index::IndexDocument {
-    let mut document = authoritative_projection(&format!("{THREAD}:t-0"), owner);
+    thread_document("t-0", owner, kinds)
+}
+
+fn thread_document(
+    thread: &str,
+    owner: &str,
+    kinds: &[AttachmentKind],
+) -> predicate_index::IndexDocument {
+    let mut document = authoritative_projection(&format!("{THREAD}:{thread}"), owner);
     document.profile = Profile::new(Token::new(DOCUMENT_PROFILES[1]).unwrap());
     document.partition = Token::new(item_filter_index::mail::PARTITION).unwrap();
     document
@@ -567,6 +576,95 @@ fn queued_documents(storage: &TursoStorage) -> Vec<predicate_index::IndexDocumen
     .collect()
 }
 
+/// Queues one write holding these Mail documents, as a build without the
+/// facts did, and opens the cache with this build.
+async fn queue_and_open(
+    storage: &mut TursoStorage,
+    documents: Vec<predicate_index::IndexDocument>,
+) {
+    let mut mutation = queued("Draft");
+    mutation.optimistic.optimistic_data_json =
+        cache_core::queue::encode_optimistic_source(&cache_core::queue::OptimisticSource {
+            client_metadata: None,
+            identity_bindings: Vec::new(),
+            mutation_data: serde_json::json!({}),
+            link_patches: Vec::new(),
+            revalidations: Vec::new(),
+            projection_mutations: documents
+                .into_iter()
+                .map(predicate_index::OptimisticProjectionMutation::Replace)
+                .collect(),
+            uncertain_calendar_event_keys: Vec::new(),
+        });
+    storage.enqueue_mutation(mutation).await.unwrap();
+    forget_version(storage);
+    ensure(storage);
+}
+
+/// A later save of a created draft can still name the thread's local key,
+/// which the create's settlement made an alias of the server's: the rewrite
+/// reads the thread through it. A document whose thread the cache does not
+/// hold keeps the kinds it has, and one the facts would take over the
+/// attribute limit stays as it is, since replay validates it.
+#[test]
+fn the_queue_rewrite_follows_aliases_and_keeps_what_it_cannot_improve() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("mail-attachments-queue-edges").unwrap();
+        store(
+            &storage,
+            &[Shape {
+                profile: DOCUMENT_PROFILES[1],
+                complete: true,
+                record: true,
+                attachments: vec![Some(Some("application/pdf"))],
+            }],
+            None,
+        );
+        let alias = cache_core::identity::alias_record(&EntityKey::entity(THREAD, &["t-0"]));
+        put_record(
+            &storage,
+            &EntityKey::entity(THREAD, &["local-0"]),
+            alias
+                .fields
+                .iter()
+                .map(|(field, value)| (field.as_str(), value.clone()))
+                .collect(),
+        );
+        // Three attributes of its own (owner, server relation, updated-at)
+        // and enough more to reach the limit.
+        let missing = thread_document("t-missing", "queued", &[AttachmentKind::Image]);
+        let mut full = thread_document("t-0", "queued", &[]);
+        let attributes = 3;
+        full.exact_facts.extend(
+            (attributes..predicate_index::MAX_ATTRIBUTES_PER_DOCUMENT).map(|index| {
+                predicate_index::ExactFact {
+                    attribute: Token::new(format!("extra-{index}")).unwrap(),
+                    value: attachment_value(AttachmentKind::Pdf),
+                }
+            }),
+        );
+        full.canonicalize();
+        full.validate().unwrap();
+        queue_and_open(
+            &mut storage,
+            vec![
+                thread_document("local-0", "queued", &[]),
+                missing.clone(),
+                full.clone(),
+            ],
+        )
+        .await;
+        assert_eq!(
+            queued_documents(&storage),
+            vec![
+                thread_document("local-0", "queued", &[AttachmentKind::Pdf]),
+                missing,
+                full,
+            ]
+        );
+    });
+}
+
 /// A write queued by a build without the facts holds a Mail document with
 /// none, and each push composes the thread's shadow from it again. The open
 /// gives it the thread's kinds, so the shadow keeps them through a push and
@@ -586,22 +684,7 @@ fn a_write_queued_before_the_facts_gets_them_on_open() {
             }],
             None,
         );
-        let mut mutation = queued("Draft");
-        mutation.optimistic.optimistic_data_json =
-            cache_core::queue::encode_optimistic_source(&cache_core::queue::OptimisticSource {
-                client_metadata: None,
-                identity_bindings: Vec::new(),
-                mutation_data: serde_json::json!({}),
-                link_patches: Vec::new(),
-                revalidations: Vec::new(),
-                projection_mutations: vec![predicate_index::OptimisticProjectionMutation::Replace(
-                    mail_document("queued", &[]),
-                )],
-                uncertain_calendar_event_keys: Vec::new(),
-            });
-        storage.enqueue_mutation(mutation).await.unwrap();
-        forget_version(&storage);
-        ensure(&storage);
+        queue_and_open(&mut storage, vec![mail_document("queued", &[])]).await;
         let queued = mail_document("queued", &[AttachmentKind::Pdf]);
         assert_eq!(queued_documents(&storage), vec![queued.clone()]);
 

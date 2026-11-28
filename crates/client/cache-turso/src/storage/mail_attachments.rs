@@ -11,6 +11,7 @@
 //! reads. A record the cache does not hold, or holds without a type, gives none.
 
 use super::*;
+use cache_core::identity;
 use cache_core::queue::{decode_optimistic_source, encode_optimistic_source};
 use cache_core::value::CacheValue;
 use derived_sorts::{AUTHORITATIVE, OPTIMISTIC, Tables};
@@ -46,7 +47,9 @@ pub(super) fn backfill(connection: &Db) -> Result<(), TursoStorageError> {
 
 /// Gives the Mail documents of queued writes their threads' attachment facts.
 /// Each later push for a thread composes its shadow from them again, and a
-/// write queued by a build without the facts holds none.
+/// write queued by a build without the facts holds none. A document whose
+/// thread the cache does not hold, or that the facts would take over the
+/// attribute limit, stays as it is: replay validates the payload.
 fn conform_queue(connection: &Db) -> Result<(), TursoStorageError> {
     let layer_update =
         "UPDATE optimistic_layers SET optimistic_data_json = ?2 WHERE mutation_id = ?1";
@@ -55,40 +58,35 @@ fn conform_queue(connection: &Db) -> Result<(), TursoStorageError> {
         let layer = row.optimistic.ok_or_else(invariant)?;
         let mut source =
             decode_optimistic_source(&layer.optimistic_data_json).map_err(|_| invariant())?;
-        let mut documents = source
-            .projection_mutations
-            .iter_mut()
-            .filter_map(|mutation| match mutation {
-                OptimisticProjectionMutation::Replace(document) if is_mail(document) => {
-                    Some(document)
-                }
-                _ => None,
-            })
-            .collect::<Vec<_>>();
-        if documents.is_empty() {
-            continue;
-        }
-        let threads = documents
-            .iter()
-            .map(|document| {
-                RecordKey::from_entity(&EntityKey(document.record_key.as_str().to_owned().into()))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let kinds = kinds_of(connection, &record_batch::read(connection, &threads)?)?;
         let mut changed = false;
-        for (document, kinds) in documents.iter_mut().zip(kinds) {
-            let before = document.exact_facts.clone();
-            document
+        for mutation in &mut source.projection_mutations {
+            let OptimisticProjectionMutation::Replace(document) = mutation else {
+                continue;
+            };
+            if !is_mail(document) {
+                continue;
+            }
+            let Some(thread) = thread_record(connection, document)? else {
+                continue;
+            };
+            let mut conformed = document.clone();
+            conformed
                 .exact_facts
                 .retain(|fact| fact.attribute.as_str() != mail::ATTACHMENT_ATTRIBUTE);
-            document
-                .exact_facts
-                .extend(kinds.into_iter().map(|kind| ExactFact {
-                    attribute: mail::token(mail::ATTACHMENT_ATTRIBUTE),
-                    value: mail::attachment_value(kind),
-                }));
-            document.canonicalize();
-            changed |= document.exact_facts != before;
+            conformed.exact_facts.extend(
+                kinds_of(connection, &[Some(thread)])?
+                    .into_iter()
+                    .flatten()
+                    .map(|kind| ExactFact {
+                        attribute: mail::token(mail::ATTACHMENT_ATTRIBUTE),
+                        value: mail::attachment_value(kind),
+                    }),
+            );
+            conformed.canonicalize();
+            if conformed != *document && conformed.validate().is_ok() {
+                *document = conformed;
+                changed = true;
+            }
         }
         if !changed {
             continue;
@@ -106,6 +104,30 @@ fn conform_queue(connection: &Db) -> Result<(), TursoStorageError> {
         )?;
     }
     Ok(())
+}
+
+/// The thread record `document` names, through the aliases a settled create
+/// leaves at the local key later writes may still name; none when the cache
+/// does not hold it.
+fn thread_record(
+    connection: &Db,
+    document: &IndexDocument,
+) -> Result<Option<Record>, TursoStorageError> {
+    let mut key = EntityKey(document.record_key.as_str().to_owned().into());
+    for _ in 0..=identity::MAX_ALIAS_CHAIN_DEPTH {
+        let Some(record) = record_batch::read(connection, &[RecordKey::from_entity(&key)?])?
+            .into_iter()
+            .flatten()
+            .next()
+        else {
+            return Ok(None);
+        };
+        match identity::alias_target(&record) {
+            Some(target) => key = target.clone(),
+            None => return Ok(Some(record)),
+        }
+    }
+    Ok(None)
 }
 
 fn is_mail(document: &IndexDocument) -> bool {
