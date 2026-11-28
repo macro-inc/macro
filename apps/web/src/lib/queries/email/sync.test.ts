@@ -17,13 +17,19 @@ vi.mock('../soup/normalized-cache', () => ({ invalidateAllSoup: vi.fn() }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { success: vi.fn(), failure: vi.fn() },
 }));
+const revalidateMailFolderLists = vi.hoisted(() =>
+  vi.fn(async () => undefined)
+);
+vi.mock('@queries/soup/graphql/mail-list-revalidation', () => ({
+  revalidateMailFolderLists,
+}));
 
-import { soupKeys } from '../soup/keys';
 import { handleRefreshEmail } from './sync';
 
 beforeEach(() => {
   vi.useFakeTimers();
   client = new QueryClient();
+  revalidateMailFolderLists.mockClear();
 });
 afterEach(() => {
   vi.runOnlyPendingTimers();
@@ -31,34 +37,14 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-it('refreshes isolated folder queries on provider changes without refetching All Mail', async () => {
-  const keys = ['spam', 'trash', 'all'].map(
-    (emailView) =>
-      soupKeys.astItems({ params: {}, body: { emailView }, transport: 'rest' })
-        .queryKey
-  );
-  const reset = () =>
-    keys.forEach((key) => client.setQueryData(key, { pages: [] }));
-  reset();
+it('reads the folder lists again on provider changes, coalescing bursts', async () => {
   handleRefreshEmail({ event: 'update_labels', link_id: 'inbox' });
-  expect(keys.map((key) => client.getQueryState(key)?.isInvalidated)).toEqual([
-    true,
-    true,
-    false,
-  ]);
-  reset();
+  expect(revalidateMailFolderLists).toHaveBeenCalledTimes(1);
+
   handleRefreshEmail({ event: 'upsert_message', link_id: 'inbox' });
   handleRefreshEmail({ event: 'delete_message', link_id: 'inbox' });
-  // Bursts coalesce, but the last change still refreshes both folders.
-  expect(keys.map((key) => client.getQueryState(key)?.isInvalidated)).toEqual([
-    false,
-    false,
-    false,
-  ]);
+  // Bursts coalesce, but the last change still refreshes the folders.
+  expect(revalidateMailFolderLists).toHaveBeenCalledTimes(1);
   await vi.advanceTimersByTimeAsync(5000);
-  expect(keys.map((key) => client.getQueryState(key)?.isInvalidated)).toEqual([
-    true,
-    true,
-    false,
-  ]);
+  expect(revalidateMailFolderLists).toHaveBeenCalledTimes(2);
 });

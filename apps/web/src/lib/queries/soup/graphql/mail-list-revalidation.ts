@@ -71,3 +71,18 @@ export async function revalidateMailAttachmentListsForSoupUpdates(
   if (!patches.some(carriesAttachment)) return;
   await revalidateMailAttachmentLists();
 }
+
+const listsMailFolder = (body: unknown) =>
+  isRecord(body) && (body.emailView === 'spam' || body.emailView === 'trash');
+
+/**
+ * Spam and Trash are server pages: the cache has no folder membership, so a
+ * provider change that moves a thread in or out of a folder reaches them only
+ * by reading the server again. Their rows' own fields stay live meanwhile.
+ */
+export function revalidateMailFolderLists(): Promise<void> {
+  return refreshActiveGraphqlSoupQueries({
+    where: listsMailFolder,
+    unmaintainedOnly: true,
+  });
+}

@@ -21,7 +21,6 @@ import { revalidateMailImportanceLists } from '../soup/graphql/mail-list-revalid
 import { invalidateAllSoup } from '../soup/normalized-cache';
 import { type UndoHandle, useUndoableMutation } from '../undo';
 import { type MutationCallbacks, withCallbacks } from '../utils';
-import { invalidateEmailFolderQueries } from './folder-cache';
 import {
   createGraphqlEmailThreadQuery,
   fetchGraphqlEmailThread,
@@ -239,9 +238,7 @@ export function useMarkThreadAsUnreadMutation(
     mutationFn: (params: MarkThreadAsUnreadParams) =>
       markEmailThreadUnread(params, options?.observeQueuedSettlement ?? false),
     ...withCallbacks<MarkThreadAsUnreadResult, Error, MarkThreadAsUnreadParams>(
-      {
-        onSettled: () => invalidateEmailFolderQueries(),
-      },
+      {},
       callbacks
     ),
   }));

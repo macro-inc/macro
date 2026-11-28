@@ -1,8 +1,8 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { refreshEmailThreadCache } from '@queries/email/cache-cleanup';
-import { invalidateEmailFolderQueries } from '@queries/email/folder-cache';
 import { emailKeys } from '@queries/email/keys';
+import { revalidateMailFolderLists } from '@queries/soup/graphql/mail-list-revalidation';
 import { emailClient } from '@service-email/client';
 import type { MailboxOperation } from '@service-email/generated/schemas';
 import {
@@ -40,7 +40,7 @@ function threadOperationsQueryOptions(threadId: string, enabled: boolean) {
       );
       if (wasPending && !hasPending(operations)) {
         fireAndForget(refreshEmailThreadCache(threadId), 'email-operations');
-        fireAndForget(invalidateEmailFolderQueries(), 'email-operations');
+        fireAndForget(revalidateMailFolderLists(), 'email-operations');
       }
       return operations;
     },
