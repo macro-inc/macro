@@ -1863,6 +1863,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       },
     },
     liveQueries: true,
+    liveQueryRows: true,
     people: createPeopleCache({
       snapshot: (request, traceparent) =>
         initializedRequest({ kind: 'contact-snapshot', request, traceparent }),

@@ -1,5 +1,6 @@
+import type { ChannelEntity } from '@entity';
 import type { CombinedError } from '@urql/core';
-import { type Accessor, createMemo, createSignal } from 'solid-js';
+import { type Accessor, createMemo, createSignal, untrack } from 'solid-js';
 import { arrayEquals } from '../../../core/util/compareUtils';
 import { readRowSnapshot } from '../../../graphql-cache/exchange/live-query';
 import type { QueryRevalidation } from '../../../graphql-cache/exchange/optimistic';
@@ -18,8 +19,14 @@ import {
   mapSoupPageToEntityList,
 } from '../transform-utils';
 import { makeGraphqlSoupInput } from './ast';
+import {
+  channelListRow,
+  finishChannelListRow,
+  isChannelListRow,
+} from './channel-list-row';
 import type { GroupedSoupPaging } from './create-grouped-soup-live-query';
 import type { PredicateQueryStatus } from './create-predicate-query';
+import type { SoupLiveRecord } from './create-soup-live-query';
 import {
   createSoupLiveQuery,
   type SoupLiveQueryOptions,
@@ -97,14 +104,14 @@ export function createGraphqlSoupAstItemsQuery(
   // fetched version separately: a local edit must not change page coverage.
   type ProjectionRow = {
     key: string;
-    record: GraphqlSoupItem;
+    record: SoupLiveRecord;
     fetched?: GraphqlSoupItem;
   };
   const records = createMemo((previous: ProjectionRow[]) => {
-    const fetched = new Map(
+    const fetched = new Map<string, GraphqlSoupItem>(
       source.fetchedRecords().map((record) => [soupItemKey(record), record])
     );
-    const visible = new Map(fetched);
+    const visible = new Map<string, SoupLiveRecord>(fetched);
     for (const record of source.data() ?? [])
       visible.set(soupItemKey(record), record);
     const old = new Map(previous.map((row) => [row.key, row]));
@@ -121,14 +128,21 @@ export function createGraphqlSoupAstItemsQuery(
   // break `createKeyedProjection`'s structural equality check with closures.
   const mailItems = new Map<string, SoupApiItem>();
   const [mailItemsVersion, setMailItemsVersion] = createSignal(0);
-  const projected = createKeyedProjection(
-    records,
+  // Shaped channel-list rows skip the keyed projection: they are immutable,
+  // so each new row object is finished once, outside any store.
+  const keyedRecords = createMemo(
+    () => records().filter((row) => !isChannelListRow(row.record)),
+    [],
+    { equals: arrayEquals }
+  );
+  const projectedKeyed = createKeyedProjection(
+    keyedRecords,
     (row) => row.key,
     ({ record, fetched }) => {
       const sort = sortMethod();
       const showSupportedForeignEntities = showForeign();
       const view = { emailView: input()?.emailView };
-      const rawRecord = readRowSnapshot(record);
+      const rawRecord = readRowSnapshot(record as GraphqlSoupItem);
       const rawFetched =
         fetched === record
           ? rawRecord
@@ -167,6 +181,44 @@ export function createGraphqlSoupAstItemsQuery(
       };
     }
   );
+  type ChannelItem = {
+    key: string;
+    entity: ChannelEntity;
+    timestamp: number | undefined;
+  };
+  const channelItems = new WeakMap<
+    ProjectionRow,
+    { sort: SoupAstParams['sort_method']; item: ChannelItem }
+  >();
+  const projectedChannels = createMemo(() => {
+    const sort = sortMethod();
+    return records().flatMap((row): ChannelItem[] => {
+      if (!isChannelListRow(row.record)) return [];
+      const entity = finishChannelListRow(row.record);
+      const previous = channelItems.get(row);
+      if (previous && previous.sort === sort && previous.item.entity === entity)
+        return [previous.item];
+      // Sort by the fetched version, as the keyed path does: a local edit
+      // must not move page coverage.
+      const fetched = row.fetched
+        ? untrack(() => channelListRow(row.fetched!))
+        : undefined;
+      const item = {
+        key: row.key,
+        entity,
+        timestamp:
+          fetched && isChannelListRow(fetched)
+            ? soupEntityTimestamp(finishChannelListRow(fetched), sort)
+            : undefined,
+      };
+      channelItems.set(row, { sort, item });
+      return [item];
+    });
+  });
+  const projected = createMemo(() => [
+    ...projectedKeyed(),
+    ...projectedChannels(),
+  ]);
   const byKey = createMemo(() => {
     const map = new Map(projected().map((item) => [item.key, item]));
     if (mailItems.size > 0) {

@@ -99,6 +99,7 @@ import {
   channelNotificationRefresh,
   disposeChannelNotificationRefresh,
 } from '../../lib/queries/channel/notification-refresh';
+import { channelListRow } from '../../lib/queries/soup/graphql/channel-list-row';
 import { createGraphqlSoupAstItemsQuery } from '../../lib/queries/soup/graphql/items';
 
 type WireNotification = {
@@ -287,6 +288,12 @@ function createChannelCacheEngine(initial: WireChannel[]) {
       }
 
       entityFilterCalls.set(live.id, (entityFilterCalls.get(live.id) ?? 0) + 1);
+      // A view that asks for channel-list rows gets them shaped, as the engine
+      // shapes them; a changed shaped row is sent whole.
+      const sent = (record: WireChannel) =>
+        live.row
+          ? channelListRow(structuredClone(record) as never)
+          : structuredClone(record);
       const filter = predicateForFilter(
         args.filters as Record<string, unknown> | undefined
       );
@@ -310,7 +317,7 @@ function createChannelCacheEngine(initial: WireChannel[]) {
           keys: next.keys,
           upserts: next.records.map(([recordKey, record]) => ({
             recordKey,
-            record: structuredClone(record),
+            record: sent(record),
             identity: { mutationUuid: null, pending: false },
           })),
           patches: [],
@@ -325,7 +332,7 @@ function createChannelCacheEngine(initial: WireChannel[]) {
       const removed = existing.lastKeys.filter((key) => !nextKeySet.has(key));
       const upserts: Array<{
         recordKey: string;
-        record: WireChannel;
+        record: unknown;
         identity: { mutationUuid: null; pending: false };
       }> = [];
       const patches: Array<{
@@ -335,16 +342,19 @@ function createChannelCacheEngine(initial: WireChannel[]) {
       }> = [];
 
       for (const [recordKey, record] of next.records) {
-        if (!prevKeySet.has(recordKey)) {
+        const prevJson = existing.lastRecords.get(recordKey);
+        const nextJson = next.serialized.get(recordKey);
+        if (
+          !prevKeySet.has(recordKey) ||
+          (live.row !== undefined && prevJson !== nextJson)
+        ) {
           upserts.push({
             recordKey,
-            record: structuredClone(record),
+            record: sent(record),
             identity: { mutationUuid: null, pending: false },
           });
           continue;
         }
-        const prevJson = existing.lastRecords.get(recordKey);
-        const nextJson = next.serialized.get(recordKey);
         if (prevJson !== nextJson && prevJson !== undefined) {
           const prevRecord = JSON.parse(prevJson) as WireChannel;
           const fields: Array<{ path: string[]; value: unknown }> = [];

@@ -175,6 +175,29 @@ const HAND_CASES: Array<[string, Json]> = [
   ['no participants', channel('empty', { participants: [] })],
 ];
 
+/** Records a page wrote with too few fields: shaped with nulls, never thrown on. */
+const THIN_CASES: Array<[string, Json]> = [
+  [
+    'thin',
+    {
+      __typename: 'GraphqlSoupChannel',
+      id: 'thin',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    },
+  ],
+  [
+    'thin message',
+    {
+      __typename: 'GraphqlSoupChannel',
+      id: 'thin-message',
+      channelType: 'PUBLIC',
+      participants: [{ channelId: 'thin-message' }],
+      latestMessage: { messageId: 'm-thin' },
+    },
+  ],
+];
+
 /** A small seeded generator (mulberry32), so the corpus is reproducible. */
 function random(seed: number) {
   return () => {
@@ -187,9 +210,9 @@ function random(seed: number) {
 
 function generated(count: number, seed: number): Array<[string, Json]> {
   const next = random(seed);
-  const pick = <T,>(values: readonly T[]): T =>
+  const pick = <T>(values: readonly T[]): T =>
     values[Math.floor(next() * values.length)];
-  const maybe = <T,>(value: T): T | null => (next() < 0.3 ? null : value);
+  const maybe = <T>(value: T): T | null => (next() < 0.3 ? null : value);
   const date = () =>
     new Date(Date.UTC(2026, 0, 1) + Math.floor(next() * 3e10)).toISOString();
   return Array.from({ length: count }, (_, index) => {
@@ -203,16 +226,13 @@ function generated(count: number, seed: number): Array<[string, Json]> {
       viewedAt: maybe(date()),
       interactedAt: maybe(date()),
       isParticipant: pick([true, false, null]),
-      participants: Array.from(
-        { length: Math.floor(next() * 4) },
-        (_, at) => ({
-          channelId: id,
-          userId: `u-${Math.floor(next() * 20)}-${at}`,
-          role: 'MEMBER',
-          joinedAt: date(),
-          leftAt: maybe(date()),
-        })
-      ),
+      participants: Array.from({ length: Math.floor(next() * 4) }, (_, at) => ({
+        channelId: id,
+        userId: `u-${Math.floor(next() * 20)}-${at}`,
+        role: 'MEMBER',
+        joinedAt: date(),
+        leftAt: maybe(date()),
+      })),
       latestMessage: maybe(
         message(id, {
           threadId: maybe(`t-${index}`),
@@ -220,7 +240,9 @@ function generated(count: number, seed: number): Array<[string, Json]> {
           createdAt: date(),
         })
       ),
-      latestNonThreadMessage: maybe(message(`${id}-root`, { createdAt: date() })),
+      latestNonThreadMessage: maybe(
+        message(`${id}-root`, { createdAt: date() })
+      ),
       unreadNotifications: Array.from(
         { length: Math.floor(next() * 2) },
         (_, at) => ({
@@ -267,7 +289,7 @@ describe('channel-list rows', () => {
   });
 
   it('match the rows the engine shapes', () => {
-    const committed = [...HAND_CASES, ...generated(100, 12_278)];
+    const committed = [...HAND_CASES, ...THIN_CASES, ...generated(100, 12_278)];
     const rows = committed.map(([name, record]) => ({
       name,
       record,

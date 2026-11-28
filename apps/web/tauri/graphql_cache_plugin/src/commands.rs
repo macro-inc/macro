@@ -692,6 +692,28 @@ pub async fn graphql_cache_entity_filter(
         .await
 }
 
+/// [`graphql_cache_entity_filter`] for pages that may name a live-view row
+/// shape (`liveQuery.row`). A separate command, so a page on a binary
+/// without row shapes finds it missing and asks for selected records.
+#[tauri::command]
+#[tracing::instrument(
+    name = "graphql_cache.native.entity_filter",
+    skip_all,
+    fields(graphql_cache.ipc.command = "entity_filter_rows", graphql_cache.live_query.row = request.live_query.as_ref().and_then(|live| live.row.as_deref()), upstream.trace_id = traceparent.as_deref().and_then(|parent| parent.split('-').nth(1))),
+    err
+)]
+pub async fn graphql_cache_entity_filter_rows(
+    state: State<'_, CacheState>,
+    request: EntityFilterRequest,
+    traceparent: Option<String>,
+    request_id: Option<String>,
+) -> Result<EntityFilterResult, String> {
+    let releases = request.live_query.as_ref().is_some_and(|live| live.release);
+    reading_handle(&state, request_id.filter(|_| !releases))?
+        .entity_filter(request)
+        .await
+}
+
 /// Reads a registered live view without resending its selection and predicate.
 #[tauri::command]
 #[tracing::instrument(

@@ -2,9 +2,11 @@ import type { ChannelEntity } from '@entity';
 import { resolveNotifiedAt } from '@queries/soup/normalized-cache/notified-floor';
 import { resolveOwnTouch } from '@queries/soup/normalized-cache/own-touch';
 import type { ChannelListItemFieldsFragment } from '@service-storage/graphql/generated/graphql';
+import type { GraphqlSoupItem } from '@service-storage/graphql-soup';
+import { CHANNEL_LIST_ROW_NAME } from '../../../graphql-cache/protocol';
 
 /** The live-view row name hosts that shape rows accept (`live_row_shape`). */
-export const CHANNEL_LIST_ROW = 'channel-list';
+export const CHANNEL_LIST_ROW = CHANNEL_LIST_ROW_NAME;
 
 type ChannelRecord = Extract<
   ChannelListItemFieldsFragment,
@@ -69,17 +71,17 @@ function message(
 ): ChannelListMessage | null | undefined {
   if (!value) return value;
   return {
-    messageId: value.messageId,
+    messageId: value.messageId ?? null,
     ...(value.threadId != null ? { threadId: value.threadId } : {}),
-    content: value.content,
+    content: value.content ?? null,
     mentions: value.mentions ?? [],
-    senderId: value.senderId,
-    createdAt: value.createdAt,
+    senderId: value.senderId ?? null,
+    createdAt: value.createdAt ?? null,
   };
 }
 
 /**
- * The row for one complete selected record. A record of another Soup type is
+ * The row for one selected record, as the engine shapes it. A record of another Soup type is
  * returned as it is, for the general mapper.
  */
 export function channelListRow<T extends { __typename: string }>(
@@ -101,12 +103,19 @@ export function channelListRow<T extends { __typename: string }>(
     __typename: 'GraphqlSoupChannel',
     id: channel.id,
     name: channel.channelName ?? null,
-    channelType: channel.channelType.toLowerCase() as ChannelListRow['channelType'],
+    // A thin record (a page wrote too few fields) shapes with nulls, as the
+    // engine shapes it, rather than throwing.
+    channelType: (typeof channel.channelType === 'string'
+      ? channel.channelType.toLowerCase()
+      : (channel.channelType ?? null)) as ChannelListRow['channelType'],
     ...(channel.channelTeamId != null ? { teamId: channel.channelTeamId } : {}),
-    ownerId: channel.ownerId,
-    createdAt: channel.createdAt,
-    updatedAt: channel.updatedAt,
-    participantIds: channel.participants.map((participant) => participant.userId),
+    ownerId: channel.ownerId ?? null,
+    createdAt: channel.createdAt ?? null,
+    updatedAt: channel.updatedAt ?? null,
+    participantIds: (Array.isArray(channel.participants)
+      ? channel.participants
+      : []
+    ).map((participant) => participant.userId ?? null),
     isParticipant: channel.isParticipant ?? true,
     ...(viewedAt != null ? { viewedAt } : {}),
     ...(channel.interactedAt != null
@@ -193,3 +202,20 @@ export function finishChannelListRow(row: ChannelListRow): ChannelEntity {
   finished.set(row, { entity, touchedAt, notifiedAt });
   return entity;
 }
+
+/**
+ * The `row` option of a channel-list live view: a host-shaped row is adopted
+ * as it is, and a selected record from a host without row shapes is shaped
+ * here.
+ */
+export const CHANNEL_LIST_LIVE_ROW = {
+  name: CHANNEL_LIST_ROW,
+  toRow: (
+    record: object,
+    shaped: boolean
+  ): GraphqlSoupItem | ChannelListRow => {
+    if (!shaped) return channelListRow(record as GraphqlSoupItem);
+    adoptChannelListRow(record);
+    return record as GraphqlSoupItem | ChannelListRow;
+  },
+} as const;

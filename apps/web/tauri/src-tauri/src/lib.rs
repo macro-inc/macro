@@ -461,6 +461,7 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
             graphql_cache_plugin::commands::graphql_cache_contact_snapshot,
             graphql_cache_plugin::commands::graphql_cache_contact_reconcile,
             graphql_cache_plugin::commands::graphql_cache_entity_filter,
+            graphql_cache_plugin::commands::graphql_cache_entity_filter_rows,
             graphql_cache_plugin::commands::graphql_cache_entity_filter_resume,
             graphql_cache_plugin::commands::graphql_cache_calendar_range,
             graphql_cache_plugin::commands::graphql_cache_calendar_commit,

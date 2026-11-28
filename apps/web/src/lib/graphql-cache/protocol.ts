@@ -156,6 +156,9 @@ export type SearchCachePage = {
   nextCursor: SearchCursor | null;
 };
 
+/** The live-view row names a host with `liveQueryRows` shapes. */
+export const CHANNEL_LIST_ROW_NAME = 'channel-list';
+
 /** Maximum server-page membership evidence in one reconciliation request. */
 export const MAX_RECONCILIATION_BASELINE = 5_000;
 
@@ -168,6 +171,11 @@ export type EntityFilterCacheArgs = {
     fragmentName: string;
     since?: CacheRevision;
     release?: boolean;
+    /**
+     * A row shape the engine sends instead of the selected record
+     * (`live_row_shape`); only on hosts with `liveQueryRows`.
+     */
+    row?: typeof CHANNEL_LIST_ROW_NAME;
   };
   filters: Record<string, unknown>;
   sortMethod: 'CREATED_AT' | 'UPDATED_AT' | 'VIEWED_AT' | 'VIEWED_UPDATED';

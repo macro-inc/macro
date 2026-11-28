@@ -76,6 +76,9 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
     get liveQueries() {
       return current.liveQueries;
     },
+    get liveQueryRows() {
+      return current.liveQueryRows;
+    },
     get disabled() {
       return current.disabled;
     },

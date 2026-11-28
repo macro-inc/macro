@@ -57,6 +57,7 @@ import type { UrqlInfiniteData } from '../../../urql-solid/types';
 import { createHiddenDeferral } from '../../visible-refresh';
 import { registerGraphqlSoupRevalidations } from './active-queries';
 import { soupCacheTelemetry } from './cache-activity-telemetry';
+import { CHANNEL_LIST_LIVE_ROW, type ChannelListRow } from './channel-list-row';
 import { createPredicateQuery } from './create-predicate-query';
 import {
   buildGraphqlEntitiesSoupInput,
@@ -84,6 +85,9 @@ import {
 
 /** A Soup query declaration. The source owns page cursors and cache baselines. */
 export type SoupLiveQueryInput = Omit<SoupInitialInput, 'expand'>;
+
+/** A record a Soup live query shows: selected, or a shaped channel-list row. */
+export type SoupLiveRecord = GraphqlSoupItem | ChannelListRow;
 
 export type SoupProjection = 'channel-list' | 'preview';
 
@@ -230,7 +234,7 @@ export function createSoupLiveQuery(
     baselineKeys: ReadonlySet<string>;
     displayedKeys: ReadonlySet<string>;
     withoutEmail: boolean;
-    records: GraphqlSoupItem[];
+    records: SoupLiveRecord[];
     mail?: {
       nextCursor: string | null;
       revision: CacheRevision;
@@ -701,6 +705,10 @@ export function createSoupLiveQuery(
       select: queryOptions.projection
         ? projectionSelections[queryOptions.projection]
         : soupItemSelection,
+      row:
+        queryOptions.projection === 'channel-list'
+          ? CHANNEL_LIST_LIVE_ROW
+          : undefined,
       source: {
         filters: withoutEmail
           ? {
@@ -715,7 +723,7 @@ export function createSoupLiveQuery(
       },
     };
   });
-  const live = createPredicateQuery<GraphqlSoupItem>({
+  const live = createPredicateQuery<SoupLiveRecord>({
     host: getGraphqlSoupCacheHost,
     query: () => {
       const definition = localSource();
@@ -729,6 +737,7 @@ export function createSoupLiveQuery(
       return {
         source: { ...definition.source, baseline: definition.source.baseline },
         select: definition.select,
+        ...(definition.row ? { row: definition.row } : {}),
       };
     },
   });
@@ -1133,7 +1142,7 @@ export function createSoupLiveQuery(
   // New server pages must render immediately, even if the next evaluation stalls
   // or fails. Preserve covered decisions and local additions, then append new
   // rows in server-page order until a successful reconciliation orders the union.
-  const displayData = createMemo((): GraphqlSoupItem[] | undefined => {
+  const displayData = createMemo((): SoupLiveRecord[] | undefined => {
     const local = displayLocalProjection();
     if (networkIsAuthoritative()) {
       const fetched = query.data?.records();
@@ -1354,7 +1363,10 @@ export function createSoupLiveQuery(
         const selected = await readSoupPage(host, {
           page: result,
           select: mailItemSelection,
-          baseline: reconcile ? definition.records : local.records,
+          // A Mail view reads selected records; only channel lists shape rows.
+          baseline: reconcile
+            ? definition.records
+            : (local.records as GraphqlSoupItem[]),
           keys,
           mailView,
         });
