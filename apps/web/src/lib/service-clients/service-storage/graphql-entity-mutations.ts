@@ -1,7 +1,11 @@
 import { TRACE_PARENT_CONTEXT_KEY } from '@app/lib/urql-solid/trace-parent-exchange';
 import { ThrownResultError } from '@core/util/result';
 import { networkRevalidated } from '@graphql-cache/exchange/network-revalidation-exchange';
-import type { QueryRevalidation } from '@graphql-cache/exchange/optimistic';
+import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
+import {
+  optimisticMutationDispositionOf,
+  type QueryRevalidation,
+} from '@graphql-cache/exchange/optimistic';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import type { AnyVariables, OperationContext } from '@urql/core';
@@ -27,8 +31,10 @@ const isEffectsError = (error: GraphQLError) =>
 
 /** Moves resolve with their cache prediction once durably queued; the other
  * operations have no resolver and wait for the server's result. A result whose
- * effects failed to resolve says so (`effectsResolved: false`): the write
- * committed, but its rows never reached the cache. `listsReadAgain` says the
+ * effects failed to resolve, or whose rows or deletions the cache failed to
+ * apply, says so (`effectsResolved: false`): the write committed, but its rows
+ * never reached the cache. `queued` says the cache queued the write with its
+ * revalidations, which it reads once the write commits. `listsReadAgain` says the
  * client's exchange read every mounted list again, each successfully, before
  * the write settled (no live cache).
  * Never retry a failed/ambiguous GraphQL write through the REST transport. */
@@ -101,12 +107,19 @@ async function sendEntityMutation<Data, Variables extends AnyVariables>(
       ...outcome,
       effects: [],
       effectsResolved: false,
+      queued: false,
       listsReadAgain: networkRevalidated(result),
     };
   }
+  const metadata = normalizedCacheResultMetadata(result);
+  const cacheRejected =
+    metadata?.source === 'live-network' &&
+    metadata.cacheEffectsApplied === false;
+  if (cacheRejected) span.setAttr('entity.cache_effects_applied', false);
   return {
     ...outcome,
-    effectsResolved: true,
+    effectsResolved: !cacheRejected,
+    queued: optimisticMutationDispositionOf(result)?.kind === 'queued',
     listsReadAgain: networkRevalidated(result),
   };
 }
