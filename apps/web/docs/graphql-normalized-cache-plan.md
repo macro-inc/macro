@@ -620,20 +620,25 @@ draining it, answers:
   sees, up to `SETTLEMENT_WAIT_LIMIT_MS` (140 s). It holds
   `claim-next-mutation` meanwhile, and refuses enqueues as
   `owner-lock-unavailable` (so the page sends them itself and keeps its host)
-  once a claim could no longer get its full wait before the limit. An owner that drains or leaves during the wait is replaced
-  as usual, unless the replacement would wipe the database, and a settlement
-  the lost owner was writing, or one whose page has gone, goes to the next
-  engine. With every tab hidden, the wait starts an engine in a hidden tab
-  rather than parking, so a settlement still has somewhere to land. Outside
-  the wait, while a head its pages claimed is out, a hidden owner with no
-  visible tab to take over keeps its engine, and an owner that leaves with
-  every other tab hidden is replaced by a hidden one, until the head settles
-  or its lease ends: a parked build holds no lock, and a newer build would open
-  the database without asking. On the page, a head claimed before retirement settles through the
-  host that claimed it (`createRetirableCacheHost` pins it until the head
-  settles or its lease ends), and a retired host refuses any other settlement
+  once a claim could no longer get its full wait before the limit. An owner
+  that drains or leaves during the wait is replaced as usual, unless the
+  replacement would wipe the database, and a settlement the lost owner was
+  writing, or one whose page has gone, goes to the next engine. With every tab
+  hidden, the wait starts an engine in a hidden tab rather than parking, so a
+  settlement still has somewhere to land. Outside the wait, while a head its
+  pages claimed is out or its settlement waits for an engine, a hidden owner
+  with no visible tab to take over keeps its engine, and an owner that leaves
+  with every other tab hidden is replaced by a hidden one (a tab sending the
+  answer first, since a frozen tab would never open it), until the head
+  settles or its lease ends: a parked build holds no lock, and a newer build
+  would open the database without asking. On the page, a head claimed before
+  retirement settles through the host that claimed it
+  (`createRetirableCacheHost` pins it until the head settles or its lease
+  ends), and a retired host refuses any other settlement
   (`CacheSettlementUnwrittenError`) rather than acknowledging one it did not
-  write. A head still out after the wait, or whose coordinator restarted, stays
+  write. A head still out after the wait, or whose coordinator restarted, or
+  out when the owner's engine crashed just before a newer build opened (the
+  lock is free until the coordinator notices), stays
   queued and is sent again, at least once as on any lost page. A
   running engine is then drained, within the same limit as any drain (15 s), so
   what it was given settles; it then releases the owner lock. An enqueue that
