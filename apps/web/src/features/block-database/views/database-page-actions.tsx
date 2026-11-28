@@ -4,6 +4,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { enableEntityAppearance } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowsClockwiseIcon from '@icon/system/regular/arrows-clockwise.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import DuplicateIcon from '@icon/system/regular/copy.svg';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
@@ -37,7 +38,8 @@ export function DatabasePageActions(props: {
   detail: DatabaseDetail;
   table?: TableDetail;
   entityActions?: DatabaseEntityActions;
-  onImported: (tableId: string) => void;
+  /** Show a table the menu just added (an imported CSV or a synced table). */
+  onTableAdded: (tableId: string) => void;
   onRename: () => void;
   onDelete: () => ResultAsync<void, DatabaseEntityFailure>;
 }) {
@@ -166,6 +168,10 @@ export function DatabasePageActions(props: {
               >
                 <WebhookIcon class="size-4 shrink-0" />
                 Webhooks
+              </Dropdown.Item>
+              <Dropdown.Item onSelect={transfers.openSync}>
+                <ArrowsClockwiseIcon class="size-4 shrink-0" />
+                {t('databaseSyncs.syncFrom')}
               </Dropdown.Item>
             </Show>
             <Dropdown.Sub>

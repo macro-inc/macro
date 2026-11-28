@@ -15,6 +15,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { triggerFocusNewElement } from '@core/directive/focusInput';
 import { isMobile } from '@core/mobile/isMobile';
+import ArrowsClockwiseIcon from '@icon/system/regular/arrows-clockwise.svg';
 import DuplicateIcon from '@icon/system/regular/copy.svg';
 import DownloadIcon from '@icon/system/regular/download-simple.svg';
 import RenameIcon from '@icon/system/regular/pencil-line.svg';
@@ -113,7 +114,7 @@ function DatabaseTitleMenu(
     get table() {
       return props.activeTable;
     },
-    onImported: (tableId) => props.onSelectTable(tableId),
+    onTableAdded: (tableId) => props.onSelectTable(tableId),
   });
   const entity = () => props.header.entity(props.detail);
   const rows = () =>
@@ -185,6 +186,15 @@ function DatabaseTitleMenu(
           icon: WebhookIcon,
           group: 'file',
           action: transfers.openWebhooks,
+        };
+
+      if (row === 'sync')
+        return {
+          id: row,
+          label: t('databaseSyncs.syncFrom'),
+          icon: ArrowsClockwiseIcon,
+          group: 'file',
+          action: transfers.openSync,
         };
 
       return {

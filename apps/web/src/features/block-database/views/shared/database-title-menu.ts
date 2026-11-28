@@ -5,6 +5,7 @@ export type DatabaseTitleMenuRow =
   | 'move-to-folder'
   | 'import-csv'
   | 'webhooks'
+  | 'sync'
   | 'download-csv'
   | 'delete';
 
@@ -24,6 +25,7 @@ export function databaseTitleMenuRows(viewer: {
   rows.push('duplicate', 'move-to-folder');
   if (viewer.canEdit) rows.push('import-csv');
   if (viewer.canEdit && viewer.hasTable) rows.push('webhooks');
+  if (viewer.canEdit) rows.push('sync');
   if (viewer.hasTable) rows.push('download-csv');
   rows.push('delete');
 

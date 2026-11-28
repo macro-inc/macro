@@ -15,6 +15,7 @@ import {
   parseDatabaseCsv,
 } from '../../../database/core/csv';
 import { isDatabaseNameTaken } from '../../../database/core/property-creation';
+import { SyncDialog } from '../../component/SyncDialog';
 import { WebhooksDialog } from '../../component/WebhooksDialog';
 import {
   exportDatabaseTableCsv,
@@ -39,18 +40,21 @@ export type DatabaseEntityActions = {
 };
 
 /**
- * A database's CSV import and export and its webhooks: the state behind those
- * menu items, whichever menu draws them, and the dialogs they open.
+ * A database's CSV import and export, its webhooks and its synced tables: the
+ * state behind those menu items, whichever menu draws them, and the dialogs
+ * they open.
  */
 export function createDatabaseTransfers(props: {
   detail: DatabaseDetail;
   table?: TableDetail;
-  onImported: (tableId: string) => void;
+  /** Show a table the menu just added (an imported CSV or a synced table). */
+  onTableAdded: (tableId: string) => void;
 }) {
   const [exporting, setExporting] = createSignal(false);
   const [reading, setReading] = createSignal(false);
   const [draft, setDraft] = createSignal<{ data: DatabaseCsv; name: string }>();
   const [webhooksOpen, setWebhooksOpen] = createSignal(false);
+  const [syncOpen, setSyncOpen] = createSignal(false);
   let fileInput: HTMLInputElement | undefined;
   const editable = () =>
     props.detail.grant === 'edit' || props.detail.grant === 'owner';
@@ -112,7 +116,7 @@ export function createDatabaseTransfers(props: {
   function importFile(request: ImportTable) {
     return importDatabaseTable(props.detail.database.id, request).map(
       (table) => {
-        props.onImported(table.id);
+        props.onTableAdded(table.id);
         toast.success('CSV imported');
       }
     );
@@ -126,6 +130,9 @@ export function createDatabaseTransfers(props: {
     exportCsv: () => fireAndForget(exportCsv(), 'database-page-actions'),
     openWebhooks: () => {
       setWebhooksOpen(true);
+    },
+    openSync: () => {
+      setSyncOpen(true);
     },
     /** The hidden input behind Import CSV. */
     fileInput: () => (
@@ -145,7 +152,7 @@ export function createDatabaseTransfers(props: {
         />
       </Show>
     ),
-    /** The import and webhooks dialogs; focus returns to `returnFocus`. */
+    /** The import, webhooks and sync dialogs; focus returns to `returnFocus`. */
     dialogs: (returnFocus: () => HTMLElement | undefined) => (
       <>
         <Show when={draft()}>
@@ -173,6 +180,14 @@ export function createDatabaseTransfers(props: {
               />
             </Show>
           )}
+        </Show>
+        <Show when={syncOpen()}>
+          <SyncDialog
+            detail={props.detail}
+            onTableAdded={props.onTableAdded}
+            onClose={() => setSyncOpen(false)}
+            returnFocus={returnFocus()}
+          />
         </Show>
       </>
     ),

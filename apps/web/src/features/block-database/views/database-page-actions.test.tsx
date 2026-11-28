@@ -59,6 +59,17 @@ const mocks = vi.hoisted(() => ({
   csv: vi.fn(),
   listWebhooks: vi.fn(),
   createWebhook: vi.fn(),
+  listSyncs: vi.fn(),
+  listSyncSources: vi.fn(),
+}));
+vi.mock('@service-cognition/database-syncs', () => ({
+  databaseSyncsClient: {
+    list: mocks.listSyncs,
+    listSources: mocks.listSyncSources,
+  },
+}));
+vi.mock('@core/constant/SettingsState', () => ({
+  useSettingsState: () => ({ openSettings: vi.fn() }),
 }));
 vi.mock('../../../lib/core/component/Toast/Toast', () => ({
   toast: { failure: vi.fn(), success: vi.fn() },
@@ -81,6 +92,13 @@ let presenceStyles: HTMLStyleElement;
 beforeEach(() => {
   queryClient.clear();
   mocks.listWebhooks.mockReset().mockReturnValue(okAsync({ webhooks: [] }));
+  mocks.listSyncs.mockReset().mockReturnValue(okAsync([]));
+  mocks.listSyncSources.mockReset().mockReturnValue(
+    okAsync({
+      granola: { connected: false },
+      notion: { connected: false, dataSources: [] },
+    })
+  );
   mocks.createWebhook.mockReset().mockImplementation(({ tableId }) =>
     okAsync({
       webhook: {
@@ -125,36 +143,38 @@ function setup(
   const [loaded, setLoaded] = createSignal(false);
   render(() => (
     <QueryClientProvider client={queryClient}>
-      <BlockItemSplitLabel
-        name={() => 'Customers'}
-        title={
-          <Show when={loaded()}>
-            <DatabaseTitle
-              name="Customers"
-              canEdit={grant !== 'view'}
-              onRename={vi.fn()}
-              onEditReady={editReady}
-            />
-          </Show>
-        }
-      />
-      <DatabasePageActions
-        detail={
-          {
-            database: { id: 'db', name: 'Customers', owner_id: 'owner' },
-            grant,
-            tables: [],
-          } as unknown as DatabaseDetail
-        }
-        table={
-          selectedTable?.() ??
-          ({ table: { id: 'table', name: 'Contacts' } } as TableDetail)
-        }
-        entityActions={entityActions}
-        onImported={vi.fn()}
-        onRename={() => editTitle?.()}
-        onDelete={remove}
-      />
+      <>
+        <BlockItemSplitLabel
+          name={() => 'Customers'}
+          title={
+            <Show when={loaded()}>
+              <DatabaseTitle
+                name="Customers"
+                canEdit={grant !== 'view'}
+                onRename={vi.fn()}
+                onEditReady={editReady}
+              />
+            </Show>
+          }
+        />
+        <DatabasePageActions
+          detail={
+            {
+              database: { id: 'db', name: 'Customers', owner_id: 'owner' },
+              grant,
+              tables: [],
+            } as unknown as DatabaseDetail
+          }
+          table={
+            selectedTable?.() ??
+            ({ table: { id: 'table', name: 'Contacts' } } as TableDetail)
+          }
+          entityActions={entityActions}
+          onTableAdded={vi.fn()}
+          onRename={() => editTitle?.()}
+          onDelete={remove}
+        />
+      </>
     </QueryClientProvider>
   ));
   setLoaded(true);
@@ -201,6 +221,21 @@ describe('database page actions', () => {
       expect(screen.getByRole('menuitem', { name: 'Download' })).toBeTruthy();
     }
   );
+  it('opens the synced tables dialog from Sync from… and closes it with Done', async () => {
+    setup();
+    await openMenu();
+    selectItem('Sync from…');
+    const dialog = await screen.findByRole('dialog', { name: 'Synced tables' });
+    await within(dialog).findByText('No tables here are synced yet.');
+    expect(mocks.listSyncs).toHaveBeenCalledWith('db');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+  it('offers Sync from… to editors only', async () => {
+    setup('view');
+    await openMenu();
+    expect(screen.queryByRole('menuitem', { name: 'Sync from…' })).toBeNull();
+  });
   it('downloads the current table as CSV from the nested menu, with no other format', async () => {
     setup();
     await openMenu();
@@ -282,7 +317,7 @@ describe('database page actions', () => {
             tables: [{ table: { id: 'contacts', name: ' contacts ' } }],
           } as unknown as DatabaseDetail
         }
-        onImported={vi.fn()}
+        onTableAdded={vi.fn()}
         onRename={vi.fn()}
         onDelete={vi.fn(() => okAsync(undefined))}
       />

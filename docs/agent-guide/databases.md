@@ -32,8 +32,8 @@ On touch devices the split header is the title, the access badge, Share and Info
 Tap the title for its menu, a sheet that starts with the whole name and holds
 everything else the desktop header offers: **Ask Macro** (the desktop **AI**
 button), **Rename** (a dialog), Copy Link, Copy ID, Favorite, Change icon,
-Duplicate, Move to folder, Import CSV, Webhooks, **Download table as CSV** and
-Delete. A column's arrow opens a sheet too; **Change type** there shows the
+Duplicate, Move to folder, Import CSV, Webhooks, Sync from…, **Download table
+as CSV** and Delete. A column's arrow opens a sheet too; **Change type** there shows the
 column's current type and opens the list of types in the same sheet, with **Back**.
 
 On touch devices the page's first row holds the **New** button for records and
@@ -51,7 +51,7 @@ The copy has every table, column (options and colours, formulas, relations withi
 the database), view (filters, sorts, layouts and hand-placed board cards) and
 record, under new ids. A relation into another database stays only if you can see
 that database; otherwise the column and its view references are left out.
-Sharing, forms, webhooks, saved queries and row history stay with the original.
+Sharing, forms, webhooks, syncs, saved queries and row history stay with the original.
 Drive and list rows offer the same **Duplicate**, and agents use `DuplicateItem`
 with `entityType: "database"`. Verify by editing a record in the copy and
 checking the original is unchanged.
@@ -820,7 +820,7 @@ the row context menu offers the same Share action, plus Rename (edit or owner),
 Favorite, Copy Link, and Delete (owner).
 
 The toolbar's **Database actions** (`…`) menu, beside **AI**, contains **Rename**,
-**Import CSV**, **Webhooks**, **Download**, and owner-only **Delete**. Rename focuses the inline
+**Import CSV**, **Webhooks**, **Sync from…**, **Download**, and owner-only **Delete**. Rename focuses the inline
 title in the split header; Delete opens the standard confirmation dialog.
 **Download** offers **Current table as CSV**.
 Exports contain all records, regardless of the current filters. CSV uses column
@@ -854,6 +854,40 @@ webhook stops working if they lose edit access.
 
 Browser examples: [desktop](media/database-webhooks/desktop.png) and
 [phone](media/database-webhooks/phone.png).
+
+### Synced tables
+
+A synced table mirrors an outside source: the creator's imported Granola
+meetings (Title, Date, Attendees, Summary, Granola link, Call) or a Notion data
+source read through their Notion connection (its title and every property with
+a Macro column type). The cognition routes are `GET /databases/syncs/sources`
+(Granola connected, readable Notion data sources), `POST /databases/syncs`
+(a new database named after the source), `POST|GET /databases/{id}/syncs`,
+`POST /databases/{id}/syncs/{syncId}/run` and `DELETE /databases/{id}/syncs/{syncId}`
+(the table and rows stay). Creating takes a client-minted `id`; retrying it
+answers the same sync. The harness worker runs a new sync within seconds, a
+Granola sync a few seconds after each imported meeting and every 15 minutes,
+a Notion sync every 30 minutes. Rows mirror the source: editing a synced cell
+is overwritten on the next change, and a row deleted in Macro comes back. A
+column you delete or retype stops syncing (listed in `detachedColumns`); new
+Notion properties add columns. Writes act as the sync's creator and stop with
+`status.failure = "creator_lost_access"` if they lose edit access. Verify by
+running a sync and reading the table, then changing the source and choosing run.
+
+In the web app, **Database actions → Sync from…** (editors only; on phones,
+the title menu's **Sync from…**) opens
+**Synced tables** (a drawer on phones). It lists the database's syncs with
+their source (Granola meetings or the Notion database's title), the table they
+write, their status (waiting for the first sync, up to date, or last sync
+failed with the reason), when they last succeeded, and any columns that stopped
+syncing. **Sync now** asks for a run; **Stop syncing** removes the sync and keeps
+the table and rows. **Add a synced table** offers Granola meetings and each
+readable Notion database; a source that isn't connected links to
+**Settings → Integrations**, and a source the database already mirrors reads
+**Already synced**. Choosing one adds the table and switches to it; the list
+polls until its first run finishes. **Create → Synced database** (in the
+launcher and command menu) opens the same source choice and opens the new
+database, named after its source.
 
 ## Side panel and activity
 

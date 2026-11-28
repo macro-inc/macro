@@ -20,6 +20,7 @@ import computers from './en/computers';
 import create from './en/create';
 import crm from './en/crm';
 import databaseAnswers from './en/database-answers';
+import databaseSyncs from './en/database-syncs';
 import dictation from './en/dictation';
 import emailThread from './en/email-thread';
 import emailViews from './en/email-views';
@@ -85,6 +86,7 @@ export default {
   create,
   crm,
   databaseAnswers,
+  databaseSyncs,
   dictation,
   emailThread,
   emailViews,

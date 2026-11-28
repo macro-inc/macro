@@ -33,6 +33,8 @@ fails rather than leave them out, so nothing is stopped on an outage.
 
 - Depends on: `call` import port, `connectors` `ApiConnectionsService` (tests use its `FakeConnectors`).
 - Used by: `services/agent_harness_service` (composition root, worker, webhook route).
+  Its `calls` is wrapped in `database_syncs::inbound::call_imports::SyncOnCallImport`,
+  so each ingest marks the owner's synced Granola tables due.
 
 ## Checks
 

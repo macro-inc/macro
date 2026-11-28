@@ -41,7 +41,7 @@ maps a data source onto Macro database columns and cells
 
 - Depends on: `connectors` (`ApiConnectionsService`; tests use its
   `FakeConnectors`), `models_databases` (the column and cell vocabulary).
-- Used by: `import`.
+- Used by: `import`, `database_syncs`.
 
 ## Checks
 

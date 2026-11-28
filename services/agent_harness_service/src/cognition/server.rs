@@ -602,26 +602,6 @@ pub async fn build(
     let granola_signing_key = *mcp_encryption_key.as_bytes();
     let connections = Arc::new(composed.connectors.clone());
 
-    let granola_sync: Option<Arc<dyn granola_sync::domain::service::SyncService>> =
-        Some(Arc::new(granola_sync::domain::service::Service {
-            repo: granola_sync::outbound::pg_repo::PgSyncRepository::new(
-                db.clone(),
-                &granola_signing_key,
-            ),
-            granola: granola_sync::outbound::api::GranolaApi(Arc::clone(&connections)),
-            accounts: granola_sync::outbound::accounts::ConnectedAccounts(Arc::clone(&connections)),
-            verifier: granola_sync::outbound::signature::StandardWebhooks,
-            calls: Arc::new(call::domain::imports::CallImportServiceImpl(
-                call::outbound::pg_imported_call_repo::PgImportedCallRepository::new(db.clone()),
-                macro_event_broker.clone(),
-            )),
-            public_url: public_url.to_string(),
-        })
-            as Arc<dyn granola_sync::domain::service::SyncService>);
-    let granola_worker = granola_sync
-        .as_ref()
-        .map(|service| tokio::spawn(granola_sync::inbound::run_worker(service.clone())));
-
     // Nudges the user's connected clients when import rows flip, so setup
     // sections and chat surfaces update immediately instead of on the next
     // poll (see import::outbound::gateway_notifier).
@@ -657,6 +637,63 @@ pub async fn build(
         ),
         ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
     );
+    // Synced tables: Granola meetings and Notion data sources kept in sync
+    // with database tables by the worker below. Granola imports mark their
+    // owner's syncs due, so the call import granola_sync uses is wrapped.
+    let imported_calls: Arc<dyn call::domain::imports::CallImportService> =
+        Arc::new(call::domain::imports::CallImportServiceImpl(
+            call::outbound::pg_imported_call_repo::PgImportedCallRepository::new(db.clone()),
+            macro_event_broker.clone(),
+        ));
+    // One instance for the syncs and this service's import, so those two
+    // pace each user's Notion connection together and a `Retry-After` holds
+    // both. Imports started from sessions or MCP build their own instance in
+    // ai_tools and are paced apart.
+    let notion_connections = Arc::new(import_notion::outbound::connected::ConnectedNotion::new(
+        Arc::clone(&connections),
+    ));
+    let database_syncs_service = Arc::new(database_syncs::wiring::build_service(
+        db.clone(),
+        databases_tool_context.service.clone(),
+        entity_access_service.clone(),
+        database_syncs::wiring::SyncSources {
+            calls: imported_calls.clone(),
+            granola_accounts: Arc::new(granola_sync::outbound::accounts::ConnectedAccounts(
+                Arc::clone(&connections),
+            )),
+            notion: notion_connections.clone(),
+            teams: ai_tools::build_team_repository(db.clone()),
+        },
+    ));
+    import_jobs
+        .tracker
+        .spawn(database_syncs::inbound::worker::run_worker(
+            database_syncs_service.clone(),
+            import_jobs.shutdown.clone(),
+        ));
+
+    let granola_sync: Option<Arc<dyn granola_sync::domain::service::SyncService>> =
+        Some(Arc::new(granola_sync::domain::service::Service {
+            repo: granola_sync::outbound::pg_repo::PgSyncRepository::new(
+                db.clone(),
+                &granola_signing_key,
+            ),
+            granola: granola_sync::outbound::api::GranolaApi(Arc::clone(&connections)),
+            accounts: granola_sync::outbound::accounts::ConnectedAccounts(Arc::clone(&connections)),
+            verifier: granola_sync::outbound::signature::StandardWebhooks,
+            calls: Arc::new(
+                database_syncs::inbound::call_imports::SyncOnCallImport::new(
+                    imported_calls.clone(),
+                    database_syncs_service.clone(),
+                ),
+            ),
+            public_url: public_url.to_string(),
+        })
+            as Arc<dyn granola_sync::domain::service::SyncService>);
+    let granola_worker = granola_sync
+        .as_ref()
+        .map(|service| tokio::spawn(granola_sync::inbound::run_worker(service.clone())));
+
     let project_tool_context = ai_tools::build_project_tool_context(
         db.clone(),
         macro_event_broker.clone(),
@@ -716,9 +753,7 @@ pub async fn build(
                 Arc::clone(&connections),
             )),
         )
-        .with_notion_connections(Arc::new(
-            import_notion::outbound::connected::ConnectedNotion::new(Arc::clone(&connections)),
-        ))
+        .with_notion_connections(notion_connections.clone())
         .with_hubspot(
             Arc::new(import_hubspot::outbound::client::HubspotApi::new(
                 Arc::clone(&connections),
@@ -1002,6 +1037,7 @@ pub async fn build(
         connectors: composed.connectors.clone(),
         granola_sync,
         import_service,
+        database_syncs_service,
         onboarding_service,
         macro_event_broker: macro_event_broker.clone(),
     });

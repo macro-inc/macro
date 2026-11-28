@@ -23,3 +23,10 @@ export const databaseWebhookKeys = createQueryKeys('database-webhooks', {
   /** A database's webhooks. */
   list: (databaseId: string) => ({ queryKey: [databaseId] }),
 });
+
+export const databaseSyncKeys = createQueryKeys('database-syncs', {
+  /** What the viewer can sync a table from. */
+  sources: null,
+  /** A database's synced tables. */
+  list: (databaseId: string) => ({ queryKey: [databaseId] }),
+});

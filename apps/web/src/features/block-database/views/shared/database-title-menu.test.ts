@@ -9,6 +9,7 @@ describe('databaseTitleMenuRows', () => {
       'move-to-folder',
       'import-csv',
       'webhooks',
+      'sync',
       'download-csv',
       'delete',
     ]);
@@ -29,6 +30,7 @@ describe('databaseTitleMenuRows', () => {
       'duplicate',
       'move-to-folder',
       'import-csv',
+      'sync',
       'delete',
     ]);
   });

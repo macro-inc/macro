@@ -524,6 +524,24 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     );
 
     let composed = test_connectors(pool.clone());
+    let database_syncs_service = Arc::new(database_syncs::wiring::build_service(
+        pool.clone(),
+        databases_tool_context.service.clone(),
+        entity_access_service.clone(),
+        database_syncs::wiring::SyncSources {
+            calls: Arc::new(call::domain::imports::CallImportServiceImpl(
+                call::outbound::pg_imported_call_repo::PgImportedCallRepository::new(pool.clone()),
+                macro_event_broker.clone(),
+            )),
+            granola_accounts: Arc::new(granola_sync::outbound::accounts::ConnectedAccounts(
+                Arc::new(composed.connectors.clone()),
+            )),
+            notion: Arc::new(import_notion::outbound::connected::ConnectedNotion::new(
+                Arc::new(composed.connectors.clone()),
+            )),
+            teams: ai_tools::build_team_repository(pool.clone()),
+        },
+    ));
     let tool_service_context = ai_tools::ToolServiceContext {
         memory_tool_context: ai_tools::memory::build_memory_tool_context(
             pool.clone(),
@@ -805,6 +823,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             },
         },
         granola_sync: None,
+        database_syncs_service,
         connectors_state: connectors::inbound::axum_router::ConnectorsRouterState::new(
             composed.connectors.clone(),
             composed.catalog.clone(),
