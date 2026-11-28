@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const useSoupAstItemsQuery = vi.hoisted(() => vi.fn());
 const refreshes = vi.hoisted(() => ({
   laterPages: undefined as (() => boolean) | undefined,
+  readPagesAgain: vi.fn(),
 }));
 
 vi.mock('@queries/soup/items', () => ({ useSoupAstItemsQuery }));
@@ -15,6 +16,7 @@ vi.mock('@queries/channel/by-ids', () => ({
     laterPages: () => boolean
   ) => {
     refreshes.laterPages = laterPages;
+    return refreshes.readPagesAgain;
   },
 }));
 vi.mock('@entity', () => ({
@@ -25,29 +27,40 @@ import { useCollapsedUnreadChannels } from './collapsed-unread-channels';
 
 afterEach(() => {
   useSoupAstItemsQuery.mockReset();
+  refreshes.readPagesAgain.mockReset();
   vi.useRealTimers();
 });
 
-/** A loaded first page with more behind it; `fetchNextPage` counts calls. */
-function firstPageWithMore(resetToInitialPage = vi.fn(), refresh = vi.fn()) {
+/**
+ * A loaded first page with more behind it; `fetchNextPage` counts calls, and
+ * three pages are kept until `resetToInitialPage` drops the later two.
+ */
+function firstPageWithMore(resetToInitialPage = vi.fn()) {
   const fetchNextPage = vi.fn(async () => {});
-  useSoupAstItemsQuery.mockImplementation((_args, options) => ({
-    resetToInitialPage,
-    refresh,
-    revalidationQueries: [{}, {}, {}],
-    get isEnabled() {
-      return options().enabled;
-    },
-    isPending: false,
-    isFetching: false,
-    isSuccess: true,
-    hasPageData: true,
-    hasNextPage: true,
-    error: undefined,
-    fetchError: undefined,
-    fetchNextPage,
-    data: { entities: [{ id: 'ch-1', type: 'channel' }] },
-  }));
+  useSoupAstItemsQuery.mockImplementation((_args, options) => {
+    const [pages, setPages] = createSignal(3);
+    return {
+      resetToInitialPage: () => {
+        resetToInitialPage();
+        setPages(1);
+      },
+      get revalidationQueries() {
+        return Array.from({ length: pages() }, () => ({}));
+      },
+      get isEnabled() {
+        return options().enabled;
+      },
+      isPending: false,
+      isFetching: false,
+      isSuccess: true,
+      hasPageData: true,
+      hasNextPage: true,
+      error: undefined,
+      fetchError: undefined,
+      fetchNextPage,
+      data: { entities: [{ id: 'ch-1', type: 'channel' }] },
+    };
+  });
   return fetchNextPage;
 }
 
@@ -132,10 +145,9 @@ describe('useCollapsedUnreadChannels', () => {
     }
   });
 
-  it('reads its kept pages again on return only once they have gone stale', () => {
+  it('reads its kept pages again once they have missed live updates for 30 s while on screen', () => {
     vi.useFakeTimers();
-    const refresh = vi.fn(async () => {});
-    firstPageWithMore(vi.fn(), refresh);
+    firstPageWithMore();
     const [readsMore, setReadsMore] = createSignal(true);
     const dispose = createRoot((dispose) => {
       useCollapsedUnreadChannels(
@@ -145,15 +157,56 @@ describe('useCollapsedUnreadChannels', () => {
       );
       return dispose;
     });
+    const readAgain = refreshes.readPagesAgain;
     try {
+      vi.advanceTimersByTime(60_000);
+      expect(readAgain).not.toHaveBeenCalled();
+      // A short return keeps the deadline set when the view first left.
       setReadsMore(false);
       vi.advanceTimersByTime(10_000);
       setReadsMore(true);
-      expect(refresh).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(5_000);
+      expect(readAgain).not.toHaveBeenCalled();
+      // Leaving again holds the catch-up until the view is back.
       setReadsMore(false);
-      vi.advanceTimersByTime(31_000);
+      vi.advanceTimersByTime(60_000);
+      expect(readAgain).not.toHaveBeenCalled();
       setReadsMore(true);
-      expect(refresh).toHaveBeenCalledOnce();
+      vi.advanceTimersByTime(0);
+      expect(readAgain).toHaveBeenCalledOnce();
+      // Pages read again are current until the view next leaves.
+      vi.advanceTimersByTime(60_000);
+      expect(readAgain).toHaveBeenCalledOnce();
+      setReadsMore(false);
+      vi.advanceTimersByTime(10_000);
+      setReadsMore(true);
+      vi.advanceTimersByTime(19_999);
+      expect(readAgain).toHaveBeenCalledOnce();
+      vi.advanceTimersByTime(1);
+      expect(readAgain).toHaveBeenCalledTimes(2);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('catches up nothing once its later pages were dropped', () => {
+    vi.useFakeTimers();
+    firstPageWithMore();
+    const [listsEvery, setListsEvery] = createSignal(true);
+    const [readsMore, setReadsMore] = createSignal(true);
+    const dispose = createRoot((dispose) => {
+      useCollapsedUnreadChannels(() => true, listsEvery, readsMore);
+      return dispose;
+    });
+    try {
+      setReadsMore(false);
+      vi.advanceTimersByTime(10_000);
+      setListsEvery(false);
+      vi.advanceTimersByTime(60_000);
+      setListsEvery(true);
+      setReadsMore(true);
+      vi.advanceTimersByTime(60_000);
+      expect(refreshes.readPagesAgain).not.toHaveBeenCalled();
     } finally {
       dispose();
     }

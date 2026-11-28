@@ -6,12 +6,13 @@ import {
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isChannelEntity } from '@entity';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
-import { type Accessor, createEffect, createMemo } from 'solid-js';
+import { type Accessor, createEffect, createMemo, untrack } from 'solid-js';
 import {
   type SoupAstItemsQuery,
   type SoupAstItemsQueryArgs,
   useSoupAstItemsQuery,
 } from '../soup/items';
+import { channelNotificationRefresh } from './notification-refresh';
 import { registerChannelNotificationRefresh } from './register-notification-refresh';
 
 const BATCH_SIZE = 500;
@@ -36,7 +37,9 @@ export function channelsByIdsQueryArgs(
  * Keep each channel list's bounded unread and mention projections current,
  * including cached rows. A list given `channelTypes` also waits for a new
  * channel of those types to reach its first page. While `laterPages` is
- * false, only the first page is read again.
+ * false, only the first page is read again. Returns a function that queues
+ * every registered page to be read again; the queue skips a page whose
+ * registration ends before its turn.
  */
 export function registerChannelListNotificationRefresh(
   query: SoupAstItemsQuery,
@@ -44,13 +47,12 @@ export function registerChannelListNotificationRefresh(
   channelIds?: Accessor<ReadonlySet<string>>,
   laterPages: Accessor<boolean> = () => true
 ) {
-  return registerChannelNotificationRefresh(() => ({
+  // The first page comes first (its cursor is null).
+  const pages = () =>
+    (query.revalidationQueries ?? []).slice(0, laterPages() ? undefined : 1);
+  registerChannelNotificationRefresh(() => ({
     client: getGraphqlSoupClient(),
-    // The first page comes first (its cursor is null).
-    queries: (query.revalidationQueries ?? []).slice(
-      0,
-      laterPages() ? undefined : 1
-    ),
+    queries: pages(),
     reader: {
       enabled: query.transport === 'graphql' && query.isEnabled,
       fetching: query.isFetching,
@@ -69,6 +71,10 @@ export function registerChannelListNotificationRefresh(
             ),
     },
   }));
+  return () => {
+    const queue = channelNotificationRefresh(getGraphqlSoupClient());
+    for (const page of untrack(pages)) queue.invalidateQuery(page);
+  };
 }
 
 /** One Soup owner supplies local rows, missing-record fetches, and unread updates. */

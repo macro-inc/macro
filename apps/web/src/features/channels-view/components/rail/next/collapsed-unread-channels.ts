@@ -8,7 +8,7 @@ import { isChannelEntity } from '@entity';
 import { registerChannelListNotificationRefresh } from '@queries/channel/by-ids';
 import { queryReadyGate } from '@queries/gate';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
-import { type Accessor, createEffect, on } from 'solid-js';
+import { type Accessor, createEffect, on, onCleanup } from 'solid-js';
 import { channelTypesShownBy } from '../../../core/channel-types';
 
 const UNREAD_CHANNEL_FILTERS = defineQueryFilters({
@@ -16,8 +16,9 @@ const UNREAD_CHANNEL_FILTERS = defineQueryFilters({
 });
 
 /**
- * Pages kept while their view is off screen are read again when it returns
- * after this long, the time the query counts them fresh.
+ * Pages kept while their view is off screen miss live updates; they are read
+ * again once they have missed them this long, the time the query counts them
+ * fresh, while the view is on screen.
  */
 const UNREAD_PAGES_FRESH_MS = 30_000;
 
@@ -28,9 +29,9 @@ const UNREAD_PAGES_FRESH_MS = 30_000;
  * channel, such as a collapsed section or an Unread only filter. It reads the
  * next page, and live updates read the later pages again, only while
  * `readsMore` holds too, such as while that view is on screen; it keeps the
- * pages it has meanwhile, and reads them again on return once they have gone
- * stale. When the view goes, the later pages are dropped, so live updates
- * revalidate the first page alone.
+ * pages it has meanwhile, and reads them again once they have gone stale
+ * while the view is on screen. When the view goes, the later pages are
+ * dropped, so live updates revalidate the first page alone.
  */
 export function useCollapsedUnreadChannels(
   enabled: Accessor<boolean>,
@@ -49,7 +50,7 @@ export function useCollapsedUnreadChannels(
     })
   );
   const reading = () => listsEvery() && readsMore();
-  registerChannelListNotificationRefresh(
+  const readPagesAgain = registerChannelListNotificationRefresh(
     query,
     channelTypesShownBy(UNREAD_CHANNEL_FILTERS),
     undefined,
@@ -68,24 +69,33 @@ export function useCollapsedUnreadChannels(
       return;
     fireAndForget(query.fetchNextPage(), 'channels-collapsed-unread');
   });
-  let pausedAt: number | undefined;
+  // When the kept later pages began to miss live updates; with none kept,
+  // nothing is missed.
+  const keepsLaterPages = () =>
+    listsEvery() && (query.revalidationQueries?.length ?? 0) > 1;
+  let missedSince: number | undefined;
   createEffect(
     on(
       reading,
       (now) => {
         if (!now) {
-          pausedAt ??= Date.now();
+          missedSince = keepsLaterPages()
+            ? (missedSince ?? Date.now())
+            : undefined;
           return;
         }
-        const since = pausedAt;
-        pausedAt = undefined;
-        if (
-          since === undefined ||
-          Date.now() - since < UNREAD_PAGES_FRESH_MS ||
-          (query.revalidationQueries?.length ?? 0) < 2
-        )
-          return;
-        fireAndForget(query.refresh(), 'channels-collapsed-unread');
+        const since = missedSince;
+        if (since === undefined) return;
+        // The refresh queue reads each page in turn, and drops the rest if
+        // the view leaves first; leaving keeps the deadline for its return.
+        const timer = setTimeout(
+          () => {
+            missedSince = undefined;
+            if (keepsLaterPages()) readPagesAgain();
+          },
+          Math.max(0, since + UNREAD_PAGES_FRESH_MS - Date.now())
+        );
+        onCleanup(() => clearTimeout(timer));
       },
       { defer: true }
     )

@@ -12,6 +12,10 @@ vi.mock('./register-notification-refresh', () => ({
     registered.options = options;
   },
 }));
+const invalidateQuery = vi.hoisted(() => vi.fn(() => true));
+vi.mock('./notification-refresh', () => ({
+  channelNotificationRefresh: () => ({ invalidateQuery }),
+}));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => ({}),
 }));
@@ -24,8 +28,9 @@ import { registerChannelListNotificationRefresh } from './by-ids';
 it('registers only the first page while later pages are not read again', () => {
   const pages = [{ page: 'first' }, { page: 'second' }, { page: 'third' }];
   const [laterPages, setLaterPages] = createSignal(true);
-  const dispose = createRoot((dispose) => {
-    registerChannelListNotificationRefresh(
+  const { dispose, readPagesAgain } = createRoot((dispose) => ({
+    dispose,
+    readPagesAgain: registerChannelListNotificationRefresh(
       {
         transport: 'graphql',
         isEnabled: true,
@@ -36,13 +41,17 @@ it('registers only the first page while later pages are not read again', () => {
       undefined,
       undefined,
       laterPages
-    );
-    return dispose;
-  });
+    ),
+  }));
   try {
     expect(registered.options?.().queries).toEqual(pages);
+    readPagesAgain();
+    expect(invalidateQuery.mock.calls).toEqual(pages.map((page) => [page]));
     setLaterPages(false);
     expect(registered.options?.().queries).toEqual([{ page: 'first' }]);
+    invalidateQuery.mockClear();
+    readPagesAgain();
+    expect(invalidateQuery.mock.calls).toEqual([[{ page: 'first' }]]);
   } finally {
     dispose();
   }
