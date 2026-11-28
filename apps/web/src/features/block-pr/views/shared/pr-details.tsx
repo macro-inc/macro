@@ -24,6 +24,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { PrPriorityIcon } from '../../component/PrLinks';
 import { PrStatusIcon } from '../../component/PrStatus';
 import { usePrPage } from '../../context/pr-page-context';
@@ -33,18 +34,24 @@ import {
   type PrListDensity,
   prFileCommentCounts,
   prPageReadyToMerge,
-  prRowHeight,
   prVisibleChecks,
 } from '../../primitives/pr-page-state';
 import { PrGithubAvatar } from './pr-header';
 
 export function PrListRow(props: {
+  as?: 'div' | 'button';
+  onClick?: () => void;
+  'aria-expanded'?: boolean;
   density?: PrListDensity;
   children: JSX.Element;
   class?: string;
 }) {
   return (
-    <div
+    <Dynamic
+      component={props.as ?? 'div'}
+      type={props.as === 'button' ? 'button' : undefined}
+      onClick={props.onClick}
+      aria-expanded={props['aria-expanded']}
       class={cn(
         'flex min-w-0 items-center gap-2 text-sm',
         props.density === 'touch' ? 'min-h-11' : 'min-h-[30px]',
@@ -52,7 +59,7 @@ export function PrListRow(props: {
       )}
     >
       {props.children}
-    </div>
+    </Dynamic>
   );
 }
 
@@ -172,13 +179,13 @@ export function PrChecksList(props: {
         }}
       </For>
       <Show when={canExpand()}>
-        <Button
-          size="sm"
-          variant="ghost"
-          class="justify-start text-ink-muted"
-          style={{
-            'min-height': `${prRowHeight(props.density ?? 'compact')}px`,
-          }}
+        <PrListRow
+          as="button"
+          density={props.density}
+          class={cn(
+            'justify-start rounded-md text-ink-muted not-touch:hover:bg-hover focus-visible:bg-hover focus-visible:outline-2 focus-visible:outline-accent',
+            props.spacious && 'min-h-9 px-3 touch:min-h-11'
+          )}
           aria-expanded={expanded()}
           onClick={() => setExpanded(!expanded())}
         >
@@ -186,7 +193,7 @@ export function PrChecksList(props: {
           {expanded()
             ? t('prPage.showFewerChecks')
             : t('prPage.showAllChecks', { count: checks().length })}
-        </Button>
+        </PrListRow>
       </Show>
     </div>
   );
