@@ -165,6 +165,7 @@ local resources.
 | Trigger | What runs |
 | --- | --- |
 | Push to `main` | `deploy_on_push.yml`: builds nix binaries and Lambdas, runs migrations on the in-VPC runner, then `pulumi up` on dev for every service in `.github/services-config.json` |
+| A `Deploy on Push` run ends, and every quarter of an hour | `dev-deploy-alert.yml`: tells Macro Alerts when Dev stops deploying ([below](#when-a-dev-deploy-alert-fires)) |
 | Published GitHub release | `release-production.yml`: the same flow against prod, then workers, website, and web app; once the web app is deployed, `ios-app-store-publish.yml` releases the held iOS App Store version |
 | Pull request touching a mapped stack | `pulumi_preview_pr.yml` previews against dev and comments; `code_check_infra.yml` runs Biome and `tsc` |
 | Manual | `deploy-pulumi-stack.yml`, `deploy-service-generic.yml`, `migrate-macro-db.yml` |
@@ -213,6 +214,42 @@ build/deployment failure gates remain attempt-scoped.
 - `continueBeforeSteadyState` means a green deploy job does not prove old tasks
   stopped. The circuit breaker rolls back failed deployments; otherwise roll
   forward or redeploy an older ref.
+
+### When a Dev deploy alert fires
+
+`dev-deploy-alert.yml` (`xtask_workflows`' `dev_deploy_alert.rs`) posts to the
+Macro Alerts channel when Dev stops deploying, and `✅ Resolved` when it
+deploys again. It runs when a `Deploy on Push` run ends and every quarter of an
+hour, and posts only when Dev's state differs from what the channel was last
+told, so a failure posts once however many runs fail after it. Dev is failing
+when:
+
+- the newest deploy run that ended failed, ran out of time, failed to start,
+  or was cancelled after its jobs started, by hand or by
+  `cancel_stuck_cloud_storage_deploys.yml` (90 minutes after the push);
+- a job of a run still going waited an hour for a runner (until that run
+  ends);
+- or the oldest commit on `main` Dev does not run was pushed three hours ago,
+  which also catches runs that never start or end and a disabled workflow.
+
+A push replaced by a newer one while it waited ends cancelled before any job
+started; it is read past and posts nothing. `✅ Resolved` waits for a run that
+deploys after the alert, so a failed run re-run clears nothing while it goes.
+The job runs on GitHub's own runner, apart from the deploys' Namespace and
+`db-migrator` runners, and its summary says why it posted or did not.
+
+What to do:
+
+- **Failed jobs**: open the run and fix forward on `main`, or re-run the
+  failed jobs when the failure is flaky.
+- **Stuck waiting for a runner** or **cancelled while waiting**: the alert
+  names the runner label. `db-migrator` is the self-hosted in-VPC runner the
+  migrations run on, since they must reach the databases: check that it is
+  online in the repository's Actions runners and that its EC2 instance passes
+  its status checks (an impaired instance needs a reboot or a larger size). A
+  `namespace-profile-*` label means Namespace has no runner to give.
+- **Not deployed for hours**: check that `Deploy on Push` is enabled and
+  whether a run is stuck in its queue.
 
 ## Legacy patterns not to copy
 
