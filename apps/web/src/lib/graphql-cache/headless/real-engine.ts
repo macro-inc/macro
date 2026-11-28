@@ -65,7 +65,7 @@ export type EngineCallLog = {
   mark(): number;
 };
 
-export function createEngineCallLog(): EngineCallLog {
+function createEngineCallLog(): EngineCallLog {
   const calls: EngineCall[] = [];
   return {
     calls,

@@ -29,7 +29,7 @@ export type MemoryOpfsCounters = {
   flushes: number;
 };
 
-export class MemorySyncAccessHandle {
+class MemorySyncAccessHandle {
   #file: MemoryFile | undefined;
   readonly #counters: MemoryOpfsCounters;
 
@@ -102,7 +102,7 @@ function reserve(file: MemoryFile, size: number): void {
   file.bytes = grown;
 }
 
-export class MemoryFileHandle {
+class MemoryFileHandle {
   readonly kind = 'file';
   readonly name: string;
   readonly #file: MemoryFile;
@@ -126,7 +126,7 @@ export class MemoryFileHandle {
   }
 }
 
-export class MemoryDirectoryHandle {
+class MemoryDirectoryHandle {
   readonly kind = 'directory';
   readonly name: string;
   readonly #files = new Map<string, MemoryFile>();
@@ -224,7 +224,7 @@ type LockWaiter = {
  * Web Locks for one origin: exclusive and shared modes, `ifAvailable`,
  * `signal`, and `query`. Grants are FIFO per name, as the spec requires.
  */
-export class MemoryLockManager {
+class MemoryLockManager {
   readonly #held: HeldLock[] = [];
   readonly #waiting: LockWaiter[] = [];
 

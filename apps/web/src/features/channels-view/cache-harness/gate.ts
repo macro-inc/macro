@@ -179,7 +179,7 @@ function sum(values: Iterable<number>): number {
   return total;
 }
 
-export function gatedCounts(counts: ScenarioCounts): GatedCounts {
+function gatedCounts(counts: ScenarioCounts): GatedCounts {
   const mappers = Object.values(counts.mappers);
   return {
     'engine.calls': counts.engine.calls,

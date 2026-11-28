@@ -15,7 +15,7 @@ import type { ChannelLabelsList } from '@service-storage/generated/schemas/chann
 import { match } from 'ts-pattern';
 
 export const VIEWER_ID = 'user-1';
-export const TEAM_ID = 'team-1';
+const TEAM_ID = 'team-1';
 const ORGANIZATION_ID = '1';
 const PEOPLE = 400;
 const PARTICIPANTS_PER_CHANNEL = 75;
@@ -36,11 +36,7 @@ const TWO_YEARS_MS = 2 * 365 * 24 * 60 * 60 * 1000;
  * account rather than with what is on screen. */
 const ERA_CHANNELS = 3_500;
 
-export type FixtureChannelType =
-  | 'public'
-  | 'private'
-  | 'direct_message'
-  | 'team';
+type FixtureChannelType = 'public' | 'private' | 'direct_message' | 'team';
 
 type FixtureNotification = {
   id: string;
@@ -59,7 +55,7 @@ type FixtureMessage = {
   createdAt: string;
 };
 
-export type FixtureChannel = {
+type FixtureChannel = {
   id: string;
   name: string;
   channelType: FixtureChannelType;
@@ -107,7 +103,7 @@ export type ChatFixture = {
 /** Root values for the subscriptions a delivered message reaches: the
  * channel's hydrated record (`SoupUpdates`) and the viewer's new notification
  * (`NotificationUpdates`). */
-export type MessageFrames = {
+type MessageFrames = {
   SoupUpdates: { soupUpdates: unknown[] };
   NotificationUpdates: { notificationUpdates: unknown };
 };
