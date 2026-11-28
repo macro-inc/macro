@@ -26,14 +26,21 @@ import { soupEntityKey } from '../soup/graphql/entity-input';
 import { prepareGraphqlSoupRestore } from '../soup/graphql/optimistic-deletions';
 import { soupItemKey } from '../soup/graphql/reconciliation';
 
-/** Reads again the lists a committed write left stale. The write's returned rows
- * update every list the cache keeps current, so only the others are read;
- * without a live cache the client already read every mounted list before the
- * write settled. A write whose rows never came back leaves every list stale.
- * A failed read must not turn a committed write into a retryable failure. */
-function refreshAfterWrite(result: { effectsResolved: boolean }) {
-  const unmaintainedOnly = result.effectsResolved;
-  if (unmaintainedOnly && !getGraphqlCacheHost()) return;
+/** Reads again the lists a committed write left stale. Without a live cache
+ * the client's exchange reads every mounted list before the write settles;
+ * when it did, each successfully, nothing is read here, and when one of its
+ * reads failed every list is read in its own cursor order. With a live cache
+ * the write's returned rows update every list the cache keeps current, so only
+ * the others are read. A write whose rows never came back leaves every list
+ * stale. A failed read must not turn a committed write into a retryable
+ * failure. */
+function refreshAfterWrite(result: {
+  effectsResolved: boolean;
+  listsReadAgain: boolean;
+}) {
+  if (result.listsReadAgain) return;
+  const unmaintainedOnly =
+    result.effectsResolved && getGraphqlCacheHost() !== undefined;
   fireAndForget(
     refreshActiveGraphqlSoupQueries({ unmaintainedOnly }),
     'entity-mutation'
@@ -44,13 +51,14 @@ export async function moveEntity(
   entity: EntityRefInput,
   projectId: string | null
 ) {
-  // A move is queued with the lists to read once it commits, so only one
-  // whose rows never came back reads them here.
+  // With a live cache a move is queued with the lists to read once it
+  // commits, so only one whose rows never came back reads them here.
   const result = await moveGraphqlEntity(
     { entity, projectId },
     getUnmaintainedGraphqlSoupRevalidations()
   );
-  if (!result.effectsResolved) refreshAfterWrite(result);
+  if (getGraphqlCacheHost() && result.effectsResolved) return;
+  refreshAfterWrite(result);
 }
 
 export async function trashEntity(entity: EntityRefInput) {
