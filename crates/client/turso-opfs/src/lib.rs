@@ -27,6 +27,6 @@ mod browser;
 #[cfg(target_arch = "wasm32")]
 pub use browser::{
     CloseFailure, ClosedSession, ConnectFailure, ConnectedOpfsSession, OpenDisposition,
-    OpenFailure, OpenResult, OpfsError, OpfsErrorKind, OpfsOwner, OpfsSession, ResetFailure,
-    ResetRequiredSession, Sidecar, WipeFailure,
+    OpenFailure, OpenResult, OpfsError, OpfsErrorKind, OpfsIoTotals, OpfsOwner, OpfsSession,
+    ResetFailure, ResetRequiredSession, Sidecar, WipeFailure, io_totals,
 };

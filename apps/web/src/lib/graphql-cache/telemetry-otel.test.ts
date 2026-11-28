@@ -110,10 +110,16 @@ describe('cache OpenTelemetry sink', () => {
       queryFingerprint: 'a430d84680aabd0b',
       durationMs: 201,
       outcome: 'success',
+      storageWrites: 2,
+      storageWriteBytes: 8_240,
+      storageWriteMs: 1.5,
+      storageFlushes: 1,
+      storageFlushMs: 198,
     });
 
     expect(anonymousSpan).toHaveBeenCalledWith('graphql_cache.slow_query');
     expect(span.run).toHaveBeenCalledOnce();
+    // The COMMIT's time splits into its WAL append and its flush.
     expect(warn).toHaveBeenCalledExactlyOnceWith('graphql_cache.slow_query', {
       'db.system.name': 'sqlite',
       'db.query.fingerprint': 'a430d84680aabd0b',
@@ -121,6 +127,15 @@ describe('cache OpenTelemetry sink', () => {
       'cache.duration_ms': 201,
       'cache.outcome': 'success',
       'cache.slow_query_threshold_ms': 200,
+      'cache.storage.writes': 2,
+      'cache.storage.write_bytes': 8_240,
+      'cache.storage.write_ms': 1.5,
+      'cache.storage.flushes': 1,
+      'cache.storage.flush_ms': 198,
+    });
+    expect(Object.fromEntries(span.setAttr.mock.calls)).toMatchObject({
+      'cache.storage.flushes': 1,
+      'cache.storage.flush_ms': 198,
     });
     expect(span.end).toHaveBeenCalledOnce();
   });

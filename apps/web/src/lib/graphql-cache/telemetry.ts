@@ -36,6 +36,8 @@ export const CACHE_TELEMETRY_EVENT_NAMES = [
   'graphql_cache.linear_memory',
   'graphql_cache.queue_diagnostics',
   'graphql_cache.wal_checkpoint',
+  // The engine's COMMITs and storage writes and flushes since its last report.
+  'graphql_cache.storage_io',
   'graphql_cache.navigation',
   'graphql_cache.aggregate',
 ] as const;
@@ -305,6 +307,12 @@ const CACHE_REQUEST_KINDS: Readonly<Record<CacheRequest['kind'], true>> = {
   'inspect-mutations': true,
 };
 
+/** Which WAL copy a `graphql_cache.wal_checkpoint` was: one run while the
+ * engine was quiet, or one run right after the COMMIT that took the WAL to its
+ * cap, while that request waited. */
+export const CACHE_CHECKPOINT_KINDS = ['idle', 'capped'] as const;
+export type CacheCheckpointKind = (typeof CACHE_CHECKPOINT_KINDS)[number];
+
 export type CacheTelemetryObservation = {
   name: CacheTelemetryEventName;
   /** Original fixed event name represented by an aggregate envelope. */
@@ -348,6 +356,19 @@ export type CacheTelemetryObservation = {
   oldestAgeMs?: number;
   /** Frames in the WAL when a checkpoint ran (`graphql_cache.wal_checkpoint`). */
   walFrames?: number;
+  checkpointKind?: CacheCheckpointKind;
+  /** Storage write requests during a slow query or a checkpoint, or since the
+   * last `graphql_cache.storage_io`. A COMMIT's writes append to the WAL. */
+  storageWrites?: number;
+  storageWriteBytes?: number;
+  storageWriteMs?: number;
+  /** Flushes of storage to disk, and the time they took, over the same span. */
+  storageFlushes?: number;
+  storageFlushMs?: number;
+  /** COMMITs that wrote since the last `graphql_cache.storage_io`, and their
+   * time, WAL append and flush included. */
+  commits?: number;
+  commitMs?: number;
   /** The engine request a `slow_request` timed; a fixed protocol name. */
   requestKind?: CacheRequest['kind'];
   /** How long a `slow_request` waited in the engine queue before it ran. */
@@ -536,6 +557,31 @@ function sanitizeObservation(
       : {}),
     ...(boundedNumber(input.walFrames) !== undefined
       ? { walFrames: boundedNumber(input.walFrames) }
+      : {}),
+    ...(input.checkpointKind !== undefined &&
+    CACHE_CHECKPOINT_KINDS.includes(input.checkpointKind)
+      ? { checkpointKind: input.checkpointKind }
+      : {}),
+    ...(boundedNumber(input.storageWrites) !== undefined
+      ? { storageWrites: boundedNumber(input.storageWrites) }
+      : {}),
+    ...(boundedNumber(input.storageWriteBytes) !== undefined
+      ? { storageWriteBytes: boundedNumber(input.storageWriteBytes) }
+      : {}),
+    ...(boundedNumber(input.storageWriteMs, 3_600_000) !== undefined
+      ? { storageWriteMs: boundedNumber(input.storageWriteMs, 3_600_000) }
+      : {}),
+    ...(boundedNumber(input.storageFlushes) !== undefined
+      ? { storageFlushes: boundedNumber(input.storageFlushes) }
+      : {}),
+    ...(boundedNumber(input.storageFlushMs, 3_600_000) !== undefined
+      ? { storageFlushMs: boundedNumber(input.storageFlushMs, 3_600_000) }
+      : {}),
+    ...(boundedNumber(input.commits) !== undefined
+      ? { commits: boundedNumber(input.commits) }
+      : {}),
+    ...(boundedNumber(input.commitMs, 3_600_000) !== undefined
+      ? { commitMs: boundedNumber(input.commitMs, 3_600_000) }
       : {}),
     ...(typeof input.requestKind === 'string' &&
     Object.hasOwn(CACHE_REQUEST_KINDS, input.requestKind)
@@ -985,6 +1031,14 @@ export function isCacheTelemetryObservation(
       'queueDepth',
       'oldestAgeMs',
       'walFrames',
+      'checkpointKind',
+      'storageWrites',
+      'storageWriteBytes',
+      'storageWriteMs',
+      'storageFlushes',
+      'storageFlushMs',
+      'commits',
+      'commitMs',
       'requestKind',
       'queueWaitMs',
     ].includes(key)

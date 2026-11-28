@@ -5,7 +5,7 @@ use crate::state::{
 };
 use js_sys::{Function, Object, Promise, Reflect};
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     collections::HashMap,
     fmt,
     io::ErrorKind,
@@ -60,6 +60,63 @@ const PAGE_CACHE_PAGES: i64 = 8_000;
 extern "C" {
     #[wasm_bindgen(js_namespace = performance, js_name = now)]
     fn performance_now() -> f64;
+}
+
+/// The writes and flushes Turso has completed through this worker's OPFS
+/// handles since the worker started, across every file and session, and the
+/// time they took. A failed write or flush is not counted. Telemetry takes the
+/// difference across a statement or a checkpoint to split its time into
+/// writing (appending to the WAL, or copying it) and flushing.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct OpfsIoTotals {
+    /// Write requests: one per page, or per batch of pages Turso wrote together.
+    pub writes: u64,
+    /// Bytes those requests wrote.
+    pub write_bytes: u64,
+    /// Milliseconds spent in them.
+    pub write_ms: f64,
+    /// Flushes of a file to disk.
+    pub flushes: u64,
+    /// Milliseconds spent in them.
+    pub flush_ms: f64,
+}
+
+thread_local! {
+    static IO_TOTALS: Cell<OpfsIoTotals> = const {
+        Cell::new(OpfsIoTotals {
+            writes: 0,
+            write_bytes: 0,
+            write_ms: 0.0,
+            flushes: 0,
+            flush_ms: 0.0,
+        })
+    };
+}
+
+/// The writes and flushes made so far on this worker.
+pub fn io_totals() -> OpfsIoTotals {
+    IO_TOTALS.with(Cell::get)
+}
+
+fn count_write(bytes: usize, started_at: f64) {
+    let elapsed = performance_now() - started_at;
+    IO_TOTALS.with(|totals| {
+        let mut next = totals.get();
+        next.writes += 1;
+        next.write_bytes += bytes as u64;
+        next.write_ms += elapsed;
+        totals.set(next);
+    });
+}
+
+fn count_flush(started_at: f64) {
+    let elapsed = performance_now() - started_at;
+    IO_TOTALS.with(|totals| {
+        let mut next = totals.get();
+        next.flushes += 1;
+        next.flush_ms += elapsed;
+        totals.set(next);
+    });
 }
 
 /// Stable, payload-free error categories produced by the OPFS adapter.
@@ -1206,6 +1263,7 @@ impl File for OpfsFile {
     ) -> turso_core::Result<Completion> {
         let _operation = OperationGuard::enter(self.owner, self.session)?;
         completion.keep_write_buffer_alive(buffer.clone());
+        let started_at = performance_now();
         let result = preflight_write_range(pos, [buffer.as_slice().len()])
             .and_then(|expected| {
                 write_all(
@@ -1224,6 +1282,9 @@ impl File for OpfsFile {
                 })
             })
             .map_err(LimboError::CompletionError);
+        if result.is_ok() {
+            count_write(buffer.as_slice().len(), started_at);
+        }
         finish_completion(&completion, result);
         Ok(completion)
     }
@@ -1238,6 +1299,7 @@ impl File for OpfsFile {
         // All browser writes are synchronous, so the argument vector keeps
         // every buffer alive until all writes finish and completion fires.
         // Aggregate count and end offset are checked before the first write.
+        let started_at = performance_now();
         let result = (|| {
             let expected =
                 preflight_write_range(pos, buffers.iter().map(|buffer| buffer.as_slice().len()))?;
@@ -1265,6 +1327,12 @@ impl File for OpfsFile {
             }
         })()
         .map_err(LimboError::CompletionError);
+        if result.is_ok() {
+            count_write(
+                buffers.iter().map(|buffer| buffer.as_slice().len()).sum(),
+                started_at,
+            );
+        }
         finish_completion(&completion, result);
         Ok(completion)
     }
@@ -1275,12 +1343,16 @@ impl File for OpfsFile {
         _sync_type: FileSyncType,
     ) -> turso_core::Result<Completion> {
         let _operation = OperationGuard::enter(self.owner, self.session)?;
+        let started_at = performance_now();
         let result = registered_handle(self.owner, self.session, self.handle).and_then(|handle| {
             handle.flush().map_err(|error| {
                 js_handle_completion_error(self.owner, "OPFS flush", &error, ErrorKind::Other)
             })?;
             Ok(0)
         });
+        if result.is_ok() {
+            count_flush(started_at);
+        }
         finish_completion(&completion, result);
         Ok(completion)
     }

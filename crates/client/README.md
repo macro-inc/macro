@@ -650,6 +650,10 @@ Search Datadog logs for `service:web-app "graphql_cache.slow_query"`:
   SQL template, allowing repeated executions to be grouped without exporting SQL.
 - `cache.outcome`: `success` or `error`; slow failures are reported too.
 - `cache.slow_query_threshold_ms`: `200`.
+- `cache.storage.writes`, `cache.storage.write_bytes`, `cache.storage.write_ms`,
+  `cache.storage.flushes`, `cache.storage.flush_ms`: the OPFS writes and flushes
+  made during the statement. A slow `COMMIT` splits into its WAL append (writes)
+  and its flush; any other statement shows the page writes it caused.
 
 Parameters, results, raw SQL, and user identity are not exported. Logging uses
 an anonymous span context. A throwing JS telemetry callback cannot change query
@@ -683,11 +687,25 @@ connection's view of it current, so the page cache survives the copy.
 Turso's restart checkpoint alone would start the log over before it syncs the
 database file.
 
-An idle copy that ran is reported as `graphql_cache.wal_checkpoint` with
-`cache.duration_ms`, `cache.count` (frames copied) and `cache.wal_frames` (frames
-in the WAL when it ran; a count below it is a partial copy). A failed copy is
+A copy that ran is reported as `graphql_cache.wal_checkpoint` with
+`cache.checkpoint_kind` (`idle`, or `capped` for the copy a COMMIT reaching
+10,000 frames runs), `cache.duration_ms`, `cache.count` (frames copied) and
+`cache.wal_frames` (frames in the WAL when it ran; a count below it is a partial
+copy). A capped copy also carries the `cache.storage.*` writes and flushes it
+made, since it runs inside the write that triggered it. A failed idle copy is
 reported with its error class and retried once the next request has run; it
 leaves the WAL whole and resets the cache only when the error means corruption.
+A failed capped copy is reported with `cache.error_code` `unknown` and no frame
+counts; it also leaves the WAL whole, and the next COMMIT that writes tries it
+again.
+
+The engine worker also reports `graphql_cache.storage_io` when the engine
+opens, at most once a minute while it runs, and when it drains: the COMMITs
+that wrote (`cache.storage.commits`, `cache.storage.commit_ms`) and the
+completed OPFS writes and flushes (`cache.storage.*`) since its last report.
+The OPFS counts cover every file of the worker, so
+`cache.storage.flushes / cache.storage.commits` is the worker's flushes per
+COMMIT, checkpoint and close flushes included.
 
 ## Slow request telemetry
 

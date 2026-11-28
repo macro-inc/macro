@@ -8,11 +8,15 @@
 
 use super::schema_store::{ADDED, OLD, ROOTS, adopt, pending};
 use super::*;
+use crate::query_telemetry::{
+    CappedCheckpoint, QueryTelemetry, StorageIo, commit_totals, fingerprint, set_query_telemetry,
+};
 use crate::storage::migration::test_hooks;
 use cache_core::engine::{IDENTITY_META_KEY, IDENTITY_VALUE_FIELD};
 use cache_core::meta::Schema;
 use cache_core::schema_change::{ProjectionInputs, ResetReason, Tier};
 use cache_core::value::CacheValue;
+use std::rc::Rc;
 
 /// About 3 KB of hex, distinct per write: some 27 WAL frames per write of 50.
 fn incompressible(write: usize, index: usize) -> String {
@@ -362,6 +366,113 @@ fn an_owned_wal_is_copied_after_the_commit_that_takes_it_to_the_cap() {
     assert_eq!(wal_frames(&storage), 0, "the copy started the log over");
     assert_holds(&storage, last);
     end_and_reopen(&io, "owned-cap.db", storage, last, End::Close);
+}
+
+/// Records what the driver reports, on a clock that moves 250 ms at every
+/// reading, so every statement is slow; storage totals come from the test IO.
+struct Recorder {
+    io: Arc<FaultIo>,
+    now: std::cell::Cell<f64>,
+    slow: std::cell::RefCell<Vec<(String, StorageIo)>>,
+    capped: std::cell::RefCell<Vec<CappedCheckpoint>>,
+}
+
+impl QueryTelemetry for Recorder {
+    fn now_ms(&self) -> f64 {
+        let now = self.now.get();
+        self.now.set(now + 250.0);
+        now
+    }
+
+    fn storage_io(&self) -> StorageIo {
+        StorageIo {
+            writes: self.io.writes(),
+            flushes: self.io.syncs(),
+            ..StorageIo::default()
+        }
+    }
+
+    fn slow_query(&self, fingerprint: &str, _duration_ms: f64, _success: bool, io: StorageIo) {
+        self.slow.borrow_mut().push((fingerprint.to_owned(), io));
+    }
+
+    fn capped_checkpoint(&self, checkpoint: CappedCheckpoint) {
+        self.capped.borrow_mut().push(checkpoint);
+    }
+}
+
+#[test]
+fn telemetry_splits_each_commit_s_writes_and_flushes_and_reports_the_capped_copy() {
+    let io = FaultIo::new();
+    let mut storage = open_owned(&io, "owned-cap-telemetry.db");
+    let recorder = Rc::new(Recorder {
+        io: io.clone(),
+        now: std::cell::Cell::new(0.0),
+        slow: std::cell::RefCell::default(),
+        capped: std::cell::RefCell::default(),
+    });
+    set_query_telemetry(Some(recorder.clone()));
+    struct Uninstall;
+    impl Drop for Uninstall {
+        fn drop(&mut self) {
+            set_query_telemetry(None);
+        }
+    }
+    let _uninstall = Uninstall;
+    let commits_before = commit_totals().commits;
+
+    let mut previous = 0;
+    let mut next = 0;
+    let mut most = 0;
+    loop {
+        write(&mut storage, next).unwrap();
+        next += 1;
+        let now = wal_frames(&storage);
+        if now < previous {
+            break;
+        }
+        previous = now;
+        most = most.max(now);
+        assert!(next < 1_000, "no copy at {now} frames");
+    }
+
+    // Every write committed once, and each COMMIT appended and flushed once.
+    let totals = commit_totals();
+    assert_eq!(totals.commits - commits_before, next as u64);
+    // Each COMMIT's time is its statement's one clock step (this clock moves
+    // 250 ms a read), without the slow report that follows it.
+    assert_eq!(totals.commit_ms, 250.0 * next as f64, "{totals:?}");
+    let commit = fingerprint("COMMIT");
+    let commits: Vec<_> = recorder
+        .slow
+        .borrow()
+        .iter()
+        .filter(|(fingerprint, _)| *fingerprint == commit)
+        .map(|(_, io)| *io)
+        .collect();
+    assert_eq!(commits.len(), next);
+    for io in &commits {
+        assert_eq!(io.flushes, 1, "{io:?}");
+        assert!(io.writes >= 1, "{io:?}");
+    }
+
+    // One copy, after the COMMIT that reached the cap, outside that COMMIT.
+    let capped = recorder.capped.borrow().clone();
+    assert_eq!(capped.len(), 1, "{capped:?}");
+    let copy = capped[0];
+    assert!(copy.success);
+    assert!(copy.wal_frames >= most && copy.wal_frames >= driver::CHECKPOINT_CAP_FRAMES);
+    assert_eq!(copy.backfilled_frames, copy.wal_frames);
+    // The WAL is synced before the copy, and the database file after it.
+    assert!(copy.io.flushes >= 2, "{copy:?}");
+    assert!(copy.io.writes >= 1, "{copy:?}");
+
+    // A read commits nothing that wrote.
+    let expected: Vec<_> = (0..RECORDS)
+        .map(|index| Some(record(&incompressible(next - 1, index))))
+        .collect();
+    assert_eq!(block_on(storage.get_batch(&keys())).unwrap(), expected);
+    assert_eq!(commit_totals().commits - commits_before, next as u64);
 }
 
 #[test]

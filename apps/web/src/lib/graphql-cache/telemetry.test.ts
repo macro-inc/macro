@@ -626,6 +626,55 @@ describe('describeCacheError', () => {
     expect(describeCacheError(undefined)).toEqual({ errorCode: 'unknown' });
   });
 
+  it('exports storage writes, flushes and COMMITs, and drops an unknown checkpoint kind', () => {
+    const storageIo = {
+      name: 'graphql_cache.storage_io',
+      operationCategory: 'storage',
+      outcome: 'success',
+      commits: 12,
+      commitMs: 30.5,
+      storageWrites: 14,
+      storageWriteBytes: 57_680,
+      storageWriteMs: 3.25,
+      storageFlushes: 13,
+      storageFlushMs: 22.75,
+    } satisfies CacheTelemetryObservation;
+    const capped = {
+      name: 'graphql_cache.wal_checkpoint',
+      operationCategory: 'storage',
+      checkpointKind: 'capped',
+      outcome: 'success',
+      durationMs: 300,
+      walFrames: 10_002,
+      count: 10_002,
+      storageWrites: 40,
+      storageWriteBytes: 40_968_192,
+      storageWriteMs: 180,
+      storageFlushes: 2,
+      storageFlushMs: 20,
+    } satisfies CacheTelemetryObservation;
+    expect(isCacheTelemetryObservation(storageIo)).toBe(true);
+    expect(isCacheTelemetryObservation(capped)).toBe(true);
+    const events: CacheTelemetryEnvelope[] = [];
+    const reporter = new CacheTelemetryReporter(
+      browserCacheTelemetryContext('treatment'),
+      { emit: (event) => events.push(event) }
+    );
+    reporter.emit(storageIo);
+    reporter.emit(capped);
+    reporter.emit({
+      ...capped,
+      checkpointKind: 'secret' as never,
+      storageFlushes: -1,
+    });
+    expect(events).toEqual([
+      expect.objectContaining(storageIo),
+      expect.objectContaining(capped),
+      expect.not.objectContaining({ checkpointKind: expect.anything() }),
+    ]);
+    expect(events[2]).not.toHaveProperty('storageFlushes');
+  });
+
   it('keeps the new fields inside the exported allowlist', () => {
     expect(
       isCacheTelemetryObservation({

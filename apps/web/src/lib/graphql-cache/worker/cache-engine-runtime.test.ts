@@ -623,10 +623,21 @@ describe('cache engine worker runtime', () => {
     const recordCachedQueueDiagnostics = vi.fn();
     let now = 0;
     let memoryBytes = 10;
+    const io = (commits: number, flushes: number) => ({
+      commits,
+      commitMs: commits * 2,
+      writes: commits,
+      writeBytes: commits * 4_120,
+      writeMs: commits * 0.5,
+      flushes,
+      flushMs: flushes,
+    });
+    let storageIo = io(3, 3);
     installCacheEngineWorker({
       scope,
       now: () => now,
       readLinearMemoryBytes: () => memoryBytes,
+      readStorageIoTotals: () => storageIo,
       memoryTelemetryIntervalMs: 60_000,
       findOwnerLock: async () => ({}),
       telemetry: {
@@ -655,6 +666,7 @@ describe('cache engine worker runtime', () => {
     });
     now = 60_000;
     memoryBytes = 20;
+    storageIo = io(13, 5);
     direct.receive({
       ...version,
       kind: 'heartbeat',
@@ -680,6 +692,32 @@ describe('cache engine worker runtime', () => {
       expect.objectContaining({ bytes: 10, highWaterBytes: 10 }),
       expect.objectContaining({ bytes: 20, highWaterBytes: 20 }),
       expect.objectContaining({ bytes: 15, highWaterBytes: 20 }),
+    ]);
+    // Reported with memory, as what happened since the last report; the
+    // drain had nothing new.
+    expect(
+      observations.filter(
+        (observation) => observation.name === 'graphql_cache.storage_io'
+      )
+    ).toEqual([
+      expect.objectContaining({
+        commits: 3,
+        commitMs: 6,
+        storageWrites: 3,
+        storageWriteBytes: 12_360,
+        storageWriteMs: 1.5,
+        storageFlushes: 3,
+        storageFlushMs: 3,
+      }),
+      expect.objectContaining({
+        commits: 10,
+        commitMs: 20,
+        storageWrites: 10,
+        storageWriteBytes: 41_200,
+        storageWriteMs: 5,
+        storageFlushes: 2,
+        storageFlushMs: 2,
+      }),
     ]);
   });
 
