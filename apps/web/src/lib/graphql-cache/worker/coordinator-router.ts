@@ -318,6 +318,8 @@ export class CoordinatorRouter {
   >();
   private engineRoute: EngineRoute | undefined;
   private activationTimer: ReturnType<typeof setTimeout> | undefined;
+  /** The running startup watchdog has the hidden budget, not the phase's. */
+  private activationBudgetHidden = false;
   private heartbeatIntervalTimer: ReturnType<typeof setTimeout> | undefined;
   private heartbeatTimeoutTimer: ReturnType<typeof setTimeout> | undefined;
   private drain: DrainWatch | undefined;
@@ -535,7 +537,23 @@ export class CoordinatorRouter {
 
     match(message)
       .with({ kind: 'tab-visibility' }, ({ visible }) => {
-        this.applyActions(core.setTabVisibility(tabId, visible));
+        const before = core.state;
+        const actions = core.setTabVisibility(tabId, visible);
+        // A shown tab took over a hidden startup: that owner left before it
+        // was ready, and a wipe it was to make passes to the next one.
+        if (
+          before.kind === 'activating' &&
+          actions.some(
+            (action) =>
+              action.kind === 'release-owner' &&
+              action.ownerEpoch === before.ownerEpoch
+          )
+        )
+          this.recordOwnerLeft(before.ownerEpoch, {
+            outcome: 'graceful',
+            ownerEvent: 'replacement',
+          });
+        this.applyActions(actions);
       })
       .with({ kind: 'ping' }, () => {
         this.postToTab(
@@ -1444,7 +1462,11 @@ export class CoordinatorRouter {
       .with({ kind: 'activating' }, ({ tabId, ownerEpoch }) => {
         if (!core.hasVisibleTab && !core.startsForSettlement)
           this.clearActivationTimer();
-        else if (this.activationTimer === undefined)
+        else if (
+          this.activationTimer === undefined ||
+          // A shown tab now waits for it: the phase gets its whole budget.
+          (this.activationBudgetHidden && core.hasVisibleTab)
+        )
           this.armStartupWatchdog(tabId, ownerEpoch);
         // Arming can end this owner, whose successor then synced for itself.
         if (core.snapshot().ownerEpoch !== ownerEpoch) return;
@@ -1507,10 +1529,10 @@ export class CoordinatorRouter {
     const hidden = !this.coreValue?.hasVisibleTab;
     if (hidden && !this.coreValue?.startsForSettlement) return;
     const { phase } = progress;
-    const timeoutMs =
-      hidden && phase === 'loading-assets'
-        ? Math.min(progress.timeoutMs, HIDDEN_SETTLEMENT_STARTUP_TIMEOUT_MS)
-        : progress.timeoutMs;
+    const shortened = hidden && phase === 'loading-assets';
+    const timeoutMs = shortened
+      ? Math.min(progress.timeoutMs, HIDDEN_SETTLEMENT_STARTUP_TIMEOUT_MS)
+      : progress.timeoutMs;
     const reason = match(phase)
       .with('loading-assets', () => 'engine asset loading watchdog timed out')
       .with('awaiting-owner-lock', () => 'engine owner lock watchdog timed out')
@@ -1528,6 +1550,7 @@ export class CoordinatorRouter {
       ).catch(reportCoordinatorTaskFailure);
     }, timeoutMs);
     this.activationTimer = timer;
+    this.activationBudgetHidden = shortened;
   }
 
   /** Tab ids holding this scope's liveness locks without registering here,
@@ -2311,6 +2334,7 @@ export class CoordinatorRouter {
   }
 
   private clearActivationTimer(): void {
+    this.activationBudgetHidden = false;
     if (this.activationTimer !== undefined) {
       this.clearTimeoutFn(this.activationTimer);
       this.activationTimer = undefined;

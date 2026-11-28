@@ -377,15 +377,17 @@ export class CoordinatorCore {
   }
 
   /** A hidden tab starts an engine only so that a head still out has one to
-   * settle in, and it has not reached storage yet. Nobody waits to see it,
-   * so a startup that stalls, as in a frozen tab, is given up sooner. */
+   * settle in, it has not reached storage yet, and another tab could start
+   * one instead. Nobody waits to see it, so a startup that stalls, as in a
+   * frozen tab, is given up sooner. */
   get startsForSettlement(): boolean {
     const state = this.stateValue;
     return (
       state.kind === 'activating' &&
       !this.hasVisibleTab &&
       !startupPhaseMayTouchStorage(state.phase) &&
-      this.unsettled()
+      this.unsettled() &&
+      this.eligibleTabs().some((tabId) => tabId !== state.tabId)
     );
   }
 
@@ -434,11 +436,16 @@ export class CoordinatorCore {
       state.ownerEpoch === this.hiddenElectionEpoch &&
       !this.visibleTabs.has(state.tabId) &&
       !startupPhaseMayTouchStorage(state.phase)
-    )
-      return [
-        ...this.releaseStartingOwner('a shown tab starts the engine instead'),
-        ...this.activateNext(state.databaseAction),
-      ];
+    ) {
+      const released = this.releaseStartingOwner(
+        'a shown tab starts the engine instead'
+      );
+      // As for any owner that stops: a replacement that would wipe the
+      // database a newer build waits for hands it over instead.
+      return this.handsOverNow(state.databaseAction)
+        ? [...released, ...this.completeSupersede()]
+        : [...released, ...this.activateNext(state.databaseAction)];
+    }
     if (shown && state.kind === 'resetting-after-loss' && this.outage)
       return this.resumeAfterLoss();
     return this.handoffIfNeeded();
@@ -461,6 +468,10 @@ export class CoordinatorCore {
     if (!this.tabs.includes(tabId)) return [];
     if (visible) {
       this.visibleTabs.add(tabId);
+      // A tab shown while it starts is alive; it keeps its engine.
+      const state = this.stateValue;
+      if (state.kind === 'activating' && state.tabId === tabId)
+        this.hiddenElectionEpoch = undefined;
       // A later hide waits its grace again before the owner drains.
       this.hiddenDrainDeferred = false;
     } else this.visibleTabs.delete(tabId);

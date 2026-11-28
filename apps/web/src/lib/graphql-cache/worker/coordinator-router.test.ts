@@ -16,6 +16,7 @@ import {
   queryHeldLockNames,
 } from './coordinator-router';
 import type { CacheTakeoverMessage } from './coordinator-takeover';
+import { HIDDEN_SETTLEMENT_STARTUP_TIMEOUT_MS } from './startup';
 
 class FakePort extends EventTarget {
   readonly messages: unknown[] = [];
@@ -1663,6 +1664,88 @@ describe('CoordinatorRouter', () => {
     });
     for (const tab of [tabA, tabB])
       expect(messagesOfKind(tab, 'cache-superseded')).toHaveLength(1);
+  });
+
+  describe('a hidden startup kept for a head out', () => {
+    // a starts and closes; b and c are hidden, and b hands over a commit.
+    const hiddenElection = async () => {
+      vi.useFakeTimers();
+      const router = new CoordinatorRouter({
+        verifyTabLockHeld: async () => true,
+        watchTabLock: () => () => undefined,
+      });
+      const [a, b, c] = [new FakePort(), new FakePort(), new FakePort()];
+      await register(router, a, 'a');
+      await register(router, b, 'b');
+      await register(router, c, 'c');
+      for (const [port, tabId] of [
+        [b, 'b'],
+        [c, 'c'],
+      ] as const)
+        await router.handleTabMessage(port as CoordinatorMessagePort, {
+          ...version,
+          kind: 'tab-visibility',
+          tabId,
+          visible: false,
+        });
+      await router.handleTabMessage(
+        b as CoordinatorMessagePort,
+        {
+          ...version,
+          kind: 'cache-request',
+          tabId: 'b',
+          request: {
+            id: 9,
+            kind: 'commit-optimistic-write',
+            transactionId: '1',
+            leaseOwner: 'b',
+            leaseGeneration: '1',
+            query: 'mutation Saved { saved }',
+            data: { saved: true },
+          },
+        } as never
+      );
+      await router.handleTabMessage(
+        a as CoordinatorMessagePort,
+        {
+          ...version,
+          kind: 'disconnect-tab',
+          tabId: 'a',
+          reason: 'closed',
+        } as never
+      );
+      expect(router.snapshot()?.state).toMatchObject({
+        kind: 'activating',
+        tabId: 'b',
+      });
+      return { router, b, c };
+    };
+
+    it('is given up for another tab once it loads too long', async () => {
+      const { router, b, c } = await hiddenElection();
+      await vi.advanceTimersByTimeAsync(
+        HIDDEN_SETTLEMENT_STARTUP_TIMEOUT_MS - 1
+      );
+      expect(messagesOfKind(b, 'terminate-engine')).toEqual([]);
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(messagesOfKind(b, 'terminate-engine')).toHaveLength(1);
+      expect(messagesOfKind(c, 'become-owner')).toHaveLength(1);
+      expect(router.snapshot()?.state).toMatchObject({ tabId: 'c' });
+    });
+
+    it('keeps the whole budget once its tab is shown', async () => {
+      const { router, b } = await hiddenElection();
+      await vi.advanceTimersByTimeAsync(5_000);
+      await router.handleTabMessage(b as CoordinatorMessagePort, {
+        ...version,
+        kind: 'tab-visibility',
+        tabId: 'b',
+        visible: true,
+      });
+      await vi.advanceTimersByTimeAsync(HIDDEN_SETTLEMENT_STARTUP_TIMEOUT_MS);
+      expect(messagesOfKind(b, 'terminate-engine')).toEqual([]);
+      expect(router.snapshot()?.state).toMatchObject({ tabId: 'b' });
+    });
   });
 
   it('gives a head claimed during the wait a wait of its own, and claims none late in it', async () => {

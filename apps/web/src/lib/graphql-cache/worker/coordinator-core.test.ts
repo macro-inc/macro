@@ -625,6 +625,36 @@ describe('CoordinatorCore', () => {
       expect(core.startsForSettlement).toBe(false);
     });
 
+    it('hands over rather than wipe when a shown tab takes a hidden startup', () => {
+      const core = new CoordinatorCore('scope');
+      for (const tab of ['tab-a', 'tab-b', 'tab-c']) core.registerTab(tab);
+      ready(core, 'tab-a', 1, 'opened-existing');
+      const claim = action(
+        core.request('tab-c', claimNext(1)),
+        'route-request'
+      );
+      core.engineResponse(1, claim.routeId, ok({ transactionId: '7' }));
+      for (const tab of ['tab-a', 'tab-b', 'tab-c'])
+        core.setTabVisibility(tab, false);
+      core.ownerLost('tab-a', 1, 'engine crashed');
+      core.resumeAfterLoss();
+      expect(core.state).toMatchObject({
+        kind: 'activating',
+        tabId: 'tab-c',
+        databaseAction: 'wipe-before-open',
+      });
+      expect(core.supersede()).toContainEqual(
+        expect.objectContaining({ kind: 'await-settlements' })
+      );
+      const shown = core.setTabVisibility('tab-b', true);
+      expect(shown).toContainEqual(
+        expect.objectContaining({ kind: 'broadcast-cache-superseded' })
+      );
+      expect(shown).not.toContainEqual(
+        expect.objectContaining({ kind: 'elect-owner' })
+      );
+    });
+
     it('starts an engine for a settlement whose page went during a drain', () => {
       const core = new CoordinatorCore('scope');
       for (const tab of ['tab-a', 'tab-b', 'tab-c']) core.registerTab(tab);
