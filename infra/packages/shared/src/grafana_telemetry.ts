@@ -12,6 +12,7 @@ const PROD_GRAFANA_PROJECTS: Record<string, boolean> = {
   'agent-harness-service': true,
   'authentication-service': true,
   'calendar-service': true,
+  'cloud-storage-service': true,
   'connection-gateway': true,
   'contacts-service': true,
   'convert-service': true,
