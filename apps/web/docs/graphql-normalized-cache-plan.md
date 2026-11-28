@@ -151,7 +151,8 @@ entire cache in browser memory. With 10s of thousands of cached objects
     and reads every mounted query again (`mutation_queue.rows_missing`), in the
     write's trace when its caller named one, including when it is applied after
     a reload.
-    An HTTP 5xx response keeps its retry.
+    An HTTP 5xx response is a server failure even when its only errors are
+    there: it counts against the retry budget above and rolls back after ten.
     Each queued network attempt has a one-minute timeout, comfortably inside its
     five-minute lease. A page that reloads or closes mid-attempt never settles
     its claim, so each page holds a Web Lock named after its lease owner
