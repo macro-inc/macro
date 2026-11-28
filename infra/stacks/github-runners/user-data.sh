@@ -114,9 +114,10 @@ done
 rm -f "$tarball"
 
 # Registers both runners with a token read from the terminal (or stdin), then
-# starts them. Both register before either starts, so no job runs on the box
-# while the token is on a command line. A runner already registered is left as
-# it is, so a run that failed half-way can be repeated.
+# starts them. The token reaches config.sh only through its environment
+# (ACTIONS_RUNNER_INPUT_TOKEN), never a command line or a log, and both
+# runners register before either starts. Each step is skipped once done, so a
+# run that failed half-way can be repeated.
 register() {
   umask 022
   if [ "$(id -u)" -ne 0 ]; then
@@ -139,19 +140,20 @@ register() {
     dir="/home/${RUNNER_USER}/${name}"
     if [ -e "$dir/.runner" ]; then
       echo "${name} is already registered."
-      continue
+    else
+      ACTIONS_RUNNER_INPUT_TOKEN="$token" runuser -u "$RUNNER_USER" -- "$dir/config.sh" \
+        --unattended \
+        --url "$GITHUB_RUNNER_URL" \
+        --name "$name" \
+        --labels "$RUNNER_LABEL" \
+        --runnergroup "$RUNNER_GROUP" \
+        --work _work \
+        --replace
     fi
-    sudo -u "$RUNNER_USER" "$dir/config.sh" \
-      --unattended \
-      --url "$GITHUB_RUNNER_URL" \
-      --token "$token" \
-      --name "$name" \
-      --labels "$RUNNER_LABEL" \
-      --runnergroup "$RUNNER_GROUP" \
-      --work _work \
-      --replace
 
-    (cd "$dir" && ./svc.sh install "$RUNNER_USER")
+    if [ ! -e "$dir/.service" ]; then
+      (cd "$dir" && ./svc.sh install "$RUNNER_USER")
+    fi
     unit=$(cat "$dir/.service")
 
     # The generated unit neither restarts nor survives a job's OOM kill:

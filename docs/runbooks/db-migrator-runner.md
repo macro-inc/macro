@@ -84,17 +84,26 @@ The runner is offline, hung, or busy with two other jobs.
 
 4. Restart the runners (`sudo systemctl restart 'actions.runner.*'`), or,
    with approval, reboot the instance (`aws ec2 reboot-instances
-   --instance-ids "$id"`). A runner whose registration was removed (offline
-   for 14 days) does not come back by itself: rebuild the instance.
+   --instance-ids "$id"`). A runner whose registration GitHub removed
+   (offline for 14 days) does not come back by itself. Stop the runners
+   (`sudo systemctl stop 'actions.runner.*'`), delete `.runner`,
+   `.credentials` and `.credentials_rsaparams` from its directory under
+   `/home/runner`, and register it again ("Rebuild the instance", last
+   step).
 5. Re-run the cancelled deploy's failed jobs, or push again.
 
 ## Rebuild the instance
 
-Any change to `user-data.sh` replaces the instance. With approval for the
-deploy, from `infra/stacks/github-runners`:
+Any change to `user-data.sh` replaces the instance. To replace it without
+one, name it. With approval for the deploy, from
+`infra/stacks/github-runners`:
 
 ```sh
+# after a change
 pulumi up --stack macro-inc/dev
+# without one
+pulumi up --stack macro-inc/dev --replace \
+  'urn:pulumi:dev::github-runners::macro:components:DbMigratorRunner$aws:ec2/instance:Instance::github-runners-db-migrator-dev'
 ```
 
 Do it while no deploy runs: a job on the old instance is lost, and no runner
@@ -115,9 +124,8 @@ aws ssm start-session --target "$id"
 sudo register-db-migrator-runners    # paste the token at the prompt
 ```
 
-It ends with `>>> db-migrator runners registered and started`. A runner that
-is already registered is skipped, so running it again after a failure is
-safe.
+It ends with `>>> db-migrator runners registered and started`. It skips what
+an earlier run finished, so running it again after a failure is safe.
 
 ## Replacing the hand-made runner
 
