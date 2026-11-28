@@ -1624,6 +1624,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   `useSoupAstItemsQuery` (backed by `createSoupLiveQuery`) for Soup lists; see
   [choosing a reactive read](docs/graphql-normalized-cache-plan.md#choosing-a-reactive-read).
   Keep predicate failure recovery generic: bound stale reads, retain same-scope rows, hydrate only missing identities, and preserve revision/generation fences; projection selection must not change recovery policy.
+  Call baselines sort by `startedAt` for creation and `endedAt` for recency,
+  falling back to `startedAt` when the server returns a null `endedAt`.
 - Reconcile cached Mail pages with same-query server membership; missing local
   previews are unknown, not proof that a fetched email left the inbox. Keep
   local pagination cursors independent of retained server rows. Preserve live
