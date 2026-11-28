@@ -24,8 +24,13 @@ const SHARED_SECTIONS = 6;
 const SHARED_SECTION_SIZE = 30;
 const PERSONAL_SECTIONS = 4;
 const PERSONAL_SECTION_SIZE = 20;
-/** The server's page size when a request names none. */
-const DEFAULT_LIMIT = 100;
+/** The server's page size when a request names none (GraphQL Soup's
+ * `limit.unwrap_or(20)`), and the bounds it clamps a requested one to
+ * (Soup's `limit.clamp(1, 500)`). */
+const DEFAULT_LIMIT = 20;
+const MIN_LIMIT = 1;
+const MAX_LIMIT = 500;
+const U16_MAX = 65_535;
 /** The fixture's clock: every timestamp is before it. */
 export const FIXTURE_NOW = Date.parse('2026-11-20T12:00:00.000Z');
 const TWO_YEARS_MS = 2 * 365 * 24 * 60 * 60 * 1000;
@@ -446,10 +451,17 @@ export function createChatFixture(
         direction * (sortKey(a, method) - sortKey(b, method)) ||
         a.id.localeCompare(b.id)
     );
+    const requested = initial.limit ?? DEFAULT_LIMIT;
+    // The schema takes a page size as a `u16`: anything else is an input
+    // error there, not a page.
+    if (!Number.isInteger(requested) || requested < 0 || requested > U16_MAX) {
+      unsupported(`limit ${requested}`);
+      return { items: [], nextCursor: null };
+    }
     return serve({
       ids: matched.map((channel) => channel.id),
       offset: 0,
-      limit: initial.limit ?? DEFAULT_LIMIT,
+      limit: Math.min(Math.max(requested, MIN_LIMIT), MAX_LIMIT),
     });
   };
 

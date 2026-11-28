@@ -26,9 +26,11 @@ grows with the account, not with what is on screen.
 
 - `fixture.ts`: the deterministic account (about 75 participants a channel)
   and the GraphQL resolvers that serve it, counting rows asked and returned.
-  It pages as the server does (`models_pagination`): a full page carries a
-  cursor even when nothing follows, so reading to the end costs one more,
-  empty page.
+  It pages as the server does: a page with no limit has 20 rows, a
+  requested limit is clamped to 1–500 (Soup), a limit the schema refuses
+  (not a `u16`) is a fault, and a full page carries a cursor even when
+  nothing follows (`models_pagination`), so reading to the end costs one
+  more, empty page.
 - `mount.tsx`: `ChatDataPathMount`, the `ChannelsRail` composition without its
   rendering, and `modelViewport`, the rows a fixed 816px sidebar mounts. A
   section's visible range comes from `onSectionRange`; `ChatDataPath.viewport()`
@@ -59,11 +61,11 @@ Per scenario, each its own number:
   count reads row ids from the store's target, so it adds none.
 - `rows`: rows the rail built, resolved to a channel, and mounted.
 
-## Gate
 The earlier visit's totals (`seed`: engine calls, SQL, file bytes) are
 reported, not gated: the visit is not a measured step, so a slow machine whose
 visit outlasts a mutation queue poll (Gotchas) adds a drain to them.
 
+## Gate
 
 `gate.ts` fails the run on:
 
@@ -92,8 +94,8 @@ in the PR. Reviewers read its diff as the change's cost.
   `just test-cache-harness src/features/channels-view/cache-harness`. It writes
   every count to `.cache/chat-cache-harness/results.json` (or
   `CHAT_CACHE_HARNESS_OUT`) before it checks the run.
-- `bun run test src/features/channels-view/cache-harness/gate.test.ts` for the
-  gate's own rules.
+- `bun run test src/features/channels-view/cache-harness` for the gate's own
+  rules and the fixture's paging (`gate.test.ts`, `fixture.test.ts`).
 - PR CI runs `just test-cache-harness` as the web checks' **Cache Harness** job.
 
 ## Gotchas
