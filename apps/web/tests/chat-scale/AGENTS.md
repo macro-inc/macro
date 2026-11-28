@@ -65,8 +65,10 @@ From `apps/web`:
 - `bun run test tests/chat-scale` for the limits' own rules and the
   fixture's paging and filters.
 - CI: the `Chat scale` workflow (`chat_scale.yml`), nightly and by hand; it
-  uploads `.cache/chat-scale`, and a scheduled run that fails tells Macro
-  Alerts (a run by hand does not).
+  uploads `.cache/chat-scale`. A scheduled run tells Macro Alerts when the
+  result changes: a failure after a pass, and `✅ Resolved` after a
+  failure. A failure while the channel already shows one, and a run by
+  hand, post nothing (`docs/development/ci.md`).
 
 ## Changing a limit
 
