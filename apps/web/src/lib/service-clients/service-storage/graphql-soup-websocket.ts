@@ -6,6 +6,7 @@ import { type Span, Telemetry } from '@macro-inc/observability';
 import type { Client, OperationResult } from '@urql/core';
 import type { Result } from 'neverthrow';
 import { createSignal } from 'solid-js';
+import { onEnd, pipe, subscribe } from 'wonka';
 import {
   channelNotificationRefresh,
   disposeChannelNotificationRefresh,
@@ -322,13 +323,15 @@ export function createGraphqlSoupSubscriptionsLifecycle(
   let connections = 0;
   let stopWatchingForReattach: (() => void) | undefined;
   let socketOpen = false;
+  // The set is subscribed and none of its subscriptions has ended or failed.
+  let attached = false;
   const [liveSince, setLiveSince] = createSignal<number | undefined>();
   // Updates reach the cache from now on, once the set that writes it is
   // attached on an open socket.
   const markLive = () => {
     if (
       socketOpen &&
-      activity !== undefined &&
+      attached &&
       currentHost !== undefined &&
       !currentHost.disabled
     )
@@ -345,6 +348,7 @@ export function createGraphqlSoupSubscriptionsLifecycle(
   };
 
   const unsubscribeAll = () => {
+    attached = false;
     setLiveSince(undefined);
     generation += 1;
     stopWatchingForReattach?.();
@@ -399,10 +403,24 @@ export function createGraphqlSoupSubscriptionsLifecycle(
               ({ document }) => document !== SoupUpdatesDocument
             );
       const setGeneration = generation;
+      // A subscription that failed or ended misses what follows, and no
+      // reconnect of the socket brings it back: only a new set does.
+      const ended = () => {
+        if (setGeneration !== generation) return;
+        attached = false;
+        setLiveSince(undefined);
+      };
+      attached = true;
       unsubscribes = subscriptions.map(({ document, errorMessage }) => {
-        const subscription = client
-          .subscription(document, {})
-          .subscribe((result) => {
+        const subscription = pipe(
+          client.subscription(document, {}),
+          // The server can end one with no result at all (a subscriber
+          // that fell behind), which urql passes on only as the end.
+          onEnd(() => {
+            ended();
+            if (setGeneration === generation) reattachOnNextOpportunity();
+          }),
+          subscribe((result) => {
             if (document === ActivityUpdatesDocument) {
               activityHandler.onResult(
                 result as OperationResult<ActivityUpdatesSubscription>
@@ -448,18 +466,15 @@ export function createGraphqlSoupSubscriptionsLifecycle(
                 });
               }
             }
-            // An error may have ended the subscription; what it would have
-            // delivered since is missed.
-            if (
-              (result.error || result.hasNext === false) &&
-              setGeneration === generation
-            )
-              setLiveSince(undefined);
+            // An error may have ended the subscription, or dropped what it
+            // delivered: urql gives no end after a GraphQL error.
+            if (result.error || result.hasNext === false) ended();
             // urql ends a subscription with a final `hasNext: false` result.
             if (result.hasNext === false && setGeneration === generation) {
               reattachOnNextOpportunity();
             }
-          });
+          })
+        );
         return () => subscription.unsubscribe();
       });
       markLive();

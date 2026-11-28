@@ -1254,8 +1254,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   is dead; the reconnect is what tells followers such as agent sessions
   (`subscribeGraphqlSoupReconnected`) to refetch what they missed.
   `graphqlSoupCacheUpdatesLiveSince()` says since when updates have reached the
-  cache without a break, for readers that must not trust a cached absence from
-  before then.
+  cache without a break (socket open, no subscription ended or failed since),
+  for readers that must not trust a cached record read before then to still
+  exist: its removal may never have reached the cache.
 - The page that owns the cache engine keeps the engine's compiled WebAssembly
   and hands it to each new engine worker (`worker/compiled-engine.ts`), keyed by
   the asset it was compiled from: the browser compiles the engine's functions
