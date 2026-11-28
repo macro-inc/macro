@@ -91,7 +91,7 @@ import {
 import { usePrDetail } from './PrDetail';
 import { PrPageTopBar } from './pr-page-top-bar';
 import { PrSlimBar } from './pr-slim-bar';
-import { PrDetailsSection } from './shared/pr-details';
+import { PrChecksList, PrDetailsSection } from './shared/pr-details';
 import { PrPageContent } from './shared/pr-page-content';
 
 describe('PR refresh wiring', () => {
@@ -457,6 +457,47 @@ describe('PR band to strip switch', () => {
       expect(title.parentElement?.className).toContain('max-w-[1376px]');
     } finally {
       dispose();
+    }
+  });
+});
+
+describe('checks expansion row', () => {
+  it('expands and collapses six checks without submitting its surrounding form', () => {
+    const container = document.createElement('form');
+    const submit = vi.fn((event: SubmitEvent) => event.preventDefault());
+    container.addEventListener('submit', submit);
+    document.body.append(container);
+    const dispose = render(() => {
+      const source = createSamplePrPage();
+      const page = source.page();
+      if (!page) throw new Error('Missing sample page');
+      return createComponent(PrPageProvider, {
+        value: source,
+        get children() {
+          return createComponent(PrChecksList, { page, spacious: true });
+        },
+      });
+    }, container);
+    try {
+      const list = container.firstElementChild;
+      const control = container.querySelector('button[aria-expanded]');
+      if (!(control instanceof HTMLButtonElement))
+        throw new Error('Missing expansion button');
+      expect(control.type).toBe('button');
+      expect(control.classList.contains('min-h-9')).toBe(true);
+      expect(control.classList.contains('touch:min-h-11')).toBe(true);
+      expect(control.getAttribute('aria-expanded')).toBe('false');
+      expect(list?.children.length).toBe(6);
+      control.click();
+      expect(control.getAttribute('aria-expanded')).toBe('true');
+      expect(list?.children.length).toBe(7);
+      control.click();
+      expect(control.getAttribute('aria-expanded')).toBe('false');
+      expect(list?.children.length).toBe(6);
+      expect(submit).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+      container.remove();
     }
   });
 });
