@@ -1243,7 +1243,7 @@ export function getGraphqlSoupClient(): Client {
             graphqlWsClient,
             stripGraphqlSoupClientDirectives
           ),
-          createEmailMailboxEffectsExchange(host),
+          createEmailMailboxEffectsExchange(host, refetchMissed),
           traceParentExchange,
           fetchExchange,
         ],

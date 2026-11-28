@@ -769,7 +769,8 @@ Trash, Undo and folder restores use the same bounded GraphQL mailbox mutation.
 Each thread has its own write acknowledgement and Mail row. A committed write
 whose row cannot be loaded keeps its acknowledgement and reads the thread by ID
 within a fixed time budget. The durable queue can settle and retry that read
-afterward. Each offline replayed trash write settles independently by thread.
+afterward. If the retry misses too, the cache revalidates mounted queries. Each
+offline replayed trash write settles independently by thread.
 A rejected thread keeps its state and other acknowledged threads stay in Trash.
 Returned and recovered rows update Inbox and other locally maintained Mail lists.
 Spam and Trash still get membership and their list-specific preview from the

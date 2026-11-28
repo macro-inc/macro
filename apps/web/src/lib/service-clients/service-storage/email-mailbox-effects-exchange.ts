@@ -72,7 +72,8 @@ function mailboxServerFailure(result: OperationResult) {
 /** Recover acknowledged Mail rows within a fixed budget. A durable write can
  * settle without its row and retry only that read after local settlement. */
 export function createEmailMailboxEffectsExchange(
-  host?: Pick<CacheHost, 'onMutationSettled'>
+  host?: Pick<CacheHost, 'onMutationSettled'>,
+  revalidateAfterMissedUpdate?: () => void
 ): Exchange {
   return ({ client, forward }) => {
     async function recover(
@@ -164,8 +165,18 @@ export function createEmailMailboxEffectsExchange(
           if (settlement.transactionId !== attempt.transactionId) return;
           clearTimeout(expire);
           stop();
-          if (settlement.status === 'committed' && isCurrent())
-            fireAndForget(repair(unrepaired), 'email.folder.row_recovery');
+          if (settlement.status !== 'committed' || !isCurrent()) return;
+          fireAndForget(
+            (async () => {
+              await repair(unrepaired);
+              if (
+                isCurrent() &&
+                unrepaired.some((index) => !recovered[index].effect)
+              )
+                revalidateAfterMissedUpdate?.();
+            })(),
+            'email.folder.row_recovery'
+          );
         });
         const expire = setTimeout(stop, QUEUE_LEASE_MS);
       }

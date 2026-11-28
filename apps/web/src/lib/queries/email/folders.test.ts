@@ -315,7 +315,7 @@ describe('restore provider folders', () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
-  it('settles the acknowledgement when a primary row read stalls', async () => {
+  it('settles a stalled row read and revalidates after the committed retry misses', async () => {
     const deadline = new AbortController();
     vi.spyOn(AbortSignal, 'timeout').mockReturnValueOnce(deadline.signal);
     onTestFinished(() => {
@@ -323,6 +323,7 @@ describe('restore provider folders', () => {
     });
     let emitSettlement!: (settlement: MutationSettlement) => void;
     const stop = vi.fn();
+    const revalidate = vi.fn();
     const host = {
       onMutationSettled: (
         callback: (settlement: MutationSettlement) => void
@@ -363,7 +364,7 @@ describe('restore provider folders', () => {
                 )
               )
             ),
-        createEmailMailboxEffectsExchange(host),
+        createEmailMailboxEffectsExchange(host, revalidate),
         fetchExchange,
       ],
       fetch: async (_input, init) => {
@@ -396,10 +397,14 @@ describe('restore provider folders', () => {
     expect(reads).toBe(1);
     emitSettlement({ transactionId: 'other-write', status: 'committed' });
     expect(reads).toBe(1);
+    expect(revalidate).not.toHaveBeenCalled();
     emitSettlement({ transactionId: 'folder-write', status: 'committed' });
     await retried;
     expect(reads).toBe(2);
     expect(stop).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(revalidate).toHaveBeenCalledOnce(), {
+      timeout: 500,
+    });
   }, 2_000);
 
   it('does not refresh lists when every request fails', async () => {
