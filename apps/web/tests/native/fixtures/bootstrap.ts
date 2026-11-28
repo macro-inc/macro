@@ -3,6 +3,7 @@ import type { Link } from '../../../src/lib/service-clients/service-email/genera
 import type { ListLabelsResponse } from '../../../src/lib/service-clients/service-email/generated/schemas/listLabelsResponse';
 import type { ListChannelNotificationSettingsResponse } from '../../../src/lib/service-clients/service-notification/generated/schemas/listChannelNotificationSettingsResponse';
 import type { ListSectionNotificationSettingsResponse } from '../../../src/lib/service-clients/service-notification/generated/schemas/listSectionNotificationSettingsResponse';
+import type { CalendarOccurrenceResponse } from '../../../src/lib/service-clients/service-storage/generated/schemas/calendarOccurrenceResponse';
 import { accounts, EMAIL, identity, USER_ID } from './mail';
 
 const link: Link = {
@@ -52,6 +53,13 @@ const SECTION_NOTIFICATION_SETTINGS: ListSectionNotificationSettingsResponse = {
 };
 // The fixture inbox has no labels of its own, so Mail rows show none.
 const EMAIL_LABELS: ListLabelsResponse = { labels: [] };
+// The fixture user has no calendar events. The app reads occurrences over
+// REST when the calendar cache cannot answer in time, or to check first sync.
+const CALENDAR_OCCURRENCES: CalendarOccurrenceResponse = {
+  hasMore: false,
+  items: [],
+  syncStatus: 'ready',
+};
 const name = { id: USER_ID, first_name: 'Offline', last_name: 'Fixture' };
 
 /** Empty, unrelated app-chrome resources. Unlisted requests remain errors. */
@@ -79,6 +87,7 @@ export const bootstrapResponses = new Map<
   ['POST /email/email/links/health-check', { body: {} }],
   ['GET /email/email/labels', { body: EMAIL_LABELS }],
   ['GET /calendar/calendars', { body: { calendars: [] } }],
+  ['GET /dss/calendar-events', { body: CALENDAR_OCCURRENCES }],
   // The fixture user has saved no booking settings.
   ['GET /calendar/scheduling/settings', { body: {}, status: 404 }],
   ['GET /contacts/contacts', { body: { contacts: [] } }],

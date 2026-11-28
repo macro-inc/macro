@@ -613,6 +613,20 @@ test('the Mail label read finds no labels', async () => {
   expect(server.requests.filter((request) => request.error)).toEqual([]);
 });
 
+test('the calendar occurrence REST read finds no events', async () => {
+  server = startFixtureServer();
+  const response = await fetch(
+    `${server.origin}/dss/calendar-events?start=2025-01-01T00:00:00Z&end=2025-01-02T00:00:00Z&limit=1`
+  );
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({
+    hasMore: false,
+    items: [],
+    syncStatus: 'ready',
+  });
+  expect(server.requests.filter((request) => request.error)).toEqual([]);
+});
+
 test('unknown endpoints fail closed; disconnect removes the TCP listener', async () => {
   server = startFixtureServer();
   expect((await fetch(`${server.origin}/unimplemented`)).status).toBe(501);

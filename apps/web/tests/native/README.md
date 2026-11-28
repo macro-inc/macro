@@ -76,7 +76,9 @@ hint exists (`user-info-gate.ts`), and reads it once at startup. Unrelated
 app-chrome reads (billing, language, system status, routines, MCP connections,
 calendars, forms, harnesses, saved views, work feed, contacts) return explicit
 empty resources, in `fixtures/bootstrap.ts` and as empty `GraphqlUser` fields in
-`fixtures/server.ts`; the running-timer read (`user.timeTracking`) gets no timer
+`fixtures/server.ts`. Calendar occurrences, read from the cache and over REST
+(`GET /dss/calendar-events`) when the cache cannot answer in time, list no events.
+The running-timer read (`user.timeTracking`) gets no timer
 and the current server clock. The fixture user joined no channels, so the channel
 backfill lane (`SoupChannelDirectoryBackfill`) and the directory's network
 fallback (`ChannelDirectoryPage`) read an empty directory. The fixture user owns
