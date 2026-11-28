@@ -12,6 +12,8 @@ valid:
     import * as windows from '@queries/channel/window';
   - |
     const module = await import('@queries/channel/window');
+  - |
+    const module = await import(`@queries/channel/window`);
 invalid:
   - |
     import { useChannelsByIdsQuery } from '@queries/channel/by-ids';
@@ -31,3 +33,7 @@ invalid:
     export * from '@queries/channel/by-ids';
   - |
     const { useChannelsByIdsQuery } = await import('@queries/channel/by-ids');
+  - |
+    const { useChannelsByIdsQuery } = await import(`@queries/channel/by-ids`);
+  - |
+    const byIds = await import(`${QUERIES}/channel/by-ids.ts`);

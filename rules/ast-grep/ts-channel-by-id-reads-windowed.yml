@@ -30,6 +30,11 @@ utils:
   by-ids-source:
     kind: string
     regex: ^['"](@queries/channel|@app/lib/queries/channel|(\.{1,2}/)+(.+/)?channel)/by-ids(\.ts)?['"]$
+  # A template literal can build the path, so one ending in /by-ids counts
+  # whatever comes before it.
+  by-ids-template:
+    kind: template_string
+    regex: /by-ids(\.ts)?`$
   from-by-ids:
     any:
       - kind: import_statement
@@ -59,7 +64,7 @@ rule:
       not:
         has:
           kind: export_clause
-    # import('…/by-ids')
+    # import('…/by-ids'), import(`…/by-ids`)
     - kind: call_expression
       all:
         - has:
@@ -68,4 +73,6 @@ rule:
         - has:
             field: arguments
             has:
-              matches: by-ids-source
+              any:
+                - matches: by-ids-source
+                - matches: by-ids-template

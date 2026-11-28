@@ -1,5 +1,23 @@
 id: tsx-channel-by-id-reads-windowed
 snapshots:
+  "const byIds = await import(`${QUERIES}/channel/by-ids.ts`);\n":
+    labels:
+    - source: import(`${QUERIES}/channel/by-ids.ts`)
+      style: primary
+      start: 20
+      end: 58
+    - source: import
+      style: secondary
+      start: 20
+      end: 26
+    - source: "`${QUERIES}/channel/by-ids.ts`"
+      style: secondary
+      start: 27
+      end: 57
+    - source: "`${QUERIES}/channel/by-ids.ts`"
+      style: secondary
+      start: 27
+      end: 57
   "const { useChannelsByIdsQuery } = await import('@queries/channel/by-ids');\n":
     labels:
     - source: import('@queries/channel/by-ids')
@@ -15,6 +33,24 @@ snapshots:
       start: 47
       end: 72
     - source: "'@queries/channel/by-ids'"
+      style: secondary
+      start: 47
+      end: 72
+  "const { useChannelsByIdsQuery } = await import(`@queries/channel/by-ids`);\n":
+    labels:
+    - source: import(`@queries/channel/by-ids`)
+      style: primary
+      start: 40
+      end: 73
+    - source: import
+      style: secondary
+      start: 40
+      end: 46
+    - source: "`@queries/channel/by-ids`"
+      style: secondary
+      start: 47
+      end: 72
+    - source: "`@queries/channel/by-ids`"
       style: secondary
       start: 47
       end: 72
