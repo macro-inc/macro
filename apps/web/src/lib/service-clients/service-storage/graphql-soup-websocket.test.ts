@@ -633,6 +633,7 @@ describe('GraphQL Soup subscription lifecycle', () => {
   });
 
   it('stops saying updates reach the cache after a failed result, even while the socket reconnects', () => {
+    vi.useFakeTimers();
     const receive: Array<(result: { error?: unknown }) => void> = [];
     const client = {
       query: vi.fn(),
@@ -665,11 +666,16 @@ describe('GraphQL Soup subscription lifecycle', () => {
       expect(lifecycle.updatesLiveSince()).toBeUndefined();
 
       // The next foreground signal attaches a new set.
+      vi.setSystemTime(10_000);
       setVisibility('visible');
       expect(client.subscription).toHaveBeenCalledTimes(6);
-      expect(lifecycle.updatesLiveSince()).toBeDefined();
+      expect(lifecycle.updatesLiveSince()).toBe(
+        10_000 + SUBSCRIBE_REGISTRATION_MS
+      );
 
-      // An update the cache failed to take is missed as well.
+      // An update the cache failed to take is missed: updates reach it
+      // again only from then, without a new set.
+      vi.setSystemTime(20_000);
       receive.at(-1)?.({
         extensions: {
           __macroNormalizedCache: {
@@ -678,7 +684,11 @@ describe('GraphQL Soup subscription lifecycle', () => {
           },
         },
       } as { error?: unknown });
-      expect(lifecycle.updatesLiveSince()).toBeUndefined();
+      expect(lifecycle.updatesLiveSince()).toBe(
+        20_000 + SUBSCRIBE_REGISTRATION_MS
+      );
+      setVisibility('visible');
+      expect(client.subscription).toHaveBeenCalledTimes(6);
     } finally {
       lifecycle.dispose();
     }

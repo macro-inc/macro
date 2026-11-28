@@ -410,14 +410,23 @@ export function createGraphqlSoupSubscriptionsLifecycle(
               ({ document }) => document !== SoupUpdatesDocument
             );
       const setGeneration = generation;
-      // A subscription that failed, ended, or lost an update on its way into
-      // the cache misses what follows, and no reconnect of the socket brings
-      // it back: only a new set does, on the next foreground or online signal.
+      // A subscription that failed or ended misses what follows, and no
+      // reconnect of the socket brings it back: only a new set does, on the
+      // next foreground or online signal.
       const lost = () => {
         if (setGeneration !== generation) return;
         attached = false;
         setLiveSince(undefined);
         reattachOnNextOpportunity();
+      };
+      // An update the cache failed to take is missed, but the subscription
+      // still delivers what follows: updates reach the cache again from now.
+      // A late result of a replaced set can land here too (urql shares the
+      // operation), which only restarts the count.
+      const missed = () => {
+        if (setGeneration !== generation || !attached) return;
+        setLiveSince(undefined);
+        markLive();
       };
       attached = host !== undefined && !host.disabled;
       unsubscribes = subscriptions.map(({ document, errorMessage }) => {
@@ -475,14 +484,13 @@ export function createGraphqlSoupSubscriptionsLifecycle(
             // An error may have ended the subscription, or dropped what it
             // delivered: urql gives no end after a GraphQL error. urql ends a
             // subscription with a final `hasNext: false` result.
+            if (result.error || result.hasNext === false) lost();
             const metadata = normalizedCacheResultMetadata(result);
             if (
-              result.error ||
-              result.hasNext === false ||
-              (metadata?.source === 'live-network' &&
-                metadata.cacheEffectsApplied === false)
+              metadata?.source === 'live-network' &&
+              metadata.cacheEffectsApplied === false
             )
-              lost();
+              missed();
           })
         );
         return () => subscription.unsubscribe();
