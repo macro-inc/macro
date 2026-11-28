@@ -29,6 +29,7 @@ use uuid::Uuid;
 #[cfg(test)]
 mod test;
 
+pub mod calls;
 mod channels;
 mod document;
 pub mod mail;

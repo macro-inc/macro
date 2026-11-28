@@ -11,9 +11,9 @@ engine) — keep it free of native-only dependencies.
 
 - `src/lib.rs`: the `SOUP_FLAT_V*` profile constants (stable profile names,
   never renumber an existing one) and the `vocabulary` module.
-- `src/document.rs`, `src/mail.rs`, `src/channels.rs`, `src/properties.rs`:
-  one compiler module per entity kind, each turning that kind's
-  `*Literal` AST nodes into `PredicateExpr`/`IndexQuery`.
+- `src/document.rs`, `src/mail.rs`, `src/channels.rs`, `src/calls.rs`,
+  `src/properties.rs`: compilers that turn `*Literal` AST nodes into
+  `PredicateExpr` and `IndexQuery`.
 - `src/test/`: compilation tests, including `confinement.rs` (that filters
   can't reach data outside their declared scope).
 

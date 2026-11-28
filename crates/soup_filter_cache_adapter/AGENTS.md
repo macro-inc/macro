@@ -20,6 +20,11 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
   and notification projection updates applied without a server round-trip.
 - `src/channels.rs`, `src/database_rows.rs`, `src/mail.rs`, `src/properties.rs`:
   per-entity-kind projection/patch logic.
+- `src/calls.rs`: index complete viewer-relative snapshots from responses and
+  pushes. An older record without a projection retains its server baseline
+  evidence. Call-only first pages repair their bounded contradicted window.
+  Call lists stay unmaintained until recovery covers missed status and access
+  changes. Call sort timestamps do not advance on viewer attendance changes.
 - `src/mail/reconciliation.rs`: invalidate contradicted Mail facts during an
   authoritative `Soup` first-page write. Use the supported view/filter and
   microsecond timestamp/key boundary; never infer thread deletion. Skip

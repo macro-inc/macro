@@ -97,6 +97,9 @@ fn extend_document(
     properties: Option<Vec<ExactFact>>,
 ) -> ProjectionMutation {
     document.profile = current_profile(&document.profile);
+    if document.partition == item_filter_index::calls::partition() {
+        return ProjectionMutation::Replace(document);
+    }
     let Some(properties) = properties.filter(|facts| {
         facts
             .iter()
@@ -207,6 +210,7 @@ pub async fn augment_authoritative_response<S: DurableRead>(
         return Err(error("Soup backfill contains an incomplete property projection").into());
     }
     if reuse_stored_identity && operation == Some("Soup") {
+        result.extend(crate::calls::first_page_updates(storage, variables, data, &result).await?);
         result.extend(
             crate::mail::reconciliation::first_page_updates(storage, variables, data, &result)
                 .await?,
