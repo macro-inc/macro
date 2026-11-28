@@ -180,7 +180,14 @@ export class NotificationRetention extends pulumi.ComponentResource {
           DD_SERVERLESS_LOGS_ENABLED: 'false',
           ...(grafana && {
             GRAFANA_OTLP_ENDPOINT: `http://${GRAFANA_COLLECTOR_ADDRESS}`,
-            GRAFANA_COLLECTOR_CONFIG: grafanaCollectorConfig(grafana.secretArn),
+            // Through the key's policy, so the function takes the collector
+            // only once its role may read the key: the schedule already
+            // exists and can invoke the function at any point of an update.
+            GRAFANA_COLLECTOR_CONFIG: grafanaCollectorConfig(
+              pulumi
+                .all([grafana.secretArn, grafana.policy.id])
+                .apply(([secretArn]) => secretArn)
+            ),
             OPENTELEMETRY_COLLECTOR_CONFIG_URI: 'env:GRAFANA_COLLECTOR_CONFIG',
             OPENTELEMETRY_EXTENSION_LOG_LEVEL: 'warn',
           }),
@@ -200,7 +207,8 @@ export class NotificationRetention extends pulumi.ComponentResource {
 
     // Ensure the extensions can fetch their keys before EventBridge can invoke
     // the function. The collector can't start without its key, and then the
-    // function's init fails.
+    // function's init fails. This orders a new schedule; the collector's
+    // config above orders the function's own update.
     const rule = new aws.cloudwatch.EventRule(
       `${BASE_NAME}-schedule`,
       {
