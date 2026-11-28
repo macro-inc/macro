@@ -473,6 +473,53 @@ describe('networkRevalidationExchange', () => {
     stalled.unsubscribe();
   });
 
+  it('leaves a paged reader that outlasts the wait outside the write trace', async () => {
+    vi.useFakeTimers();
+    const { client, respond } = setup();
+    let rereadRuns = 0;
+    const reread = {
+      setAttr: () => {},
+      run: <T>(work: () => T) => {
+        rereadRuns += 1;
+        return work();
+      },
+    } as unknown as Span;
+    vi.spyOn(Telemetry, 'span').mockImplementation(((
+      _name: string,
+      operation: (span: Span) => Promise<unknown>
+    ) => operation(reread)) as typeof Telemetry.span);
+    let trace: TraceContext | undefined;
+    const list = client
+      .query(
+        LIST,
+        { page: 1 },
+        {
+          networkRevalidation: {
+            revalidate: (given) => {
+              trace = given;
+              return new Promise(() => {});
+            },
+            active: () => true,
+            gone: () => false,
+          },
+        }
+      )
+      .subscribe(() => {});
+    respond(0);
+    const saved = client.mutation(SAVE, {}).toPromise();
+    respond(1);
+    await vi.advanceTimersByTimeAsync(0);
+    // A page sent while the exchange waits joins the reread.
+    trace?.run(() => {});
+    expect(rereadRuns).toBe(1);
+    await vi.advanceTimersByTimeAsync(15_000);
+    await saved;
+    // One sent after it gave up, such as a recovery's read, does not.
+    trace?.run(() => {});
+    expect(rereadRuns).toBe(1);
+    list.unsubscribe();
+  });
+
   it('re-sends a query whose paged reader is gone', async () => {
     const { client, requests, respond, flush } = setup();
     let mounted = true;

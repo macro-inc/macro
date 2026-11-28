@@ -33,7 +33,8 @@ import { optimisticMutationDispositionOf } from './optimistic';
 /** A paged list's own read of its loaded pages, in cursor order. */
 export type NetworkRevalidation = {
   /** Reads the list again, starting after the write committed. Its requests
-   * join `trace`, the span of the exchange's reread. */
+   * join `trace`, the span of the exchange's reread, while the exchange waits
+   * for it. */
   revalidate: (trace: TraceContext) => Promise<unknown>;
   /** The list reads the network now. One that doesn't (paused) is skipped,
    * and keeps its pages. */
@@ -259,12 +260,18 @@ export function networkRevalidationExchange(
         return [settled];
       });
       span.setAttr('revalidation.queries_resent', pending.length);
+      // A paged list that outlasts the wait sends its pages outside the span.
+      let waiting = true;
+      const trace: TraceContext = {
+        run: (work) => (waiting ? span.run(work) : work()),
+      };
       const [reads, outcomes] = await Promise.all([
         Promise.all(pending),
         Promise.all(
-          [...revalidations].map((owner) => revalidateOwner(owner, span))
+          [...revalidations].map((owner) => revalidateOwner(owner, trace))
         ),
       ]);
+      waiting = false;
       recordOutcomes(span, outcomes);
       return (
         reads.every(Boolean) && outcomes.every((outcome) => outcome === 'read')
