@@ -9,6 +9,7 @@ import {
   createSignal,
   onCleanup,
 } from 'solid-js';
+import { queryAccountSession } from '../../auth/account-scope';
 import { queryClient } from '../../client';
 import type { SoupAstItemsData } from '../items';
 import { soupEntityKey } from './entity-input';
@@ -40,18 +41,22 @@ export type GraphqlSoupDeletion = {
   /** Restore failed keys immediately. Retire confirmed keys when their lists catch up. */
   settle: (
     deletedKeys: readonly string[],
-    acknowledgements?: ReadonlyMap<string, Promise<boolean>>
+    acknowledgements?: ReadonlyMap<string, Promise<boolean>>,
+    historyOnlyKeys?: ReadonlySet<string>
   ) => void;
   release: () => void;
   /** Retire only keys confirmed restored after this deletion began. */
   restore: (keys: readonly string[]) => void;
 };
 
-/** Retain normalized `typename:id` keys until acknowledged, restored, or expired. */
+/** Retain normalized `typename:id` keys through the list's acknowledgement. */
 export function createGraphqlSoupDeletion(
   keys: readonly string[]
 ): GraphqlSoupDeletion {
-  const [deletedKeys, setDeletedKeys] = createSignal(keys);
+  const session = queryAccountSession();
+  const [pendingKeys, setDeletedKeys] = createSignal(keys);
+  const deletedKeys = () =>
+    session === queryAccountSession() ? pendingKeys() : [];
   let settled = false;
   let released = false;
   let expiryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -79,7 +84,7 @@ export function createGraphqlSoupDeletion(
       );
       if (deletedKeys().length === 0) release();
     },
-    settle: (successfulKeys, acknowledgements) => {
+    settle: (successfulKeys, acknowledgements, historyOnlyKeys) => {
       if (settled || released) return;
       settled = true;
       setDeletedKeys(
@@ -95,9 +100,13 @@ export function createGraphqlSoupDeletion(
         RETAINED_DELETIONS_KEY,
         (retained) => [...(retained ?? []), deletion]
       );
-      // Cleanup is independent of hung refresh promises and query lifetime.
-      expiryTimer = setTimeout(release, GRAPHQL_SOUP_DELETE_RETENTION_MS);
-      if (!acknowledgements?.size) return;
+      // Collect keys with no stale readers even if reconciliation hung.
+      // A visible stale row must stay hidden past the retention deadline.
+      const [retentionElapsed, setRetentionElapsed] = createSignal(false);
+      expiryTimer = setTimeout(
+        () => setRetentionElapsed(true),
+        GRAPHQL_SOUP_DELETE_RETENTION_MS
+      );
       const acknowledged = new Set<string>();
       const [acknowledgementCount, setAcknowledgementCount] = createSignal(0);
       let notifyScheduled = false;
@@ -106,13 +115,23 @@ export function createGraphqlSoupDeletion(
         let version = 0;
         createEffect(() => {
           const observed = ++version;
-          if (acknowledgementCount() === 0) return;
+          const keys = deletedKeys();
+          if (keys.length === 0) {
+            queueMicrotask(release);
+            return;
+          }
+          const expired = retentionElapsed();
+          const hasAcknowledgements = acknowledgementCount() > 0;
+          if (!expired && !hasAcknowledgements) return;
           const ready = new Set(
-            deletedKeys().filter((key) => acknowledged.has(key))
+            keys.filter((key) => expired || acknowledged.has(key))
           );
           if (ready.size === 0) return;
           for (const read of deletionReaders()) {
-            for (const key of read(ready)) ready.delete(key);
+            for (const key of read(ready)) {
+              // A history removal leaves the entity in other lists.
+              if (!historyOnlyKeys?.has(key)) ready.delete(key);
+            }
             if (ready.size === 0) return;
           }
           queueMicrotask(() => {
@@ -133,7 +152,7 @@ export function createGraphqlSoupDeletion(
         });
       };
       for (const key of deletedKeys()) {
-        const receipt = acknowledgements.get(key);
+        const receipt = acknowledgements?.get(key);
         if (receipt)
           fireAndForget(acknowledge(key, receipt), 'soup-optimistic-deletions');
       }

@@ -496,7 +496,13 @@ describe('bulk delete GraphQL optimism', () => {
     network.resolve(true);
     await expect(result).resolves.toMatchObject({ results: [true, true] });
     await vi.waitFor(() => expect(mutation.isPending).toBe(false));
-    expect(mocks.refresh).toHaveBeenCalledWith({ throwOnError: true });
+    expect(mocks.refresh).toHaveBeenCalledWith({
+      throwOnError: true,
+      where: expect.any(Function),
+    });
+    const { where } = mocks.refresh.mock.calls[0][0];
+    expect(where({ params: { sort_method: 'viewed_at' } })).toBe(true);
+    expect(where({ params: { sort_method: 'updated_at' } })).toBe(false);
     expect([...pendingKeys()]).toEqual([
       'GraphqlSoupDocument:task-1',
       'GraphqlSoupDocument:task-2',

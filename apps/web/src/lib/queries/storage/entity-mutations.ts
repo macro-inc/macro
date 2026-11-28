@@ -1,5 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { isResponseFreeNetworkError } from '@core/util/request-error';
 import { catchToResult } from '@core/util/result';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/schemas/updateSharePermissionRequestV2';
 import type {
@@ -66,11 +68,31 @@ function refreshAfterWrite(result: EntityWriteResult, strict = false) {
 
 export type OnSoupDeletion = (acknowledgement: Promise<boolean>) => void;
 
-function reconcileDeletion(
+async function deleteEntity(
   entity: EntityRefInput,
-  result: Awaited<ReturnType<typeof trashGraphqlEntity>>,
+  write: typeof trashGraphqlEntity,
   onDeletion: OnSoupDeletion | undefined
 ) {
+  const generation = cacheSessionGeneration.capture();
+  let result: Awaited<ReturnType<typeof write>>;
+  try {
+    result = await write(entity);
+  } catch (error) {
+    if (
+      onDeletion &&
+      cacheSessionGeneration.isCurrent(generation) &&
+      isResponseFreeNetworkError(error)
+    ) {
+      // The server may have trashed the item and its descendants before the
+      // response was lost. Restore the failed overlay and read for recovery.
+      refreshAfterWrite({ effectsResolved: false, listsReadAgain: false });
+    }
+    throw error;
+  }
+  if (!cacheSessionGeneration.isCurrent(generation)) {
+    onDeletion?.(Promise.resolve(false));
+    return;
+  }
   if (!onDeletion) {
     refreshAfterWrite(result);
     return;
@@ -83,9 +105,14 @@ function reconcileDeletion(
         effect.__typename === 'GraphqlCacheDeletion' &&
         `${effect.graphqlTypeName}:${effect.entityId}` === key
     );
-  onDeletion(
-    refreshAfterWrite({ ...result, effectsResolved: hasTombstone }, true)
-  );
+  if (hasTombstone) {
+    // Raw list snapshots gate release separately. A failed reread of an
+    // unrelated unmaintained list must not veto this tombstone.
+    refreshAfterWrite(result);
+    onDeletion(Promise.resolve(true));
+    return;
+  }
+  onDeletion(refreshAfterWrite({ ...result, effectsResolved: false }, true));
 }
 
 export async function moveEntity(
@@ -103,11 +130,11 @@ export async function moveEntity(
   refreshAfterWrite(result);
 }
 
-export async function trashEntity(
+export function trashEntity(
   entity: EntityRefInput,
   onDeletion?: OnSoupDeletion
 ) {
-  reconcileDeletion(entity, await trashGraphqlEntity(entity), onDeletion);
+  return deleteEntity(entity, trashGraphqlEntity, onDeletion);
 }
 
 export async function restoreEntity(entity: EntityRefInput) {
@@ -123,15 +150,11 @@ export async function restoreEntity(entity: EntityRefInput) {
   refreshAfterWrite(result);
 }
 
-export async function permanentlyDeleteEntity(
+export function permanentlyDeleteEntity(
   entity: EntityRefInput,
   onDeletion?: OnSoupDeletion
 ) {
-  reconcileDeletion(
-    entity,
-    await permanentlyDeleteGraphqlEntity(entity),
-    onDeletion
-  );
+  return deleteEntity(entity, permanentlyDeleteGraphqlEntity, onDeletion);
 }
 
 export async function duplicateEntity(

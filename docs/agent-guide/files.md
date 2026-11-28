@@ -37,6 +37,8 @@ and a bulk copy that includes one fails before any write. For a GraphQL delete,
 check that maintained lists stay hidden through the handoff from the optimistic
 overlay to the returned tombstone without issuing another list request. With the
 cache disabled, the write's post-commit list reads drive the same handoff.
+When a list still shows the deleted row after a minute, its overlay must stay
+until the list catches up or unmounts.
 Restore immediately after trash and confirm the row
 returns without waiting for retained deletion markers to expire, even if the
 trash's background refresh failed. A delete started after the restore request

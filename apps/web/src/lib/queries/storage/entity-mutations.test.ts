@@ -131,7 +131,6 @@ it('uses the accepted tombstone and reads only unmaintained lists', async () => 
   await expect(acknowledge.mock.calls[0]?.[0]).resolves.toBe(true);
   expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith({
     unmaintainedOnly: true,
-    throwOnError: true,
   });
 });
 
@@ -156,6 +155,22 @@ it('keeps a deletion unacknowledged when both cache effects and recovery fail', 
   expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith({
     unmaintainedOnly: false,
     throwOnError: true,
+  });
+});
+
+it('recovers a delete whose transport lost the server reply without retrying the write', async () => {
+  const error = new CombinedError({
+    networkError: new Error('connection lost'),
+  });
+  mocks.mutation.mockReturnValue({ toPromise: async () => ({ error }) });
+  const acknowledge = vi.fn();
+  await expect(
+    trashEntity({ type: 'PROJECT', id: 'entity' }, acknowledge)
+  ).rejects.toBe(error);
+  expect(acknowledge).not.toHaveBeenCalled();
+  expect(mocks.mutation).toHaveBeenCalledOnce();
+  expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith({
+    unmaintainedOnly: false,
   });
 });
 

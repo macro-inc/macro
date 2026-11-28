@@ -18,6 +18,7 @@ import {
   currentQueryAccount,
   isCurrentQueryAccount,
   type QueryAccount,
+  queryAccountSession,
 } from '@queries/auth/account-scope';
 import { callKeys } from '@queries/call/keys';
 import { refreshChannelDirectory } from '@queries/channel/directory';
@@ -173,18 +174,31 @@ async function settleDssDeletes(
 }
 
 /** Retry only old writes that bypass the GraphQL client's post-write reads. */
-async function revalidateLegacyDeletions(isPending: () => boolean) {
+async function revalidateLegacyDeletions(
+  isPending: () => boolean,
+  where: (body: unknown) => boolean
+) {
   for (const delay of [0, 1000, 2000]) {
     if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
     if (!isPending()) return false;
     try {
-      await refreshActiveGraphqlSoupQueries({ throwOnError: true });
+      await refreshActiveGraphqlSoupQueries({ where, throwOnError: true });
       return true;
     } catch {
       // Keep the tombstone through a transient read failure.
     }
   }
   return false;
+}
+
+function isHistoryList(body: object): boolean {
+  const params = 'params' in body ? body.params : undefined;
+  return (
+    typeof params === 'object' &&
+    params !== null &&
+    'sort_method' in params &&
+    params.sort_method === 'viewed_at'
+  );
 }
 
 function removeDssEntityCaches(entities: EntityData[]) {
@@ -220,7 +234,8 @@ export function createBulkDeleteDssItemsMutation() {
       type === 'database'
     );
   };
-  const isCurrentContext = (context: unknown) =>
+  const isCurrentContext = (context: { accountSession: number }) =>
+    context.accountSession === queryAccountSession() &&
     queryClient
       .getMutationCache()
       .getAll()
@@ -282,12 +297,13 @@ export function createBulkDeleteDssItemsMutation() {
       const { keys, ...snapshots } = removeDssEntityCaches(deletable);
       return {
         ...snapshots,
+        accountSession: queryAccountSession(),
         graphqlDeletion: createGraphqlSoupDeletion([...keys]),
       };
     },
     onSettled: (outcome, error, entities, context) => {
-      const deletion = context?.graphqlDeletion;
-      if (!deletion) return;
+      if (!context) return;
+      const { graphqlDeletion: deletion, accountSession } = context;
       // Logout/cache clearing can outlive an in-flight API call. Do not
       // repopulate session-local tombstones after their mutation was cleared.
       if (!isCurrentContext(context)) {
@@ -305,17 +321,26 @@ export function createBulkDeleteDssItemsMutation() {
       const legacyKeys = deletedKeys.filter(
         (key) => !acknowledgements.has(key)
       );
+      const historyOnlyKeys = new Set(
+        legacyKeys.filter((key) => !key.startsWith('GraphqlSoupAgentSession:'))
+      );
       if (legacyKeys.length > 0) {
         // History removals and agent-session deletes have no GraphQL result
         // for the exchange to apply or revalidate. Share one read for them.
+        const hasAgentSessionDeletes = legacyKeys.length > historyOnlyKeys.size;
         const ready = revalidateLegacyDeletions(
           () =>
-            isCurrentContext(context) &&
-            legacyKeys.some((key) => deletion.keys().includes(key))
+            accountSession === queryAccountSession() &&
+            legacyKeys.some((key) => deletion.keys().includes(key)),
+          (body) =>
+            typeof body === 'object' &&
+            body !== null &&
+            ((hasAgentSessionDeletes && 'asf' in body && !!body.asf) ||
+              (historyOnlyKeys.size > 0 && isHistoryList(body)))
         );
         for (const key of legacyKeys) acknowledgements.set(key, ready);
       }
-      deletion.settle(deletedKeys, acknowledgements);
+      deletion.settle(deletedKeys, acknowledgements, historyOnlyKeys);
     },
     onError: (error, entities, context) => {
       if (context && !isCurrentContext(context)) {

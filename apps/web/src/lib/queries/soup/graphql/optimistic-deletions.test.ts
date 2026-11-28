@@ -188,6 +188,7 @@ describe('GraphQL Soup deletion lifecycle', () => {
   });
 
   it('keeps a returned tombstone hidden until every mounted list has caught up', async () => {
+    vi.useFakeTimers();
     const key = 'GraphqlSoupDocument:deleted';
     const [raw, publish] = createSignal([key]);
     createRoot((cleanup) => {
@@ -199,14 +200,33 @@ describe('GraphQL Soup deletion lifecycle', () => {
     try {
       deletion.settle([key], new Map([[key, promise]]));
       resolve(true);
-      await promise;
-      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(GRAPHQL_SOUP_DELETE_RETENTION_MS * 2);
       expect(
         withoutPendingSoupEntities([{ id: key }], new Set(deletion.keys()))
       ).toEqual([]);
       publish([]);
-      await vi.waitFor(() => expect(deletion.keys()).toEqual([]));
+      await vi.advanceTimersByTimeAsync(1);
+      expect(deletion.keys()).toEqual([]);
       expect(refresh).not.toHaveBeenCalled();
+    } finally {
+      deletion.release();
+    }
+  });
+
+  it('releases a history-only removal even when another list still includes the entity', async () => {
+    const key = 'GraphqlSoupDocument:shared';
+    createRoot((cleanup) => {
+      dispose = cleanup;
+      observeGraphqlSoupDeletions(() => [key]);
+    });
+    const deletion = createGraphqlSoupDeletion([key]);
+    try {
+      deletion.settle(
+        [key],
+        new Map([[key, Promise.resolve(true)]]),
+        new Set([key])
+      );
+      await vi.waitFor(() => expect(deletion.keys()).toEqual([]));
     } finally {
       deletion.release();
     }
