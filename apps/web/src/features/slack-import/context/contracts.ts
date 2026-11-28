@@ -32,6 +32,7 @@ export type ImportConversation = {
   kind: ConversationMetadata['kind'];
   archived: boolean;
   channelId: string | undefined;
+  channelUpdatesQueued?: boolean;
   status:
     | 'awaiting_uploads'
     | 'queued'

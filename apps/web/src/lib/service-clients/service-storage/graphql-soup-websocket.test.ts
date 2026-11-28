@@ -245,6 +245,7 @@ describe('GraphQL Soup subscription lifecycle', () => {
       expect(documents.includes(SoupUpdatesDocument)).toBe(
         host?.disabled === false
       );
+      expect(lifecycle.receivesSoupUpdates()).toBe(host?.disabled === false);
       const patch = {
         __typename: 'GraphqlNewNotification',
         notification: { id: 'one' },
@@ -259,6 +260,32 @@ describe('GraphQL Soup subscription lifecycle', () => {
     unregister();
     for (const unsubscribe of unsubscribes)
       expect(unsubscribe).toHaveBeenCalledOnce();
+  });
+
+  it('marks the Soup stream unavailable when a lagged subscription ends', () => {
+    const receive = new Map<unknown, (result: { hasNext: boolean }) => void>();
+    const client = {
+      query: vi.fn(),
+      subscription: vi.fn((document) => ({
+        subscribe: (next: (result: { hasNext: boolean }) => void) => {
+          receive.set(document, next);
+          return { unsubscribe: vi.fn() };
+        },
+      })),
+    };
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
+    lifecycle.replace(
+      client as never,
+      { disabled: false, onCacheGenerationChanged: () => () => {} } as never
+    );
+    expect(lifecycle.receivesSoupUpdates()).toBe(true);
+
+    receive.get(SoupUpdatesDocument)?.({ hasNext: false });
+    expect(lifecycle.receivesSoupUpdates()).toBe(false);
+    setVisibility('visible');
+    expect(lifecycle.receivesSoupUpdates()).toBe(true);
+    lifecycle.dispose();
+    expect(lifecycle.receivesSoupUpdates()).toBe(false);
   });
   it('refetches mounted call lists when a Soup update carries a call', async () => {
     const receive = new Map<unknown, (result: { data?: unknown }) => void>();

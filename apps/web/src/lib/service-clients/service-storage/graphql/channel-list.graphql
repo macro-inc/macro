@@ -13,28 +13,32 @@ query ChannelListSoup($input: SoupInput!) {
 fragment ChannelListItemFields on GraphqlSoupEntity {
 	...SoupItemPreviewFields
 	... on GraphqlSoupChannel {
-		unreadNotifications: notifications(
-			filter: {
-				states: [UNSEEN]
-				topLevelMessagesOnly: true
-			}
-			limit: 1
-		) {
-			id
-			state
-			createdAt
+		...ChannelListUnreadFields
+	}
+}
+
+fragment ChannelListUnreadFields on GraphqlSoupChannel {
+	unreadNotifications: notifications(
+		filter: {
+			states: [UNSEEN]
+			topLevelMessagesOnly: true
 		}
-		# Counts unread mentions, threads included; the row shows 9+ past nine.
-		unreadMentions: notifications(
-			filter: {
-				states: [UNSEEN]
-				eventTypes: ["channel_mention"]
-			}
-			limit: 10
-		) {
-			id
-			state
+		limit: 1
+	) {
+		id
+		state
+		createdAt
+	}
+	# Counts unread mentions, threads included; the row shows 9+ past nine.
+	unreadMentions: notifications(
+		filter: {
+			states: [UNSEEN]
+			eventTypes: ["channel_mention"]
 		}
+		limit: 10
+	) {
+		id
+		state
 	}
 }
 

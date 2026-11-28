@@ -8,8 +8,15 @@ import { delegateChannelNotificationRefresh } from '../../channel/notification-r
 import { getActiveGraphqlSoupRevalidations } from './active-queries';
 
 /** Filtered notification membership must be re-evaluated after status writes. */
-export function getChannelListRevalidations(client?: Pick<Client, 'query'>) {
-  return getActiveGraphqlSoupRevalidations(client).filter(
+export function getChannelListRevalidations(
+  client?: Pick<Client, 'query'>,
+  options: { importedRowsQueued?: boolean } = {}
+) {
+  return getActiveGraphqlSoupRevalidations(client, {
+    unmaintainedOnly: options.importedRowsQueued
+      ? ({ document }) => document === ChannelListSoupDocument
+      : false,
+  }).filter(
     (query) =>
       query.document === ChannelListSoupDocument ||
       query.document === ChannelUnreadPresenceDocument ||
@@ -19,20 +26,25 @@ export function getChannelListRevalidations(client?: Pick<Client, 'query'>) {
 
 /** Refresh only mounted channel-list pages, never full notification history. */
 export async function revalidateChannelLists(
-  client: Pick<Client, 'query'>
+  client: Pick<Client, 'query'>,
+  options: { importedRowsQueued?: boolean } = {}
 ): Promise<void> {
   await Promise.all(
-    getChannelListRevalidations(client).map(async ({ document, variables }) => {
-      try {
-        if (delegateChannelNotificationRefresh(client, { document, variables }))
-          return;
-        const result = await client
-          .query(document, variables, { requestPolicy: 'network-only' })
-          .toPromise();
-        if (result.error) throw result.error;
-      } catch (error) {
-        console.error('Failed to refresh channel unread state', error);
+    getChannelListRevalidations(client, options).map(
+      async ({ document, variables }) => {
+        try {
+          if (
+            delegateChannelNotificationRefresh(client, { document, variables })
+          )
+            return;
+          const result = await client
+            .query(document, variables, { requestPolicy: 'network-only' })
+            .toPromise();
+          if (result.error) throw result.error;
+        } catch (error) {
+          console.error('Failed to refresh channel unread state', error);
+        }
       }
-    })
+    )
   );
 }

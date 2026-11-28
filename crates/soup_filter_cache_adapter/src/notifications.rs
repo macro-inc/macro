@@ -47,7 +47,10 @@ pub(super) fn selected_snapshot(
     fields: &[&FieldNode],
 ) -> Option<serde_json::Value> {
     let mut selected = None;
-    for field in fields.iter().filter(|field| field.name == "notifications") {
+    for field in fields
+        .iter()
+        .filter(|field| field.name == "notifications" && field.arguments.is_empty())
+    {
         let value = match object
             .get(&field.response_key)
             .and_then(serde_json::Value::as_array)

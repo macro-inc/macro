@@ -300,6 +300,7 @@ export function createGraphqlSoupSubscriptionsLifecycle(
     host?: CacheHost
   ): void;
   connected(): void;
+  receivesSoupUpdates(): boolean;
   dispose(): void;
 } {
   let currentClient: Pick<Client, 'subscription' | 'query'> | undefined;
@@ -311,6 +312,7 @@ export function createGraphqlSoupSubscriptionsLifecycle(
   let generation = 0;
   let signaledFailure = false;
   let connections = 0;
+  let soupUpdatesActive = false;
   let stopWatchingForReattach: (() => void) | undefined;
 
   // graphql-ws retries transient failures itself and gives up only on ones a
@@ -324,6 +326,7 @@ export function createGraphqlSoupSubscriptionsLifecycle(
 
   const unsubscribeAll = () => {
     generation += 1;
+    soupUpdatesActive = false;
     stopWatchingForReattach?.();
     stopWatchingForReattach = undefined;
     for (const unsubscribe of unsubscribes) unsubscribe();
@@ -369,12 +372,12 @@ export function createGraphqlSoupSubscriptionsLifecycle(
       const activityHandler = activity;
       const channelHandler = channels;
 
-      const subscriptions =
-        host && !host.disabled
-          ? LIVE_UPDATE_SUBSCRIPTIONS
-          : LIVE_UPDATE_SUBSCRIPTIONS.filter(
-              ({ document }) => document !== SoupUpdatesDocument
-            );
+      soupUpdatesActive = !!host && !host.disabled;
+      const subscriptions = soupUpdatesActive
+        ? LIVE_UPDATE_SUBSCRIPTIONS
+        : LIVE_UPDATE_SUBSCRIPTIONS.filter(
+            ({ document }) => document !== SoupUpdatesDocument
+          );
       const setGeneration = generation;
       unsubscribes = subscriptions.map(({ document, errorMessage }) => {
         const subscription = client
@@ -396,7 +399,12 @@ export function createGraphqlSoupSubscriptionsLifecycle(
                 revalidateMailAttachmentListsForSoupUpdates(patches),
                 'graphql-soup-subscriptions'
               );
-              channelHandler.onSoupUpdates(patches);
+              const metadata = normalizedCacheResultMetadata(result);
+              channelHandler.onSoupUpdates(
+                patches,
+                metadata?.source === 'live-network' &&
+                  metadata.cacheEffectsApplied === true
+              );
             }
             if (
               document === NotificationUpdatesDocument &&
@@ -427,6 +435,11 @@ export function createGraphqlSoupSubscriptionsLifecycle(
             }
             // urql ends a subscription with a final `hasNext: false` result.
             if (result.hasNext === false && setGeneration === generation) {
+              if (document === SoupUpdatesDocument) {
+                soupUpdatesActive = false;
+                // A lagged recipient stream can end while the socket stays up.
+                if (!result.error) channelHandler.reconnect();
+              }
               reattachOnNextOpportunity();
             }
           });
@@ -444,6 +457,7 @@ export function createGraphqlSoupSubscriptionsLifecycle(
           'graphql-soup-subscriptions'
         );
     },
+    receivesSoupUpdates: () => soupUpdatesActive,
     dispose() {
       if (options.suspendOnPagehide) {
         removeEventListener('pagehide', onPagehide);

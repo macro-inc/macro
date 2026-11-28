@@ -16,7 +16,10 @@ import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { createConnectionWebsocketEffect } from '@service-connection/websocket';
 // ast-grep-ignore: tsx-no-service-client-outside-queries -- Composition only; endpoint calls remain in the query adapter.
 import { storageServiceClient } from '@service-storage/client';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import {
+  channelListPushesAvailable,
+  getGraphqlSoupClient,
+} from '@service-storage/graphql-soup';
 import { uploadSlackImport } from '@service-storage/slack-import-upload';
 import { type JSX, Show, Suspense } from 'solid-js';
 import type { ImportJob } from './context/contracts';
@@ -96,10 +99,17 @@ function SlackImportSettings(props: {
     ) {
       hideImportPromotion(userId(), 'channels');
     }
+    const importedRowsQueued =
+      channelListPushesAvailable(client) &&
+      job.status === 'completed' &&
+      job.conversations.length > 0 &&
+      job.conversations.every(
+        (conversation) => conversation.channelUpdatesQueued
+      );
     invalidateAllSoup();
     await Promise.all([
       refreshChannelDirectory(),
-      revalidateChannelLists(client),
+      revalidateChannelLists(client, { importedRowsQueued }),
     ]);
   }
   return (

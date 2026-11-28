@@ -91,15 +91,24 @@ export function registerGraphqlSoupRevalidations(
  * ones a write that updates the cache still has to read again. */
 export function getActiveGraphqlSoupRevalidations(
   client?: Pick<Client, 'query'>,
-  options: { unmaintainedOnly?: boolean } = {}
+  options: {
+    unmaintainedOnly?: boolean | ((query: QueryRevalidation) => boolean);
+  } = {}
 ): QueryRevalidation[] {
   // Asked for by a write: lists that mount after it read the server again.
   forgetSoupNetworkAnswers();
   const queries = new Map<number, QueryRevalidation>();
   for (const source of revalidationSources) {
     if (client && source.client && source.client() !== client) continue;
-    if (options.unmaintainedOnly && source.cacheMaintained?.()) continue;
+    const maintained = options.unmaintainedOnly && source.cacheMaintained?.();
+    if (maintained && options.unmaintainedOnly === true) continue;
     for (const query of source.queries()) {
+      if (
+        maintained &&
+        typeof options.unmaintainedOnly === 'function' &&
+        options.unmaintainedOnly(query)
+      )
+        continue;
       queries.set(createRequest(query.document, query.variables).key, query);
     }
   }
@@ -109,6 +118,25 @@ export function getActiveGraphqlSoupRevalidations(
 /** The pages a write that updates the normalized cache still reads again. */
 export const getUnmaintainedGraphqlSoupRevalidations = () =>
   getActiveGraphqlSoupRevalidations(undefined, { unmaintainedOnly: true });
+
+/** Check coverage of a pushed row's mounted page without invalidating other reads. */
+export function cacheMaintainsGraphqlSoupPage(
+  client: Pick<Client, 'query'>,
+  query: QueryRevalidation
+): boolean {
+  const key = createRequest(query.document, query.variables).key;
+  let found = false;
+  for (const source of revalidationSources) {
+    if (source.client && source.client() !== client) continue;
+    const ownsPage = source
+      .queries()
+      .some((page) => createRequest(page.document, page.variables).key === key);
+    if (!ownsPage) continue;
+    if (!source.cacheMaintained?.()) return false;
+    found = true;
+  }
+  return found;
+}
 
 /** Registers a mounted GraphQL Soup query for mutation-driven revalidation. */
 export function registerActiveGraphqlSoupQuery(

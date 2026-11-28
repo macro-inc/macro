@@ -1,9 +1,13 @@
 import type { CacheHost } from '@graphql-cache/host/types';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { cacheNewChannelUnread } from '@queries/channel/unread-cache';
+import { cacheMaintainsGraphqlSoupPage } from '@queries/soup/graphql/active-queries';
 import type { Client } from '@urql/core';
 import { channelNotificationRefresh } from '../../queries/channel/notification-refresh';
-import type { SoupUpdatesSubscription } from './graphql/generated/graphql';
+import {
+  ChannelListSoupDocument,
+  type SoupUpdatesSubscription,
+} from './graphql/generated/graphql';
 import type { GraphqlNotificationPatch } from './graphql-soup-websocket';
 
 /** A channel this recent is new to its members, allowing for clock skew. */
@@ -78,7 +82,10 @@ export function createChannelListUpdatesHandler(
       coordinator.onPatch(patch, normalized);
     },
     /** A new DM, group chat or channel reaches lists that do not show it yet. */
-    onSoupUpdates(patches: SoupUpdatesSubscription['soupUpdates']) {
+    onSoupUpdates(
+      patches: SoupUpdatesSubscription['soupUpdates'],
+      normalized = false
+    ) {
       if (disposed) return;
       for (const patch of patches) {
         if (patch.__typename !== 'SoupUpdated') continue;
@@ -86,10 +93,21 @@ export function createChannelListUpdatesHandler(
         if (channel.__typename !== 'GraphqlSoupChannel') continue;
         if (!channel.isParticipant || !isNewChannel(channel.createdAt))
           continue;
-        coordinator.expectChannel({
-          id: channel.id,
-          channelType: channel.channelType,
-        });
+        const pushedWitnesses =
+          normalized &&
+          'unreadNotifications' in channel &&
+          'unreadMentions' in channel;
+        const hint = { id: channel.id, channelType: channel.channelType };
+        if (!pushedWitnesses) {
+          coordinator.expectChannel(hint);
+          continue;
+        }
+        coordinator.expectChannel(
+          hint,
+          (query) =>
+            query.document !== ChannelListSoupDocument ||
+            !cacheMaintainsGraphqlSoupPage(client, query)
+        );
       }
     },
     reconnect: () => coordinator.reconnect(),

@@ -44,6 +44,9 @@ confirms access. Verify counters, errors and skip
 reasons at narrow widths, using synthetic exports and a test backend rather than
 importing customer data into hosted dev.
 
+Committed import changes reach joined channel lists in other connected browser
+sessions for current participants. Reconnect refreshes lists after missed updates.
+
 For a release check, inspect the actual create request and then reload the server
 receipt: both must contain exactly the selected Slack IDs and history option.
 Select two rows with the same display name, filter both out, and confirm the

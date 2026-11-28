@@ -10,6 +10,11 @@ type Object = serde_json::Map<String, serde_json::Value>;
 pub(super) fn selected_object(object: &Object, fields: &[&FieldNode]) -> Result<Object, ()> {
     let mut selected = Object::new();
     for field in fields {
+        // Notification arguments identify distinct edges. The active
+        // snapshot is resolved separately from the unfiltered selection.
+        if field.name == "notifications" && !field.arguments.is_empty() {
+            continue;
+        }
         let Some(value) = object.get(&field.response_key) else {
             continue;
         };
