@@ -25,6 +25,7 @@ import { UnifiedFilterDropdown } from '@app/features/next-soup/soup-view/filters
 import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-bar/use-filter-refinements';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { createLabelCollapse } from '@core/signal/create-label-collapse';
 import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
@@ -35,7 +36,7 @@ import {
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import FileCsvIcon from '@icon/system/regular/file-csv.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
-import { Button, ButtonGroup, Tooltip } from '@ui';
+import { Button, ButtonGroup, cn, Tooltip } from '@ui';
 import { Result } from 'neverthrow';
 import {
   createEffect,
@@ -83,6 +84,19 @@ import {
 } from './use-crm';
 
 const CRM_ASIDE_PREFERENCE = 'crm';
+/**
+ * What the desktop list header gives up, in order, when its actions would
+ * overflow it: the view options, the Visibility label, Visibility itself, the
+ * filters, then the title (the rail still marks the view). Create and Search
+ * always stay.
+ */
+const HEADER_COLLAPSE_ORDER = [
+  'viewOptions',
+  'visibilityLabel',
+  'visibility',
+  'filters',
+  'title',
+] as const;
 /** Where CRM saved a collapsed sidebar before it used the shell's preference. */
 const LEGACY_COLLAPSED_PREFERENCE = 'macro:pref:crm:sidebar-collapsed';
 
@@ -206,6 +220,15 @@ export function CrmWorkspaceView(props: {
     copyPipelineLink,
   } = useCrmContext();
   const view = useCrmWorkspace();
+  // A narrow pane (the desktop window has no minimum width) gives up header
+  // controls rather than push Create and Search past the header's edge. Each
+  // comes back once there is room.
+  const [headerActions, setHeaderActions] = createSignal<HTMLDivElement>();
+  const headerCollapsed = createLabelCollapse(
+    headerActions,
+    () => HEADER_COLLAPSE_ORDER,
+    { watchContent: true }
+  );
   const [peopleSearch, setPeopleSearch] = createSignal(
     view.queryFilters.state.include.crmContactSearch ?? ''
   );
@@ -631,45 +654,73 @@ export function CrmWorkspaceView(props: {
                 <Show when={!pipelineId() && !activityTab()}>
                   <Show when={!isTouchDevice()}>
                     <ListHeader
+                      actionsRef={setHeaderActions}
                       title={
-                        <ViewSidebar.Title caret={false} title={title()}>
-                          {title()}
-                        </ViewSidebar.Title>
+                        <div class={cn(headerCollapsed('title') && 'hidden')}>
+                          <ViewSidebar.Title caret={false} title={title()}>
+                            {title()}
+                          </ViewSidebar.Title>
+                        </div>
                       }
                     >
                       <Show when={!peopleActive()}>
-                        <HeaderActionGroup label="Company filters" size="md">
-                          <UnifiedFilterDropdown
-                            grouped
-                            hideLabel
-                            variant="ghost"
-                          />
-                        </HeaderActionGroup>
-                        <HeaderActionGroup
-                          label="Company view options"
-                          size="md"
+                        {/* Wrappers the header's row keeps, so hiding a group never adds or removes a child. */}
+                        <div
+                          class={cn(
+                            'contents',
+                            headerCollapsed('filters') && 'hidden'
+                          )}
                         >
-                          <SoupViewContextSort grouped />
-                          <SoupViewContextGroup
-                            grouped
-                            hideLabel
-                            variant="ghost"
-                          />
-                          <CompanyDisplayMenu grouped />
-                          <Suspense>
-                            <CompanyViewsMenu grouped hideLabel />
-                          </Suspense>
-                          <Show when={listsEnabled() && activeList()}>
-                            <ButtonGroup.Button
+                          <HeaderActionGroup label="Company filters" size="md">
+                            <UnifiedFilterDropdown
+                              grouped
+                              hideLabel
                               variant="ghost"
-                              onClick={editActiveList}
-                            >
-                              Edit list
-                            </ButtonGroup.Button>
-                          </Show>
-                        </HeaderActionGroup>
+                            />
+                          </HeaderActionGroup>
+                        </div>
+                        <div
+                          class={cn(
+                            'contents',
+                            headerCollapsed('viewOptions') && 'hidden'
+                          )}
+                        >
+                          <HeaderActionGroup
+                            label="Company view options"
+                            size="md"
+                          >
+                            <SoupViewContextSort grouped />
+                            <SoupViewContextGroup
+                              grouped
+                              hideLabel
+                              variant="ghost"
+                            />
+                            <CompanyDisplayMenu grouped />
+                            <Suspense>
+                              <CompanyViewsMenu grouped hideLabel />
+                            </Suspense>
+                            <Show when={listsEnabled() && activeList()}>
+                              <ButtonGroup.Button
+                                variant="ghost"
+                                onClick={editActiveList}
+                              >
+                                Edit list
+                              </ButtonGroup.Button>
+                            </Show>
+                          </HeaderActionGroup>
+                        </div>
                       </Show>
-                      <PeopleDisplayMenu visibility={view.peopleVisibility} />
+                      <div
+                        class={cn(
+                          'contents',
+                          headerCollapsed('visibility') && 'hidden'
+                        )}
+                      >
+                        <PeopleDisplayMenu
+                          visibility={view.peopleVisibility}
+                          iconOnly={headerCollapsed('visibilityLabel')}
+                        />
+                      </div>
                       {toolbarCreateMenu()}
                       <CrmHeaderSearch
                         label={

@@ -97,6 +97,10 @@ vi.mock('@core/mobile/virtualKeyboard', () => ({
 vi.mock('@solid-primitives/resize-observer', () => ({
   createElementSize: () => ({ width: 0, height: 40 }),
 }));
+// jsdom lays nothing out, so the list header never has to make room.
+vi.mock('@core/signal/create-label-collapse', () => ({
+  createLabelCollapse: () => () => false,
+}));
 vi.mock('@entity', () => ({
   isCrmCompanyEntity: () => false,
   isCrmContactEntity: () => false,
