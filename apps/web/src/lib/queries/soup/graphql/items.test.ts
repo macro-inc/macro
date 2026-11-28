@@ -1,3 +1,4 @@
+import type { NetworkRevalidation } from '@graphql-cache/exchange/network-revalidation-exchange';
 import type {
   Client,
   GraphQLRequest,
@@ -30,9 +31,7 @@ const mapSoupPageToEntityListMock = vi.hoisted(() =>
 );
 const makeGraphqlSoupInputMock = vi.hoisted(() => vi.fn());
 
-const networkRevalidationOwners = vi.hoisted(
-  () => [] as { revalidate: () => Promise<void> }[]
-);
+const networkRevalidationOwners = vi.hoisted(() => [] as NetworkRevalidation[]);
 
 vi.mock(
   '@graphql-cache/exchange/network-revalidation-exchange',
