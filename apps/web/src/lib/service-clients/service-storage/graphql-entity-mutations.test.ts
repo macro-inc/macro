@@ -1,4 +1,9 @@
-import { withOptimisticMutationDisposition } from '@graphql-cache/exchange/optimistic';
+import {
+  optimisticContextOf,
+  withOptimisticMutationDisposition,
+} from '@graphql-cache/exchange/optimistic';
+import { optimisticResolversExchange } from '@graphql-cache/exchange/optimistic-resolvers';
+import { entityOptimisticResolvers } from '@queries/entity-optimistic-resolvers';
 import {
   type Client,
   CombinedError,
@@ -6,9 +11,11 @@ import {
   type Exchange,
   type Operation,
   type OperationResult,
+  stringifyDocument,
 } from '@urql/core';
 import { describe, expect, it, vi } from 'vitest';
 import { filter, map, pipe } from 'wonka';
+import { MoveEntitiesDocument } from './graphql/generated/graphql';
 
 let graphql: Client | undefined;
 vi.mock('./graphql-soup', () => ({
@@ -65,10 +72,13 @@ describe('entity move transport', () => {
       )
     );
     await expect(
-      moveGraphqlEntity({
-        entity: { type: 'DOCUMENT', id: 'document' },
-        projectId: 'folder',
-      })
+      moveGraphqlEntity(
+        {
+          entity: { type: 'DOCUMENT', id: 'document' },
+          projectId: 'folder',
+        },
+        []
+      )
     ).resolves.toMatchObject({ __typename: 'GraphqlMutationSuccess' });
   });
 
@@ -87,10 +97,13 @@ describe('entity move transport', () => {
       )
     );
     await expect(
-      moveGraphqlEntity({
-        entity: { type: 'DOCUMENT', id: 'document' },
-        projectId: 'folder',
-      })
+      moveGraphqlEntity(
+        {
+          entity: { type: 'DOCUMENT', id: 'document' },
+          projectId: 'folder',
+        },
+        []
+      )
     ).rejects.toThrow('Forbidden');
   });
 });
@@ -121,9 +134,10 @@ describe('moveGraphqlEntity', () => {
       }),
     }));
 
-    await expect(moveGraphqlEntity(input)).resolves.toEqual({
+    await expect(moveGraphqlEntity(input, [])).resolves.toEqual({
       __typename: 'GraphqlMutationSuccess',
       effects: [],
+      effectsResolved: false,
     });
   });
 
@@ -142,7 +156,7 @@ describe('moveGraphqlEntity', () => {
       }),
     }));
 
-    await expect(moveGraphqlEntity(input)).rejects.toThrow('boom');
+    await expect(moveGraphqlEntity(input, [])).rejects.toThrow('boom');
   });
 
   it('fails on a typed mutation error', async () => {
@@ -163,6 +177,59 @@ describe('moveGraphqlEntity', () => {
       },
     }));
 
-    await expect(moveGraphqlEntity(input)).rejects.toThrow();
+    await expect(moveGraphqlEntity(input, [])).rejects.toThrow();
+  });
+});
+
+describe('revalidations', () => {
+  const unmaintained = {
+    document: MoveEntitiesDocument,
+    variables: { inputs: [] },
+  };
+  const wire = {
+    query: stringifyDocument(MoveEntitiesDocument),
+    operationName: 'MoveEntities',
+    variablesJson: '{"inputs":[]}',
+  };
+
+  function captureRevalidations() {
+    const sent: Operation[] = [];
+    const capture: Exchange = () => (operations) =>
+      pipe(
+        operations,
+        filter((operation) => operation.kind !== 'teardown'),
+        map((operation) => {
+          sent.push(operation);
+          return {
+            operation,
+            stale: false,
+            hasNext: false,
+            data: {
+              moveEntities: {
+                results: [
+                  { __typename: 'GraphqlMutationSuccess', effects: [] },
+                ],
+              },
+            },
+          };
+        })
+      );
+    graphql = createClient({
+      url: 'https://example.test/graphql',
+      exchanges: [
+        optimisticResolversExchange(entityOptimisticResolvers),
+        capture,
+      ],
+    });
+    return sent;
+  }
+
+  it('queues a predicted move with the lists to read again on replay', async () => {
+    const sent = captureRevalidations();
+    await moveGraphqlEntity(
+      { entity: { type: 'DOCUMENT', id: 'document' }, projectId: 'folder' },
+      [unmaintained]
+    );
+    expect(optimisticContextOf(sent[0]!)?.revalidations).toEqual([wire]);
   });
 });
