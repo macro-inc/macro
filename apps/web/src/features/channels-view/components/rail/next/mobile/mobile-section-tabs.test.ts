@@ -1,6 +1,10 @@
+import type { ChannelEntity } from '@entity';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import { describe, expect, it } from 'vitest';
-import { mobileSectionMemberWindow } from './mobile-section-tabs';
+import {
+  channelsForMobileSection,
+  mobileSectionMemberWindow,
+} from './mobile-section-tabs';
 
 const label = (channelIds: string[]) =>
   ({ id: 'section', channelIds }) as ChannelLabel;
@@ -82,5 +86,30 @@ describe('mobileSectionMemberWindow', () => {
       discover,
     });
     expect(windowIds(window)).toEqual(discover);
+  });
+});
+
+describe('channelsForMobileSection', () => {
+  const channel = (id: string, name: string) =>
+    ({ id, name, channelType: 'public' }) as ChannelEntity;
+  it("lists a section's rows in its own order, whichever source holds each record", () => {
+    // Two members share a name, so the list's name sort keeps them in the
+    // order given. That order must not follow which record was looked up
+    // last: at the window's edge the looked-up row would push itself out of
+    // the window, and the window would look up the other one, without end.
+    const team = channel('team', 'billing');
+    const secret = channel('secret', 'billing');
+    const section = {
+      id: 'section',
+      channelIds: ['team', 'secret'],
+    } as ChannelLabel;
+    const rows = (channels: ChannelEntity[]) =>
+      channelsForMobileSection({
+        tab: 'label:section',
+        channels,
+        labels: [section],
+      }).map((row) => row.id);
+    expect(rows([team, secret])).toEqual(['team', 'secret']);
+    expect(rows([secret, team])).toEqual(['team', 'secret']);
   });
 });

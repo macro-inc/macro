@@ -55,8 +55,15 @@ export function channelsForMobileSection(options: {
   );
   // Index once: scanning a reactive member array for every row multiplies
   // both the work and Solid subscriptions for large name-matched sections.
-  const memberIds = new Set(label?.channelIds);
-  return options.channels.filter((channel) => memberIds.has(channel.id));
+  const records = new Map(
+    options.channels.map((channel) => [channel.id, channel])
+  );
+  // In the section's own order, as desktop lists it: the list's sorts keep
+  // ties in the order given, and the records come first from the window's
+  // lookups. Rows ordered by where a record came from would move as the
+  // window looks them up, and a tie at the window's edge would then push the
+  // looked-up row out of it and the other in, looking each up in turn.
+  return [...new Set(label?.channelIds)].flatMap((id) => records.get(id) ?? []);
 }
 
 /**
