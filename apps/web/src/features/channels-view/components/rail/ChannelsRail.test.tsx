@@ -893,7 +893,10 @@ describe('bounded reference window', () => {
 
   it('keeps the rows discovery found after the window forgets their records', () => {
     const ids = numbered('member', 60);
-    const team = (id: string) => ({ ...joined(id), channelType: 'team' });
+    const team = (id: string): ChannelEntity => ({
+      ...joined(id),
+      channelType: 'team',
+    });
     mocks.flags = ['enable-channel-tags'];
     mocks.labels = [
       {

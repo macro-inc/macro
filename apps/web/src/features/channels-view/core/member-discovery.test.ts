@@ -186,8 +186,8 @@ describe('keepDiscoveredRecords', () => {
       found[0]
     );
     const fresher = record('ch-0', 1);
-    expect(
-      keepDiscoveredRecords(first, members, [fresher]).get('ch-0')
-    ).toBe(fresher);
+    expect(keepDiscoveredRecords(first, members, [fresher]).get('ch-0')).toBe(
+      fresher
+    );
   });
 });

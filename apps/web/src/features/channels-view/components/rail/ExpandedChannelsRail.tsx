@@ -16,10 +16,10 @@ import type { ChannelEntity } from '@entity';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import XIcon from '@icon/system/regular/x.svg';
+import { createElementSize } from '@solid-primitives/resize-observer';
 import { createDroppable } from '@thisbeyond/solid-dnd';
 import { cn, EmptyStatePanel, Hotkey, type TabOption, Tabs } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   type Accessor,
   createEffect,
