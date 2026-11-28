@@ -1723,6 +1723,70 @@ describe('normalizedCacheExchange', () => {
     h.ops.next(teardownOf(mutation));
   });
 
+  it.each([
+    ['a clean reply', undefined],
+    [
+      'a reply missing some rows',
+      new CombinedError({
+        graphQLErrors: [
+          {
+            message: 'A changed item could not be read back',
+            path: ['setEntityProperty', 'effects'],
+          },
+        ],
+      }),
+    ],
+  ])(
+    'discards a read that predates a direct write with %s',
+    async (_case, error) => {
+      const h = controlledQueryHarness(host);
+      const query = makeOp(997, 'network-only');
+      h.ops.next(query);
+      await vi.waitFor(() => expect(h.forwarded).toHaveLength(1));
+      const earlierRead = h.forwarded[0];
+      const mutation = makeMutationOp(998);
+      h.ops.next(mutation);
+      await vi.waitFor(() => expect(h.forwarded).toHaveLength(2));
+      h.network.next({
+        ...queryResult(h.forwarded[1], { saved: true }),
+        error,
+      });
+      await tick();
+      h.network.next(queryResult(earlierRead, { value: 'before-save' }));
+      await tick();
+      expect(
+        h.results.some((result) =>
+          JSON.stringify(result.data)?.includes('before-save')
+        )
+      ).toBe(false);
+      h.ops.next(teardownOf(query));
+      h.ops.next(teardownOf(mutation));
+    }
+  );
+
+  it('marks a write missing some rows as committed without a cache', async () => {
+    const h = controlledQueryHarness({ ...host, disabled: true });
+    const mutation = makeMutationOp(996, { saved: true });
+    h.ops.next(mutation);
+    await vi.waitFor(() => expect(h.forwarded).toHaveLength(1));
+    h.network.next({
+      ...queryResult(h.forwarded[0], { saved: true }),
+      error: new CombinedError({
+        graphQLErrors: [
+          {
+            message: 'A changed item could not be read back',
+            path: ['setEntityProperty', 'effects'],
+          },
+        ],
+      }),
+    });
+    await vi.waitFor(() => expect(h.results).toHaveLength(1));
+    expect(optimisticMutationDispositionOf(h.results[0])?.kind).toBe(
+      'committed'
+    );
+    h.ops.next(teardownOf(mutation));
+  });
+
   it.each(['subscription', 'mutation'] as const)(
     'discards queued %s effects when retirement overtakes the first effect',
     async (kind) => {
@@ -6948,6 +7012,62 @@ describe('normalizedCacheExchange', () => {
       reread?.context[TRACE_PARENT_CONTEXT_KEY]?.run(() => undefined);
       // Only the reread's first request joins the write's trace.
       expect(traced).toEqual(['write']);
+    });
+
+    it('reads a query that was in flight in the write’s trace once it answers', async () => {
+      const parent = { run: <T>(work: () => T) => work() };
+      const h = controlledQueryHarness(host);
+      const query = makeOp(1, 'network-only');
+      h.ops.next(query);
+      await vi.waitFor(() => expect(h.forwarded).toHaveLength(1));
+      const inFlight = h.forwarded[0];
+      // The client keeps the in-flight request instead of sending the reread,
+      // so the query is read again once that request answers.
+      vi.mocked(h.client.reexecuteOperation).mockImplementationOnce(
+        () => undefined
+      );
+      const mutation = makeMutationOp(2, optimistic);
+      h.ops.next(
+        makeOperation(mutation.kind, mutation, {
+          ...mutation.context,
+          [TRACE_PARENT_CONTEXT_KEY]: parent,
+        })
+      );
+      await vi.waitFor(() =>
+        expect(
+          h.forwarded.some((operation) => operation.kind === 'mutation')
+        ).toBe(true)
+      );
+      const sent = h.forwarded.find(
+        (operation) => operation.kind === 'mutation'
+      )!;
+      h.network.next({
+        ...queryResult(sent, optimistic),
+        error: new CombinedError({
+          graphQLErrors: [
+            {
+              message: 'A changed item could not be read back',
+              path: ['setEntityProperty', 'effects'],
+            },
+          ],
+        }),
+      });
+      await vi.waitFor(() =>
+        expect(h.client.reexecuteOperation).toHaveBeenCalledWith(
+          expect.objectContaining({ key: 1 })
+        )
+      );
+      const reads = () =>
+        h.forwarded.filter(
+          (operation) => operation.kind === 'query' && operation.key === 1
+        );
+      h.network.next(queryResult(inFlight, { value: 'before-save' }));
+      await vi.waitFor(() => expect(reads()).toHaveLength(2));
+      await tick();
+      // One read follows the in-flight answer, in the write's trace.
+      expect(reads()).toHaveLength(2);
+      expect(reads()[1].context[TRACE_PARENT_CONTEXT_KEY]).toBeDefined();
+      h.ops.next(teardownOf(query));
     });
 
     it.each(['initial', 'continuation'] as const)(

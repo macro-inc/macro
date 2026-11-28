@@ -29,3 +29,10 @@ export function committedWithMissingRows(result: OperationResult): boolean {
     onlyEffectErrors(result.error)
   );
 }
+
+/** The server committed this write: a clean reply, or one missing some rows. */
+export function serverCommitted(result: OperationResult): boolean {
+  return (
+    result.data != null && (!result.error || committedWithMissingRows(result))
+  );
+}

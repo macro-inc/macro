@@ -110,7 +110,7 @@ import {
   createDocumentQueryReader,
   QueryReadInvalidatedError,
 } from './document-query-reader';
-import { committedWithMissingRows } from './effect-errors';
+import { serverCommitted } from './effect-errors';
 import {
   compileEntityResolvers,
   type EntityResolverConfig,
@@ -998,7 +998,10 @@ export function normalizedCacheExchange(
       const refreshObsoleteQuery = (op: Operation): void => {
         const active = activeOps.get(op.key);
         if (active && active.context.requestPolicy !== 'cache-only') {
-          enqueueQueryForward(active);
+          // This read pays any reread owed after a write, in its trace.
+          const owed = owedRefetches.get(op.key);
+          owedRefetches.delete(op.key);
+          enqueueQueryForward(owed ?? active);
         }
       };
 
@@ -1765,20 +1768,25 @@ export function normalizedCacheExchange(
       }
 
       function refetchActiveQueries(parent?: TraceContext) {
-        for (const operation of activeOps.values()) {
+        for (const active of activeOps.values()) {
+          // A query already in flight sends again once it answers (owed), so
+          // the owed send carries the trace too; only one send joins it.
+          const operation = parent
+            ? makeOperation(active.kind, active, {
+                ...active.context,
+                [TRACE_PARENT_CONTEXT_KEY]: firstRequestIn(parent),
+              })
+            : active;
           if (operation.context.requestPolicy !== 'cache-only')
             owedRefetches.set(operation.key, operation);
-          refetchActiveQuery(operation, parent);
+          refetchActiveQuery(operation);
         }
       }
 
-      function refetchActiveQuery(operation: Operation, parent?: TraceContext) {
+      function refetchActiveQuery(operation: Operation) {
         client.reexecuteOperation(
           makeOperation('query', operation, {
             ...operation.context,
-            ...(parent && {
-              [TRACE_PARENT_CONTEXT_KEY]: firstRequestIn(parent),
-            }),
             requestPolicy:
               operation.context.requestPolicy === 'cache-only'
                 ? 'cache-only'
@@ -1813,8 +1821,7 @@ export function normalizedCacheExchange(
         const op = result.operation;
         if (
           op.kind === 'mutation' &&
-          result.data != null &&
-          !result.error &&
+          serverCommitted(result) &&
           !result.hasNext
         ) {
           mutationVersion += 1;
@@ -1828,10 +1835,9 @@ export function normalizedCacheExchange(
             refetchActiveQueries();
             if (optimisticContextOf(op))
               return withOptimisticMutationDisposition(result, {
-                kind:
-                  result.data != null && !result.error
-                    ? 'committed'
-                    : 'permanently-failed',
+                kind: serverCommitted(result)
+                  ? 'committed'
+                  : 'permanently-failed',
               });
             return result;
           }
@@ -1988,10 +1994,7 @@ export function normalizedCacheExchange(
           let settled = result;
           // A write that committed without some of its rows still applies
           // the rows and deletions it returned.
-          if (
-            result.data != null &&
-            (!result.error || committedWithMissingRows(result))
-          ) {
+          if (serverCommitted(result)) {
             // Callers that skip their own reads rely on the rows reaching
             // the cache; a failed write or deletion says so.
             const cacheEffectsApplied = parent
@@ -2004,10 +2007,9 @@ export function normalizedCacheExchange(
           }
           if (optimistic) {
             return withOptimisticMutationDisposition(settled, {
-              kind:
-                result.data != null && !result.error
-                  ? 'committed'
-                  : 'permanently-failed',
+              kind: serverCommitted(result)
+                ? 'committed'
+                : 'permanently-failed',
             });
           }
           return settled;
