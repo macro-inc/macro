@@ -90,12 +90,12 @@ describe('limitFailures', () => {
     const failures = limitFailures([
       run(3_500, (name) =>
         name === 'coldOpen' || name === 'expand'
-          ? { longTasks: { count: 1, totalMs: 1_600, maxMs: 1_600 } }
+          ? { longTasks: { count: 1, totalMs: 2_100, maxMs: 2_100 } }
           : {}
       ),
     ]);
     expect(failures).toEqual([
-      '3500 channels, expand: longest task (ms): 1600, limit 1500',
+      '3500 channels, expand: longest task (ms): 2100, limit 2000',
     ]);
   });
 
@@ -108,7 +108,7 @@ describe('limitFailures', () => {
             longTasks: { count: 300, totalMs: 241_000, maxMs: 900 },
           }))
           .with('scroll', () => ({
-            longTasks: { count: 60, totalMs: 30_100, maxMs: 300 },
+            longTasks: { count: 60, totalMs: 40_100, maxMs: 300 },
           }))
           .with('collapse', () => ({ domNodes: 4_100 }))
           .otherwise(() => ({}))
@@ -117,7 +117,7 @@ describe('limitFailures', () => {
     expect(failures).toEqual([
       '3500 channels, seed: rows on screen (ms): 8100, limit 8000',
       '3500 channels, coldOpen: long tasks in all (ms): 241000, limit 240000',
-      '3500 channels, scroll: long tasks in all (ms): 30100, limit 30000',
+      '3500 channels, scroll: long tasks in all (ms): 40100, limit 40000',
       '3500 channels, collapse: DOM nodes: 4100, limit 4000',
     ]);
   });
@@ -175,12 +175,12 @@ describe('limitFailures', () => {
       run(3_500, () => ({ longTasks: { count: 1, totalMs: 100, maxMs: 100 } })),
       run(7_000, (name) =>
         name === 'message'
-          ? { longTasks: { count: 8, totalMs: 2_600, maxMs: 300 } }
+          ? { longTasks: { count: 8, totalMs: 4_100, maxMs: 300 } }
           : { longTasks: { count: 2, totalMs: 400, maxMs: 200 } }
       ),
     ]);
     expect(failures).toEqual([
-      '3500 to 7000 channels, message: long task growth: 5.20, limit 5',
+      '3500 to 7000 channels, message: long task growth: 8.20, limit 8',
     ]);
   });
 
@@ -189,12 +189,12 @@ describe('limitFailures', () => {
       run(3_500),
       run(7_000, (name) =>
         name === 'coldOpen' || name === 'scroll'
-          ? { longTasks: { count: 60, totalMs: 6_000, maxMs: 400 } }
+          ? { longTasks: { count: 60, totalMs: 9_000, maxMs: 400 } }
           : {}
       ),
     ]);
     expect(failures).toEqual([
-      '3500 to 7000 channels, scroll: long task growth: 6, limit 5',
+      '3500 to 7000 channels, scroll: long task growth: 9, limit 8',
     ]);
   });
 

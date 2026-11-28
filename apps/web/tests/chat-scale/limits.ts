@@ -52,13 +52,13 @@ export const LOADS: readonly StepName[] = ['seed', 'coldOpen'];
 
 /**
  * Ceilings, the same at both sizes unless a size is named, about twice the
- * highest of two local runs (2026-11-28, on a shared 96-CPU machine at a load
- * average of 100 to 130, which lengthens long tasks). At 3,500 / 7,000
- * channels they measured heap after collection of 693 / 1,319 MB in the
+ * highest of four local runs (2026-11-28, on a shared 96-CPU machine at a
+ * load average of 60 to 130, which lengthens long tasks). At 3,500 / 7,000
+ * channels they measured heap after collection of 701 / 1,333 MB in the
  * seed, which writes the whole cache, and 241 / 388 MB at most in the steps
- * after it; 1,674 DOM nodes at most; rows on screen 1.6–3.2 s after
- * navigation; a load's longest task 0.96 s and its tasks 31 / 113 s in all;
- * an interaction's longest task 0.63 s and its tasks 4.9 / 12.5 s in all.
+ * after it; 1,674 DOM nodes at most; rows on screen 1.5–3.4 s after
+ * navigation; a load's longest task 1.07 s and its tasks 31 / 113 s in all;
+ * an interaction's longest task 0.88 s and its tasks 4.9 / 17.9 s in all.
  */
 export const CEILINGS = {
   heapMb: {
@@ -67,8 +67,8 @@ export const CEILINGS = {
   },
   domNodes: 4_000,
   rowsMs: 8_000,
-  load: { longestTaskMs: 2_000, longTasksMs: 240_000 },
-  interaction: { longestTaskMs: 1_500, longTasksMs: 30_000 },
+  load: { longestTaskMs: 2_500, longTasksMs: 240_000 },
+  interaction: { longestTaskMs: 2_000, longTasksMs: 40_000 },
 } as const;
 
 /**
@@ -77,14 +77,16 @@ export const CEILINGS = {
  * Its heap and long tasks do today, because the sidebar's work follows every
  * channel its sections and favorites name: in the runs above the heap grew
  * 1.6–1.9 times, a load's long tasks 3.3–6.2 times, and an interaction's up to
- * 3.2 times. These limits catch growth past that; lower them as that work is
- * bounded by the screen. Under `LONG_TASK_FLOOR_MS` at N, long tasks compare
- * as that floor, since a few long tasks' jitter is not growth.
+ * 5.5 times (one run's message step at 2N also took the app's token refresh, a
+ * second round of polls and 2,838 server rows against 1,869). These limits
+ * catch growth past that; lower them as that work is bounded by the screen.
+ * Under `LONG_TASK_FLOOR_MS` at N, long tasks compare as that floor, since a
+ * few long tasks' jitter is not growth.
  */
 export const GROWTH = {
   heap: 2.2,
   domNodes: 1.2,
-  longTasks: { load: 10, interaction: 5 },
+  longTasks: { load: 10, interaction: 8 },
 } as const;
 
 export const LONG_TASK_FLOOR_MS = 500;
