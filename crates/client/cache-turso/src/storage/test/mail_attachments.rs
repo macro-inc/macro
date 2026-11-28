@@ -368,9 +368,10 @@ fn a_document_at_the_attribute_limit_becomes_incomplete() {
 #[test]
 #[ignore = "a measurement: run in release with --ignored --nocapture"]
 fn open_cost_at_n_and_2n() {
-    // The p90 cache of the bench generator holds 5,000 Mail threads.
+    // The bench generator's p90 cache holds 15,000 Mail threads and its p50
+    // cache 600 (`cache-bench`'s `dataset.rs`).
     let sizes = std::env::var_os("MAIL_ATTACHMENT_THREADS").map_or_else(
-        || vec![5_000, 10_000],
+        || vec![15_000, 30_000],
         |sizes| {
             sizes
                 .to_str()
@@ -400,8 +401,8 @@ fn open_cost_at_n_and_2n() {
         forget_version(&storage);
         for row in driver::query(
             &storage.connection(),
-            "EXPLAIN QUERY PLAN SELECT d.id, r.value FROM index_documents AS d JOIN records AS r ON r.__typename = ?1 AND r.id = substr(d.record_key, ?2) WHERE d.profile = ?3 AND d.partition = ?4 AND d.state = 0 AND d.id > ?5 ORDER BY d.id LIMIT ?6",
-            vec![text(THREAD), Value::from_i64(24), text(DOCUMENT_PROFILES[1]), text("email"), Value::from_i64(0), Value::from_i64(256)],
+            "EXPLAIN QUERY PLAN SELECT id, record_key FROM index_documents WHERE profile = ?1 AND partition = ?2 AND state = 0 AND id > ?3 ORDER BY id LIMIT ?4",
+            vec![text(DOCUMENT_PROFILES[1]), text("email"), Value::from_i64(0), Value::from_i64(256)],
         )
         .unwrap()
         {
