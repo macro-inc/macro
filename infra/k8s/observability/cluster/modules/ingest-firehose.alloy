@@ -82,6 +82,18 @@ otelcol.processor.transform "cloudwatch" {
       `set(attributes["aws.log.stream.names"], attributes["log_stream"])`,
       `set(attributes["cloud.provider"], "aws")`,
       `set(attributes["cloud.region"], attributes["region"]) where attributes["region"] != nil`,
+      // AWS WAF's request log (aws-waf-logs-*): the request's trace, from its
+      // traceparent header as Datadog's WAF pipeline takes it, and no client
+      // address: not WAF's clientIp, a rate-based rule's limitValue (the
+      // address, for an IP key) or the value of its IP or FORWARDED_IP custom
+      // key, or any header (or HEADER custom key) named for forwarding or a
+      // client address. A value is a JSON string, escaped quotes included.
+      `merge_maps(cache, ExtractPatterns(body, "(?i)\"name\":\"traceparent\",\"value\":\"00-(?P<trace_id>[0-9a-f]{32})-(?P<span_id>[0-9a-f]{16})-[0-9a-f]{2}\""), "upsert") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
+      `set(trace_id.string, ConvertCase(cache["trace_id"], "lower")) where cache["trace_id"] != nil`,
+      `set(span_id.string, ConvertCase(cache["span_id"], "lower")) where cache["span_id"] != nil`,
+      `replace_pattern(body, "\"(clientIp|limitValue)\":\"(?:[^\"\\\\]|\\\\.)*\"", "\"${1}\":\"redacted\"") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
+      `replace_pattern(body, "(\"key\":\"(?:IP|FORWARDED_IP)\"(?:,\"[A-Za-z]+\":\"(?:[^\"\\\\]|\\\\.)*\")*,\"value\":\")(?:[^\"\\\\]|\\\\.)*\"", "${1}redacted\"") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
+      `replace_pattern(body, "(?i)(\"name\":\"[^\"]*(?:forwarded|client-ip|real-ip|connecting-ip)[^\"]*\",\"value\":\")(?:[^\"\\\\]|\\\\.)*\"", "${1}redacted\"") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
       `delete_matching_keys(attributes, "^(log_group|log_stream|msg_type|region|loki\\.attribute\\.labels)$")`,
     ]
   }
