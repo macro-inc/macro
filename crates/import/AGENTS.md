@@ -20,9 +20,13 @@ Notion workspace imports go through a reviewed plan: `ImportFromNotion`
 (`plan`) reads the workspace over Notion's REST API (`import_notion`, through
 the user's Notion connection when it gives API access), asks the decision model what to do with each page
 and data source (copy, tasks, skip, or by hand), and stages the plan as ledger
-rows. The agent presents it with `PresentReview` (kind `import`) and asks
-"Should I kick it off?"; the owner approves on the card or by saying yes, which
-has the agent submit it with `DecideReview`. `plan` returns after a short wait
+rows. The agent presents it with `PresentReview` (kind `import`). A ready plan
+ends with "Should I kick it off?"; the owner approves on the card or by saying
+yes, which has the agent submit it with `DecideReview`. A plan still being made
+gets no such offer: a yes before it is ready approves nothing (`DecideReview`
+refuses), and the `import.planned` system turn that announces it cannot
+approve, so the agent tells the user to approve it on the card once it is
+ready and says so again when `import.planned` arrives. `plan` returns after a short wait
 (`PLAN_WAIT`), usually while the run is still `running`, and the agent
 presents the review at once: the harness ties the staged rows and the
 `running` run (`import_run.review_id`) to the review, so rows staged later
@@ -423,6 +427,11 @@ paths reject workspace-plan rows so approval cannot be bypassed.
   folder or ancestor relocate it to the persistent owner-only `Notion (personal)`
   mirror, with a report note. Derive visibility from the reviewed verdict, never
   the team claim. A folder's link-only setting does not grant database access.
+- A readable Notion page explicitly selected as an import root gets Copy even
+  if triage suggests Skip. Preserve Hand and each descendant’s own verdict. A new scoped
+  plan can stage a previously discarded root again. Respect the approved
+  review’s explicit Copy overrides for skipped Notion pages when writing or
+  resuming the plan.
 - `databases::body_links` builds a separate occurrence map for each page or row;
   `?v` selects the saved view, otherwise the first container tab is assumed and
   reported. Excluded sources retain `notImported` links and do not create folders;

@@ -2,7 +2,6 @@
  * @vitest-environment jsdom
  */
 
-import { propertiesKeys } from '@queries/properties/keys';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import type { PropertyOption } from '@service-properties/generated/schemas/propertyOption';
 import type { PropertyOptionResponse } from '@service-properties/generated/schemas/propertyOptionResponse';
@@ -18,6 +17,21 @@ import {
   bulkSetEntityPropertyOptionsHandler,
   setEntityPropertyHandler,
 } from './Properties';
+
+vi.mock('@queries/properties/tags', () => ({
+  useTagsQuery: () => ({ isSuccess: true, isError: false, data: tagSets }),
+}));
+
+vi.mock('@queries/properties/options', () => ({
+  usePropertyOptionsQuery: (definitionId: () => string) => ({
+    isSuccess: true,
+    isError: false,
+    isPlaceholderData: false,
+    get data() {
+      return definitionId() === STATUS_DEF ? statusOptions : [];
+    },
+  }),
+}));
 
 vi.mock('@core/auth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/auth')>()),
@@ -74,15 +88,6 @@ function makeClient(): QueryClient {
       queries: { retry: false, staleTime: Number.POSITIVE_INFINITY },
     },
   });
-  client.setQueryData(propertiesKeys.tags.queryKey, tagSets);
-  client.setQueryData(
-    propertiesKeys.options({ propertyDefinitionId: STATUS_DEF }).queryKey,
-    statusOptions
-  );
-  client.setQueryData(
-    propertiesKeys.options({ propertyDefinitionId: 'empty-def' }).queryKey,
-    []
-  );
   return client;
 }
 

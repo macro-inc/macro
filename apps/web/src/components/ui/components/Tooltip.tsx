@@ -118,18 +118,22 @@ function TooltipContent(props: ComponentProps<typeof KobalteTooltip.Content>) {
   const [local, rest] = splitProps(props, ['class', 'children']);
   return (
     <Show when={context?.visible()}>
-      <KobalteTooltip.Content
-        {...rest}
-        class={cn(
-          // Kobalte mutates inline pointer-events as its layer stack changes.
-          'pointer-events-none! z-tool-tip max-w-[calc(100vw-32px)]',
-          local.class
-        )}
-      >
-        <Surface class={tooltipClasses()} depth={3}>
-          {local.children}
-        </Surface>
-      </KobalteTooltip.Content>
+      {/* Kobalte wraps the content in a positioner of the same size, which
+          would otherwise take clicks meant for the controls under it. */}
+      <div class="contents [&>[data-popper-positioner]]:pointer-events-none">
+        <KobalteTooltip.Content
+          {...rest}
+          class={cn(
+            // Kobalte mutates inline pointer-events as its layer stack changes.
+            'pointer-events-none! z-tool-tip max-w-[calc(100vw-32px)]',
+            local.class
+          )}
+        >
+          <Surface class={tooltipClasses()} depth={3}>
+            {local.children}
+          </Surface>
+        </KobalteTooltip.Content>
+      </div>
     </Show>
   );
 }

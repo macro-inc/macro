@@ -15,6 +15,8 @@ use rootcause::Report;
 use std::collections::HashSet;
 use uuid::Uuid;
 
+use crate::domain::operator_names::as_typed;
+
 #[cfg(test)]
 mod test;
 
@@ -362,6 +364,8 @@ impl<S: EmailSearchSource> EmailSearchService<S> {
 
     /// Resolves each tag or label name to what the index stores, or `None`
     /// when a name that must be carried names nothing, so nothing matches.
+    /// Names match with their phrase quotes left out, since a typed term
+    /// drops them ([`as_typed`]).
     async fn label_conditions(
         &self,
         user: &MacroUserId<Lowercase<'_>>,
@@ -378,18 +382,20 @@ impl<S: EmailSearchSource> EmailSearchService<S> {
 
         let mut conditions = Vec::new();
         for wanted in &filters.label_names {
-            let name = wanted.name.to_lowercase();
+            // A caller can name a label exactly, quotes and all, as well as
+            // type it.
+            let name = as_typed(&wanted.name).to_lowercase();
             let mut condition = LabelCondition {
                 exclude: wanted.exclude,
                 ..LabelCondition::default()
             };
             for label in &labels {
-                if label.to_lowercase() == name && !condition.labels.contains(label) {
+                if as_typed(label).to_lowercase() == name && !condition.labels.contains(label) {
                     condition.labels.push(label.clone());
                 }
             }
             for tag in &tags {
-                if tag.label.to_lowercase() == name {
+                if as_typed(&tag.label).to_lowercase() == name {
                     condition.tag_option_ids.push(tag.option_id);
                 }
             }

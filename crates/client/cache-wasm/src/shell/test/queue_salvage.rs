@@ -1,5 +1,8 @@
+use super::schema_change::{labelled, set_worker_schema};
 use super::*;
-use crate::shell::salvage::wipe_keeping_queue;
+use crate::shell::salvage::{
+    QueueOutcome, QueueReport, wipe_keeping_queue, wipe_keeping_queue_after,
+};
 use cache_turso::{QueueLoss, SalvageFile};
 use std::cell::Cell;
 
@@ -9,6 +12,14 @@ const UUID: &str = "00000000-0000-4000-8000-000000000011";
 const REFUSE_LOSSES: &str = "const frame = args[0];
     if (frame.byteLength === 22 && frame[12] === 4)
       throw new DOMException('full', 'QuotaExceededError');
+    return original(...args);";
+
+/// [`REFUSE_LOSSES`], for the next `self.lossesToRefuse` losses written.
+const REFUSE_EARLY_LOSSES: &str = "const frame = args[0];
+    if (self.lossesToRefuse > 0 && frame.byteLength === 22 && frame[12] === 4) {
+      self.lossesToRefuse -= 1;
+      throw new DOMException('full', 'QuotaExceededError');
+    }
     return original(...args);";
 
 fn side_file(scope: &str) -> String {
@@ -176,11 +187,20 @@ async fn wipe_open_and_die(scope: &str) {
 }
 
 async fn open(scope: &str, recovery: bool) -> (CacheEngine, &'static str, serde_json::Value) {
-    let (engine, outcome, queue) = open_cache_inner(scope.into(), None, recovery, None, false)
-        .await
-        .expect("open");
+    let (engine, outcome, queue, _) = open_with_change(scope, recovery).await;
+    (engine, outcome, queue)
+}
+
+async fn open_with_change(
+    scope: &str,
+    recovery: bool,
+) -> (CacheEngine, &'static str, serde_json::Value, JsSchemaChange) {
+    let (engine, outcome, queue, change) =
+        open_cache_inner(scope.into(), None, recovery, None, false)
+            .await
+            .expect("open");
     let queue = serde_json::json!([queue.outcome.as_str(), queue.kept, queue.dropped]);
-    (engine, outcome.as_str(), queue)
+    (engine, outcome.as_str(), queue, change)
 }
 
 async fn depth(engine: &CacheEngine) -> String {
@@ -232,6 +252,333 @@ async fn a_recovery_open_keeps_the_queue_and_wipes_the_rest() {
         .await,
     );
     assert_eq!(read["kind"], "miss");
+    assert_kept(&engine, SCOPE).await;
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_cache_that_cannot_take_the_schema_keeps_its_queue_under_the_schema_it_was_queued_under()
+{
+    const SCOPE: &str = "cache-wasm-salvage-adoption";
+    const IN_PLACE: &str = "cache-wasm-salvage-adoption-in-place";
+    set_worker_schema(Some(labelled("String")));
+    closed_with_queue(IN_PLACE).await;
+    closed_with_queue(SCOPE).await;
+    set_worker_schema(Some(labelled("[String]")));
+    let (engine, outcome, queue, in_place) = open_with_change(IN_PLACE, false).await;
+    assert_eq!(outcome, "opened-existing");
+    assert_eq!(queue, serde_json::json!(["none", 0, 0]));
+    assert_eq!(in_place.change, "types");
+    close_and_destroy(&engine, IN_PLACE).await;
+
+    // The file fails the adoption as a corrupt one does: it is wiped as a
+    // recovery wipe is, and the next one adopts the schema as it would have.
+    cache_turso::migration_test_hooks::corrupt_next_adoption();
+    let (engine, outcome, queue, moved) = open_with_change(SCOPE, false).await;
+    assert_eq!(outcome, "reset-corrupt");
+    assert_eq!(queue, serde_json::json!(["kept", 1, 0]));
+    assert_eq!(
+        (moved.change, moved.changed_types, moved.retired_overlays),
+        (
+            in_place.change,
+            in_place.changed_types,
+            in_place.retired_overlays
+        )
+    );
+    assert_kept(&engine, SCOPE).await;
+    resolved(engine.close()).await;
+
+    let (engine, outcome, queue, again) = open_with_change(SCOPE, false).await;
+    assert_eq!(outcome, "opened-existing");
+    assert_eq!(queue, serde_json::json!(["none", 0, 0]));
+    assert_eq!(again.change, "unchanged");
+    set_worker_schema(None);
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+/// The page reads both reports off the export, which `open_cache_inner` does
+/// not cover.
+#[wasm_bindgen_test(async)]
+async fn the_exported_open_carries_the_schema_change_and_the_queue_of_a_schema_wipe() {
+    const SCOPE: &str = "cache-wasm-salvage-adoption-export";
+    set_worker_schema(Some(labelled("String")));
+    closed_with_queue(SCOPE).await;
+    set_worker_schema(Some(labelled("[String]")));
+    cache_turso::migration_test_hooks::corrupt_next_adoption();
+    let opened = open_cache_with_outcome(SCOPE.into(), None, None, None)
+        .await
+        .expect("open");
+    let field = |name: &str| js_sys::Reflect::get(&opened, &JsValue::from_str(name)).expect(name);
+    let read =
+        |name: &str| serde_wasm_bindgen::from_value::<serde_json::Value>(field(name)).expect(name);
+    assert_eq!(read("outcome"), "reset-corrupt");
+    let queue = read("queue");
+    assert_eq!(
+        (
+            queue["outcome"].as_str(),
+            queue["kept"].as_u64(),
+            queue["dropped"].as_u64()
+        ),
+        (Some("kept"), Some(1), Some(0))
+    );
+    assert_eq!(read("schemaChange")["change"], "types");
+    let engine = field("engine");
+    let close = js_sys::Function::from(
+        js_sys::Reflect::get(&engine, &JsValue::from_str("close")).expect("close"),
+    );
+    resolved(js_sys::Promise::from(close.call0(&engine).expect("close"))).await;
+    set_worker_schema(None);
+    destroy_cache(SCOPE.into()).await.expect("destroy");
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_loss_the_open_told_before_a_schema_wipe_is_told_once_and_never_as_kept() {
+    const SCOPE: &str = "cache-wasm-salvage-adoption-loss";
+    // Noted in the side file, the later open reads it back; refused there,
+    // only the earlier open knows of it.
+    for refused in [false, true] {
+        set_worker_schema(Some(labelled("String")));
+        closed_with_queue(SCOPE).await;
+        let loss = QueueLoss {
+            abandoned: false,
+            dropped: 1,
+        };
+        write_side_file(SCOPE, &SalvageFile::loss(loss)).await;
+        set_worker_schema(Some(labelled("[String]")));
+        if refused {
+            break_side_files("write", REFUSE_LOSSES).await;
+        }
+        cache_turso::migration_test_hooks::corrupt_next_adoption();
+        let (engine, outcome, queue, _) = open_with_change(SCOPE, false).await;
+        if refused {
+            restore_side_files().await;
+        }
+        assert_eq!(outcome, "reset-corrupt", "{refused}");
+        assert_eq!(queue, serde_json::json!(["partial", 1, 1]), "{refused}");
+        assert_kept(&engine, SCOPE).await;
+        close_and_destroy(&engine, SCOPE).await;
+    }
+    set_worker_schema(None);
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_loss_the_side_file_refused_before_a_schema_wipe_outlives_a_worker_that_never_told_it() {
+    const SCOPE: &str = "cache-wasm-salvage-adoption-untold";
+    // Refused once, the note is written again before the wipe and keeps its
+    // count; refused twice, the import after the wipe notes that writes were
+    // lost, as any loss whose count the side file could not keep.
+    for (refusals, later) in [(1, 1), (2, 0)] {
+        set_worker_schema(Some(labelled("String")));
+        closed_with_queue(SCOPE).await;
+        let loss = QueueLoss {
+            abandoned: false,
+            dropped: 1,
+        };
+        write_side_file(SCOPE, &SalvageFile::loss(loss)).await;
+        set_worker_schema(Some(labelled("[String]")));
+        break_side_files("write", REFUSE_EARLY_LOSSES).await;
+        let refuse = format!("self.lossesToRefuse = {refusals}; return Promise.resolve();");
+        run_js(&refuse, "").await;
+        cache_turso::migration_test_hooks::corrupt_next_adoption();
+        let (engine, outcome, queue, _) = open_with_change(SCOPE, false).await;
+        restore_side_files().await;
+        assert_eq!(outcome, "reset-corrupt", "{refusals}");
+        assert_eq!(queue, serde_json::json!(["partial", 1, 1]), "{refusals}");
+        // Its worker dies before it tells the page.
+        resolved(engine.close()).await;
+        let (engine, _, queue) = open(SCOPE, false).await;
+        assert_eq!(
+            queue,
+            serde_json::json!(["unreadable", 0, later]),
+            "{refusals}"
+        );
+        assert_kept(&engine, SCOPE).await;
+        close_and_destroy(&engine, SCOPE).await;
+        set_worker_schema(None);
+    }
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_copy_taken_after_a_loss_nobody_noted_tells_it_to_whoever_imports_it() {
+    const SCOPE: &str = "cache-wasm-salvage-untold-copy";
+    let untold = QueueReport {
+        outcome: QueueOutcome::Unreadable,
+        dropped: 1,
+        ..QueueReport::default()
+    };
+    let noted = QueueReport {
+        noted: true,
+        ..untold
+    };
+    for (earlier, expected) in [
+        (untold, "partial"),
+        (noted, "kept"),
+        (QueueReport::default(), "kept"),
+    ] {
+        closed_with_queue(SCOPE).await;
+        // No loss note reaches the side file, and the engine dies before it
+        // opens the next database.
+        break_side_files("write", REFUSE_LOSSES).await;
+        let owner = owner(SCOPE).await;
+        let Ok((owner, _)) = wipe_keeping_queue_after(SCOPE, owner, &earlier).await else {
+            panic!("wipe keeps the queue")
+        };
+        owner.release().await.expect("release");
+        restore_side_files().await;
+        let (engine, _, queue) = open(SCOPE, false).await;
+        assert_eq!(queue, serde_json::json!([expected, 1, 0]), "{earlier:?}");
+        assert_kept(&engine, SCOPE).await;
+        close_and_destroy(&engine, SCOPE).await;
+    }
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_copy_taken_when_the_side_file_could_not_be_read_tells_a_loss_to_whoever_imports_it() {
+    const SCOPE: &str = "cache-wasm-salvage-unread-copy";
+    // The wipe writes over the note it cannot read, so the note it leaves
+    // counts the earlier loss too, unless the side file refuses it as well.
+    for (losses_refused, counted) in [(true, 0), (false, 2)] {
+        closed_with_queue(SCOPE).await;
+        let loss = QueueLoss {
+            abandoned: false,
+            dropped: 2,
+        };
+        write_side_file(SCOPE, &SalvageFile::loss(loss)).await;
+        let noted = QueueReport {
+            outcome: QueueOutcome::Unreadable,
+            dropped: 2,
+            noted: true,
+            ..QueueReport::default()
+        };
+        // The wipe cannot read the note back, and the engine dies before it
+        // opens the next database.
+        let files = "FileSystemFileHandle.prototype.createSyncAccessHandle";
+        run_js(
+            &format!("self.untouchedFiles = {files}; return Promise.resolve();"),
+            "",
+        )
+        .await;
+        break_side_files("read", "throw new DOMException('no', 'NotReadableError');").await;
+        if losses_refused {
+            break_side_files("write", REFUSE_LOSSES).await;
+        }
+        let owner = owner(SCOPE).await;
+        let Ok((owner, _)) = wipe_keeping_queue_after(SCOPE, owner, &noted).await else {
+            panic!("wipe keeps the queue")
+        };
+        owner.release().await.expect("release");
+        run_js(
+            &format!("{files} = self.untouchedFiles; return Promise.resolve();"),
+            "",
+        )
+        .await;
+        let (engine, _, queue) = open(SCOPE, false).await;
+        assert_eq!(
+            queue,
+            serde_json::json!(["partial", 1, counted]),
+            "losses refused: {losses_refused}"
+        );
+        assert_kept(&engine, SCOPE).await;
+        close_and_destroy(&engine, SCOPE).await;
+    }
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_noted_loss_the_wipe_could_not_read_is_counted_once_when_its_note_stays() {
+    const SCOPE: &str = "cache-wasm-salvage-unread-note-stays";
+    closed_with_queue(SCOPE).await;
+    let loss = QueueLoss {
+        abandoned: false,
+        dropped: 2,
+    };
+    write_side_file(SCOPE, &SalvageFile::loss(loss)).await;
+    let noted = QueueReport {
+        outcome: QueueOutcome::Unreadable,
+        dropped: 2,
+        noted: true,
+        ..QueueReport::default()
+    };
+    // The wipe can neither read the side file nor change it, so the note
+    // stays for the import, which reads it once the side file reads again.
+    let files = "FileSystemFileHandle.prototype.createSyncAccessHandle";
+    run_js(
+        &format!("self.untouchedFiles = {files}; return Promise.resolve();"),
+        "",
+    )
+    .await;
+    break_side_files("read", "throw new DOMException('no', 'NotReadableError');").await;
+    break_side_files(
+        "truncate",
+        "throw new DOMException('full', 'QuotaExceededError');",
+    )
+    .await;
+    let owner = owner(SCOPE).await;
+    let Ok((owner, crossing)) = wipe_keeping_queue_after(SCOPE, owner, &noted).await else {
+        panic!("wipe keeps the queue")
+    };
+    run_js(
+        &format!("{files} = self.untouchedFiles; return Promise.resolve();"),
+        "",
+    )
+    .await;
+    let Ok(opened) = open_storage(SCOPE, owner, crossing).await else {
+        panic!("the next database opens")
+    };
+    let told = noted.then(opened.queue);
+    release_storage(opened.storage).await.expect("release");
+    assert_eq!(
+        (told.outcome, told.kept, told.dropped),
+        (QueueOutcome::Partial, 1, 2)
+    );
+    let (engine, _, _) = open(SCOPE, false).await;
+    assert_kept(&engine, SCOPE).await;
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test]
+fn a_noted_loss_keeps_its_count_when_the_later_open_could_not_read_it() {
+    let earlier = QueueReport {
+        outcome: QueueOutcome::Unreadable,
+        dropped: 2,
+        noted: true,
+        ..QueueReport::default()
+    };
+    let later = |dropped| QueueReport {
+        outcome: QueueOutcome::Partial,
+        kept: 1,
+        dropped,
+        noted: true,
+        ..QueueReport::default()
+    };
+    // Read back, or counted by a wipe that could not read it, the note is
+    // among what the later open counted.
+    assert_eq!(earlier.then(later(3)).dropped, 3);
+    // Unread, only the earlier open knows its count.
+    assert_eq!(earlier.then(later(0)).dropped, 2);
+    let unnoted = QueueReport {
+        noted: false,
+        ..earlier
+    };
+    assert_eq!(unnoted.then(later(0)).dropped, 2);
+    assert_eq!(unnoted.then(later(3)).dropped, 5);
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_reset_tier_keeps_the_queue_in_its_own_database() {
+    const SCOPE: &str = "cache-wasm-salvage-reset-tier";
+    closed_with_queue(SCOPE).await;
+    change(
+        SCOPE,
+        "UPDATE cache_schema SET hash = 'other', incoming_hash = 'other', artifact = x'00'",
+    )
+    .await;
+    let (engine, outcome, queue, adopted) = open_with_change(SCOPE, false).await;
+    assert_eq!(outcome, "opened-existing");
+    assert_eq!(queue, serde_json::json!(["none", 0, 0]));
+    assert_eq!(adopted.change, "reset");
+    assert_eq!(adopted.reset_reason, Some("unreadable"));
+    assert_eq!(adopted.retired_overlays, 1);
+    assert!(!opfs_file_exists(&side_file(SCOPE)).await);
     assert_kept(&engine, SCOPE).await;
     close_and_destroy(&engine, SCOPE).await;
 }

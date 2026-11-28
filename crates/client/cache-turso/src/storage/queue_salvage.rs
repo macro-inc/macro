@@ -4,6 +4,7 @@
 //! its queue is read into a [`SalvagedQueue`], encoded into the append-only
 //! [`SalvageFile`] kept beside the database, and imported into the next one.
 
+use super::schema_store::{self, StoredRow};
 use super::{
     LAYER_INSERT, OPTIMISTIC_EXACT_FACT_INSERT, OPTIMISTIC_INDEX_DOCUMENT_INSERT,
     OPTIMISTIC_INTEGER_FACT_INSERT, OPTIMISTIC_SORT_FACT_INSERT, OPTIMISTIC_UNCERTAINTY_INSERT,
@@ -63,7 +64,8 @@ const RECORD_KEEP: &str =
 ///
 /// Holds queued writes and what they need to run again: their optimistic
 /// layers, projections and retry counts, the account and access policy they
-/// were made under, and the aliases of the entities they name.
+/// were made under, the aliases of the entities they name, and the stored
+/// GraphQL schema their overlays were made under.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SalvagedQueue {
     id: Uuid,
@@ -77,6 +79,10 @@ pub struct SalvagedQueue {
     rows: Vec<Vec<Value>>,
     shadows: Vec<Shadow>,
     records: Vec<(RecordKey, Vec<u8>)>,
+    /// The stored schema of the database this was read from, none when it
+    /// stored none, and an unreadable one when it was joined with a queue
+    /// read under another.
+    schema: Option<StoredRow>,
 }
 
 /// One optimistic projection document and its facts.
@@ -345,6 +351,7 @@ fn import(
             ..QueueImport::default()
         });
     }
+    let held_nothing = schema_store::is_empty(connection)?;
     let highest = sequence(connection)?;
     let queue = if highest == 0 {
         queue.clone()
@@ -379,6 +386,10 @@ fn import(
                 Value::from_blob(value.clone()),
             ],
         )?;
+    }
+    // Writes it already queues are under its own schema.
+    if imported.kept > 0 {
+        schema_store::import(connection, queue.schema.as_ref(), held_nothing)?;
     }
     ImportMarker {
         id: queue.id,

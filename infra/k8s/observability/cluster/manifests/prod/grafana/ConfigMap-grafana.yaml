@@ -69,6 +69,15 @@ data:
     ha_listen_address = $__env{POD_IP}:9094
     ha_peers = grafana-headless.observability.svc.cluster.local:9094
     ha_reconnect_timeout = 2m
+    [unified_alerting.state_history]
+    backend = multiple
+    enabled = true
+    loki_basic_auth_password = $__file{/etc/grafana/secrets/otlp_token}
+    loki_basic_auth_username = state-history
+    loki_remote_read_url = http://query-gateway.observability.svc.cluster.local:8081/loki
+    loki_remote_write_url = http://query-gateway.observability.svc.cluster.local:8081/state-history
+    primary = annotations
+    secondaries = loki
     [unified_storage]
     index_path = /var/lib/grafana-search/bleve
     [users]

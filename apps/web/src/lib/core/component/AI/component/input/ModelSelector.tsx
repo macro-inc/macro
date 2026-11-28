@@ -36,7 +36,7 @@ const MODEL_DESCRIPTION: Record<TModel, string> = {
   [Model.gpt6Astra]: 'Frontier reasoning for the hardest problems',
   [Model.gpt62Sol]: 'Balanced reasoning, coding, and speed',
   [Model.gpt6Luna]: 'Fast help with everyday tasks',
-  [Model.gemini38Flash]: 'Fast answers over data and documents',
+  [Model.gemini4Hydrogen]: 'Fast answers over data and documents',
 };
 
 const isModel = (id: string): id is TModel =>

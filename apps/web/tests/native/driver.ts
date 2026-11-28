@@ -190,7 +190,8 @@ export async function expectAccountInitials(
 
 /**
  * The controls that the pane cuts off in the header holding the `search`
- * button or field (its aria-label or placeholder): each must lie inside its
+ * button or field (its aria-label, placeholder or label), and the other
+ * controls in its header: each must lie inside its
  * top bar and be the element at its own center, so a control laid out past
  * the bar's edge, clipped by the scrolling actions row, or covered by an open
  * search field, is listed. Controls kept mounted but hidden (a collapsed
@@ -199,13 +200,18 @@ export async function expectAccountInitials(
  */
 export async function clippedHeaderControls(browser: Browser, search: string) {
   return browser.execute((label) => {
-    const button = document.querySelector(
-      `[aria-label="${label}"], [placeholder="${label}"]`
-    );
+    // A field named by a visually hidden label is checked as its input.
+    const button =
+      document.querySelector(
+        `[aria-label="${label}"], [placeholder="${label}"]`
+      ) ??
+      [...document.querySelectorAll('label')].find(
+        (element) => element.textContent?.trim() === label
+      )?.control;
     const bar = button?.closest('[data-view-shell-top-bar]');
-    if (!bar) return [`no header with ${label}`];
+    if (!button || !bar) return [`no header with ${label}`];
     const edge = bar.getBoundingClientRect();
-    return [...bar.querySelectorAll('button, label')]
+    return [...new Set([...bar.querySelectorAll('button, label'), button])]
       .map((control) => ({ control, box: control.getBoundingClientRect() }))
       .filter(
         ({ control, box }) =>

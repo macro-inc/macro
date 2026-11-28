@@ -26,6 +26,10 @@ From `infra/`:
   except those `queues.ts` marks Datadog only, have hand-written Grafana copies in
   `infra/stacks/observability/nixos/grafana-provisioning/prod-alerts.nix`. Change thresholds and windows
   in both. Grafana pages for those, so their Datadog copies use `pages: false`.
+- Monitors ported to Grafana in shadow are in
+  `infra/stacks/observability/nixos/grafana-provisioning/datadog/<file>.nix`,
+  named as their file here, listed with their rules in `MAPPING.md` there.
+  Change a ported monitor's query or thresholds in both.
 - Read `README.md` before deployment: imported resources must be adopted first
   to avoid duplicate alerts. Never deploy without explicit approval.
 - Deploying needs the `goalertIntegrationKey` and `goalertNotifyIntegrationKey`

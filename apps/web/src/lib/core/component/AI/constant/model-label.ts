@@ -29,7 +29,7 @@ const HARNESS_PRETTYNAME: Record<string, string> = {
   'minimax-m3': 'MiniMax M3',
   'gpt-oss-120b': 'GPT OSS 120B',
   'nemotron-lightning-3p5-30b-a3b': 'Nemotron Lightning 3.5 30B A3B',
-  'gemini-3.8-flash': 'Gemini 3.8 Flash',
+  'gemini-4-hydrogen': 'Gemini 4 Hydrogen',
 };
 
 /** Vendor acronyms that read as shouting only when they are not shouted. */

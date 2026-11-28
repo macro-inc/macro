@@ -28,6 +28,7 @@ import {
   type EntityFilterCacheResult,
   INITIAL_CACHE_REVISION,
 } from '../protocol';
+import { CacheWriteSupersededError } from './errors';
 import {
   createTauriCacheHost,
   NativeCacheUpgradeRequiredError,
@@ -91,6 +92,64 @@ describe('createTauriCacheHost', () => {
       notify({ payload: { revision: String(revision) } });
     }
     expect(span).toHaveBeenCalledTimes(3);
+    host.dispose();
+  });
+
+  it('records what the native open did to the cache as graphql_cache.schema_init', async () => {
+    const attributes = new Map<string, unknown>();
+    const end = vi.fn();
+    const anonymousSpan = vi
+      .spyOn(Telemetry, 'anonymousSpan')
+      .mockImplementation(
+        () =>
+          ({
+            setAttr: (key: string, value: unknown) => {
+              attributes.set(key, value);
+            },
+            end,
+          }) as unknown as ReturnType<typeof Telemetry.anonymousSpan>
+      );
+    invokeMock.mockImplementation(async (command: string) =>
+      command === 'graphql_cache_init_with_schema'
+        ? {
+            change: 'reset',
+            resetReason: 'invalid',
+            changedTypes: 0,
+            droppedRecords: 12,
+            incompleteDocuments: 3,
+            retiredOverlays: 1,
+            adoptMs: 7,
+            physicalReset: true,
+            storageUpgradedFrom: 12,
+          }
+        : null
+    );
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    await host.readQuery({ query: '{ x }' });
+    expect(anonymousSpan).toHaveBeenCalledWith('graphql_cache.schema_init');
+    expect(Object.fromEntries(attributes)).toEqual({
+      'cache.backend': 'turso-native',
+      'cache.operation_category': 'initialization',
+      'cache.outcome': 'success',
+      'cache.schema.change': 'reset',
+      'cache.schema.reset_reason': 'invalid',
+      'cache.schema.changed_types': 0,
+      'cache.schema.dropped_records': 12,
+      'cache.schema.incomplete_documents': 3,
+      'cache.schema.retired_overlays': 1,
+      'cache.schema.adopt_ms': 7,
+      'cache.schema.physical_reset': true,
+      'cache.storage.upgraded_from': 12,
+    });
+    expect(end).toHaveBeenCalledOnce();
+    host.dispose();
+  });
+
+  it('records no schema_init when the native cache was already open', async () => {
+    const anonymousSpan = vi.spyOn(Telemetry, 'anonymousSpan');
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    await host.readQuery({ query: '{ x }' });
+    expect(anonymousSpan).not.toHaveBeenCalledWith('graphql_cache.schema_init');
     host.dispose();
   });
 
@@ -899,6 +958,30 @@ describe('createTauriCacheHost', () => {
       data: { x: 1 },
       identity: 'user-1',
     });
+  });
+
+  it('marks background writes and maps a native refusal', async () => {
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    invokeMock.mockImplementation((command: string) =>
+      command === 'graphql_cache_write'
+        ? Promise.reject(
+            'graphql cache write superseded by a committed mutation; fetch the query again'
+          )
+        : Promise.resolve(null)
+    );
+
+    await expect(
+      host.writeQuery({
+        generation: TEST_AUTHORITY_GENERATION,
+        query: '{ x }',
+        data: { x: 1 },
+        background: true,
+      })
+    ).rejects.toBeInstanceOf(CacheWriteSupersededError);
+    expect(invokeMock).toHaveBeenCalledWith(
+      'graphql_cache_write',
+      expect.objectContaining({ background: true })
+    );
   });
 
   it('returns only the native hydration projection', async () => {

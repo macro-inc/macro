@@ -1,9 +1,9 @@
 import { useViewShell, ViewSidebar } from '@app/components/view-shell';
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { CopyAvailabilityButton } from '@app/features/calendar/availability/CopyAvailabilityButton';
-import { CalendarSwatch } from '@app/features/calendar/components/CalendarSwatch';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { CalendarColorPicker } from '@app/features/calendar/components/calendar-color-picker';
+import { CalendarSourceLabel } from '@app/features/calendar/components/SourceControls';
 import { useCalendarNavigation } from '@app/features/calendar/context/calendar-navigation-context';
 import { useHasTeammates } from '@app/features/calendar/hooks/use-team-ooo';
 import { TEAM_OOO_SOURCE_ID } from '@app/features/calendar/types';
@@ -241,12 +241,11 @@ export function MobileCalendarSidebar() {
                                 onChange={(checked) =>
                                   changeVisibility(source.id, checked)
                                 }
-                                class="flex min-h-11 w-full gap-3 rounded-lg px-3 text-base"
+                                class="flex min-h-11 w-full gap-3 rounded-lg px-3 py-1 text-base"
                               >
                                 <Checkbox.Control />
-                                <CalendarSwatch color={source.color} />
-                                <Checkbox.Label class="min-w-0 flex-1 truncate">
-                                  {source.name}
+                                <Checkbox.Label class="flex min-w-0 flex-1 items-center gap-3">
+                                  <CalendarSourceLabel source={source} />
                                 </Checkbox.Label>
                               </Checkbox>
                             </div>

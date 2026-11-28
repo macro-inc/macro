@@ -35,6 +35,9 @@ the server says its connection can be imported from (`importAvailable`),
   trackers, and lets the owner exclude objects and change sharing. On phones,
   **Open full review** uses the existing full-height sheet. Approve on the card,
   or say yes and let the agent submit it with `DecideReview`; planning must be ready.
+  To include a skipped Notion page, tick its checkbox to change it to **Copy**.
+  To retry a previously skipped page in a fresh review, ask to import its
+  Notion link as a workspace root and approve the resulting plan.
   For Notion, items marked **Needs you** cannot be selected for automatic import.
   The completed report shows their reasons in an open **Needs you** section
   apart from items left out in review. Stop affects the selected source only,
@@ -87,7 +90,7 @@ Notion access lost`) or `Import cancelled`. **Open the <Source> import** opens t
 session presenting the review, once one does; Slack rows have no session.
 A failed row offers **Reconnect <Source>** when the connection was revoked,
 expired or unusable, and **View details** (its review) otherwise; a partly
-failed import reads `Imported with some failures`. A finished or cancelled
+failed import reads `Imported with N problems` (`Imported with some problems` until its report counts them), and one that wrote nothing reads `Nothing imported`. A finished or cancelled
 run leaves after about five seconds; a failed one stays until **Dismiss the
 <Source> import** or a week; a partly failed one stays until dismissed; a
 plan waiting for approval stays for an hour after its last change.

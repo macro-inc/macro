@@ -9,7 +9,10 @@ mod engine_writes;
 mod fact_lookup_cost;
 mod filter_scope_cost;
 mod filter_scope_semantics;
+mod id_list_semantics;
 mod migration;
+// Its I/O, CPU and memory counters read Linux's `/proc`.
+#[cfg(target_os = "linux")]
 mod migration_cost;
 mod mutation_retry;
 mod optimistic_atomicity;
@@ -17,6 +20,8 @@ mod page_retention;
 mod permission_retirement;
 mod predicate_cost;
 mod projection_writes;
+mod schema_salvage;
+mod schema_store;
 mod search_bucket_cost;
 mod search_options;
 mod search_prefilter;
@@ -24,6 +29,7 @@ mod search_projection;
 mod search_streaming;
 mod startup;
 mod wal_checkpoint;
+use cache_core::codec::cache_namespace_at;
 use cache_core::normalize::RecordUpdates;
 use pollster::block_on;
 use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
@@ -1993,6 +1999,7 @@ struct FaultIo {
     fault: Arc<AtomicU8>,
     /// Reads from every file, so a test can tell a cached page from a read one.
     reads: Arc<AtomicU64>,
+    database_writes: Arc<AtomicU64>,
 }
 
 impl FaultIo {
@@ -2001,6 +2008,7 @@ impl FaultIo {
             inner: MemoryIO::new(),
             fault: Arc::new(AtomicU8::new(IoFault::None as u8)),
             reads: Arc::new(AtomicU64::new(0)),
+            database_writes: Arc::new(AtomicU64::new(0)),
         })
     }
 
@@ -2026,6 +2034,11 @@ impl FaultIo {
     fn reads(&self) -> u64 {
         self.reads.load(Ordering::SeqCst)
     }
+
+    /// Writes to main database files rather than WALs.
+    fn database_writes(&self) -> u64 {
+        self.database_writes.load(Ordering::SeqCst)
+    }
 }
 
 impl Clock for FaultIo {
@@ -2049,6 +2062,7 @@ impl IO for FaultIo {
             fault: self.fault.clone(),
             database: !path.ends_with("-wal"),
             reads: self.reads.clone(),
+            database_writes: self.database_writes.clone(),
             inner: self.inner.open_file(path, flags, direct)?,
         }))
     }
@@ -2084,6 +2098,7 @@ struct FaultFile {
     /// The main database file rather than its WAL.
     database: bool,
     reads: Arc<AtomicU64>,
+    database_writes: Arc<AtomicU64>,
     inner: Arc<dyn File>,
 }
 
@@ -2142,6 +2157,9 @@ impl File for FaultFile {
         if self.take(IoFault::StorageFull) {
             return Err(CompletionError::IOError(std::io::ErrorKind::StorageFull, "write").into());
         }
+        if self.database {
+            self.database_writes.fetch_add(1, Ordering::SeqCst);
+        }
         self.inner.pwrite(pos, buffer, completion)
     }
 
@@ -2156,6 +2174,9 @@ impl File for FaultFile {
         }
         if self.take(IoFault::StorageFull) {
             return Err(CompletionError::IOError(std::io::ErrorKind::StorageFull, "writev").into());
+        }
+        if self.database {
+            self.database_writes.fetch_add(1, Ordering::SeqCst);
         }
         self.inner.pwritev(pos, buffers, completion)
     }
@@ -2447,4 +2468,41 @@ fn raw_record_keys_include_unprojected_records_and_preserve_queued_writes() {
             "{details}"
         );
     });
+}
+
+/// Rewrites every record as cache format 3 stored it, untagged postcard
+/// bytes, and moves the file to `namespace`.
+fn mark_previous_format(storage: &TursoStorage, namespace: &str) {
+    // One transaction: a production-size cache has hundreds of thousands of
+    // records.
+    raw_execute(storage, "BEGIN", Vec::new());
+    let rows = driver::query(
+        &storage.connection(),
+        "SELECT __typename, id, value FROM records",
+        Vec::new(),
+    )
+    .unwrap();
+    for row in rows {
+        let typename = required_text(&row, 0).unwrap();
+        let id = required_text(&row, 1).unwrap();
+        let Value::Blob(bytes) = required_value(&row, 2).unwrap() else {
+            panic!("records.value must be a blob");
+        };
+        let legacy = match bytes.first() {
+            Some(0) => bytes[1..].to_vec(),
+            Some(1) => miniz_oxide::inflate::decompress_to_vec(&bytes[1..]).unwrap(),
+            other => panic!("unexpected record encoding {other:?} for {typename}:{id}"),
+        };
+        raw_execute(
+            storage,
+            "UPDATE records SET value = ?1 WHERE __typename = ?2 AND id = ?3",
+            vec![Value::from_blob(legacy), text(&typename), text(&id)],
+        );
+    }
+    raw_execute(
+        storage,
+        "UPDATE meta SET value = ?1 WHERE key = 'namespace'",
+        vec![text(namespace)],
+    );
+    raw_execute(storage, "COMMIT", Vec::new());
 }

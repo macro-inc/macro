@@ -320,6 +320,7 @@ type ImportPlanCardProps = {
   isCollapsed: (id: string) => boolean;
   isShowingRows: (id: string) => boolean;
   isExcluded: (id: string) => boolean;
+  isCopyOverride?: (id: string) => boolean;
   isShared: (id: string) => boolean;
   /** The viewer may trim, approve, and stop this import. */
   canAct: boolean;
@@ -531,7 +532,12 @@ function PlanContents(
           <For each={props.nodes}>
             {(node) => (
               <ImportPlanRow
-                node={node}
+                node={
+                  props.isCopyOverride?.(node.id)
+                    ? { ...node, decision: 'copy', reason: null }
+                    : node
+                }
+                source={props.source}
                 collapsed={props.isCollapsed(node.id)}
                 showingRows={props.isShowingRows(node.id)}
                 excluded={props.isExcluded(node.id)}
@@ -611,7 +617,7 @@ function PlanContents(
             Dismiss
           </Button>
           <Button
-            variant="primary"
+            variant={props.full ? 'primary' : 'secondary'}
             size="sm"
             disabled={!props.editable || props.count === 0}
             onClick={() => props.onApprove()}
@@ -675,7 +681,7 @@ export function ImportPlanCard(props: ImportPlanCardProps) {
   const [full, setFull] = createSignal(false);
   return (
     <>
-      <Card class="my-3 flex min-w-0 flex-col gap-3 p-3">
+      <Card variant="filled" depth={3} class="my-3 gap-3 p-3">
         <PlanContents
           {...props}
           full={false}

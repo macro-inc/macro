@@ -107,6 +107,8 @@ function ConnectChip(
         props.connected()
           ? 'border-edge-muted text-ink-muted'
           : 'border-accent/40 text-accent hover:bg-accent/10 focus-visible:bg-accent/10',
+        // An unavailable action must not look clickable.
+        !props.connected() && 'disabled:opacity-50',
         isSelectedAsNode() && 'bg-active'
       )}
       // Keep the editor's selection where it was: this is an action, not a

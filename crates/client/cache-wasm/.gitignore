@@ -1,0 +1,2 @@
+# Databases the ignored schema_cost browser test reads; never commit one.
+/bench-data/

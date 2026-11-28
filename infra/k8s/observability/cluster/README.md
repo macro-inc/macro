@@ -29,7 +29,7 @@ modules/*.nix ──nix run .#render──▶ manifests/prod/ (committed) ──
 | `reloader` | `observability` | Restarts a Deployment when a Secret it names in `secret.reloader.stakater.com/reload` changes (Grafana's rotated database password). |
 | `grafana` | `observability` | Grafana, two replicas on RDS Postgres with HA alerting between them, provisioned from the host's `nixos/grafana-provisioning`. Sends no notification until the switch, except the watchdog heartbeat (below). |
 | `edge` | `observability` | nginx, the only target of the ALB: Grafana and Argo CD by hostname, OTLP to `alloy-ingest`, basic-auth remote write and Loki push. Runs only in the ALB's zones. |
-| `query-gateway` | `observability` | nginx between Grafana's datasources and the backends: only query endpoints and methods pass. |
+| `query-gateway` | `observability` | nginx between Grafana's datasources and the backends: only query endpoints and methods pass, and Grafana's alert state history push. |
 | `alloy-ingest` | `observability` | Two Alloys running the host's `nixos/ingest.alloy`: check the OTLP token, send logs to Loki, metrics to Mimir and traces to the sampler. |
 | `derived-metrics` | `observability` | Two Alloys that compute the metrics Datadog derives from spans and write them to Mimir ("Derived metrics"). |
 | `alloy-sampler` | `observability` | Three Alloys that each see whole traces: count span metrics and service graphs, keep or drop each trace, send the kept ones to Tempo ("Trace sampling" below). |
@@ -42,10 +42,10 @@ Run from this directory.
 
 | Command | What it does |
 | --- | --- |
-| `nix run .#render` | Renders the modules into `manifests/prod/` and the derived metrics' `MAPPING.md`. Commit the result with the change. |
+| `nix run .#render` | Renders the modules into `manifests/prod/`, the derived metrics' `MAPPING.md` and the Datadog monitors' `MAPPING.md` (host stack, `grafana-provisioning/datadog/`). Commit the result with the change. |
 | `nix run .#check` | Fails when either differs from a fresh render, then validates. CI runs this (`observability_cluster.yml`). |
 | `nix run .#validate` | Validates the manifests strictly with kubeconform: core kinds against the Kubernetes schemas for the cluster's version, custom resources against the CRDs being installed. |
-| `nix run .#kind-smoke` | Bootstraps the pushed branch onto a throwaway kind cluster and waits for the applications. Every application must sync and be healthy except those that need AWS: `aws-load-balancer-controller` (VPC lookup), `external-secrets` (the ClusterSecretStore), `loki`, `tempo` and `mimir` (gp3 volumes and S3), and `grafana`, `edge` and `alloy-ingest` (their secrets); `edge` may also stay unsynced (its TargetGroupBindings need the controller's webhook). Pass `--delete` to remove the cluster afterwards. |
+| `nix run .#kind-smoke` | Bootstraps the pushed branch onto a throwaway kind cluster and waits for the applications. Every application must sync and be healthy except those that need AWS: `aws-load-balancer-controller` (VPC lookup), `external-secrets` (the ClusterSecretStore), `loki`, `tempo` and `mimir` (gp3 volumes and S3), and `grafana`, `edge`, `alloy-ingest` and `query-gateway` (their secrets); `edge` may also stay unsynced (its TargetGroupBindings need the controller's webhook). Pass `--delete` to remove the cluster afterwards. |
 | `nix run .#bootstrap -- --context <ctx>` | The one-time bootstrap below. |
 
 ## Bootstrap (once, after the cluster exists)
@@ -233,8 +233,32 @@ alloy-ingest ── tap: spans and logs some metric reads, before sampling ─�
 ALB ─▶ edge ─┬─ grafana.* ──▶ grafana ──▶ query-gateway ──▶ Loki, Mimir, Tempo
              ├─ /v1/{traces,logs,metrics} ──▶ alloy-ingest ─┬─ logs, metrics ──▶ Loki, Mimir
              │                                             └─ traces ──▶ alloy-sampler ──▶ Tempo
+             ├─ /awsfirehose/api/v1/push ──▶ alloy-ingest ──▶ Loki
              └─ /api/v1/write, /loki/api/v1/push (basic auth) ──▶ Mimir, Loki
 ```
+
+CloudWatch Logs reach Loki through Amazon Data Firehose (`../aws`,
+`modules/firehose.nix`): a log group in us-east-1, production's region, has a
+subscription filter to the one Firehose stream there, which posts batches to
+the edge with the OTLP token as its access key (a subscription can't cross
+regions). `modules/ingest-firehose.alloy` turns each event into a log record of
+its group (`service.name` is the group's name without `/aws/lambda/`,
+`/aws/vendedlogs/` or a leading `/`, other slashes as dashes, and without the
+`-prod` or `-dev` suffix, which becomes `deployment.environment`) and hands it
+to the OTLP log path, so emails are hashed as in every other log. The group,
+stream and function name are structured metadata (`aws_log_group_names`,
+`aws_log_stream_names`, `faas_name`). An AWS WAF event (`aws-waf-logs-*`) also
+gets the trace and span ID of its `traceparent` header, as Datadog's WAF
+pipeline does, and loses its client address: `clientIp`, a rate-based rule's
+`limitValue` and its `IP` or `FORWARDED_IP` custom key's value, and every
+header or `HEADER` custom key named for forwarding or a client address
+(`x-forwarded-for`, `forwarded`, `cf-connecting-ip`, ...) read `redacted`.
+Firehose has its answer once the events
+are handed on: a batch the memory limiter then refuses is lost, not retried
+(the limiter's `otelcol_processor_incoming_items_total` minus
+`outgoing_items_total`, and the error "failed to consume log entries"). Events
+from Firehose's own log groups are dropped, so its delivery errors can't loop
+back through it.
 
 ### Trace sampling
 
@@ -302,7 +326,14 @@ rule that pings a GoAlert heartbeat monitor every two minutes, so GoAlert pages 
 this Grafana, its alerting or its path to GoAlert stops. The switch sets
 `notify = true`. The cluster's own rules are the "Observability cluster"
 group in `modules/grafana.nix` (today: Tempo compaction stalled), routed to
-GoAlert notify. Muting covers notification policies only: a contact point's
+GoAlert notify. Datadog's monitors run beside Datadog as shadow rules (folder
+`Datadog shadow`, label `shadow=datadog`, the host stack's
+`grafana-provisioning/datadog/MAPPING.md`): they route to GoAlert notify and
+never page, even critical ones, until the paging moves over group by group.
+Every rule's state changes also go to Loki (`{from="state-history"}`), through
+the query gateway's one write path (basic auth, user `state-history`, password
+`otlp_token`, which only Grafana's historian sends), so they can be compared
+with Datadog's without the Grafana API. Muting covers notification policies only: a contact point's
 **Test** button in the UI sends for real even while muted; don't press it
 before the switch.
 
@@ -310,7 +341,7 @@ before the switch.
 
 | Key | Used by | Missing means |
 | --- | --- | --- |
-| `otlp_token` | `alloy-ingest` (bearer token), `edge` (basic-auth password of user `metrics`) | neither starts: no ingest, and no Grafana either, since it is behind the edge |
+| `otlp_token` | `alloy-ingest` (bearer token), `edge` (basic-auth password of user `metrics`), `grafana` and `query-gateway` (state history's basic auth, user `state-history`) | none of them starts: no ingest and no Grafana |
 | `google_client_id`, `google_client_secret`, `grafana_secret_key` | `grafana` | Grafana doesn't start |
 | `goalert_grafana_integration_key`, `goalert_grafana_notify_integration_key` | `grafana` contact points | they fail once unmuted |
 | `goalert_cluster_heartbeat_id` | the watchdog | it pings a URL that doesn't exist, and GoAlert never pages for it |

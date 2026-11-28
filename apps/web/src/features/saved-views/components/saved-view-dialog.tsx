@@ -116,6 +116,8 @@ export function SavedViewForm(
             Name
             <Input
               value={name()}
+              // Select the prefilled name so typing replaces it.
+              onFocus={(event) => event.currentTarget.select()}
               onInput={(event) => {
                 setName(event.currentTarget.value);
                 changed();

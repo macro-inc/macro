@@ -48,6 +48,8 @@ partial database rows, exact failure totals and a truncation flag for sampled
 details. Older events may omit these fields and the warning list.
 The fold reuses this tagged event enum for its generated TypeScript union;
 retain Specta derives on event payloads and preserve the producer wire shape.
+An `import.planned` notification appends `IMPORT_PLANNED_GUIDANCE`: tell the
+user the plan is ready, never approve it in that turn.
 Allow `<noop/>`, and nothing else, only before any tool call in a notification
 turn; prompt instructions must match the fold's conservative treatment of all
 tool activity. The fold drops a `<noop/>` that ends prose, but asks for the bare

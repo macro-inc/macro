@@ -41,8 +41,9 @@ They then open two more splits beside Email, resize the window to 1000px and
 They then open Tasks, narrow the window from 520px to 400px and expect every
 Tasks list header control, New and Search included, inside the header, then
 restore the size and expect the layout switch and Group by back.
-They then open Calendar and expect its header controls, Search events included,
-inside the header and uncovered at 440px, 400px, 360px and 320px (where Search
+They then open Calendar and expect its header controls, Search events included
+(a field at the default size, a button in a narrow pane), inside the header and
+uncovered at the default size, at 440px, 400px, 360px and 320px (where Search
 wraps onto its own row, where it is also opened and must leave the other
 controls in view) and at the restored size.
 The full suite checks native Soup predicate evaluation via

@@ -66,6 +66,9 @@ spec:
             - containerPort: 4318
               name: otlp-http
               protocol: TCP
+            - containerPort: 4319
+              name: firehose
+              protocol: TCP
           readinessProbe:
             httpGet:
               path: /-/ready

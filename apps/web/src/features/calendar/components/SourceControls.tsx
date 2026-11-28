@@ -1,4 +1,5 @@
 import { ViewSidebar } from '@app/components/view-shell';
+import { t } from '@app/lib/i18n';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import RssIcon from '@icon/system/regular/rss.svg';
 import WarningIcon from '@icon/system/regular/warning.svg';
@@ -129,7 +130,9 @@ export function CalendarAccountLabel(props: { group: CalendarAccountGroup }) {
  */
 export function CalendarSourceLabel(props: { source: CalendarSource }) {
   const syncFailure = () =>
-    props.source.syncError ? `Sync failed: ${props.source.syncError}` : '';
+    props.source.syncError
+      ? t('calendar.syncFailed', { error: props.source.syncError })
+      : '';
 
   return (
     <>
@@ -159,13 +162,13 @@ export function SubscriptionMark(props: { class?: string }) {
   return (
     <Tooltip
       as="span"
-      label="Subscription calendar"
+      label={t('calendar.subscriptionCalendar')}
       class={cn('flex shrink-0 text-ink-muted', props.class)}
     >
       <RssIcon
         aria-hidden={false}
         class="size-3"
-        aria-label="Subscription calendar"
+        aria-label={t('calendar.subscriptionCalendar')}
       />
     </Tooltip>
   );

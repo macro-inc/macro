@@ -102,6 +102,23 @@ it('cancellation never prompts the agent', async () => {
   );
   expect(mocks.reportConnected).not.toHaveBeenCalled();
 });
+it('connects while the agent is still working, without continuing the turn', async () => {
+  // An agent reply asks for an app and keeps working; the chip must not be
+  // dead until the turn ends.
+  mocks.turn = 'running';
+  mocks.connect.mockResolvedValue('connected');
+  render(() => (
+    <AgentConnections>
+      <Button />
+    </AgentConnections>
+  ));
+  const button = screen.getByRole('button') as HTMLButtonElement;
+  expect(button.disabled).toBe(false);
+  fireEvent.click(button);
+  await waitFor(() => expect(mocks.notify).toHaveBeenCalledOnce());
+  expect(mocks.connect).toHaveBeenCalledOnce();
+  expect(mocks.reportConnected).not.toHaveBeenCalled();
+});
 it('collaborators cannot connect their account on behalf of the session owner', () => {
   mocks.viewer = 'collaborator';
   render(() => (

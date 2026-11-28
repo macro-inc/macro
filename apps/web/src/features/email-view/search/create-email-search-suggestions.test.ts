@@ -46,6 +46,8 @@ const LABELS = [
   { name: 'Sent', kind: 'label' as const },
   { name: 'Archive', kind: 'label' as const },
   { name: 'Arch review', kind: 'tag' as const },
+  { name: 'Q3 "Plan"', kind: 'tag' as const },
+  { name: '🔥', kind: 'tag' as const },
 ];
 
 function setup(initialSearch = '') {
@@ -636,6 +638,28 @@ it('lists labels and tags after label:, and after the views once in: names one',
     ]);
     setSearch('invoice in:tr');
     expect(recentListed(suggestions)).toEqual(['in:Travel ']);
+    dispose();
+  });
+});
+
+it('offers a tag named by an emoji or holding quotes, written as the search reads it', () => {
+  createRoot((dispose) => {
+    const { search, setSearch, suggestions } = setup();
+    suggestions.setFocused(true);
+
+    setSearch('label:q3');
+    expect(recentListed(suggestions)).toEqual(['label:"Q3 Plan" ']);
+    suggestions.pick(0);
+    expect(search()).toBe('label:"Q3 Plan" ');
+
+    // A phone or a Mac types a curly quote in place of `"`.
+    setSearch('label:“q3');
+    expect(recentListed(suggestions)).toEqual(['label:"Q3 Plan" ']);
+
+    setSearch('budget -in:🔥');
+    expect(recentListed(suggestions)).toEqual(['-in:🔥 ']);
+    suggestions.pick(0);
+    expect(search()).toBe('budget -in:🔥 ');
     dispose();
   });
 });

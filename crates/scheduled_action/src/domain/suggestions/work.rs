@@ -33,9 +33,10 @@ pub const WORK_TEXTS: u16 = 100;
 pub const SENT_MESSAGES: u16 = 200;
 /// Newest sent messages it reads the text of.
 pub const SENT_TEXTS: u16 = 50;
-/// The model the finding call runs on, thinking little: as good at finding
-/// streams as a larger model, in a third of the time.
-pub const WORK_MODEL: &str = "google/gemini-3.8-flash";
+/// The model the finding call runs on, thinking little. Gemini 3.8 Flash,
+/// its first model, was as good at finding streams as a larger model in a
+/// third of the time; Gemini 4 Hydrogen replaced it as the fast Gemini model.
+pub const WORK_MODEL: &str = "google/gemini-4-hydrogen";
 /// Finding calls one list may take: the model is held to the list's shape
 /// by its prompt alone, and about one answer in four strays from it.
 pub const WORK_TRIES: u32 = 2;

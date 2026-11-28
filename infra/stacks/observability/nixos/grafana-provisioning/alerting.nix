@@ -1,11 +1,16 @@
-# Grafana alerting provisioning: contact points, the notification policy and
-# the rule groups, as the three provisioning documents Grafana reads.
+# Grafana alerting provisioning: contact points, the notification policy, the
+# rule groups and the mute timings, as the provisioning documents Grafana
+# reads.
 #
 # `goalertUrl` is where Grafana reaches GoAlert's API, without a trailing slash.
 # The contact points read `$GRAFANA_ALERT_TOPIC_ARN`, `$GOALERT_GRAFANA_KEY`
 # and `$GOALERT_GRAFANA_NOTIFY_KEY` from Grafana's environment.
 { lib, goalertUrl }:
 let
+  # Datadog's monitors, ported in shadow (datadog/default.nix).
+  datadog = import ./datadog { inherit lib; };
+  # A mute timing that covers all time: a route with it sends nothing.
+  muteAlways = "always";
   lokiQuery = expr: {
     refId = "A";
     datasourceUid = "loki";
@@ -367,6 +372,33 @@ in
         group_interval = "5m";
         repeat_interval = "4h";
         routes = [
+          # Shadow rules (datadog/) notify and never page, whatever their
+          # severity; one whose Datadog monitor sends nothing (dev and
+          # staging) sends nothing either.
+          {
+            receiver = "GoAlert notify";
+            object_matchers = [
+              [
+                "shadow"
+                "="
+                "datadog"
+              ]
+            ];
+            repeat_interval = "1h";
+            routes = [
+              {
+                receiver = "GoAlert notify";
+                object_matchers = [
+                  [
+                    "datadog_route"
+                    "="
+                    "silent"
+                  ]
+                ];
+                mute_time_intervals = [ muteAlways ];
+              }
+            ];
+          }
           {
             receiver = "Macro team email";
             object_matchers = [
@@ -450,6 +482,27 @@ in
           (rule "dd-4876245-warning" "[DEV] Channel invite count warning" "4876245" invites "warning"
             "$B > 5 && $B <= 10"
           )
+        ];
+      }
+    ]
+    ++ datadog.groups;
+  };
+  inherit muteAlways;
+  muteTimings = {
+    apiVersion = 1;
+    muteTimes = [
+      {
+        orgId = 1;
+        name = muteAlways;
+        time_intervals = [
+          {
+            times = [
+              {
+                start_time = "00:00";
+                end_time = "24:00";
+              }
+            ];
+          }
         ];
       }
     ];

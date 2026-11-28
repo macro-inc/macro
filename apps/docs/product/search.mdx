@@ -81,6 +81,7 @@ A few details:
 
 - Words match from their start: `subject:lunch` also finds "lunchtime", and `from:ana` finds Ana and Anabel but not Diana. A full address matches only that address.
 - Quote a value that has a space in it: `subject:"team lunch"`, `label:"Q3 planning"`.
+- A label or tag named only with an emoji works as typed, such as `label:🔥`. Leave out double quotes that are part of its name: `label:"Q3 Plan"` finds a tag named Q3 "Plan".
 - Write dates as `2026/06/01` or `2026-06-01`. They are read in your time zone.
 - `newer_than:` and `older_than:` take a number and a unit: `d` for days, `w` for weeks, `m` for months, `y` for years.
 - Operator names are not case sensitive, so `From:ana` works too.

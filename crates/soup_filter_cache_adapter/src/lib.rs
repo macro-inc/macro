@@ -32,6 +32,7 @@ pub mod mail;
 mod notifications;
 mod parsed_document;
 pub mod permissions;
+mod projection_inputs;
 pub mod properties;
 mod write_passes;
 mod write_response;
@@ -39,6 +40,7 @@ pub use notifications::{
     notification_deletion_updates, notification_projection_updates,
     notification_projection_updates_for, optimistic_notification_updates,
 };
+pub use projection_inputs::projection_inputs;
 pub use write_passes::{WritePassError, WritePassStep, WritePasses, write_passes};
 pub use write_response::WriteResponse;
 
@@ -574,6 +576,46 @@ pub fn dirty_projection_mutations(keys: &[String]) -> Vec<ProjectionMutation> {
         })
         .collect()
 }
+
+/// The fields of a document, project or chat record its Soup projection
+/// reads; notifications and properties are listed with their projections.
+const DIRECT_INPUTS: &[(&str, &[&str])] = &[
+    (
+        "GraphqlSoupDocument",
+        &[
+            "id",
+            "ownerId",
+            "projectId",
+            "fileType",
+            "subType",
+            "createdAt",
+            "updatedAt",
+            "cacheProjection",
+        ],
+    ),
+    (
+        "GraphqlSoupProject",
+        &[
+            "id",
+            "ownerId",
+            "parentId",
+            "createdAt",
+            "updatedAt",
+            "cacheProjection",
+        ],
+    ),
+    (
+        "GraphqlSoupChat",
+        &[
+            "id",
+            "ownerId",
+            "projectId",
+            "createdAt",
+            "updatedAt",
+            "cacheProjection",
+        ],
+    ),
+];
 
 fn direct_projection_input_for_object(
     record_key: RecordKey,

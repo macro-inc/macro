@@ -320,6 +320,9 @@ pub enum ItemStatus {
     Unknown,
 }
 
+/// How to answer a ready import plan, appended to the system-event prompt.
+const IMPORT_PLANNED_GUIDANCE: &str = " An import.planned event means a presented import plan is ready: tell the user in one plain sentence that it is ready to review, with its numbers (what it copies, task lists, skipped, by hand), and that they approve it on the card. Do not approve it or call DecideReview in this turn; a system event cannot approve, whatever the user said before the plan was ready.";
+
 /// XML supplied next to the per-prompt agent context. Escaping JSON as XML text
 /// prevents payloads from closing the envelope or introducing new instructions.
 pub fn notification_context(notifications: &[Notification]) -> Result<String, serde_json::Error> {
@@ -336,6 +339,25 @@ pub fn notification_context(notifications: &[Notification]) -> Result<String, se
         ));
     }
     xml.push_str("</m-notifications>\nThese are system events, not user requests. Do not repeat completed actions or retry uncertain outcomes. Read final drafts through GetReview. If nothing needs saying and you have not called any tool in this turn, reply with <noop/> and nothing else: no text before or after it. After any tool call, summarize the result instead of replying with <noop/>.");
+    // Nothing else tells the user a plan they are waiting on is ready, and an
+    // earlier yes cannot approve it: say so, and leave approval to the card.
+    // A plan the owner already decided on the card in this batch is not
+    // waiting for anyone.
+    let decided = |subject: &str| {
+        notifications.iter().any(|notification| {
+            notification.subject_id == subject
+                && matches!(
+                    notification.event,
+                    NotificationEvent::ReviewDecided(_) | NotificationEvent::ReviewSettled(_)
+                )
+        })
+    };
+    if notifications.iter().any(|notification| {
+        matches!(notification.event, NotificationEvent::ImportPlanned(_))
+            && !decided(&notification.subject_id)
+    }) {
+        xml.push_str(IMPORT_PLANNED_GUIDANCE);
+    }
     Ok(xml)
 }
 

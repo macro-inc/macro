@@ -42,13 +42,11 @@ const MODELS = {
   ],
   // The fast path's single model: whole doc in, `runCode` out, no supervisor.
   // Mirrors the chain the backend EditDocument tool sends for `fast: true`.
-  // Benched on a real inline request (10k-token prompt, one runCode step):
-  // 3.8 Flash 1.5-5 s with no thinking tokens, 3.7 Flash 3.8-5.4 s (~450
-  // thinking tokens even at `low`), 3.5 Flash Lite 0.8-1.1 s with identical
-  // code on three requests. 3.8 leads for headroom on harder edits; Haiku is
-  // the provider-error fallback.
+  // Benched on a 12.7k-token inline request at `low` thinking, one runCode
+  // step, 11 runs each: Gemini 4 Hydrogen a median 2.8 s (100-230 thinking
+  // tokens), Gemini 3.8 Flash 4.9 s. Haiku is the provider-error fallback.
   fast: [
-    { provider: 'google', model: 'gemini-3.8-flash' },
+    { provider: 'google', model: 'gemini-4-hydrogen' },
     { provider: 'anthropic', model: 'claude-haiku-4-5' },
   ],
 } as const;

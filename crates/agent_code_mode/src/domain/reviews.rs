@@ -108,9 +108,10 @@ pub struct CreateReview {
 /// Persisted review item state shared with typed system notifications.
 pub use agent_runtime_protocol::domain::notification::ItemStatus as ReviewItemStatus;
 
-/// Why a submit was refused before anything started.
+/// Why a submit was refused before anything started. The card shows it, so
+/// it speaks to the owner; `DecideReview` adds what the agent should do.
 const NOT_APPROVABLE: &str =
-    "This review is not ready to approve yet. Check it again before approving.";
+    "This plan isn't ready to approve yet, so nothing was started. Approve it once it's ready.";
 
 /// Full UI record, fetched outside the model context.
 #[derive(Clone, Serialize, Deserialize, ToSchema, specta::Type)]

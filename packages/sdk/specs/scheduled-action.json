@@ -7184,7 +7184,7 @@
       },
       "Topic": {
         "type": "object",
-        "description": "One thing in the person's work that several suggestions may belong to,\nsuch as a customer, an event or a hire, as generation sessions named it.",
+        "description": "One result in the person's work that several suggestions end at, such as\na renewal, an event or a filled role, as generation sessions named it.",
         "required": ["key", "name", "open"],
         "properties": {
           "key": {

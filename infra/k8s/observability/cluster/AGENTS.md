@@ -50,6 +50,9 @@ The [README](README.md) has the application list, bootstrap and contract with
   (also writes `MAPPING.md`). While Datadog still has it, change
   `infra/stacks/monitoring` with it.
 - Change an edge or query-gateway rule: `modules/edge.nix`.
+- Port a Datadog monitor: the host stack's `grafana-provisioning/datadog/`
+  (recipe in `infra/stacks/observability/AGENTS.md`); render writes its
+  `MAPPING.md` too.
 
 ## Checks
 
@@ -87,6 +90,10 @@ The [README](README.md) has the application list, bootstrap and contract with
 - Derived metrics are delta samples: query them with `sum_over_time`, never `rate` or
   `increase` (`modules/derived-metrics/MAPPING.md`).
 - Grafana's contact point **Test** button sends even while `notify` is false.
+- Rule state history goes to Loki through the query gateway's one write path,
+  `/state-history/loki/api/v1/push` (`macro.edge.stateHistoryUrl`), with basic
+  auth Grafana's historian sends (grafana users can point a datasource there);
+  query it as `{from="state-history"}`. Don't open other write paths on the gateway.
 - Argo CD syncs with server-side apply; ignore a field (`ignoreDifferences`) only
   after seeing it drift on a cluster.
 

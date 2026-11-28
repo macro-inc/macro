@@ -7,7 +7,7 @@ fn advertised_models_lead_with_auto_then_chat_then_routed() {
     assert_eq!(
         models
             .iter()
-            .filter(|model| **model == "google/gemini-3.8-flash")
+            .filter(|model| **model == "google/gemini-4-hydrogen")
             .count(),
         1
     );
@@ -26,7 +26,7 @@ fn advertised_models_lead_with_auto_then_chat_then_routed() {
 
 #[test]
 fn auto_defaults_to_gemini() {
-    assert_eq!(resolve(AUTO_MODEL), "google/gemini-3.8-flash");
+    assert_eq!(resolve(AUTO_MODEL), "google/gemini-4-hydrogen");
     assert_eq!(resolve("fireworks/glm-5p3"), "fireworks/glm-5p3");
     assert_eq!(display_name(AUTO_MODEL), "Auto");
     assert_eq!(super::supports_images(AUTO_MODEL), Some(true));
@@ -50,7 +50,10 @@ fn routed_models_have_house_names() {
         display_name("fireworks/nemotron-lightning-3p5-30b-a3b"),
         "Nemotron Lightning 3.5 30B A3B"
     );
-    assert_eq!(display_name("google/gemini-3.8-flash"), "Gemini 3.8 Flash");
+    assert_eq!(
+        display_name("google/gemini-4-hydrogen"),
+        "Gemini 4 Hydrogen"
+    );
     assert_eq!(
         display_name("anthropic/claude-sonnet-5-5"),
         "anthropic/claude-sonnet-5-5"

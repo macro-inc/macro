@@ -2664,7 +2664,10 @@ the type can't link to CRM records. **Create** still creates the property.
 A name that is exactly a built-in property's (`Contacts`, `Status`, `Owner`, in
 any case) cannot be used: the note says the name belongs to a built-in
 property, **Create** is disabled, and **Use <name>** appears when that property
-applies to the item being edited.
+applies to the item being edited. A name already used by another of your (or
+your team's) properties is refused on **Create** with "A property with that
+name already exists", and repeated option values with "Duplicate values not
+allowed".
 Calls are linked automatically
 when they end, from their participants and the invitees of the calendar event
 carrying the meeting link; verify on a finished call's `Properties`.
@@ -2951,9 +2954,8 @@ preview replies per thread. Expand a thread to load its replies;
 `Load earlier messages` pages backward. Live updates preserve unsent replies
 and edits while updating the surrounding thread.
 
-Discussion and comment headers include the date for older messages (for example,
-`Yesterday at 4:37 PM` or `09/24/26 at 4:37 PM`). Regular channel timelines retain
-their date dividers and time-only message headers.
+Discussion and comment headers show when a message was sent
+[as channels do](channels.md#message-times).
 
 When verifying `@` mentions, compare the same person query in the document body
 and the Discussion composer: shared contacts use the same recent-interaction

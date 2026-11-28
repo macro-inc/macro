@@ -55,6 +55,9 @@ pub(super) struct QueueReport {
     pub(super) kept: u64,
     /// Mutations known to be lost.
     pub(super) dropped: u64,
+    /// Whether the side file notes this report's loss, which the next open
+    /// reads back and tells again.
+    pub(super) noted: bool,
     pub(super) times: CrossingTimes,
 }
 
@@ -105,17 +108,42 @@ pub(super) async fn wipe_keeping_queue(
     scope: &str,
     owner: OpfsOwner,
 ) -> Result<(OpfsOwner, Crossing), JsValue> {
+    wipe_keeping(scope, owner, &QueueReport::default()).await
+}
+
+/// [`wipe_keeping_queue`], after an open that told `earlier`. A loss in it
+/// that the side file does not note goes with the copy, which then says writes
+/// were lost before it, as one behind a noted loss does: whoever imports it,
+/// this engine or one after it dies, tells the loss. A noted one the wipe
+/// cannot read goes into the loss note the wipe writes over it.
+pub(super) async fn wipe_keeping_queue_after(
+    scope: &str,
+    owner: OpfsOwner,
+    earlier: &QueueReport,
+) -> Result<(OpfsOwner, Crossing), JsValue> {
+    wipe_keeping(scope, owner, earlier).await
+}
+
+async fn wipe_keeping(
+    scope: &str,
+    owner: OpfsOwner,
+    earlier: &QueueReport,
+) -> Result<(OpfsOwner, Crossing), JsValue> {
+    let untold = earlier.lost() && !earlier.noted;
     let started = query_telemetry::now_ms();
     // Once the queue is read from here on, nothing may keep it from the file.
     let held = owner.sidecar().hold().await;
     let (owner, sidecar) = or_release(owner, held).await?;
     let (owner, file) = or_release(owner, read_file(&sidecar).await).await?;
-    // Either way the file cannot say what else is lost once a queue follows in it.
-    let doubted = file
-        .as_ref()
-        .is_none_or(|file| file.lost() && file.queue().is_none());
+    let unread = file.is_none();
+    // Either way the file cannot say what else is lost once a queue follows in
+    // it, so the copy says so itself.
+    let doubted = untold
+        || file
+            .as_ref()
+            .is_none_or(|file| file.lost() && file.queue().is_none());
     let (owner, mut read) =
-        read_before_wipe(scope, owner, &sidecar, file.unwrap_or_default()).await?;
+        read_before_wipe(scope, owner, &sidecar, file.unwrap_or_default(), doubted).await?;
     if doubted {
         read.report.lose();
     }
@@ -126,7 +154,14 @@ pub(super) async fn wipe_keeping_queue(
     });
     let mut unwritten = read.unwritten;
     if unwritten || read.report.lost() {
-        let frame = SalvageFile::loss(read.report.loss());
+        // A note the wipe could not read is gone once this is written over
+        // it, so this one counts it too. Not written, the count stays with
+        // that note if it is still there, and is lost with it if not.
+        let mut loss = read.report.loss();
+        if unread && earlier.noted {
+            loss.dropped += earlier.dropped;
+        }
+        let frame = SalvageFile::loss(loss);
         if sidecar.write_tail(read.end, &frame).await.is_ok() {
             read.end += frame.len() as u64;
             read.report.dropped = 0;
@@ -279,6 +314,7 @@ async fn read_before_wipe(
     owner: OpfsOwner,
     sidecar: &Sidecar,
     file: SalvageFile,
+    doubted: bool,
 ) -> Result<(OpfsOwner, ReadBeforeWipe), JsValue> {
     let mut read = ReadBeforeWipe {
         queue: None,
@@ -361,7 +397,11 @@ async fn read_before_wipe(
         Ok(())
     };
     if forgotten.is_ok() {
-        read.carry(found.queue, pending);
+        let queue = found.queue.map(|queue| match doubted {
+            true => queue.after_loss(),
+            false => queue,
+        });
+        read.carry(queue, pending);
         read.write_queue(sidecar).await;
     }
     let owner = connected
@@ -391,6 +431,7 @@ fn report_of(found: &QueueRead) -> QueueReport {
         },
         kept: 0,
         dropped: found.dropped,
+        noted: false,
         times: CrossingTimes::default(),
     }
 }
@@ -399,6 +440,54 @@ impl QueueReport {
     /// Whether pages have a loss to be told of.
     pub(super) fn lost(&self) -> bool {
         !matches!(self.outcome, QueueOutcome::None | QueueOutcome::Kept) || self.dropped > 0
+    }
+
+    /// What an open told, then a wipe of the database it opened and the open
+    /// that followed: what the later one kept, and every loss, each once. A
+    /// count is what is known: one a side file could not give back after the
+    /// wipe is lost with it, as on any open that cannot read the side file,
+    /// and the outcome still says writes were lost.
+    pub(super) fn then(self, later: Self) -> Self {
+        // The later open counted what the side file notes: read back, or
+        // carried into the note its wipe wrote over one it could not read.
+        // Only an import that could not read what the wipe left, or a wipe
+        // whose note the side file refused, counts less.
+        let (earlier, dropped) = match self.noted {
+            true => (QueueOutcome::None, 0),
+            false => (self.outcome, self.dropped),
+        };
+        let counted = match self.noted {
+            true => later.dropped.max(self.dropped),
+            false => dropped + later.dropped,
+        };
+        let lost = !matches!(earlier, QueueOutcome::None | QueueOutcome::Kept) || dropped > 0;
+        Self {
+            outcome: match later.outcome {
+                QueueOutcome::None => earlier,
+                // What the earlier open lost is not among what the later kept.
+                QueueOutcome::Kept if lost => QueueOutcome::Partial,
+                outcome => outcome,
+            },
+            kept: later.kept,
+            dropped: counted,
+            noted: later.noted && !lost,
+            times: self.times.then(later.times),
+        }
+    }
+
+    /// Notes the loss this report tells when the side file would not take it
+    /// from [`leave`], so that a worker that dies before it tells leaves it to
+    /// the next one. Anything else the side file holds is what [`leave`] meant
+    /// to replace.
+    pub(super) async fn noted_in(self, sidecar: &Sidecar) -> Self {
+        if self.noted || !self.lost() {
+            return self;
+        }
+        let noted = sidecar
+            .replace(&SalvageFile::loss(self.loss()))
+            .await
+            .is_ok();
+        Self { noted, ..self }
     }
 
     /// What a later open has to be told of this one.
@@ -439,6 +528,7 @@ impl Crossing {
                 },
                 kept: 0,
                 dropped: self.report.dropped + later.report.dropped,
+                noted: false,
                 times: self.report.times.then(later.report.times),
             },
         }
@@ -531,7 +621,10 @@ async fn leave(sidecar: &Sidecar, report: QueueReport) -> Result<QueueReport, Js
     if report.lost() {
         let left = sidecar.replace(&SalvageFile::loss(report.loss())).await;
         if left.is_ok() {
-            return Ok(report);
+            return Ok(QueueReport {
+                noted: true,
+                ..report
+            });
         }
         unless_busy(left)?;
     }

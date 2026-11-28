@@ -22,6 +22,7 @@ mod query_path;
 pub mod queue;
 pub mod record_selection;
 pub mod revision;
+pub mod schema_change;
 pub mod search;
 pub mod store;
 pub mod value;

@@ -1,5 +1,6 @@
-# OpenTofu, the AWS provider and the S3 state backend. `stateKey` picks the
-# state object; `null` keeps the state local (the bootstrap's first apply only).
+# OpenTofu, the AWS providers (the cluster's region and production's) and the
+# S3 state backend. `stateKey` picks the state object; `null` keeps the state
+# local (the bootstrap's first apply only).
 {
   lib,
   pkgs,
@@ -28,9 +29,19 @@
     };
   };
 
-  provider.aws = {
-    inherit (settings) region;
-    allowed_account_ids = [ settings.accountId ];
-    default_tags.tags = settings.tags;
-  };
+  provider.aws = [
+    {
+      inherit (settings) region;
+      allowed_account_ids = [ settings.accountId ];
+      default_tags.tags = settings.tags;
+    }
+    # Production's region, for what has to sit next to it: the Firehose stream
+    # its log groups send to (modules/firehose.nix).
+    {
+      alias = "production";
+      inherit (settings.firehose) region;
+      allowed_account_ids = [ settings.accountId ];
+      default_tags.tags = settings.tags;
+    }
+  ];
 }

@@ -357,3 +357,40 @@ it('keeps ordinary single-request updates immediate', () => {
     { kind: 'broadcast-push', push: { kind: 'cache-changed', revision: '1' } },
   ]);
 });
+
+it.each([
+  [['a', 'b'], ['b', 'c'], ['b']],
+  [['a'], undefined, undefined],
+  [undefined, ['a'], undefined],
+] as const)(
+  'intersects unchangedViews across coalesced pushes (%j + %j -> %j)',
+  (first, second, expected) => {
+    const { push, reply } = resume([
+      { id: 1, kind: 'write', query: '{ a }', data: { a: 1 } },
+      { id: 2, kind: 'write', query: '{ b }', data: { b: 2 } },
+    ]);
+    push({
+      kind: 'cache-hydrated',
+      revision: parseCacheRevision('1'),
+      ...(first === undefined ? {} : { unchangedViews: [...first] }),
+    });
+    reply(0);
+    expect(
+      push({
+        kind: 'cache-hydrated',
+        revision: parseCacheRevision('2'),
+        ...(second === undefined ? {} : { unchangedViews: [...second] }),
+      })
+    ).toEqual([
+      {
+        kind: 'broadcast-push',
+        push: {
+          kind: 'cache-hydrated',
+          revision: '2',
+          ...(expected === undefined ? {} : { unchangedViews: [...expected] }),
+        },
+        coalescedCount: 2,
+      },
+    ]);
+  }
+);

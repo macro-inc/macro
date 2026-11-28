@@ -2,17 +2,21 @@
 # (infra/stacks/observability/nixos/proxy.nix before it served only GoAlert):
 #
 # - `edge`: the only target of the existing ALB (TargetGroupBinding, IP
-#   targets). Grafana and Argo CD by hostname, POST-only OTLP to Alloy ingest, and
-#   basic-auth Prometheus remote write and Loki push, rate limited. The
+#   targets). Grafana and Argo CD by hostname, POST-only OTLP and Amazon Data
+#   Firehose to Alloy ingest, and basic-auth Prometheus remote write and Loki
+#   push, rate limited. The
 #   ALB is enabled in only two zones and sends nothing to a target outside
 #   them, so the edge runs only there.
 # - `query-gateway`: Grafana's datasources go through it. Grafana users can
 #   send arbitrary paths through a datasource proxy, so only the query
 #   endpoints of Mimir, Loki and Tempo pass, and only with the methods
-#   queries use; maintenance and write APIs answer 404 or 403.
+#   queries use; maintenance and write APIs answer 404 or 403. The one write
+#   is Grafana's alert state history, a Loki push under a prefix no
+#   datasource has (`stateHistoryUrl`), with basic auth only Grafana's
+#   historian holds: a datasource pointed at the prefix can't write.
 #
-# Rate limits are per replica: two edge replicas allow twice the host's
-# 100 requests/s.
+# Rate limits are per replica: each edge replica allows 400 ingest requests/s
+# with a burst of 800.
 {
   config,
   lib,
@@ -47,7 +51,8 @@ let
     ++ map (host: "    ${host} otlp;\n") cfg.otlpHosts
   );
 
-  # Unauthenticated (bearer token checked by Alloy) or basic-auth ingest.
+  # Unauthenticated (bearer token or Firehose access key checked by Alloy) or
+  # basic-auth ingest.
   ingest = upstream: auth: ''
     if ($observability_host != otlp) { return 404; }
     limit_except POST { deny all; }
@@ -103,6 +108,10 @@ let
       }
       location = /loki/api/v1/push {
         ${ingest endpoints.loki.push true}
+      }
+      # CloudWatch Logs from Amazon Data Firehose; Alloy checks its access key.
+      location = /awsfirehose/api/v1/push {
+        ${ingest (svc "alloy-ingest" config.macro.ingest.firehosePort) false}
       }
     }
     ${lib.optionalString (cfg.argocdHosts != [ ]) ''
@@ -166,6 +175,17 @@ let
       }
       location ~ ^/loki/loki/api/v1/(labels|label/[^/]+/values|series|index/stats|index/volume|index/volume_range|patterns|tail|status/buildinfo|format_query|detected_fields|detected_labels|detected_field/[^/]+/values)$ {
         ${query endpoints.loki.query "GET" websocketHeaders}
+      }
+      # Grafana's alert state history (`unified_alerting.state_history`).
+      # `$request_uri` is the path as sent: a datasource proxy path that
+      # climbs out of its prefix with `..` normalizes to this location but
+      # fails the check. Grafana users can point a datasource at this prefix,
+      # so the push also needs the historian's basic auth (grafana.nix).
+      location = /state-history/loki/api/v1/push {
+        if ($request_uri != "/state-history/loki/api/v1/push") { return 403; }
+        auth_basic "state-history";
+        auth_basic_user_file /etc/nginx/auth/state-history.htpasswd;
+        ${query endpoints.loki.query "POST" ''proxy_set_header Authorization "";''}
       }
       location ~ ^/tempo/api/(echo|search|search/tags|search/tag/[^/]+/values|traces/[a-fA-F0-9]+|v2/traces/[a-fA-F0-9]+|v2/search/tags|v2/search/tag/[^/]+/values|metrics/query|metrics/query_range|status/buildinfo)$ {
         ${query endpoints.tempo.query "GET" ""}
@@ -243,6 +263,12 @@ in
         };
       description = "Grafana datasource URLs through the query gateway.";
     };
+    stateHistoryUrl = mkOption {
+      type = types.str;
+      readOnly = true;
+      default = "${svc "query-gateway" config.macro.edge.gatewayPort}/state-history";
+      description = "Where Grafana pushes alert state history: Loki's push API under it, through the query gateway.";
+    };
   };
 
   config = {
@@ -307,7 +333,11 @@ in
               }
               {
                 to = [ (workload.pods ingestPods) ];
-                ports = workload.tcpPorts [ 4318 ];
+                # OTLP, Firehose.
+                ports = workload.tcpPorts [
+                  4318
+                  config.macro.ingest.firehosePort
+                ];
               }
               {
                 to = [ argocdServer ];
@@ -365,6 +395,19 @@ in
           port = cfg.gatewayPort;
           podLabels = endpoints.clientLabels.read;
           preStopSeconds = 10;
+          volumes = [
+            {
+              name = "auth";
+              secret.secretName = "query-gateway-basic-auth";
+            }
+          ];
+          volumeMounts = [
+            {
+              name = "auth";
+              mountPath = "/etc/nginx/auth";
+              readOnly = true;
+            }
+          ];
         })
         {
           networkPolicies.query-gateway.spec = {
@@ -389,6 +432,17 @@ in
             ];
           };
         }
+      ];
+
+      yamls = [
+        # State history's push: user `state-history`, password the OTLP
+        # token, which Grafana reads from its own Secret. Anyone holding the
+        # token can already push to Loki through the edge.
+        (workload.externalSecret cluster {
+          name = "query-gateway-basic-auth";
+          properties = [ "otlp_token" ];
+          template."state-history.htpasswd" = "state-history:{PLAIN}{{ .otlp_token }}\n";
+        })
       ];
     };
   };

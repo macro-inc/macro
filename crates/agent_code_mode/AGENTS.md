@@ -139,7 +139,8 @@ which refuses them before decoding the decision; `DecideReview` requires a real 
 review's acting account. Every Submit, from the card or the chat, waits for
 `ReviewActions::approvable` (default: always), the hook a kind uses to refuse
 until it is ready, and is refused with `CodeModeError::NotApprovable` (400, shown on the card
-like a draft problem). A write its fence refuses after the submit puts the
+like a draft problem, so its text speaks to the owner; `DecideReview` appends what the agent
+should do: nothing was queued, never promise to start it later). A write its fence refuses after the submit puts the
 item back to pending with the reason, never `unknown`, and settles the review
 with the typed `refused` outcome: the review is open again, unchanged.
 Dismissing a review calls `ReviewActions::released`, so an import review
@@ -166,6 +167,10 @@ longer delivery state.
 
 Import reviews contain exactly one draft, with source `notion`, `linear`, or
 `jira`. Source selection stays on that draft through presentation and approval.
+The optional `copySkipped` list records skipped Notion pages the owner chose
+to copy. The import service applies it to the approved plan. Roll out the
+server that decodes `copySkipped` before serving a web build that writes it.
+Drain reviews with saved overrides before rolling back to an older decoder.
 
 The web and SDK review types are generated from these Rust types with specta
 (`src/bin/export_review_types.rs`, `just gen-agent-review-types` in `apps/web`).

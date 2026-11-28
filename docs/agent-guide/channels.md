@@ -394,6 +394,19 @@ remain literal; source-controlled tags must not inject entities. Test live edits
 and deletion before deferred reconciliation: neither may be overwritten or revived.
 See the [rollout/recovery gates](../runbooks/slack-archive-import.md).
 
+## Message times
+
+Every message, reply, system update and comment says when it was sent: `2:33 PM`
+today, `Yesterday at 11:47 PM` the day before, `11/6/26, 2:33 PM` earlier. A time
+alone is always today's. The date order and the 12- or 24-hour clock follow the
+browser's locale, hovering shows the whole date, and labels change on their own
+when the day does. The same goes for a message without a header, whose time
+shows in its hover toolbar. The first message of a day always has a header, even
+from the same sender minutes later.
+
+Date dividers stand between top-level messages of different days: `Today`,
+`Yesterday`, the weekday up to six days back, then the date. Replies have none.
+
 ## Collapsed reply chains
 
 Collapsed channel threads show up to the first three replies from the timeline
@@ -409,8 +422,9 @@ row out of view and back. Expanding again must retain every incoming reply.
 
 Standalone thread previews show the first three complete message groups instead.
 Consecutive replies from the same sender within the five-minute avatar-grouping
-window count as one group. Different senders, longer gaps, deleted replies, and
-agent replies triggered by different users preserve their avatar group boundaries.
+window count as one group. Different senders, longer gaps, a new day, deleted
+replies, and agent replies triggered by different users preserve their avatar
+group boundaries.
 
 Channel timelines show system updates alongside messages: participant additions
 and removals, renames, profile picture changes, and completed calls with their

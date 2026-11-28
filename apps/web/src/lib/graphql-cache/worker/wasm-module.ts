@@ -50,7 +50,11 @@ import type {
   SearchCachePage,
   WriteResult,
 } from '../protocol';
-import type { CacheQueueOutcome } from '../telemetry';
+import type {
+  CacheQueueOutcome,
+  CacheSchemaChange,
+  CacheSchemaResetReason,
+} from '../telemetry';
 import { workerCacheTelemetry } from '../telemetry-relay';
 import type { CompiledEngineExchange } from './compiled-engine';
 import type { StaleDatabaseRemovalOutcome } from './stale-databases';
@@ -107,6 +111,20 @@ export interface CacheOpenResult {
   outcome: CacheOpenOutcome;
   /** Optional while older cached WASM artifacts are still in circulation. */
   queue?: CacheQueueCrossing;
+  /** What bringing the opened records to the worker's GraphQL schema did;
+   * absent from WASM built before the cache stored its schema. */
+  schemaChange?: CacheOpenSchemaChange;
+}
+
+/** `schemaChange` of an open result. */
+export interface CacheOpenSchemaChange {
+  change: CacheSchemaChange;
+  resetReason?: CacheSchemaResetReason;
+  changedTypes: number;
+  droppedRecords: number;
+  incompleteDocuments: number;
+  retiredOverlays: number;
+  adoptMs: number;
 }
 
 export type CacheEngineHydrationResult = WriteResult &

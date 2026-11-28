@@ -365,14 +365,20 @@ try {
     .$('[aria-label="Search email"]')
     .waitForDisplayed({ timeout: 30_000 });
 
-  // Calendar's header wraps its controls onto a second row in a narrow pane;
-  // Search events must stay inside it there too, and off New when it wraps
-  // onto a row of its own (360px and narrower), as must the controls that
-  // wrap after it (320px), with Search closed and open.
+  // Calendar's header shows Search events as a field in a wide pane and as a
+  // button in a narrow one, where it wraps its controls onto a second row;
+  // Search must stay inside it there too, and off New when it wraps onto a
+  // row of its own (360px and narrower), as must the controls that wrap after
+  // it (320px), with Search closed and open.
+  const calendarSearchField = '[data-view-shell-top-bar] input[type="search"]';
   await browser.$('[data-sidebar-next-item="calendar"]').click();
-  await browser
-    .$('button[aria-label="Search events"]')
-    .waitForDisplayed({ timeout: 30_000 });
+  await browser.$(calendarSearchField).waitForDisplayed({ timeout: 30_000 });
+  await expectHeaderFits(
+    browser,
+    'Search events',
+    'calendar-header',
+    'the default window'
+  );
   for (const width of [440, 400, 360, 320]) {
     await browser.setWindowSize(width, 900);
     await expectHeaderFits(
@@ -384,7 +390,7 @@ try {
     if (width > 360) continue;
     // Open on its own row, Search leaves the controls above it in view.
     await browser.$('button[aria-label="Search events"]').click();
-    await browser.$('input[placeholder="Search events"]').waitForDisplayed();
+    await browser.$(calendarSearchField).waitForDisplayed();
     await expectHeaderFits(
       browser,
       'Search events',

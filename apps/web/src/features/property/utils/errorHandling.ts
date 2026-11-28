@@ -12,6 +12,7 @@ export const ERROR_MESSAGES = {
   PROPERTY_DELETE: 'Unable to delete property',
   PROPERTY_ADD: 'Unable to add property',
   PROPERTY_CREATE: 'Unable to create property',
+  PROPERTY_NAME_TAKEN: 'A property with that name already exists',
 
   // Option operations
   OPTION_FETCH: 'Unable to load options',

@@ -3,7 +3,7 @@ import ClockCounterIcon from '@icon/system/regular/clock-counter-clockwise.svg';
 import LightningIcon from '@icon/system/regular/lightning.svg';
 import PlayIcon from '@icon/system/regular/play.svg';
 import type { RoutineTemplate } from '@service-scheduled-action/generated/schemas';
-import { Badge, Button, Layer } from '@ui';
+import { Badge, Button, Card } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
 import { TemplateReferenceChip } from '../components/template-reference';
 import { formatDateTime } from '../core/routine-draft';
@@ -106,30 +106,25 @@ export function RoutineTemplateView(props: {
                 </Badge>
               </div>
             </div>
-            <Layer depth={1}>
-              <section
-                aria-label="Template triggers"
-                class="rounded-xl border border-edge-muted bg-surface"
-              >
-                <div class="flex flex-col gap-2 p-4">
-                  <For each={props.triggers}>
-                    {(trigger) => (
-                      <div class="flex items-center gap-2 text-sm">
-                        <LightningIcon class="size-4 shrink-0 text-ink-muted" />
-                        {trigger}
-                      </div>
-                    )}
-                  </For>
-                </div>
-                <div class="flex items-center gap-2 border-t border-edge-muted px-4 py-3 text-xs text-ink-muted">
-                  <span
-                    aria-hidden="true"
-                    class="size-1.5 rounded-full bg-ink-extra-muted"
-                  />
-                  Doesn't run until you activate it
-                </div>
-              </section>
-            </Layer>
+            <Card variant="raised" role="region" aria-label="Template triggers">
+              <div class="flex flex-col gap-2 p-4">
+                <For each={props.triggers}>
+                  {(trigger) => (
+                    <div class="flex items-center gap-2 text-sm">
+                      <LightningIcon class="size-4 shrink-0 text-ink-muted" />
+                      {trigger}
+                    </div>
+                  )}
+                </For>
+              </div>
+              <div class="flex items-center gap-2 border-t border-edge-divider px-4 py-3 text-xs text-ink-muted">
+                <span
+                  aria-hidden="true"
+                  class="size-1.5 rounded-full bg-ink-extra-muted"
+                />
+                Doesn't run until you activate it
+              </div>
+            </Card>
             <section aria-label="Template instructions">
               {props.instructions}
             </section>

@@ -13,7 +13,9 @@ pub const MAX_SOUP_PAGES: usize = 64;
 pub const MAX_SOUP_PAGE_BYTES: usize = 2 * 1024 * 1024;
 /// Viewer type owning the disposable query entry points.
 pub const SOUP_PAGE_OWNER: &str = "GraphqlUser";
-pub(crate) const PAGE_ORDER_FIELD: &str = "__cache_soup_page_order_v1";
+/// Write-recency metadata on the viewer record. A merge never takes it from
+/// an incoming record.
+pub const PAGE_ORDER_FIELD: &str = "__cache_soup_page_order_v1";
 const ORDER_OVERHEAD_BYTES: usize = PAGE_ORDER_FIELD.len() + 32;
 
 fn is_page_field(key: &str) -> bool {

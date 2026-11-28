@@ -17,6 +17,7 @@ use std::collections::{BTreeMap, HashMap};
 
 mod optimistic;
 mod prepare;
+pub(crate) use prepare::{PARENT_INPUTS, PARENTS, PROPERTY_INPUTS};
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod test;
 

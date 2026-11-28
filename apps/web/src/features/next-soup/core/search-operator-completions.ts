@@ -1,8 +1,10 @@
-import { foldName } from '@core/util/name-match-score';
-import { match } from 'ts-pattern';
 import {
   isPhraseQuote,
   nameAsTyped,
+} from '@app/components/view-shell/search-terms';
+import { foldName } from '@core/util/name-match-score';
+import { match } from 'ts-pattern';
+import {
   SEARCH_OPERATOR_CALL_STATUSES,
   SEARCH_OPERATOR_NAMES,
   SEARCH_OPERATOR_PRIORITIES,

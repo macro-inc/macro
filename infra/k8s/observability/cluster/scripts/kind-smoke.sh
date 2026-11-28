@@ -25,6 +25,10 @@ if ! kind get clusters | grep -qx "$name"; then
   kind create cluster --name "$name" --image "$image" --wait 2m
 fi
 context="kind-$name"
+# Workloads spread across zones with DoNotSchedule (derived-metrics, Grafana,
+# ingest) stay Pending on a node with no zone label. The backends stay Pending
+# anyway: their spread needs three zones (`minDomains`), and their volumes gp3.
+kubectl --context "$context" label nodes --all --overwrite topology.kubernetes.io/zone=kind
 nix run "$(git rev-parse --show-toplevel)/infra/k8s/observability/cluster#bootstrap" -- \
   --context "$context" --revision "$revision"
 # On a kept cluster the applications may still show an older commit.
@@ -43,7 +47,7 @@ done
 # secret from it wait for it, and Loki, Tempo and Mimir wait for gp3 volumes
 # (EBS CSI) and S3; Argo CD waits for its Google client. The edge can't even sync: the controller's webhook, which
 # admits TargetGroupBindings, isn't running.
-expected_unhealthy="argocd aws-load-balancer-controller external-secrets loki tempo mimir grafana edge alloy-ingest"
+expected_unhealthy="argocd aws-load-balancer-controller external-secrets loki tempo mimir grafana edge alloy-ingest query-gateway"
 expected_unsynced="edge"
 deadline=$((SECONDS + 1200))
 while :; do

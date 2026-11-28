@@ -613,6 +613,16 @@ describe('coordinator runtime protocol', () => {
     },
     {
       ...version,
+      kind: 'register-tab',
+      scope: 'scope',
+      tabId: 'tab',
+      livenessLockName: 'graphql-cache-tab:scope:tab',
+      visible: true,
+      buildTime: 1_790_000_000_000,
+      generation: 1_790_000_100_000,
+    },
+    {
+      ...version,
       kind: 'cache-request',
       tabId: 'tab',
       request: { id: 1, kind: 'clear' },
@@ -948,6 +958,18 @@ describe('coordinator runtime protocol', () => {
         buildTime: 0,
       }).ok
     ).toBe(false);
+    expect(
+      validateTabToCoordinatorEnvelope({
+        ...version,
+        kind: 'register-tab',
+        scope: 'scope',
+        tabId: 'tab',
+        livenessLockName: 'lock',
+        visible: true,
+        buildTime: 0,
+        generation: -1,
+      }).ok
+    ).toBe(false);
     // Every page reports its build, which decides database takeovers.
     expect(
       validateTabToCoordinatorEnvelope({
@@ -997,10 +1019,10 @@ describe('coordinator runtime protocol', () => {
     // The current versions moved past the unversioned name, so the lock
     // names the versioned database that builds before them never held.
     expect(databaseOwnerLockName('scope')).toBe(
-      'macro:turso-opfs:v1:29:graphql-cache:scope:s4.v4.t12'
+      'macro:turso-opfs:v1:29:graphql-cache:scope:s4.v4.t13'
     );
     expect(databaseOwnerLockName('é')).toBe(
-      'macro:turso-opfs:v1:26:graphql-cache:é:s4.v4.t12'
+      'macro:turso-opfs:v1:26:graphql-cache:é:s4.v4.t13'
     );
   });
 

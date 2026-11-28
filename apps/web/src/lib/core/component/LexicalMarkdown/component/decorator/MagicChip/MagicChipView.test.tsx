@@ -101,12 +101,11 @@ it('selects document cards without navigating and preserves the explicit session
     />
   ));
   const card = view.container.querySelector('[data-magic-chip-card]')!;
-  expect(card.classList.contains('bg-surface')).toBe(true);
   fireEvent.click(screen.getByText('Document response'));
   expect(select).toHaveBeenCalledTimes(1);
   expect(open).not.toHaveBeenCalled();
   setSelected(true);
-  expect(card.classList.contains('ring-2')).toBe(true);
+  expect(card.classList.contains('outline-4')).toBe(true);
   fireEvent.click(screen.getByRole('button', { name: 'Open session' }));
   expect(open).toHaveBeenCalledTimes(1);
   expect(select).toHaveBeenCalledTimes(1);

@@ -1162,7 +1162,7 @@ supplied context, explicitly set `toolset: { type: 'none' }`:
 ```ts
 const answer = await macro.ai.structuredCompletion({
   prompt: 'Summarize these supplied notes: ...',
-  model: 'google/gemini-3.8-flash',
+  model: 'google/gemini-4-hydrogen',
   toolset: { type: 'none' },
   output_schema: {
     name: 'Summary',

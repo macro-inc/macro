@@ -1,9 +1,9 @@
+import { isPhraseQuote } from '@app/components/view-shell/search-terms';
 import {
   isUnfinishedEmailSearchOperator,
   readsAsEmailSearchOperator,
 } from '@app/features/email-view/search/email-search-operators';
 import {
-  isPhraseQuote,
   isUnfinishedSearchOperator,
   readSearchOperators,
   readsAsSearchOperator,

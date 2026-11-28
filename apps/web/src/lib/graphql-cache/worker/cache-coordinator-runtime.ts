@@ -108,8 +108,11 @@ export function installCacheCoordinatorWorker(
 /** Give each client its own runner scope. Closing its last port must not call
  * SharedWorkerGlobalScope.close() while another client is reconnecting. */
 export function installSharedCacheCoordinatorWorker(
-  scope: { onconnect: ((event: MessageEvent) => void) | null },
-  router = new CoordinatorRouter()
+  scope: {
+    onconnect: ((event: MessageEvent) => void) | null;
+    close(): void;
+  },
+  router = new CoordinatorRouter({ endCoordinator: () => scope.close() })
 ): void {
   scope.onconnect = (event) => {
     for (const endpoint of event.ports) {

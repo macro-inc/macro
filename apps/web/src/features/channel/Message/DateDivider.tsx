@@ -1,4 +1,5 @@
-import { formatRelativeDate, isSameDay } from '@core/util/time';
+import { useCurrentDay } from '@core/signal/currentDay';
+import { formatConversationDay, isSameDay } from '@core/util/time';
 import { createMemo, Show } from 'solid-js';
 import type { ChannelMessageListMeta } from './list-meta';
 import { MessageFlag } from './MessageFlag';
@@ -25,6 +26,7 @@ export function isDateDividerVisible(
 }
 
 export function DateDivider(props: DateDividerProps) {
+  const currentDay = useCurrentDay();
   const shouldRender = createMemo(
     () =>
       isDateDividerVisible(props.createdAt, props.listMeta, props.isReply) &&
@@ -33,7 +35,9 @@ export function DateDivider(props: DateDividerProps) {
 
   return (
     <Show when={shouldRender()}>
-      <MessageFlag text={formatRelativeDate(props.createdAt)} />
+      <MessageFlag
+        text={formatConversationDay(props.createdAt, currentDay())}
+      />
     </Show>
   );
 }

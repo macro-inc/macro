@@ -33,6 +33,12 @@ Paths below `grafana-provisioning/` are under `nixos/`.
   panel both read it), and its Datadog copy in
   `infra/stacks/monitoring/monitors/` by hand. A new entry takes the next free
   `panelId`; never renumber one, since sent notifications link to it.
+- Port or change a Datadog monitor's Grafana shadow: its entry in
+  `grafana-provisioning/datadog/<file>.nix`, one file per
+  `infra/stacks/monitoring/monitors/<file>.ts` (format in `datadog/default.nix`).
+  Render the cluster: it writes `datadog/MAPPING.md`, the per-monitor list of
+  rules and comparisons. Shadow rules notify and never page; record what
+  running beside Datadog showed in the entry's `comparison`.
 - Change the Macro computers fleet dashboard
   (`grafana-provisioning/computers-dashboard.nix`) or the Firecracker hosts:
   capacity one (`grafana-provisioning/firecracker-capacity-dashboard.nix`).

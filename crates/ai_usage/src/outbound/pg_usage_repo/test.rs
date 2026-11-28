@@ -249,6 +249,24 @@ async fn gemini_3_8_flash_is_priced_like_deepseek_v4p1_flash(pool: PgPool) {
     );
 }
 
+/// Gemini 4 Hydrogen bills input and output at Gemini 3.8 Flash's discounted
+/// $0.30 / $1.20. The input discount also applies to its cache reads, which
+/// come to $0.015, half of Flash's $0.03.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn gemini_4_hydrogen_bills_at_its_discounted_rates(pool: PgPool) {
+    let repo = PgUsageRepo::new(pool);
+
+    assert_eq!(
+        repo.get_pricing("google/gemini-4-hydrogen").await.unwrap(),
+        Some(ModelPricing::Tokens {
+            input: 0.3,
+            output: 1.2,
+            cache_read: Some(0.015),
+            cache_write: None,
+        })
+    );
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn set_pricing_recomputes_existing_rows_at_the_discounted_rate(pool: PgPool) {
     let repo = PgUsageRepo::new(pool.clone());

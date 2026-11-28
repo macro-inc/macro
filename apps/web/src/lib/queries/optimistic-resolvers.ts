@@ -7,10 +7,12 @@ import {
   UpdateNotificationsDocument,
 } from '../service-clients/service-storage/graphql/generated/graphql';
 import { entityOptimisticResolvers } from './entity-optimistic-resolvers';
+import { propertyCatalogOptimisticResolvers } from './properties/catalog/resolvers';
 
 /** Local mutation semantics. Only predicted fields enter the optimistic layer. */
 export const soupOptimisticResolvers = [
   ...entityOptimisticResolvers,
+  ...propertyCatalogOptimisticResolvers,
   optimisticResolver(MarkEmailThreadSeenDocument, ({ input }) => ({
     __typename: 'GraphqlSoupEmailThread',
     id: String(input.threadId),

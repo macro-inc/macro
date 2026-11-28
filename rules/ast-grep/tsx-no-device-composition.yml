@@ -108,7 +108,6 @@ ignores:
   - apps/web/src/features/calendar-view/components/Header.tsx
   - apps/web/src/features/calendar-view/components/SelectedEventDetails.tsx
   - apps/web/src/features/calendar-view/components/Workspace.tsx
-  - apps/web/src/features/calendar/components/CalendarSettingsDropdown.tsx
   - apps/web/src/features/calendar/components/EventDetails.tsx
   - apps/web/src/features/calendar/components/EventRsvpScopeDialog.tsx
   - apps/web/src/features/calendar/components/MonthDrawer.tsx

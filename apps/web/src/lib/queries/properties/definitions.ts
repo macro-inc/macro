@@ -1,20 +1,48 @@
+import type { UrqlQueryResult } from '@app/lib/urql-solid/types';
 import { toast } from '@core/component/Toast/Toast';
 import { useIsAuthenticated } from '@core/context/user';
-import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
-import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
-import type { Accessor } from 'solid-js';
+import { createLiveQuery } from '@graphql-cache/solid/create-live-query';
+import type { CreatePropertyDefinitionRequest } from '@service-properties/generated/schemas/createPropertyDefinitionRequest';
+import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
+import type { PropertyDefinitionResponse } from '@service-properties/generated/schemas/propertyDefinitionResponse';
+import type { PropertyScope } from '@service-properties/generated/schemas/propertyScope';
 import {
-  PROPERTY_NAME_RESERVED_CODE,
-  propertiesServiceClient,
-} from '../../service-clients/service-properties/client';
-import type { CreatePropertyDefinitionRequest } from '../../service-clients/service-properties/generated/schemas/createPropertyDefinitionRequest';
-import type { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
-import type { PropertyDefinition } from '../../service-clients/service-properties/generated/schemas/propertyDefinition';
-import type { PropertyDefinitionResponse } from '../../service-clients/service-properties/generated/schemas/propertyDefinitionResponse';
-import type { PropertyScope } from '../../service-clients/service-properties/generated/schemas/propertyScope';
-import { queryClient } from '../client';
-import { type MutationCallbacks, withCallbacks } from '../utils';
-import { propertiesKeys } from './keys';
+  type GraphqlPropertyEntityType,
+  PropertyCatalogDefinitionsDocument,
+  type PropertyCatalogDefinitionsQuery,
+  PropertyCatalogDefinitionsWithOptionsDocument,
+  type PropertyCatalogDefinitionsWithOptionsQuery,
+} from '@service-storage/graphql/generated/graphql';
+import {
+  getGraphqlSoupCacheHost,
+  getGraphqlSoupClient,
+} from '@service-storage/graphql-soup';
+import type { AnyVariables, OperationResult } from '@urql/core';
+import { type Accessor, createMemo, untrack } from 'solid-js';
+import { isCatalogConflict } from './catalog/errors';
+import { offlineAsSuccess } from './catalog/list-result';
+import {
+  toDefinitionWithOptions,
+  toGraphqlDefinitionScope,
+  toPropertyDefinition,
+} from './catalog/map';
+import {
+  type CatalogMutationCallbacks,
+  createCatalogMutation,
+} from './catalog/mutation';
+import {
+  catalogReadKey,
+  catalogReadPolicy,
+  noteCatalogResult,
+  refreshCatalogReaders,
+  registerCatalogReader,
+} from './catalog/readers';
+import {
+  createPropertyDefinition,
+  deletePropertyDefinition,
+  isCatalogErrorCode,
+} from './catalog/writes';
 
 type ListPropertiesQueryParams = {
   scope: PropertyScope;
@@ -22,71 +50,155 @@ type ListPropertiesQueryParams = {
   forEntityType?: EntityType;
 };
 
-// Cached callbacks outlive the caller; only plain request values enter here.
-function listPropertiesQueryOptions(
-  { scope, includeOptions, forEntityType }: ListPropertiesQueryParams,
-  enabled: boolean
-) {
-  return queryOptions({
-    queryKey: propertiesKeys.definitions({
-      scope,
-      includeOptions,
-      forEntityType,
-    }).queryKey,
-    queryFn: () =>
-      throwOnErr(() =>
-        propertiesServiceClient.listProperties({
-          scope,
-          include_options: includeOptions,
-          for_entity_type: forEntityType,
-        })
-      ),
-    enabled,
-    staleTime: 1000 * 60 * 5, // 5 minutes
-  });
-}
-
-export function useListPropertiesQuery(
-  params: Accessor<ListPropertiesQueryParams>,
-  enabled: Accessor<boolean> = () => true
-) {
-  const authenticated = useIsAuthenticated();
-  return useQuery(() =>
-    listPropertiesQueryOptions(params(), authenticated() === true && enabled())
+function definitionsWithOptions(
+  data: PropertyCatalogDefinitionsWithOptionsQuery
+): PropertyDefinitionResponse[] {
+  return data.user.propertyDefinitions.flatMap(
+    (definition) => toDefinitionWithOptions(definition) ?? []
   );
 }
 
+function definitionsOnly(
+  data: PropertyCatalogDefinitionsQuery
+): PropertyDefinitionResponse[] {
+  return data.user.propertyDefinitions.flatMap(
+    (definition) => toPropertyDefinition(definition) ?? []
+  );
+}
+
+/** A definitions list, read from the cache and the server. */
+export type PropertyDefinitionsQuery = UrqlQueryResult<
+  PropertyDefinitionResponse[]
+>;
+
+/**
+ * The viewer's property definitions in the server's order, read live from
+ * the normalized cache. With `includeOptions` (fixed per call site), each
+ * carries its options.
+ */
+export function useListPropertiesQuery(
+  params: Accessor<ListPropertiesQueryParams>,
+  enabled: Accessor<boolean> = () => true
+): PropertyDefinitionsQuery {
+  const authenticated = useIsAuthenticated();
+  const variables = createMemo(
+    () => {
+      if (authenticated() !== true || !enabled()) return undefined;
+      const { scope, forEntityType } = params();
+      return {
+        scope: toGraphqlDefinitionScope(scope),
+        forEntityType: (forEntityType ??
+          null) as GraphqlPropertyEntityType | null,
+      };
+    },
+    undefined,
+    {
+      equals: (a, b) =>
+        a?.scope === b?.scope && a?.forEntityType === b?.forEntityType,
+    }
+  );
+  const withOptions = untrack(() => params().includeOptions);
+  const key = createMemo(() =>
+    catalogReadKey(
+      withOptions
+        ? PropertyCatalogDefinitionsWithOptionsDocument
+        : PropertyCatalogDefinitionsDocument,
+      variables()
+    )
+  );
+  const readOptions = () => ({
+    requestPolicy: catalogReadPolicy(key()),
+    keepPreviousData: false,
+    client: getGraphqlSoupClient(),
+    onResult: (result: OperationResult<unknown, AnyVariables>) =>
+      noteCatalogResult('definitions', result),
+  });
+  const query = withOptions
+    ? createLiveQuery(
+        PropertyCatalogDefinitionsWithOptionsDocument,
+        variables,
+        () => ({ ...readOptions(), select: definitionsWithOptions })
+      )
+    : createLiveQuery(PropertyCatalogDefinitionsDocument, variables, () => ({
+        ...readOptions(),
+        select: definitionsOnly,
+      }));
+
+  registerCatalogReader({
+    kind: 'definitions',
+    key,
+    variables,
+    withOptions,
+    definitionIds: () =>
+      (query.data ?? []).map((item) =>
+        'definition' in item ? item.definition.id : item.id
+      ),
+    refresh: () => query.refetch({ requestPolicy: 'network-only' }),
+  });
+  return offlineAsSuccess(query);
+}
+
+/**
+ * Definitions with their options, once: from the cache when it holds the
+ * list, else from the server. Independent of any mounted reader, so a reader
+ * refreshing cannot cancel it. A mounted reader of the same list shares this
+ * operation, so a request of its that fails can answer this one with the
+ * failure even though the cache holds the list; the cached list wins then,
+ * as TanStack's cached data did. Only a request that failed in the network
+ * asks the cache again, and only the normalized cache: the plain network
+ * client answers a cache-only read by sending the request again.
+ */
+export async function loadPropertyDefinitionsWithOptions(
+  params: Omit<ListPropertiesQueryParams, 'includeOptions'>
+): Promise<PropertyDefinitionResponse[]> {
+  const client = getGraphqlSoupClient();
+  const host = getGraphqlSoupCacheHost();
+  const variables = {
+    scope: toGraphqlDefinitionScope(params.scope),
+    forEntityType: (params.forEntityType ??
+      null) as GraphqlPropertyEntityType | null,
+  };
+  const result = await client
+    .query(PropertyCatalogDefinitionsWithOptionsDocument, variables, {
+      requestPolicy: 'cache-first',
+    })
+    .toPromise();
+  if (result.data) return definitionsWithOptions(result.data);
+  // Only the cache the read went through answers it: a client without one
+  // would send a cache-only read as a second request.
+  if (
+    result.error?.networkError &&
+    host &&
+    getGraphqlSoupCacheHost() === host
+  ) {
+    const cached = await client
+      .query(PropertyCatalogDefinitionsWithOptionsDocument, variables, {
+        requestPolicy: 'cache-only',
+      })
+      .toPromise();
+    if (cached.data) return definitionsWithOptions(cached.data);
+  }
+  throw result.error ?? new Error('Property definitions returned no data');
+}
+
+/** One definition with its options, read from the server. */
 export async function fetchPropertyDefinitionWithOptions(
   definitionId: string
 ): Promise<PropertyDefinitionResponse | undefined> {
-  const data = await queryClient.fetchQuery({
-    queryKey: propertiesKeys.definitions({
-      scope: 'all',
-      includeOptions: true,
-    }).queryKey,
-    queryFn: async () =>
-      await throwOnErr(
-        async () =>
-          await propertiesServiceClient.listProperties({
-            scope: 'all',
-            include_options: true,
-          })
-      ),
-    staleTime: 0,
-  });
-
-  return data.find((item) =>
+  const result = await getGraphqlSoupClient()
+    .query(
+      PropertyCatalogDefinitionsWithOptionsDocument,
+      { scope: 'ALL', forEntityType: null },
+      { requestPolicy: 'network-only' }
+    )
+    .toPromise();
+  if (result.error) throw result.error;
+  if (!result.data) throw new Error('Property definitions returned no data');
+  return definitionsWithOptions(result.data).find((item) =>
     'definition' in item
       ? item.definition.id === definitionId
       : item.id === definitionId
   );
-}
-
-function invalidatePropertyDefinitions() {
-  queryClient.invalidateQueries({
-    predicate: ({ queryKey }) =>
-      queryKey.includes('properties') && queryKey.includes('definitions'),
-  });
 }
 
 type CreatePropertyDefinitionParams = {
@@ -97,68 +209,55 @@ type DeletePropertyDefinitionParams = {
   definitionId: string;
 };
 
+const deleteFailed = () => toast.failure('Failed to delete property');
+
 export function useDeletePropertyDefinitionMutation(
-  callbacks?: MutationCallbacks<unknown, Error, DeletePropertyDefinitionParams>
+  callbacks?: CatalogMutationCallbacks<void, DeletePropertyDefinitionParams>
 ) {
-  return useMutation(() => ({
-    mutationFn: async (vars: DeletePropertyDefinitionParams) => {
-      return await throwOnErr(
-        async () =>
-          await propertiesServiceClient.deletePropertyDefinition({
-            definition_id: vars.definitionId,
-          })
-      );
-    },
-    ...withCallbacks<unknown, Error, DeletePropertyDefinitionParams>(
-      {
-        onError(error) {
-          console.error('Failed to delete property definition', error);
-          toast.failure('Failed to delete property');
-        },
-        onSuccess: () => {
-          invalidatePropertyDefinitions();
-        },
+  return createCatalogMutation(
+    (vars: DeletePropertyDefinitionParams) =>
+      deletePropertyDefinition(vars.definitionId, deleteFailed),
+    {
+      onError(error) {
+        console.error('Failed to delete property definition', error);
+        deleteFailed();
       },
-      callbacks
-    ),
-  }));
+    },
+    callbacks
+  );
 }
 
 /** Whether a failed create was the server refusing a built-in property's name. */
 export function isPropertyNameReserved(error: unknown): boolean {
-  return thrownResultErrorHasCode(error, PROPERTY_NAME_RESERVED_CODE);
+  return isCatalogConflict(error, 'RESERVED_NAME');
 }
 
 export function useCreatePropertyDefinitionMutation(
-  callbacks?: MutationCallbacks<
+  callbacks?: CatalogMutationCallbacks<
     PropertyDefinition,
-    Error,
     CreatePropertyDefinitionParams
   >
 ) {
-  return useMutation(() => ({
-    mutationFn: async (vars: CreatePropertyDefinitionParams) => {
-      const result = await throwOnErr(
-        async () =>
-          await propertiesServiceClient.createPropertyDefinition({
-            body: vars.body,
-          })
-      );
-      return result;
-    },
-    ...withCallbacks<PropertyDefinition, Error, CreatePropertyDefinitionParams>(
-      {
-        onError(error) {
-          console.error('Failed to create property definition', error);
-          // The caller says why a built-in name was refused.
-          if (isPropertyNameReserved(error)) return;
-          toast.failure('Failed to create property');
-        },
-        onSuccess: () => {
-          invalidatePropertyDefinitions();
-        },
+  return createCatalogMutation(
+    (vars: CreatePropertyDefinitionParams) =>
+      createPropertyDefinition(vars.body),
+    {
+      onError(error) {
+        console.error('Failed to create property definition', error);
+        // The caller says why a name or an option value was refused.
+        if (isCatalogErrorCode(error, 'CONFLICT')) return;
+        toast.failure('Failed to create property');
       },
-      callbacks
-    ),
-  }));
+    },
+    callbacks
+  );
+}
+
+/**
+ * Reload the definition and option lists on screen, for a server-side change
+ * no catalog write described (such as replacing the CRM stages). Without the
+ * cache, the client reloads mounted queries after any mutation itself.
+ */
+export function refreshPropertyDefinitions(): Promise<void> {
+  return refreshCatalogReaders(['definitions', 'options']);
 }
