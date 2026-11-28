@@ -18,6 +18,7 @@ inbound = [
   "dep:axum",
   "dep:entity_registry",
   "dep:macro_authorization",
+  "dep:nom",
   "entity_access/inbound",
   "macro_authorization/axum",
   "schema",
@@ -65,6 +66,7 @@ dashmap = { workspace = true }
 macro_uuid = { path = "../macro_uuid" }
 messages = { path = "../messages", features = ["ports", "schema"] }
 mockall = { workspace = true, optional = true }
+nom = { workspace = true, optional = true }
 agent_fold = { path = "../folds/agent_fold" }
 # Only the domain vocabulary; `outbound` would pull rdkafka into every
 # consumer of this crate.
