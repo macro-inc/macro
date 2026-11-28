@@ -361,16 +361,18 @@ impl TursoStorage {
     /// Close failure exposes no recoverable session and requires replacing the
     /// worker before a recovery wipe.
     pub fn try_close(self) -> Result<TursoStorageCloseOutcome, TursoStorageCloseFailure> {
-        let reason = self.latched_reason();
+        let latched = self.latched_reason();
         let Self {
             session,
             connection,
             ..
         } = self;
+        // After a failed sync the OS may have dropped dirty WAL pages, and a
+        // later sync can still succeed, so no copy may move that WAL into the
+        // database: the pair closes as reset-required, as `flush_wal` latches.
+        let reason = latched.or_else(|| session.flush_wal().err().map(|_| PhysicalResetReason::Io));
         if reason.is_none() {
-            // The copy below syncs the WAL before it copies, but a copy that
-            // fails or finds the log busy leaves it as it was.
-            let _ = session.flush_wal();
+            // A copy that fails or finds the log busy leaves it as it was.
             connection.checkpoint_before_close();
         }
         connection.release_statements();

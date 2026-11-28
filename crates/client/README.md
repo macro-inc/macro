@@ -737,9 +737,11 @@ COMMIT, which opens whole.
   counts as unflushed, so the new owner's first flush covers it. A drain
   cancels the quiet wait, though the requests it still runs flush as before
   (a generation read first, or once 2 s have passed): closing the engine on
-  release, handoff or close tries to flush and copy the WAL itself, and goes
-  on if either fails, since what is unflushed then is cache data a power loss
-  could take anyway. A wipe deletes the file.
+  release, handoff or close flushes the WAL and then copies it into the
+  database. When that flush fails it closes reset-required without copying:
+  the OS may have dropped the dirty pages, and a later sync that succeeds
+  would let the copy move them into the database. A failed copy leaves the
+  WAL as it was. A wipe deletes the file.
 - A failed deferred flush is reported as `graphql_cache.wal_flush` with its
   error class and resets the cache, as a failed sync inside a COMMIT did.
 
