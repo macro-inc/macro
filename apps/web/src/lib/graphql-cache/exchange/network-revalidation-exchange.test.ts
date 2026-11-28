@@ -13,6 +13,7 @@ import {
   networkRevalidationExchange,
   registerNetworkRevalidation,
 } from './network-revalidation-exchange';
+import { withOptimisticMutationDisposition } from './optimistic';
 
 const LIST = gql`query List { items { id tags } }`;
 const DETAIL = gql`query Detail { item { id tags } }`;
@@ -267,6 +268,8 @@ describe('networkRevalidationExchange', () => {
     respond(2, { data: undefined, error });
     expect((await saved).error).toBeUndefined();
     expect(errors.at(-1)).toBe(error);
+    // A caller that would read the list itself still does.
+    expect(networkRevalidated(await saved)).toBe(false);
     list.unsubscribe();
   });
 
@@ -296,6 +299,31 @@ describe('networkRevalidationExchange', () => {
     const result = await saved;
     expect(result.error).toBe(error);
     expect(networkRevalidated(result)).toBe(false);
+    await flush();
+    expect(
+      requests.filter(({ operation }) => operation.kind === 'query')
+    ).toHaveLength(2);
+    list.unsubscribe();
+  });
+
+  it('reads queries again after a lost write the cache gave up on', async () => {
+    const { client, requests, respond, flush } = setup();
+    const list = client.query(LIST, {}).subscribe(() => {});
+    respond(0);
+    const saved = client.mutation(SAVE, {}).toPromise();
+    const error = new CombinedError({ networkError: new Error('dropped') });
+    const failed = withOptimisticMutationDisposition(
+      {
+        operation: requests[1].operation,
+        data: undefined,
+        error,
+        stale: false,
+        hasNext: false,
+      },
+      { kind: 'permanently-failed' }
+    );
+    respond(1, failed);
+    expect((await saved).error).toBe(error);
     await flush();
     expect(
       requests.filter(({ operation }) => operation.kind === 'query')
@@ -392,6 +420,7 @@ describe('networkRevalidationExchange', () => {
     await vi.advanceTimersByTimeAsync(15_000);
     await done;
     expect((await saved).error).toBeUndefined();
+    expect(networkRevalidated(await saved)).toBe(false);
     failing.unsubscribe();
     stalled.unsubscribe();
   });

@@ -127,7 +127,7 @@ export function networkRevalidationExchange(
       number,
       { operation: Operation; requestId: number }
     >();
-    const waiters = new Map<number, Set<() => void>>();
+    const waiters = new Map<number, Set<(read: boolean) => void>>();
     // The lists reading each query key. A key with one never gets its old
     // operation re-sent: its lists read it again in cursor order.
     const owners = new Map<number, Set<NetworkRevalidation>>();
@@ -139,7 +139,8 @@ export function networkRevalidationExchange(
       if (operation.kind === 'teardown') {
         queries.delete(operation.key);
         owners.delete(operation.key);
-        finish(operation.key);
+        // No reader is left to show a stale result.
+        finish(operation.key, true);
       }
       if (operation.kind !== 'query') return operation;
       inFlight.add(operation.key);
@@ -167,14 +168,15 @@ export function networkRevalidationExchange(
       return tagged;
     }
 
-    function finish(key: number): void {
+    function finish(key: number, read: boolean): void {
       inFlight.delete(key);
       const pending = waiters.get(key);
       waiters.delete(key);
-      for (const resolve of pending ?? []) resolve();
+      for (const resolve of pending ?? []) resolve(read);
     }
 
-    async function refreshQueries(span: Span): Promise<void> {
+    /** Whether every query and list was read again. */
+    async function refreshQueries(span: Span): Promise<boolean> {
       const revalidations = new Set<NetworkRevalidation>();
       // Includes lists whose operations urql joined onto another list's.
       for (const owner of CLIENT_OWNERS.get(client) ?? []) {
@@ -196,25 +198,25 @@ export function networkRevalidationExchange(
           // which may have started before the write: send that one again.
           if (!inFlight.has(operation.key)) return [];
         }
-        const settled = new Promise<void>((resolve) => {
+        const settled = new Promise<boolean>((resolve) => {
           let queryWaiters = waiters.get(operation.key);
           if (!queryWaiters) {
             queryWaiters = new Set();
             waiters.set(operation.key, queryWaiters);
           }
           const pending = queryWaiters;
-          const complete = () => {
+          const complete = (read: boolean) => {
             clearTimeout(timer);
             pending.delete(complete);
             if (pending.size === 0 && waiters.get(operation.key) === pending) {
               waiters.delete(operation.key);
             }
-            resolve();
+            resolve(read);
           };
           // A stalled unrelated query must not hold a confirmed mutation (or
           // the next edit in its serialization scope) indefinitely. Its fetch
           // can still reconcile subscribers after this wait expires.
-          const timer = setTimeout(complete, REVALIDATION_WAIT_MS);
+          const timer = setTimeout(() => complete(false), REVALIDATION_WAIT_MS);
           pending.add(complete);
         });
         const refresh = track(
@@ -231,11 +233,14 @@ export function networkRevalidationExchange(
         return [settled];
       });
       span.setAttr('revalidation.queries_resent', pending.length);
-      const [, outcomes] = await Promise.all([
+      const [reads, outcomes] = await Promise.all([
         Promise.all(pending),
         Promise.all([...revalidations].map(revalidateOwner)),
       ]);
       recordOutcomes(span, outcomes);
+      return (
+        reads.every(Boolean) && outcomes.every((outcome) => outcome === 'read')
+      );
     }
 
     return (operations$) =>
@@ -252,17 +257,11 @@ export function networkRevalidationExchange(
             ) {
               return empty;
             }
-            if (!result.stale && !result.hasNext) finish(operation.key);
+            if (!result.stale && !result.hasNext)
+              finish(operation.key, !result.error);
           }
-          const disposition = optimisticMutationDispositionOf(result);
-          if (
-            operation.kind !== 'mutation' ||
-            !enabled() ||
-            result.hasNext ||
-            (disposition && disposition.kind !== 'committed')
-          ) {
+          if (operation.kind !== 'mutation' || !enabled() || result.hasNext)
             return fromValue(result);
-          }
           const revalidate = () =>
             Telemetry.span(
               'graphql.mutation.network_revalidation',
@@ -271,9 +270,12 @@ export function networkRevalidationExchange(
                   'graphql.operation.name',
                   getOperationName(operation.query) ?? 'unknown'
                 );
-                await refreshQueries(span);
+                const complete = await refreshQueries(span);
+                span.setAttr('revalidation.complete', complete);
+                return complete;
               }
             );
+          const disposition = optimisticMutationDispositionOf(result);
           if (result.data == null || result.error) {
             // A write whose response was lost may still have committed, so
             // the queries are read again, without holding back its error.
@@ -284,9 +286,11 @@ export function networkRevalidationExchange(
               );
             return fromValue(result);
           }
+          if (disposition && disposition.kind !== 'committed')
+            return fromValue(result);
           async function refreshBeforeSettling() {
-            await revalidate();
-            REVALIDATED.add(result);
+            // A caller may skip its own read only if every one succeeded.
+            if (await revalidate()) REVALIDATED.add(result);
             return result;
           }
           return fromPromise(refreshBeforeSettling());
