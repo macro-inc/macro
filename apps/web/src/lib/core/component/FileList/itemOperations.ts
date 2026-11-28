@@ -6,6 +6,7 @@ import { getDeletedTree } from '@queries/storage/deleted';
 import {
   duplicateEntity,
   moveEntity,
+  type OnSoupDeletion,
   permanentlyDeleteEntity,
   restoreEntity,
   trashEntity,
@@ -94,10 +95,10 @@ export async function setFileType(args: {
   return true;
 }
 
-export async function deleteItem(args: {
-  itemType: ItemType;
-  id: string;
-}): Promise<boolean> {
+export async function deleteItem(
+  args: { itemType: ItemType; id: string },
+  onGraphqlDeletion?: OnSoupDeletion
+): Promise<boolean> {
   const { itemType, id } = args;
 
   const accessLevel = await getItemAccessLevel({ itemType, id });
@@ -110,7 +111,7 @@ export async function deleteItem(args: {
     )
       return false;
     const result = await catchToResult(() =>
-      trashEntity({ type: ENTITY_TYPES[itemType], id })
+      trashEntity({ type: ENTITY_TYPES[itemType], id }, onGraphqlDeletion)
     );
     if (result.isErr()) {
       return false;

@@ -8,7 +8,8 @@ export class BulkDeleteFailure extends Error {
   constructor(
     entities: EntityData[],
     readonly results: boolean[],
-    cause?: unknown
+    cause?: unknown,
+    readonly acknowledgements?: ReadonlyMap<string, Promise<boolean>>
   ) {
     const deletedEntities = entities.filter(
       (_, index) => results[index] === true

@@ -41,7 +41,10 @@ import {
 } from '@queries/soup/graphql/optimistic-deletions';
 import { soupKeys } from '@queries/soup/keys';
 import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
-import { permanentlyDeleteEntity } from '@queries/storage/entity-mutations';
+import {
+  type OnSoupDeletion,
+  permanentlyDeleteEntity,
+} from '@queries/storage/entity-mutations';
 import { databasesKeys, formsKeys } from '@queries/storage/keys';
 import { scheduledActionClient } from '@service-scheduled-action/client';
 import type { ListedDatabase } from '@service-storage/generated/schemas/listedDatabase';
@@ -139,8 +142,9 @@ function invalidateDeletedDssItems(
 async function settleDssDeletes(
   entities: EntityData[],
   deletions: Promise<boolean>[],
-  writer: QueryAccount | undefined
-): Promise<boolean[]> {
+  writer: QueryAccount | undefined,
+  acknowledgements: Map<string, Promise<boolean>>
+) {
   const outcomes = await Promise.allSettled(deletions);
   const results = outcomes.map(
     (outcome) => outcome.status === 'fulfilled' && outcome.value
@@ -158,9 +162,29 @@ async function settleDssDeletes(
   const failure = outcomes.find((outcome) => outcome.status === 'rejected');
   if (results.some((success) => !success)) {
     if (failure && !results.some(Boolean)) throw failure.reason;
-    throw new BulkDeleteFailure(entities, results, failure?.reason);
+    throw new BulkDeleteFailure(
+      entities,
+      results,
+      failure?.reason,
+      acknowledgements
+    );
   }
-  return results;
+  return { results, acknowledgements };
+}
+
+/** Retry only old writes that bypass the GraphQL client's post-write reads. */
+async function revalidateLegacyDeletions(isPending: () => boolean) {
+  for (const delay of [0, 1000, 2000]) {
+    if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+    if (!isPending()) return false;
+    try {
+      await refreshActiveGraphqlSoupQueries({ throwOnError: true });
+      return true;
+    } catch {
+      // Keep the tombstone through a transient read failure.
+    }
+  }
+  return false;
 }
 
 function removeDssEntityCaches(entities: EntityData[]) {
@@ -209,17 +233,28 @@ export function createBulkDeleteDssItemsMutation() {
       // holds nothing in its directory.
       const writer = currentQueryAccount();
       const deletable = entities.filter(isDeletable);
+      const acknowledgements = new Map<string, Promise<boolean>>();
       const deletions = deletable.map(async (e) => {
+        const key = soupEntityKey(e);
+        const acknowledge: OnSoupDeletion | undefined = key
+          ? (ready) => acknowledgements.set(key, ready)
+          : undefined;
         if (e.type === 'agent_session') {
           await deleteAgentSession(e.id);
           return true;
         }
         if (e.type === 'channel') {
-          await permanentlyDeleteEntity({ type: 'CHANNEL', id: e.id });
+          await permanentlyDeleteEntity(
+            { type: 'CHANNEL', id: e.id },
+            acknowledge
+          );
           return true;
         }
         if (e.type === 'call') {
-          await permanentlyDeleteEntity({ type: 'CALL', id: e.id });
+          await permanentlyDeleteEntity(
+            { type: 'CALL', id: e.id },
+            acknowledge
+          );
           return true;
         }
         if (e.type === 'routine') {
@@ -238,9 +273,9 @@ export function createBulkDeleteDssItemsMutation() {
           );
           return true;
         }
-        return deleteItem({ id: e.id, itemType: e.type });
+        return deleteItem({ id: e.id, itemType: e.type }, acknowledge);
       });
-      return settleDssDeletes(deletable, deletions, writer);
+      return settleDssDeletes(deletable, deletions, writer, acknowledgements);
     },
     onMutate: async (entities: EntityData[]) => {
       const deletable = entities.filter(isDeletable);
@@ -250,25 +285,37 @@ export function createBulkDeleteDssItemsMutation() {
         graphqlDeletion: createGraphqlSoupDeletion([...keys]),
       };
     },
-    onSettled: (results, error, entities, context) => {
-      if (!context?.graphqlDeletion) return;
+    onSettled: (outcome, error, entities, context) => {
+      const deletion = context?.graphqlDeletion;
+      if (!deletion) return;
       // Logout/cache clearing can outlive an in-flight API call. Do not
       // repopulate session-local tombstones after their mutation was cleared.
       if (!isCurrentContext(context)) {
-        context.graphqlDeletion.release();
+        deletion.release();
         return;
       }
-      const outcomes =
-        error instanceof BulkDeleteFailure ? error.results : results;
+      const result = error instanceof BulkDeleteFailure ? error : outcome;
       const deletedKeys = entities
         .filter(isDeletable)
         .flatMap((entity, index) => {
           const key = soupEntityKey(entity);
-          return outcomes?.[index] === true && key ? [key] : [];
+          return result?.results[index] === true && key ? [key] : [];
         });
-      // API completion closes the mutation; display state survives it and
-      // independently retries revalidation. Failed keys are restored now.
-      context.graphqlDeletion.settle(deletedKeys);
+      const acknowledgements = new Map(result?.acknowledgements);
+      const legacyKeys = deletedKeys.filter(
+        (key) => !acknowledgements.has(key)
+      );
+      if (legacyKeys.length > 0) {
+        // History removals and agent-session deletes have no GraphQL result
+        // for the exchange to apply or revalidate. Share one read for them.
+        const ready = revalidateLegacyDeletions(
+          () =>
+            isCurrentContext(context) &&
+            legacyKeys.some((key) => deletion.keys().includes(key))
+        );
+        for (const key of legacyKeys) acknowledgements.set(key, ready);
+      }
+      deletion.settle(deletedKeys, acknowledgements);
     },
     onError: (error, entities, context) => {
       if (context && !isCurrentContext(context)) {

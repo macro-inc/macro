@@ -355,10 +355,10 @@ describe('bulk delete GraphQL optimism', () => {
         entity('failed-auto', 'routine'),
       ])
     ).rejects.toBeInstanceOf(BulkDeleteFailure);
-    expect(mocks.deleteCallGraphql).toHaveBeenCalledWith({
-      type: 'CALL',
-      id: 'deleted-call',
-    });
+    expect(mocks.deleteCallGraphql).toHaveBeenCalledWith(
+      { type: 'CALL', id: 'deleted-call' },
+      expect.any(Function)
+    );
     expect(invalidate).toHaveBeenCalledWith({ queryKey: callKeys._def });
     expect(invalidate).toHaveBeenCalledWith({
       queryKey: scheduledActionKeys.list.queryKey,
@@ -407,7 +407,7 @@ describe('bulk delete GraphQL optimism', () => {
     const { mutation } = mount();
     await expect(
       mutation.mutateAsync([entity('folder-1', 'project')])
-    ).resolves.toEqual([true]);
+    ).resolves.toMatchObject({ results: [true] });
     // Its databases and forms return to the root on the server.
     expect(invalidate).toHaveBeenCalledWith({
       queryKey: databasesKeys.list.queryKey,
@@ -421,7 +421,7 @@ describe('bulk delete GraphQL optimism', () => {
     const { mutation } = mount();
     await expect(
       mutation.mutateAsync([entity('db-1', 'database')])
-    ).resolves.toEqual([true]);
+    ).resolves.toMatchObject({ results: [true] });
     expect(mocks.trashDatabase).toHaveBeenCalledWith(
       mocks.graphqlClient,
       'db-1'
@@ -494,7 +494,7 @@ describe('bulk delete GraphQL optimism', () => {
     expect(mocks.deleteItem).toHaveBeenCalledTimes(2);
     expect(mocks.refresh).not.toHaveBeenCalled();
     network.resolve(true);
-    await expect(result).resolves.toEqual([true, true]);
+    await expect(result).resolves.toMatchObject({ results: [true, true] });
     await vi.waitFor(() => expect(mutation.isPending).toBe(false));
     expect(mocks.refresh).toHaveBeenCalledWith({ throwOnError: true });
     expect([...pendingKeys()]).toEqual([
@@ -505,12 +505,10 @@ describe('bulk delete GraphQL optimism', () => {
     await vi.waitFor(() => expect(pendingKeys().size).toBe(0));
   });
 
-  it('restores failed deletions even while revalidation is still pending', async () => {
+  it('restores a failed delete without a success acknowledgement', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const network = deferred<boolean>();
-    const refreshed = deferred<void>();
     mocks.deleteItem.mockReturnValue(network.promise);
-    mocks.refresh.mockReturnValue(refreshed.promise);
     const { mutation, pendingKeys } = mount();
     const error = new Error('delete failed');
     const result = expect(
@@ -520,13 +518,26 @@ describe('bulk delete GraphQL optimism', () => {
       expect(pendingKeys().has('GraphqlSoupDocument:task')).toBe(true)
     );
     network.reject(error);
-    await vi.waitFor(() => expect(mocks.refresh).toHaveBeenCalledOnce());
+    await result;
+    expect(mocks.refresh).not.toHaveBeenCalled();
     expect(mocks.rollbackSoup).toHaveBeenCalledOnce();
     expect(mocks.rollbackSearch).toHaveBeenCalledOnce();
     expect(mocks.failure).toHaveBeenCalledWith('Failed to delete items');
     expect(pendingKeys().has('GraphqlSoupDocument:task')).toBe(false);
-    await result;
-    refreshed.resolve();
+    await vi.waitFor(() => expect(pendingKeys().size).toBe(0));
+  });
+
+  it('hands a confirmed GraphQL delete off to its write receipt without another list read', async () => {
+    const receipt = deferred<boolean>();
+    mocks.deleteItem.mockImplementation(async (_entity, acknowledge) => {
+      acknowledge?.(receipt.promise);
+      return true;
+    });
+    const { mutation, pendingKeys } = mount();
+    await mutation.mutateAsync([entity('task')]);
+    expect([...pendingKeys()]).toEqual(['GraphqlSoupDocument:task']);
+    receipt.resolve(true);
+    expect(mocks.refresh).not.toHaveBeenCalled();
     await vi.waitFor(() => expect(pendingKeys().size).toBe(0));
   });
 
@@ -804,12 +815,12 @@ describe('channel deletion', () => {
 
     await expect(
       mutation.mutateAsync([entity('channel-id', 'channel')])
-    ).resolves.toEqual([true]);
+    ).resolves.toMatchObject({ results: [true] });
 
-    expect(mocks.deleteCallGraphql).toHaveBeenCalledWith({
-      type: 'CHANNEL',
-      id: 'channel-id',
-    });
+    expect(mocks.deleteCallGraphql).toHaveBeenCalledWith(
+      { type: 'CHANNEL', id: 'channel-id' },
+      expect.any(Function)
+    );
     expect(invalidate).toHaveBeenCalledWith(
       expect.objectContaining({ queryKey: channelKeys._def })
     );

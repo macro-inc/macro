@@ -31,12 +31,16 @@ import { registerGraphqlSoupRevalidations } from './active-queries';
 import { makeGraphqlGroupedSoupInput } from './ast';
 import { createGroupedSoupLiveQuery } from './create-grouped-soup-live-query';
 import { createGraphqlSoupDoneProjection } from './done-projection';
+import { soupEntityKey } from './entity-input';
 import { createGraphqlGroupedSoupProjection } from './grouped-projection';
 import {
   createGraphqlSoupAstItemsQuery,
   type GraphqlSoupAstItemsQuery,
 } from './items';
-import { usePendingGraphqlSoupDeleteKeys } from './optimistic-deletions';
+import {
+  observeGraphqlSoupDeletions,
+  usePendingGraphqlSoupDeleteKeys,
+} from './optimistic-deletions';
 import { usePendingGraphqlSoupDone } from './optimistic-done';
 
 export type GraphqlGroupedSoupAstItemsQueryArgs = {
@@ -219,6 +223,16 @@ export function createGraphqlGroupedSoupAstItemsQuery(
       }
     })
   );
+
+  observeGraphqlSoupDeletions(function* (keys) {
+    if (!query.isEnabled) return;
+    for (const [id, item] of Object.entries(
+      (cachedMail() ?? projected())?.itemsById ?? {}
+    )) {
+      const key = soupEntityKey({ id, type: item.tag });
+      if (key && keys.has(key)) yield key;
+    }
+  });
 
   return {
     groupedPaging: grouped.paging,

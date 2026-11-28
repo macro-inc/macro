@@ -107,6 +107,58 @@ it('reads only the lists the cache cannot keep current after a write', async () 
   });
 });
 
+it('uses the accepted tombstone and reads only unmaintained lists', async () => {
+  mocks.mutation.mockReturnValue({
+    toPromise: async () => ({
+      ...(await trashed([
+        {
+          __typename: 'GraphqlCacheDeletion',
+          graphqlTypeName: 'GraphqlSoupDocument',
+          entityId: 'entity',
+        },
+      ]).toPromise()),
+      extensions: {
+        __macroNormalizedCache: {
+          source: 'live-network',
+          cacheEffectsApplied: true,
+        },
+      },
+    }),
+  });
+  const acknowledge = vi.fn<(ready: Promise<boolean>) => void>();
+  await trashEntity({ type: 'DOCUMENT', id: 'entity' }, acknowledge);
+  expect(acknowledge).toHaveBeenCalledOnce();
+  await expect(acknowledge.mock.calls[0]?.[0]).resolves.toBe(true);
+  expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith({
+    unmaintainedOnly: true,
+    throwOnError: true,
+  });
+});
+
+it('uses the completed uncached exchange read as the deletion acknowledgement', async () => {
+  mocks.host.mockReturnValue(undefined);
+  mocks.readAgain.mockReturnValue(true);
+  mocks.mutation.mockReturnValue(trashed([]));
+  const acknowledge = vi.fn<(ready: Promise<boolean>) => void>();
+  await trashEntity({ type: 'DOCUMENT', id: 'entity' }, acknowledge);
+  expect(acknowledge).toHaveBeenCalledOnce();
+  await expect(acknowledge.mock.calls[0]?.[0]).resolves.toBe(true);
+  expect(mocks.refresh).not.toHaveBeenCalled();
+});
+
+it('keeps a deletion unacknowledged when both cache effects and recovery fail', async () => {
+  mocks.mutation.mockReturnValue(trashed([]));
+  mocks.refresh.mockRejectedValue(new Error('list read failed'));
+  const acknowledge = vi.fn<(ready: Promise<boolean>) => void>();
+  await trashEntity({ type: 'DOCUMENT', id: 'entity' }, acknowledge);
+  expect(acknowledge).toHaveBeenCalledOnce();
+  await expect(acknowledge.mock.calls[0]?.[0]).resolves.toBe(false);
+  expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith({
+    unmaintainedOnly: false,
+    throwOnError: true,
+  });
+});
+
 it('leaves the lists to the client when its exchange read them all', async () => {
   // Without a live cache the exchange read every mounted list, each
   // successfully, before the write settled.

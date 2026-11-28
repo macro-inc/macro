@@ -36,7 +36,8 @@ const isEffectsError = (error: GraphQLError) =>
  * never reached the cache. `queued` says the cache queued the write with its
  * revalidations, which it reads once the write commits. `listsReadAgain` says the
  * client's exchange read every mounted list again, each successfully, before
- * the write settled (no live cache).
+ * the write settled (no live cache). `cacheEffectsApplied` positively confirms
+ * a direct write reached the cache, including any returned tombstones.
  * Never retry a failed/ambiguous GraphQL write through the REST transport. */
 async function mutateEntity<Data, Variables extends AnyVariables>(
   operation: string,
@@ -107,6 +108,7 @@ async function sendEntityMutation<Data, Variables extends AnyVariables>(
     return {
       ...outcome,
       effectsResolved: false,
+      cacheEffectsApplied: false,
       queued: false,
       listsReadAgain: networkRevalidated(result),
     };
@@ -119,6 +121,9 @@ async function sendEntityMutation<Data, Variables extends AnyVariables>(
   return {
     ...outcome,
     effectsResolved: !cacheRejected,
+    cacheEffectsApplied:
+      metadata?.source === 'live-network' &&
+      metadata.cacheEffectsApplied === true,
     queued: optimisticMutationDispositionOf(result)?.kind === 'queued',
     listsReadAgain: networkRevalidated(result),
   };

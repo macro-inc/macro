@@ -157,6 +157,7 @@ describe('moveGraphqlEntity', () => {
       __typename: 'GraphqlMutationSuccess',
       effects: [rendered],
       effectsResolved: false,
+      cacheEffectsApplied: false,
       queued: false,
       listsReadAgain: false,
     });

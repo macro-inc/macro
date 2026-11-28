@@ -71,6 +71,7 @@ import {
   soupNetworkAnswerFresh,
 } from './network-freshness';
 import {
+  observeGraphqlSoupDeletions,
   usePendingGraphqlSoupDeleteKeys,
   withoutPendingSoupEntities,
 } from './optimistic-deletions';
@@ -1172,6 +1173,13 @@ export function createSoupLiveQuery(
       local.displayedKeys
     );
     return additions.length ? [...local.records, ...additions] : local.records;
+  });
+  observeGraphqlSoupDeletions(function* (keys) {
+    if (!isEnabled()) return;
+    for (const record of displayData() ?? localProjection()?.records ?? []) {
+      const key = soupItemKey(record);
+      if (keys.has(key)) yield key;
+    }
   });
 
   // Keeps the server pages as deep as a local Mail list, so it stays as deep

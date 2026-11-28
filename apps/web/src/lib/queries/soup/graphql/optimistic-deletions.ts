@@ -1,9 +1,16 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { skipToken, useMutationState, useQuery } from '@tanstack/solid-query';
-import { type Accessor, batch, createMemo, createSignal } from 'solid-js';
+import {
+  type Accessor,
+  batch,
+  createEffect,
+  createMemo,
+  createRoot,
+  createSignal,
+  onCleanup,
+} from 'solid-js';
 import { queryClient } from '../../client';
 import type { SoupAstItemsData } from '../items';
-import { refreshActiveGraphqlSoupQueries } from './active-queries';
 import { soupEntityKey } from './entity-input';
 import { graphqlSoupKeys } from './keys';
 
@@ -13,21 +20,34 @@ export const GRAPHQL_SOUP_DELETE_MUTATION_KEY = [
 ] as const;
 
 export const GRAPHQL_SOUP_DELETE_RETENTION_MS = 60_000;
-const REVALIDATION_ATTEMPTS = 3;
-const RETRY_DELAY_MS = 1_000;
 const RETAINED_DELETIONS_KEY = graphqlSoupKeys.retainedDeletions.queryKey;
 type RetainedDeletions = GraphqlSoupDeletion[];
+type DeletionReader = (keys: ReadonlySet<string>) => Iterable<string>;
+const [deletionReaders, setDeletionReaders] = createSignal<
+  readonly DeletionReader[]
+>([]);
+
+/** A live list may still show its previous snapshot after the cache confirms a tombstone. */
+export function observeGraphqlSoupDeletions(reader: DeletionReader) {
+  setDeletionReaders((readers) => [...readers, reader]);
+  onCleanup(() =>
+    setDeletionReaders((readers) => readers.filter((entry) => entry !== reader))
+  );
+}
 
 export type GraphqlSoupDeletion = {
   keys: Accessor<readonly string[]>;
-  /** Restore failed keys immediately and revalidate the confirmed deletions. */
-  settle: (deletedKeys: readonly string[]) => void;
+  /** Restore failed keys immediately. Retire confirmed keys when their lists catch up. */
+  settle: (
+    deletedKeys: readonly string[],
+    acknowledgements?: ReadonlyMap<string, Promise<boolean>>
+  ) => void;
   release: () => void;
   /** Retire only keys confirmed restored after this deletion began. */
   restore: (keys: readonly string[]) => void;
 };
 
-/** Retain normalized `typename:id` keys until revalidation, release, or expiry. */
+/** Retain normalized `typename:id` keys until acknowledged, restored, or expired. */
 export function createGraphqlSoupDeletion(
   keys: readonly string[]
 ): GraphqlSoupDeletion {
@@ -35,33 +55,18 @@ export function createGraphqlSoupDeletion(
   let settled = false;
   let released = false;
   let expiryTimer: ReturnType<typeof setTimeout> | undefined;
-  let retryTimer: ReturnType<typeof setTimeout> | undefined;
+  let detachReaders: (() => void) | undefined;
   const restoredKeys = new Set<string>();
   const release = () => {
     if (released) return;
     released = true;
     clearTimeout(expiryTimer);
-    clearTimeout(retryTimer);
+    detachReaders?.();
     setDeletedKeys([]);
     queryClient.setQueryData<RetainedDeletions>(
       RETAINED_DELETIONS_KEY,
       (retained) => retained?.filter((entry) => entry.keys !== deletedKeys)
     );
-  };
-  const revalidate = async (attempt: number): Promise<void> => {
-    try {
-      await refreshActiveGraphqlSoupQueries({ throwOnError: true });
-      release();
-    } catch {
-      if (released || attempt + 1 >= REVALIDATION_ATTEMPTS) return;
-      retryTimer = setTimeout(
-        () => {
-          retryTimer = undefined;
-          fireAndForget(revalidate(attempt + 1), 'soup-optimistic-deletions');
-        },
-        RETRY_DELAY_MS * 2 ** attempt
-      );
-    }
   };
   const deletion: GraphqlSoupDeletion = {
     keys: deletedKeys,
@@ -74,7 +79,7 @@ export function createGraphqlSoupDeletion(
       );
       if (deletedKeys().length === 0) release();
     },
-    settle: (successfulKeys) => {
+    settle: (successfulKeys, acknowledgements) => {
       if (settled || released) return;
       settled = true;
       setDeletedKeys(
@@ -82,9 +87,6 @@ export function createGraphqlSoupDeletion(
       );
       if (deletedKeys().length === 0) {
         release();
-        // Reconcile uncertain failures without retaining a failed deletion.
-        if (keys.length > 0)
-          fireAndForget(revalidate(0), 'soup-optimistic-deletions');
         return;
       }
       // A mutation observer can detach before the API finishes, starting its
@@ -95,7 +97,46 @@ export function createGraphqlSoupDeletion(
       );
       // Cleanup is independent of hung refresh promises and query lifetime.
       expiryTimer = setTimeout(release, GRAPHQL_SOUP_DELETE_RETENTION_MS);
-      fireAndForget(revalidate(0), 'soup-optimistic-deletions');
+      if (!acknowledgements?.size) return;
+      const acknowledged = new Set<string>();
+      const [acknowledgementCount, setAcknowledgementCount] = createSignal(0);
+      let notifyScheduled = false;
+      createRoot((dispose) => {
+        detachReaders = dispose;
+        let version = 0;
+        createEffect(() => {
+          const observed = ++version;
+          if (acknowledgementCount() === 0) return;
+          const ready = new Set(
+            deletedKeys().filter((key) => acknowledged.has(key))
+          );
+          if (ready.size === 0) return;
+          for (const read of deletionReaders()) {
+            for (const key of read(ready)) ready.delete(key);
+            if (ready.size === 0) return;
+          }
+          queueMicrotask(() => {
+            if (observed === version) deletion.restore([...ready]);
+          });
+        });
+      }, null);
+      const acknowledge = async (key: string, receipt: Promise<boolean>) => {
+        if (!(await receipt) || released) return;
+        acknowledged.add(key);
+        // A bulk write can confirm many keys at once. Recheck lists once
+        // for that group of receipts.
+        if (notifyScheduled) return;
+        notifyScheduled = true;
+        queueMicrotask(() => {
+          notifyScheduled = false;
+          setAcknowledgementCount(acknowledged.size);
+        });
+      };
+      for (const key of deletedKeys()) {
+        const receipt = acknowledgements.get(key);
+        if (receipt)
+          fireAndForget(acknowledge(key, receipt), 'soup-optimistic-deletions');
+      }
     },
   };
   return deletion;
@@ -133,7 +174,7 @@ export type GraphqlSoupDeleteContext = {
 };
 
 /** Reflect pending and confirmed deletions in GraphQL views. Completed
- * mutations retain their own tombstones until strict revalidation or expiry.
+ * mutations retain their own tombstones until acknowledgement or expiry.
  */
 export function usePendingGraphqlSoupDeleteKeys() {
   const retained = useQuery(

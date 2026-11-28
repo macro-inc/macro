@@ -33,7 +33,11 @@ copy, and updating team/link/channel access on desktop and touch. Call-record
 permanent deletion and team sharing also use these mutations. A denied or failed
 GraphQL write must not retry through REST or report success; mixed bulk actions
 retain successful siblings. Chats can't be duplicated: the copy action skips them,
-and a bulk copy that includes one fails before any write. Restore immediately after trash and confirm the row
+and a bulk copy that includes one fails before any write. For a GraphQL delete,
+check that maintained lists stay hidden through the handoff from the optimistic
+overlay to the returned tombstone without issuing another list request. With the
+cache disabled, the write's post-commit list reads drive the same handoff.
+Restore immediately after trash and confirm the row
 returns without waiting for retained deletion markers to expire, even if the
 trash's background refresh failed. A delete started after the restore request
 must still hide its row. Deletion and restore overlays distinguish entity type as

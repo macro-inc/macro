@@ -26,6 +26,20 @@ import { soupEntityKey } from '../soup/graphql/entity-input';
 import { prepareGraphqlSoupRestore } from '../soup/graphql/optimistic-deletions';
 import { soupItemKey } from '../soup/graphql/reconciliation';
 
+type EntityWriteResult = {
+  effectsResolved: boolean;
+  listsReadAgain: boolean;
+};
+
+async function confirmListRefresh(read: Promise<void>): Promise<boolean> {
+  try {
+    await read;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Reads again the lists a committed write left stale. Without a live cache
  * the client's exchange reads every mounted list before the write settles;
  * when it did, each successfully, nothing is read here, and when one of its
@@ -34,16 +48,43 @@ import { soupItemKey } from '../soup/graphql/reconciliation';
  * the others are read. A write whose rows never came back leaves every list
  * stale. A failed read must not turn a committed write into a retryable
  * failure. */
-function refreshAfterWrite(result: {
-  effectsResolved: boolean;
-  listsReadAgain: boolean;
-}) {
-  if (result.listsReadAgain) return;
+function refreshAfterWrite(result: EntityWriteResult): void;
+function refreshAfterWrite(
+  result: EntityWriteResult,
+  strict: true
+): Promise<boolean>;
+function refreshAfterWrite(result: EntityWriteResult, strict = false) {
+  if (result.listsReadAgain) return strict ? Promise.resolve(true) : undefined;
   const unmaintainedOnly =
     result.effectsResolved && getGraphqlCacheHost() !== undefined;
-  fireAndForget(
-    refreshActiveGraphqlSoupQueries({ unmaintainedOnly }),
-    'entity-mutation'
+  const refresh = refreshActiveGraphqlSoupQueries(
+    strict ? { unmaintainedOnly, throwOnError: true } : { unmaintainedOnly }
+  );
+  if (strict) return confirmListRefresh(refresh);
+  fireAndForget(refresh, 'entity-mutation');
+}
+
+export type OnSoupDeletion = (acknowledgement: Promise<boolean>) => void;
+
+function reconcileDeletion(
+  entity: EntityRefInput,
+  result: Awaited<ReturnType<typeof trashGraphqlEntity>>,
+  onDeletion: OnSoupDeletion | undefined
+) {
+  if (!onDeletion) {
+    refreshAfterWrite(result);
+    return;
+  }
+  const key = soupEntityKey(entity);
+  const hasTombstone =
+    result.cacheEffectsApplied &&
+    result.effects.some(
+      (effect) =>
+        effect.__typename === 'GraphqlCacheDeletion' &&
+        `${effect.graphqlTypeName}:${effect.entityId}` === key
+    );
+  onDeletion(
+    refreshAfterWrite({ ...result, effectsResolved: hasTombstone }, true)
   );
 }
 
@@ -62,8 +103,11 @@ export async function moveEntity(
   refreshAfterWrite(result);
 }
 
-export async function trashEntity(entity: EntityRefInput) {
-  refreshAfterWrite(await trashGraphqlEntity(entity));
+export async function trashEntity(
+  entity: EntityRefInput,
+  onDeletion?: OnSoupDeletion
+) {
+  reconcileDeletion(entity, await trashGraphqlEntity(entity), onDeletion);
 }
 
 export async function restoreEntity(entity: EntityRefInput) {
@@ -79,8 +123,15 @@ export async function restoreEntity(entity: EntityRefInput) {
   refreshAfterWrite(result);
 }
 
-export async function permanentlyDeleteEntity(entity: EntityRefInput) {
-  refreshAfterWrite(await permanentlyDeleteGraphqlEntity(entity));
+export async function permanentlyDeleteEntity(
+  entity: EntityRefInput,
+  onDeletion?: OnSoupDeletion
+) {
+  reconcileDeletion(
+    entity,
+    await permanentlyDeleteGraphqlEntity(entity),
+    onDeletion
+  );
 }
 
 export async function duplicateEntity(

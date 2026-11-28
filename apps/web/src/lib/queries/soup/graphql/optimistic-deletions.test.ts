@@ -1,6 +1,6 @@
 import type { ChannelEntity } from '@entity/types/entity';
 import { QueryClient } from '@tanstack/solid-query';
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SoupAstItemsData } from '../items';
 
@@ -19,6 +19,7 @@ import {
   createGraphqlSoupDeletion,
   GRAPHQL_SOUP_DELETE_MUTATION_KEY,
   GRAPHQL_SOUP_DELETE_RETENTION_MS,
+  observeGraphqlSoupDeletions,
   prepareGraphqlSoupRestore,
   usePendingGraphqlSoupDeleteKeys,
   withoutPendingGraphqlSoupDeletes,
@@ -69,7 +70,6 @@ function data(): SoupAstItemsData {
 
 describe('GraphQL Soup deletion lifecycle', () => {
   it('does not resurrect restored ids when an earlier deletion settles late', async () => {
-    refresh.mockReturnValue(new Promise<void>(() => {}));
     const deletion = createGraphqlSoupDeletion([
       'GraphqlSoupDocument:restored',
       'GraphqlSoupDocument:sibling',
@@ -109,13 +109,9 @@ describe('GraphQL Soup deletion lifecycle', () => {
   });
 
   it('retains confirmed ids after their completed mutation is garbage collected', async () => {
-    let finishRefresh!: () => void;
-    refresh.mockReturnValue(
-      new Promise<void>((resolve) => {
-        finishRefresh = resolve;
-      })
-    );
-    const deletion = createGraphqlSoupDeletion(['GraphqlSoupDocument:deleted']);
+    const { promise, resolve } = Promise.withResolvers<boolean>();
+    const key = 'GraphqlSoupDocument:deleted';
+    const deletion = createGraphqlSoupDeletion([key]);
     const ids = createRoot((cleanup) => {
       dispose = cleanup;
       return usePendingGraphqlSoupDeleteKeys();
@@ -124,83 +120,95 @@ describe('GraphQL Soup deletion lifecycle', () => {
       mutationKey: GRAPHQL_SOUP_DELETE_MUTATION_KEY,
       onMutate: () => ({ graphqlDeletion: deletion }),
       mutationFn: async () => true,
-      onSettled: () => deletion.settle(['GraphqlSoupDocument:deleted']),
+      onSettled: () => deletion.settle([key], new Map([[key, promise]])),
     });
     try {
       await mutation.execute(undefined);
       expect(mutation.state.status).toBe('success');
       client.getMutationCache().remove(mutation);
       expect([...ids()]).toEqual(['GraphqlSoupDocument:deleted']);
-      finishRefresh();
+      resolve(true);
       await vi.waitFor(() => expect(ids().size).toBe(0));
+      expect(refresh).not.toHaveBeenCalled();
     } finally {
       deletion.release();
     }
   });
 
-  it('bounds retries and expires retained ids even when every refresh fails', async () => {
+  it('expires an unacknowledged deletion without issuing any reads', async () => {
     vi.useFakeTimers();
-    refresh.mockRejectedValue(new Error('offline'));
     const deletion = createGraphqlSoupDeletion([
       'GraphqlSoupDocument:deleted',
       'GraphqlSoupDocument:failed',
     ]);
-    deletion.settle(['GraphqlSoupDocument:deleted']);
-    await vi.advanceTimersByTimeAsync(3000);
-    expect(refresh).toHaveBeenCalledTimes(3);
+    deletion.settle(
+      ['GraphqlSoupDocument:deleted'],
+      new Map([['GraphqlSoupDocument:deleted', Promise.resolve(false)]])
+    );
     expect(deletion.keys()).toEqual(['GraphqlSoupDocument:deleted']);
-    await vi.advanceTimersByTimeAsync(GRAPHQL_SOUP_DELETE_RETENTION_MS - 3001);
+    await vi.advanceTimersByTimeAsync(GRAPHQL_SOUP_DELETE_RETENTION_MS - 1);
     expect(deletion.keys()).toEqual(['GraphqlSoupDocument:deleted']);
     await vi.advanceTimersByTimeAsync(1);
     expect(deletion.keys()).toEqual([]);
     await vi.advanceTimersByTimeAsync(GRAPHQL_SOUP_DELETE_RETENTION_MS);
-    expect(refresh).toHaveBeenCalledTimes(3);
+    expect(refresh).not.toHaveBeenCalled();
   });
 
-  it('expires ids even if a refresh never settles and does not restart after a late failure', async () => {
+  it('expires ids even if an acknowledgement is late', async () => {
     vi.useFakeTimers();
-    let reject!: (error: Error) => void;
-    refresh.mockReturnValue(
-      new Promise<void>((_resolve, fail) => {
-        reject = fail;
-      })
-    );
-    const deletion = createGraphqlSoupDeletion(['GraphqlSoupDocument:deleted']);
-    deletion.settle(['GraphqlSoupDocument:deleted']);
+    const { promise, resolve } = Promise.withResolvers<boolean>();
+    const key = 'GraphqlSoupDocument:deleted';
+    const deletion = createGraphqlSoupDeletion([key]);
+    deletion.settle([key], new Map([[key, promise]]));
     await vi.advanceTimersByTimeAsync(GRAPHQL_SOUP_DELETE_RETENTION_MS);
     expect(deletion.keys()).toEqual([]);
-    reject(new Error('late failure'));
+    resolve(true);
     await vi.advanceTimersByTimeAsync(GRAPHQL_SOUP_DELETE_RETENTION_MS);
-    expect(refresh).toHaveBeenCalledOnce();
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it('a late success only releases its own overlapping operation', async () => {
-    let finishFirst!: () => void;
-    let finishSecond!: () => void;
-    refresh
-      .mockReturnValueOnce(
-        new Promise<void>((resolve) => {
-          finishFirst = resolve;
-        })
-      )
-      .mockReturnValueOnce(
-        new Promise<void>((resolve) => {
-          finishSecond = resolve;
-        })
-      );
-    const first = createGraphqlSoupDeletion(['GraphqlSoupDocument:shared']);
-    const second = createGraphqlSoupDeletion(['GraphqlSoupDocument:shared']);
+    const firstResult = Promise.withResolvers<boolean>();
+    const secondResult = Promise.withResolvers<boolean>();
+    const key = 'GraphqlSoupDocument:shared';
+    const first = createGraphqlSoupDeletion([key]);
+    const second = createGraphqlSoupDeletion([key]);
     try {
-      first.settle(['GraphqlSoupDocument:shared']);
-      second.settle(['GraphqlSoupDocument:shared']);
-      finishFirst();
+      first.settle([key], new Map([[key, firstResult.promise]]));
+      second.settle([key], new Map([[key, secondResult.promise]]));
+      firstResult.resolve(true);
       await vi.waitFor(() => expect(first.keys()).toEqual([]));
       expect(second.keys()).toEqual(['GraphqlSoupDocument:shared']);
-      finishSecond();
+      secondResult.resolve(true);
       await vi.waitFor(() => expect(second.keys()).toEqual([]));
     } finally {
       first.release();
       second.release();
+    }
+  });
+
+  it('keeps a returned tombstone hidden until every mounted list has caught up', async () => {
+    const key = 'GraphqlSoupDocument:deleted';
+    const [raw, publish] = createSignal([key]);
+    createRoot((cleanup) => {
+      dispose = cleanup;
+      observeGraphqlSoupDeletions(raw);
+    });
+    const deletion = createGraphqlSoupDeletion([key]);
+    const { promise, resolve } = Promise.withResolvers<boolean>();
+    try {
+      deletion.settle([key], new Map([[key, promise]]));
+      resolve(true);
+      await promise;
+      await Promise.resolve();
+      expect(
+        withoutPendingSoupEntities([{ id: key }], new Set(deletion.keys()))
+      ).toEqual([]);
+      publish([]);
+      await vi.waitFor(() => expect(deletion.keys()).toEqual([]));
+      expect(refresh).not.toHaveBeenCalled();
+    } finally {
+      deletion.release();
     }
   });
 });
