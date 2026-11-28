@@ -4,12 +4,12 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-import type { HubspotLossCount } from './hubspotLossCount';
+import type { CrmLossCount } from './crmLossCount';
 
 /**
- * What a HubSpot plan holds, for the review card.
+ * What a CRM plan holds, for the review card.
  */
-export interface HubspotReport {
+export interface CrmReport {
   /**
    * Records already in Macro from an earlier import, left as they are.
    * @minimum 0
@@ -30,7 +30,8 @@ export interface HubspotReport {
    * @minimum 0
    */
   created?: number;
-  /** Portal-defined property names whose values stay in HubSpot. */
+  /** Properties the source defined itself, as `object.name`; their values
+stay in the source. */
   customProperties: string[];
   /**
    * Deals, each becoming an entry in its pipeline.
@@ -44,9 +45,9 @@ address or deal) or to a teammate's import, instead of creating them.
    */
   linked?: number;
   /** What cannot be carried over, by kind. */
-  losses: HubspotLossCount[];
+  losses: CrmLossCount[];
   /**
-   * HubSpot owners named by the planned records.
+   * Source owners named by the planned records.
    * @minimum 0
    */
   owners: number;

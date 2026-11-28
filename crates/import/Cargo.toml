@@ -18,6 +18,7 @@ axum = { workspace = true }
 chrono = { workspace = true }
 connection_gateway_client = { path = "../connection_gateway_client" }
 dateparser = { workspace = true }
+feature_flags = { path = "../feature_flags" }
 futures = { workspace = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
   "axum",

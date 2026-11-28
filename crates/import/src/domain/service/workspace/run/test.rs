@@ -1091,6 +1091,7 @@ mod events;
 mod hubspot;
 mod inline;
 mod reimport;
+mod rollout;
 /// The session events the import produces, in order.
 mod root;
 mod tracker;

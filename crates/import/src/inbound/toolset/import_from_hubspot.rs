@@ -1,7 +1,7 @@
 //! The HubSpot CRM import tool.
 use super::{ImportToolContext, NotionImportAction, import_error, tool_error};
 use crate::domain::{
-    models::{HubspotReport, ImportSource, NotionImportReport, RunStatus},
+    models::{CrmReport, ImportSource, NotionImportReport, RunStatus},
     ports::ImportError,
     service::WorkspaceImporter,
 };
@@ -66,6 +66,9 @@ impl<T: WorkspaceImporter> AsyncTool<ImportToolContext<T>> for ImportFromHubspot
             },
         }
         .map_err(|error| match error {
+            ImportError::NotRolledOut(source) => {
+                tool_error(super::not_rolled_out_message(source), error)
+            }
             ImportError::CrmAccessRequired => tool_error(
                 "Importing into the CRM needs a team whose CRM the user may use. Tell them to join a team or ask an admin for CRM access.".into(),
                 error,
@@ -82,7 +85,7 @@ impl<T: WorkspaceImporter> AsyncTool<ImportToolContext<T>> for ImportFromHubspot
     }
 }
 
-fn counts(hubspot: Option<&HubspotReport>) -> String {
+fn counts(hubspot: Option<&CrmReport>) -> String {
     let Some(hubspot) = hubspot else {
         return "no records".into();
     };

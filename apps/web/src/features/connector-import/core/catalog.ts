@@ -1,3 +1,4 @@
+import { isFeatureEnabled } from '@core/constant/featureFlags';
 import IconAirtable from '@icon/import/airtable.svg';
 import IconAsana from '@icon/import/asana.svg';
 import IconBox from '@icon/import/box.svg';
@@ -187,11 +188,27 @@ export const IMPORT_CATEGORIES: Record<ImportCategory, ImportCategoryConfig> = {
   },
 };
 
+/**
+ * A category with only the providers offered now: a row waiting on a rollout
+ * flag shows once its flag is on. Read it in a reactive scope.
+ */
+export function offeredCategory(
+  config: ImportCategoryConfig
+): ImportCategoryConfig {
+  return {
+    ...config,
+    providers: config.providers.filter(
+      (provider) => !provider.flag || isFeatureEnabled(provider.flag)
+    ),
+  };
+}
+
 /** Where Macro can import an app's data from, if it can. */
 export function importSourceFor(
   appSlug: string
 ): { config: ImportCategoryConfig; provider: ImportProvider } | undefined {
-  for (const config of Object.values(IMPORT_CATEGORIES)) {
+  for (const category of Object.values(IMPORT_CATEGORIES)) {
+    const config = offeredCategory(category);
     const provider = config.providers.find((row) => row.appSlug === appSlug);
     if (provider) return { config, provider };
   }

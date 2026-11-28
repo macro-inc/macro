@@ -112,6 +112,16 @@ fn tool_error(description: String, e: impl Into<anyhow::Error>) -> ToolCallError
     }
 }
 
+/// What an import tool tells the agent when the source's import is not
+/// rolled out to the user: plain and calm, so the agent neither retries nor
+/// works around it.
+fn not_rolled_out_message(source: ImportSource) -> String {
+    let label = source.label();
+    format!(
+        "The {label} import is in early access and not turned on for this account yet. Nothing is wrong with the user's {label} connection or data, and nothing was read or changed. Tell the user plainly that importing from {label} isn't available to them yet; do not retry, and do not recreate their {label} records with other tools."
+    )
+}
+
 fn import_error(context: &str, e: ImportError) -> ToolCallError {
     ToolCallError {
         description: format!("{context}: {e}"),

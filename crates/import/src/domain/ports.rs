@@ -63,6 +63,10 @@ pub enum ImportError {
     /// The connected HubSpot portal could not be read.
     #[error(transparent)]
     Hubspot(#[from] import_hubspot::domain::HubspotError),
+    /// The source's import is still being rolled out and is not turned on
+    /// for this user (see [`ImportRollout`]).
+    #[error("the {} import is not turned on for this account yet", .0.label())]
+    NotRolledOut(crate::domain::models::ImportSource),
     /// A CRM import needs a team whose CRM the user may use.
     #[error("importing into the CRM needs a team with CRM access")]
     CrmAccessRequired,
@@ -1585,16 +1589,47 @@ pub trait WrittenObjects: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<WrittenObject>>> + Send;
 }
 
-/// A team's CRM as a HubSpot import writes it.
+/// Whether a source's import is rolled out to a user. Object-safe
+/// (`#[async_trait]`) so the import service holds it without a type
+/// parameter.
+#[async_trait::async_trait]
+pub trait ImportRollout: Send + Sync + 'static {
+    /// Whether `user` may plan an import from `source`.
+    async fn enabled_for(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: crate::domain::models::ImportSource,
+    ) -> bool;
+}
+
+/// The rollout of a host with no feature flag client: imports waiting on a
+/// flag ([`ImportSource::rollout_flag`]) are off for everyone, every other
+/// import is on.
+///
+/// [`ImportSource::rollout_flag`]: crate::domain::models::ImportSource::rollout_flag
+pub struct ImportsOff;
+
+#[async_trait::async_trait]
+impl ImportRollout for ImportsOff {
+    async fn enabled_for(
+        &self,
+        _user: &MacroUserIdStr<'static>,
+        source: crate::domain::models::ImportSource,
+    ) -> bool {
+        source.rollout_flag().is_none()
+    }
+}
+
+/// A team's CRM as a CRM import writes it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CrmTeam {
     /// The team whose CRM receives the records.
     pub team_id: Uuid,
-    /// Its members, for matching HubSpot owners.
+    /// Its members, for matching source owners.
     pub members: Vec<CrmMember>,
 }
 
-/// A team member HubSpot owners are matched against.
+/// A team member source owners are matched against.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CrmMember {
     /// Login email, lowercased; matched against the owner's email.
@@ -1610,7 +1645,7 @@ pub struct NewCrmContact {
     pub name: String,
     /// Email addresses, primary first; may be empty.
     pub emails: Vec<String>,
-    /// The CRM company to file it under, when its HubSpot company was imported.
+    /// The CRM company to file it under, when its source company was imported.
     pub company: Option<Uuid>,
 }
 
@@ -1645,12 +1680,12 @@ pub struct NewDealEntry {
     pub close_date: Option<String>,
     /// The owning team member's Macro user id.
     pub owner: Option<String>,
-    /// The deal's HubSpot URL; unique per deal, so it is the entry's
+    /// The deal's URL in its source; unique per deal, so it is the entry's
     /// identity on resume.
     pub link: String,
 }
 
-/// Writes a HubSpot import into the team's CRM through the CRM services,
+/// Writes a CRM import into the team's CRM through the CRM services,
 /// with the importing user's permissions. Object-safe so the import service
 /// holds it without a type parameter.
 #[async_trait::async_trait]

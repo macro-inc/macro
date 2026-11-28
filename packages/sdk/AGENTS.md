@@ -200,6 +200,10 @@ enforced by the ordinary backend APIs.
   `User.activity()` reads `/memory/activity` and `Initiative.activity()` DSS
   `/initiatives/{id}/activity`. Code mode hides the matching direct tools.
 - `services.ts`, `openapi-ts.config.ts`: generated service contract inputs.
+- `src/compat/`: type-only modules a `./generated/<service>` export points
+  its `types` at, to keep deprecated aliases for generated type names the API
+  renamed (`HubspotReport` is now `CrmReport`). Runtime code stays the
+  generated module's; drop an alias once callers have moved.
 - `src/calls/`: optional Node and browser LiveKit helpers, exported only as
   `@macro-inc/sdk/calls/node` and `@macro-inc/sdk/calls/browser`. Keep them out of
   `src/macro.ts` and its dependency graph; LiveKit runtimes stay optional peers.

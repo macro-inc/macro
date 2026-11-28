@@ -17,6 +17,14 @@
       "types": "./dist/src/macro.d.ts",
       "import": "./dist/src/macro.js"
     },
+    "./generated/cognition": {
+      "types": "./dist/src/compat/cognition.d.ts",
+      "import": "./dist/generated/cognition/index.js"
+    },
+    "./generated/agent-reviews": {
+      "types": "./dist/src/compat/agent-reviews.d.ts",
+      "import": "./dist/generated/agent-reviews/index.js"
+    },
     "./generated/*": {
       "types": "./dist/generated/*/index.d.ts",
       "import": "./dist/generated/*/index.js"

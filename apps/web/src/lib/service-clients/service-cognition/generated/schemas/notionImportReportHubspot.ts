@@ -4,6 +4,6 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-import type { HubspotReport } from './hubspotReport';
+import type { CrmReport } from './crmReport';
 
-export type NotionImportReportHubspot = null | HubspotReport;
+export type NotionImportReportHubspot = null | CrmReport;

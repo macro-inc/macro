@@ -147,6 +147,35 @@ try {
       consumer,
     );
 
+    if (runtime === 'core') {
+      // Node16/NodeNext consumers resolve the generated subpaths' types
+      // strictly: every re-export there must name a file.
+      const strict = join(consumer, 'generated-types.ts');
+      await Bun.write(
+        strict,
+        `import type { NotionImportReport, Sdk } from '@macro-inc/sdk/generated/cognition';
+         import type { HubspotReport } from '@macro-inc/sdk/generated/agent-reviews';
+         export type Imported = [NotionImportReport, Sdk, HubspotReport];`,
+      );
+      await run(
+        [
+          process.execPath,
+          Bun.resolveSync('typescript/bin/tsc', sdk),
+          '--noEmit',
+          '--strict',
+          '--skipLibCheck',
+          '--target',
+          'ES2022',
+          '--module',
+          'nodenext',
+          '--moduleResolution',
+          'nodenext',
+          strict,
+        ],
+        consumer,
+      );
+    }
+
     if (runtime !== 'node') {
       const bundle = await build({
         stdin: { contents: source, resolveDir: consumer },

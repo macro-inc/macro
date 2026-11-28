@@ -32,6 +32,7 @@ use std::time::Duration;
 use uuid::Uuid;
 
 mod admission;
+mod crm_workspace;
 mod hubspot_workspace;
 pub(crate) mod lifecycle;
 mod notion_workspace;
@@ -319,7 +320,9 @@ pub struct ImportServiceImpl<R, S, C, W = NoSlackSource, N = NoNotionConnections
         ImportSource,
         Arc<dyn import_tracker::domain::model::TrackerConnections>,
     >,
-    hubspot: Option<HubspotImport>,
+    hubspot: Option<Arc<dyn import_hubspot::domain::HubspotConnections>>,
+    crm_writer: Option<Arc<dyn crate::domain::ports::CrmImportWriter>>,
+    rollout: Arc<dyn crate::domain::ports::ImportRollout>,
     slack_source: Arc<W>,
     mcp_tools: Arc<S>,
     creator: Arc<C>,
@@ -329,13 +332,6 @@ pub struct ImportServiceImpl<R, S, C, W = NoSlackSource, N = NoNotionConnections
     jobs: WorkspaceJobs,
     mirror_locks: Arc<PersonalMirrorLocks>,
     reservation_clock: Arc<dyn Fn() -> chrono::DateTime<chrono::Utc> + Send + Sync>,
-}
-
-/// The HubSpot reader and the CRM writer a host wires together.
-#[derive(Clone)]
-struct HubspotImport {
-    reader: Arc<dyn import_hubspot::domain::HubspotConnections>,
-    writer: Arc<dyn crate::domain::ports::CrmImportWriter>,
 }
 
 /// Weak slots keep in-run mirror exclusion per user without retaining inactive locks.
@@ -374,6 +370,8 @@ impl<R: Clone, S, C, W: SlackWorkspaceSource, N> Clone for ImportServiceImpl<R, 
             workspace_source: self.workspace_source,
             trackers: self.trackers.clone(),
             hubspot: self.hubspot.clone(),
+            crm_writer: self.crm_writer.clone(),
+            rollout: self.rollout.clone(),
             slack_source: self.slack_source.clone(),
             mcp_tools: self.mcp_tools.clone(),
             creator: self.creator.clone(),
@@ -401,6 +399,8 @@ impl<R, S, C> ImportServiceImpl<R, S, C> {
             workspace_source: ImportSource::Notion,
             trackers: Default::default(),
             hubspot: None,
+            crm_writer: None,
+            rollout: Arc::new(crate::domain::ports::ImportsOff),
             slack_source: Arc::new(NoSlackSource),
             mcp_tools,
             creator,
@@ -426,6 +426,8 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
             workspace_source: self.workspace_source,
             trackers: self.trackers,
             hubspot: self.hubspot,
+            crm_writer: self.crm_writer,
+            rollout: self.rollout,
             mcp_tools: self.mcp_tools,
             creator: self.creator,
             recorder: self.recorder,
@@ -449,14 +451,34 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
         self
     }
 
-    /// Read HubSpot portals through `reader` and write them into the team's
-    /// CRM through `writer`. Hosts without it report HubSpot as unavailable.
+    /// Read HubSpot portals through `reader`. Hosts without it report
+    /// HubSpot as unavailable.
     pub fn with_hubspot(
         mut self,
         reader: Arc<dyn import_hubspot::domain::HubspotConnections>,
+    ) -> Self {
+        self.hubspot = Some(reader);
+        self
+    }
+
+    /// Decide which users may plan an import still being rolled out
+    /// through `rollout`. Hosts without it leave every flagged import off.
+    pub fn with_import_rollout(
+        mut self,
+        rollout: Arc<dyn crate::domain::ports::ImportRollout>,
+    ) -> Self {
+        self.rollout = rollout;
+        self
+    }
+
+    /// Write every CRM import (HubSpot and later sources) into the team's
+    /// CRM through `writer`. Hosts without it report CRM imports as
+    /// unavailable.
+    pub fn with_crm_writer(
+        mut self,
         writer: Arc<dyn crate::domain::ports::CrmImportWriter>,
     ) -> Self {
-        self.hubspot = Some(HubspotImport { reader, writer });
+        self.crm_writer = Some(writer);
         self
     }
 
@@ -492,6 +514,8 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
             workspace_source: self.workspace_source,
             trackers: self.trackers,
             hubspot: self.hubspot,
+            crm_writer: self.crm_writer,
+            rollout: self.rollout,
             mcp_tools: self.mcp_tools,
             creator: self.creator,
             recorder: self.recorder,

@@ -23,11 +23,33 @@ use axum::{
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
 use std::sync::Arc;
 
 #[cfg(test)]
 mod test;
+
+/// Reads the flags an import's rollout waits on for one user. Object-safe
+/// (`#[async_trait]`) so the router state names no adapter.
+#[async_trait::async_trait]
+pub trait ImportFlags: Send + Sync + 'static {
+    /// The user's flags, or `None` when they cannot be read: every flagged
+    /// import then reads as off.
+    async fn load(&self, user: &MacroUserIdStr<'static>) -> Option<feature_flags::FlagSnapshot>;
+}
+
+#[async_trait::async_trait]
+impl<F: feature_flags::FeatureFlags + 'static> ImportFlags for F {
+    async fn load(&self, user: &MacroUserIdStr<'static>) -> Option<feature_flags::FlagSnapshot> {
+        feature_flags::FeatureFlags::load(self, user)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(error = ?error, "could not read import rollout flags; flagged imports read as off");
+            })
+            .ok()
+    }
+}
 
 /// What the `/connectors` routes run on.
 pub struct ConnectorsRouterState<S, C, Auth> {
@@ -35,6 +57,7 @@ pub struct ConnectorsRouterState<S, C, Auth> {
     catalog: Arc<C>,
     authorization_state: MacroAuthorizationState<Auth>,
     importable: Arc<Importable>,
+    import_flags: Option<Arc<dyn ImportFlags>>,
     on_connected: Option<ConnectorHook>,
     on_removed: Option<ConnectorHook>,
 }
@@ -46,6 +69,7 @@ impl<S, C, Auth> Clone for ConnectorsRouterState<S, C, Auth> {
             catalog: self.catalog.clone(),
             authorization_state: self.authorization_state.clone(),
             importable: self.importable.clone(),
+            import_flags: self.import_flags.clone(),
             on_connected: self.on_connected.clone(),
             on_removed: self.on_removed.clone(),
         }
@@ -76,6 +100,7 @@ where
             catalog: Arc::new(catalog),
             authorization_state,
             importable: Arc::new(Importable::new()),
+            import_flags: None,
             on_connected: None,
             on_removed: None,
         }
@@ -87,6 +112,28 @@ where
     pub fn with_importable(mut self, importable: Importable) -> Self {
         self.importable = Arc::new(importable);
         self
+    }
+
+    /// Read the flags of flagged imports
+    /// ([`Importable::with_flagged`]) through `flags`. Without it a flagged
+    /// import is off for everyone.
+    pub fn with_import_flags(mut self, flags: Arc<dyn ImportFlags>) -> Self {
+        self.import_flags = Some(flags);
+        self
+    }
+
+    /// What `user` can import from, reading their flags only when an import
+    /// waits on one.
+    async fn importable_for(&self, user: &MacroUserIdStr<'static>) -> Importable {
+        let snapshot = match (&self.import_flags, self.importable.flags().next()) {
+            (Some(flags), Some(_)) => flags.load(user).await,
+            _ => None,
+        };
+        self.importable.for_user(|flag| {
+            snapshot
+                .as_ref()
+                .is_some_and(|snapshot| snapshot.is_enabled(flag))
+        })
     }
 
     /// Run `hook` when a user finishes connecting an app.
@@ -206,12 +253,13 @@ where
     Auth: MacroAuthorizationService,
 {
     let user = &authorization.authorization.user.macro_user_id;
-    let connectors = state.connectors.list(user).await?;
+    let (connectors, importable) =
+        futures::join!(state.connectors.list(user), state.importable_for(user));
 
     Ok(Json(
-        connectors
+        connectors?
             .iter()
-            .map(|connector| ConnectorResponse::new(connector, &state.importable))
+            .map(|connector| ConnectorResponse::new(connector, &importable))
             .collect(),
     ))
 }
@@ -253,7 +301,10 @@ where
 
     Ok((
         StatusCode::CREATED,
-        Json(ConnectorResponse::new(&connector, &state.importable)),
+        Json(ConnectorResponse::new(
+            &connector,
+            &state.importable_for(user).await,
+        )),
     ))
 }
 
@@ -383,7 +434,10 @@ where
             .ok_or(ConnectorsError::NotFound(key))?,
     };
 
-    Ok(Json(ConnectorResponse::new(&connector, &state.importable)))
+    Ok(Json(ConnectorResponse::new(
+        &connector,
+        &state.importable_for(user).await,
+    )))
 }
 
 #[utoipa::path(

@@ -91,6 +91,20 @@ impl ImportSource {
         ]
     }
 
+    /// The feature flag this source's import waits on while it is rolled
+    /// out, shared with the web registry and the connectors listing; `None`
+    /// for an import that is on for everyone. Every source decides here:
+    /// there is no default.
+    pub fn rollout_flag(self) -> Option<&'static str> {
+        match self {
+            ImportSource::Linear
+            | ImportSource::Jira
+            | ImportSource::Notion
+            | ImportSource::Slack
+            | ImportSource::Hubspot => None,
+        }
+    }
+
     /// This source's app in the connectors catalog. Slack's `slack_v2` is
     /// the same app; the connectors services decide which connection
     /// counts.
@@ -1027,8 +1041,9 @@ pub struct NotionReportItem {
     pub reason: Option<String>,
 }
 
-/// Something a HubSpot import cannot carry into Macro CRM, counted on the
-/// review card and in the final report.
+/// Something a CRM import cannot carry into Macro CRM, counted on the review
+/// card and in the final report. The serialized names are stored on ledger
+/// rows: never rename one.
 #[derive(
     Debug,
     Clone,
@@ -1046,8 +1061,8 @@ pub struct NotionReportItem {
     strum::EnumIter,
 )]
 #[serde(rename_all = "snake_case")]
-pub enum HubspotLoss {
-    /// A record's HubSpot owner is not a member of the team; it stays unassigned.
+pub enum CrmLoss {
+    /// A record's owner in the source is not a member of the team; it stays unassigned.
     OwnerNotMember,
     /// A deal with no company; Macro pipelines track companies, so it is not imported.
     DealWithoutCompany,
@@ -1063,7 +1078,7 @@ pub enum HubspotLoss {
     UnsupportedCurrency,
     /// A company's further domains; only its primary domain is kept.
     AdditionalDomains,
-    /// A company's HubSpot owner; Macro companies have no owner.
+    /// A company's owner in the source; Macro companies have no owner.
     CompanyOwner,
     /// A company sharing its domain with another planned company; both become
     /// one CRM company.
@@ -1081,19 +1096,19 @@ pub enum HubspotLoss {
     Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, specta::Type, ToSchema,
 )]
 #[serde(rename_all = "camelCase")]
-pub struct HubspotLossCount {
+pub struct CrmLossCount {
     /// What was lost.
-    pub loss: HubspotLoss,
+    pub loss: CrmLoss,
     /// Records affected.
     pub count: u32,
 }
 
-/// What a HubSpot plan holds, for the review card.
+/// What a CRM plan holds, for the review card.
 #[derive(
     Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, specta::Type, ToSchema,
 )]
 #[serde(rename_all = "camelCase")]
-pub struct HubspotReport {
+pub struct CrmReport {
     /// Deal pipelines, each becoming a Macro pipeline.
     pub pipelines: u32,
     /// Companies.
@@ -1102,7 +1117,7 @@ pub struct HubspotReport {
     pub contacts: u32,
     /// Deals, each becoming an entry in its pipeline.
     pub deals: u32,
-    /// HubSpot owners named by the planned records.
+    /// Source owners named by the planned records.
     pub owners: u32,
     /// Of those, owners matched to a team member by email.
     pub owners_matched: u32,
@@ -1116,8 +1131,9 @@ pub struct HubspotReport {
     #[serde(default)]
     pub linked: u32,
     /// What cannot be carried over, by kind.
-    pub losses: Vec<HubspotLossCount>,
-    /// Portal-defined property names whose values stay in HubSpot.
+    pub losses: Vec<CrmLossCount>,
+    /// Properties the source defined itself, as `object.name`; their values
+    /// stay in the source.
     pub custom_properties: Vec<String>,
 }
 
@@ -1229,5 +1245,5 @@ pub struct NotionImportReport {
     pub settlement_lists_truncated: bool,
     /// A HubSpot plan's counts, owners and losses.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub hubspot: Option<HubspotReport>,
+    pub hubspot: Option<CrmReport>,
 }

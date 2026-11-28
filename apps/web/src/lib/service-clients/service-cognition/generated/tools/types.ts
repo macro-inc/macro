@@ -3795,10 +3795,11 @@ export type RunErrorKind =
   | 'interrupted'
   | 'internal';
 /**
- * Something a HubSpot import cannot carry into Macro CRM, counted on the
- * review card and in the final report.
+ * Something a CRM import cannot carry into Macro CRM, counted on the review
+ * card and in the final report. The serialized names are stored on ledger
+ * rows: never rename one.
  */
-export type HubspotLoss =
+export type CrmLoss =
   | 'owner_not_member'
   | 'deal_without_company'
   | 'deal_without_pipeline'
@@ -11421,7 +11422,7 @@ export interface NotionImportReport {
   /**
    * A HubSpot plan's counts, owners and losses.
    */
-  hubspot?: HubspotReport | null;
+  hubspot?: CrmReport | null;
 }
 /**
  * Details alongside the outcome on a Notion import card.
@@ -11668,9 +11669,9 @@ export interface NotionImporter {
   count: number;
 }
 /**
- * What a HubSpot plan holds, for the review card.
+ * What a CRM plan holds, for the review card.
  */
-export interface HubspotReport {
+export interface CrmReport {
   /**
    * Deal pipelines, each becoming a Macro pipeline.
    */
@@ -11688,7 +11689,7 @@ export interface HubspotReport {
    */
   deals: number;
   /**
-   * HubSpot owners named by the planned records.
+   * Source owners named by the planned records.
    */
   owners: number;
   /**
@@ -11711,17 +11712,18 @@ export interface HubspotReport {
   /**
    * What cannot be carried over, by kind.
    */
-  losses: HubspotLossCount[];
+  losses: CrmLossCount[];
   /**
-   * Portal-defined property names whose values stay in HubSpot.
+   * Properties the source defined itself, as `object.name`; their values
+   * stay in the source.
    */
   customProperties: string[];
 }
 /**
  * How many records lost one thing.
  */
-export interface HubspotLossCount {
-  loss: HubspotLoss;
+export interface CrmLossCount {
+  loss: CrmLoss;
   /**
    * Records affected.
    */

@@ -11,7 +11,7 @@ use import_hubspot::domain::{
 };
 
 use super::*;
-use crate::domain::models::{HubspotLoss, HubspotLossCount, NotionImportReport};
+use crate::domain::models::{CrmLoss, CrmLossCount, NotionImportReport};
 use crate::domain::models::{WrittenKind, WrittenObject};
 use crate::domain::ports::ImportError;
 use crate::domain::ports::{
@@ -204,12 +204,12 @@ impl HubspotConnections for Disconnected {
 /// A team's CRM in memory: natural keys behave like CRM's (one company per
 /// domain, one contact per address).
 #[derive(Default)]
-struct Crm {
+pub(super) struct Crm {
     team: Option<CrmTeam>,
-    pipelines: Mutex<Vec<(Uuid, String, Vec<String>)>>,
-    companies: Mutex<Vec<(Uuid, String, Option<String>)>>,
-    contacts: Mutex<Vec<(Uuid, NewCrmContact)>>,
-    entries: Mutex<Vec<(Uuid, Uuid, NewDealEntry)>>,
+    pub(super) pipelines: Mutex<Vec<(Uuid, String, Vec<String>)>>,
+    pub(super) companies: Mutex<Vec<(Uuid, String, Option<String>)>>,
+    pub(super) contacts: Mutex<Vec<(Uuid, NewCrmContact)>>,
+    pub(super) entries: Mutex<Vec<(Uuid, Uuid, NewDealEntry)>>,
     /// Contacts with these names fail to be created, once each.
     failing_contacts: Mutex<HashSet<String>>,
     /// Companies with these names fail to be created.
@@ -394,7 +394,8 @@ fn hubspot_service(
     tracker: TaskTracker,
 ) -> Service {
     service(pool, Writer::default(), CancellationToken::new(), tracker)
-        .with_hubspot(Arc::new(Reader(inventory)), crm)
+        .with_hubspot(Arc::new(Reader(inventory)))
+        .with_crm_writer(crm)
 }
 
 /// A review for `owner`'s HubSpot plan, as the agent presents it.
@@ -508,7 +509,7 @@ async fn row_id(pool: &PgPool, owner: &MacroUserIdStr<'static>, key: &str) -> Uu
         .id
 }
 
-fn crm_for(team: Uuid, members: &[&MacroUserIdStr<'static>]) -> Arc<Crm> {
+pub(super) fn crm_for(team: Uuid, members: &[&MacroUserIdStr<'static>]) -> Arc<Crm> {
     Arc::new(Crm {
         team: Some(CrmTeam {
             team_id: team,
@@ -635,32 +636,32 @@ async fn writes_a_portal_into_the_crm_and_reruns_add_nothing(pool: PgPool) {
     assert_eq!(
         hubspot.losses,
         [
-            HubspotLossCount {
-                loss: HubspotLoss::OwnerNotMember,
+            CrmLossCount {
+                loss: CrmLoss::OwnerNotMember,
                 count: 1
             },
-            HubspotLossCount {
-                loss: HubspotLoss::DealWithoutCompany,
+            CrmLossCount {
+                loss: CrmLoss::DealWithoutCompany,
                 count: 1
             },
-            HubspotLossCount {
-                loss: HubspotLoss::ExtraCompanyLinks,
+            CrmLossCount {
+                loss: CrmLoss::ExtraCompanyLinks,
                 count: 2
             },
-            HubspotLossCount {
-                loss: HubspotLoss::DomainRejected,
+            CrmLossCount {
+                loss: CrmLoss::DomainRejected,
                 count: 1
             },
-            HubspotLossCount {
-                loss: HubspotLoss::UnsupportedCurrency,
+            CrmLossCount {
+                loss: CrmLoss::UnsupportedCurrency,
                 count: 1
             },
-            HubspotLossCount {
-                loss: HubspotLoss::MergedCompany,
+            CrmLossCount {
+                loss: CrmLoss::MergedCompany,
                 count: 1
             },
-            HubspotLossCount {
-                loss: HubspotLoss::MergedContact,
+            CrmLossCount {
+                loss: CrmLoss::MergedContact,
                 count: 1
             },
         ]
@@ -767,7 +768,8 @@ async fn without_a_connection_the_user_is_asked_to_connect_and_no_import_fails(p
         CancellationToken::new(),
         TaskTracker::new(),
     )
-    .with_hubspot(Arc::new(Disconnected), crm);
+    .with_hubspot(Arc::new(Disconnected))
+    .with_crm_writer(crm);
 
     let result = service
         .prepare_workspace_import(&owner, ImportSource::Hubspot, None, Duration::from_secs(5))
@@ -872,8 +874,8 @@ async fn contacts_of_a_left_out_company_are_counted(pool: PgPool) {
     );
     let losses = report.hubspot.unwrap().losses;
     assert!(
-        losses.contains(&HubspotLossCount {
-            loss: HubspotLoss::ContactWithoutCompany,
+        losses.contains(&CrmLossCount {
+            loss: CrmLoss::ContactWithoutCompany,
             count: 3
         }),
         "{losses:?}"
@@ -982,10 +984,9 @@ async fn an_object_cut_short_by_shutdown_is_left_for_the_next_worker(pool: PgPoo
     let shutdown = CancellationToken::new();
     *crm.stop_on_create.lock().unwrap() = Some(("Acme".into(), shutdown.clone()));
     let tracker = TaskTracker::new();
-    let service = service(&pool, Writer::default(), shutdown, tracker.clone()).with_hubspot(
-        Arc::new(Reader(portal("hubspot-handover@example.com"))),
-        crm.clone(),
-    );
+    let service = service(&pool, Writer::default(), shutdown, tracker.clone())
+        .with_hubspot(Arc::new(Reader(portal("hubspot-handover@example.com"))))
+        .with_crm_writer(crm.clone());
     service
         .prepare_workspace_import(&owner, ImportSource::Hubspot, None, Duration::from_secs(60))
         .await
@@ -1110,4 +1111,48 @@ async fn a_deal_entry_is_found_again_whatever_host_its_link_names(pool: PgPool) 
 
     assert!(report.failures.is_empty(), "{:?}", report.failures);
     assert_eq!(crm.entries.lock().unwrap().len(), 2);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_row_staged_before_the_crm_import_was_shared_is_written(pool: PgPool) {
+    let team = Uuid::now_v7();
+    let owner = teammate(&pool, "hubspot-stored-row", team).await;
+    let crm = crm_for(team, &[&owner]);
+    let planned = plan(
+        &pool,
+        portal("hubspot-stored-row@example.com"),
+        crm.clone(),
+        &owner,
+    )
+    .await;
+    // The company row as a plan stored it before the plan and write moved out of the
+    // HubSpot module.
+    let stored = serde_json::json!({
+        "title": "Acme (stored)",
+        "url": "https://app.hubspot.com/contacts/248109388/record/0-2/10",
+        "plan": {"path": [], "shared": true, "decision": "copy", "shareable": false},
+        "object": {"type": "company", "value": {"domain": "stored.example"}},
+        "losses": ["company_owner"]
+    });
+    let acme = row_id(&pool, &owner, "company:10").await;
+    sqlx::query!(
+        "UPDATE import_entity SET metadata = $1 WHERE id = $2",
+        stored,
+        acme
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let report = finish(planned, &owner, NotionWriteChoices::default()).await;
+
+    assert!(report.failures.is_empty(), "{:?}", report.failures);
+    let companies = crm.companies.lock().unwrap();
+    assert!(
+        companies
+            .iter()
+            .any(|(_, name, domain)| name == "Acme (stored)"
+                && domain.as_deref() == Some("stored.example")),
+        "{companies:?}"
+    );
 }

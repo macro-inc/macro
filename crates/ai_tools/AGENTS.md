@@ -139,7 +139,7 @@ Reviewed Linear/Jira imports also register read-only tracker connections in ever
 host. `src/import_trackers.rs` creates stable-id tasks via ordinary markdown and
 projects via `InitiativeServiceImpl::create_imported`, with Macro AI attribution;
 project, parent and label writes pass through the owning property services.
-`src/import_hubspot.rs` (`HubspotCrmWriter`) is the HubSpot import's
+`src/crm_import.rs` (`CrmRecordWriter`) is the CRM imports'
 `CrmImportWriter`: CRM records and pipeline entries through
 `crm::domain::record_import` as Macro AI for the user, with the team roster
 for owner matching. Every host that builds the import service registers it

@@ -667,6 +667,79 @@ export type CreateChatRequest = {
 };
 
 /**
+ * Something a CRM import cannot carry into Macro CRM, counted on the review
+ * card and in the final report. The serialized names are stored on ledger
+ * rows: never rename one.
+ */
+export type CrmLoss = 'owner_not_member' | 'deal_without_company' | 'deal_without_pipeline' | 'extra_company_links' | 'domain_rejected' | 'unsupported_currency' | 'additional_domains' | 'company_owner' | 'merged_company' | 'merged_contact' | 'contact_without_company';
+
+/**
+ * How many records lost one thing.
+ */
+export type CrmLossCount = {
+    /**
+     * Records affected.
+     */
+    count: number;
+    /**
+     * What was lost.
+     */
+    loss: CrmLoss;
+};
+
+/**
+ * What a CRM plan holds, for the review card.
+ */
+export type CrmReport = {
+    /**
+     * Records already in Macro from an earlier import, left as they are.
+     */
+    alreadyImported: number;
+    /**
+     * Companies.
+     */
+    companies: number;
+    /**
+     * Contacts.
+     */
+    contacts: number;
+    /**
+     * Records this import created in the CRM.
+     */
+    created?: number;
+    /**
+     * Properties the source defined itself, as `object.name`; their values
+     * stay in the source.
+     */
+    customProperties: Array<string>;
+    /**
+     * Deals, each becoming an entry in its pipeline.
+     */
+    deals: number;
+    /**
+     * Records this import matched to ones already in the CRM (same domain,
+     * address or deal) or to a teammate's import, instead of creating them.
+     */
+    linked?: number;
+    /**
+     * What cannot be carried over, by kind.
+     */
+    losses: Array<CrmLossCount>;
+    /**
+     * Source owners named by the planned records.
+     */
+    owners: number;
+    /**
+     * Of those, owners matched to a team member by email.
+     */
+    ownersMatched: number;
+    /**
+     * Deal pipelines, each becoming a Macro pipeline.
+     */
+    pipelines: number;
+};
+
+/**
  * What a successful tool call committed to the user's databases.
  */
 export type DatabaseChange = {
@@ -1065,77 +1138,6 @@ export type HttpSendChatMessageRequest = {
      * Which toolset to use. Defaults to `all`
      */
     toolset?: ToolSet;
-};
-
-/**
- * Something a HubSpot import cannot carry into Macro CRM, counted on the
- * review card and in the final report.
- */
-export type HubspotLoss = 'owner_not_member' | 'deal_without_company' | 'deal_without_pipeline' | 'extra_company_links' | 'domain_rejected' | 'unsupported_currency' | 'additional_domains' | 'company_owner' | 'merged_company' | 'merged_contact' | 'contact_without_company';
-
-/**
- * How many records lost one thing.
- */
-export type HubspotLossCount = {
-    /**
-     * Records affected.
-     */
-    count: number;
-    /**
-     * What was lost.
-     */
-    loss: HubspotLoss;
-};
-
-/**
- * What a HubSpot plan holds, for the review card.
- */
-export type HubspotReport = {
-    /**
-     * Records already in Macro from an earlier import, left as they are.
-     */
-    alreadyImported: number;
-    /**
-     * Companies.
-     */
-    companies: number;
-    /**
-     * Contacts.
-     */
-    contacts: number;
-    /**
-     * Records this import created in the CRM.
-     */
-    created?: number;
-    /**
-     * Portal-defined property names whose values stay in HubSpot.
-     */
-    customProperties: Array<string>;
-    /**
-     * Deals, each becoming an entry in its pipeline.
-     */
-    deals: number;
-    /**
-     * Records this import matched to ones already in the CRM (same domain,
-     * address or deal) or to a teammate's import, instead of creating them.
-     */
-    linked?: number;
-    /**
-     * What cannot be carried over, by kind.
-     */
-    losses: Array<HubspotLossCount>;
-    /**
-     * HubSpot owners named by the planned records.
-     */
-    owners: number;
-    /**
-     * Of those, owners matched to a team member by email.
-     */
-    ownersMatched: number;
-    /**
-     * Deal pipelines, each becoming a Macro pipeline.
-     */
-    pipelines: number;
 };
 
 /**
@@ -1608,7 +1610,7 @@ export type NotionImportReport = {
      * Objects that need handling by hand, with reasons.
      */
     handItems?: Array<NotionReportItem>;
-    hubspot?: null | HubspotReport;
+    hubspot?: null | CrmReport;
     /**
      * Plan objects finished so far, or confirmed new copies once completed.
      */

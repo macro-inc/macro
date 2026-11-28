@@ -158,3 +158,36 @@ fn connect_steps_never_say_whose_flow_they_are() {
         })
     );
 }
+
+#[test]
+fn a_flagged_import_is_available_only_to_users_with_its_flag_on() {
+    let importable = Importable::new()
+        .with(ConnectorId::parse("hubspot").unwrap(), ImportSurface::Mcp)
+        .with_flagged(
+            ConnectorId::parse("trello").unwrap(),
+            ImportSurface::Mcp,
+            "enable-trello-import",
+        );
+    let connector = |slug| {
+        Connector::new(
+            app(slug),
+            "x".to_owned(),
+            Status::Connected,
+            true,
+            Surfaces::new(true, false),
+        )
+    };
+
+    let off = importable.for_user(|_| false);
+    let on = importable.for_user(|flag| flag == "enable-trello-import");
+
+    assert_eq!(
+        importable.flags().collect::<Vec<_>>(),
+        ["enable-trello-import"]
+    );
+    assert!(!importable.available(&connector("trello")));
+    assert!(!off.available(&connector("trello")));
+    assert!(off.available(&connector("hubspot")));
+    assert!(on.available(&connector("trello")));
+    assert!(on.available(&connector("hubspot")));
+}

@@ -5,14 +5,14 @@ fn a_ready_plan_is_presented_with_its_counts() {
     let report = NotionImportReport {
         status: Some(RunStatus::Ready),
         skip: 1,
-        hubspot: Some(HubspotReport {
+        hubspot: Some(CrmReport {
             pipelines: 2,
             companies: 196,
             contacts: 792,
             deals: 98,
             owners: 2,
             owners_matched: 1,
-            ..HubspotReport::default()
+            ..CrmReport::default()
         }),
         ..NotionImportReport::default()
     };
@@ -58,5 +58,26 @@ fn the_tool_asks_to_start_only_a_ready_plan() {
             "While it is still being planned, do not ask or approve: the user approves it on the card once it is ready."
         ),
         "{schema}"
+    );
+}
+
+#[test]
+fn a_source_not_rolled_out_is_refused_calmly_and_without_retrying() {
+    let text = super::super::not_rolled_out_message(ImportSource::Hubspot);
+
+    assert!(
+        text.starts_with(
+            "The HubSpot import is in early access and not turned on for this account yet."
+        ),
+        "{text}"
+    );
+    assert!(
+        text.contains("Nothing is wrong with the user's HubSpot connection or data"),
+        "{text}"
+    );
+    assert!(text.contains("do not retry"), "{text}");
+    assert!(
+        text.contains("do not recreate their HubSpot records with other tools"),
+        "{text}"
     );
 }

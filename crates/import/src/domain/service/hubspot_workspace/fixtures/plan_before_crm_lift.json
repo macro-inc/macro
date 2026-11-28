@@ -1,0 +1,1021 @@
+{
+  "base": {
+    "rows": [
+      {
+        "kind": "HubspotPipeline",
+        "foreign_id": "7:pipeline:default",
+        "parent": null,
+        "metadata": {
+          "warnings": [
+            "Skipped an unreadable HubSpot company.",
+            "Notes, emails, calls, meetings, tasks, tickets, line items, custom objects, attachments and custom property values stay in HubSpot."
+          ],
+          "title": "Sales",
+          "url": null,
+          "plan": {
+            "decision": "copy",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "pipeline",
+            "value": {
+              "stages": [
+                "Review",
+                "Review (2)"
+              ]
+            }
+          },
+          "hubspotSummary": {
+            "owners": 1,
+            "ownersMatched": 1,
+            "customProperties": [
+              "deals.renewal_date"
+            ]
+          }
+        }
+      },
+      {
+        "kind": "HubspotCompany",
+        "foreign_id": "7:company:10",
+        "parent": null,
+        "metadata": {
+          "title": "globex.example",
+          "url": "https://app-eu1.hubspot.com/contacts/7/record/0-2/10",
+          "plan": {
+            "decision": "copy",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "company",
+            "value": {
+              "domain": "globex.example"
+            }
+          },
+          "losses": [
+            "additional_domains",
+            "company_owner"
+          ]
+        }
+      },
+      {
+        "kind": "HubspotDeal",
+        "foreign_id": "7:deal:30",
+        "parent": "7:pipeline:default",
+        "metadata": {
+          "title": "Deal 30",
+          "url": "https://app-eu1.hubspot.com/contacts/7/record/0-3/30",
+          "plan": {
+            "decision": "copy",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "deal",
+            "value": {
+              "pipeline": "7:pipeline:default",
+              "company": "7:company:10",
+              "stage": "Review (2)",
+              "outcome": "lost",
+              "amount": null,
+              "currency": null,
+              "closeDate": null,
+              "owner": "macro|member@example.com"
+            }
+          },
+          "losses": [
+            "unsupported_currency"
+          ]
+        }
+      }
+    ],
+    "report": {
+      "pipelines": 1,
+      "companies": 1,
+      "contacts": 0,
+      "deals": 1,
+      "owners": 1,
+      "ownersMatched": 1,
+      "alreadyImported": 0,
+      "created": 0,
+      "linked": 0,
+      "losses": [
+        {
+          "loss": "unsupported_currency",
+          "count": 1
+        },
+        {
+          "loss": "additional_domains",
+          "count": 1
+        },
+        {
+          "loss": "company_owner",
+          "count": 1
+        }
+      ],
+      "customProperties": [
+        "deals.renewal_date"
+      ]
+    }
+  },
+  "rich": {
+    "rows": [
+      {
+        "kind": "HubspotPipeline",
+        "foreign_id": "7:pipeline:default",
+        "parent": null,
+        "metadata": {
+          "warnings": [
+            "Skipped an unreadable HubSpot company.",
+            "Notes, emails, calls, meetings, tasks, tickets, line items, custom objects, attachments and custom property values stay in HubSpot."
+          ],
+          "title": "Sales",
+          "url": null,
+          "plan": {
+            "decision": "copy",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "pipeline",
+            "value": {
+              "stages": [
+                "Review",
+                "Review (2)"
+              ]
+            }
+          },
+          "hubspotSummary": {
+            "owners": 3,
+            "ownersMatched": 1,
+            "customProperties": [
+              "deals.renewal_date",
+              "companies.tier",
+              "companies.region"
+            ]
+          }
+        }
+      },
+      {
+        "kind": "HubspotPipeline",
+        "foreign_id": "7:pipeline:99",
+        "parent": null,
+        "metadata": {
+          "title": "Renewals with a long label that keeps going and going and going past the option label limit for sure yes",
+          "url": null,
+          "plan": {
+            "decision": "copy",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "pipeline",
+            "value": {
+              "stages": [
+                "Stage 1",
+                "won",
+                "WON (2)"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "kind": "HubspotCompany",
+        "foreign_id": "7:company:10",
+        "parent": null,
+        "metadata": {
+          "title": "globex.example",
+          "url": "https://app-eu1.hubspot.com/contacts/7/record/0-2/10",
+          "plan": {
+            "decision": "copy",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "company",
+            "value": {
+              "domain": "globex.example"
+            }
+          },
+          "losses": [
+            "additional_domains",
+            "company_owner"
+          ]
+        }
+      },
+      {
+        "kind": "HubspotCompany",
+        "foreign_id": "7:company:11",
+        "parent": null,
+        "metadata": {
+          "title": "Acme",
+          "url": "https://app-eu1.hubspot.com/contacts/7/record/0-2/11",
+          "plan": {
+            "decision": "copy",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "company",
+            "value": {
+              "domain": "acme.example."
+            }
+          }
+        }
+      },
+      {
+        "kind": "HubspotCompany",
+        "foreign_id": "7:company:12",
+        "parent": null,
+        "metadata": {
+          "title": "Acme dup",
+          "url": "https://app-eu1.hubspot.com/contacts/7/record/0-2/12",
+          "plan": {
+            "decision": "copy",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "company",
+            "value": {
+              "domain": "acme.example"
+            }
+          },
+          "losses": [
+            "merged_company",
+            "company_owner"
+          ]
+        }
+      },
+      {
+        "kind": "HubspotCompany",
+        "foreign_id": "7:company:13",
+        "parent": null,
+        "metadata": {
+          "title": "Company 13",
+          "url": "https://app-eu1.hubspot.com/contacts/7/record/0-2/13",
+          "plan": {
+            "decision": "copy",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "company",
+            "value": {
+              "domain": null
+            }
+          },
+          "losses": [
+            "domain_rejected"
+          ]
+        }
+      },
+      {
+        "kind": "HubspotCompany",
+        "foreign_id": "7:company:14",
+        "parent": null,
+        "metadata": {
+          "title": "Company 14",
+          "url": "https://app-eu1.hubspot.com/contacts/7/record/0-2/14",
+          "plan": {
+            "decision": "copy",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "company",
+            "value": {
+              "domain": null
+            }
+          }
+        }
+      },
+      {
+        "kind": "HubspotContact",
+        "foreign_id": "7:contact:20",
+        "parent": "7:company:12",
+        "metadata": {
+          "title": "Ada Lovelace",
+          "url": "https://app-eu1.hubspot.com/contacts/7/record/0-1/20",
+          "plan": {
+            "decision": "copy",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "contact",
+            "value": {
+              "emails": [
+                "ada@acme.example",
+                "a2@acme.example"
+              ],
+              "company": "7:company:12"
+            }
+          },
+          "losses": [
+            "extra_company_links"
+          ]
+        }
+      },
+      {
+        "kind": "HubspotContact",
+        "foreign_id": "7:contact:21",
+        "parent": null,
+        "metadata": {
+          "title": "ada@acme.example",
+          "url": "https://app-eu1.hubspot.com/contacts/7/record/0-1/21",
+          "plan": {
+            "decision": "copy",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "contact",
+            "value": {
+              "emails": [
+                "ada@acme.example"
+              ],
+              "company": null
+            }
+          },
+          "losses": [
+            "merged_contact"
+          ]
+        }
+      },
+      {
+        "kind": "HubspotContact",
+        "foreign_id": "7:contact:22",
+        "parent": null,
+        "metadata": {
+          "title": "Contact 22",
+          "url": "https://app-eu1.hubspot.com/contacts/7/record/0-1/22",
+          "plan": {
+            "decision": "copy",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "contact",
+            "value": {
+              "emails": [],
+              "company": null
+            }
+          }
+        }
+      },
+      {
+        "kind": "HubspotDeal",
+        "foreign_id": "7:deal:30",
+        "parent": "7:pipeline:default",
+        "metadata": {
+          "title": "Deal 30",
+          "url": "https://app-eu1.hubspot.com/contacts/7/record/0-3/30",
+          "plan": {
+            "decision": "copy",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "deal",
+            "value": {
+              "pipeline": "7:pipeline:default",
+              "company": "7:company:10",
+              "stage": "Review (2)",
+              "outcome": "lost",
+              "amount": null,
+              "currency": null,
+              "closeDate": null,
+              "owner": "macro|member@example.com"
+            }
+          },
+          "losses": [
+            "unsupported_currency"
+          ]
+        }
+      },
+      {
+        "kind": "HubspotDeal",
+        "foreign_id": "7:deal:31",
+        "parent": "7:pipeline:99",
+        "metadata": {
+          "title": "Big",
+          "url": "https://app-eu1.hubspot.com/contacts/7/record/0-3/31",
+          "plan": {
+            "decision": "copy",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "deal",
+            "value": {
+              "pipeline": "7:pipeline:99",
+              "company": "7:company:11",
+              "stage": "WON (2)",
+              "outcome": "lost",
+              "amount": 10.0,
+              "currency": "EUR",
+              "closeDate": "2026-01-02",
+              "owner": null
+            }
+          },
+          "losses": [
+            "owner_not_member"
+          ]
+        }
+      },
+      {
+        "kind": "HubspotDeal",
+        "foreign_id": "7:deal:32",
+        "parent": null,
+        "metadata": {
+          "title": "Deal 32",
+          "url": "https://app-eu1.hubspot.com/contacts/7/record/0-3/32",
+          "plan": {
+            "decision": "skip",
+            "reason": "Its pipeline is archived or missing.",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "deal",
+            "value": {
+              "pipeline": "",
+              "company": "",
+              "stage": null,
+              "outcome": "open",
+              "amount": null,
+              "currency": "EUR",
+              "closeDate": null,
+              "owner": null
+            }
+          },
+          "losses": [
+            "owner_not_member",
+            "deal_without_pipeline"
+          ]
+        }
+      },
+      {
+        "kind": "HubspotDeal",
+        "foreign_id": "7:deal:33",
+        "parent": "7:pipeline:default",
+        "metadata": {
+          "title": "No co",
+          "url": "https://app-eu1.hubspot.com/contacts/7/record/0-3/33",
+          "plan": {
+            "decision": "skip",
+            "reason": "It has no company, and Macro pipelines track companies.",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "deal",
+            "value": {
+              "pipeline": "7:pipeline:default",
+              "company": "",
+              "stage": "Review",
+              "outcome": "open",
+              "amount": 1.0,
+              "currency": "USD",
+              "closeDate": null,
+              "owner": null
+            }
+          },
+          "losses": [
+            "deal_without_company"
+          ]
+        }
+      }
+    ],
+    "report": {
+      "pipelines": 2,
+      "companies": 5,
+      "contacts": 3,
+      "deals": 4,
+      "owners": 3,
+      "ownersMatched": 1,
+      "alreadyImported": 0,
+      "created": 0,
+      "linked": 0,
+      "losses": [
+        {
+          "loss": "owner_not_member",
+          "count": 2
+        },
+        {
+          "loss": "deal_without_company",
+          "count": 1
+        },
+        {
+          "loss": "deal_without_pipeline",
+          "count": 1
+        },
+        {
+          "loss": "extra_company_links",
+          "count": 1
+        },
+        {
+          "loss": "domain_rejected",
+          "count": 1
+        },
+        {
+          "loss": "unsupported_currency",
+          "count": 1
+        },
+        {
+          "loss": "additional_domains",
+          "count": 1
+        },
+        {
+          "loss": "company_owner",
+          "count": 2
+        },
+        {
+          "loss": "merged_company",
+          "count": 1
+        },
+        {
+          "loss": "merged_contact",
+          "count": 1
+        },
+        {
+          "loss": "contact_without_company",
+          "count": 1
+        }
+      ],
+      "customProperties": [
+        "deals.renewal_date",
+        "companies.tier",
+        "companies.region"
+      ]
+    }
+  },
+  "rich_keep_case": {
+    "rows": [
+      {
+        "kind": "HubspotPipeline",
+        "foreign_id": "7:pipeline:default",
+        "parent": null,
+        "metadata": {
+          "warnings": [
+            "Skipped an unreadable HubSpot company.",
+            "Notes, emails, calls, meetings, tasks, tickets, line items, custom objects, attachments and custom property values stay in HubSpot."
+          ],
+          "title": "Sales",
+          "url": null,
+          "plan": {
+            "decision": "copy",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "pipeline",
+            "value": {
+              "stages": [
+                "Review",
+                "Review (2)"
+              ]
+            }
+          },
+          "hubspotSummary": {
+            "owners": 3,
+            "ownersMatched": 1,
+            "customProperties": [
+              "deals.renewal_date",
+              "companies.tier",
+              "companies.region"
+            ]
+          }
+        }
+      },
+      {
+        "kind": "HubspotPipeline",
+        "foreign_id": "7:pipeline:99",
+        "parent": null,
+        "metadata": {
+          "title": "Renewals with a long label that keeps going and going and going past the option label limit for sure yes",
+          "url": null,
+          "plan": {
+            "decision": "copy",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "pipeline",
+            "value": {
+              "stages": [
+                "Stage 1",
+                "won",
+                "WON (2)"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "kind": "HubspotCompany",
+        "foreign_id": "7:company:10",
+        "parent": null,
+        "metadata": {
+          "title": "globex.example",
+          "url": "https://app-eu1.hubspot.com/contacts/7/record/0-2/10",
+          "plan": {
+            "decision": "copy",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "company",
+            "value": {
+              "domain": "globex.example"
+            }
+          },
+          "losses": [
+            "additional_domains",
+            "company_owner"
+          ]
+        }
+      },
+      {
+        "kind": "HubspotCompany",
+        "foreign_id": "7:company:11",
+        "parent": null,
+        "metadata": {
+          "title": "Acme",
+          "url": "https://app-eu1.hubspot.com/contacts/7/record/0-2/11",
+          "plan": {
+            "decision": "copy",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "company",
+            "value": {
+              "domain": "Acme.example."
+            }
+          }
+        }
+      },
+      {
+        "kind": "HubspotCompany",
+        "foreign_id": "7:company:12",
+        "parent": null,
+        "metadata": {
+          "title": "Acme dup",
+          "url": "https://app-eu1.hubspot.com/contacts/7/record/0-2/12",
+          "plan": {
+            "decision": "copy",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "company",
+            "value": {
+              "domain": "acme.example"
+            }
+          },
+          "losses": [
+            "merged_company",
+            "company_owner"
+          ]
+        }
+      },
+      {
+        "kind": "HubspotCompany",
+        "foreign_id": "7:company:13",
+        "parent": null,
+        "metadata": {
+          "title": "Company 13",
+          "url": "https://app-eu1.hubspot.com/contacts/7/record/0-2/13",
+          "plan": {
+            "decision": "copy",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "company",
+            "value": {
+              "domain": null
+            }
+          },
+          "losses": [
+            "domain_rejected"
+          ]
+        }
+      },
+      {
+        "kind": "HubspotCompany",
+        "foreign_id": "7:company:14",
+        "parent": null,
+        "metadata": {
+          "title": "Company 14",
+          "url": "https://app-eu1.hubspot.com/contacts/7/record/0-2/14",
+          "plan": {
+            "decision": "copy",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "company",
+            "value": {
+              "domain": null
+            }
+          }
+        }
+      },
+      {
+        "kind": "HubspotContact",
+        "foreign_id": "7:contact:20",
+        "parent": "7:company:12",
+        "metadata": {
+          "title": "Ada Lovelace",
+          "url": "https://app-eu1.hubspot.com/contacts/7/record/0-1/20",
+          "plan": {
+            "decision": "copy",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "contact",
+            "value": {
+              "emails": [
+                "ada@acme.example",
+                "a2@acme.example"
+              ],
+              "company": "7:company:12"
+            }
+          },
+          "losses": [
+            "extra_company_links"
+          ]
+        }
+      },
+      {
+        "kind": "HubspotContact",
+        "foreign_id": "7:contact:21",
+        "parent": null,
+        "metadata": {
+          "title": "ada@acme.example",
+          "url": "https://app-eu1.hubspot.com/contacts/7/record/0-1/21",
+          "plan": {
+            "decision": "copy",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "contact",
+            "value": {
+              "emails": [
+                "ada@acme.example"
+              ],
+              "company": null
+            }
+          },
+          "losses": [
+            "merged_contact"
+          ]
+        }
+      },
+      {
+        "kind": "HubspotContact",
+        "foreign_id": "7:contact:22",
+        "parent": null,
+        "metadata": {
+          "title": "Contact 22",
+          "url": "https://app-eu1.hubspot.com/contacts/7/record/0-1/22",
+          "plan": {
+            "decision": "copy",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "contact",
+            "value": {
+              "emails": [],
+              "company": null
+            }
+          }
+        }
+      },
+      {
+        "kind": "HubspotDeal",
+        "foreign_id": "7:deal:30",
+        "parent": "7:pipeline:default",
+        "metadata": {
+          "title": "Deal 30",
+          "url": "https://app-eu1.hubspot.com/contacts/7/record/0-3/30",
+          "plan": {
+            "decision": "copy",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "deal",
+            "value": {
+              "pipeline": "7:pipeline:default",
+              "company": "7:company:10",
+              "stage": "Review (2)",
+              "outcome": "lost",
+              "amount": null,
+              "currency": null,
+              "closeDate": null,
+              "owner": "macro|member@example.com"
+            }
+          },
+          "losses": [
+            "unsupported_currency"
+          ]
+        }
+      },
+      {
+        "kind": "HubspotDeal",
+        "foreign_id": "7:deal:31",
+        "parent": "7:pipeline:99",
+        "metadata": {
+          "title": "Big",
+          "url": "https://app-eu1.hubspot.com/contacts/7/record/0-3/31",
+          "plan": {
+            "decision": "copy",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "deal",
+            "value": {
+              "pipeline": "7:pipeline:99",
+              "company": "7:company:11",
+              "stage": "WON (2)",
+              "outcome": "lost",
+              "amount": 10.0,
+              "currency": "EUR",
+              "closeDate": "2026-01-02",
+              "owner": null
+            }
+          },
+          "losses": [
+            "owner_not_member"
+          ]
+        }
+      },
+      {
+        "kind": "HubspotDeal",
+        "foreign_id": "7:deal:32",
+        "parent": null,
+        "metadata": {
+          "title": "Deal 32",
+          "url": "https://app-eu1.hubspot.com/contacts/7/record/0-3/32",
+          "plan": {
+            "decision": "skip",
+            "reason": "Its pipeline is archived or missing.",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "deal",
+            "value": {
+              "pipeline": "",
+              "company": "",
+              "stage": null,
+              "outcome": "open",
+              "amount": null,
+              "currency": "EUR",
+              "closeDate": null,
+              "owner": null
+            }
+          },
+          "losses": [
+            "owner_not_member",
+            "deal_without_pipeline"
+          ]
+        }
+      },
+      {
+        "kind": "HubspotDeal",
+        "foreign_id": "7:deal:33",
+        "parent": "7:pipeline:default",
+        "metadata": {
+          "title": "No co",
+          "url": "https://app-eu1.hubspot.com/contacts/7/record/0-3/33",
+          "plan": {
+            "decision": "skip",
+            "reason": "It has no company, and Macro pipelines track companies.",
+            "path": [],
+            "shared": true,
+            "shareable": false
+          },
+          "object": {
+            "type": "deal",
+            "value": {
+              "pipeline": "7:pipeline:default",
+              "company": "",
+              "stage": "Review",
+              "outcome": "open",
+              "amount": 1.0,
+              "currency": "USD",
+              "closeDate": null,
+              "owner": null
+            }
+          },
+          "losses": [
+            "deal_without_company"
+          ]
+        }
+      }
+    ],
+    "report": {
+      "pipelines": 2,
+      "companies": 5,
+      "contacts": 3,
+      "deals": 4,
+      "owners": 3,
+      "ownersMatched": 1,
+      "alreadyImported": 0,
+      "created": 0,
+      "linked": 0,
+      "losses": [
+        {
+          "loss": "owner_not_member",
+          "count": 2
+        },
+        {
+          "loss": "deal_without_company",
+          "count": 1
+        },
+        {
+          "loss": "deal_without_pipeline",
+          "count": 1
+        },
+        {
+          "loss": "extra_company_links",
+          "count": 1
+        },
+        {
+          "loss": "domain_rejected",
+          "count": 1
+        },
+        {
+          "loss": "unsupported_currency",
+          "count": 1
+        },
+        {
+          "loss": "additional_domains",
+          "count": 1
+        },
+        {
+          "loss": "company_owner",
+          "count": 2
+        },
+        {
+          "loss": "merged_company",
+          "count": 1
+        },
+        {
+          "loss": "merged_contact",
+          "count": 1
+        },
+        {
+          "loss": "contact_without_company",
+          "count": 1
+        }
+      ],
+      "customProperties": [
+        "deals.renewal_date",
+        "companies.tier",
+        "companies.region"
+      ]
+    }
+  }
+}

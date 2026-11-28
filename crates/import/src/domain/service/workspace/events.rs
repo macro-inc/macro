@@ -154,7 +154,7 @@ where
             report.confirmed = Some(writes);
         }
         report.on_team = self.repo.user_team_id(user).await?.is_some();
-        if let Some(hubspot) = report.hubspot.as_mut() {
+        if let Some(crm) = report.hubspot.as_mut() {
             // A record this import created carries its CRM marker; one it
             // matched by natural key or linked from a teammate does not.
             let imported: Vec<Uuid> = rows
@@ -174,9 +174,8 @@ where
                 .into_iter()
                 .filter(|object| object.kind == WrittenKind::CrmRecord)
                 .count();
-            hubspot.created = u32::try_from(created).unwrap_or(u32::MAX);
-            hubspot.linked =
-                u32::try_from(imported.len().saturating_sub(created)).unwrap_or(u32::MAX);
+            crm.created = u32::try_from(created).unwrap_or(u32::MAX);
+            crm.linked = u32::try_from(imported.len().saturating_sub(created)).unwrap_or(u32::MAX);
         }
         Ok(report)
     }
