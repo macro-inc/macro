@@ -23,6 +23,8 @@ type Variables = { cursor: string | null };
 type FakeExecution = {
   variables: Variables;
   next(data: Page): void;
+  /** Answers with data and an error together, as a partial response does. */
+  partial(data: Page, error: CombinedError): void;
   fail(error: CombinedError): void;
   readonly unsubscribed: boolean;
 };
@@ -46,6 +48,11 @@ function makeFakeClient(): {
       variables: request.variables,
       next: (data) =>
         subject.next({ operation, data } as OperationResult<Page, Variables>),
+      partial: (data, error) =>
+        subject.next({ operation, data, error } as OperationResult<
+          Page,
+          Variables
+        >),
       fail: (error) =>
         subject.next({ operation, error } as OperationResult<Page, Variables>),
       get unsubscribed() {
@@ -77,10 +84,13 @@ const DOCUMENT = gql`
 const disposals: Array<() => void> = [];
 
 /**
- * Two loaded pages, `b, member` then `c`, from a query that repairs its
- * cursor chain while `repairs` holds.
+ * Two loaded pages, `b, member` then `c` (ending at `lastCursor`), from a
+ * query that repairs its cursor chain while `repairs` holds.
  */
-async function twoPagesRepairedWhile(repairs: () => boolean) {
+async function twoPagesRepairedWhile(
+  repairs: () => boolean,
+  lastCursor: string | null = null
+) {
   const fake = makeFakeClient();
   let query!: ReturnType<
     typeof createUrqlInfiniteQuery<Page, Variables, string | null, string[]>
@@ -106,7 +116,7 @@ async function twoPagesRepairedWhile(repairs: () => boolean) {
     nextCursor: 'after-member',
   });
   const nextPage = query.fetchNextPage();
-  fake.executions[1]?.next({ values: ['c'], nextCursor: null });
+  fake.executions[1]?.next({ values: ['c'], nextCursor: lastCursor });
   await nextPage;
   expect(query.data).toEqual(['b', 'member', 'c']);
   return { fake, query };
@@ -611,36 +621,7 @@ describe('createUrqlInfiniteQuery', () => {
   });
 
   it('asks for the next page from the end of a repaired chain', async () => {
-    const fake = makeFakeClient();
-    let query!: ReturnType<
-      typeof createUrqlInfiniteQuery<Page, Variables, string | null, string[]>
-    >;
-    disposals.push(
-      createRoot((dispose) => {
-        query = createUrqlInfiniteQuery<
-          Page,
-          Variables,
-          string | null,
-          string[]
-        >(() => ({
-          query: DOCUMENT,
-          client: fake.client,
-          initialPageParam: null,
-          variables: (cursor) => ({ cursor }),
-          getNextPageParam: (lastPage) => lastPage.nextCursor,
-          select: ({ pages }) => pages.flatMap((page) => page.values),
-          repairContinuations: true,
-        }));
-        return dispose;
-      })
-    );
-    fake.executions[0]?.next({
-      values: ['b', 'member'],
-      nextCursor: 'after-member',
-    });
-    const secondPage = query.fetchNextPage();
-    fake.executions[1]?.next({ values: ['c'], nextCursor: 'after-c' });
-    await secondPage;
+    const { fake, query } = await twoPagesRepairedWhile(() => true, 'after-c');
 
     pushMemberAcross(fake);
     await vi.waitFor(() => expect(fake.executions).toHaveLength(3));
@@ -658,6 +639,104 @@ describe('createUrqlInfiniteQuery', () => {
     fake.executions[3]?.next({ values: ['d'], nextCursor: null });
     await thirdPage;
     expect(query.data).toEqual(['new', 'b', 'member', 'c', 'd']);
+  });
+
+  it('leaves the chain to a refetch that starts while it is broken', async () => {
+    const { fake, query } = await twoPagesRepairedWhile(() => true);
+
+    pushMemberAcross(fake);
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(3));
+    const refetch = query.refetch();
+    await Promise.resolve();
+    // The refetch reads the first page again and stops the repair; no repair
+    // starts against the cursor the first page is about to replace.
+    expect(fake.executions[2]?.unsubscribed).toBe(true);
+    expect(fake.executions).toHaveLength(4);
+
+    fake.executions[3]?.next({
+      values: ['newer', 'new'],
+      nextCursor: 'after-new',
+    });
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(5));
+    expect(fake.executions[4]?.variables).toEqual({ cursor: 'after-new' });
+    fake.executions[4]?.next({
+      values: ['b', 'member', 'c'],
+      nextCursor: null,
+    });
+    await refetch;
+    expect(query.data).toEqual(['newer', 'new', 'b', 'member', 'c']);
+    await Promise.resolve();
+    expect(fake.executions).toHaveLength(5);
+  });
+
+  it('lets a queued next page go ahead when the page before a repair moves again', async () => {
+    const { fake, query } = await twoPagesRepairedWhile(() => true, 'after-c');
+
+    pushMemberAcross(fake);
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(3));
+    const thirdPage = query.fetchNextPage();
+    // Another new row pushes `b` across while the repair reads.
+    fake.executions[0]?.next({
+      values: ['newer', 'new'],
+      nextCursor: 'after-new',
+    });
+    fake.executions[2]?.next({
+      values: ['member', 'c'],
+      nextCursor: 'after-c',
+    });
+
+    // The outdated read is dropped and the pass ends, so the next page goes.
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(4));
+    expect(fake.executions[3]?.variables).toEqual({ cursor: 'after-c' });
+    expect(fake.executions[1]?.unsubscribed).toBe(false);
+    fake.executions[3]?.next({ values: ['d'], nextCursor: null });
+    await thirdPage;
+
+    // Then the next pass repairs from where the first page now ends.
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(5));
+    expect(fake.executions[4]?.variables).toEqual({ cursor: 'after-new' });
+    fake.executions[4]?.next({
+      values: ['b', 'member', 'c'],
+      nextCursor: 'after-c',
+    });
+    await vi.waitFor(() =>
+      expect(query.data).toEqual(['newer', 'new', 'b', 'member', 'c', 'd'])
+    );
+    expect(query.isFetching).toBe(false);
+    expect(fake.executions).toHaveLength(5);
+  });
+
+  it('clears a failed repair once the chain holds again', async () => {
+    const { fake, query } = await twoPagesRepairedWhile(() => true);
+
+    pushMemberAcross(fake);
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(3));
+    const offline = new CombinedError({ networkError: new Error('offline') });
+    fake.executions[2]?.fail(offline);
+    await vi.waitFor(() => expect(query.error).toBe(offline));
+
+    // The new row goes, and the first page ends where it did.
+    fake.executions[0]?.next({
+      values: ['b', 'member'],
+      nextCursor: 'after-member',
+    });
+    await vi.waitFor(() => expect(query.error).toBeNull());
+    expect(query.data).toEqual(['b', 'member', 'c']);
+    expect(fake.executions).toHaveLength(3);
+  });
+
+  it('keeps the stale page when a repair read comes back with an error', async () => {
+    const { fake, query } = await twoPagesRepairedWhile(() => true);
+
+    pushMemberAcross(fake);
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(3));
+    const partial = new CombinedError({
+      graphQLErrors: ['partial failure'],
+    });
+    fake.executions[2]?.partial({ values: [], nextCursor: null }, partial);
+    await vi.waitFor(() => expect(query.error).toBe(partial));
+    expect(query.data).toEqual(['new', 'b', 'c']);
+    expect(fake.executions[1]?.unsubscribed).toBe(false);
   });
 
   it('stops a repair when the list goes back to its first page', async () => {
