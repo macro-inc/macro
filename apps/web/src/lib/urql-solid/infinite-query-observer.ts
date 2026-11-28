@@ -86,6 +86,16 @@ type ReplacementCheck = {
   current?: () => boolean;
 };
 
+/** How a repair pass ended: the chain checked, a page behind it moved, or it stopped. */
+type RepairPassEnd = 'done' | 'moved' | 'stopped';
+
+/**
+ * A pass that a moving page cut short waits before the next one, longer each
+ * time it keeps moving, so the reads that move it get their turn.
+ */
+const REPAIR_PAUSE_MIN_MS = 250;
+const REPAIR_PAUSE_MAX_MS = 8_000;
+
 type ReplaceOutcome =
   | { kind: 'replaced' }
   | { kind: 'failed'; error: CombinedError | undefined }
@@ -193,6 +203,8 @@ export class InfiniteQueryObserver<
     | undefined;
   private repairController = new AbortController();
   private repairPromise: Promise<void> | undefined;
+  private repairPause: ReturnType<typeof setTimeout> | undefined;
+  private repairPauseMs = 0;
 
   constructor(
     client: Client,
@@ -560,6 +572,7 @@ export class InfiniteQueryObserver<
   }
 
   private destroyPage(page: Page<PageData, Variables, PageParam>): void {
+    if (page === this.failedNextPage) this.failedNextPage = undefined;
     page.unsubscribe();
     page.observer.destroy();
   }
@@ -598,6 +611,9 @@ export class InfiniteQueryObserver<
     this.repairController.abort();
     this.repairController = new AbortController();
     this.repairPromise = undefined;
+    clearTimeout(this.repairPause);
+    this.repairPause = undefined;
+    this.repairPauseMs = 0;
     this.setState({ repairing: false, repairError: undefined });
   }
 
@@ -616,6 +632,7 @@ export class InfiniteQueryObserver<
     if (
       this.destroyed ||
       this.state.repairing ||
+      this.repairPause !== undefined ||
       this.state.refetching ||
       this.state.fetchingNextPage ||
       this.fetchNextPromise ||
@@ -645,8 +662,9 @@ export class InfiniteQueryObserver<
 
   /**
    * Whether each continuation page's cursor follows the page before it, or
-   * the first one that does not. A page without rows, or a cursor that fails
-   * to resolve, says nothing about the pages after it.
+   * the first one that does not. A page without rows or with an error (a
+   * partial response can leave out its cursor), or a cursor that fails to
+   * resolve, says nothing about the pages after it.
    */
   private checkContinuations(): ContinuationCheck<PageParam> {
     const previous: UrqlInfiniteData<PageData, PageParam> = {
@@ -660,25 +678,32 @@ export class InfiniteQueryObserver<
         if (!Object.is(page.pageParam, next.pageParam))
           return { kind: 'broken', pageIndex, pageParam: next.pageParam };
       }
-      const data = page.observer.getCurrentResult().data;
-      if (data === undefined) return { kind: 'unknown' };
+      const { data, error } = page.observer.getCurrentResult();
+      if (data === undefined || error) return { kind: 'unknown' };
       previous.pages.push(data);
       previous.pageParams.push(page.pageParam);
     }
     return { kind: 'holds' };
   }
 
-  /** The cursor the page before `pageIndex` now ends at, when it has rows. */
+  /**
+   * The cursor the page before `pageIndex` now ends at, when every page up to
+   * it has rows and no error.
+   */
   private continuationAt(pageIndex: number): PageParam | null | undefined {
-    const previous = this.successfulPages(this.pages.slice(0, pageIndex));
-    if (previous.pages.length !== pageIndex) return undefined;
-    return this.resolveNextPageParam(previous).pageParam;
+    const previous = this.pages.slice(0, pageIndex);
+    const clean = previous.every((page) => {
+      const { data, error } = page.observer.getCurrentResult();
+      return data !== undefined && !error;
+    });
+    if (!clean) return undefined;
+    return this.resolveNextPageParam(this.successfulPages(previous)).pageParam;
   }
 
   private async runRepair(signal: AbortSignal): Promise<void> {
-    let finished = false;
+    let end: RepairPassEnd = 'stopped';
     try {
-      finished = await this.repairPass(signal);
+      end = await this.repairPass(signal);
     } catch (cause) {
       if (!signal.aborted)
         this.setState({ repairError: toCombinedError(cause) });
@@ -687,63 +712,80 @@ export class InfiniteQueryObserver<
         this.repairPromise = undefined;
         this.setState({ repairing: false });
         this.emit();
-        // A page behind the pass may have moved while it read.
-        if (finished) this.repairContinuations();
+        this.pauseRepair(end);
       }
     }
   }
 
   /**
+   * Repairs a page that moved under a pass after a pause, which doubles
+   * while each pass is cut short. Page updates during the pause start no
+   * pass: the one at its end covers them, and meanwhile the query is idle,
+   * so the refresh queue and a queued next page or refetch get their turn.
+   */
+  private pauseRepair(end: RepairPassEnd): void {
+    if (end !== 'moved') {
+      this.repairPauseMs = 0;
+      return;
+    }
+    this.repairPauseMs = Math.min(
+      REPAIR_PAUSE_MAX_MS,
+      Math.max(REPAIR_PAUSE_MIN_MS, this.repairPauseMs * 2)
+    );
+    this.repairPause = setTimeout(() => {
+      this.repairPause = undefined;
+      this.repairContinuations();
+    }, this.repairPauseMs);
+  }
+
+  /**
    * Replaces broken continuations in order, each once, keeping the stale
    * rows until a clean replacement lands, and drops the pages after one that
-   * now ends the list. A page behind the pass that moves meanwhile is left
-   * to the next pass, so a queued next page or refetch is not held behind a
-   * chain that keeps changing. A failed read keeps the stale page, reports
-   * the error and ends the repair; the next page update tries again.
-   * Resolves whether the pass finished without failing or being stopped.
+   * now ends the list. A read whose page has moved on since is dropped,
+   * failed or not, and a page behind the pass that moves ends it. A failed
+   * read keeps the stale page, reports the error and ends the repair; the
+   * next page update tries again.
    */
-  private async repairPass(signal: AbortSignal): Promise<boolean> {
+  private async repairPass(signal: AbortSignal): Promise<RepairPassEnd> {
     let nextIndex = 1;
-    for (
-      let chain = this.checkContinuations();
-      chain.kind === 'broken';
-      chain = this.checkContinuations()
-    ) {
+    let chain = this.checkContinuations();
+    while (chain.kind === 'broken') {
       if (
         signal.aborted ||
         this.destroyed ||
         !this.state.enabled ||
         !this.options.repairContinuations
       )
-        return false;
+        return 'stopped';
       const { pageIndex, pageParam } = chain;
-      if (pageIndex < nextIndex) return true;
+      if (pageIndex < nextIndex) return 'moved';
       nextIndex = pageIndex + 1;
       if (pageParam === null || pageParam === undefined) {
         this.destroyPages(pageIndex);
         this.emit();
-        continue;
+      } else {
+        const stale = this.pages[pageIndex];
+        const outcome = await this.replacePage(
+          pageIndex,
+          pageParam,
+          { requestPolicy: 'network-only' },
+          signal,
+          {
+            complete: true,
+            current: () =>
+              this.pages[pageIndex] === stale &&
+              Object.is(this.continuationAt(pageIndex), pageParam),
+          }
+        );
+        if (outcome.kind === 'failed')
+          this.setState({ repairError: outcome.error });
+        if (outcome.kind === 'failed' || outcome.kind === 'cancelled')
+          return 'stopped';
       }
-      const stale = this.pages[pageIndex];
-      const outcome = await this.replacePage(
-        pageIndex,
-        pageParam,
-        { requestPolicy: 'network-only' },
-        signal,
-        {
-          complete: true,
-          current: () =>
-            this.pages[pageIndex] === stale &&
-            Object.is(this.continuationAt(pageIndex), pageParam),
-        }
-      );
-      if (outcome.kind === 'failed')
-        this.setState({ repairError: outcome.error });
-      if (outcome.kind === 'failed' || outcome.kind === 'cancelled')
-        return false;
+      chain = this.checkContinuations();
     }
-    this.setState({ repairError: undefined });
-    return true;
+    if (chain.kind === 'holds') this.setState({ repairError: undefined });
+    return 'done';
   }
 
   private destroyPages(fromIndex = 0): void {
@@ -983,10 +1025,12 @@ export class InfiniteQueryObserver<
     try {
       await replacement.observer.refetch(refetchOptions);
       if (signal.aborted || this.destroyed) return { kind: 'cancelled' };
+      // A read for a page the chain has moved on from says nothing, even
+      // when it failed.
+      if (check.current && !check.current()) return { kind: 'outdated' };
       const result = replacement.observer.getCurrentResult();
       if (result.data === undefined || (check.complete && result.error))
         return { kind: 'failed', error: result.error ?? undefined };
-      if (check.current && !check.current()) return { kind: 'outdated' };
       const stale = this.pages[pageIndex];
       this.pages.splice(pageIndex, 1, replacement);
       if (stale) this.destroyPage(stale);

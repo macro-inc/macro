@@ -156,7 +156,10 @@ export type UrqlInfiniteQueryOptions<
    * Reads a continuation page again from the cursor the page before it now
    * ends at, once a read of that page moves its last row: the saved cursor
    * would skip the rows pushed across the boundary. The stale page stays
-   * until its replacement lands. Cursors compare with `Object.is`, so
+   * until a replacement without an error lands, and nothing is replaced or
+   * dropped behind a page with an error. While the page before it keeps
+   * moving, the query rests between reads, from 250 ms up to 8 s, so other
+   * reads get their turn. Cursors compare with `Object.is`, so
    * `getNextPageParam` must return the same value for the same page.
    * Defaults to false.
    */

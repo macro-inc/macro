@@ -739,6 +739,123 @@ describe('createUrqlInfiniteQuery', () => {
     expect(fake.executions[1]?.unsubscribed).toBe(false);
   });
 
+  it('waits before reading again while the page before a repair keeps moving', async () => {
+    const { fake, query } = await twoPagesRepairedWhile(() => true);
+
+    pushMemberAcross(fake);
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(3));
+    fake.executions[0]?.next({
+      values: ['newer', 'new'],
+      nextCursor: 'after-new',
+    });
+    fake.executions[2]?.next({ values: ['member', 'c'], nextCursor: null });
+    // The outdated read is dropped, and the query rests before the next pass,
+    // however often the first page moves meanwhile.
+    await vi.waitFor(() => expect(query.isFetching).toBe(false));
+    for (const top of ['a', 'z', 'newest']) {
+      fake.executions[0]?.next({
+        values: [top, 'newer'],
+        nextCursor: 'after-newer',
+      });
+      await Promise.resolve();
+    }
+    expect(fake.executions).toHaveLength(3);
+    expect(query.isFetching).toBe(false);
+
+    // One pass then reads from where the first page ends by then.
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(4));
+    expect(fake.executions[3]?.variables).toEqual({ cursor: 'after-newer' });
+    fake.executions[3]?.next({
+      values: ['new', 'b', 'member', 'c'],
+      nextCursor: null,
+    });
+    await vi.waitFor(() =>
+      expect(query.data).toEqual(['newest', 'newer', 'new', 'b', 'member', 'c'])
+    );
+    expect(query.isFetching).toBe(false);
+  });
+
+  it('lets a failed read for a cursor the chain has left go to the current one', async () => {
+    const { fake, query } = await twoPagesRepairedWhile(() => true);
+
+    pushMemberAcross(fake);
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(3));
+    fake.executions[0]?.next({
+      values: ['newer', 'new'],
+      nextCursor: 'after-new',
+    });
+    fake.executions[2]?.fail(
+      new CombinedError({ networkError: new Error('offline') })
+    );
+
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(4));
+    expect(fake.executions[3]?.variables).toEqual({ cursor: 'after-new' });
+    expect(query.error).toBeNull();
+    fake.executions[3]?.next({
+      values: ['b', 'member', 'c'],
+      nextCursor: null,
+    });
+    await vi.waitFor(() =>
+      expect(query.data).toEqual(['newer', 'new', 'b', 'member', 'c'])
+    );
+  });
+
+  it('keeps the later pages when the page before them comes back with an error', async () => {
+    const { fake, query } = await twoPagesRepairedWhile(() => true);
+
+    // A partial response can leave out the cursor the page ends at.
+    fake.executions[0]?.partial(
+      { values: ['new', 'b'], nextCursor: null },
+      new CombinedError({ graphQLErrors: ['partial failure'] })
+    );
+    await vi.waitFor(() => expect(query.data).toEqual(['new', 'b', 'c']));
+    await Promise.resolve();
+    expect(fake.executions[1]?.unsubscribed).toBe(false);
+    expect(fake.executions).toHaveLength(2);
+  });
+
+  it('clears a next page error once a repair replaces that page', async () => {
+    const fake = makeFakeClient();
+    let query!: ReturnType<
+      typeof createUrqlInfiniteQuery<Page, Variables, string | null, string[]>
+    >;
+    const dispose = createRoot((rootDispose) => {
+      query = createUrqlInfiniteQuery<Page, Variables, string | null, string[]>(
+        () => ({
+          query: DOCUMENT,
+          client: fake.client,
+          initialPageParam: null,
+          variables: (cursor) => ({ cursor }),
+          getNextPageParam: (lastPage) => lastPage.nextCursor,
+          select: ({ pages }) => pages.flatMap((page) => page.values),
+          repairContinuations: true,
+        })
+      );
+      return rootDispose;
+    });
+    disposals.push(dispose);
+    fake.executions[0]?.next({
+      values: ['b', 'member'],
+      nextCursor: 'after-member',
+    });
+    const nextPage = query.fetchNextPage();
+    fake.executions[1]?.partial(
+      { values: ['c'], nextCursor: null },
+      new CombinedError({ graphQLErrors: ['partial failure'] })
+    );
+    await nextPage;
+    expect(query.isFetchNextPageError).toBe(true);
+
+    pushMemberAcross(fake);
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(3));
+    fake.executions[2]?.next({ values: ['member', 'c'], nextCursor: null });
+    await vi.waitFor(() =>
+      expect(query.data).toEqual(['new', 'b', 'member', 'c'])
+    );
+    expect(query.isFetchNextPageError).toBe(false);
+    expect(query.error).toBeNull();
+  });
+
   it('stops a repair when the list goes back to its first page', async () => {
     const { fake, query } = await twoPagesRepairedWhile(() => true);
 
