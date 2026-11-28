@@ -341,7 +341,8 @@ pub trait Storage: MaybeSend {
     /// `Result`; a failed claim is nested and never undoes the upsert.
     ///
     /// A backend whose writes each pay a flush overrides this to write both
-    /// in one transaction.
+    /// in one transaction. It then writes the upsert alone after a failed
+    /// claim, unless undoing the claim failed, which is a reset.
     fn upsert_mutation_and_claim(
         &mut self,
         entry: NewQueuedMutation,

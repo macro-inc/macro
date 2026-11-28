@@ -130,6 +130,13 @@ impl Storage for BrowserStorage {
         self.inner.put_batch(entries).await
     }
 
+    async fn put_batch_durable(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+    ) -> Result<(), Self::Error> {
+        self.inner.put_batch_durable(entries).await
+    }
+
     async fn put_batch_with_projections(
         &mut self,
         entries: Vec<(EntityKey<'static>, Record)>,

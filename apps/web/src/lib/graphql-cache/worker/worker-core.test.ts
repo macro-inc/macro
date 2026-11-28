@@ -4009,6 +4009,49 @@ describe('CacheWorkerCore', () => {
     expect(delay.armed()).toEqual([250]);
   });
 
+  it('cancels the quiet wait when a WAL flush runs because it is overdue', async () => {
+    const order: string[] = [];
+    let hold = false;
+    let release: (() => void) | undefined;
+    const flushWal = vi.fn(async () => {
+      if (hold) await new Promise<void>((resolve) => (release = resolve));
+      order.push('flush');
+      return true;
+    });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue(walFlushEngine(order, flushWal)),
+    });
+    let now = 0;
+    const delay = delayTimer();
+    const core = new CacheWorkerCore({
+      monotonicNow: () => now,
+      afterArrivedMessages: (resume) => queueMicrotask(resume),
+      afterDelay: delay.afterDelay,
+    });
+    const requests = walFlushRequests(core);
+    await openAndFlush(requests, delay, flushWal, order);
+
+    await requests.write();
+    await settle();
+    now = 1_900;
+    await requests.write();
+    await settle();
+    expect(delay.armed()).toEqual([100]);
+
+    hold = true;
+    now = 2_100;
+    const read = requests.read('next');
+    await vi.waitFor(() => expect(release).toBeDefined());
+    expect(delay.armed()).toEqual([]);
+    release?.();
+    await read;
+    await settle();
+    delay.elapse();
+    await settle();
+    expect(order).toEqual(['write', 'write', 'flush', 'read:next']);
+    expect(flushWal).toHaveBeenCalledOnce();
+  });
+
   it('arms no WAL flush when the engine flushes in every COMMIT', async () => {
     const order: string[] = [];
     loadCacheWasmMock.mockResolvedValue({
@@ -4026,22 +4069,27 @@ describe('CacheWorkerCore', () => {
     expect(delay.afterDelay).not.toHaveBeenCalled();
   });
 
-  it('records a failed WAL flush and keeps serving requests', async () => {
+  it('records a failed WAL flush and reports the reset it latched', async () => {
     const order: string[] = [];
     const flushWal = vi.fn(async (): Promise<boolean> => true);
     loadCacheWasmMock.mockResolvedValue({
       openCache: vi.fn().mockResolvedValue(walFlushEngine(order, flushWal)),
     });
     const record = vi.fn();
+    const onStorageResetRequired = vi.fn();
     const delay = delayTimer();
     const core = new CacheWorkerCore({
+      onStorageResetRequired,
       telemetry: { record, flush: vi.fn() },
       afterArrivedMessages: (resume) => queueMicrotask(resume),
       afterDelay: delay.afterDelay,
     });
     const requests = walFlushRequests(core);
     await openAndFlush(requests, delay, flushWal, order);
-    flushWal.mockRejectedValueOnce(new Error('opfs flush failed'));
+    const flushError = Object.assign(new Error('opfs flush failed'), {
+      cacheStorageResetRequired: true,
+    });
+    flushWal.mockRejectedValueOnce(flushError);
 
     await requests.write();
     await settle();
@@ -4055,8 +4103,7 @@ describe('CacheWorkerCore', () => {
         })
       )
     );
-    await requests.read('after');
-    expect(order).toEqual(['write', 'read:after']);
+    expect(onStorageResetRequired).toHaveBeenCalledExactlyOnceWith(flushError);
   });
 
   it('runs an idle WAL copy that fell due during a WAL flush once the flush ends', async () => {

@@ -652,9 +652,10 @@ Search Datadog logs for `service:web-app "graphql_cache.slow_query"`:
 - `cache.slow_query_threshold_ms`: `200`.
 - `cache.storage.writes`, `cache.storage.write_bytes`, `cache.storage.write_ms`,
   `cache.storage.flushes`, `cache.storage.flush_ms`: the OPFS writes and flushes
-  made during the statement. A slow `COMMIT` splits into its WAL append (writes)
-  and, for a queue write, its flush; any other statement shows the page writes
-  it caused.
+  made during the statement. A slow `COMMIT` shows its WAL append (writes) and
+  the WAL header sync after a restart of the log; a queue write's flush runs
+  after the statement and is not in it. Any other statement shows the page
+  writes it caused.
 
 Parameters, results, raw SQL, and user identity are not exported. Logging uses
 an anonymous span context. A throwing JS telemetry callback cannot change query
@@ -711,7 +712,8 @@ COMMIT, checkpoint and close flushes included.
 ## WAL flushes
 
 The browser's connection runs `synchronous = NORMAL` (`DEFER_COMMIT_FLUSH` in
-turso-opfs), so a COMMIT appends to the WAL without flushing it. A closed or
+turso-opfs), so a COMMIT appends to the WAL without flushing it (Turso still
+syncs a new WAL header, after a checkpoint restarts the log). A closed or
 crashed tab, or a killed browser, keeps every COMMIT; an OS crash or power
 loss can drop the newest ones and leaves the database as of an earlier
 COMMIT, which opens whole.
@@ -722,16 +724,17 @@ COMMIT, which opens whole.
   trusts after a crash (`Storage::put_batch_durable`): the permission marker
   and the storage generation. A failed flush leaves the write's outcome
   unknown, and the cache needs a physical reset
-  (`TransactionOutcomeUncertain`); a failed `flushWal` latches the same reset.
+  (`TransactionOutcomeUncertain`).
 - Cache writes hold data the server sends again. After a request that can
   write, the engine worker calls `flushWal` once nothing has run for 250 ms
   (a request that starts restarts the wait), or before the next request once
-  the first unflushed write is 2 s old, so up
-  to 2 s of cache writes are exposed to a power loss. A drain cancels a flush
-  not yet started: closing the engine on release, handoff or close flushes
-  and copies the WAL itself. A wipe deletes the file.
+  the first unflushed write is 2 s old. A power loss can take the cache
+  writes of the last 2 s, and more while one long request runs. A drain
+  cancels a flush not yet started: closing the engine on release, handoff or
+  close tries to flush and copy the WAL itself, and goes on if either fails,
+  since what is unflushed then is cache data. A wipe deletes the file.
 - A failed deferred flush is reported as `graphql_cache.wal_flush` with its
-  error class, and the cache resets at the next request.
+  error class and resets the cache, as a failed sync inside a COMMIT did.
 
 ## Slow request telemetry
 

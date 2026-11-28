@@ -778,7 +778,7 @@ impl ConnectedOpfsSession {
     }
 
     /// A handle that flushes this session's WAL, for the storage to make a
-    /// write durable before it answers. It does nothing once the session
+    /// write durable before it answers. It fails once the session
     /// closes.
     pub fn wal_flusher(&self) -> WalFlusher {
         WalFlusher {

@@ -390,14 +390,15 @@ impl TursoStorage {
     /// Flushes the WAL when a COMMIT appended to it since the last flush,
     /// making every write so far survive an OS crash or power loss. Returns
     /// whether it flushed. The engine worker calls it once writes go quiet;
-    /// durable writes already flushed themselves. A failed flush latches a
-    /// reset, as a failed flush after a durable write does: what the log
-    /// holds on disk is no longer known.
+    /// durable writes already flushed themselves. A failed flush latches the
+    /// reset a failed sync inside a COMMIT always has (`Io`): it is the same
+    /// flush, moved out of the COMMIT.
     pub fn flush_wal(&self) -> Result<bool, TursoStorageError> {
         self.require_healthy()?;
-        let result = self.session.flush_wal().map_err(|_| {
-            TursoStorageError::reset(PhysicalResetReason::TransactionOutcomeUncertain)
-        });
+        let result = self
+            .session
+            .flush_wal()
+            .map_err(|_| TursoStorageError::reset(PhysicalResetReason::Io));
         self.latch_result(result)
     }
 
@@ -1653,8 +1654,10 @@ impl Storage for TursoStorage {
         })();
         match (result, claim_failure) {
             (Ok((upsert, claimed)), _) => Ok((upsert, Ok(claimed))),
-            // A failed claim never costs the upsert: write it on its own, as
-            // the separate calls would have, and report the claim under it.
+            // A failed claim whose rollback went through does not cost the
+            // upsert: write it on its own, as the separate calls would have,
+            // and report the claim under it. A failed rollback is a reset,
+            // and the enqueue is not acknowledged.
             (Err(TursoStorageError::Database), Some(claim_error)) => {
                 let upsert = self
                     .upsert_mutation_with_shadow(entry, now_ms, alone)

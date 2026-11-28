@@ -782,6 +782,8 @@ export class CacheWorkerCore {
 
   /** Runs the due WAL flush in the request queue's place. */
   private startWalFlush(): void {
+    this.cancelWalFlush?.();
+    this.cancelWalFlush = undefined;
     this.walFlushDue = false;
     this.unflushedSince = undefined;
     const engine = this.engine;
@@ -799,8 +801,7 @@ export class CacheWorkerCore {
     try {
       await flushWal();
     } catch (error) {
-      // A failed flush latches a reset in the engine, and the next request
-      // reports it.
+      // A failed flush latches a reset in the engine, reported here.
       this.telemetry.record({
         name: 'graphql_cache.wal_flush',
         operationCategory: 'storage',

@@ -2565,7 +2565,9 @@ impl<S: Storage> Engine<S> {
                 None,
             ),
         };
-        // The expected queue snapshot already matched, so the kinds agree.
+        // The expected queue snapshot matched, so a storage that keeps its
+        // contract returns the kind it promised. One that does not fails the
+        // enqueue here, and a claim made with it lapses with its lease.
         if upsert.kind != expected_kind {
             return Err(EngineError::StaleOptimisticUpsert);
         }
