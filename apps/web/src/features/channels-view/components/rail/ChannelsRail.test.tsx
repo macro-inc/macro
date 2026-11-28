@@ -77,6 +77,7 @@ const mocks = vi.hoisted(() => ({
   setUnavailableReferenceIds: (_ids: string[]) => {},
   sectionsEnabled: true,
   unreadRows: [] as ChannelEntity[],
+  unreadListsEvery: undefined as (() => boolean) | undefined,
   closedGroups: [] as string[],
   collapsedLabels: [] as string[],
   sectionPreferences: {} as Partial<
@@ -486,8 +487,13 @@ vi.mock('./hooks/useChannelRailActivity', () => ({
   },
 }));
 vi.mock('./next/collapsed-unread-channels', () => ({
-  useCollapsedUnreadChannels: (enabled: () => boolean) => () =>
-    enabled() ? mocks.unreadRows : [],
+  useCollapsedUnreadChannels: (
+    enabled: () => boolean,
+    listsEvery: () => boolean
+  ) => {
+    mocks.unreadListsEvery = listsEvery;
+    return () => (enabled() ? mocks.unreadRows : []);
+  },
 }));
 vi.mock('./next/ExpandedChannelsRail', async (importOriginal) => {
   const { ExpandedChannelsRail: RealRenderer } =
@@ -1002,6 +1008,67 @@ describe('bounded reference window', () => {
     mocks.closedGroups = ['favorites'];
     mount();
     expect(windowIds()).toEqual(members);
+  });
+});
+
+describe('unread pages', () => {
+  const section = (channelIds: string[]): ChannelLabel => ({
+    id: 'section',
+    teamId: 'team',
+    name: 'Section',
+    channelIds,
+    channelCount: channelIds.length,
+    sortOrder: 0,
+    createdAt: '2026-01-01',
+    updatedAt: '2026-01-01',
+  });
+
+  afterEach(() => {
+    mocks.tab = 'browse';
+  });
+
+  it('reads every unread page while a custom section lists its unread collapsed', () => {
+    mocks.flags = ['enable-channel-tags'];
+    mocks.labels = [section(['member-0'])];
+    mocks.collapsedLabels = ['section'];
+    mount();
+    expect(mocks.unreadListsEvery!()).toBe(true);
+  });
+
+  it('reads the first unread page for collapsed sections that hide their unread', () => {
+    mocks.flags = ['enable-channel-tags'];
+    mocks.labels = [section(['member-0'])];
+    mocks.collapsedLabels = ['section'];
+    mocks.sectionPreferences = {
+      'label:section': { unreadWhenCollapsed: false },
+    };
+    mount();
+    expect(mocks.unreadListsEvery!()).toBe(false);
+  });
+
+  it('reads the first unread page while another tab shows', () => {
+    mocks.closedGroups = ['channels'];
+    mocks.tab = 'threads';
+    mount();
+    expect(mocks.unreadListsEvery!()).toBe(false);
+  });
+
+  it('reads the first unread page while search results show', () => {
+    mocks.closedGroups = ['channels'];
+    const [searchOpen, setSearchOpen] = createSignal(false);
+    render(() => (
+      <ChannelsRail
+        localChannels={() => mocks.pool}
+        sources={sources}
+        searchQuery=""
+        onSearchQueryChange={() => {}}
+        searchOpen={searchOpen()}
+        onSearchOpenChange={() => {}}
+      />
+    ));
+    expect(mocks.unreadListsEvery!()).toBe(true);
+    setSearchOpen(true);
+    expect(mocks.unreadListsEvery!()).toBe(false);
   });
 });
 

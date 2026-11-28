@@ -465,23 +465,37 @@ export function ChannelsRail(props: ChannelsRailProps) {
         !state.expandedGroups[section] &&
         state.sectionPreferences[section]?.unreadWhenCollapsed !== false
     );
-  // An open favorites or custom section filtered to Unread only lists every
-  // unread member, and the pool carries no unread state.
+  // A favorites or custom section lists every unread member while it is
+  // collapsed (unless it hides them) or filtered to Unread only, and the pool
+  // carries no unread state.
+  const listsEveryUnreadMember = (key: ChannelSectionKey, open: boolean) => {
+    const preferences = state.sectionPreferences[key];
+    return open
+      ? preferences?.unreadOnly === true
+      : preferences?.unreadWhenCollapsed !== false;
+  };
   const referencesListEveryUnread = () =>
     sectionsEnabled() &&
-    ((state.expandedGroups.favorites &&
-      state.sectionPreferences.favorites?.unreadOnly === true) ||
+    ((favoriteChannelIds().length > 0 &&
+      listsEveryUnreadMember('favorites', state.expandedGroups.favorites)) ||
       labels().some(
         (label) =>
-          !state.collapsedLabels.includes(label.id) &&
-          state.sectionPreferences[`label:${label.id}`]?.unreadOnly === true
+          label.channelIds.length > 0 &&
+          listsEveryUnreadMember(
+            `label:${label.id}`,
+            !state.collapsedLabels.includes(label.id)
+          )
       ));
-  // Referenced rows take unread state from here: every unread channel for a
-  // view that lists each one, otherwise the newest page, which section counts
-  // read. Rows on screen also carry it in their own records.
+  // Search results and the other tabs show no section.
+  const sectionsShown = () => !props.searchOpen && tab() === 'browse';
+  // Referenced rows take unread state from here: every unread channel while
+  // the sections on show list each one, otherwise the newest page, which
+  // section counts read. Rows on screen also carry it in their own records.
   const unreadChannels = useCollapsedUnreadChannels(
     () => builtInSectionCollapsed() || hasReferences(),
-    () => builtInSectionCollapsed() || referencesListEveryUnread()
+    () =>
+      sectionsShown() &&
+      (builtInSectionCollapsed() || referencesListEveryUnread())
   );
   const collapsedUnread = () =>
     builtInSectionCollapsed() ? unreadChannels() : [];

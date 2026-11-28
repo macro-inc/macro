@@ -18,9 +18,10 @@ afterEach(() => {
 });
 
 /** A loaded first page with more behind it; `fetchNextPage` counts calls. */
-function firstPageWithMore() {
+function firstPageWithMore(resetToInitialPage = vi.fn()) {
   const fetchNextPage = vi.fn(async () => {});
   useSoupAstItemsQuery.mockImplementation((_args, options) => ({
+    resetToInitialPage,
     get isEnabled() {
       return options().enabled;
     },
@@ -49,6 +50,25 @@ describe('useCollapsedUnreadChannels', () => {
       expect(fetchNextPage).not.toHaveBeenCalled();
       setListsEvery(true);
       expect(fetchNextPage).toHaveBeenCalledOnce();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('drops the later pages once no view lists every unread channel', () => {
+    const resetToInitialPage = vi.fn();
+    firstPageWithMore(resetToInitialPage);
+    const [listsEvery, setListsEvery] = createSignal(true);
+    const dispose = createRoot((dispose) => {
+      useCollapsedUnreadChannels(() => true, listsEvery);
+      return dispose;
+    });
+    try {
+      expect(resetToInitialPage).not.toHaveBeenCalled();
+      setListsEvery(false);
+      expect(resetToInitialPage).toHaveBeenCalledOnce();
+      setListsEvery(true);
+      expect(resetToInitialPage).toHaveBeenCalledOnce();
     } finally {
       dispose();
     }
