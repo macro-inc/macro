@@ -160,6 +160,11 @@ This command:
 - Starts the local proxy and the frontend
 
 When startup finishes, the command prints the frontend URL and the important service URLs.
+With the frontend enabled, open `/bots/` on the printed instance HTTPS origin
+to open Bots. The frontend lane builds a separate fixture-free bundle, and
+the instance proxy serves it beside `/app/` and `/auth/`. For Creator
+changes, restart the named instance to rebuild the Bots bundle. The Web app
+keeps its normal Vite development server.
 
 In a terminal it stays attached with hotkeys. Without one (an agent's shell, a pipe,
 CI), it runs in the background and returns once the stack is ready. See

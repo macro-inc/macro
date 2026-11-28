@@ -19,7 +19,7 @@ fn apply(rewrites: &[HeaderRewrite], header: &str) -> String {
 
 #[test]
 fn local_computers_have_an_http_gateway_without_guest_tls_or_host_dns() {
-    let local = caddyfile(&test_instance(), Mode::Local, false);
+    let local = caddyfile(&test_instance(), Mode::Local, false, false);
     let (_, computer) = local
         .split_once("http://:{$COMPUTER_GATEWAY_PORT} {")
         .expect("computer HTTP listener");
@@ -34,7 +34,9 @@ fn local_computers_have_an_http_gateway_without_guest_tls_or_host_dns() {
     ] {
         assert!(computer.contains(path), "missing computer route: {path}");
     }
-    assert!(!caddyfile(&test_instance(), Mode::Dev, false).contains("COMPUTER_GATEWAY_PORT"));
+    assert!(
+        !caddyfile(&test_instance(), Mode::Dev, false, false).contains("COMPUTER_GATEWAY_PORT")
+    );
 }
 
 #[test]
@@ -67,7 +69,7 @@ fn vite_routes_cover_every_backend_prefix_and_no_frontend_routes() {
 /// the guarantee that replaces the old hand-maintained route list.
 #[test]
 fn generates_a_route_for_every_prefixed_service() {
-    let caddy = caddyfile(&test_instance(), Mode::Local, false);
+    let caddy = caddyfile(&test_instance(), Mode::Local, false, false);
     for svc in inventory::RUST_SERVICES {
         let Some(prefix) = svc.path_prefix else {
             continue;
@@ -88,7 +90,7 @@ fn generates_a_route_for_every_prefixed_service() {
 /// Local-only prefixed services fan out to the shared-dev gateway (no strip).
 #[test]
 fn dev_fans_local_only_prefixes_to_the_gateway() {
-    let caddy = caddyfile(&test_instance(), Mode::Dev, false);
+    let caddy = caddyfile(&test_instance(), Mode::Dev, false, false);
     for svc in inventory::RUST_SERVICES {
         let Some(prefix) = svc.path_prefix else {
             continue;
@@ -131,7 +133,7 @@ fn dev_fans_local_only_prefixes_to_the_gateway() {
 /// services use `handle_path`.
 #[test]
 fn websocket_services_use_a_matcher() {
-    let caddy = caddyfile(&test_instance(), Mode::Local, false);
+    let caddy = caddyfile(&test_instance(), Mode::Local, false, false);
     // connection-gateway is the inventoried WebSocket service.
     assert!(caddy.contains("@connection_gateway path /connection-gateway /connection-gateway/*"));
     assert!(caddy.contains("uri strip_prefix /connection-gateway"));
@@ -143,19 +145,19 @@ fn websocket_services_use_a_matcher() {
 /// (PostHog and OTLP traces/logs), un-stripped, on its own :8098 port.
 #[test]
 fn analytics_proxy_route_is_present() {
-    let caddy = caddyfile(&test_instance(), Mode::Local, false);
+    let caddy = caddyfile(&test_instance(), Mode::Local, false, false);
     assert!(caddy.contains("handle /i/* {"));
     assert!(caddy.contains("reverse_proxy analytics-proxy:8098"));
 }
 
 #[test]
 fn document_content_services_are_available_through_the_proxy() {
-    let caddy = caddyfile(&test_instance(), Mode::Local, false);
+    let caddy = caddyfile(&test_instance(), Mode::Local, false, false);
 
     assert!(caddy.contains("uri strip_prefix /sync"));
     assert!(caddy.contains("reverse_proxy sync-service:8787"));
     assert!(caddy.contains("header_up Origin http://localhost:3000"));
-    assert!(!caddyfile(&test_instance(), Mode::Dev, false).contains("header_up Origin"));
+    assert!(!caddyfile(&test_instance(), Mode::Dev, false, false).contains("header_up Origin"));
     assert!(caddy.contains("handle_path /lexical/*"));
     assert!(caddy.contains("reverse_proxy lexical-service:8096"));
     assert!(caddy.contains("handle_path /ai-editing/*"));
@@ -166,18 +168,21 @@ fn document_content_services_are_available_through_the_proxy() {
 /// fan-out locally, the dev-pointed service in dev.
 #[test]
 fn static_file_block_is_mode_specific() {
-    let local = caddyfile(&test_instance(), Mode::Local, false);
+    let local = caddyfile(&test_instance(), Mode::Local, false, false);
     assert!(local.contains("/static-file-storage"));
     // A route at site scope sorts after the Vite catch-all handle and loops.
     assert!(local.contains("handle_path /static-file/*"));
     assert!(!local.contains("route /static-file/*"));
-    assert!(caddyfile(&test_instance(), Mode::Dev, false).contains("handle_path /static-file/*"));
-    assert!(!caddyfile(&test_instance(), Mode::Dev, false).contains("/static-file-storage"));
+    assert!(
+        caddyfile(&test_instance(), Mode::Dev, false, false).contains("handle_path /static-file/*")
+    );
+    assert!(!caddyfile(&test_instance(), Mode::Dev, false, false).contains("/static-file-storage"));
     assert!(local.contains("handle_path /local-storage/*"));
     // A CDN-signed link reaches LocalStack without the CDN's parameters.
     assert!(local.contains("uri @cdn_signed query"));
     assert!(
-        !caddyfile(&test_instance(), Mode::Dev, false).contains("handle_path /local-storage/*")
+        !caddyfile(&test_instance(), Mode::Dev, false, false)
+            .contains("handle_path /local-storage/*")
     );
 }
 
@@ -210,14 +215,14 @@ fn frontend_wires_every_inventory_prefix() {
 /// forwards frontend requests to Vite instead of serving a bundle.
 #[test]
 fn static_frontend_block_is_opt_in() {
-    let headless = caddyfile(&test_instance(), Mode::Local, true);
+    let headless = caddyfile(&test_instance(), Mode::Local, true, false);
     assert!(headless.contains("handle_path /app/* {"));
     assert!(headless.contains("root * /srv/frontend"));
     assert!(headless.contains("try_files {path} /index.html"));
     assert!(headless.contains("redir / \"/app/?{query}\" 302"));
     assert!(headless.contains("handle /mailpit/*"));
 
-    let attached = caddyfile(&test_instance(), Mode::Local, false);
+    let attached = caddyfile(&test_instance(), Mode::Local, false, false);
     assert!(!attached.contains("/srv/frontend"));
     assert!(attached.contains("reverse_proxy host.docker.internal:{$VITE_PORT}"));
     assert!(attached.contains(&format!(
@@ -229,7 +234,7 @@ fn static_frontend_block_is_opt_in() {
     assert!(!attached.contains("redir / /app/ 302"));
     assert!(!attached.contains("handle /mailpit/*"));
 
-    let headless_dev = caddyfile(&test_instance(), Mode::Dev, true);
+    let headless_dev = caddyfile(&test_instance(), Mode::Dev, true, false);
     assert!(!headless_dev.contains("handle /mailpit/*"));
 }
 
@@ -237,14 +242,14 @@ fn static_frontend_block_is_opt_in() {
 #[test]
 fn vite_connection_limit_is_scoped_to_frontend() {
     for mode in [Mode::Local, Mode::Dev] {
-        let attached = caddyfile(&test_instance(), mode, false);
+        let attached = caddyfile(&test_instance(), mode, false, false);
         assert_eq!(attached.matches("max_conns_per_host").count(), 1);
         let (backend_routes, frontend_route) = attached
             .split_once("reverse_proxy host.docker.internal:{$VITE_PORT} {")
             .expect("attached frontend must proxy to Vite");
         assert!(!backend_routes.contains("max_conns_per_host"));
         assert!(frontend_route.contains("transport http {\n                max_conns_per_host 16"));
-        assert!(!caddyfile(&test_instance(), mode, true).contains("max_conns_per_host"));
+        assert!(!caddyfile(&test_instance(), mode, true, false).contains("max_conns_per_host"));
     }
 }
 
@@ -253,7 +258,7 @@ fn vite_connection_limit_is_scoped_to_frontend() {
 /// CORS, because it fans out to the shared-dev gateway.
 #[test]
 fn local_proxy_uses_tls_and_wildcard_cors() {
-    let local = caddyfile(&test_instance(), Mode::Local, false);
+    let local = caddyfile(&test_instance(), Mode::Local, false, false);
     assert!(local.contains("tls /etc/caddy/certs/server.pem /etc/caddy/certs/server-key.pem"));
     // Keep main's internal certificates for the separate preview listener.
     assert!(local.contains("auto_https disable_redirects"));
@@ -270,7 +275,7 @@ fn local_proxy_uses_tls_and_wildcard_cors() {
         "deferred -Access-Control-* deletes strip the CORS headers this overlay sets"
     );
 
-    let dev = caddyfile(&test_instance(), Mode::Dev, false);
+    let dev = caddyfile(&test_instance(), Mode::Dev, false, false);
     assert!(dev.contains("tls /etc/caddy/certs/server.pem /etc/caddy/certs/server-key.pem"));
     assert!(!dev.contains("@cors header Origin *"));
     assert!(!dev.contains("@cors_preflight"));
@@ -461,14 +466,14 @@ fn no_cookie_rewrite_has_an_empty_replacement() {
 
 #[test]
 fn only_local_stacks_namespace_cookies() {
-    let local = caddyfile(&test_instance(), Mode::Local, true);
+    let local = caddyfile(&test_instance(), Mode::Local, true, false);
     assert!(
         local.contains("request_header Cookie \"; (__Host-|__Secure-)?macro-agent-a--\" \";!$1\"")
     );
     assert!(local.contains("Set-Cookie \"^macro-agent-a--__Host-\" \"__Host-macro-agent-a--\""));
 
     // `run_dev` shares cookies with the dev gateway's own services.
-    assert!(!caddyfile(&test_instance(), Mode::Dev, true).contains("Set-Cookie"));
+    assert!(!caddyfile(&test_instance(), Mode::Dev, true, false).contains("Set-Cookie"));
 }
 
 /// Runs the generated cookie block in a real Caddy in front of a stub service
@@ -589,4 +594,16 @@ fn real_caddy_applies_the_generated_cookie_rules() {
         assert_eq!(request(jar).1, reaches_service, "jar: {jar}");
     }
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn bots_routes_only_mount_when_requested() {
+    let native = caddyfile(&test_instance(), Mode::Local, false, true);
+    assert!(native.contains("handle_path /bots/*"));
+    assert!(native.contains("root * /srv/bots"));
+    assert!(native.contains("@read method GET HEAD"));
+    assert!(native.contains("rewrite @doc /index.html"));
+    assert!(native.contains("handle_path /auth/*"));
+    let backend_only = caddyfile(&test_instance(), Mode::Local, false, false);
+    assert!(!backend_only.contains("handle_path /bots/*"));
 }

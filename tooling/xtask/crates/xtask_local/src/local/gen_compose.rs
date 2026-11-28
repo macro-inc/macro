@@ -110,6 +110,7 @@ pub fn generate(
     instance: &Instance,
     binaries: &BinariesDir,
     static_frontend: bool,
+    bots_frontend: bool,
     sidecars: Sidecars,
     computers: &Computers,
 ) -> Result<PathBuf> {
@@ -155,6 +156,7 @@ pub fn generate(
         &mut services,
         instance,
         static_frontend,
+        bots_frontend,
         mode.spec().runs_local_infra,
     );
     add_localstack_service(&mut services, instance);
@@ -439,6 +441,7 @@ fn add_proxy_service(
     services: &mut IndexMap<String, Option<dct::Service>>,
     instance: &Instance,
     static_frontend: bool,
+    bots_frontend: bool,
     previews: bool,
 ) {
     let proxy_port = instance.port(Port::Proxy);
@@ -456,6 +459,12 @@ fn add_proxy_service(
         volumes.push(dct::Volumes::Simple(format!(
             "{}:/srv/frontend:ro",
             super::frontend::static_dir(instance).display()
+        )));
+    }
+    if bots_frontend {
+        volumes.push(dct::Volumes::Simple(format!(
+            "{}:/srv/bots:ro",
+            super::frontend::bots_dir(instance).display()
         )));
     }
     let mut ports = vec![format!("{proxy_port}:{proxy_port}")];

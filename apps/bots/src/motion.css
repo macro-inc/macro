@@ -1,0 +1,265 @@
+/* Motion and terrain for the Bots shell.
+   Only opacity and the transform family (transform, translate, scale) animate,
+   so nothing here can move layout. Content entry settles within 400ms and
+   never gates input. Reduced motion lands every rule on its final frame. */
+
+:root {
+  --motion-tap: 70ms;
+  --motion-quick: 140ms;
+  --motion-base: 220ms;
+  --motion-reveal: 420ms;
+  --motion-stagger: 30ms;
+  --motion-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --motion-settle: cubic-bezier(0.3, 1.45, 0.5, 1);
+}
+
+/* Terrain: one fixed scene behind every route. It is full strength behind the
+   Creator and sign-in, recedes behind working views, and is faint behind
+   Passwords and Billing. After its one reveal nothing in it moves. */
+.terrain {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+  transition: opacity 400ms linear;
+}
+.terrain svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.terrain-far,
+.terrain-mid,
+.terrain-near,
+.terrain-river {
+  animation: terrain-resolve var(--motion-reveal) steps(3, jump-none) both;
+}
+.terrain-mid {
+  animation-delay: 90ms;
+}
+.terrain-near {
+  animation-delay: 180ms;
+}
+.terrain-river {
+  animation-delay: 270ms;
+}
+@keyframes terrain-resolve {
+  from {
+    opacity: 0;
+  }
+}
+.beacon-pulse {
+  opacity: 0.65;
+}
+body:has(main:not([data-route="/"], [data-route="/sign-in"])) .terrain {
+  opacity: 0.6;
+}
+body:has(main:is([data-route="/passwords"], [data-route="/billing"])) .terrain {
+  opacity: 0.3;
+  transition: none;
+}
+/* Zero timing, not `animation: none`: removing the animation would replay
+   the reveal on the next route. */
+body:has(main:is([data-route="/passwords"], [data-route="/billing"]))
+  .terrain
+  g {
+  animation-duration: 0s;
+  animation-delay: 0s;
+}
+
+/* Entry: a short fade that settles 4px downward. Moving down from above keeps
+   the page's scrollable area unchanged while it plays. */
+main[data-route="/sign-in"] .sign-in,
+.creator > *,
+.fleet-tower,
+.brain-frame,
+.brain-frame ~ * {
+  animation: enter var(--motion-base) var(--motion-out) both;
+}
+.creator > :nth-child(2),
+.fleet-tower:nth-child(2) {
+  animation-delay: var(--motion-stagger);
+}
+.creator > :nth-child(3),
+.fleet-tower:nth-child(3) {
+  animation-delay: calc(var(--motion-stagger) * 2);
+}
+.fleet-tower:nth-child(4) {
+  animation-delay: calc(var(--motion-stagger) * 3);
+}
+.fleet-tower:nth-child(5) {
+  animation-delay: calc(var(--motion-stagger) * 4);
+}
+.fleet-tower:nth-child(n + 6) {
+  animation-delay: calc(var(--motion-stagger) * 5);
+}
+@keyframes enter {
+  from {
+    opacity: 0;
+    translate: 0 -4px;
+  }
+}
+
+/* The sign-in card carries the terrain's amber and cyan datum line. */
+main[data-route="/sign-in"] .sign-in {
+  position: relative;
+}
+main[data-route="/sign-in"] .sign-in::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 76px;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    var(--amber) 52px,
+    transparent 52px 56px,
+    #4d98aa 56px
+  );
+  transform-origin: 0 50%;
+  animation: datum var(--motion-base) var(--motion-out) 120ms both;
+}
+@keyframes datum {
+  from {
+    scale: 0 1;
+  }
+}
+
+/* Portraits resolve in four stepped levels. The Creator portrait also gets one
+   scan line and a 1px idle lift; smaller portraits stay still. */
+.portrait-frame {
+  position: relative;
+  background: #000;
+}
+.portrait-frame img,
+.fleet-portrait img,
+.brain-portrait img {
+  animation: portrait-resolve var(--motion-reveal) steps(4, jump-none) both;
+}
+.portrait-frame img {
+  animation:
+    portrait-resolve var(--motion-reveal) steps(4, jump-none) both,
+    portrait-idle 6.4s steps(1) var(--motion-reveal) infinite;
+}
+@keyframes portrait-resolve {
+  from {
+    opacity: 0.08;
+  }
+}
+@keyframes portrait-idle {
+  50% {
+    translate: 0 -1px;
+  }
+}
+.portrait-scan {
+  position: absolute;
+  inset: 0;
+  border-top: 2px solid rgb(77 152 170 / 75%);
+  opacity: 0;
+  pointer-events: none;
+  animation: portrait-scan var(--motion-reveal) steps(14) both;
+}
+@keyframes portrait-scan {
+  from {
+    opacity: 1;
+    translate: 0 0;
+  }
+  90% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    translate: 0 100%;
+  }
+}
+
+/* Press: down is quick and linear, release settles with a slight overshoot.
+   Scoped to the Creator and to Fleet and Brain controls, so Passwords and
+   Billing stay still. */
+.creator :is(button, .primary),
+.canonical-fleet :is(.fleet-rail-controls button, .fleet-hub-link, .primary),
+.brain nav a,
+.slider-thumb {
+  transition: scale var(--motion-quick) var(--motion-settle);
+}
+.creator :is(button:not(:disabled), .primary):active,
+.canonical-fleet
+  :is(
+    .fleet-rail-controls button:not(:disabled),
+    .fleet-hub-link,
+    .primary
+  ):active,
+.brain nav a:active {
+  scale: 0.97;
+  transition: scale var(--motion-tap) linear;
+}
+.slider-thumb:active {
+  scale: 1.18;
+}
+
+/* Selected underline: drawn from the centre in place of the static inset
+   shadow, for the Brain tabs and the Creator presets. */
+#root .brain nav a,
+#root .presets button {
+  position: relative;
+}
+#root .brain nav a::after,
+#root .presets button::after {
+  content: "";
+  position: absolute;
+  inset: auto 1px 0;
+  height: 2px;
+  background: var(--amber);
+  opacity: 0;
+  scale: 0 1;
+  transition:
+    scale var(--motion-quick) var(--motion-out),
+    opacity var(--motion-tap) linear;
+}
+#root .brain nav a[aria-current="page"],
+#root .presets button[aria-pressed="true"] {
+  box-shadow: none;
+}
+#root .brain nav a[aria-current="page"]::after,
+#root .presets button[aria-pressed="true"]::after {
+  opacity: 1;
+  scale: 1 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terrain,
+  .creator :is(button, .primary),
+  .canonical-fleet :is(.fleet-rail-controls button, .fleet-hub-link, .primary),
+  .brain nav a,
+  .slider-thumb,
+  #root .brain nav a::after,
+  #root .presets button::after {
+    transition: none;
+  }
+  .terrain-far,
+  .terrain-mid,
+  .terrain-near,
+  .terrain-river,
+  main[data-route="/sign-in"] .sign-in,
+  main[data-route="/sign-in"] .sign-in::before,
+  .creator > *,
+  .fleet-tower,
+  .brain-frame,
+  .brain-frame ~ *,
+  .portrait-frame img,
+  .fleet-portrait img,
+  .brain-portrait img,
+  .portrait-scan {
+    animation: none;
+  }
+  .creator :is(button, .primary):active,
+  .canonical-fleet
+    :is(.fleet-rail-controls button, .fleet-hub-link, .primary):active,
+  .brain nav a:active,
+  .slider-thumb:active {
+    scale: 1;
+  }
+}

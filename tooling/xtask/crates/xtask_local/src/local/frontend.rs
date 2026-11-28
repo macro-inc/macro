@@ -169,6 +169,30 @@ pub fn prepare(stage: &Stage) -> Result<()> {
     prepare_dependencies(stage)
 }
 
+/// Build the native Bots document for this instance's same-origin Caddy mount.
+pub fn build_bots(stage: &Stage, instance: &Instance) -> Result<()> {
+    let dist = bots_dir(instance);
+    if !stage.is_dry_run() {
+        instance.ensure_artifact_dir()?;
+    }
+    let mut cmd = Command::new("bun");
+    cmd.current_dir(repo_root()).args([
+        "run",
+        "--filter",
+        "@macro-inc/bots",
+        "build",
+        "--mode",
+        "local-native",
+        "--outDir",
+    ]);
+    cmd.arg(&dist).arg("--emptyOutDir");
+    stage.run("Building Bots frontend", &mut cmd)
+}
+
+pub fn bots_dir(instance: &Instance) -> PathBuf {
+    instance.artifact_dir().join("bots")
+}
+
 /// Host-facing frontend URL.
 pub fn url(instance: &Instance) -> String {
     format!("http://localhost:{}/app", instance.port(Port::Frontend))
