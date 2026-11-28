@@ -246,11 +246,13 @@ it('queues a move with the lists to read once it commits, and reads none itself'
 
 it.each([
   {
+    description: 'chat',
     entity: { type: 'CHAT' as const, id: 'chat' },
     items: [{ __typename: 'GraphqlSoupChat', id: 'chat', projectId: 'parent' }],
     restoredKeys: ['GraphqlSoupChat:chat'],
   },
   {
+    description: 'folder',
     entity: { type: 'PROJECT' as const, id: 'folder' },
     items: [
       {
@@ -271,9 +273,39 @@ it.each([
       'GraphqlSoupDocument:nested-document',
     ],
   },
+  {
+    description: 'folder with an omitted intermediate folder',
+    entity: { type: 'PROJECT' as const, id: 'folder' },
+    effectsError: new CombinedError({
+      graphQLErrors: [
+        {
+          message: 'A changed item could not be read back',
+          path: ['restoreEntities', 'results', 0, 'effects'],
+        },
+      ],
+    }),
+    items: [
+      {
+        __typename: 'GraphqlSoupDocument',
+        id: 'nested-document',
+        projectId: 'missing-folder',
+      },
+      {
+        __typename: 'GraphqlSoupChat',
+        id: 'nested-chat',
+        projectId: 'missing-folder',
+      },
+      { __typename: 'GraphqlSoupProject', id: 'folder', parentId: 'parent' },
+    ],
+    restoredKeys: [
+      'GraphqlSoupProject:folder',
+      'GraphqlSoupDocument:nested-document',
+      'GraphqlSoupChat:nested-chat',
+    ],
+  },
 ])(
-  'publishes only restored identities for a sibling-tab $entity.type restore',
-  async ({ entity, items, restoredKeys }) => {
+  'publishes only restored identities for a sibling-tab $description restore',
+  async ({ entity, items, restoredKeys, effectsError }) => {
     queryClient.setQueryData(authKeys.userInfo.queryKey, {
       id: 'viewer',
       authenticated: true,
@@ -289,8 +321,10 @@ it.each([
     const broadcast = vi
       .spyOn(BroadcastChannel.prototype, 'postMessage')
       .mockImplementation(send);
+    mocks.readAgain.mockReturnValue(Boolean(effectsError));
     mocks.mutation.mockReturnValue({
       toPromise: async () => ({
+        error: effectsError,
         data: {
           restoreEntities: {
             results: [
@@ -318,6 +352,7 @@ it.each([
       });
       await vi.waitFor(() => expect(restored.keys()).toEqual([]));
       expect(parent.keys()).toEqual([parentKey]);
+      if (effectsError) expect(mocks.refresh).not.toHaveBeenCalled();
     } finally {
       broadcast.mockRestore();
       peer.close();
@@ -365,6 +400,7 @@ it('shows a confirmed restore immediately while retaining unrelated and newer de
   });
   const restore = restoreEntity({ type: 'DOCUMENT', id: 'restored' });
   const newer = createGraphqlSoupDeletion(['GraphqlSoupDocument:restored']);
+  newer.markDispatched('GraphqlSoupDocument:restored', soupOperationTime());
   newer.settle(['GraphqlSoupDocument:restored']);
   try {
     finish();
@@ -387,6 +423,8 @@ it('shows the restored rows the server returned when another could not be read b
     'GraphqlSoupDocument:child',
     'GraphqlSoupDocument:unreadable',
   ]);
+  const dispatchedAt = soupOperationTime();
+  for (const key of deletion.keys()) deletion.markDispatched(key, dispatchedAt);
   deletion.settle(deletion.keys());
   mocks.mutation.mockReturnValue({
     toPromise: async () => ({
@@ -429,6 +467,7 @@ it('shows the restored rows the server returned when another could not be read b
 it('keeps prior deletion markers when the server refuses restoration', async () => {
   mocks.refresh.mockReturnValue(new Promise<void>(() => {}));
   const deletion = createGraphqlSoupDeletion(['GraphqlSoupDocument:deleted']);
+  deletion.markDispatched('GraphqlSoupDocument:deleted', soupOperationTime());
   deletion.settle(['GraphqlSoupDocument:deleted']);
   mocks.mutation.mockReturnValue({
     toPromise: async () => ({

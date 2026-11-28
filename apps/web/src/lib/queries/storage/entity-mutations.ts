@@ -160,30 +160,30 @@ function restoredEntityKeys(
   if (!key) return [];
   if (entity.type !== 'PROJECT') return [key];
 
-  const children = new Map<string, { key: string; projectId?: string }[]>();
+  const leaves = new Set<string>();
+  const children = new Map<string, { key: string; projectId: string }[]>();
   for (const effect of effects) {
     if (effect.__typename !== 'SoupUpdated') continue;
     const item = effect.item;
-    let folderId: string | null | undefined;
-    switch (item.__typename) {
-      case 'GraphqlSoupProject':
-        folderId = item.parentId;
-        break;
-      case 'GraphqlSoupDocument':
-      case 'GraphqlSoupChat':
-        folderId = item.projectId;
-        break;
-      default:
-        continue;
+    if (
+      item.__typename === 'GraphqlSoupDocument' ||
+      item.__typename === 'GraphqlSoupChat'
+    ) {
+      // A folder restore returns only restored documents and chats. Their
+      // intermediate folder may be missing from a partial effects response.
+      if (!item.deletedAt) leaves.add(soupItemKey(item));
+      continue;
     }
-    if (!folderId || item.deletedAt) continue;
-    const child = {
-      key: soupItemKey(item),
-      projectId: item.__typename === 'GraphqlSoupProject' ? item.id : undefined,
-    };
-    const siblings = children.get(folderId);
+    if (
+      item.__typename !== 'GraphqlSoupProject' ||
+      !item.parentId ||
+      item.deletedAt
+    )
+      continue;
+    const child = { key: soupItemKey(item), projectId: item.id };
+    const siblings = children.get(item.parentId);
     if (siblings) siblings.push(child);
-    else children.set(folderId, [child]);
+    else children.set(item.parentId, [child]);
   }
 
   const restored = new Set([key]);
@@ -192,10 +192,10 @@ function restoredEntityKeys(
     for (const child of children.get(projectId) ?? []) {
       if (restored.has(child.key)) continue;
       restored.add(child.key);
-      if (child.projectId) projects.push(child.projectId);
+      projects.push(child.projectId);
     }
   }
-  return [...restored];
+  return [...restored, ...leaves];
 }
 
 export async function restoreEntity(entity: EntityRefInput) {
