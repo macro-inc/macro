@@ -66,7 +66,8 @@ app over 3,500 and 7,000 channels and checks heap, long tasks and DOM size
 against loose limits. It runs nightly at 05:30 UTC and by hand
 (`gh workflow run chat_scale.yml --ref <branch>`), not in `PR CI`. Its last
 job is the same `Tell Macro Alerts` job, with the nightly run in place of the
-sweep; the run's summary has the measurements.
+sweep, on scheduled runs only (a run by hand posts nothing); the run's summary
+has the measurements.
 
 The CAPTCHA vision lab's browser tests (`captcha_vision_lab.yml`) are not in
 `PR CI` either, because they stalled at random on the runners while Bun drove

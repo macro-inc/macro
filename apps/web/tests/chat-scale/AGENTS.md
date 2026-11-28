@@ -40,7 +40,9 @@ sections' coverage.
   no first page shows. Sections grow with the account: six team sections
   and three personal ones hold about 92% of the channels that can be in a
   section (every channel but direct messages), from every era, and a fourth
-  personal section is a name rule over the private channels. Six of the 12
+  personal section is a name rule over the private channels. The rail's
+  first pages are the account's newest 500 channels, which the guard
+  below counts against. Six of the 12
   favorites are old. `savedView` is the viewer's saved rail: Favorites,
   Direct messages and one team section open, everything else collapsed.
 - `backend.ts`: every request the page makes, answered in the test process:
@@ -54,8 +56,8 @@ sections' coverage.
 
 From `apps/web`:
 
-- `just build-chat-scale`, then `just test-chat-scale-browser` (about four
-  minutes; `-g 3500` runs one size and the limits test over it, which checks
+- `just build-chat-scale`, then `just test-chat-scale-browser` (about eight
+  minutes on a busy machine; `-g 3500` runs one size and the limits test over it, which checks
   only that size's floors and ceilings). It
   writes `.cache/chat-scale/results.json`, `summary.md` and Playwright's
   report; a failed size leaves its requests and console errors in
@@ -63,7 +65,8 @@ From `apps/web`:
 - `bun run test tests/chat-scale` for the limits' own rules and the
   fixture's paging and filters.
 - CI: the `Chat scale` workflow (`chat_scale.yml`), nightly and by hand; it
-  uploads `.cache/chat-scale` and tells Macro Alerts when it turns red.
+  uploads `.cache/chat-scale`, and a scheduled run that fails tells Macro
+  Alerts (a run by hand does not).
 
 ## Changing a limit
 
@@ -103,7 +106,7 @@ reading under one is a measurement that did not happen.
   that makes the rail's by-ID reads grow with the account: sections hold at
   least `MIN_SECTION_COVERAGE` of the channels that can be in one, and at
   least `MIN_OUTSIDE_FIRST_PAGES` of the channels sections and favorites
-  name are outside the first page of each list. A fixed handful of sections
+  name are outside the account's newest 500, the rail's first pages. A fixed handful of sections
   hides that growth.
 - The saved view is written to local storage before the app starts, under
   the viewer's key, only when nothing is there yet.
