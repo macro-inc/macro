@@ -1036,7 +1036,8 @@ its client, because a list mounted while another list's request for the same
 page is in flight never sends its own operation. The exchange records a
 `graphql.mutation.network_revalidation` span, in the trace the write's caller
 named, with the queries it sent, the lists it read, failed or cut off at 15 s,
-and `revalidation.complete`. Other paged queries, grouped Soup lists included,
+and `revalidation.complete`; every query and page it sends joins that span for
+that send only. Other paged queries, grouped Soup lists included,
 are sent again page by page. A write whose response was lost (a network error)
 may still have committed, so its queries are read again in the background,
 without holding back its error. Mail archive and read-state writes add no

@@ -2720,7 +2720,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       // exchange gave up on it.
       const owner = networkRevalidationOwners.at(-1);
       if (!owner) throw new Error('the list registered no network owner');
-      const earlier = owner.revalidate();
+      const earlier = owner.revalidate({ run: (work) => work() });
       await vi.waitFor(() => expect(fake.executions).toHaveLength(2));
       const refresh = refreshActiveGraphqlSoupQueries();
       fake.executions[1].next(

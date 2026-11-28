@@ -3,6 +3,11 @@ import {
   networkRevalidationExchange,
 } from '@graphql-cache/exchange/network-revalidation-exchange';
 import {
+  type Span,
+  Telemetry,
+  type TraceContext,
+} from '@macro-inc/observability';
+import {
   type Client,
   CombinedError,
   createClient,
@@ -14,7 +19,7 @@ import {
 } from '@urql/core';
 import { createRoot, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import {
   empty,
   fromPromise,
@@ -27,6 +32,7 @@ import {
 import { createUrqlInfiniteQuery } from './create-urql-infinite-query';
 import { InfiniteQueryObserver } from './infinite-query-observer';
 import { createPagedNetworkRevalidation } from './paged-network-revalidation';
+import { TRACE_PARENT_CONTEXT_KEY } from './trace-parent-exchange';
 
 type Page = {
   values: string[];
@@ -734,7 +740,16 @@ describe('createUrqlInfiniteQuery under the revalidation exchange', () => {
   `;
 
   /** A server listing `rows` two at a time, after the row named by a cursor. */
-  function serve(rows: string[], { failReadsAfterWrite = false } = {}) {
+  function serve(
+    rows: string[],
+    {
+      failReadsAfterWrite = false,
+      onRead,
+    }: {
+      failReadsAfterWrite?: boolean;
+      onRead?: (operation: Operation) => void;
+    } = {}
+  ) {
     const reads: (string | null)[] = [];
     let written = false;
     const client = createClient({
@@ -762,7 +777,10 @@ describe('createUrqlInfiniteQuery under the revalidation exchange', () => {
                   } as OperationResult)
                 );
               const cursor: string | null = operation.variables?.cursor ?? null;
-              if (operation.kind === 'query') reads.push(cursor);
+              if (operation.kind === 'query') {
+                reads.push(cursor);
+                onRead?.(operation);
+              }
               const start = cursor === null ? 0 : rows.indexOf(cursor) + 1;
               const values = rows.slice(start, start + 2);
               const data =
@@ -821,6 +839,68 @@ describe('createUrqlInfiniteQuery under the revalidation exchange', () => {
       // Re-sending page 2 after b would show c twice.
       expect(query.data).toEqual(['b', 'c', 'd', 'e']);
       expect(server.reads).toEqual([null, 'c']);
+    });
+  });
+
+  it("sends every page it reads again after a write in the write's trace", async () => {
+    let trace = 'none';
+    const sentIn: string[] = [];
+    const reread = {
+      setAttr: () => {},
+      run: <T,>(work: () => T) => {
+        trace = 'reread';
+        try {
+          return work();
+        } finally {
+          trace = 'none';
+        }
+      },
+    } as unknown as Span;
+    const original = Telemetry.span.bind(Telemetry);
+    // Only the exchange's reread span is faked; the queries keep their own.
+    const span = vi
+      .spyOn(Telemetry, 'span')
+      .mockImplementation(((...args: Parameters<typeof Telemetry.span>) =>
+        args[0] === 'graphql.mutation.network_revalidation'
+          ? (args.at(-1) as (span: Span) => unknown)(reread)
+          : original(...args)) as typeof Telemetry.span);
+    onTestFinished(() => span.mockRestore());
+    const server = serve(['a', 'b', 'c', 'd', 'e'], {
+      // As the trace exchange's fetch does when it sends.
+      onRead: (operation) => {
+        const parent: TraceContext | undefined =
+          operation.context[TRACE_PARENT_CONTEXT_KEY];
+        sentIn.push(parent ? parent.run(() => trace) : trace);
+      },
+    });
+    await createRoot(async (dispose) => {
+      disposals.push(dispose);
+      const networkRevalidation = createPagedNetworkRevalidation(() => query, {
+        client: () => server.client,
+        chain: () => null,
+        reads: () => true,
+      });
+      const query = createUrqlInfiniteQuery(() => ({
+        client: server.client,
+        query: LIST,
+        initialPageParam: null as string | null,
+        context: { networkRevalidation: networkRevalidation() },
+        variables: (cursor: string | null) => ({ cursor }),
+        getNextPageParam: (data: { page: Page }) => data.page.nextCursor,
+        select: ({ pages }: { pages: { page: Page }[] }) =>
+          pages.flatMap((data) => data.page.values),
+      }));
+      await vi.waitFor(() => expect(query.data).toEqual(['a', 'b']));
+      await query.fetchNextPage();
+      sentIn.length = 0;
+
+      await server.client.mutation(ARCHIVE, {}).toPromise();
+      // Page 2 is sent after page 1's await, outside the span's own run.
+      expect(sentIn).toEqual(['reread', 'reread']);
+
+      // A later read of the same pages is not part of the write.
+      await query.refetch({ requestPolicy: 'network-only' });
+      expect(sentIn).toEqual(['reread', 'reread', 'none', 'none']);
     });
   });
 

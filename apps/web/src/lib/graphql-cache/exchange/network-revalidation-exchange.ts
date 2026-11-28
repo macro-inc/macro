@@ -1,5 +1,9 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import { type Span, Telemetry } from '@macro-inc/observability';
+import {
+  type Span,
+  Telemetry,
+  type TraceContext,
+} from '@macro-inc/observability';
 import {
   type Client,
   type Exchange,
@@ -28,8 +32,9 @@ import { optimisticMutationDispositionOf } from './optimistic';
 
 /** A paged list's own read of its loaded pages, in cursor order. */
 export type NetworkRevalidation = {
-  /** Reads the list again, starting after the write committed. */
-  revalidate: () => Promise<unknown>;
+  /** Reads the list again, starting after the write committed. Its requests
+   * join `trace`, the span of the exchange's reread. */
+  revalidate: (trace: TraceContext) => Promise<unknown>;
   /** The list reads the network now. One that doesn't (paused) is skipped,
    * and keeps its pages. */
   active: () => boolean;
@@ -96,14 +101,15 @@ const REVALIDATION_WAIT_MS = 15_000;
  * the owner reads its pages one after another. A failed read is the reader's
  * to show; it never fails the write. */
 async function revalidateOwner(
-  owner: NetworkRevalidation
+  owner: NetworkRevalidation,
+  trace: TraceContext
 ): Promise<'read' | 'failed' | 'timed_out'> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const expired = new Promise<'timed_out'>((resolve) => {
     timer = setTimeout(() => resolve('timed_out'), REVALIDATION_WAIT_MS);
   });
   const read = async () => {
-    await owner.revalidate();
+    await owner.revalidate(trace);
     return 'read' as const;
   };
   const outcome = await ResultAsync.fromPromise(
@@ -255,7 +261,9 @@ export function networkRevalidationExchange(
       span.setAttr('revalidation.queries_resent', pending.length);
       const [reads, outcomes] = await Promise.all([
         Promise.all(pending),
-        Promise.all([...revalidations].map(revalidateOwner)),
+        Promise.all(
+          [...revalidations].map((owner) => revalidateOwner(owner, span))
+        ),
       ]);
       recordOutcomes(span, outcomes);
       return (

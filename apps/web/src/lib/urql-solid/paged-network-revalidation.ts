@@ -2,8 +2,10 @@ import {
   type NetworkRevalidation,
   registerNetworkRevalidation,
 } from '@graphql-cache/exchange/network-revalidation-exchange';
+import type { TraceContext } from '@macro-inc/observability';
 import type { Client } from '@urql/core';
 import { type Accessor, createMemo, onCleanup } from 'solid-js';
+import { TRACE_PARENT_CONTEXT_KEY } from './trace-parent-exchange';
 import type { UrqlInfiniteQueryRefetchOptions } from './types';
 
 type PagedQuery = {
@@ -45,20 +47,45 @@ export function createPagedNetworkRevalidation(
     const self: NetworkRevalidation = {
       gone: () => disposed || owner() !== self,
       active: () => !self.gone() && options.reads(),
-      revalidate: async () => {
+      revalidate: async (trace) => {
         if (!self.active()) return;
         options.before?.();
-        // A refetch already running may have read before the write committed.
-        // A failed read rejects, so the write is not reported as read again.
-        await query().refetch({
-          requestPolicy: 'network-only',
-          fresh: true,
-          throwOnError: true,
-        });
+        const reread = whileReading(trace);
+        try {
+          // A refetch already running may have read before the write
+          // committed. A failed read rejects, so the write is not reported as
+          // read again.
+          await query().refetch({
+            requestPolicy: 'network-only',
+            fresh: true,
+            throwOnError: true,
+            context: { [TRACE_PARENT_CONTEXT_KEY]: reread.context },
+          });
+        } finally {
+          reread.end();
+        }
       },
     };
     onCleanup(registerNetworkRevalidation(options.client(), self));
     return self;
   });
   return owner;
+}
+
+/**
+ * The trace each page a reread sends joins, though it sends after awaits that
+ * lose the browser's context. A page keeps this context after the reread, so
+ * a later send of it, outside the write, joins nothing.
+ */
+function whileReading(trace: TraceContext): {
+  context: TraceContext;
+  end(): void;
+} {
+  let reading = true;
+  return {
+    context: { run: (work) => (reading ? trace.run(work) : work()) },
+    end: () => {
+      reading = false;
+    },
+  };
 }
