@@ -12,6 +12,8 @@ import {
   getGraphqlCacheHost,
   getGraphqlSoupClient,
 } from '@service-storage/graphql-soup';
+import { createSignal } from 'solid-js';
+import { queryAccountSession } from '../auth/account-scope';
 import { getActiveGraphqlSoupRevalidations } from '../soup/graphql/active-queries';
 
 type MailboxFolderField = Extract<
@@ -25,6 +27,48 @@ const mailListDocuments = new Set([
   GroupSoupDocument,
   MailFolderSoupDocument,
 ]);
+
+const [pendingTrash, setPendingTrash] = createSignal<
+  ReadonlyMap<string, { session: number; key: string }>
+>(new Map());
+
+export function pendingEmailTrashKeys(): ReadonlySet<string> {
+  const session = queryAccountSession();
+  return new Set(
+    [...pendingTrash().values()]
+      .filter((entry) => entry.session === session)
+      .map((entry) => entry.key)
+  );
+}
+
+/** Keep older network pages from showing a thread while its trash is pending.
+ * The normalized reply owns membership once the write settles. */
+function holdTrashVisibility(uuid: string, threadId: string) {
+  const host = getGraphqlCacheHost();
+  const entry = {
+    session: queryAccountSession(),
+    key: `GraphqlSoupEmailThread:${threadId}`,
+  };
+  setPendingTrash((pending) => new Map(pending).set(uuid, entry));
+
+  const release = () => {
+    unsubscribeSettlement?.();
+    unsubscribeGeneration?.();
+    setPendingTrash((pending) => {
+      if (!pending.has(uuid)) return pending;
+      const next = new Map(pending);
+      next.delete(uuid);
+      return next;
+    });
+  };
+  const unsubscribeSettlement = host?.onMutationSettled((settlement) => {
+    if (settlement.mutationUuid === uuid) release();
+  });
+  const unsubscribeGeneration = host?.onCacheGenerationChanged((change) => {
+    if (change.queue === 'reset') release();
+  });
+  return release;
+}
 
 export async function setEmailMailboxFolderStates(
   threadIds: readonly string[],
@@ -57,24 +101,34 @@ async function setEmailMailboxFolderState(
   client: ReturnType<typeof getGraphqlSoupClient>,
   input: SetEmailThreadStateInput
 ) {
-  const result = await client
-    .mutation(
-      SetEmailThreadStateDocument,
-      { input },
-      {
-        optimisticMutation: {
-          revalidations: getActiveGraphqlSoupRevalidations(client, {
-            unmaintainedOnly: true,
-          }).filter(({ document }) => mailListDocuments.has(document)),
-        },
-      }
-    )
-    .toPromise();
-  const disposition = optimisticMutationDispositionOf(result);
-  if (disposition?.kind === 'queued') return;
-  if (disposition?.kind === 'permanently-failed') throw disposition.error;
-  if (result.error) throw result.error;
-  if (disposition?.kind === 'committed') return;
-  if (!result.data?.setEmailThreadState)
-    throw new Error('Email thread state mutation returned no thread');
+  const uuid =
+    input.field === 'TRASHED' && input.value ? crypto.randomUUID() : undefined;
+  const release = uuid && holdTrashVisibility(uuid, input.threadId);
+  let queued = false;
+  try {
+    const result = await client
+      .mutation(
+        SetEmailThreadStateDocument,
+        { input },
+        {
+          optimisticMutation: {
+            uuid,
+            revalidations: getActiveGraphqlSoupRevalidations(client, {
+              unmaintainedOnly: true,
+            }).filter(({ document }) => mailListDocuments.has(document)),
+          },
+        }
+      )
+      .toPromise();
+    const disposition = optimisticMutationDispositionOf(result);
+    queued = disposition?.kind === 'queued';
+    if (queued) return;
+    if (disposition?.kind === 'permanently-failed') throw disposition.error;
+    if (result.error) throw result.error;
+    if (disposition?.kind === 'committed') return;
+    if (!result.data?.setEmailThreadState)
+      throw new Error('Email thread state mutation returned no thread');
+  } finally {
+    if (!queued && release) release();
+  }
 }

@@ -57,6 +57,7 @@ import {
 } from '../../../service-clients/service-storage/graphql-soup';
 import { createUrqlInfiniteQuery } from '../../../urql-solid/create-urql-infinite-query';
 import type { UrqlInfiniteData } from '../../../urql-solid/types';
+import { pendingEmailTrashKeys } from '../../email/mailbox-state';
 import { createHiddenDeferral } from '../../visible-refresh';
 import { registerGraphqlSoupRevalidations } from './active-queries';
 import { soupCacheTelemetry } from './cache-activity-telemetry';
@@ -1319,7 +1320,15 @@ export function createSoupLiveQuery(
     localRevision: () => displayLocalProjection()?.mail?.revision,
     localOptimistic: () => displayLocalProjection()?.mail?.optimistic ?? false,
     data: createMemo(() => {
-      const records = displayData();
+      const displayed = displayData();
+      const records =
+        displayed && options().projection !== 'mail-folder'
+          ? withoutPendingSoupEntities(
+              displayed,
+              pendingEmailTrashKeys(),
+              soupItemKey
+            )
+          : displayed;
       return (
         records &&
         withoutPendingSoupEntities(
