@@ -83,7 +83,11 @@ function MailList(props: { tab: MailTab }) {
       <p role="status">{source.error()?.message ?? phase()}</p>
       <ol>
         <For each={source.data()}>
-          {(thread) => <li data-thread-id={thread.id}>{thread.displayName}</li>}
+          {(thread) => (
+            <li data-thread-id={thread.id}>
+              {'displayName' in thread ? thread.displayName : thread.name}
+            </li>
+          )}
         </For>
       </ol>
     </section>

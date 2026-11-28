@@ -464,3 +464,75 @@ it('waits for the tab to show before reading again after a failed read', async (
     visibility.mockRestore();
   }
 });
+
+it('reads a shaped view afresh when the host stops shaping its rows', async () => {
+  // A native binary without the rows command turns `liveQueryRows` off once;
+  // its next reply is a delta against selected records, not shaped rows. A
+  // reply says whether it is shaped, whatever the host says by then.
+  let shapes = true;
+  const listeners = new Set<CacheChangeListener>();
+  const requests: Array<{
+    args: EntityFilterCacheArgs;
+    resolve: (value: EntityFilterCacheResult) => void;
+  }> = [];
+  const host: CacheHost = {
+    ...createNoopCacheHost(),
+    get liveQueryRows() {
+      return shapes;
+    },
+    onCacheChanged: (cb) => {
+      listeners.add(cb);
+      return () => {
+        listeners.delete(cb);
+      };
+    },
+    entityFilter: (args) =>
+      args.liveQuery?.release
+        ? Promise.resolve({ kind: 'unsupported' })
+        : new Promise((resolve) => requests.push({ args, resolve })),
+  };
+  const query = createRoot((dispose) => {
+    cleanups.push(dispose);
+    return createPredicateQuery({
+      host: () => host,
+      query: () => ({
+        ...request,
+        row: {
+          name: 'channel-list' as const,
+          toRow: (record: object, shaped: boolean) =>
+            ({ ...record, shaped }) as unknown as Row,
+        },
+      }),
+    });
+  });
+  const shapedOf = () =>
+    query
+      .data()
+      ?.records.map(
+        (row) => (row.record as unknown as { shaped: boolean }).shaped
+      );
+  expect(requests[0].args.liveQuery?.row).toBe('channel-list');
+  // The host turns off while the shaped read is in flight.
+  shapes = false;
+  requests[0].resolve({ ...snapshot(), row: 'channel-list' });
+  await flush();
+  expect(shapedOf()).toEqual([true, true]);
+  shapes = true;
+
+  listeners.forEach((cb) => cb(revision('2')));
+  await flush();
+  expect(requests).toHaveLength(2);
+  expect(requests[1].args.liveQuery?.since).toBe('1');
+  shapes = false;
+  requests[1].resolve(patch());
+  await flush();
+
+  expect(requests).toHaveLength(3);
+  expect(requests[2].args.liveQuery?.since).toBeUndefined();
+  expect(requests[2].args.liveQuery?.row).toBeUndefined();
+  // The delta was not applied over rows of the other shape.
+  expect(shapedOf()).toEqual([true, true]);
+  requests[2].resolve({ ...snapshot(), revision: revision('2') });
+  await flush();
+  expect(shapedOf()).toEqual([false, false]);
+});

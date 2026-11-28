@@ -20,10 +20,12 @@ import type { CacheHost } from '../../../graphql-cache/host/types';
 import {
   type CacheRevision,
   type EntityFilterCacheArgs,
+  type EntityFilterCacheResult,
   parseCacheRevision,
 } from '../../../graphql-cache/protocol';
 import { createHiddenDeferral } from '../../visible-refresh';
 import { soupCacheTelemetry } from './cache-activity-telemetry';
+import { ImmutableLiveRows } from './immutable-live-rows';
 
 /** A declared source and generated fragment; no mutation-specific query updates. */
 export type PredicateQueryRequest<T> = {
@@ -31,6 +33,17 @@ export type PredicateQueryRequest<T> = {
     baseline: NonNullable<EntityFilterCacheArgs['baseline']>;
   };
   select: RecordSelection<T>;
+  /**
+   * Rows the view shows instead of the selected record. A host that shapes
+   * them (`liveQueryRows`) sends `name`'s row and marks the reply (`row`), and
+   * `toRow` adopts it (`shaped`); otherwise it sends the selected record, which
+   * `toRow` shapes.
+   * Rows are then immutable values rather than a store.
+   */
+  row?: {
+    name: NonNullable<EntityFilterCacheArgs['liveQuery']>['row'];
+    toRow: (record: object, shaped: boolean) => T;
+  };
 };
 
 export type LiveQueryRow<T> = {
@@ -51,7 +64,10 @@ export type LiveQuerySnapshot<T> = {
 
 type LiveQueryHost = Pick<
   CacheHost,
-  'entityFilter' | 'onCacheChanged' | 'onCacheGenerationChanged'
+  | 'entityFilter'
+  | 'onCacheChanged'
+  | 'onCacheGenerationChanged'
+  | 'liveQueryRows'
 >;
 
 export type PredicateQueryStatus =
@@ -110,6 +126,12 @@ export function createPredicateQuery<T extends object>(options: {
       const baselineKeys: ReadonlySet<string> = new Set(
         request.source.baseline.map((entry) => entry.key)
       );
+      // Shaped rows are immutable values; selected records stay in a store.
+      const immutable = request.row
+        ? new ImmutableLiveRows<T>(request.row.toRow)
+        : undefined;
+      // Whether the last applied reply was shaped by the host.
+      let lastShaped: boolean | undefined;
       const [rows, setRows] = createStore<Record<string, LiveQueryRow<T>>>({});
       const touchRowVersion = (recordKey: string) => {
         const row = rows[recordKey];
@@ -137,9 +159,67 @@ export function createPredicateQuery<T extends object>(options: {
           ...request.select,
           since,
           ...(release ? { release } : {}),
+          ...(request.row?.name !== undefined && host.liveQueryRows === true
+            ? { row: request.row.name }
+            : {}),
         },
       });
       setStatus('loading');
+
+      // Applies a checked update to the store rows; returns them in view order.
+      const applyStore = (
+        result: Extract<EntityFilterCacheResult, { kind: 'live-query' }>
+      ): readonly LiveQueryRow<T>[] => {
+        let orderChanged =
+          result.reset ||
+          result.keys !== undefined ||
+          result.removed.length > 0;
+        if (result.reset) {
+          setRows(reconcile({}));
+        }
+        for (const key of result.removed) {
+          setRows(key, undefined!);
+        }
+        for (const row of result.upserts) {
+          if (!rows[row.recordKey]) orderChanged = true;
+          setRows(
+            row.recordKey,
+            reconcile(row as LiveQueryRow<T>, {
+              key: 'id',
+              merge: true,
+            })
+          );
+          touchRowVersion(row.recordKey);
+        }
+        for (const patch of result.patches) {
+          setRows(
+            patch.recordKey,
+            produce((row) => {
+              for (const field of patch.fields) {
+                if (!field.path.length) {
+                  row.record = field.value as T;
+                  continue;
+                }
+                let parent: unknown = row.record;
+                for (const segment of field.path.slice(0, -1)) {
+                  parent = (parent as Record<string | number, unknown>)[
+                    segment
+                  ];
+                }
+                (parent as Record<string | number, unknown>)[
+                  field.path[field.path.length - 1]
+                ] = field.value;
+              }
+              row.identity = patch.identity;
+            })
+          );
+          touchRowVersion(patch.recordKey);
+        }
+        if (result.keys !== undefined) keys = result.keys;
+        if (orderChanged)
+          orderedRows = keys.flatMap((key) => (rows[key] ? [rows[key]] : []));
+        return orderedRows;
+      };
 
       let retryTimer: ReturnType<typeof setTimeout> | undefined;
       const run = async () => {
@@ -212,61 +292,37 @@ export function createPredicateQuery<T extends object>(options: {
                 }
               }
               for (const patch of result.patches) {
-                if (result.reset || !untrack(() => rows[patch.recordKey]))
+                if (
+                  result.reset ||
+                  !(immutable
+                    ? immutable.has(patch.recordKey)
+                    : untrack(() => rows[patch.recordKey]))
+                )
                   throw new Error('live query patch has no base row');
+              }
+              // The reply says whether the engine shaped it: a host can stop
+              // shaping, or be swapped, while a read is in flight.
+              const shaped = result.row !== undefined;
+              // A reply of the other shape than the rows held is a delta that
+              // cannot apply: read the view afresh.
+              if (
+                immutable &&
+                lastShaped !== undefined &&
+                lastShaped !== shaped &&
+                !result.reset
+              ) {
+                since = undefined;
+                retries = 1;
+                pending = true;
+                continue;
               }
               untrack(() =>
                 batch(() => {
-                  let orderChanged =
-                    result.reset ||
-                    result.keys !== undefined ||
-                    result.removed.length > 0;
-                  if (result.reset) {
-                    setRows(reconcile({}));
-                  }
-                  for (const key of result.removed) {
-                    setRows(key, undefined!);
-                  }
-                  for (const row of result.upserts) {
-                    if (!rows[row.recordKey]) orderChanged = true;
-                    setRows(
-                      row.recordKey,
-                      reconcile(row as LiveQueryRow<T>, {
-                        key: 'id',
-                        merge: true,
-                      })
-                    );
-                    touchRowVersion(row.recordKey);
-                  }
-                  for (const patch of result.patches) {
-                    setRows(
-                      patch.recordKey,
-                      produce((row) => {
-                        for (const field of patch.fields) {
-                          if (!field.path.length) {
-                            row.record = field.value as T;
-                            continue;
-                          }
-                          let parent: unknown = row.record;
-                          for (const segment of field.path.slice(0, -1)) {
-                            parent = (
-                              parent as Record<string | number, unknown>
-                            )[segment];
-                          }
-                          (parent as Record<string | number, unknown>)[
-                            field.path[field.path.length - 1]
-                          ] = field.value;
-                        }
-                        row.identity = patch.identity;
-                      })
-                    );
-                    touchRowVersion(patch.recordKey);
-                  }
-                  if (result.keys !== undefined) keys = result.keys;
-                  if (orderChanged)
-                    orderedRows = keys.flatMap((key) =>
-                      rows[key] ? [rows[key]] : []
-                    );
+                  if (immutable) {
+                    orderedRows = immutable.apply(result, shaped);
+                    lastShaped = shaped;
+                    if (result.keys !== undefined) keys = result.keys;
+                  } else orderedRows = applyStore(result);
                   since = revision;
                   observationId = result.observationId;
                   setData({

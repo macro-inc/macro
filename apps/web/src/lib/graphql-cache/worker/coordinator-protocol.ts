@@ -13,6 +13,7 @@ import {
   type CachePush,
   type CacheRequest,
   type CacheResponse,
+  CHANNEL_LIST_ROW_NAME,
   isCachePush,
   isCacheResponse,
   isCacheRevision,
@@ -906,6 +907,7 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
               'fragmentName',
               'since',
               'release',
+              'row',
             ]) &&
             typeof request.liveQuery.id === 'string' &&
             request.liveQuery.id.length > 0 &&
@@ -918,6 +920,8 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
               isCacheRevision(request.liveQuery.since)) &&
             (request.liveQuery.release === undefined ||
               typeof request.liveQuery.release === 'boolean') &&
+            (request.liveQuery.row === undefined ||
+              request.liveQuery.row === CHANNEL_LIST_ROW_NAME) &&
             request.mail === undefined &&
             request.baseline !== undefined)) &&
         (request.mail === undefined ||

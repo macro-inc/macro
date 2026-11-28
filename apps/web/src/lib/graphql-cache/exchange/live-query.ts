@@ -92,6 +92,22 @@ export function readRowSnapshot<T extends object>(record: T): T {
   return raw;
 }
 
+/**
+ * `readRowSnapshot`, plus the version it subscribed to, so a consumer can tell
+ * an in-place update from no change. An unregistered value is immutable and
+ * has no version (`undefined`).
+ */
+export function readRowVersion<T extends object>(
+  record: T
+): { raw: T; version: unknown } {
+  const raw = unwrapStoreProxy(record);
+  const entry = rowVersions.get(raw);
+  if (!entry) return { raw: record, version: undefined };
+  const version =
+    entry === LIVE_ROW_LAZY ? ensureLazyRowSignal(raw)[0]() : entry();
+  return { raw, version };
+}
+
 /** Immutable evidence for consumers that compare earlier query results. */
 export function querySnapshot<T>(data: T): T {
   if (data === null || typeof data !== 'object') return data;

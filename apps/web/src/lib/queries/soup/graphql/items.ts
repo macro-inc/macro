@@ -1,3 +1,4 @@
+import type { ChannelEntity } from '@entity';
 import type { CombinedError } from '@urql/core';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { arrayEquals } from '../../../core/util/compareUtils';
@@ -18,8 +19,10 @@ import {
   mapSoupPageToEntityList,
 } from '../transform-utils';
 import { makeGraphqlSoupInput } from './ast';
+import { finishChannelListRow, isChannelListRow } from './channel-list-row';
 import type { GroupedSoupPaging } from './create-grouped-soup-live-query';
 import type { PredicateQueryStatus } from './create-predicate-query';
+import type { SoupLiveRecord } from './create-soup-live-query';
 import {
   createSoupLiveQuery,
   type SoupLiveQueryOptions,
@@ -28,6 +31,7 @@ import { createGraphqlSoupDoneProjection } from './done-projection';
 import { usePendingGraphqlSoupDeleteKeys } from './optimistic-deletions';
 import { usePendingGraphqlSoupDone } from './optimistic-done';
 import { soupItemKey } from './reconciliation';
+import { createServerRowShaper } from './server-row-shaper';
 
 export type GraphqlSoupAstItemsQueryArgs = {
   params: SoupAstParams;
@@ -72,6 +76,13 @@ export type GraphqlSoupAstItemsQuery = {
   refresh: () => Promise<void>;
 };
 
+/** A finished channel-list row, as the projection lists it. */
+type ChannelItem = {
+  key: string;
+  entity: ChannelEntity;
+  timestamp: number | undefined;
+};
+
 /** Translate the legacy REST-shaped request and project reactive Soup records. */
 export function createGraphqlSoupAstItemsQuery(
   args: Accessor<GraphqlSoupAstItemsQueryArgs>,
@@ -97,23 +108,36 @@ export function createGraphqlSoupAstItemsQuery(
   // fetched version separately: a local edit must not change page coverage.
   type ProjectionRow = {
     key: string;
-    record: GraphqlSoupItem;
+    record: SoupLiveRecord;
     fetched?: GraphqlSoupItem;
+    /** `fetched` shaped, on a channel-list view. */
+    fetchedRow?: SoupLiveRecord;
   };
+  // A channel-list view shows server rows (before the cache serves it, or
+  // while the network is authoritative) as the rows the engine shapes.
+  const shapeServerRow: (record: SoupLiveRecord) => SoupLiveRecord =
+    createServerRowShaper();
+  const shapesRows = createMemo(() => options().projection === 'channel-list');
   const records = createMemo((previous: ProjectionRow[]) => {
-    const fetched = new Map(
+    const fetched = new Map<string, GraphqlSoupItem>(
       source.fetchedRecords().map((record) => [soupItemKey(record), record])
     );
-    const visible = new Map(fetched);
+    const visible = new Map<string, SoupLiveRecord>(fetched);
     for (const record of source.data() ?? [])
       visible.set(soupItemKey(record), record);
     const old = new Map(previous.map((row) => [row.key, row]));
-    return [...visible].map(([key, record]) => {
+    const shapes = shapesRows();
+    return [...visible].map(([key, visibleRecord]) => {
+      const record = shapes ? shapeServerRow(visibleRecord) : visibleRecord;
       const row = old.get(key);
       const baseline = fetched.get(key);
-      return row?.record === record && row.fetched === baseline
+      const fetchedRow =
+        shapes && baseline ? shapeServerRow(baseline) : undefined;
+      return row?.record === record &&
+        row.fetched === baseline &&
+        row.fetchedRow === fetchedRow
         ? row
-        : { key, record, fetched: baseline };
+        : { key, record, fetched: baseline, fetchedRow };
     });
   }, []);
   // Retain raw SoupApiItems only for Mail views (consumed by `itemsById` when
@@ -121,14 +145,21 @@ export function createGraphqlSoupAstItemsQuery(
   // break `createKeyedProjection`'s structural equality check with closures.
   const mailItems = new Map<string, SoupApiItem>();
   const [mailItemsVersion, setMailItemsVersion] = createSignal(0);
-  const projected = createKeyedProjection(
-    records,
+  // Shaped channel-list rows skip the keyed projection: they are immutable,
+  // so each new row object is finished once, outside any store.
+  const keyedRecords = createMemo(
+    () => records().filter((row) => !isChannelListRow(row.record)),
+    [],
+    { equals: arrayEquals }
+  );
+  const projectedKeyed = createKeyedProjection(
+    keyedRecords,
     (row) => row.key,
     ({ record, fetched }) => {
       const sort = sortMethod();
       const showSupportedForeignEntities = showForeign();
       const view = { emailView: input()?.emailView };
-      const rawRecord = readRowSnapshot(record);
+      const rawRecord = readRowSnapshot(record as GraphqlSoupItem);
       const rawFetched =
         fetched === record
           ? rawRecord
@@ -167,6 +198,46 @@ export function createGraphqlSoupAstItemsQuery(
       };
     }
   );
+  const channelItems = new WeakMap<
+    ProjectionRow,
+    {
+      sort: SoupAstParams['sort_method'];
+      fetched: SoupLiveRecord | undefined;
+      item: ChannelItem;
+    }
+  >();
+  const projectedChannels = createMemo(() => {
+    const sort = sortMethod();
+    return records().flatMap((row): ChannelItem[] => {
+      if (!isChannelListRow(row.record)) return [];
+      const entity = finishChannelListRow(row.record);
+      // Sort by the fetched version, as the keyed path does: a local edit
+      // must not move page coverage.
+      const fetched = row.fetchedRow;
+      const previous = channelItems.get(row);
+      if (
+        previous &&
+        previous.sort === sort &&
+        previous.fetched === fetched &&
+        previous.item.entity === entity
+      )
+        return [previous.item];
+      const item = {
+        key: row.key,
+        entity,
+        timestamp:
+          fetched && isChannelListRow(fetched)
+            ? soupEntityTimestamp(finishChannelListRow(fetched), sort)
+            : undefined,
+      };
+      channelItems.set(row, { sort, fetched, item });
+      return [item];
+    });
+  });
+  const projected = createMemo(() => [
+    ...projectedKeyed(),
+    ...projectedChannels(),
+  ]);
   const byKey = createMemo(() => {
     const map = new Map(projected().map((item) => [item.key, item]));
     if (mailItems.size > 0) {
