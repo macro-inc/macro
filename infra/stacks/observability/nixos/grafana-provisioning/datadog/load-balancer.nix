@@ -48,6 +48,7 @@ let
     critical = 90;
     warning = 60;
     translation = "The load balancer's own 5xx (not its targets') as a share of its requests over the hour, per load balancer: Datadog's prod set when this was written, a rule per region. A load balancer with no 5xx has no datapoints, which is OK.";
+    comparison = "Replay, 2026-11-13 05:00 to 11-28 00:00 UTC: fired in neither, on any of the 12 load balancers. Live, 2026-11-27 23:43 to 11-28 00:48 UTC: neither fired.";
   };
   # Every load balancer, as Datadog's `{*}`: dev too.
   healthy = region: {
@@ -74,6 +75,7 @@ let
     comparator = "<=";
     critical = 0.25;
     translation = "Healthy hosts per target group and zone, averaged per load balancer as Datadog does (1.57 for prod-gateway-alb in both when compared), for every load balancer in the region, dev too, as Datadog's `{*}`; a rule per region. The series label is the load balancer.";
+    comparison = "Replay, 2026-11-13 05:00 to 11-28 00:00 UTC, with SEARCH over 5-minute averages, since Metrics Insights reaches back only 3 hours: fired in neither, on any of the 27 load balancers in both regions. Live, 2026-11-27 23:43 to 11-28 00:48 UTC: Grafana's rules errored on every evaluation until their Metrics Insights query got a statistic (Grafana refuses a CloudWatch query without one). Since that reached Grafana at 2026-11-28 00:04, state history records no Error or NoData state for them, and neither system has fired.";
   };
 in
 {

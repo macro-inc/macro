@@ -18,6 +18,14 @@ the threshold. Warning and critical are exclusive bands. No datapoints
 never fires unless noted. Rule state history is in Loki,
 `{from="state-history", group=~"Datadog .*"} | json`.
 
+How a comparison reads: a replay evaluates the rule as rendered once a
+minute against CloudWatch's one-minute history and lines it up, group by
+group, with Datadog's alert events, from the state each Datadog group was
+in when the window opened. Episodes (a run of warning or critical minutes)
+match when they overlap within 10 minutes. The replay reads complete data
+on minute boundaries, which Grafana evaluating live doesn't, so a minute of
+lead or lag is within its error. Live is the rule running in Grafana.
+
 Of 24 monitors, 20 are ported and 4 not.
 
 | Monitor | Datadog | Route | Grafana |
@@ -129,7 +137,7 @@ Rule group `Datadog rds`, every 1m.
 
 [PROD] Excessive concurrent connections in rds proxy · Datadog [1076524](https://us5.datadoghq.com/monitors/1076524) · pages in Datadog
 
-Comparison: Not compared yet.
+Comparison: Replay, 2026-11-13 05:00 to 11-28 00:00 UTC: fired in neither. Live, 2026-11-27 23:43 to 11-28 00:48 UTC: Grafana's rule errored on every evaluation until its metric math query got a statistic (Grafana refuses a CloudWatch query without one). Since that reached Grafana at 2026-11-28 00:04, state history records no Error or NoData state for it, and neither system has fired.
 
 - Rules: `dd-808d1b622224-crit` (critical, > 500)
 - `connections`: mean over 1h, 15m late. CloudWatch us-east-1: `SUM(SEARCH('Namespace="AWS/RDS" MetricName="DatabaseConnections" ProxyName="macrodb-proxy-prod" TargetGroup="default"', 'Sum', 60)) / DATAPOINT_COUNT(SEARCH('Namespace="AWS/RDS" MetricName="DatabaseConnections" ProxyName="macrodb-proxy-prod" TargetGroup="default"', 'Sum', 60))`
@@ -140,7 +148,7 @@ Comparison: Not compared yet.
 
 [PROD] RDS High CPU Utilization · Datadog [1062630](https://us5.datadoghq.com/monitors/1062630) · pages in Datadog
 
-Comparison: Not compared yet.
+Comparison: Replay, 2026-11-13 05:00 to 11-28 00:00 UTC: fired in neither, on either instance. Live, 2026-11-27 23:43 to 11-28 00:48 UTC: neither fired.
 
 - Rules: `dd-806199e4c9a9-crit` (critical, >= 95), `dd-806199e4c9a9-warn` (warning, >= 80)
 - `cpu`: mean over 1h, 15m late. CloudWatch us-east-1: `AWS/RDS CPUUtilization {DBInstanceIdentifier=fusionauthdb-prod|macro-db-prod} Average` per minute
@@ -151,7 +159,7 @@ Comparison: Not compared yet.
 
 [AWS] RDS Storage utilization is high · Datadog [6120132](https://us5.datadoghq.com/monitors/6120132) · pages in Datadog
 
-Comparison: Not compared yet.
+Comparison: Replay, 2026-11-13 05:00 to 11-28 00:00 UTC: macro-db-prod and its replica warned from 11-27 00:52 and 00:21 in Datadog and a minute later in Grafana, and were still warning at the end; the other six instances fired in neither. macro-db-dev grew from 50 to 100 GiB in five storage autoscaling steps on 11-26 and 11-27 (Datadog's `aws.rds.total_storage_space`), and Datadog warned for 3 to 5½ hours each time, ending 1 to 1¾ hours after the resize. A fixed size can't follow that: replayed with 100 GiB throughout, Grafana reads the instance fuller than it was, in warning or critical for 52 of the last 58 hours (19 of them critical) against Datadog's 23 in warning. Replayed dividing by Datadog's size at each hour instead, Grafana's five episodes start a minute after Datadog's, and the four that end inside the window end 2 to 4 minutes after; but Grafana reads critical for 38 to 61 minutes around each resize (known only to the hour), while the hour's average still holds free space from before it. macro-db-dev is now at 100 GiB, its autoscaling maximum, so its size here holds; macro-db-prod and both replicas can still grow past theirs. Live, 2026-11-27 23:43 to 11-28 00:48 UTC: from the first evaluation Grafana warned on the same three instances as Datadog; macro-db-dev recovered at 00:02 in Grafana (still dividing by 90 GiB) and 00:09 in Datadog, and at 00:48 both warn on macro-db-prod and its replica.
 
 #### fusionauth-db-dev
 
@@ -185,8 +193,8 @@ Comparison: Not compared yet.
 
 - Rules: `dd-a8efb4582845-crit` (critical, > 90), `dd-a8efb4582845-warn` (warning, > 85)
 - `free`: mean over 1h, 15m late. CloudWatch us-east-1: `AWS/RDS FreeStorageSpace {DBInstanceIdentifier=macro-db-dev} Average` per minute
-- Value: `100 - $free / (90 * 1073741824) * 100`.
-- Translation: Datadog's `{*} by {dbinstanceidentifier,engine}` as a rule per instance, with its allocated storage written in rds.nix (90 GiB): CloudWatch has free space but not the total. Storage autoscaling makes that number stale.
+- Value: `100 - $free / (100 * 1073741824) * 100`.
+- Translation: Datadog's `{*} by {dbinstanceidentifier,engine}` as a rule per instance, with its allocated storage written in rds.nix (100 GiB): CloudWatch has free space but not the total. Storage autoscaling makes that number stale.
 
 #### macro-db-dev-read-replica
 
@@ -224,7 +232,7 @@ Rule group `Datadog ses`, every 1m.
 
 [SES] Complaint Rate Increasing · Datadog [4178105](https://us5.datadoghq.com/monitors/4178105) · pages in Datadog
 
-Comparison: Not compared yet.
+Comparison: Replay, 2026-11-13 05:00 to 11-28 00:00 UTC: fired in neither. Live, 2026-11-27 23:43 to 11-28 00:48 UTC: neither fired.
 
 - Rules: `dd-5141d47ef5d2-crit` (critical, > 0.005)
 - `ses`: mean over 1h, 15m late. CloudWatch us-east-1: `AWS/SES Reputation.ComplaintRate {} Average` per minute
@@ -235,7 +243,7 @@ Comparison: Not compared yet.
 
 [SES] Bounce Rate Increasing · Datadog [1333601](https://us5.datadoghq.com/monitors/1333601) · pages in Datadog
 
-Comparison: Not compared yet.
+Comparison: Replay, 2026-11-13 05:00 to 11-28 00:00 UTC: both start in the warning Datadog opened on 2026-11-10 21:15 UTC; Datadog ended it at 11-16 15:18 and Grafana a minute later, and neither fired again. Live, 2026-11-27 23:43 to 11-28 00:48 UTC: neither fired.
 
 - Rules: `dd-8ddffa06f549-crit` (critical, > 0.05), `dd-8ddffa06f549-warn` (warning, > 0.03)
 - `ses`: mean over 1h, 15m late. CloudWatch us-east-1: `AWS/SES Reputation.BounceRate {} Average` per minute
@@ -246,7 +254,7 @@ Comparison: Not compared yet.
 
 [SES] HIGH EMAIL SENDS · Datadog [4757927](https://us5.datadoghq.com/monitors/4757927) · pages in Datadog
 
-Comparison: Not compared yet.
+Comparison: Replay, 2026-11-13 05:00 to 11-28 00:00 UTC: Datadog warned twice on 11-20, at 22:29 for 3 minutes and at 22:36 for 7; Grafana warned a minute later each time, for the same lengths, and neither went critical. Live, 2026-11-27 23:43 to 11-28 00:48 UTC: neither fired.
 
 - Rules: `dd-2ac9f2f73291-crit` (critical, > 250), `dd-2ac9f2f73291-warn` (warning, > 200)
 - `ses`: sum over 1h, 15m late. CloudWatch us-east-1: `AWS/SES Send {} Sum` per minute
@@ -261,7 +269,7 @@ Rule group `Datadog cache`, every 1m.
 
 [PROD] Macro Cache Available Memory Low · Datadog [1062487](https://us5.datadoghq.com/monitors/1062487) · pages in Datadog
 
-Comparison: Not compared yet.
+Comparison: Replay, 2026-11-13 05:00 to 11-28 00:00 UTC: fired in neither. Live, 2026-11-27 23:43 to 11-28 00:48 UTC: Grafana's rules errored on every evaluation until their metric math query got a statistic (Grafana refuses a CloudWatch query without one). Since that reached Grafana at 2026-11-28 00:04, state history records no Error or NoData state for them, and neither system has fired.
 
 - Rules: `dd-aa7ed1a64641-crit` (critical, > 90), `dd-aa7ed1a64641-warn` (warning, > 80)
 - `memory`: mean over 1h, 15m late. CloudWatch us-east-1: `SUM(SEARCH('{AWS/ElastiCache,CacheClusterId} MetricName="DatabaseMemoryUsagePercentage" (CacheClusterId="macro-cache-prod-001" OR CacheClusterId="macro-cache-prod-002")', 'Average', 60)) / DATAPOINT_COUNT(SEARCH('{AWS/ElastiCache,CacheClusterId} MetricName="DatabaseMemoryUsagePercentage" (CacheClusterId="macro-cache-prod-001" OR CacheClusterId="macro-cache-prod-002")', 'Average', 60))`
@@ -276,7 +284,7 @@ Rule group `Datadog graphql-soup`, every 1m.
 
 [PROD] GraphQL soup: cloud-storage-service target group 5xx · Datadog [23404593](https://us5.datadoghq.com/monitors/23404593) · pages in Datadog
 
-Comparison: Not compared yet.
+Comparison: Replay, 2026-11-13 05:00 to 11-28 00:00 UTC: each of Datadog's 129 warning or critical episodes overlaps a Grafana one, which starts a median minute earlier and ends a minute later, 106 of them within 5 minutes at both ends; 115 of Grafana's 118 overlap a Datadog one, and the other 3 lasted 1 to 2 minutes. Same state (OK, warning, critical) in 98.3% of minutes. Live, 2026-11-27 23:43 to 11-28 00:48 UTC: neither fired.
 
 - Rules: `dd-62f0debe358f-crit` (critical, > 25), `dd-62f0debe358f-warn` (warning, > 10)
 - `errors`: sum over 15m. CloudWatch us-east-1: `AWS/ApplicationELB HTTPCode_Target_5XX_Count {LoadBalancer=app/prod-gateway-alb/8e99d35bdc70b1c9, TargetGroup=targetgroup/prod-cloud-storage-service-tg/efcc30d4d72a4d50} Sum` per minute
@@ -287,7 +295,7 @@ Comparison: Not compared yet.
 
 [PROD] GraphQL soup: macro-db-prod connections high · Datadog [23404592](https://us5.datadoghq.com/monitors/23404592) · pages in Datadog
 
-Comparison: Not compared yet.
+Comparison: Replay, 2026-11-13 05:00 to 11-28 00:00 UTC: 66 of Datadog's 70 warning episodes overlap one of Grafana's 52, which runs some of Datadog's short flaps together; they start and end a median 0 minutes apart, 48 within 5 minutes at both ends. Grafana missed four Datadog flaps of 1 to 3 minutes (11-18 17:33, 11-19 01:01, 11-24 12:17 and 12:20), and every Grafana episode overlaps a Datadog one. Same state in 99.6% of minutes, critical in neither. Live, 2026-11-27 23:43 to 11-28 00:48 UTC: neither fired.
 
 - Rules: `dd-add1694e3413-crit` (critical, > 1400), `dd-add1694e3413-warn` (warning, > 1100)
 - `connections`: mean over 15m. CloudWatch us-east-1: `AWS/RDS DatabaseConnections {DBInstanceIdentifier=macro-db-prod} Average` per minute
@@ -302,7 +310,7 @@ Rule group `Datadog load-balancer`, every 1m.
 
 Application load balancer low healthy host count · Datadog [16891631](https://us5.datadoghq.com/monitors/16891631) · pages in Datadog
 
-Comparison: Not compared yet.
+Comparison: Replay, 2026-11-13 05:00 to 11-28 00:00 UTC, with SEARCH over 5-minute averages, since Metrics Insights reaches back only 3 hours: fired in neither, on any of the 27 load balancers in both regions. Live, 2026-11-27 23:43 to 11-28 00:48 UTC: Grafana's rules errored on every evaluation until their Metrics Insights query got a statistic (Grafana refuses a CloudWatch query without one). Since that reached Grafana at 2026-11-28 00:04, state history records no Error or NoData state for them, and neither system has fired.
 
 #### us-east-1
 
@@ -322,7 +330,7 @@ Comparison: Not compared yet.
 
 [PROD] Load Balancer Non-200 Responses · Datadog [1062605](https://us5.datadoghq.com/monitors/1062605) · pages in Datadog
 
-Comparison: Not compared yet.
+Comparison: Replay, 2026-11-13 05:00 to 11-28 00:00 UTC: fired in neither, on any of the 12 load balancers. Live, 2026-11-27 23:43 to 11-28 00:48 UTC: neither fired.
 
 #### us-east-1
 
@@ -348,7 +356,7 @@ Rule group `Datadog compute`, every 1m.
 
 [PROD] Lambda Increased Error Count · Datadog [1065393](https://us5.datadoghq.com/monitors/1065393) · pages in Datadog
 
-Comparison: Not compared yet.
+Comparison: Replay, 2026-11-13 05:00 to 11-28 00:00 UTC: job-update-handler-lambda-prod warned 41 times in both, each episode overlapping one in the other and every Grafana episode starting and ending within a minute of Datadog's; the other 17 functions fired in neither, and neither went critical. Same state in 99.6% of minutes. Live, 2026-11-27 23:43 to 11-28 00:48 UTC: neither fired.
 
 - Rules: `dd-9b47db78a838-crit` (critical, > 500), `dd-9b47db78a838-warn` (warning, > 100)
 - `errors`: sum over 1h, 15m late. CloudWatch us-east-1: `AWS/Lambda Errors {FunctionName=call_recording_preview_handler-prod|dataloss_prevention_handler-prod|document-text-extractor-prod|document-upload-finalizer-lambda-prod|docx-unzip-lambda-prod|docx-upload-job-table-cleanup-lambda-prod|email_refresh_handler-prod|email_scheduled_handler-prod|job-submission-handler-lambda-prod|job-to-dpr-table-cleanup-lambda-prod|job-update-handler-lambda-prod|notification_retention_handler-prod|pdf-preprocess-lambda-prod|search_upload_handler-prod|sha-cleanup-trigger-prod|static-file-service-image-optimizer-prod|ws-connection-init-handler-lambda-prod|ws-ping-response-handler-prod} Sum` per minute

@@ -55,6 +55,7 @@
       critical = 500;
       warning = 100;
       translation = "Errors per function over the hour, divided by 60 as Datadog's `.as_rate()` of a `sum(last_1h)` comes out. The functions are Datadog's tag selection when this was written: a new prod function needs adding here.";
+      comparison = "Replay, 2026-11-13 05:00 to 11-28 00:00 UTC: job-update-handler-lambda-prod warned 41 times in both, each episode overlapping one in the other and every Grafana episode starting and ending within a minute of Datadog's; the other 17 functions fired in neither, and neither went critical. Same state in 99.6% of minutes. Live, 2026-11-27 23:43 to 11-28 00:48 UTC: neither fired.";
     }
   ];
 }

@@ -51,7 +51,8 @@ The [README](README.md) has the application list, bootstrap and contract with
   `infra/stacks/monitoring` with it.
 - Change an edge or query-gateway rule: `modules/edge.nix`.
 - Port a Datadog monitor: the host stack's `grafana-provisioning/datadog/`
-  (its AGENTS.md); render writes its `MAPPING.md` too.
+  (recipe in `infra/stacks/observability/AGENTS.md`); render writes its
+  `MAPPING.md` too.
 
 ## Checks
 

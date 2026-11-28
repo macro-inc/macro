@@ -151,6 +151,14 @@ in
   never fires unless noted. Rule state history is in Loki,
   `{from="state-history", group=~"Datadog .*"} | json`.
 
+  How a comparison reads: a replay evaluates the rule as rendered once a
+  minute against CloudWatch's one-minute history and lines it up, group by
+  group, with Datadog's alert events, from the state each Datadog group was
+  in when the window opened. Episodes (a run of warning or critical minutes)
+  match when they overlap within 10 minutes. The replay reads complete data
+  on minute boundaries, which Grafana evaluating live doesn't, so a minute of
+  lead or lag is within its error. Live is the rule running in Grafana.
+
   Of ${toString (builtins.length allMonitors)} monitors, ${
     count (entries: ported (builtins.head entries))
   } are ported and ${count (entries: !(ported (builtins.head entries)))} not.
