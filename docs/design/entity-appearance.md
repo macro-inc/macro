@@ -34,11 +34,12 @@ The web editor writes Markdown document, snippet, and initiative appearance
 through `setEntityAppearance`. The editor selects the committed Soup identity
 and appearance from the primary. Mounted lists update from the normalized cache,
 including after offline replay. The editor confirms a queued choice when replay
-commits and restores the prior choice when replay rejects it. The network
-exchange refreshes mounted queries when the cache is unavailable. A live
-commit with missing effects reads the one entity by ID from the primary.
-On replay, the queue rereads mounted lists when a committed response contains
-no rows. A worker pause keeps the editor waiting for settlement from that host.
+commits and restores the prior choice when replay rejects it. If the committed
+appearance row is missing, the mutation keeps the acknowledgement and reports
+an error at its effects field. The uncached exchange and the durable queue
+reread mounted queries after that response. If a direct save received no row
+and the exchange did not complete its rereads, it can read the entity by ID
+from the primary. A worker pause keeps the editor waiting for that host.
 Headers and breadcrumbs use the lightweight preview identity selection, without
 loading document properties.
 Existing duplication/template flows copy appearance; blank creation uses defaults.

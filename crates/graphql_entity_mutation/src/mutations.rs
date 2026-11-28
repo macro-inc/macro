@@ -369,8 +369,21 @@ fn has_soup_record(entity_type: EntityType) -> bool {
 pub struct GraphqlMutationSuccess<E> {
     /// Ordered domain effects rendered through the shared Soup patch contract.
     effects: Vec<EntityMutationEffect>,
+    /// Report missing update rows for an operation that requires them.
+    require_effect_rows: bool,
     /// Associates the result with the composed Soup edge object.
     edges: PhantomData<E>,
+}
+
+impl<E> GraphqlMutationSuccess<E> {
+    /// Construct a successful result whose unavailable rows may be omitted.
+    fn new(effects: Vec<EntityMutationEffect>) -> Self {
+        Self {
+            effects,
+            require_effect_rows: false,
+            edges: PhantomData,
+        }
+    }
 }
 
 /// A failure selecting fields on a post-commit row must also leave the write
@@ -440,7 +453,15 @@ impl<E: SoupEntityEdges> GraphqlMutationSuccess<E> {
                     async move {
                         match effect {
                             EntityMutationEffect::Updated(entity) => {
-                                SoupPatch::hydrate_updated(user_id, entity.clone(), loader).await
+                                let patch =
+                                    SoupPatch::hydrate_updated(user_id, entity.clone(), loader)
+                                        .await?;
+                                if self.require_effect_rows && patch.is_none() {
+                                    return Err(async_graphql::Error::new(
+                                        "A changed item could not be read back",
+                                    ));
+                                }
+                                Ok(patch)
                             }
                             EntityMutationEffect::Deleted(entity) => {
                                 SoupPatch::deleted(entity.clone()).map(Some)
@@ -515,10 +536,9 @@ pub enum GraphqlEntityMutationResult<E: SoupEntityEdges> {
 impl<E: SoupEntityEdges> GraphqlEntityMutationResult<E> {
     /// Construct a successful result that refreshes one entity's Soup record.
     pub fn from_updated_entity(entity: Entity<'static>) -> Self {
-        Self::Success(GraphqlMutationSuccess {
-            effects: vec![EntityMutationEffect::updated(entity)],
-            edges: PhantomData,
-        })
+        Self::Success(GraphqlMutationSuccess::new(vec![
+            EntityMutationEffect::updated(entity),
+        ]))
     }
 
     /// Construct a failed result from a domain-classified error.
@@ -529,10 +549,7 @@ impl<E: SoupEntityEdges> GraphqlEntityMutationResult<E> {
     /// Convert a borrowed domain mutation outcome into its GraphQL union variant.
     fn new(x: Result<&EntityMutationSuccess, &EntityMutationErrorCode>) -> Self {
         match x {
-            Ok(result) => Self::Success(GraphqlMutationSuccess {
-                effects: result.effects.clone(),
-                edges: PhantomData,
-            }),
+            Ok(result) => Self::Success(GraphqlMutationSuccess::new(result.effects.clone())),
             Err(error) => Self::Error(GraphqlMutationError(*error)),
         }
     }
@@ -621,8 +638,8 @@ impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
             Ok(result) => {
                 span.record("entity_mutation.failed_count", 0);
                 Ok(GraphqlMutationSuccess {
-                    effects: result.effects,
-                    edges: PhantomData,
+                    require_effect_rows: true,
+                    ..GraphqlMutationSuccess::new(result.effects)
                 })
             }
             Err(error) => {

@@ -171,12 +171,9 @@ impl QueryRoot {
 
     /// Return a successful domain outcome whose deletion cannot be represented by Soup.
     async fn unsupported_deletion(&self) -> super::GraphqlMutationSuccess<TestSoupEdges> {
-        super::GraphqlMutationSuccess {
-            effects: vec![EntityMutationEffect::deleted(
-                EntityType::User.with_entity_string("user-1".to_string()),
-            )],
-            edges: std::marker::PhantomData,
-        }
+        super::GraphqlMutationSuccess::new(vec![EntityMutationEffect::deleted(
+            EntityType::User.with_entity_string("user-1".to_string()),
+        )])
     }
 
     /// Return two committed outcomes, one with a broken cache effect.
@@ -185,10 +182,9 @@ impl QueryRoot {
             super::GraphqlEntityMutationResult::from_updated_entity(
                 EntityType::Document.with_entity_string("committed-copy".to_string()),
             ),
-            super::GraphqlEntityMutationResult::Success(super::GraphqlMutationSuccess {
-                effects: Vec::new(),
-                edges: std::marker::PhantomData,
-            }),
+            super::GraphqlEntityMutationResult::Success(super::GraphqlMutationSuccess::new(
+                Vec::new(),
+            )),
         ]
     }
 
@@ -204,29 +200,23 @@ impl QueryRoot {
 
     /// Return a successful outcome whose effects touch only entities listed outside Soup.
     async fn database_and_form_effects(&self) -> super::GraphqlMutationSuccess<TestSoupEdges> {
-        super::GraphqlMutationSuccess {
-            effects: vec![
-                EntityMutationEffect::updated(
-                    EntityType::Database.with_entity_string("database-1".to_string()),
-                ),
-                EntityMutationEffect::deleted(
-                    EntityType::Form.with_entity_string("form-1".to_string()),
-                ),
-            ],
-            edges: std::marker::PhantomData,
-        }
+        super::GraphqlMutationSuccess::new(vec![
+            EntityMutationEffect::updated(
+                EntityType::Database.with_entity_string("database-1".to_string()),
+            ),
+            EntityMutationEffect::deleted(
+                EntityType::Form.with_entity_string("form-1".to_string()),
+            ),
+        ])
     }
 
     /// A committed appearance write whose Soup loader is unavailable.
     async fn appearance_with_unavailable_soup(
         &self,
     ) -> super::GraphqlMutationSuccess<TestSoupEdges> {
-        super::GraphqlMutationSuccess {
-            effects: vec![EntityMutationEffect::updated(
-                EntityType::Document.with_entity_string("document-1".to_owned()),
-            )],
-            edges: std::marker::PhantomData,
-        }
+        super::GraphqlMutationSuccess::new(vec![EntityMutationEffect::updated(
+            EntityType::Document.with_entity_string("document-1".to_owned()),
+        )])
     }
 }
 

@@ -32,10 +32,9 @@ import {
 } from './graphql/generated/graphql';
 import { getEntityGraphqlClient, getGraphqlCacheHost } from './graphql-soup';
 
-/** An error resolving rows after a committed single or batch write. */
+/** An error resolving `<mutation>.results[n].effects`. */
 const isEffectsError = (error: GraphQLError) =>
-  (error.path?.[1] === 'results' && error.path[3] === 'effects') ||
-  (error.path?.[0] === 'setEntityAppearance' && error.path[1] === 'effects');
+  error.path?.[1] === 'results' && error.path[3] === 'effects';
 
 /** Predicted writes can resolve once durably queued. A result whose
  * effects failed to resolve, or whose rows or deletions the cache failed to
@@ -202,15 +201,7 @@ export const setGraphqlEntityAppearance = (
       if (queued)
         return { queued, listsReadAgain: false, settlement: observed?.promise };
       if (disposition?.kind === 'permanently-failed') throw disposition.error;
-      const errors = result.error?.graphQLErrors ?? [];
-      if (
-        result.error &&
-        (result.error.networkError ||
-          (result.error.response?.status ?? 0) >= 500 ||
-          errors.length === 0 ||
-          !errors.every(isEffectsError))
-      )
-        throw result.error;
+      if (result.error && !committedWithMissingRows(result)) throw result.error;
       const effects = result.data?.setEntityAppearance?.effects;
       if (!effects)
         throw (

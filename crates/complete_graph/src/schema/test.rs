@@ -47,6 +47,7 @@ use uuid::Uuid;
 use super::*;
 
 mod active_notification_ids;
+mod appearance_effects;
 mod calendar;
 mod channel;
 mod contacts;
