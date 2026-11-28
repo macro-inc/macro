@@ -11,7 +11,7 @@ import {
 } from '../../queries/channel/notification-refresh';
 import { revalidateCallListsForSoupUpdates } from '../../queries/soup/graphql/call-list-revalidation';
 import {
-  revalidateMailAttachmentLists,
+  revalidateMailAttachmentListsAfterReconnect,
   revalidateMailAttachmentListsForSoupUpdates,
 } from '../../queries/soup/graphql/mail-list-revalidation';
 import {
@@ -440,7 +440,7 @@ export function createGraphqlSoupSubscriptionsLifecycle(
       connections += 1;
       if (connections > 1)
         fireAndForget(
-          revalidateMailAttachmentLists(),
+          revalidateMailAttachmentListsAfterReconnect(),
           'graphql-soup-subscriptions'
         );
     },

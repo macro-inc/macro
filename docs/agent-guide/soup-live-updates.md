@@ -40,8 +40,9 @@ evaluate locally from the `mail-attachment` facts the Mail projection reads off 
 thread's attachments, so a pushed thread moves between them. On a host that does
 not evaluate Mail locally (the desktop app's legacy Mail profile, older native
 builds), mounted lists with that filter still refetch when a pushed thread carries
-attachments, as lists that can contain calls do for calls, and after the Soup
-socket reconnects, since nothing replays what it pushed while it was down.
+attachments, as lists that can contain calls do for calls. After the Soup socket
+reconnects, every mounted list with that filter refetches, maintained or not,
+since nothing replays what it pushed while it was down.
 
 ### Grouped views
 

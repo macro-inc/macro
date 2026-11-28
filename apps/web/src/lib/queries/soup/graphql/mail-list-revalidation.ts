@@ -57,19 +57,24 @@ function carriesAttachment(patch: SoupPatch): boolean {
  * current from the threads' attachment facts. Elsewhere (the desktop app's
  * legacy Mail profile, older native builds, a cold cache) such a list reads the
  * server and the cache cannot place an arriving thread in it, so mounted lists
- * the cache does not maintain refetch when one arrives, and after the Soup
- * socket reconnects, since what it pushed meanwhile is lost.
+ * the cache does not maintain refetch when one arrives.
  */
-export function revalidateMailAttachmentLists(): Promise<void> {
-  return refreshActiveGraphqlSoupQueries({
+export async function revalidateMailAttachmentListsForSoupUpdates(
+  patches: readonly SoupPatch[]
+): Promise<void> {
+  if (!patches.some(carriesAttachment)) return;
+  await refreshActiveGraphqlSoupQueries({
     where: filtersByAttachment,
     unmaintainedOnly: true,
   });
 }
 
-export async function revalidateMailAttachmentListsForSoupUpdates(
-  patches: readonly SoupPatch[]
-): Promise<void> {
-  if (!patches.some(carriesAttachment)) return;
-  await revalidateMailAttachmentLists();
+/**
+ * After the Soup socket reconnects, what it pushed meanwhile is lost: neither
+ * the cache nor the server page a list shows has it. Mounted lists filtered by
+ * attachment kind read the server again, maintained ones too, until a reconnect
+ * catches the cache up on its own.
+ */
+export function revalidateMailAttachmentListsAfterReconnect(): Promise<void> {
+  return refreshActiveGraphqlSoupQueries({ where: filtersByAttachment });
 }
