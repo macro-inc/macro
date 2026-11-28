@@ -75,6 +75,12 @@ const HEADING_PASSES = 3;
 /** How long a load waits for the channel lane to record its finished pass
  * after the last page was served. */
 const LANE_TIMEOUT_MS = 120_000;
+/** How long a load waits for the backend to serve the channel lane's last
+ * page: the seed's whole pass at 7,000 channels took 141–154 s on a busy
+ * machine. */
+const PASS_TIMEOUT_MS = 300_000;
+/** The rail's tree, by the label it has in English. */
+const RAIL_TREE = '[role="tree"][aria-label="Conversations"]';
 const TOGGLED_SECTION = 'Direct messages';
 /** Chat's saved view (`features/channels-view/persistence.ts`), per viewer. */
 const SAVED_VIEW_KEY = 'macro:channels:view-state:v1';
@@ -156,11 +162,13 @@ const ZERO_METRICS = Object.fromEntries(
  * unless the app has written its own. */
 function observePage({
   firstRows,
+  tree,
   row,
   savedViewKey,
   savedView,
 }: {
   firstRows: number;
+  tree: string;
   row: string;
   savedViewKey: string;
   savedView: string;
@@ -175,7 +183,7 @@ function observePage({
       state.longTasks.push([entry.startTime, entry.duration]);
   }).observe({ type: 'longtask', buffered: true });
   const rows = new MutationObserver(() => {
-    const shown = document.querySelectorAll(`[role="tree"] ${row}`).length;
+    const shown = document.querySelectorAll(`${tree} ${row}`).length;
     if (shown < firstRows) return;
     state.rowsAt = performance.now();
     rows.disconnect();
@@ -234,6 +242,25 @@ async function readLaneCheckpoint(page: Page): Promise<LaneCheckpoint> {
       storageGeneration: stored.storageGeneration ?? null,
     };
   }, CHANNEL_LANE_KEY_SUFFIX);
+}
+
+/** The backend's word that it served the channel lane's last page, failing
+ * after `PASS_TIMEOUT_MS`. It is handled from the start, so a failure while
+ * the page loads fails the step where it is awaited rather than as an
+ * unhandled rejection. */
+function passServed(backend: Backend): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const served = Promise.race([
+    backend.channelPassFinished(),
+    new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(
+        () => reject(new Error('the backend never served the last page')),
+        PASS_TIMEOUT_MS
+      );
+    }),
+  ]).finally(() => clearTimeout(timer));
+  served.catch(() => undefined);
+  return served;
 }
 
 /** Waits until the channel lane's checkpoint records a finished pass that
@@ -538,14 +565,18 @@ async function measure(
   const started = Date.now();
   await action();
   const settled = await backend.quiet(QUIET_MS);
-  // Counted the moment the step settles, so a poll or socket update that
-  // lands during the readings below is not this step's.
+  // One cutoff, the moment the step settles, for its requests, server
+  // reads, long tasks and Chromium's counters: a poll or socket update that
+  // lands during the readings below is not this step's in any of them.
   const reads = fixture.readsSince(readMark);
   const requests = backend.since(mark);
-  const after = await readMetrics(cdp);
+  const [after, endedAt] = await Promise.all([
+    readMetrics(cdp),
+    page.evaluate(() => performance.now()),
+  ]);
   const state = await readPageState(page);
   const tasks = state.longTasks
-    .filter(([start]) => start >= startedAt)
+    .filter(([start]) => start >= startedAt && start < endedAt)
     .map(([, duration]) => duration);
   const domNodes = await page.evaluate(
     () => document.getElementsByTagName('*').length
@@ -626,6 +657,7 @@ async function measureSize(
   try {
     await context.addInitScript(observePage, {
       firstRows: FIRST_ROWS,
+      tree: RAIL_TREE,
       row: ROW,
       savedViewKey: `${SAVED_VIEW_KEY}:${VIEWER_ID}`,
       savedView: JSON.stringify(fixture.savedView),
@@ -671,10 +703,14 @@ async function measureSize(
 
     // The earlier visit: the channel lane's whole pass into an empty cache.
     steps.seed = await measure(session, 'seed', true, async () => {
-      const pass = backend.channelPassFinished();
-      await page.goto(`${server.origin}/app/channels`);
-      await rowsShown();
-      await pass;
+      const pass = passServed(backend);
+      await Promise.all([
+        (async () => {
+          await page.goto(`${server.origin}/app/channels`);
+          await rowsShown();
+        })(),
+        pass,
+      ]);
       await laneFinished(page, null);
     });
     const seeded = await readLaneCheckpoint(page);
@@ -683,10 +719,14 @@ async function measureSize(
     // lane's refresh pass: the lane can pause longer than the quiet window
     // between pages, which would leave the rest of its pass to the next step.
     steps.coldOpen = await measure(session, 'coldOpen', true, async () => {
-      const pass = backend.channelPassFinished();
-      await page.reload();
-      await rowsShown();
-      await pass;
+      const pass = passServed(backend);
+      await Promise.all([
+        (async () => {
+          await page.reload();
+          await rowsShown();
+        })(),
+        pass,
+      ]);
       // Within the step: the refresh pass is finished once the lane records
       // it, after the last page was served.
       await laneFinished(page, seeded?.completedAt ?? null);
@@ -820,16 +860,21 @@ async function measureSize(
       ),
       'every section showed its heading, open as the viewer saved it'
     ).toEqual(expected);
-    return {
-      run: {
-        channels,
-        steps,
-        backendErrors: backend.errors(),
-        pageErrors,
-        requests: backend.counts(),
-      },
-      evidence: evidence as RunEvidence,
+    const run: ChatScaleRun = {
+      channels,
+      steps,
+      backendErrors: backend.errors(),
+      pageErrors,
+      requests: backend.counts(),
     };
+    // The test fails a run with errors after this returns; leave what the
+    // page asked for and its console errors beside the measurements.
+    if (run.pageErrors.length > 0 || run.backendErrors.length > 0)
+      writeFileSync(
+        testInfo.outputPath(`chat-scale-${channels}-diagnostics.json`),
+        JSON.stringify(await diagnose(), null, 2)
+      );
+    return { run, evidence: evidence as RunEvidence };
   } catch (error) {
     writeFileSync(
       testInfo.outputPath(`chat-scale-${channels}-diagnostics.json`),
@@ -855,6 +900,10 @@ function writeResults(): void {
   );
   writeFileSync(SUMMARY_PATH, `${summaryTable(runs)}\n`);
 }
+
+// Each invocation starts from empty results, so one that fails before it
+// measures a size leaves no earlier invocation's numbers behind.
+test.beforeAll(() => writeResults());
 
 for (const channels of SIZES) {
   test(`Chat at ${channels} channels`, async ({ browser }, testInfo) => {
