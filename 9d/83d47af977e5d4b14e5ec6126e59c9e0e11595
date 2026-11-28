@@ -1,0 +1,23 @@
+apps/web/tests/native/README.md
+  s_9a7b3753cf0d43::t_24f4780901eab3 44-46
+apps/web/tests/native/fixtures/server.ts
+  s_9a7b3753cf0d43::t_ff55fe45de2185 233-235
+apps/web/tests/native/runner.ts
+  s_9a7b3753cf0d43::t_2e18450b1780a0 363-397
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "9d83d47af977e5d4b14e5ec6126e59c9e0e11595",
+  "prompts": {},
+  "sessions": {
+    "s_9a7b3753cf0d43": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e92eee65-6980-40cb-9ea0-eb765e9b183b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
