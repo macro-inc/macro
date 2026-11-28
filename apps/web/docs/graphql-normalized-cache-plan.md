@@ -2195,14 +2195,22 @@ selections fetch only the current revision, with no unused fragment.
 
 A live view can name a row shape (`row: 'channel-list'`): the engine then
 retains, diffs and sends that row instead of the selected record, so a patch
-names a row field, and the page keeps the rows as immutable values rather than
-store rows. The page asks for a row only while the host says it shapes rows
+names a row field. The page keeps every live view's rows as immutable values:
+an update replaces the rows it changes and keeps every other row's object. The page asks for a row only while the host says it shapes rows
 (`liveQueryRows`), and the host marks each reply to such a request (`row`),
 which is what the reader trusts. Native hosts send these requests through
 `graphql_cache_entity_filter_rows`; on a binary without that command the host
 reads selected records through `graphql_cache_entity_filter` for the rest of
 the session and the page shapes them with the TypeScript port, which a shared
 corpus pins to the engine's rows.
+
+Server rows reach Soup the same way. `LiveQuery` publishes, beside its store, a
+snapshot of each result that shares every unchanged subtree with the one before
+(`shareQueryValue`: keyed list items match by entity key, so an insert, a
+removal, a reorder or a refetch keeps every other row's object), and Soup reads
+server rows from it (`querySnapshot`). A Soup mapper therefore walks a plain
+record and runs again only when that record's object or an option it reads
+changes; there is no per-row version signal.
 
 `graphql_cache.ipc.request` is a `perf`-class span (`sampling: 'perf'`) that
 records command and outcome, plus `graphql_cache.ipc.page_stall_ms` when a page

@@ -90,10 +90,11 @@ State ownership, reactivity, and async error handling.
   `query.data` still tracks the result being replaced, which is every update
   of a query without `reconcile`. A query with `reconcile` updates rows in
   place without replacing `data`, so an unwrapped walk would miss them: keep
-  its reads tracked, or for Soup `LiveQuery` and `createPredicateQuery` rows
-  reconciled in place, read through `readRowSnapshot(record)` from
-  `@graphql-cache/exchange/live-query` to subscribe at row granularity and walk
-  unwrapped records.
+  its reads tracked, or read `querySnapshot(query.data)` from
+  `@graphql-cache/exchange/live-query`: a normalized-cache result's immutable
+  snapshot, which keeps each unchanged row's object across results, so a
+  reader compares rows by identity. Soup mappers take only plain records
+  (`plainSoupRecord`).
 - **FE-52** Read reactive values (feature flags, `isEditable()`, the current
   user) inside a reactive scope, never as a snapshot at mount. A flag that is
   still loading is not "off".
