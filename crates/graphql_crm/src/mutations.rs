@@ -38,12 +38,12 @@ struct CreateCrmContactInput {
     company_id: Option<ID>,
 }
 
-/// The persisted record identity and its normalized Soup effects.
 struct CreateCrmRecordPayload<E: SoupEntityEdges> {
     record_id: ID,
     result: GraphqlEntityMutationResult<E>,
 }
 
+/// The persisted record identity and its normalized Soup effects.
 #[Object]
 impl<E: SoupEntityEdges> CreateCrmRecordPayload<E> {
     /// ID of the created record.
