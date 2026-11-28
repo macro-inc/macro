@@ -403,10 +403,33 @@ function fnv1a64Hex(bytes: Uint8Array): string {
   return hash.toString(16).padStart(16, '0');
 }
 
+const EXCERPT_MARKER = / \/\* (\d+) bytes \*\/ /;
+
 /**
- * The template, only when it is the text its fingerprint was taken from.
- * The engine fingerprints the unexpanded template, so expanded SQL or other
- * text posted beside a real fingerprint does not match and is dropped.
+ * Whether `bytes` has the engine's excerpt form for a template longer than the
+ * bound (`bounded` in `cache-turso/src/query_telemetry.rs`): its first and last
+ * halves around ` /* <length> bytes *\/ `, each half cut to a character
+ * boundary at most three bytes short. An excerpt cannot be hashed back to its
+ * fingerprint, so its form is what is checked.
+ */
+function isEngineExcerpt(value: string, bytes: Uint8Array): boolean {
+  const marker = EXCERPT_MARKER.exec(value);
+  if (!marker) return false;
+  const length = Number(marker[1]);
+  if (!Number.isSafeInteger(length) || length <= SLOW_QUERY_TEMPLATE_BYTES)
+    return false;
+  const markerBytes = marker[0].length;
+  const half = Math.floor((SLOW_QUERY_TEMPLATE_BYTES - markerBytes) / 2);
+  const head = UTF8_ENCODER.encode(value.slice(0, marker.index)).length;
+  const tail = bytes.length - head - markerBytes;
+  return head <= half && head >= half - 3 && tail <= half && tail >= half - 3;
+}
+
+/**
+ * The template, only when it is the text its fingerprint was taken from, or
+ * the engine's excerpt of a longer one. The engine fingerprints the unexpanded
+ * template, so expanded SQL or other text posted beside a real fingerprint
+ * does not match and is dropped.
  */
 function slowQueryTemplate(
   value: unknown,
@@ -420,8 +443,8 @@ function slowQueryTemplate(
   )
     return undefined;
   const bytes = UTF8_ENCODER.encode(value);
-  return bytes.length <= SLOW_QUERY_TEMPLATE_BYTES &&
-    fnv1a64Hex(bytes) === fingerprint
+  if (bytes.length > SLOW_QUERY_TEMPLATE_BYTES) return undefined;
+  return fnv1a64Hex(bytes) === fingerprint || isEngineExcerpt(value, bytes)
     ? value
     : undefined;
 }

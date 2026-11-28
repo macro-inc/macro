@@ -53,6 +53,10 @@ export class CacheTelemetryRelay {
         this.options.createChannel ??
         ((name: string) => new BroadcastChannel(name));
       this.channel = createChannel(CACHE_TELEMETRY_CHANNEL);
+      // Any same-origin context can post here, and the relay cannot tell an
+      // engine worker from one. That is no new reach: such a script can
+      // already send the page's telemetry itself. The reporter's checks
+      // (field allowlist, template hash) catch a buggy sender, not a hostile one.
       this.channel.onmessage = (event: MessageEvent<unknown>) => {
         if (this.leader && isCacheTelemetryObservation(event.data)) {
           this.reporter.emit(event.data);

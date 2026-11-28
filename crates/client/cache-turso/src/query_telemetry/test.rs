@@ -148,6 +148,25 @@ fn long_templates_keep_head_and_tail_within_the_bound() {
     assert!(text.contains(&format!(" /* {} bytes */ ", template.as_str().len())));
 }
 
+/// The web page checks a long template's excerpt against this same file
+/// (`apps/web/src/lib/graphql-cache/telemetry.test.ts`), so the two cannot
+/// drift apart.
+#[test]
+fn long_template_excerpt_matches_the_web_fixture() {
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("excerpt.json")).expect("fixture is JSON");
+    let (telemetry, _reset) = install();
+    let template = crate::sql!(
+        "SELECT value FROM records WHERE id IN ({ids}) ORDER BY id",
+        ids = Sql::placeholders(4_000)
+    );
+    slow(&telemetry, &template);
+    let events = telemetry.events.borrow();
+    let (hash, _, _, text) = &events[0];
+    assert_eq!(Some(hash.as_str()), fixture["fingerprint"].as_str());
+    assert_eq!(text.as_deref(), fixture["template"].as_str());
+}
+
 #[test]
 fn the_sent_set_is_bounded() {
     let (telemetry, _reset) = install();

@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+// Written by the engine's excerpt; `query_telemetry/test.rs` checks it.
+import engineExcerpt from '../../../../../crates/client/cache-turso/src/query_telemetry/excerpt.json';
 import {
   browserCacheTelemetryContext,
   type CacheTelemetryEnvelope,
@@ -383,7 +385,18 @@ describe('cache telemetry sampling and failure isolation', () => {
       queryFingerprint: '8351823baa0f2325',
       queryTemplate: '\u20ac'.repeat(SLOW_QUERY_TEMPLATE_BYTES / 2),
     });
-    recorder.record({ ...slow, queryTemplate: '' });
+    // A fingerprint with leading zeros, which the hex form keeps.
+    recorder.record({
+      ...slow,
+      queryFingerprint: '006a3b7abe35ee7b',
+      queryTemplate: 'SELECT 2652583577',
+    });
+    // The empty text beside its own fingerprint, the FNV offset basis.
+    recorder.record({
+      ...slow,
+      queryFingerprint: 'cbf29ce484222325',
+      queryTemplate: '',
+    });
     // Text that is not what the fingerprint was taken from: expanded SQL.
     recorder.record({
       ...slow,
@@ -397,6 +410,7 @@ describe('cache telemetry sampling and failure isolation', () => {
     recorder.record({
       name: 'graphql_cache.wal_checkpoint',
       operationCategory: 'storage',
+      queryFingerprint: '9cd1640cd0470612',
       queryTemplate: template,
     });
     recorder.flush();
@@ -406,6 +420,7 @@ describe('cache telemetry sampling and failure isolation', () => {
       atBound,
       undefined,
       undefined,
+      'SELECT 2652583577',
       undefined,
       undefined,
       undefined,
@@ -414,6 +429,37 @@ describe('cache telemetry sampling and failure isolation', () => {
     expect(
       isCacheTelemetryObservation({ ...slow, queryTemplate: template })
     ).toBe(true);
+  });
+
+  it('keeps the engine excerpt of a long template and drops look-alikes', () => {
+    const events: CacheTelemetryObservation[] = [];
+    const recorder = new CacheTelemetryRecorder({
+      emit: (event) => events.push(event),
+    });
+    const slow = {
+      name: 'graphql_cache.slow_query',
+      operationCategory: 'storage',
+      durationMs: 201,
+      queryFingerprint: engineExcerpt.fingerprint,
+      outcome: 'success',
+    } as const;
+    recorder.record({ ...slow, queryTemplate: engineExcerpt.template });
+    // A marker naming a length within the bound is not an excerpt.
+    recorder.record({
+      ...slow,
+      queryTemplate: 'SELECT 1 /* 100 bytes */ FROM records',
+    });
+    // The marker of a long template, with halves of the wrong size.
+    recorder.record({
+      ...slow,
+      queryTemplate: engineExcerpt.template.slice(64),
+    });
+    recorder.flush();
+    expect(events.map((event) => event.queryTemplate)).toEqual([
+      engineExcerpt.template,
+      undefined,
+      undefined,
+    ]);
   });
 
   it('never samples or aggregates slow requests and drops an invalid queue wait', () => {
