@@ -110,12 +110,11 @@ function catchUpLaterPages(
   // How many times reads have stopped, so a read can tell whether they
   // stopped and resumed while it waited in the queue.
   let stops = 0;
-  // Pages whose read failed while reads held, by the cycle it failed in.
-  const failed = new Map<number, number>();
+  // Pages whose read failed in the current cycle, cleared as it ends.
+  const failed = new Set<number>();
   // The current read cycle's deadline, while reads hold.
   let rearm: (() => void) | undefined;
-  const readable = (key: number) =>
-    !queued.has(key) && failed.get(key) !== stops;
+  const readable = (key: number) => !queued.has(key) && !failed.has(key);
   const readAgain = async (key: number, page: MissedPage) => {
     queued.add(key);
     const cycle = stops;
@@ -126,7 +125,7 @@ function catchUpLaterPages(
     if (landed && missed.get(key) === page) missed.delete(key);
     // One that failed within its own cycle waits for the next, as a dropped
     // one does, even when another page's turn comes first.
-    if (!landed && cycle === stops) failed.set(key, cycle);
+    if (!landed && cycle === stops && missed.get(key) === page) failed.add(key);
     // A read the queue dropped because reads stopped, settling after they
     // resumed, was skipped by the new cycle's deadline as still queued.
     if (cycle !== stops) rearm?.();
@@ -148,6 +147,7 @@ function catchUpLaterPages(
         }
       if (!reads) {
         stops += 1;
+        failed.clear();
         const now = Date.now();
         for (const [key, query] of later)
           if (!missed.has(key)) missed.set(key, { query, since: now });
