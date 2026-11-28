@@ -43,7 +43,10 @@ export function pendingEmailTrashKeys(): ReadonlySet<string> {
 
 /** Keep older network pages from showing a thread while its trash is pending.
  * The normalized reply owns membership once the write settles. */
-function holdTrashVisibility(uuid: string, threadId: string) {
+function holdTrashVisibility(
+  uuid: string,
+  threadId: SetEmailThreadStateInput['threadId']
+) {
   const host = getGraphqlCacheHost();
   const entry = {
     session: queryAccountSession(),
