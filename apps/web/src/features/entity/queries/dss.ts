@@ -3,13 +3,9 @@ import { Telemetry, type TraceContext } from '@macro-inc/observability';
 
 import { databaseEntityMessage } from '@app/features/database/core/write-failure';
 import { scheduledActionKeys } from '@app/features/routines/queries/keys';
+import { analytics } from '@app/lib/analytics';
 import { trashDatabase } from '@block-database/queries/trash-database';
-import {
-  canDuplicateItemType,
-  copyItem,
-  deleteItem,
-  moveToFolder,
-} from '@core/component/FileList/itemOperations';
+import { deleteItem } from '@core/component/FileList/itemOperations';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
@@ -18,6 +14,8 @@ import {
   currentQueryAccount,
   isCurrentQueryAccount,
   type QueryAccount,
+  QueryAccountChangedError,
+  queryAccountSession,
 } from '@queries/auth/account-scope';
 import { callKeys } from '@queries/call/keys';
 import { refreshChannelDirectory } from '@queries/channel/directory';
@@ -32,7 +30,6 @@ import {
   removeSoupEntities,
   removeSoupEntitiesFromQueriesReferencing,
 } from '@queries/soup/cache';
-import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { soupEntityKey } from '@queries/soup/graphql/entity-input';
 import {
   createGraphqlSoupDeletion,
@@ -41,13 +38,23 @@ import {
 } from '@queries/soup/graphql/optimistic-deletions';
 import { soupKeys } from '@queries/soup/keys';
 import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
-import { permanentlyDeleteEntity } from '@queries/storage/entity-mutations';
+import {
+  duplicateEntities,
+  moveEntities,
+  moveEntity,
+  permanentlyDeleteEntity,
+} from '@queries/storage/entity-mutations';
 import { databasesKeys, formsKeys } from '@queries/storage/keys';
 import { scheduledActionClient } from '@service-scheduled-action/client';
 import type { ListedDatabase } from '@service-storage/generated/schemas/listedDatabase';
 import type { ListedForm } from '@service-storage/generated/schemas/listedForm';
-import { getEntityGraphqlClient } from '@service-storage/graphql-soup';
-import { useMutation } from '@tanstack/solid-query';
+import type { EntityRefInput } from '@service-storage/graphql/generated/graphql';
+import {
+  getEntityGraphqlClient,
+  getGraphqlCacheHost,
+} from '@service-storage/graphql-soup';
+import { refetchResources } from '@service-storage/util/refetchResources';
+import { onlineManager, useMutation } from '@tanstack/solid-query';
 import { batch } from 'solid-js';
 import { type EntityData, getEntityProjectId } from '../types/entity';
 import { BulkDeleteFailure } from './bulk-delete-result';
@@ -314,6 +321,114 @@ const isFolderMovable = (
   entity.type === 'database' ||
   entity.type === 'form';
 
+const FOLDER_ENTITY_TYPES = {
+  document: 'DOCUMENT',
+  chat: 'CHAT',
+  project: 'PROJECT',
+  email: 'EMAIL_THREAD',
+  database: 'DATABASE',
+  form: 'FORM',
+} satisfies Record<FolderMovableType, EntityRefInput['type']>;
+
+// The entity mutation schema accepts at most 100 inputs per request.
+const ENTITY_MUTATION_BATCH_SIZE = 100;
+
+async function runEntityBatches<T>(
+  entities: readonly T[],
+  write: (chunk: T[]) => Promise<boolean>,
+  parent = Telemetry.captureContext()
+): Promise<boolean> {
+  const session = queryAccountSession();
+  let succeeded = true;
+  for (
+    let offset = 0;
+    offset < entities.length;
+    offset += ENTITY_MUTATION_BATCH_SIZE
+  ) {
+    if (session !== queryAccountSession()) throw new QueryAccountChangedError();
+    try {
+      const chunk = entities.slice(offset, offset + ENTITY_MUTATION_BATCH_SIZE);
+      if (!(await parent.run(() => write(chunk)))) succeeded = false;
+    } catch (error) {
+      console.error('Entity mutation batch failed', error);
+      succeeded = false;
+    }
+  }
+  return succeeded;
+}
+
+function trackMove(
+  entity: Pick<EntityData, 'id' | 'type'>,
+  projectId: string | null
+) {
+  analytics.track('update_entity', {
+    entityType: entity.type,
+    entityId: entity.id,
+    property: 'parent_project',
+    newProjectId: projectId,
+  });
+}
+
+async function moveDssEntities(
+  entities: EntityData[],
+  projectId: string | null
+) {
+  if (!entities.every(isFolderMovable)) {
+    throw new Error('Unsupported entity type provided');
+  }
+
+  // Keep moves with a Soup prediction queueable in mixed Drive selections.
+  const soup = entities.filter((entity) => soupEntityKey(entity));
+  const listed = entities.filter((entity) => !soupEntityKey(entity));
+  const session = queryAccountSession();
+  const parent = Telemetry.captureContext();
+  let movedSoupEntity = false;
+  const move = (chunk: typeof entities) =>
+    runEntityBatches(
+      chunk,
+      async (items) => {
+        const results = await moveEntities(
+          items.map(({ id, type }) => ({
+            entity: { id, type: FOLDER_ENTITY_TYPES[type] },
+            projectId,
+          }))
+        );
+        for (const [index, result] of results.entries()) {
+          if (result.__typename === 'GraphqlMutationSuccess') {
+            const entity = items[index];
+            trackMove(entity, projectId);
+            if (soupEntityKey(entity)) movedSoupEntity = true;
+          }
+        }
+        return results.every(
+          (result) => result.__typename === 'GraphqlMutationSuccess'
+        );
+      },
+      parent
+    );
+
+  const movedSoup = await move(soup);
+  const moveListed = () => {
+    if (session !== queryAccountSession()) throw new QueryAccountChangedError();
+    return move(listed);
+  };
+  // These writes have no cache prediction. Preserve TanStack's offline pause
+  // for them even when the outer mutation handed the Soup rows to the queue.
+  const movedListed =
+    listed.length === 0 ||
+    (onlineManager.isOnline()
+      ? await moveListed()
+      : await queryClient
+          .getMutationCache()
+          .build(queryClient, { mutationFn: moveListed, networkMode: 'online' })
+          .execute(undefined));
+  if (movedSoupEntity) refetchResources({ refreshFolders: false });
+  if (!movedSoup || !movedListed) {
+    throw new Error('One or more DSS items failed to move');
+  }
+  return { success: true };
+}
+
 /**
  * Databases and forms reach Drive through their own lists, not Soup: refile
  * them there at once, answering how to put them back.
@@ -402,11 +517,11 @@ function invalidateAfterMove(
       queryKey: ['project'],
     });
   }
-  return refreshActiveGraphqlSoupQueries();
 }
 
 export function createMoveToProjectDssEntityMutation() {
   return useMutation(() => ({
+    networkMode: getGraphqlCacheHost() ? 'always' : 'online',
     mutationFn: async ({
       entity: { id, type },
       project: { id: projectId },
@@ -414,13 +529,10 @@ export function createMoveToProjectDssEntityMutation() {
       entity: EntityData & { type: 'document' | 'chat' | 'project' };
       project: { id: string };
     }) => {
-      const success = await moveToFolder({
-        itemType: type,
-        id,
-        folderId: projectId,
-      });
-
-      return { success };
+      await moveEntity({ id, type: FOLDER_ENTITY_TYPES[type] }, projectId);
+      trackMove({ id, type }, projectId);
+      refetchResources({ refreshFolders: false });
+      return { success: true };
     },
     onMutate: async ({
       entity: { id, type },
@@ -452,27 +564,9 @@ export function createMoveToProjectDssEntityMutation() {
 
 export function createBulkRemoveFromProjectDssEntityMutation() {
   return useMutation(() => ({
-    mutationFn: async ({ entities }: { entities: EntityData[] }) => {
-      if (!entities.every(isFolderMovable)) {
-        throw new Error(`Unsupported entity type provided`);
-      }
-
-      const results = await Promise.all(
-        entities.map((entity) =>
-          moveToFolder({
-            itemType: entity.type,
-            id: entity.id,
-            folderId: null,
-          })
-        )
-      );
-
-      if (results.some((r) => !r)) {
-        throw new Error(`One or more DSS items failed to move`);
-      }
-
-      return { success: true };
-    },
+    networkMode: getGraphqlCacheHost() ? 'always' : 'online',
+    mutationFn: ({ entities }: { entities: EntityData[] }) =>
+      moveDssEntities(entities, null),
 
     onMutate: async ({ entities }: { entities: EntityData[] }) => {
       const moveableEntities = entities.filter(
@@ -539,7 +633,6 @@ export function createBulkRemoveFromProjectDssEntityMutation() {
       if (entities.some((e) => e.type === 'project')) {
         queryClient.invalidateQueries({ queryKey: ['project'] });
       }
-      return refreshActiveGraphqlSoupQueries();
     },
   }));
 }
@@ -553,14 +646,15 @@ function getSoupEntityProjectId(entityId: string): string | undefined {
   return undefined;
 }
 
-export function createBulkCopyDssEntityMutation() {
-  const isUnsupportedEntity = (entity: EntityData) =>
-    (entity.type !== 'chat' &&
-      entity.type !== 'document' &&
-      entity.type !== 'project' &&
-      entity.type !== 'database') ||
-    !canDuplicateItemType(entity.type);
+function canCopyDssEntity(entity: EntityData) {
+  return (
+    entity.type === 'document' ||
+    entity.type === 'project' ||
+    entity.type === 'database'
+  );
+}
 
+export function createBulkCopyDssEntityMutation() {
   return useMutation(() => ({
     mutationFn: async ({
       entities,
@@ -569,21 +663,41 @@ export function createBulkCopyDssEntityMutation() {
       entities: (EntityData & { name: string })[];
       name: string | ((oldName: string) => string);
     }) => {
-      if (entities.some(isUnsupportedEntity)) {
+      if (!entities.every(canCopyDssEntity)) {
         throw new Error(`Unsupported entity type provided`);
       }
 
-      const results = await Promise.all(
-        entities.map((e) =>
-          copyItem({
-            itemType: e.type,
-            id: e.id,
-            name: typeof name === 'function' ? name(e.name) : name,
-          })
-        )
-      );
+      let copied = false;
+      let refreshFolders = false;
+      const success = await runEntityBatches(entities, async (items) => {
+        const { copies, listsReadAgain } = await duplicateEntities(
+          items.map(({ id, type, name: originalName }) => ({
+            entity: { id, type: FOLDER_ENTITY_TYPES[type] },
+            displayName: `${typeof name === 'function' ? name(originalName) : name} copy`,
+          }))
+        );
+        for (const [index, result] of copies.entries()) {
+          if (result.__typename !== 'GraphqlMutationSuccess') continue;
+          const source = items[index];
+          copied = true;
+          if (source.type === 'project' && !listsReadAgain)
+            refreshFolders = true;
+          analytics.track('create_entity', {
+            entityType: source.type,
+            entityId: result.copyId,
+            via: 'duplicate',
+            sourceEntityId: source.id,
+          });
+        }
+        return copies.every(
+          (result) => result.__typename === 'GraphqlMutationSuccess'
+        );
+      });
 
-      if (results.some((r) => !r)) {
+      // Folder copies return the root as a Soup effect. Drive's existing
+      // catalog invalidation also discovers the duplicated descendants.
+      if (copied) refetchResources({ refreshFolders });
+      if (!success) {
         throw new Error(`One or more DSS items failed to copy`);
       }
 
@@ -614,13 +728,17 @@ export function createBulkCopyDssEntityMutation() {
         queryKey: soupKeys.astItems._def,
       });
       queryClient.invalidateQueries({ queryKey: ['entity'] });
-      return refreshActiveGraphqlSoupQueries();
+      if (entities.some((e) => e.type === 'database'))
+        queryClient.invalidateQueries({
+          queryKey: databasesKeys.list.queryKey,
+        });
     },
   }));
 }
 
 export function createBulkMoveToProjectDssEntityMutation() {
   return useMutation(() => ({
+    networkMode: getGraphqlCacheHost() ? 'always' : 'online',
     mutationFn: async ({
       entities,
       project,
@@ -630,27 +748,9 @@ export function createBulkMoveToProjectDssEntityMutation() {
       project: { id: string; name: string };
       parentSpan?: TraceContext;
     }) => {
-      if (!entities.every(isFolderMovable)) {
-        throw new Error(`Unsupported entity type provided`);
-      }
-
-      const results = await Promise.all(
-        entities.map((entity) =>
-          (parentSpan ?? Telemetry.captureContext()).run(() =>
-            moveToFolder({
-              itemType: entity.type,
-              id: entity.id,
-              folderId: project.id,
-            })
-          )
-        )
+      return (parentSpan ?? Telemetry.captureContext()).run(() =>
+        moveDssEntities(entities, project.id)
       );
-
-      if (results.some((r) => !r)) {
-        throw new Error(`One or more DSS items failed to move`);
-      }
-
-      return { success: true };
     },
 
     onMutate: async ({
@@ -684,7 +784,7 @@ export function createBulkMoveToProjectDssEntityMutation() {
     onSettled: (data, error, { entities, project, parentSpan }, context) => {
       const failed = data?.success === false || !!error;
       if (failed) {
-        context?.forEach((txn) => txn.rollback());
+        context?.toReversed().forEach((txn) => txn.rollback());
         console.error(`Failed to bulk move dss items`, entities, data, error);
       }
       invalidateListedEntities(entities);

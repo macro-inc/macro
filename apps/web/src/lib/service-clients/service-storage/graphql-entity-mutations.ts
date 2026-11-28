@@ -32,21 +32,25 @@ const isEffectsError = (error: GraphQLError) =>
  * client's exchange read every mounted list again, each successfully, before
  * the write settled (no live cache).
  * Never retry a failed/ambiguous GraphQL write through the REST transport. */
-async function mutateEntity<Data, Variables extends AnyVariables>(
+async function mutateEntities<Data, Variables extends AnyVariables>(
   operation: string,
-  entity: EntityRefInput,
+  entities: readonly EntityRefInput[],
   document: TypedDocumentNode<Data, Variables>,
   variables: Variables,
   payload: (data: Data) => EntityMutationPayloadFieldsFragment,
   context: Partial<OperationContext> = {}
 ) {
   return Telemetry.span(`entity.${operation}`, async (span) => {
-    span.setAttr('entity.id', entity.id);
-    span.setAttr('entity.type', entity.type);
+    span.setAttr('entity.count', entities.length);
+    if (entities.length === 1) {
+      span.setAttr('entity.id', entities[0].id);
+      span.setAttr('entity.type', entities[0].type);
+    }
     try {
-      return await sendEntityMutation(
+      return await sendEntityMutations(
         span,
         operation,
+        entities.length,
         document,
         variables,
         payload,
@@ -60,9 +64,47 @@ async function mutateEntity<Data, Variables extends AnyVariables>(
   });
 }
 
-async function sendEntityMutation<Data, Variables extends AnyVariables>(
+type EntityMutationOutcome =
+  EntityMutationPayloadFieldsFragment['results'][number];
+
+function requireEntityMutationSuccess(outcome: EntityMutationOutcome) {
+  if (outcome.__typename === 'GraphqlMutationError') {
+    throw new ThrownResultError([
+      { code: outcome.errorCode, message: outcome.message },
+    ]);
+  }
+  return outcome;
+}
+
+async function mutateEntity<Data, Variables extends AnyVariables>(
+  operation: string,
+  entity: EntityRefInput,
+  document: TypedDocumentNode<Data, Variables>,
+  variables: Variables,
+  payload: (data: Data) => EntityMutationPayloadFieldsFragment,
+  context?: Partial<OperationContext>
+) {
+  const { results, effectsResolved, listsReadAgain } = await mutateEntities(
+    operation,
+    [entity],
+    document,
+    variables,
+    payload,
+    context
+  );
+  const outcome = requireEntityMutationSuccess(results[0]);
+  return {
+    ...outcome,
+    effects: effectsResolved ? outcome.effects : [],
+    effectsResolved,
+    listsReadAgain,
+  };
+}
+
+async function sendEntityMutations<Data, Variables extends AnyVariables>(
   span: Span,
   operation: string,
+  count: number,
   document: TypedDocumentNode<Data, Variables>,
   variables: Variables,
   payload: (data: Data) => EntityMutationPayloadFieldsFragment,
@@ -85,28 +127,23 @@ async function sendEntityMutation<Data, Variables extends AnyVariables>(
   )
     throw result.error;
   const results = result.data ? payload(result.data).results : [];
-  const outcome = results[0];
-  if (results.length !== 1 || !outcome)
+  if (results.length !== count || results.some((outcome) => !outcome))
     throw new Error(`${operation} returned no unambiguous entity result`);
-  if (outcome.__typename === 'GraphqlMutationError') {
-    span.setAttr('entity.error_code', outcome.errorCode);
-    throw new ThrownResultError([
-      { code: outcome.errorCode, message: outcome.message },
-    ]);
+  const failures = results.filter(
+    (outcome) => outcome.__typename === 'GraphqlMutationError'
+  );
+  span.setAttr('entity.failed_count', failures.length);
+  if (failures[0]) {
+    span.setAttr('entity.error_code', failures[0].errorCode);
+    span.error(`Entity ${operation} failed`);
   }
   if (effectErrors.length > 0) {
     // The caller reads its lists again for what the patches would carry.
     span.setAttr('entity.effects_error', effectErrors[0]?.message ?? '');
-    return {
-      ...outcome,
-      effects: [],
-      effectsResolved: false,
-      listsReadAgain: networkRevalidated(result),
-    };
   }
   return {
-    ...outcome,
-    effectsResolved: true,
+    results,
+    effectsResolved: effectErrors.length === 0,
     listsReadAgain: networkRevalidated(result),
   };
 }
@@ -122,6 +159,19 @@ export const moveGraphqlEntity = (
     input.entity,
     MoveEntitiesDocument,
     { inputs: [input] },
+    (data) => data.moveEntities,
+    { optimisticMutation: { revalidations } }
+  );
+
+export const moveGraphqlEntities = (
+  inputs: MoveEntityInput[],
+  revalidations: readonly QueryRevalidation[]
+) =>
+  mutateEntities(
+    'move',
+    inputs.map(({ entity }) => entity),
+    MoveEntitiesDocument,
+    { inputs },
     (data) => data.moveEntities,
     { optimisticMutation: { revalidations } }
   );
@@ -159,6 +209,15 @@ export const duplicateGraphqlEntity = (input: DuplicateEntityInput) =>
     input.entity,
     DuplicateEntitiesDocument,
     { inputs: [input] },
+    (data) => data.duplicateEntities
+  );
+
+export const duplicateGraphqlEntities = (inputs: DuplicateEntityInput[]) =>
+  mutateEntities(
+    'duplicate',
+    inputs.map(({ entity }) => entity),
+    DuplicateEntitiesDocument,
+    { inputs },
     (data) => data.duplicateEntities
   );
 

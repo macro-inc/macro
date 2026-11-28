@@ -3,13 +3,18 @@ import { catchToResult } from '@core/util/result';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/schemas/updateSharePermissionRequestV2';
 import type {
+  DuplicateEntityInput,
+  EntityMutationResultFieldsFragment,
   EntityRefInput,
   EntitySharePolicyInput,
   GraphqlEntityAccessLevel,
   GraphqlSharePolicyOperation,
+  MoveEntityInput,
 } from '@service-storage/graphql/generated/graphql';
 import {
+  duplicateGraphqlEntities,
   duplicateGraphqlEntity,
+  moveGraphqlEntities,
   moveGraphqlEntity,
   permanentlyDeleteGraphqlEntity,
   restoreGraphqlEntity,
@@ -61,6 +66,19 @@ export async function moveEntity(
   refreshAfterWrite(result);
 }
 
+export async function moveEntities(inputs: MoveEntityInput[]) {
+  // Database and form metadata lives outside Soup. The GraphQL resolver
+  // applies their moves directly, so there is no queue to revalidate readers.
+  const direct = inputs.some(({ entity }) => !soupEntityKey(entity));
+  const result = await moveGraphqlEntities(
+    inputs,
+    direct ? [] : getUnmaintainedGraphqlSoupRevalidations()
+  );
+  if (direct || !result.effectsResolved || !getGraphqlCacheHost())
+    refreshAfterWrite(result);
+  return result.results;
+}
+
 export async function trashEntity(entity: EntityRefInput) {
   refreshAfterWrite(await trashGraphqlEntity(entity));
 }
@@ -88,7 +106,23 @@ export async function duplicateEntity(
 ): Promise<string> {
   const result = await duplicateGraphqlEntity({ entity, displayName });
   refreshAfterWrite(result);
-  for (const effect of result.effects) {
+  const copyId = duplicatedEntityId(entity, result.effects);
+  if (copyId) return copyId;
+  throw new Error(
+    'Duplication succeeded but returned no copy identity; do not retry automatically'
+  );
+}
+
+type EntityMutationEffects = Extract<
+  EntityMutationResultFieldsFragment,
+  { __typename?: 'GraphqlMutationSuccess' }
+>['effects'];
+
+function duplicatedEntityId(
+  entity: EntityRefInput,
+  effects: EntityMutationEffects
+) {
+  for (const effect of effects) {
     if (effect.__typename !== 'SoupUpdated' || effect.item.id === entity.id)
       continue;
     if (
@@ -101,9 +135,30 @@ export async function duplicateEntity(
     )
       return effect.item.id;
   }
-  throw new Error(
-    'Duplication succeeded but returned no copy identity; do not retry automatically'
-  );
+}
+
+export async function duplicateEntities(inputs: DuplicateEntityInput[]) {
+  const result = await duplicateGraphqlEntities(inputs);
+  let effectsResolved = result.effectsResolved;
+  let copied = false;
+  const copies = result.results.map((outcome, index) => {
+    if (outcome.__typename === 'GraphqlMutationError') return outcome;
+    copied = true;
+    const { entity } = inputs[index];
+    // The batch UI only needs the outcome; a database has no Soup identity.
+    const copyId = result.effectsResolved
+      ? duplicatedEntityId(entity, outcome.effects)
+      : undefined;
+    if (entity.type !== 'DATABASE' && copyId === undefined)
+      effectsResolved = false;
+    return { ...outcome, copyId };
+  });
+  if (copied)
+    refreshAfterWrite({
+      effectsResolved,
+      listsReadAgain: result.listsReadAgain,
+    });
+  return { copies, listsReadAgain: result.listsReadAgain };
 }
 
 function shareEntityType(itemType: string) {

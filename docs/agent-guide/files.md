@@ -256,6 +256,9 @@ beside it (or at the top level without edit access to its parent), copying its
 subfolders, documents, tasks, and chats; email threads filed in it stay with the
 original. Folders with more than 100 subfolders, documents, and chats can't be
 duplicated, and a failed copy leaves nothing behind.
+On a device with the local cache, folder moves and removals for documents,
+chats, folders, and email can update while offline and sync on reconnect.
+Copies appear after the server assigns their IDs.
 A folder's Share dialog, when the owner belongs to a team, has Team access
 (None, View, Comment, or Edit) without a Link sharing card or Link tab.
 Favorites use the same open actions and **Remove from favorites** menu as Tasks.

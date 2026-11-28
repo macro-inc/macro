@@ -31,7 +31,9 @@ import { createGraphqlSoupDeletion } from '../soup/graphql/optimistic-deletions'
 const UNMAINTAINED = [{ document: 'unmaintained-list', variables: {} }];
 
 import {
+  duplicateEntities,
   duplicateEntity,
+  moveEntities,
   moveEntity,
   restoreEntity,
   trashEntity,
@@ -134,6 +136,53 @@ it('queues a move with the lists to read once it commits, and reads none itself'
   });
   expect(mocks.refresh).not.toHaveBeenCalled();
 });
+
+it.each([true, false])(
+  'uses the uncached exchange receipt for batched moves and copies (%s)',
+  async (listsReadAgain) => {
+    mocks.host.mockReturnValue(undefined);
+    mocks.readAgain.mockReturnValue(listsReadAgain);
+    const entities = [
+      { type: 'DOCUMENT', id: 'first' },
+      { type: 'DOCUMENT', id: 'second' },
+    ] as const;
+    const results = entities.map(({ id }) => ({
+      __typename: 'GraphqlMutationSuccess',
+      effects: [
+        {
+          __typename: 'SoupUpdated',
+          item: { __typename: 'GraphqlSoupDocument', id: `${id}-copy` },
+        },
+      ],
+    }));
+    mocks.mutation.mockReturnValue({
+      toPromise: async () => ({
+        data: {
+          moveEntities: { results },
+          duplicateEntities: { results },
+        },
+      }),
+    });
+
+    await moveEntities(entities.map((entity) => ({ entity, projectId: null })));
+    expect(mocks.refresh.mock.calls).toEqual(
+      listsReadAgain ? [] : [[{ unmaintainedOnly: false }]]
+    );
+    mocks.refresh.mockClear();
+
+    const copies = await duplicateEntities(
+      entities.map((entity) => ({ entity }))
+    );
+    expect(copies.listsReadAgain).toBe(listsReadAgain);
+    expect(copies.copies).toMatchObject([
+      { copyId: 'first-copy' },
+      { copyId: 'second-copy' },
+    ]);
+    expect(mocks.refresh.mock.calls).toEqual(
+      listsReadAgain ? [] : [[{ unmaintainedOnly: false }]]
+    );
+  }
+);
 
 it('shows a confirmed restore immediately while retaining unrelated and newer deletes', async () => {
   mocks.refresh.mockReturnValue(new Promise<void>(() => {}));
