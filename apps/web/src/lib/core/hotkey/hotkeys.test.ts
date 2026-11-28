@@ -198,6 +198,29 @@ describe('registering a token that is already registered', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  // A soup view keeps j/k on the split scope after it unmounts; the next
+  // view's list binds the same token there and replaces it.
+  test('replacing a persistent command with other keys does not warn', () => {
+    const warn = vi.spyOn(Telemetry, 'warn');
+    makeScope('hotkeys-test-persistent');
+
+    createRoot((dispose) => {
+      registerHotkey({
+        scopeId: 'hotkeys-test-persistent',
+        hotkeyToken: token,
+        hotkey: ['j'],
+        description: 'Down',
+        keyDownHandler: () => true,
+        disposeWithOwner: false,
+      });
+      dispose();
+    });
+    disposers.push(mount('hotkeys-test-persistent', ['arrowdown', 'j']));
+
+    expect(hotkeyTokenMap().get(token)).toHaveLength(1);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   test('the same token with other keys in the same scope warns', () => {
     const warn = vi.spyOn(Telemetry, 'warn');
     makeScope('hotkeys-test-conflict');

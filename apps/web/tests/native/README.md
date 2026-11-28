@@ -41,6 +41,9 @@ They then open two more splits beside Email, resize the window to 1000px and
 They then open Tasks, narrow the window from 520px to 400px and expect every
 Tasks list header control, New and Search included, inside the header, then
 restore the size and expect the layout switch and Group by back.
+They then open Drive, narrow the window from 440px to 320px and expect every
+Drive list header control, New and Search included, inside the header, then
+restore the size and expect Filter and Sort back.
 They then open Companies, narrow the window from 520px to 320px and expect every
 Companies list header control, Create CRM record and Search included, inside the
 header, then restore the size and expect Display options and the filter back.

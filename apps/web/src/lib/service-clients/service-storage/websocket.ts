@@ -1,6 +1,6 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import {
-  ConstantBackoff,
+  ExponentialBackoff,
   type Websocket,
   WebsocketBuilder,
   WebsocketEvent,
@@ -26,10 +26,14 @@ export const storageSessionTelemetry = createSessionWebsocketTelemetry(
   () => SERVER_HOSTS['websocket-service']
 );
 
+// Retry without limit while the session is signed in (the session closes the
+// socket on sign-out). An API outage fires no browser `online` or
+// `visibilitychange` event, so a retry cap left the socket closed for good.
+// The wait doubles from 2 s up to 16 s, so a long outage costs few attempts
+// and recovery takes at most 16 s.
 const ws = new WebsocketBuilder(storageSessionTelemetry.resolveUrl)
   .withAutoConnect(false)
-  .withBackoff(new ConstantBackoff(2_000))
-  .withMaxRetries(20)
+  .withBackoff(new ExponentialBackoff(1_000, 4))
   .onOpen(storageSessionTelemetry.opened)
   .onError(storageSessionTelemetry.failed)
   .onClose((_, event) => storageSessionTelemetry.closed(event))

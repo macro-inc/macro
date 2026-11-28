@@ -95,7 +95,9 @@ explicit tab and folder links keep their destination. The drawer holds Sort (hid
 edit order applies, and hidden on the touch folder tree) and, on tab locations only, the same filter groups as the
 desktop **Filter** menu; active selections show a count badge on the trigger
 and a `Clear all` action in the drawer. The single-row desktop list header orders the title, Filter, Sort, New, and an
-expandable Search icon. `Cmd/Ctrl+F` opens the search field. These list-header
+expandable Search icon. A pane too narrow for those actions hides Sort, then
+Filter, before New or Search would leave the pane; each comes back once there
+is room (`f` opens Filter only while it shows). `Cmd/Ctrl+F` opens the search field. These list-header
 controls are desktop-only — search on
 touch uses the global search overlay and creation uses the dock's New button.
 On a touch device whose Drive
