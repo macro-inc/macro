@@ -182,76 +182,80 @@ describe('showsQuickAccessChannel', () => {
   });
 });
 
-// The Quick Access channel index rebuilt over 6,500 channels of 75
+// The Quick Access channel index rebuilt over 6,500 and 13,000 channels of 75
 // participants after one channel's view time changes: the work the index does
 // per channel before and after this module. Run with QUICK_ACCESS_BENCH=1.
 describe.skipIf(process.env.QUICK_ACCESS_BENCH !== '1')(
   'channel index rebuild (bench)',
   () => {
-    it('measures the old and the new per-channel work', () => {
-      const next = random(7);
-      const directory = Array.from({ length: 6_500 }, (_, index) =>
-        directoryChannel(next, index, 75)
-      );
-      const viewed = new Map<string, string>();
-      const rounds = 30;
-      const gc = (globalThis as { gc?: () => void }).gc;
-      const measure = (rebuild: () => void) => {
-        rebuild();
-        const times: number[] = [];
-        const heap: number[] = [];
-        for (let round = 0; round < rounds; round += 1) {
-          viewed.set(`channel-${round}`, when(next));
-          gc?.();
-          const heapBefore = process.memoryUsage().heapUsed;
-          const started = performance.now();
+    // N and 2N: production's p90 account has about 7,100 channels.
+    it.each([6_500, 13_000])(
+      'measures the old and the new per-channel work at %i channels',
+      (size) => {
+        const next = random(7);
+        const directory = Array.from({ length: size }, (_, index) =>
+          directoryChannel(next, index, 75)
+        );
+        const viewed = new Map<string, string>();
+        const rounds = 30;
+        const gc = (globalThis as { gc?: () => void }).gc;
+        const measure = (rebuild: () => void) => {
           rebuild();
-          times.push(performance.now() - started);
-          heap.push(process.memoryUsage().heapUsed - heapBefore);
-        }
-        const median = (values: number[]) =>
-          [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
-        return {
-          medianMs: Number(median(times).toFixed(2)),
-          medianHeapKb: Math.round(median(heap) / 1024),
-        };
-      };
-
-      const oldVersions = new Map<string, string>();
-      const before = measure(() => {
-        for (const record of directory) {
-          const source = viaChannelList(record);
-          const channel = {
-            ...source,
-            viewedAt: viewed.get(source.id) ?? source.viewedAt,
+          const times: number[] = [];
+          const heap: number[] = [];
+          for (let round = 0; round < rounds; round += 1) {
+            viewed.set(`channel-${round}`, when(next));
+            gc?.();
+            const heapBefore = process.memoryUsage().heapUsed;
+            const started = performance.now();
+            rebuild();
+            times.push(performance.now() - started);
+            heap.push(process.memoryUsage().heapUsed - heapBefore);
+          }
+          const median = (values: number[]) =>
+            [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
+          return {
+            medianMs: Number(median(times).toFixed(2)),
+            medianHeapKb: Math.round(median(heap) / 1024),
           };
-          const version = JSON.stringify(channel);
-          if (oldVersions.get(channel.id) !== version)
-            oldVersions.set(channel.id, version);
-        }
-      });
+        };
 
-      const rows = new Map<string, CachedGraphqlChannel>();
-      const after = measure(() => {
-        for (const record of directory) {
-          const source = directoryQuickAccessChannel(record);
-          const viewedAt = viewed.get(source.id) ?? source.viewedAt;
-          const row = rows.get(source.id);
-          if (!row || !showsQuickAccessChannel(row, source, viewedAt))
-            rows.set(source.id, { ...source, viewedAt });
-        }
-      });
+        const oldVersions = new Map<string, string>();
+        const before = measure(() => {
+          for (const record of directory) {
+            const source = viaChannelList(record);
+            const channel = {
+              ...source,
+              viewedAt: viewed.get(source.id) ?? source.viewedAt,
+            };
+            const version = JSON.stringify(channel);
+            if (oldVersions.get(channel.id) !== version)
+              oldVersions.set(channel.id, version);
+          }
+        });
 
-      console.log(
-        JSON.stringify({
-          channels: directory.length,
-          rounds,
-          gc: !!gc,
-          before,
-          after,
-        })
-      );
-      expect(after.medianMs).toBeLessThan(before.medianMs);
-    });
+        const rows = new Map<string, CachedGraphqlChannel>();
+        const after = measure(() => {
+          for (const record of directory) {
+            const source = directoryQuickAccessChannel(record);
+            const viewedAt = viewed.get(source.id) ?? source.viewedAt;
+            const row = rows.get(source.id);
+            if (!row || !showsQuickAccessChannel(row, source, viewedAt))
+              rows.set(source.id, { ...source, viewedAt });
+          }
+        });
+
+        console.log(
+          JSON.stringify({
+            channels: directory.length,
+            rounds,
+            gc: !!gc,
+            before,
+            after,
+          })
+        );
+        expect(after.medianMs).toBeLessThan(before.medianMs);
+      }
+    );
   }
 );
