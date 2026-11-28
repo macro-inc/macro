@@ -228,6 +228,7 @@ export function MobileSectionsView(props: {
   const channelNotifications = createChannelNotificationSettings({
     labels,
     resolveConflictChannels: true,
+    channelById: (channelId) => channelsById().get(channelId),
     favoriteChannelIds: () =>
       new Set(
         (favorites()?.favorites ?? [])

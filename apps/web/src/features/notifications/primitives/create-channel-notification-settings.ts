@@ -6,9 +6,14 @@ import {
   enableChatSidebarSections,
 } from '@core/constant/featureFlags';
 import { catchToResult } from '@core/util/result';
+import type { ChannelEntity } from '@entity';
 import { isMentionsOnlyItem } from '@entity/utils/notification';
 import { Telemetry } from '@macro-inc/observability';
-import { useCachedChannelsByIds } from '@queries/channel/by-ids';
+import {
+  channelIdWindow,
+  EMPTY_CHANNEL_WINDOW,
+  useChannelWindow,
+} from '@queries/channel/window';
 import { useChannelLabelsQuery } from '@queries/channel-labels/channel-labels';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import { queryReadyGate } from '@queries/gate';
@@ -59,6 +64,8 @@ type Sources = {
    * conflict checks need for their names and built-in sections.
    */
   resolveConflictChannels?: boolean;
+  /** Records the host already holds; only the other channels are looked up. */
+  channelById?: (channelId: string) => ChannelEntity | undefined;
 };
 
 export type ChannelNotificationView = EffectiveChannelNotifications & {
@@ -131,13 +138,26 @@ export function createChannelNotificationSettings(sources: Sources) {
   const ownSettingsIds = createMemo(() => [
     ...new Set([...channelSettings().keys(), ...legacyMentionsOnlyIds()]),
   ]);
-  // The rail's loaded pages may not hold these, so resolve them by id.
-  const conflictChannels = useCachedChannelsByIds(
-    ownSettingsIds,
+  // The host holds joined channels; look up the rest by id, a window's worth.
+  const conflictIds = createMemo(() =>
+    enabled() && sources.resolveConflictChannels === true
+      ? channelIdWindow([
+          {
+            key: 'own-settings',
+            ids: ownSettingsIds(),
+            isLoaded: (id) => sources.channelById?.(id) !== undefined,
+          },
+        ])
+      : EMPTY_CHANNEL_WINDOW
+  );
+  const conflictChannels = useChannelWindow(
+    conflictIds,
     () => enabled() && sources.resolveConflictChannels === true
   );
   const conflictChannel = (channelId: string) =>
-    conflictChannels.channels().find((channel) => channel.id === channelId);
+    sources.channelById?.(channelId) ??
+    conflictChannels.channels().find((channel) => channel.id === channelId) ??
+    conflictChannels.retained().find((channel) => channel.id === channelId);
 
   const sectionName = (key: NotificationSectionKey) =>
     match(key)

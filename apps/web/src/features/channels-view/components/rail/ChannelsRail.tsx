@@ -1328,6 +1328,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const channelNotifications = createChannelNotificationSettings({
     labels,
     resolveConflictChannels: true,
+    channelById,
     favoriteChannelIds: () =>
       new Set(
         favorites()

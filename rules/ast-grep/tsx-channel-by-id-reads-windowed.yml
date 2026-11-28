@@ -11,15 +11,17 @@ note: |-
   builds: at most 200 IDs, in chunks of 25. Give it the rows on screen (a
   slice with a `range`), or the first rows of a list, and show the rest from
   the channel directory's records.
-  The exact-set hooks stay for the callers below, which are bounded another
-  way: per-channel notification settings (the viewer's own settings) and
-  the Threads tab (at most five pages of threads).
+  The exact-set hooks stay for the Threads tab, whose IDs are the channels
+  of the thread pages it has loaded: 100 threads a page, five pages on
+  their own and more only as the list scrolls.
 files:
   - apps/web/src/**
 ignores:
   - apps/web/src/lib/queries/channel/**
-  - apps/web/src/features/notifications/primitives/create-channel-notification-settings.ts
   - apps/web/src/features/channels-view/queries.ts
+  # The Chat cache harness's mount models main's rail data path, exact-set
+  # reads included, until it moves to useChannelWindow.
+  - apps/web/src/features/channels-view/cache-harness/**
   - '**/*.test.ts'
   - '**/*.test.tsx'
 utils:
