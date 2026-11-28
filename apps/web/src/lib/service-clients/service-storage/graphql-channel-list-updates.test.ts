@@ -566,7 +566,8 @@ it('settles an entity notification write without waiting for a feed that stalls'
   const { client, listRefresh, queryReads } = revalidatingClient(() =>
     Promise.reject(new Error('offline'))
   );
-  // A Soup page the list's own refresh reads again in cursor order.
+  // A saved page request, which a grouped list needs read again without the
+  // cache: it rebuilds its continuations only from these.
   cleanup.push(
     registerGraphqlSoupRevalidations(
       () => [{ document: SoupDocument, variables: {} }],
@@ -588,6 +589,5 @@ it('settles an entity notification write without waiting for a feed that stalls'
   expect(result.data).toBeDefined();
   expect(listRefresh).toHaveBeenCalledOnce();
   expect(feedRefresh).toHaveBeenCalledOnce();
-  // Not re-sent with its saved cursor as well.
-  expect(queryReads).not.toHaveBeenCalled();
+  expect(queryReads).toHaveBeenCalledOnce();
 });

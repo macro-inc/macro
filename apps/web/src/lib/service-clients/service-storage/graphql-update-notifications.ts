@@ -149,9 +149,9 @@ export async function executeGraphqlUpdateNotificationsForEntities(
   // Without the cache the client's exchange already read every mounted
   // query again before the write settled.
   if (!result.error && networkRevalidationIncomplete(result)) {
-    readAgainAfterFailedReread([
-      revalidateNotificationReaders(client, { feedsOnly: true }),
-    ]);
+    // The saved page requests are read again too: a grouped list rebuilds
+    // its continuations only from them without the cache.
+    readAgainAfterFailedReread([revalidateNotificationReaders(client)]);
   } else if (!result.error && result.data && !networkRevalidated(result)) {
     // The changed rows update every reader the cache maintains; the others
     // are read again. A stale mark seen reads every reader again: the rows
