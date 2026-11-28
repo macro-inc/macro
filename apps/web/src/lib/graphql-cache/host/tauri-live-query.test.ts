@@ -198,4 +198,82 @@ describe('native retained view transport', () => {
     ).toBe(false);
     host.dispose();
   });
+
+  describe('shaped rows', () => {
+    const shaped: EntityFilterCacheArgs = {
+      ...args,
+      liveQuery: { ...args.liveQuery!, row: 'channel-list' },
+    };
+    const commands = () =>
+      invoke.mock.calls
+        .map(([command]) => command as string)
+        .filter((command) => command.startsWith('graphql_cache_entity_filter'));
+
+    it('asks a binary that has the rows command for shaped rows', async () => {
+      const host = createTauriCacheHost({ scope: 'scope-1' });
+      expect(host.liveQueryRows).toBe(true);
+      await expect(host.entityFilter(shaped)).resolves.toEqual(update);
+      expect(invoke).toHaveBeenLastCalledWith(
+        'graphql_cache_entity_filter_rows',
+        { request: shaped }
+      );
+      expect(host.liveQueryRows).toBe(true);
+      host.dispose();
+    });
+
+    it.each([
+      'Command graphql_cache_entity_filter_rows not found',
+      new Error('Command graphql_cache_entity_filter_rows not found'),
+    ])(
+      'reads selected records from an older binary without the rows command (%s)',
+      async (failure) => {
+        invoke.mockImplementation(async (command: string) => {
+          if (command === 'graphql_cache_current_authority')
+            return testAuthority('scope-1');
+          if (command === 'graphql_cache_entity_filter_rows') throw failure;
+          return command === 'graphql_cache_entity_filter' ? update : null;
+        });
+        const host = createTauriCacheHost({ scope: 'scope-1' });
+        const { row: _, ...selected } = shaped.liveQuery!;
+        await expect(host.entityFilter(shaped)).resolves.toEqual(update);
+        // The page reads this after the reply: the reply is unshaped.
+        expect(host.liveQueryRows).toBe(false);
+        expect(invoke).toHaveBeenLastCalledWith('graphql_cache_entity_filter', {
+          request: { ...shaped, liveQuery: selected },
+        });
+        await host.entityFilter({
+          ...shaped,
+          liveQuery: { ...shaped.liveQuery!, id: 'other' },
+        });
+        expect(commands()).toEqual([
+          'graphql_cache_entity_filter_rows',
+          'graphql_cache_entity_filter',
+          'graphql_cache_entity_filter',
+        ]);
+        host.dispose();
+      }
+    );
+
+    it('surfaces a rows failure other than a missing command', async () => {
+      invoke.mockImplementation(async (command: string) => {
+        if (command === 'graphql_cache_current_authority')
+          return testAuthority('scope-1');
+        if (command === 'graphql_cache_entity_filter_rows')
+          throw new Error('storage failed');
+        return null;
+      });
+      const host = createTauriCacheHost({ scope: 'scope-1' });
+      await expect(host.entityFilter(shaped)).rejects.toThrow('storage failed');
+      expect(host.liveQueryRows).toBe(true);
+      expect(commands()).toEqual(['graphql_cache_entity_filter_rows']);
+      host.dispose();
+    });
+
+    it('reads an unshaped view through the old command', async () => {
+      const host = createTauriCacheHost({ scope: 'scope-1' });
+      await host.entityFilter(args);
+      expect(commands()).toEqual(['graphql_cache_entity_filter']);
+      host.dispose();
+    });
+  });
 });
