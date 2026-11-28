@@ -44,6 +44,13 @@ const MOBILE_CHANNEL_ROW_HEIGHT = 72;
 const MOBILE_CHANNEL_BUFFER_SIZE = MOBILE_CHANNEL_ROW_HEIGHT * 6;
 const LOAD_MORE_THRESHOLD = 300;
 
+/** The list's rows in display order and the indexes `[start, end]` on screen. */
+export type MobileRowsOnScreen = {
+  ids: readonly string[];
+  start: number;
+  end: number;
+};
+
 export function ChannelsMobileView(props: {
   source: ChannelsDataSource;
   /** Favorited conversations pinned above the list in display order. */
@@ -58,6 +65,8 @@ export function ChannelsMobileView(props: {
   includePinnedInList?: boolean;
   /** Controls between the favorites and the list, included in its measured offset. */
   children?: JSX.Element;
+  /** Told which rows are on screen whenever they or the scroll change. */
+  onRowsOnScreen?: (rows: MobileRowsOnScreen) => void;
 }) {
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
@@ -102,6 +111,24 @@ export function ChannelsMobileView(props: {
       );
     return sortChannels(channels, sort);
   });
+  const visibleIds = createMemo(() =>
+    visibleChannels().map((channel) => channel.id)
+  );
+  const viewportSize = createElementSize(viewport);
+  const reportRowsOnScreen = () => {
+    const handle = virtualizer();
+    if (!handle || !props.onRowsOnScreen) return;
+    const ids = visibleIds();
+    const last = Math.max(0, ids.length - 1);
+    props.onRowsOnScreen({
+      ids,
+      start: Math.min(last, handle.findItemIndex(handle.scrollOffset)),
+      end: Math.min(
+        last,
+        handle.findItemIndex(handle.scrollOffset + handle.viewportSize)
+      ),
+    });
+  };
   const isUnread = (channel: ChannelEntity) =>
     channelActivity.unreadChannelIds().has(channel.id);
   const actionController = createListController({
@@ -122,6 +149,14 @@ export function ChannelsMobileView(props: {
   );
 
   const topInset = () => listHeaderSize.height ?? 0;
+
+  // Rows move on screen without a scroll when the list or viewport changes.
+  createEffect(
+    on([virtualizer, visibleIds, () => viewportSize.height, topInset], () => {
+      const frame = requestAnimationFrame(reportRowsOnScreen);
+      onCleanup(() => cancelAnimationFrame(frame));
+    })
+  );
 
   function loadNextPage() {
     if (
@@ -263,7 +298,10 @@ export function ChannelsMobileView(props: {
           startMargin={topInset()}
           itemSize={MOBILE_CHANNEL_ROW_HEIGHT}
           bufferSize={MOBILE_CHANNEL_BUFFER_SIZE}
-          onScroll={checkNearEnd}
+          onScroll={(offset) => {
+            checkNearEnd(offset);
+            reportRowsOnScreen();
+          }}
         >
           {(channel, index) => (
             <SoupEntityContextMenu

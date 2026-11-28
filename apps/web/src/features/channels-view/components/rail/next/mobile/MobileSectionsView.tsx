@@ -4,11 +4,16 @@ import { beginInteraction, useFlow, usePending } from '@app/observability/flow';
 import { PickerSheet } from '@components/app/mobile/PickerSheet';
 import { PillTabs } from '@components/app/mobile/PillTabs';
 import { enableChannelTags } from '@core/constant/featureFlags';
+import { useChannelDirectory } from '@core/context/channels';
 import type { ChannelEntity } from '@entity';
 import FunnelIcon from '@icon/system/regular/funnel.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import { createChannelNotificationSettings } from '@notifications/primitives/create-channel-notification-settings';
-import { useChannelWindow } from '@queries/channel/window';
+import {
+  type ChannelIdWindow,
+  EMPTY_CHANNEL_WINDOW,
+  useChannelWindow,
+} from '@queries/channel/window';
 import { useChannelLabelsQuery } from '@queries/channel-labels/channel-labels';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import { queryReadyGate } from '@queries/gate';
@@ -25,8 +30,12 @@ import {
 import { useChannelsView } from '../../../../channels-view-context';
 import type { ChannelsDataSource, ChannelsSources } from '../../../../queries';
 import { deduplicateChannels } from '../../../../queries';
-import { ChannelsMobileView } from '../../../ChannelsMobileView';
+import {
+  ChannelsMobileView,
+  type MobileRowsOnScreen,
+} from '../../../ChannelsMobileView';
 import { sectionNotificationMenus } from '../../hooks/section-notification-menus';
+import { useCollapsedUnreadChannels } from '../collapsed-unread-channels';
 import { SectionChannelsPicker } from '../SectionChannelsDialog';
 import { MobileSectionOptions } from './MobileSectionOptions';
 import {
@@ -73,12 +82,31 @@ export function MobileSectionsView(props: {
     };
   };
   const localChannels = props.localChannels;
-  const memberIds = createMemo(() =>
-    mobileSectionMemberWindow(selectedLabel(), [
-      localChannels(),
-      props.sources.recents.items(),
-    ])
+  const directory = useChannelDirectory();
+  // Until the directory settles, its pool may still bring a section's members.
+  const directorySettled = () => directory.complete() || directory.failed();
+  // The pool carries no unread state, so a section's rows take it from here.
+  const unread = useCollapsedUnreadChannels(
+    () => sectionsEnabled() && Boolean(selectedLabel())
   );
+  const liveIds = createMemo(
+    () =>
+      new Set(
+        [...props.sources.recents.items(), ...unread()].map(
+          (channel) => channel.id
+        )
+      )
+  );
+  const [rowsOnScreen, setRowsOnScreen] = createSignal<
+    { tab: MobileSectionTab; rows: MobileRowsOnScreen } | undefined
+  >(undefined, {
+    equals: (previous, next) =>
+      previous?.tab === next?.tab &&
+      previous?.rows.ids === next?.rows.ids &&
+      previous?.rows.start === next?.rows.start &&
+      previous?.rows.end === next?.rows.end,
+  });
+  const memberIds = createMemo(sectionMemberWindow);
   const members = useChannelWindow(memberIds, sectionsEnabled);
   usePending('channels.section.members', members.isLoading);
   const flow = useFlow();
@@ -88,6 +116,43 @@ export function MobileSectionsView(props: {
       flow.span.setAttr('channels.section.members.dropped', window.dropped);
     })
   );
+  // Live records first, then the directory's and those that left the window.
+  const sectionRecords = createMemo(() =>
+    deduplicateChannels([
+      members.channels(),
+      unread(),
+      props.sources.recents.items(),
+      localChannels(),
+      members.retained(),
+    ])
+  );
+  const channelsById = createMemo(
+    () => new Map(sectionRecords().map((channel) => [channel.id, channel]))
+  );
+  const undiscovered = createMemo(() => {
+    const label = selectedLabel();
+    if (!label) return [];
+    const known = channelsById();
+    const unavailable = members.unavailableIds();
+    return label.channelIds.filter(
+      (id) => !known.has(id) && !unavailable.has(id)
+    );
+  });
+  // The window reads records it resolved itself; it is built from this
+  // declaration once the list has reported its rows, after the first layout.
+  function sectionMemberWindow(): ChannelIdWindow {
+    const label = selectedLabel();
+    const report = rowsOnScreen();
+    if (!label || report?.tab !== `label:${label.id}`) {
+      return EMPTY_CHANNEL_WINDOW;
+    }
+    return mobileSectionMemberWindow({
+      label,
+      rows: report.rows,
+      isLoaded: (id) => liveIds().has(id),
+      undiscovered: directorySettled() ? undiscovered() : [],
+    });
+  }
   const base = () =>
     selected() === 'direct_messages'
       ? props.sources.direct_messages
@@ -95,26 +160,27 @@ export function MobileSectionsView(props: {
   const sectionChannels = createMemo(() =>
     channelsForMobileSection({
       tab: selected(),
-      channels: selectedLabel()
-        ? deduplicateChannels([
-            members.channels(),
-            props.sources.recents.items(),
-            localChannels(),
-            members.retained(),
-          ])
-        : base().items(),
+      channels: selectedLabel() ? sectionRecords() : base().items(),
       labels: labels(),
     })
   );
   const source: ChannelsDataSource = {
     items: sectionChannels,
     isLoading: () =>
-      selectedLabel() ? members.isLoading() : base().isLoading(),
+      selectedLabel()
+        ? members.isLoading() ||
+          (!directorySettled() && undiscovered().length > 0)
+        : base().isLoading(),
     isFetching: () =>
       selectedLabel() ? members.isLoading() : base().isFetching(),
     error: () => (selectedLabel() ? members.error() : base().error()),
+    // A section's members are looked up as its end comes on screen, so the
+    // list asks for no pages; it shows more are coming until none are left.
     hasMore: () => !selectedLabel() && base().hasMore(),
-    isLoadingMore: () => !selectedLabel() && base().isLoadingMore(),
+    isLoadingMore: () =>
+      selectedLabel()
+        ? undiscovered().length > 0 && !members.error()
+        : base().isLoadingMore(),
     loadMore: async () => {
       if (!selectedLabel()) await base().loadMore();
     },
@@ -159,17 +225,6 @@ export function MobileSectionsView(props: {
     labels().find((label) => label.id === optionsFor());
   const team = useCurrentTeamQuery();
   const favorites = useFavoritesData({ entityType: ['channel'] });
-  const channelsById = createMemo(
-    () =>
-      new Map(
-        deduplicateChannels([
-          members.channels(),
-          props.sources.recents.items(),
-          localChannels(),
-          members.retained(),
-        ]).map((channel) => [channel.id, channel])
-      )
-  );
   const channelNotifications = createChannelNotificationSettings({
     labels,
     resolveConflictChannels: true,
@@ -223,6 +278,7 @@ export function MobileSectionsView(props: {
         scrollKey={selected()}
         preferences={preferences()}
         includePinnedInList={selected() !== 'all'}
+        onRowsOnScreen={(rows) => setRowsOnScreen({ tab: selected(), rows })}
       >
         <nav
           aria-label={t('channelSections.sections')}
