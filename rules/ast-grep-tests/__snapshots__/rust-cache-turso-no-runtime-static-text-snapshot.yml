@@ -87,6 +87,18 @@ snapshots:
       start: 33
       end: 78
   ? |
+    type AtomicBool = OnceLock<String>;
+    static SQL: AtomicBool = AtomicBool::new();
+  : labels:
+    - source: type AtomicBool = OnceLock<String>;
+      style: primary
+      start: 0
+      end: 35
+    - source: AtomicBool
+      style: secondary
+      start: 5
+      end: 15
+  ? |
     type AtomicText = OnceLock<String>;
     static SQL: AtomicText = AtomicText::new();
   : labels:
@@ -102,3 +114,15 @@ snapshots:
       style: primary
       start: 32
       end: 63
+  ? |
+    use std::sync::OnceLock as AtomicU64;
+    static SQL: AtomicU64<String> = AtomicU64::new();
+  : labels:
+    - source: std::sync::OnceLock as AtomicU64
+      style: primary
+      start: 4
+      end: 36
+    - source: AtomicU64
+      style: secondary
+      start: 27
+      end: 36

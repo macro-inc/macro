@@ -29,6 +29,15 @@ rule:
     - kind: static_item
       has:
         kind: mutable_specifier
+    # An alias spelled like an allowed type would pass the name check below.
+    - kind: type_item
+      has:
+        field: name
+        regex: "^(Atomic(Bool|[UI](8|16|32|64|size))|bool|char|[ui](8|16|32|64|128|size)|f(32|64)|str)$"
+    - kind: use_as_clause
+      has:
+        field: alias
+        regex: "^(Atomic(Bool|[UI](8|16|32|64|size))|bool|char|[ui](8|16|32|64|128|size)|f(32|64)|str)$"
     - kind: static_item
       not:
         has:

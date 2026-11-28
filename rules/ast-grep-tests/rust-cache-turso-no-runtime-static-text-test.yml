@@ -7,6 +7,9 @@ valid:
   - |
     static NEXT: AtomicU64 = AtomicU64::new(1);
   - |
+    use std::sync::atomic::AtomicU64;
+    type Slot = u64;
+  - |
     static READY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
   - |
     static TABLES: &[&str] = &["records", "meta"];
@@ -44,5 +47,11 @@ invalid:
   - |
     type AtomicText = OnceLock<String>;
     static SQL: AtomicText = AtomicText::new();
+  - |
+    type AtomicBool = OnceLock<String>;
+    static SQL: AtomicBool = AtomicBool::new();
+  - |
+    use std::sync::OnceLock as AtomicU64;
+    static SQL: AtomicU64<String> = AtomicU64::new();
   - |
     static SQL: AtomicPtr<u8> = AtomicPtr::new(std::ptr::null_mut());
