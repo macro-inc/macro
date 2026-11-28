@@ -55,6 +55,7 @@ fn spec() -> LiveQuerySpec {
             )
             .unwrap(),
         ),
+        row: None,
     }
 }
 async fn seed(engine: &mut Engine<InMemoryStorage>, id: &str, sort: i64) {
@@ -979,5 +980,69 @@ fn an_incomplete_newcomer_leaves_only_reconciled_windows_unchanged() {
                 .value,
             PredicateQueryResult::Incomplete
         ));
+    });
+}
+
+fn unread_row(record: &Json) -> Json {
+    json!({ "id": record["id"], "unread": !record["read"].as_bool().unwrap_or(true) })
+}
+
+#[test]
+fn a_shaped_view_retains_diffs_and_sends_its_rows() {
+    block_on(async {
+        let mut engine = Engine::with_capacity(InMemoryStorage::new(), 1);
+        for id in 0..3 {
+            seed(&mut engine, &id.to_string(), id).await;
+        }
+        let shaped = || LiveQuerySpec {
+            row: Some(RowShape::new("unread", unread_row)),
+            ..spec()
+        };
+        let first = engine.read_live_query("a", shaped(), None).await.unwrap();
+        assert_eq!(
+            first
+                .upserts
+                .iter()
+                .map(|row| &row.record)
+                .collect::<Vec<_>>(),
+            [
+                &json!({"id": "0", "unread": true}),
+                &json!({"id": "1", "unread": true}),
+                &json!({"id": "2", "unread": true}),
+            ]
+        );
+        engine
+            .put_records_with_projections(
+                None,
+                vec![(
+                    key("1"),
+                    Record {
+                        fields: BTreeMap::from([("isRead".into(), CacheValue::Bool(true))]),
+                    },
+                )],
+                vec![],
+            )
+            .await
+            .unwrap();
+        let update = engine
+            .read_live_query("a", shaped(), Some(first.revision.parse().unwrap()))
+            .await
+            .unwrap();
+        assert!(!update.reset);
+        assert_eq!(
+            serde_json::to_value(&update.patches[0].fields).unwrap(),
+            json!([{"path":["unread"], "value":false}]),
+            "a patch names a row field, not a selected one"
+        );
+        // Another shape, or none, is another view: it starts over.
+        let selected = engine
+            .read_live_query("a", spec(), Some(update.revision.parse().unwrap()))
+            .await
+            .unwrap();
+        assert!(selected.reset);
+        assert_eq!(
+            selected.upserts[0].record,
+            json!({"id": "0", "read": false})
+        );
     });
 }
