@@ -1708,6 +1708,28 @@ impl GraphqlSoupEmailParticipant {
     }
 }
 
+/// One page's row for an email thread, embedded in the thread per `view`.
+///
+/// An embedded value with no `id`: each view's page picks its own message, so
+/// these fields must not overwrite the thread's shared preview fields.
+#[derive(SimpleObject)]
+pub struct GraphqlSoupEmailPagePreview {
+    /// The page's sort timestamp, in RFC 3339 format.
+    sort_ts: String,
+    /// The subject of the message the page picks.
+    subject: Option<String>,
+    /// The snippet of the message the page picks, never a body.
+    snippet: Option<String>,
+    /// Whether the message the page picks is a draft.
+    is_draft: bool,
+    /// The sender email.
+    sender_email: Option<String>,
+    /// The sender name.
+    sender_name: Option<String>,
+    /// The sender photo url.
+    sender_photo_url: Option<String>,
+}
+
 /// A thread-local sender with the display name from their message.
 ///
 /// This is an embedded value: different messages from one contact can carry
@@ -1901,14 +1923,32 @@ where
         self.0.thread.project_id.as_ref().map(|id| ID(id.clone()))
     }
 
-    /// Timestamp the page that returned this thread sorts by, in RFC 3339
-    /// format. It follows the page's `emailView` (Spam and Trash sort by the
-    /// newest message in the folder), so a client that caches it per thread
-    /// passes the page's own `emailView` as `view` to keep each view's value
-    /// apart. `view` only keys the cache: it never changes the value, so a
-    /// `view` other than the page's files this page's date under that key.
-    async fn sort_ts(&self, #[graphql(name = "view")] _view: Option<GraphqlEmailView>) -> String {
+    /// Timestamp used for email thread sorting, in RFC 3339 format.
+    async fn sort_ts(&self) -> String {
         self.0.thread.sort_ts.to_rfc3339()
+    }
+
+    /// The row the page that returned this thread shows: its sort timestamp
+    /// and the message its `emailView` picks (for Spam and Trash, the newest
+    /// message in the folder). The plain `name`, `snippet`, sender and
+    /// `sortTs` fields carry the same values, but a client cache shares those
+    /// across every view and the thread itself. Pass the page's own
+    /// `emailView` as `view` to cache this row per view: `view` only keys the
+    /// cache and never changes the value.
+    async fn page_preview(
+        &self,
+        #[graphql(name = "view")] _view: GraphqlEmailView,
+    ) -> GraphqlSoupEmailPagePreview {
+        let thread = &self.0.thread;
+        GraphqlSoupEmailPagePreview {
+            sort_ts: thread.sort_ts.to_rfc3339(),
+            subject: thread.name.clone(),
+            snippet: thread.snippet.clone(),
+            is_draft: thread.is_draft,
+            sender_email: thread.sender_email.clone(),
+            sender_name: thread.sender_name.clone(),
+            sender_photo_url: thread.sender_photo_url.clone(),
+        }
     }
 
     /// The created timestamp in RFC 3339 format.

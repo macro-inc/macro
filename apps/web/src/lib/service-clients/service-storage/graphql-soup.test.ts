@@ -90,7 +90,6 @@ describe('email thread sort keys', () => {
     reminderReturnedAt: '2026-10-06T21:14:00+00:00',
     latestOutboundMessageTs: '2026-09-29T08:00:00+00:00',
     latestNonSpamMessageTs: '2026-09-29T08:00:00+00:00',
-    sortTs: '2026-09-27T10:00:00+00:00',
     participants: [],
     attachments: [],
     labels: [],
@@ -110,8 +109,6 @@ describe('email thread sort keys', () => {
     ['SENT', '2026-09-29T08:00:00+00:00'],
     ['ALL', '2026-09-29T08:00:00+00:00'],
     ['DRAFTS', '2026-09-29T08:00:00+00:00'],
-    ['SPAM', '2026-09-27T10:00:00+00:00'],
-    ['TRASH', '2026-09-27T10:00:00+00:00'],
   ] as const)('dates a thread by the %s view key', (view, expected) => {
     expect(sortTs(mapGraphqlSoupItem(thread, { emailView: view }))).toBe(
       expected
@@ -133,6 +130,33 @@ describe('email thread sort keys', () => {
     }
   );
 
+  it("shows a folder page's own message and date, not the shared fields", () => {
+    const folderRow = {
+      ...thread,
+      emailName: 'Kept in the inbox',
+      snippet: 'Inbox reply',
+      senderName: 'Hal',
+      pagePreview: {
+        sortTs: '2026-09-27T10:00:00+00:00',
+        subject: 'Trashed',
+        snippet: 'Trashed original',
+        isDraft: false,
+        senderEmail: 'grace@example.com',
+        senderName: 'Grace',
+        senderPhotoUrl: null,
+      },
+    } as unknown as SoupItemFieldsFragment;
+    expect(
+      mapGraphqlSoupItem(folderRow, { emailView: 'TRASH' })?.data
+    ).toMatchObject({
+      name: 'Trashed',
+      snippet: 'Trashed original',
+      senderName: 'Grace',
+      senderEmail: 'grace@example.com',
+      sortTs: '2026-09-27T10:00:00+00:00',
+    });
+  });
+
   it('falls back to the thread update time when the view has no key', () => {
     const bare = {
       ...thread,
@@ -140,15 +164,11 @@ describe('email thread sort keys', () => {
       reminderReturnedAt: null,
       latestOutboundMessageTs: null,
       latestNonSpamMessageTs: null,
-      sortTs: null,
-    } as unknown as SoupItemFieldsFragment;
+    } as SoupItemFieldsFragment;
     expect(sortTs(mapGraphqlSoupItem(bare, { emailView: 'INBOX' }))).toBe(
       '2026-10-07T00:00:00+00:00'
     );
     expect(sortTs(mapGraphqlSoupItem(bare, { emailView: 'SENT' }))).toBe(
-      '2026-10-07T00:00:00+00:00'
-    );
-    expect(sortTs(mapGraphqlSoupItem(bare, { emailView: 'TRASH' }))).toBe(
       '2026-10-07T00:00:00+00:00'
     );
   });

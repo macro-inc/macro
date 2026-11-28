@@ -740,8 +740,9 @@ Account, alias, and facet filters stay within the selected folder. Mixed threads
 show their latest message in that folder, and folder membership is checked before
 pagination. These views read GraphQL server pages that the cache does not
 maintain: a page already read can show offline, but full-text search, offline
-membership and pages not yet read are not available for them. Their rows are the shared thread records, so a
-read/unread change shows in the open folder without a reload.
+membership and pages not yet read are not available for them. Rows share read state with the thread, so a
+read/unread change shows in the open folder without a reload, but keep their
+folder message and date: opening a mixed thread does not change its folder row.
 
 Opening a row loads the thread by id. A thread whose every message is in Spam or
 Trash renders as its folder row does, while All Mail lists and previews still leave

@@ -10335,6 +10335,43 @@ type GraphqlSoupEmailMessageLabel {
 }
 
 """
+One page's row for an email thread, embedded in the thread per `view`.
+
+An embedded value with no `id`: each view's page picks its own message, so
+these fields must not overwrite the thread's shared preview fields.
+"""
+type GraphqlSoupEmailPagePreview {
+	"""
+	The page's sort timestamp, in RFC 3339 format.
+	"""
+	sortTs: String!
+	"""
+	The subject of the message the page picks.
+	"""
+	subject: String
+	"""
+	The snippet of the message the page picks, never a body.
+	"""
+	snippet: String
+	"""
+	Whether the message the page picks is a draft.
+	"""
+	isDraft: Boolean!
+	"""
+	The sender email.
+	"""
+	senderEmail: String
+	"""
+	The sender name.
+	"""
+	senderName: String
+	"""
+	The sender photo url.
+	"""
+	senderPhotoUrl: String
+}
+
+"""
 Legacy contact-keyed participant, retained for older clients during rollout.
 """
 type GraphqlSoupEmailParticipant {
@@ -10472,14 +10509,19 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	"""
 	projectId: ID
 	"""
-	Timestamp the page that returned this thread sorts by, in RFC 3339
-	format. It follows the page's `emailView` (Spam and Trash sort by the
-	newest message in the folder), so a client that caches it per thread
-	passes the page's own `emailView` as `view` to keep each view's value
-	apart. `view` only keys the cache: it never changes the value, so a
-	`view` other than the page's files this page's date under that key.
+	Timestamp used for email thread sorting, in RFC 3339 format.
 	"""
-	sortTs(view: GraphqlEmailView): String!
+	sortTs: String!
+	"""
+	The row the page that returned this thread shows: its sort timestamp
+	and the message its `emailView` picks (for Spam and Trash, the newest
+	message in the folder). The plain `name`, `snippet`, sender and
+	`sortTs` fields carry the same values, but a client cache shares those
+	across every view and the thread itself. Pass the page's own
+	`emailView` as `view` to cache this row per view: `view` only keys the
+	cache and never changes the value.
+	"""
+	pagePreview(view: GraphqlEmailView!): GraphqlSoupEmailPagePreview!
 	"""
 	The created timestamp in RFC 3339 format.
 	"""

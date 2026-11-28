@@ -11,10 +11,10 @@ query Soup($input: SoupInput!) {
 	}
 }
 
-# Spam and Trash pages: the list rows plus the folder date. The date is the
-# fetching view's sort key, not a thread fact, so it is keyed by `$view`
-# (the input's `emailView`): Home's unread presence reads the plain
-# `sortTs`, and a shared fragment would make every cached row without it miss.
+# Spam and Trash pages: the list rows plus the row each page shows. The folder
+# date and the folder message are the fetching view's, not thread facts, so
+# they are keyed by `$view` (the input's `emailView`): opening the thread or
+# reading another view rewrites the shared `name`, `snippet` and `sortTs`.
 query MailFolderSoup($input: SoupInput!, $view: GraphqlEmailView!) {
 	user {
 		id
@@ -23,7 +23,15 @@ query MailFolderSoup($input: SoupInput!, $view: GraphqlEmailView!) {
 			items {
 				...SoupItemFields
 				... on GraphqlSoupEmailThread {
-					sortTs(view: $view)
+					pagePreview(view: $view) {
+						sortTs
+						subject
+						snippet
+						isDraft
+						senderEmail
+						senderName
+						senderPhotoUrl
+					}
 				}
 			}
 			nextCursor
