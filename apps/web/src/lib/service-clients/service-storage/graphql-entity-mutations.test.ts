@@ -180,6 +180,31 @@ describe('moveGraphqlEntity', () => {
     await expect(moveGraphqlEntity(input, [])).rejects.toThrow('boom');
   });
 
+  it('fails on an HTTP 5xx even when its only errors are effects', async () => {
+    const error = new CombinedError({
+      graphQLErrors: [
+        {
+          message: 'A changed item could not be read back',
+          path: ['moveEntities', 'results', 0, 'effects'],
+        },
+      ],
+      response: new Response(null, { status: 503 }),
+    });
+    replyWith((operation) => ({
+      operation,
+      stale: false,
+      hasNext: false,
+      data: {
+        moveEntities: {
+          results: [{ __typename: 'GraphqlMutationSuccess', effects: [] }],
+        },
+      },
+      error,
+    }));
+
+    await expect(moveGraphqlEntity(input, [])).rejects.toBe(error);
+  });
+
   it('fails on a typed mutation error', async () => {
     replyWith((operation) => ({
       operation,

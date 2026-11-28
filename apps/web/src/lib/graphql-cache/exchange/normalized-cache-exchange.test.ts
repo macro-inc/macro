@@ -6683,6 +6683,33 @@ describe('normalizedCacheExchange', () => {
         });
       });
 
+      it.each([
+        ['applies the rows a write returned', undefined, 2],
+        ['applies nothing from an HTTP 5xx', 503, 0],
+      ])(
+        '%s when another could not be read back',
+        async (_case, status, actions) => {
+          const error = new CombinedError({
+            graphQLErrors: [
+              {
+                message: 'A changed item could not be read back',
+                path: ['renameEntities', 'results', 0, 'effects'],
+              },
+            ],
+            response: status ? new Response(null, { status }) : undefined,
+          });
+          const { ops, results } = harness(host, (op) =>
+            op.kind === 'mutation' ? { data, error } : {}
+          );
+
+          ops.next(makeRenameMutationOp(24));
+          await tick();
+
+          expect(results[0]?.error).toBe(error);
+          expect(host.cacheActions).toHaveLength(actions);
+        }
+      );
+
       it('opens no span for a mutation whose caller named no trace', async () => {
         const { spans } = recordSpans();
         const { ops, results } = harness(host, (op) =>

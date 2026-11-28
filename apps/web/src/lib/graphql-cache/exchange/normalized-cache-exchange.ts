@@ -110,6 +110,7 @@ import {
   createDocumentQueryReader,
   QueryReadInvalidatedError,
 } from './document-query-reader';
+import { committedWithMissingRows } from './effect-errors';
 import {
   compileEntityResolvers,
   type EntityResolverConfig,
@@ -1985,7 +1986,12 @@ export function normalizedCacheExchange(
           const optimistic = optimisticContextOf(op);
           const parent = mutationTraceParentOf(op);
           let settled = result;
-          if (result.data != null && !result.error) {
+          // A write that committed without some of its rows still applies
+          // the rows and deletions it returned.
+          if (
+            result.data != null &&
+            (!result.error || committedWithMissingRows(result))
+          ) {
             // Callers that skip their own reads rely on the rows reaching
             // the cache; a failed write or deletion says so.
             const cacheEffectsApplied = parent

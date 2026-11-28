@@ -1,4 +1,4 @@
-import type { CombinedError } from '@urql/core';
+import type { CombinedError, OperationResult } from '@urql/core';
 
 const EFFECT_FIELDS = new Set(['effect', 'effects']);
 
@@ -14,5 +14,18 @@ export function onlyEffectErrors(error: CombinedError | undefined): boolean {
     (graphqlError.path ?? [])
       .slice(1)
       .some((segment) => EFFECT_FIELDS.has(String(segment)))
+  );
+}
+
+/**
+ * A write the server committed whose reply lacks some of its rows: it carries
+ * its data, and its only errors are under the rows. An HTTP 5xx is a failed
+ * write even when it carries such errors.
+ */
+export function committedWithMissingRows(result: OperationResult): boolean {
+  return (
+    result.data != null &&
+    (result.error?.response?.status ?? 0) < 500 &&
+    onlyEffectErrors(result.error)
   );
 }

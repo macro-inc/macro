@@ -28,7 +28,7 @@ import {
   mutationTraceParentOf,
   TRACE_PARENT_CONTEXT_KEY,
 } from '../../urql-solid/trace-parent-exchange';
-import { onlyEffectErrors } from './effect-errors';
+import { committedWithMissingRows } from './effect-errors';
 import { optimisticMutationDispositionOf } from './optimistic';
 
 /** A paged list's own read of its loaded pages, in cursor order. */
@@ -317,13 +317,9 @@ export function networkRevalidationExchange(
               }
             );
           const disposition = optimisticMutationDispositionOf(result);
-          // A write that committed but could not return its rows is read for
-          // like any committed write; its caller still sees the error. An
-          // HTTP 5xx is a failed write even when it carries such errors.
-          const rowsMissing =
-            result.data != null &&
-            (result.error?.response?.status ?? 0) < 500 &&
-            onlyEffectErrors(result.error);
+          // A write that committed but could not return all its rows is read
+          // for like any committed write; its caller still sees the error.
+          const rowsMissing = committedWithMissingRows(result);
           if (result.data == null || (result.error && !rowsMissing)) {
             // A write whose response was lost may still have committed, so
             // the queries are read again, without holding back its error.

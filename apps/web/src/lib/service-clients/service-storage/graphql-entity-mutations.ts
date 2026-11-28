@@ -1,5 +1,6 @@
 import { TRACE_PARENT_CONTEXT_KEY } from '@app/lib/urql-solid/trace-parent-exchange';
 import { ThrownResultError } from '@core/util/result';
+import { committedWithMissingRows } from '@graphql-cache/exchange/effect-errors';
 import { networkRevalidated } from '@graphql-cache/exchange/network-revalidation-exchange';
 import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
 import {
@@ -85,9 +86,11 @@ async function sendEntityMutation<Data, Variables extends AnyVariables>(
   // committed: failing to render them does not undo the mutation.
   const graphQLErrors = result.error?.graphQLErrors ?? [];
   const effectErrors = graphQLErrors.filter(isEffectsError);
+  // An HTTP 5xx is a failed write even when its only errors are effects.
   if (
     result.error &&
-    (result.error.networkError || effectErrors.length < graphQLErrors.length)
+    (effectErrors.length < graphQLErrors.length ||
+      !committedWithMissingRows(result))
   )
     throw result.error;
   const results = result.data ? payload(result.data).results : [];
