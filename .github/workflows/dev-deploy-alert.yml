@@ -265,9 +265,10 @@ jobs:
 
           /**
            * Why a run that ended without success failed: the jobs that failed or ran out
-           * of time; for one cancelled after its jobs started, the jobs still waiting for
-           * a runner and those cancelled while they ran. A job that waited under a
-           * minute, such as a matrix the cancel stopped before it expanded, is left out.
+           * of time; for one cancelled after its jobs started, the jobs of the attempt
+           * cancelled still waiting for a runner and those cancelled while they ran. A
+           * job that waited under a minute, such as a matrix the cancel stopped before it
+           * expanded, is left out.
            */
           export function endedProblem(run: Run, jobs: Job[]): Problem {
             const latest = latestAttempts(jobs);
@@ -282,7 +283,8 @@ jobs:
                 })),
               };
             }
-            const cancelled = latest.filter((job) => job.conclusion === 'cancelled');
+            // An earlier attempt's jobs were cancelled by an earlier cancel.
+            const cancelled = latestAttempts(ofLatestAttempt(run, jobs)).filter((job) => job.conclusion === 'cancelled');
             const ran = (job: Job) => Boolean(job.runner_name) && (job.steps?.length ?? 0) > 0;
             return {
               kind: 'cancelled',
@@ -696,7 +698,12 @@ jobs:
               alertRunsOf({ per_page: `${LOOK_BACK}` }),
             ]);
             // Listed after that query, back to the run it found, so the list holds every
-            // run since; a run that succeeded in between is the one Dev deployed.
+            // run since; a run that succeeded in between is the one Dev deployed. The
+            // list is by when runs were created, so a run started again by hand is read
+            // only while a page listed holds it. One past the first page has 100 pushes
+            // after it, more than three hours of them (at most 73 in any three hours of
+            // three weeks in November), so Dev deployed from it fails anyway: the push
+            // after it is three hours undeployed.
             const byId = new Map<number, Run>();
             for (let page = 1; page <= PAGES; page++) {
               const listed = await runsOf({ per_page: `${LISTED}`, page: `${page}` });

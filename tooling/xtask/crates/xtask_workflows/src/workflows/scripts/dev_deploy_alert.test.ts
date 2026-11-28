@@ -391,6 +391,25 @@ describe('endedProblem and longestWait', () => {
     ]);
   });
 
+  test('a run started again by hand and cancelled names only the jobs of its new attempt', () => {
+    const migrations = 'Deploy Cloud Storage Services / Run Database Migrations';
+    const problem = endedProblem({ ...KILLED, run_attempt: 2, updated_at: '2026-11-26T02:00:00Z' }, [
+      job(1, migrations, { conclusion: 'cancelled', started_at: null, completed_at: '2026-11-26T00:02:00Z', runner_name: null, steps: [] }),
+      job(2, 'Build Web App / Build', {
+        run_attempt: 2,
+        conclusion: 'cancelled',
+        created_at: '2026-11-26T01:50:00Z',
+        started_at: '2026-11-26T01:50:10Z',
+        completed_at: '2026-11-26T02:00:00Z',
+        steps: [{ name: 'Build', conclusion: 'cancelled' }],
+      }),
+    ]);
+    assert.deepEqual(problem.kind === 'cancelled' && { waiting: problem.waiting, running: problem.running }, {
+      waiting: [],
+      running: [{ name: 'Build Web App / Build', step: 'Build' }],
+    });
+  });
+
   test('a job that got its runner waited from its creation to its start', () => {
     const running = job(1, MIGRATIONS, { status: 'in_progress', conclusion: null, created_at: '2026-11-25T20:00:00Z', started_at: '2026-11-25T20:00:30Z' });
     const waiting = job(2, 'Build Web App / Build', { status: 'queued', conclusion: null, created_at: '2026-11-25T22:59:30Z', runner_name: '' });
