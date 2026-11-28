@@ -54,7 +54,8 @@ the run and fails with the error **Migration runner unavailable**. No service
 has deployed by then: services deploy only after the migration. A job still
 running 30 minutes later is cancelled with the run; those jobs take under ten
 minutes. If GitHub refuses the cancel five times, the error says the run
-could not be cancelled, and the hourly canceller ends it.
+could not be cancelled: cancel it by hand (the hourly canceller ends only dev
+deploys).
 
 ## When a deploy says "Migration runner unavailable"
 
@@ -77,19 +78,17 @@ The runner is offline, hung, or busy with two other jobs.
 
    ```sh
    aws ssm start-session --target "$id"
-   systemctl status 'actions.runner.*' github-runner.slice
-   journalctl -u 'actions.runner.*' -n 200
+   systemctl status 'github-runner@*' github-runner.slice
+   journalctl -u 'github-runner@*' -n 200
    journalctl -k | grep -i -E 'oom|killed process'
    ```
 
-4. Restart the runners (`sudo systemctl restart 'actions.runner.*'`), or,
+4. Restart the runners (`sudo systemctl restart 'github-runner@*'`), or,
    with approval, reboot the instance (`aws ec2 reboot-instances
    --instance-ids "$id"`). A runner whose registration GitHub removed
-   (offline for 14 days) does not come back by itself. Stop the runners
-   (`sudo systemctl stop 'actions.runner.*'`), delete `.runner`,
-   `.credentials` and `.credentials_rsaparams` from its directory under
-   `/home/runner`, and register it again ("Rebuild the instance", last
-   step).
+   (offline for 14 days) does not come back by itself: replace the instance
+   (below). Runners are registered only on a fresh instance, because the
+   token would otherwise pass through files earlier jobs could change.
 5. Re-run the cancelled deploy's failed jobs, or push again.
 
 ## Rebuild the instance
@@ -124,8 +123,9 @@ aws ssm start-session --target "$id"
 sudo register-db-migrator-runners    # paste the token at the prompt
 ```
 
-It ends with `>>> db-migrator runners registered and started`. It skips what
-an earlier run finished, so running it again after a failure is safe.
+It ends with `>>> db-migrator runners registered and started`. A runner an
+earlier, failed run registered is skipped. Once the runners have started, the
+script refuses to run again.
 
 ## Replacing the hand-made runner
 

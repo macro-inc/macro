@@ -104,27 +104,65 @@ Description=GitHub Actions runners
 MemoryMax=$((mem_kib - OS_RESERVED_KIB))K
 EOF
 
+# One unit per runner, written here by root rather than by the runner's
+# svc.sh, so nothing a job can change decides what root later runs or writes.
+# It is the unit svc.sh would write, plus: restart whenever the runner exits,
+# and keep running when the kernel kills one of its processes, so the runner
+# can report the failed step.
+cat >/etc/systemd/system/github-runner@.service <<EOF
+[Unit]
+Description=GitHub Actions runner %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/home/${RUNNER_USER}/%i/runsvc.sh
+User=${RUNNER_USER}
+WorkingDirectory=/home/${RUNNER_USER}/%i
+KillMode=process
+KillSignal=SIGTERM
+TimeoutStopSec=5min
+Slice=github-runner.slice
+Restart=always
+RestartSec=15s
+OOMPolicy=continue
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
 for name in "${RUNNER_NAMES[@]}"; do
   dir="/home/${RUNNER_USER}/${name}"
   install -d -o "$RUNNER_USER" -g "$RUNNER_USER" "$dir"
   tar -xzf "$tarball" -C "$dir"
+  # Where svc.sh would put it: outside bin/, which the runner's self-update
+  # replaces.
+  cp "$dir/bin/runsvc.sh" "$dir/runsvc.sh"
   chown -R "${RUNNER_USER}:${RUNNER_USER}" "$dir"
   (cd "$dir" && ./bin/installdependencies.sh)
 done
 rm -f "$tarball"
 
 # Registers both runners with a token read from the terminal (or stdin), then
-# starts them. The token reaches config.sh only through its environment
-# (ACTIONS_RUNNER_INPUT_TOKEN), never a command line or a log, and both
-# runners register before either starts. Each step is skipped once done, so a
-# run that failed half-way can be repeated.
+# starts them; on a fresh instance only. The token reaches config.sh only
+# through its environment (ACTIONS_RUNNER_INPUT_TOKEN), never a command line
+# or a log. Both runners register before either starts, so no job has run
+# when config.sh, which a job could change, gets the token. A runner already
+# registered is skipped, so a run that failed half-way can be repeated; once
+# the runners have started, the script refuses, and a runner that needs
+# registering again needs a new instance.
 register() {
   umask 022
   if [ "$(id -u)" -ne 0 ]; then
     echo "Run it as root: sudo register-db-migrator-runners" >&2
     return 1
   fi
-  local token name dir unit
+  local started=/var/lib/db-migrator-runners/started
+  if [ -e "$started" ]; then
+    echo "The runners on this instance have run jobs already. To register them again, replace the instance (docs/runbooks/db-migrator-runner.md)." >&2
+    return 1
+  fi
+  local token name dir
   if [ -t 0 ]; then
     read -r -s -p "Runner registration token: " token
     echo
@@ -140,34 +178,22 @@ register() {
     dir="/home/${RUNNER_USER}/${name}"
     if [ -e "$dir/.runner" ]; then
       echo "${name} is already registered."
-    else
-      ACTIONS_RUNNER_INPUT_TOKEN="$token" runuser -u "$RUNNER_USER" -- "$dir/config.sh" \
-        --unattended \
-        --url "$GITHUB_RUNNER_URL" \
-        --name "$name" \
-        --labels "$RUNNER_LABEL" \
-        --runnergroup "$RUNNER_GROUP" \
-        --work _work \
-        --replace
+      continue
     fi
-
-    if [ ! -e "$dir/.service" ]; then
-      (cd "$dir" && ./svc.sh install "$RUNNER_USER")
-    fi
-    unit=$(cat "$dir/.service")
-
-    # The generated unit neither restarts nor survives a job's OOM kill:
-    # restart it whenever it exits, and keep it running when the kernel kills
-    # one of its processes so the runner can report the failed step.
-    install -d "/etc/systemd/system/${unit}.d"
-    printf '%s\n' '[Service]' 'Slice=github-runner.slice' 'Restart=always' \
-      'RestartSec=15s' 'OOMPolicy=continue' \
-      >"/etc/systemd/system/${unit}.d/10-db-migrator.conf"
+    ACTIONS_RUNNER_INPUT_TOKEN="$token" runuser -u "$RUNNER_USER" -- "$dir/config.sh" \
+      --unattended \
+      --url "$GITHUB_RUNNER_URL" \
+      --name "$name" \
+      --labels "$RUNNER_LABEL" \
+      --runnergroup "$RUNNER_GROUP" \
+      --work _work \
+      --replace
   done
 
-  systemctl daemon-reload
+  install -d -m 0700 "$(dirname "$started")"
+  date -u +%FT%TZ >"$started"
   for name in "${RUNNER_NAMES[@]}"; do
-    systemctl enable --now "$(cat "/home/${RUNNER_USER}/${name}/.service")"
+    systemctl enable --now "github-runner@${name}.service"
   done
   echo ">>> db-migrator runners registered and started: ${RUNNER_NAMES[*]}"
 }
