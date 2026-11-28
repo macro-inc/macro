@@ -451,6 +451,8 @@ type Session = {
   fixture: ChatFixture;
   rail: Locator;
   pageErrors: string[];
+  /** The step running, under which each page error is filed. */
+  at: { step: string };
 };
 
 /** One step's cost: run it and wait until the app is quiet; then take the
@@ -460,10 +462,12 @@ type Session = {
  * from. */
 async function measure(
   session: Session,
+  name: StepName,
   navigates: boolean,
   action: () => Promise<void>
 ): Promise<StepMeasure> {
   const { page, cdp, backend, fixture, rail } = session;
+  session.at.step = name;
   const mark: BackendCounts = backend.counts();
   const readMark = fixture.reads();
   const before = navigates ? ZERO_METRICS : await readMetrics(cdp);
@@ -503,6 +507,7 @@ async function measure(
       return null;
     }
   });
+  session.at.step = `after ${name}`;
   return {
     settleMs: Math.max(0, settled - started),
     rowsMs: navigates ? (state.rowsAt ?? null) : null,
@@ -566,9 +571,10 @@ async function measureSize(
     });
     const page = await context.newPage();
     const pageErrors: string[] = [];
+    const at = { step: 'setup' };
     const consoleErrors: string[] = [];
     page.on('pageerror', (error) =>
-      pageErrors.push(`${error.message}\n${error.stack ?? ''}`)
+      pageErrors.push(`${at.step}: ${error.message}\n${error.stack ?? ''}`)
     );
     const consoleReads: Array<Promise<void>> = [];
     page.on('console', (message) => {
@@ -596,13 +602,14 @@ async function measureSize(
       fixture,
       rail,
       pageErrors,
+      at,
     };
     const rowsShown = () =>
       expect(rail.locator(ROW).nth(FIRST_ROWS - 1)).toBeVisible();
     const steps = {} as Record<StepName, StepMeasure>;
 
     // The earlier visit: the channel lane's whole pass into an empty cache.
-    steps.seed = await measure(session, true, async () => {
+    steps.seed = await measure(session, 'seed', true, async () => {
       const pass = backend.channelPassFinished();
       await page.goto(`${server.origin}/app/channels`);
       await rowsShown();
@@ -613,7 +620,7 @@ async function measureSize(
     // The next load, over the cache that visit left, through the channel
     // lane's refresh pass: the lane can pause longer than the quiet window
     // between pages, which would leave the rest of its pass to the next step.
-    steps.coldOpen = await measure(session, true, async () => {
+    steps.coldOpen = await measure(session, 'coldOpen', true, async () => {
       const pass = backend.channelPassFinished();
       await page.reload();
       await rowsShown();
@@ -649,7 +656,7 @@ async function measureSize(
     const messaged = messageChannel(fixture);
     const before = (await topChannels(rail, scroller)).includes(messaged);
     await backend.quiet(QUIET_MS);
-    steps.message = await measure(session, false, async () => {
+    steps.message = await measure(session, 'message', false, async () => {
       const frames = fixture.deliverMessage(messaged, FIXTURE_NOW + 60_000);
       expect(
         await backend.push('SoupUpdates', frames.SoupUpdates),
@@ -677,7 +684,7 @@ async function measureSize(
     const topRows = new Set(await mountedChannels(rail));
     let deepest = { top: 0, pageHeight: 0, atBottom: false };
     const passed = new Set<string>();
-    steps.scroll = await measure(session, false, async () => {
+    steps.scroll = await measure(session, 'scroll', false, async () => {
       for (let step = 0; step < SCROLL_STEPS; step += 1) {
         const reached = await scrollOnePage(scroller);
         if (reached.top >= deepest.top) deepest = reached;
@@ -708,12 +715,12 @@ async function measureSize(
       (await mountedChannels(rail)).filter((id) => directMessages.has(id));
     const shown = await directMessageRows();
     const heading = rail.getByRole('treeitem', { name: TOGGLED_SECTION });
-    steps.collapse = await measure(session, false, async () => {
+    steps.collapse = await measure(session, 'collapse', false, async () => {
       await heading.click();
       await expect(heading).toHaveAttribute('aria-expanded', 'false');
     });
     const collapsed = new Set(await directMessageRows());
-    steps.expand = await measure(session, false, async () => {
+    steps.expand = await measure(session, 'expand', false, async () => {
       await heading.click();
       await expect(heading).toHaveAttribute('aria-expanded', 'true');
     });
