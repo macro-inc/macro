@@ -419,6 +419,57 @@ describe('useChannelWindow', () => {
     }
   });
 
+  it('keeps a channel a settled lookup did not return gone when its refetch fails', () => {
+    const missing = new Set<string>();
+    const { dispose, result, setKey, setFailure } = createRoot((dispose) => {
+      const [key, setKey] = createSignal('first');
+      const [failure, setFailure] = createSignal<Error>();
+      useSoupAstItemsQuery.mockImplementation((args) => {
+        const asked: string[] =
+          JSON.stringify(args().body).match(/ch-\d{4}/g) ?? [];
+        const entities = asked
+          .filter((id) => !missing.has(id))
+          .map(channelEntity);
+        return {
+          isEnabled: true,
+          isPending: false,
+          isLoading: false,
+          isFetching: false,
+          get fetchError() {
+            return failure();
+          },
+          hasPageData: true,
+          hasNextPage: false,
+          refresh: async () => {},
+          data: { entities },
+        };
+      });
+      const result = useChannelWindow(
+        () =>
+          channelIdWindow(
+            key() === 'away'
+              ? []
+              : [{ key: key(), ids: ['ch-0001', 'ch-0002'] }]
+          ),
+        () => true
+      );
+      return { dispose, result, setKey, setFailure };
+    });
+    try {
+      setKey('away');
+      missing.add('ch-0001');
+      setKey('second');
+      expect(result.retained().map(({ id }) => id)).toEqual([]);
+      setFailure(new Error('offline'));
+      expect(result.retained()).toEqual([]);
+      expect([...result.unavailableIds()]).toEqual(['ch-0001']);
+      expect([...result.failedIds()]).toEqual([]);
+      expect(result.error()).toBeUndefined();
+    } finally {
+      dispose();
+    }
+  });
+
   it('builds and requests nothing while disabled, and drops everything when disabled', () => {
     const { requested, disposed } = fakeLookups();
     let built = 0;
@@ -536,17 +587,23 @@ describe('useChannelWindow', () => {
     try {
       expect([...result.pendingIds()].sort()).toEqual(['ch-0000', 'ch-0001']);
       expect([...result.unavailableIds()]).toEqual([]);
+      setError(new Error('offline'));
+      expect([...result.pendingIds()]).toEqual([]);
+      expect([...result.failedIds()].sort()).toEqual(['ch-0000', 'ch-0001']);
+      expect(result.error()).toBeInstanceOf(Error);
+      await result.retry();
+      expect(refresh).toHaveBeenCalledOnce();
+      setError(undefined);
       setPending(false);
       expect(result.channels().map(({ id }) => id)).toEqual(['ch-0000']);
       expect([...result.unavailableIds()]).toEqual(['ch-0001']);
       // Each read of an unchanged window shares one set.
       expect(result.unavailableIds()).toBe(result.unavailableIds());
+      // A failed refetch leaves what the settled lookup omitted gone.
       setError(new Error('offline'));
-      expect([...result.unavailableIds()]).toEqual([]);
-      expect([...result.failedIds()]).toEqual(['ch-0001']);
-      expect(result.error()).toBeInstanceOf(Error);
-      await result.retry();
-      expect(refresh).toHaveBeenCalledOnce();
+      expect([...result.unavailableIds()]).toEqual(['ch-0001']);
+      expect([...result.failedIds()]).toEqual([]);
+      expect(result.error()).toBeUndefined();
     } finally {
       dispose();
     }

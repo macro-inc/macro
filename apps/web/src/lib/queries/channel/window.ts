@@ -179,9 +179,9 @@ type WindowChunk = {
   setIds: (next: readonly string[]) => void;
   query: SoupAstItemsQuery;
   channels: Accessor<ChannelEntity[]>;
-  unresolved: Accessor<string[]>;
   missing: Accessor<readonly string[]>;
   pending: Accessor<readonly string[]>;
+  failed: Accessor<readonly string[]>;
   error: Accessor<Error | null | undefined>;
   loading: Accessor<boolean>;
   dispose: () => void;
@@ -281,29 +281,33 @@ export function useChannelWindow(
         const loaded = new Set(channels().map((channel) => channel.id));
         return ids().filter((id) => !loaded.has(id));
       });
-      // What the lookup last settled without, kept through a refetch until it
-      // returns the ID, so a refetch neither shows those IDs loading nor
-      // brings back a record kept from before they went.
+      // What the lookup last settled without, kept through a refetch and a
+      // failed one until it returns the ID, so neither shows those IDs loading
+      // or failed, nor brings back a record kept from before they went.
       const missing = createMemo<readonly string[]>((previous) => {
-        if (error()) return [];
-        if (query.hasPageData && !loading()) return unresolved();
+        if (!error() && query.hasPageData && !loading()) return unresolved();
         const last = new Set(previous);
         return unresolved().filter((id) => last.has(id));
       }, []);
-      const pending = createMemo<readonly string[]>(() => {
-        if (!loading()) return [];
+      const unsettled = () => {
         const gone = new Set(missing());
         return unresolved().filter((id) => !gone.has(id));
-      });
+      };
+      const pending = createMemo<readonly string[]>(() =>
+        loading() ? unsettled() : []
+      );
+      const failed = createMemo<readonly string[]>(() =>
+        error() ? unsettled() : []
+      );
       return {
         key,
         ids,
         setIds,
         query,
         channels,
-        unresolved,
         missing,
         pending,
+        failed,
         error,
         loading,
         dispose,
@@ -411,10 +415,7 @@ export function useChannelWindow(
     () => new Set(chunks().flatMap((chunk) => chunk.pending()))
   );
   const failedIds = createMemo<ReadonlySet<string>>(
-    () =>
-      new Set(
-        chunks().flatMap((chunk) => (chunk.error() ? chunk.unresolved() : []))
-      )
+    () => new Set(chunks().flatMap((chunk) => chunk.failed()))
   );
   const unavailableIds = createMemo<ReadonlySet<string>>(() => {
     const live = liveIds();
@@ -439,12 +440,12 @@ export function useChannelWindow(
     isLoading: () => chunks().some((chunk) => chunk.pending().length > 0),
     error: () =>
       chunks()
-        .find((chunk) => chunk.error() && chunk.unresolved().length > 0)
+        .find((chunk) => chunk.failed().length > 0)
         ?.error(),
     retry: async () => {
       await Promise.all(
         chunks()
-          .filter((chunk) => chunk.error() && chunk.unresolved().length > 0)
+          .filter((chunk) => chunk.failed().length > 0)
           .map((chunk) => chunk.query.refresh())
       );
     },
