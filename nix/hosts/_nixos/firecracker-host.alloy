@@ -158,8 +158,9 @@ otelcol.receiver.loki "journal" {
 // The same service, host and environment as the agent's spans and the host's
 // metrics. The agent writes JSON lines to stdout, which the journal records
 // at one priority, so the level comes from the line, and from the journal's
-// priority for any other line. Its `dd.trace_id` is Datadog's half of the
-// trace id, so the records don't link to traces.
+// priority for any other line. The line's `otel.trace_id` links it to its
+// trace at ingest (infra/stacks/observability README, "Logs linked to
+// traces"); `dd.trace_id` is only Datadog's half of the ID.
 otelcol.processor.transform "journal" {
 	error_mode = "ignore"
 

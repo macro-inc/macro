@@ -409,7 +409,7 @@ in
       default = if cfg.datadog.enable then "http://127.0.0.1:4317" else null;
       defaultText = lib.literalExpression ''if datadog.enable then "http://127.0.0.1:4317" else null'';
       example = "http://10.0.0.5:4317";
-      description = "Where the host agent sends its spans (OTLP gRPC): the local Datadog agent by default, or a collector on a host without one. Null sends none.";
+      description = "Where the host agent's primary exporter sends its spans (OTLP gRPC): the local Datadog agent by default, or a collector on a host without one. Null turns that exporter off. Alloy's copy for Grafana (`alloy.enable`) doesn't depend on it.";
     };
     alloy = {
       enable = lib.mkOption {

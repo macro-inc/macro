@@ -367,7 +367,9 @@ pkgs.testers.runNixOSTest {
             assert host.succeed("zpool get -H -p -o value bcloneused tank").strip() == bclone_before
             client("exec ${computerId} --root test -e /run/macro-restored")
             # Its VM's cgroup is among the series Alloy scrapes.
-            host.wait_until_succeeds("curl -sf http://127.0.0.1:12345/api/v0/component/prometheus.exporter.cadvisor.computers/metrics | grep -q 'container_cpu_usage_seconds_total{.*vms/c-${lib.replaceStrings [ "-" ] [ "" ] computerId}\"'")
+            host.wait_until_succeeds("curl -sf http://127.0.0.1:12345/api/v0/component/prometheus.exporter.cadvisor.computers/metrics | grep -q 'container_cpu_usage_seconds_total{.*vms/c-${
+              lib.replaceStrings [ "-" ] [ "" ] computerId
+            }\"'")
             client("exec ${computerId} --root sh -c 'echo kept > /home/marker && sync'")
 
             client("hibernate ${computerId}")
