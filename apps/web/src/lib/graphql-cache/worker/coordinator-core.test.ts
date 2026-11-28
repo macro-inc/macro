@@ -600,6 +600,30 @@ describe('CoordinatorCore', () => {
       );
     });
 
+    it('starts an engine for a settlement whose page went during a drain', () => {
+      const core = new CoordinatorCore('scope');
+      for (const tab of ['tab-a', 'tab-b', 'tab-c']) core.registerTab(tab);
+      ready(core, 'tab-a', 1, 'opened-existing');
+      const claim = action(
+        core.request('tab-c', claimNext(1)),
+        'route-request'
+      );
+      core.engineResponse(1, claim.routeId, ok({ transactionId: '7' }));
+      core.setTabVisibility('tab-c', false);
+      core.setTabVisibility('tab-a', false);
+      // tab-b is visible, so the hidden owner drains to hand over to it.
+      expect(core.drainHiddenOwner(1)).toContainEqual(
+        expect.objectContaining({ kind: 'drain-owner' })
+      );
+      expect(core.request('tab-c', commit(2))).toEqual([]);
+      core.tabLost('tab-c');
+      core.setTabVisibility('tab-b', false);
+      // Parked, the database would be free for a newer build.
+      expect(core.engineDrained('tab-a', 1)).toContainEqual(
+        expect.objectContaining({ kind: 'elect-owner', ownerEpoch: 2 })
+      );
+    });
+
     it('keeps a hidden engine while a head is out and no tab is visible', () => {
       const core = claimed();
       core.setTabVisibility('tab-a', false);

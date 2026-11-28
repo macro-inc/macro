@@ -1408,13 +1408,25 @@ export class CoordinatorCore {
     const visible = eligible.filter((tabId) => this.visibleTabs.has(tabId));
     // A claimed head is settled by an engine of this build, even a hidden
     // one: a parked build holds no lock, and a newer build would open the
-    // database under the head.
+    // database under the head. The pages sending its answer go first, since
+    // a frozen tab elsewhere would never open the engine.
     const candidates =
-      visible.length === 0 &&
-      (this.claims.size > 0 || (this.awaitingSettlements && this.unsettled()))
-        ? eligible
+      visible.length === 0 && this.unsettled()
+        ? [...eligible].sort(
+            (a, b) =>
+              Number(this.sendsSettlement(b)) - Number(this.sendsSettlement(a))
+          )
         : visible;
     return candidates.find((tabId) => tabId !== avoid) ?? candidates[0];
+  }
+
+  /** The tab claimed a head still out, or handed over its settlement. */
+  private sendsSettlement(tabId: string): boolean {
+    for (const claim of this.claims.values())
+      if (claim.tabId === tabId) return true;
+    return this.queuedRequests.some(
+      (queued) => queued.tabId === tabId && isMutationSettlement(queued.request)
+    );
   }
 
   private route(
