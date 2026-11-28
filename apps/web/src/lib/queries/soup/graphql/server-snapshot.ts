@@ -1,6 +1,6 @@
-import { $PROXY } from 'solid-js';
 import { querySnapshot } from '../../../graphql-cache/exchange/live-query';
 import { shareQueryValue } from '../../../graphql-cache/exchange/query-shape';
+import { isStoreProxy } from './plain-record';
 
 function copy(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(copy);
@@ -23,7 +23,7 @@ export function serverSnapshot<T>(value: T): T {
     snapshot !== value ||
     value === null ||
     typeof value !== 'object' ||
-    Reflect.get(value, $PROXY) !== value
+    !isStoreProxy(value)
   )
     return snapshot;
   return copy(value) as T;

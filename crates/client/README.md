@@ -335,8 +335,9 @@ records into UI entities through one keyed mapper. Fetched versions remain
 separate from local display versions so pagination coverage cannot drift.
 
 Inside `createSoupLiveQuery`, a Soup-internal binding owns subscription,
-coalescing, cleanup and engine-generation recovery, preserving keyed row stores
-and applying patches in one batch. Its only source is a reconciled flat Soup
+coalescing, cleanup and engine-generation recovery. It keeps the rows as
+immutable values: each reply replaces the rows it changes, keeps every other
+row's object, and applies in one batch. Its only source is a reconciled flat Soup
 filter; it is not a general query API.
 
 Mutations still use ordinary GraphQL execution and the registered local resolver.
