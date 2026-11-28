@@ -88,6 +88,20 @@ input AllDayEventTimeInput {
 }
 
 """
+The glyph to display for the entity.
+"""
+input AppearanceIconInput @oneOf {
+	"""
+	Icon name from the Macro catalog.
+	"""
+	macro: String
+	"""
+	A single native emoji.
+	"""
+	emoji: String
+}
+
+"""
 An attendee to invite.
 """
 input CalendarAttendeeInput {
@@ -397,6 +411,10 @@ type CompleteMutationRoot {
 	Replace one of the viewer's personal labels with a team label.
 	"""
 	mergeTag(optionId: ID!, targetOptionId: ID!): GraphqlTagMerge!
+	"""
+	Replace a document or initiative's icon and color overrides.
+	"""
+	setEntityAppearance(input: SetEntityAppearanceInput!): EntityMutationPayload!
 	"""
 	Rename heterogeneous entities in one request.
 	"""
@@ -2576,6 +2594,60 @@ type GraphqlAllDayEventTime {
 	Exclusive local end date (`YYYY-MM-DD`).
 	"""
 	endDate: String!
+}
+
+"""
+Color override from the shared tag palette.
+"""
+enum GraphqlAppearanceColor {
+	"""
+	Neutral.
+	"""
+	GRAY
+	"""
+	Red.
+	"""
+	RED
+	"""
+	Tomato.
+	"""
+	TOMATO
+	"""
+	Orange.
+	"""
+	ORANGE
+	"""
+	Amber.
+	"""
+	AMBER
+	"""
+	Yellow.
+	"""
+	YELLOW
+	"""
+	Green.
+	"""
+	GREEN
+	"""
+	Teal.
+	"""
+	TEAL
+	"""
+	Blue.
+	"""
+	BLUE
+	"""
+	Indigo.
+	"""
+	INDIGO
+	"""
+	Purple.
+	"""
+	PURPLE
+	"""
+	Pink.
+	"""
+	PINK
 }
 
 """
@@ -13301,6 +13373,24 @@ type SetEmailThreadsArchivedPayload {
 	Requested threads whose archive state could not change.
 	"""
 	failedThreadIds: [ID!]!
+}
+
+"""
+Replacement appearance for a document or initiative.
+"""
+input SetEntityAppearanceInput {
+	"""
+	Document or initiative to update.
+	"""
+	entity: EntityRefInput!
+	"""
+	Glyph override, omitted or null to use the entity's default icon.
+	"""
+	icon: AppearanceIconInput
+	"""
+	Tint override, omitted or null to use the entity's default color.
+	"""
+	color: GraphqlAppearanceColor
 }
 
 """

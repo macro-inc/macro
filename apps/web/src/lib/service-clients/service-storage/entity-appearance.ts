@@ -3,23 +3,19 @@ import { fetchWithToken } from '@core/util/fetchWithToken';
 import { dssFetch } from './client';
 import type { EntityAppearance } from './generated/schemas/entityAppearance';
 
-export type AppearanceEntityType =
-  | 'document'
-  | 'initiative'
+type NonSoupAppearanceEntityType =
   | 'form'
   | 'database'
   | 'scheduled_action'
   | 'saved_view';
 
-/** Owning services authorize the same shared, atomic appearance payload. */
-export function setEntityAppearance(
-  type: AppearanceEntityType,
+/** Appearance for entities outside the Soup graph. */
+export function setOtherEntityAppearance(
+  type: NonSoupAppearanceEntityType,
   id: string,
   appearance: EntityAppearance
 ) {
   const path = {
-    document: 'documents',
-    initiative: 'initiatives',
     form: 'forms',
     database: 'databases',
     scheduled_action: 'scheduled-actions',

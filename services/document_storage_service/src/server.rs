@@ -2638,6 +2638,7 @@ async fn run_server() -> anyhow::Result<()> {
                 sqs_client.clone(),
                 macro_event_broker.clone(),
             )),
+            initiative_service.clone(),
         ));
 
     // Routine writes still use the scheduled-action service. Read from the

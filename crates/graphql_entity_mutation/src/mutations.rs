@@ -22,6 +22,10 @@ use models_permissions::share_permission::{
 #[cfg(test)]
 mod test;
 
+/// GraphQL presentation inputs and their domain conversions.
+mod appearance;
+pub use appearance::SetEntityAppearanceInput;
+
 /// Maximum number of independent entities accepted by a standard batch mutation.
 const MAX_ENTITY_MUTATION_BATCH: usize = 100;
 
@@ -587,6 +591,27 @@ fn mutation_actor(ctx: &Context<'_>) -> async_graphql::Result<EntityMutationActo
 
 #[Object]
 impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
+    /// Replace a document or initiative's icon and color overrides.
+    #[tracing::instrument(
+        skip_all,
+        err(Debug),
+        fields(
+            entity_mutation.failed_count = tracing::field::Empty,
+            entity_mutation.error_code = tracing::field::Empty,
+        )
+    )]
+    async fn set_entity_appearance(
+        &self,
+        ctx: &Context<'_>,
+        input: SetEntityAppearanceInput,
+    ) -> async_graphql::Result<EntityMutationPayload<E>> {
+        let (entity, appearance) = input.into_model()?;
+        let result = mutation_service::<S>(ctx)?
+            .set_appearance(mutation_actor(ctx)?, entity, appearance)
+            .await;
+        Ok(EntityMutationPayload::new(vec![result]))
+    }
+
     /// Rename heterogeneous entities in one request.
     #[tracing::instrument(
         skip_all,

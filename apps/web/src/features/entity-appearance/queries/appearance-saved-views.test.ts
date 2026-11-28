@@ -51,8 +51,6 @@ afterEach(() => {
 it('routes saved definitions independently of Soup and unrelated REST readers', () => {
   queryClient = new QueryClient();
   expect(appearanceAdapter(queryClient, 'saved_view', 'view-1')).toEqual({
-    apiType: 'saved_view',
-    graphql: { tag: 'saved_view', typename: 'GraphqlSavedView' },
     readers: [],
   });
 });
@@ -115,7 +113,7 @@ it.each(['success', 'rejected', 'refresh-failure'] as const)(
     expect(source.detail.data()?.appearance).toBeNull();
     const initial = source.detail.data();
     const started = Promise.withResolvers<void>();
-    const response = Promise.withResolvers<Result<unknown, unknown>>();
+    const response = Promise.withResolvers<Result<undefined, unknown>>();
     const save = createSaveEntityAppearance({
       queryClient,
       cacheHost: () => undefined,
@@ -125,7 +123,7 @@ it.each(['success', 'rejected', 'refresh-failure'] as const)(
         if (result.isOk()) saved = appearance;
         return result;
       },
-      refreshUncached: () => refreshSavedViewReaders(client, 'view-1'),
+      refreshSavedView: () => refreshSavedViewReaders(client, 'view-1'),
     });
     const appearance: EntityAppearance = {
       icon: { kind: 'macro', name: 'star' },
@@ -167,7 +165,7 @@ it('patches the saved-view GraphQL identity optimistically and rolls back a reje
     appearance: null as EntityAppearance | null,
   };
   const patched = Promise.withResolvers<void>();
-  const response = Promise.withResolvers<Result<unknown, unknown>>();
+  const response = Promise.withResolvers<Result<undefined, unknown>>();
   const writes: unknown[] = [];
   const host = {
     disabled: false,
@@ -265,7 +263,7 @@ it('does not refresh a new account after delayed GraphQL confirmation', async ()
     queryClient,
     cacheHost: () => host,
     update: async () => ok(undefined),
-    refreshUncached: refresh,
+    refreshSavedView: refresh,
   });
   const pending = save(
     { type: 'saved_view', id: 'view-1', name: 'My view', ownerId: 'viewer' },

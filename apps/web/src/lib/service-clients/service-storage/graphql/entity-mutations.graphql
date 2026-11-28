@@ -17,6 +17,12 @@ fragment EntityMutationPayloadFields on EntityMutationPayload {
   }
 }
 
+mutation SetEntityAppearance($input: SetEntityAppearanceInput!) {
+  setEntityAppearance(input: $input) {
+    ...EntityMutationPayloadFields
+  }
+}
+
 mutation RenameEntities($inputs: [RenameEntityInput!]!) {
   renameEntities(inputs: $inputs) {
     ...EntityMutationPayloadFields

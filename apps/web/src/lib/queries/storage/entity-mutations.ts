@@ -34,7 +34,7 @@ import { soupItemKey } from '../soup/graphql/reconciliation';
  * the others are read. A write whose rows never came back leaves every list
  * stale. A failed read must not turn a committed write into a retryable
  * failure. */
-function refreshAfterWrite(result: {
+export function refreshAfterWrite(result: {
   effectsResolved: boolean;
   listsReadAgain: boolean;
 }) {

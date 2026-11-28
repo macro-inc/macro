@@ -107,7 +107,7 @@ it.each(['success', 'rejected', 'refresh-failure'] as const)(
     expect(source.rows()?.[0].project.appearance).toBeNull();
     network.mockClear();
     const started = Promise.withResolvers<void>();
-    const response = Promise.withResolvers<Result<unknown, unknown>>();
+    const response = Promise.withResolvers<Result<undefined, unknown>>();
     const refreshStarted = Promise.withResolvers<void>();
     const refreshAllowed = Promise.withResolvers<void>();
     const refresh = vi.fn(async () => {
@@ -121,10 +121,17 @@ it.each(['success', 'rejected', 'refresh-failure'] as const)(
       update: async (_type, _id, appearance) => {
         started.resolve();
         const result = await response.promise;
-        if (result.isOk()) saved = appearance;
-        return result;
+        if (result.isErr()) return result;
+        saved = appearance;
+        try {
+          // The production updater settles after the exchange re-reads
+          // mounted project lists.
+          await refresh();
+          return ok({ queued: false, listReadFailed: false });
+        } catch {
+          return ok({ queued: false, listReadFailed: true });
+        }
       },
-      refreshUncached: refresh,
     });
     const appearance: EntityAppearance = {
       icon: { kind: 'emoji', value: '🚀' },

@@ -219,6 +219,54 @@ impl QueryRoot {
 }
 
 #[tokio::test]
+async fn appearance_requires_an_actor_and_preserves_domain_refusals() {
+    const OPERATION: &str = r#"
+        mutation {
+          setEntityAppearance(input: {
+            entity: { type: INITIATIVE, id: "fixture-initiative" }
+            icon: { emoji: "🌿" }
+            color: GREEN
+          }) {
+            results {
+              __typename
+              ... on GraphqlMutationError { errorCode }
+            }
+          }
+        }
+    "#;
+    let schema = Schema::build(
+        QueryRoot,
+        crate::EntityMutationRoot::<UnavailableEntityMutationService, TestSoupEdges>::new(),
+        EmptySubscription,
+    )
+    .data(Arc::new(UnavailableEntityMutationService))
+    .finish();
+
+    let response = schema.execute(OPERATION).await;
+    assert_eq!(response.errors.len(), 1);
+    assert!(response.errors[0].message.contains("EntityMutationActor"));
+    let response = schema
+        .execute(Request::new(OPERATION).data(EntityMutationActor {
+            user_id: MacroUserIdStr::parse_from_str("macro|graphql-test@example.com").unwrap(),
+            organization_id: None,
+        }))
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data,
+        value!({
+            "setEntityAppearance": {
+                "results": [{
+                    "__typename": "GraphqlMutationError",
+                    "errorCode": "UNSUPPORTED_OPERATION",
+                }],
+            },
+        })
+    );
+}
+
+#[tokio::test]
 async fn mutation_results_return_typed_errors() {
     let service = Arc::new(UnavailableEntityMutationService);
     let actor = EntityMutationActor {

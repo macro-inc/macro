@@ -30,6 +30,7 @@ const policies = {
   SetEmailThreadsArchived: 'resolver',
   UpdateNotifications: 'resolver',
   RenameEntities: 'resolver',
+  SetEntityAppearance: 'resolver',
   UpdateInitiative: 'resolver',
   DeleteEntityProperty: 'resolver',
   SaveEmailDraft: 'custom: draft identity and thread links',

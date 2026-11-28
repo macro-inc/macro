@@ -40,8 +40,9 @@ use entity_mutation::{
 };
 use entity_registry::PurgeOwnedEntity;
 use futures::{StreamExt, stream};
+use initiative::domain::{models::InitiativeError, ports::InitiativeService};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
+use model_entity::{Entity, EntityAppearance, EntityType};
 use models_permissions::share_permission::{
     UpdateSharePermissionRequestV2, access_level::AccessLevel,
 };
@@ -147,6 +148,27 @@ fn target_project_failure(error: AccessError) -> EntityMutationErrorCode {
     access_failure(error)
 }
 
+/// Map initiative appearance errors onto the shared mutation vocabulary.
+fn initiative_failure(error: InitiativeError) -> EntityMutationErrorCode {
+    match error {
+        error @ InitiativeError::NotFound => {
+            EntityMutationErrorCode::not_found(rootcause::report!(error))
+        }
+        error @ (InitiativeError::Unauthorized | InitiativeError::Forbidden(_)) => {
+            EntityMutationErrorCode::forbidden(rootcause::report!(error))
+        }
+        error @ (InitiativeError::BadRequest(_) | InitiativeError::NameTooLong { .. }) => {
+            EntityMutationErrorCode::invalid(rootcause::report!(error))
+        }
+        error @ InitiativeError::Conflict(_) => {
+            EntityMutationErrorCode::conflict(rootcause::report!(error))
+        }
+        error @ InitiativeError::Internal(_) => {
+            EntityMutationErrorCode::internal(rootcause::report!(error))
+        }
+    }
+}
+
 /// Map a lifecycle-port failure onto the public vocabulary.
 fn lifecycle_failure(error: LifecycleError) -> EntityMutationErrorCode {
     match error {
@@ -198,7 +220,7 @@ where
 
 /// Unified entity mutation router wired from the domain services.
 #[derive(Clone)]
-pub struct DssEntityMutationService<D, H, C, K, E, P, Databases, Forms, A, L> {
+pub struct DssEntityMutationService<D, H, C, K, E, P, Databases, Forms, A, L, I> {
     documents: Arc<D>,
     chats: Arc<H>,
     channels: Arc<C>,
@@ -209,10 +231,11 @@ pub struct DssEntityMutationService<D, H, C, K, E, P, Databases, Forms, A, L> {
     forms: Arc<Forms>,
     access: Arc<A>,
     lifecycle: Arc<L>,
+    initiatives: Arc<I>,
 }
 
-impl<D, H, C, K, E, P, Databases, Forms, A, L>
-    DssEntityMutationService<D, H, C, K, E, P, Databases, Forms, A, L>
+impl<D, H, C, K, E, P, Databases, Forms, A, L, I>
+    DssEntityMutationService<D, H, C, K, E, P, Databases, Forms, A, L, I>
 {
     /// Compose the unified mutation router from domain services.
     #[expect(
@@ -230,6 +253,7 @@ impl<D, H, C, K, E, P, Databases, Forms, A, L>
         forms: Arc<Forms>,
         access: Arc<A>,
         lifecycle: Arc<L>,
+        initiatives: Arc<I>,
     ) -> Self {
         Self {
             documents,
@@ -242,6 +266,7 @@ impl<D, H, C, K, E, P, Databases, Forms, A, L>
             forms,
             access,
             lifecycle,
+            initiatives,
         }
     }
 
@@ -264,8 +289,8 @@ impl<D, H, C, K, E, P, Databases, Forms, A, L>
     }
 }
 
-impl<D, H, C, K, E, P, Databases, Forms, A, L>
-    DssEntityMutationService<D, H, C, K, E, P, Databases, Forms, A, L>
+impl<D, H, C, K, E, P, Databases, Forms, A, L, I>
+    DssEntityMutationService<D, H, C, K, E, P, Databases, Forms, A, L, I>
 where
     D: DocumentService
         + RenameEntity
@@ -941,8 +966,8 @@ where
     }
 }
 
-impl<D, H, C, K, E, P, Databases, Forms, A, L> EntityMutationService
-    for DssEntityMutationService<D, H, C, K, E, P, Databases, Forms, A, L>
+impl<D, H, C, K, E, P, Databases, Forms, A, L, I> EntityMutationService
+    for DssEntityMutationService<D, H, C, K, E, P, Databases, Forms, A, L, I>
 where
     D: DocumentService
         + RenameEntity
@@ -986,7 +1011,53 @@ where
         + 'static,
     A: EntityAccessService,
     L: EntityLifecycleService,
+    I: InitiativeService,
 {
+    async fn set_appearance(
+        &self,
+        actor: EntityMutationActor,
+        entity: Entity<'static>,
+        appearance: EntityAppearance,
+    ) -> EntityMutationResult {
+        match entity.entity_type {
+            EntityType::Document => {
+                let receipt = self.receipt::<EditAccessLevel>(&actor, &entity).await?;
+                self.documents.set_appearance(receipt, appearance).await?;
+            }
+            EntityType::Initiative => {
+                let receipt = self.receipt::<EditAccessLevel>(&actor, &entity).await?;
+                self.initiatives
+                    .set_appearance(receipt, appearance)
+                    .await
+                    .map_err(initiative_failure)?;
+            }
+            EntityType::User
+            | EntityType::Team
+            | EntityType::Project
+            | EntityType::Chat
+            | EntityType::Channel
+            | EntityType::ChannelMessage
+            | EntityType::EmailThread
+            | EntityType::Call
+            | EntityType::ForeignEntity
+            | EntityType::StaticFile
+            | EntityType::CrmCompany
+            | EntityType::CrmContact
+            | EntityType::CrmPipeline
+            | EntityType::CalendarEvent
+            | EntityType::Reminder
+            | EntityType::Skill
+            | EntityType::AgentSession
+            | EntityType::ScheduledAction
+            | EntityType::Harness
+            | EntityType::Database
+            | EntityType::DatabaseRow
+            | EntityType::Form
+            | EntityType::ExternalChat => return unsupported(entity, "appearance"),
+        }
+        success(vec![EntityMutationEffect::updated(entity)])
+    }
+
     async fn rename_entities(
         &self,
         actor: EntityMutationActor,

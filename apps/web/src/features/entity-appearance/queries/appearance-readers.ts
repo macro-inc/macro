@@ -6,7 +6,6 @@ import {
 } from '@queries/soup/cache';
 import { databasesKeys, entityKeys, formsKeys } from '@queries/storage/keys';
 import type { ScheduledAction } from '@service-scheduled-action/generated/schemas/scheduledAction';
-import type { AppearanceEntityType as ApiEntityType } from '@service-storage/entity-appearance';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import type { Form } from '@service-storage/generated/schemas/form';
@@ -26,15 +25,8 @@ type Reader = {
   key: QueryKey;
   patch: (appearance: EntityAppearance) => Rollback;
 };
-export type GraphqlAppearanceTarget =
-  | {
-      tag: 'document' | 'initiative';
-      typename: 'GraphqlSoupDocument' | 'GraphqlSoupInitiative';
-    }
-  | { tag: 'saved_view'; typename: 'GraphqlSavedView' };
 type Adapter = {
-  apiType: ApiEntityType;
-  graphql?: GraphqlAppearanceTarget;
+  soup?: 'document' | 'initiative';
   readers: Reader[];
 };
 
@@ -79,8 +71,7 @@ export function appearanceAdapter(
   }
   const adapters: Record<AppearanceEntityType, () => Adapter> = {
     document: () => ({
-      apiType: 'document',
-      graphql: { tag: 'document', typename: 'GraphqlSoupDocument' },
+      soup: 'document',
       readers: [
         reader<DocumentMetadata>(
           entityKeys.documentMetadata(id).queryKey,
@@ -90,17 +81,13 @@ export function appearanceAdapter(
       ],
     }),
     initiative: () => ({
-      apiType: 'initiative',
-      graphql: { tag: 'initiative', typename: 'GraphqlSoupInitiative' },
+      soup: 'initiative',
       readers: [],
     }),
     saved_view: () => ({
-      apiType: 'saved_view',
-      graphql: { tag: 'saved_view', typename: 'GraphqlSavedView' },
       readers: [],
     }),
     routine: () => ({
-      apiType: 'scheduled_action',
       readers: [
         reader<ScheduledAction>(
           scheduledActionKeys.detail({ scheduleId: id }).queryKey,
@@ -118,7 +105,6 @@ export function appearanceAdapter(
       ],
     }),
     database: () => ({
-      apiType: 'database',
       readers: [
         reader<DatabaseDetail>(
           databasesKeys.detail(id).queryKey,
@@ -145,7 +131,6 @@ export function appearanceAdapter(
       ],
     }),
     form: () => ({
-      apiType: 'form',
       readers: [
         reader<FormDetail>(
           formsKeys.detail(id).queryKey,
@@ -185,7 +170,6 @@ export function patchAppearanceReaders(
   id: string,
   appearance: EntityAppearance
 ): Rollback {
-  if (adapter.graphql?.tag === 'saved_view') return () => {};
   const rollbacks = adapter.readers.map((reader) => reader.patch(appearance));
   const previewBefore = setPreviewAppearance(id, appearance);
   if (previewBefore !== undefined) {
@@ -193,7 +177,7 @@ export function patchAppearanceReaders(
       setPreviewAppearance(id, previewBefore.appearance, appearance);
     });
   }
-  const soup = adapter.graphql;
+  const soup = adapter.soup;
   const current = soup && getSoupEntityById(id);
   if (
     soup &&
@@ -202,7 +186,7 @@ export function patchAppearanceReaders(
   ) {
     const previous = current.data.appearance;
     optimisticUpdateSoupEntity({
-      tag: soup.tag,
+      tag: soup,
       data: { id, appearance },
       frecency_score: current.frecency_score,
     });
@@ -214,7 +198,7 @@ export function patchAppearanceReaders(
         sameAppearance(latest.data.appearance, appearance)
       ) {
         hydrateSoupEntity({
-          tag: soup.tag,
+          tag: soup,
           data: { id, appearance: previous ?? null },
           frecency_score: latest.frecency_score,
         });

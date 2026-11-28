@@ -17,7 +17,8 @@ snippets, task projects (initiatives), forms, databases, and saved views.
 - `core/catalog.ts`: picker projections of `@macro-inc/entity-icons`; curate names and nouns in `packages/entity-icons/sections.json`.
 - `core/picker-grid.ts`: row projection and keyboard traversal independent of the virtual viewport.
 - `queries/appearance.ts`: domain writes and cache reconciliation.
-- `queries/appearance-readers.ts`: one typed entity adapter table for API routing, cancellation keys, and cache patches.
+- `queries/save-entity-appearance.ts`: writes document and initiative appearance through the shared Soup GraphQL mutation and routes the other editable kinds to their owning services.
+- `queries/appearance-readers.ts`: typed legacy reader cancellation keys, patches, and rollbacks.
 - `queries/pending-appearance.ts`: transient mutation intent for live GraphQL readers, including uncached lists.
 - `appearance-dialog.tsx`: lazy editor composition with production clients for the mutation adapter.
 - `queries/document-appearance.ts`: authenticated lightweight identity projection for open Markdown headers.
@@ -36,6 +37,7 @@ snippets, task projects (initiatives), forms, databases, and saved views.
 ## Checks
 
 - Run `bun run check` and `bun run test src/features/entity-appearance` from `apps/web`.
+- Verify Soup row normalization and offline replay with `bunx playwright test --config src/lib/graphql-cache/worker/browser-test/appearance-write.playwright.config.ts --project chromium`.
 - For catalog changes, also run the generator and backend checks in the maintenance guide.
 
 ## Gotchas
@@ -53,10 +55,10 @@ snippets, task projects (initiatives), forms, databases, and saved views.
 - Match lazy-loaded submenu content with a picker-shaped skeleton, not the branded logo loader.
 - Reuse the shared 12-color tag palette in `@core/constant/color-palette`; preserve named wire keys and let swatches wrap.
 - Use `virtua` for both catalogs and search results; pin and restore focused choices across scrolling and Recent reordering.
-- Capture the cache generation before reading normalized appearance fields and retain it for optimistic, server, and rollback writes; unrelated preview fields can be absent on a loaded entity.
-- Type cache-write payloads with the generated subscription result; `soupUpdates` is a list.
+- Apply document and initiative appearance through `setEntityAppearance`. Its optimistic patch and authoritative Soup row share the normalized cache identity, including on offline replay.
+- For saved-view cache writes, capture the generation before reading the normalized record and retain it through optimistic, confirmed, and rollback patches.
 - Keep pending appearance visible through uncached GraphQL revalidation; retain confirmed intent only for failed readers until fresh data or mutation garbage collection.
-- Serialize server writes per entity, fence confirmed REST writes against older GraphQL responses, and republish confirmed appearance before releasing pending intent.
+- Serialize submissions per entity and fence confirmed saved-view REST writes against older GraphQL responses. The durable queue owns uncommitted Soup appearance after enqueue.
 - Render public metadata without mounting authenticated preview queries.
 - Preserve appearance in identity projections and renderers, including inbox cards, project list, sidebar, and picker rows; reserve type-only icons for navigation and status.
 - Keep editable header icons outside breadcrumb navigation buttons; keep read-only and flag-disabled icons inside those buttons so icon clicks still navigate. Project breadcrumbs use the lightweight identity read, including owner metadata, without loading task counts or membership.

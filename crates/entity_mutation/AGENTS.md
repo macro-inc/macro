@@ -4,7 +4,7 @@
 
 Shared infrastructure used across every entity-owning feature: the
 canonical mutation vocabulary (`rename`, `move`, `trash`, `restore`,
-`duplicate`, `permanently delete`, `update share policy`) that each entity
+`duplicate`, `permanently delete`, `update share policy`, `set appearance`) that each entity
 domain crate implements, so a composition-layer router can dispatch to any
 entity kind generically.
 

@@ -11,5 +11,5 @@ pub use mutations::{
     EntityRefInput, EntitySharePolicyInput, GraphqlEntityMutationError,
     GraphqlEntityMutationErrorCode, GraphqlEntityMutationResult, GraphqlLinkShare,
     GraphqlMutationError, GraphqlMutationSuccess, GraphqlSharePolicyOperation, MoveEntityInput,
-    RenameEntityInput, UpdateEntitySharePolicyInput,
+    RenameEntityInput, SetEntityAppearanceInput, UpdateEntitySharePolicyInput,
 };

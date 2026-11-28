@@ -20,6 +20,8 @@ import {
   MoveEntitiesDocument,
   type MoveEntityInput,
   RestoreEntitiesDocument,
+  SetEntityAppearanceDocument,
+  type SetEntityAppearanceInput,
   TrashEntitiesDocument,
   UpdateEntitySharePoliciesDocument,
   type UpdateEntitySharePolicyInput,
@@ -30,8 +32,7 @@ import { getEntityGraphqlClient } from './graphql-soup';
 const isEffectsError = (error: GraphQLError) =>
   error.path?.[1] === 'results' && error.path[3] === 'effects';
 
-/** Moves resolve with their cache prediction once durably queued; the other
- * operations have no resolver and wait for the server's result. A result whose
+/** Predicted writes can resolve once durably queued. A result whose
  * effects failed to resolve, or whose rows or deletions the cache failed to
  * apply, says so (`effectsResolved: false`): the write committed, but its rows
  * never reached the cache. `queued` says the cache queued the write with its
@@ -125,6 +126,29 @@ async function sendEntityMutation<Data, Variables extends AnyVariables>(
     queued: optimisticMutationDispositionOf(result)?.kind === 'queued',
     listsReadAgain: networkRevalidated(result),
   };
+}
+
+export async function setGraphqlEntityAppearance(
+  input: SetEntityAppearanceInput,
+  revalidations: readonly QueryRevalidation[]
+) {
+  let revalidationsQueued = false;
+  const result = await mutateEntity(
+    'set_appearance',
+    input.entity,
+    SetEntityAppearanceDocument,
+    { input },
+    (data) => data.setEntityAppearance,
+    {
+      optimisticMutation: {
+        revalidations,
+        onEnqueued: () => {
+          revalidationsQueued = true;
+        },
+      },
+    }
+  );
+  return { ...result, revalidationsQueued };
 }
 
 /** A move the cache predicts is queued, so the lists it cannot keep current are

@@ -1,6 +1,6 @@
 use std::future::Future;
 
-use model_entity::Entity;
+use model_entity::{Entity, EntityAppearance};
 use rootcause::report;
 
 use crate::{
@@ -13,10 +13,18 @@ pub type MutateEntitiesResult = Result<EntityMutationSuccess, EntityMutationErro
 
 /// Domain port used by API adapters to mutate heterogeneous entities.
 ///
-/// Methods are batch-oriented because the UI performs these actions across
+/// Selection actions are batch-oriented because the UI performs them across
 /// selections. Each input always produces one ordered outcome, so cross-service
 /// partial success is explicit and no false transaction boundary is implied.
 pub trait EntityMutationService: Send + Sync + 'static {
+    /// Replace icon and color overrides for a Soup entity.
+    fn set_appearance(
+        &self,
+        actor: EntityMutationActor,
+        entity: Entity<'static>,
+        appearance: EntityAppearance,
+    ) -> impl Future<Output = MutateEntitiesResult> + Send;
+
     /// Rename entities using the canonical `display_name` concept.
     fn rename_entities(
         &self,
@@ -84,6 +92,17 @@ fn unsupported_many(
 }
 
 impl EntityMutationService for UnavailableEntityMutationService {
+    async fn set_appearance(
+        &self,
+        _actor: EntityMutationActor,
+        entity: Entity<'static>,
+        _appearance: EntityAppearance,
+    ) -> MutateEntitiesResult {
+        Err(EntityMutationErrorCode::unsupported(
+            report!(entity).attach("appearance"),
+        ))
+    }
+
     async fn rename_entities(
         &self,
         _actor: EntityMutationActor,

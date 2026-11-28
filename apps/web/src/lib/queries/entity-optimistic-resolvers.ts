@@ -1,10 +1,13 @@
+import type { OptimisticPatch } from '@graphql-cache/exchange/optimistic';
 import { optimisticResolver } from '@graphql-cache/exchange/optimistic-resolvers';
 import {
   DeleteEntityPropertyDocument,
+  type EntityMutationPayloadFieldsFragment,
   MoveEntitiesDocument,
   type MoveEntityInput,
   RenameEntitiesDocument,
   type RenameEntityInput,
+  SetEntityAppearanceDocument,
   UpdateInitiativeDocument,
 } from '@service-storage/graphql/generated/graphql';
 import { match } from 'ts-pattern';
@@ -69,6 +72,41 @@ function movedEntity({ entity, projectId }: MoveEntityInput) {
 }
 
 export const entityOptimisticResolvers = [
+  optimisticResolver(SetEntityAppearanceDocument, ({ input }) => {
+    const { entity, icon, color } = input;
+    if (entity.type !== 'DOCUMENT' && entity.type !== 'INITIATIVE')
+      return undefined;
+    const glyph =
+      icon?.emoji != null
+        ? { kind: 'emoji', value: icon.emoji }
+        : icon?.macro != null
+          ? { kind: 'macro', name: icon.macro }
+          : null;
+    const prediction: OptimisticPatch<EntityMutationPayloadFieldsFragment> = {
+      results: [
+        {
+          __typename: 'GraphqlMutationSuccess',
+          effects: [
+            {
+              __typename: 'SoupUpdated',
+              item: {
+                __typename:
+                  entity.type === 'DOCUMENT'
+                    ? 'GraphqlSoupDocument'
+                    : 'GraphqlSoupInitiative',
+                id: String(entity.id),
+                appearance:
+                  glyph || color
+                    ? { icon: glyph, color: color?.toLowerCase() ?? null }
+                    : null,
+              },
+            },
+          ],
+        },
+      ],
+    };
+    return prediction;
+  }),
   optimisticResolver(MoveEntitiesDocument, ({ inputs }) => {
     const items = (Array.isArray(inputs) ? inputs : [inputs]).map(movedEntity);
     if (items.some((item) => !item)) return undefined;

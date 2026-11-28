@@ -49,8 +49,9 @@ threads, pins, recents, notifications, folders, activity.
   `src/api/swagger.rs` lists their OpenAPI paths and schemas, while
   `src/server.rs` supplies the per-caller start limiter.
 - `src/service/entity_mutation.rs`: generic entity-mutation plumbing used
-  across item types. Folder duplication, trash, restore and permanent delete
-  run on their own task (`run_on_own_task`), so a dropped request cannot stop
+  across item types. Document and initiative appearance reuse the owning
+  domain services and return updated Soup effects. Folder duplication, trash,
+  restore and permanent delete run on their own task (`run_on_own_task`), so a dropped request cannot stop
   them partway; duplication copies documents and chats through
   `entity_mutation/project_contents.rs`, the projects domain's
   `ProjectContentCopier` port.

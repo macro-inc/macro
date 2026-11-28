@@ -53,7 +53,7 @@ it.each(['document', 'initiative'] as const)(
     cleanups.push(observer.subscribe(() => {}));
     await observer.refetch();
     const started = Promise.withResolvers<void>();
-    const response = Promise.withResolvers<Result<unknown, unknown>>();
+    const response = Promise.withResolvers<Result<undefined, unknown>>();
     const save = createSaveEntityAppearance({
       queryClient,
       cacheHost: () => undefined,
