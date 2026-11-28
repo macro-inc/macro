@@ -230,6 +230,9 @@ export function startFixtureServer(port = 0, filterMatrix = false) {
             // The fixture user has no tasks to group.
             groupSoup: { bins: [] },
             contacts: { nodes: [], nextCursor: null },
+            // The fixture user has no custom properties or tags.
+            propertyDefinitions: [],
+            tagSets: [],
             timeTracking: {
               id: USER_ID,
               runningTimer: null,

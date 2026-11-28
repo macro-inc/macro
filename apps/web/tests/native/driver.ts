@@ -210,9 +210,29 @@ export async function clippedHeaderControls(browser: Browser, search: string) {
       )?.control;
     const bar = button?.closest('[data-view-shell-top-bar]');
     if (!button || !bar) return [`no header with ${label}`];
-    const edge = bar.getBoundingClientRect();
+    const bounds = bar.getBoundingClientRect();
+    // The visible span: the bar, narrowed by any row inside it that clips
+    // what overflows it (the scrolling actions row).
+    const visibleSpan = (control: Element) => {
+      let { left, right } = bounds;
+      for (
+        let parent = control.parentElement;
+        parent && parent !== bar;
+        parent = parent.parentElement
+      ) {
+        if (getComputedStyle(parent).overflowX === 'visible') continue;
+        const clip = parent.getBoundingClientRect();
+        left = Math.max(left, clip.left);
+        right = Math.min(right, clip.right);
+      }
+      return { left, right };
+    };
     return [...new Set([...bar.querySelectorAll('button, label'), button])]
-      .map((control) => ({ control, box: control.getBoundingClientRect() }))
+      .map((control) => ({
+        control,
+        box: control.getBoundingClientRect(),
+        edge: visibleSpan(control),
+      }))
       .filter(
         ({ control, box }) =>
           box.width > 0 &&
@@ -220,20 +240,20 @@ export async function clippedHeaderControls(browser: Browser, search: string) {
           !control.classList.contains('sr-only') &&
           !control.closest('[aria-hidden="true"], [inert]')
       )
-      .filter(({ control, box }) => {
+      .filter(({ control, box, edge }) => {
         const hit = document.elementFromPoint(
           box.left + box.width / 2,
           box.top + box.height / 2
         );
         return (
-          box.left < edge.left ||
-          box.right > edge.right ||
+          box.left < edge.left - 0.5 ||
+          box.right > edge.right + 0.5 ||
           !hit ||
           !control.contains(hit)
         );
       })
       .map(
-        ({ control, box }) =>
+        ({ control, box, edge }) =>
           `${control.getAttribute('aria-label') ?? control.textContent?.trim()} at ${Math.round(box.left)}..${Math.round(box.right)} in a header ending at ${Math.round(edge.right)}`
       );
   }, search);

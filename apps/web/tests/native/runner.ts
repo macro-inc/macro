@@ -66,6 +66,8 @@ const env = {
 const children: ReturnType<typeof Bun.spawn>[] = [];
 let browser: Browser | undefined;
 const fixture = startFixtureServer(18090, matrixMode);
+/** Window widths at which Companies' header must keep every control in view. */
+const COMPANIES_WIDTHS = [520, 480, 440, 400, 360, 320];
 const timeoutMs = matrixMode ? 90 * 60_000 : 240_000;
 // Bound even a wedged WebDriver request or shutdown. The shell owns namespace
 // and profile cleanup, so forced exit cannot leave an app or fixture listening.
@@ -359,6 +361,52 @@ try {
   );
   console.log(
     'PASS: Tasks header fits 520px to 400px windows and restores its controls'
+  );
+  await browser.$('button[aria-label="Email"]').click();
+  await browser
+    .$('[aria-label="Search email"]')
+    .waitForDisplayed({ timeout: 30_000 });
+
+  // Companies' header gives up its view options, Visibility's label,
+  // Visibility, its filters and then its title, never Create or Search, as
+  // the window narrows, and shows them again once there is room.
+  // A WebDriver click on this rail item leaves Email open here; the
+  // element's own click (keyboard-style activation) navigates.
+  await browser.execute(() =>
+    document
+      .querySelector<HTMLElement>('[data-sidebar-next-item="companies"]')
+      ?.click()
+  );
+  await browser
+    .$('[aria-label="Search companies"]')
+    .waitForDisplayed({ timeout: 30_000 });
+  for (const width of COMPANIES_WIDTHS) {
+    await browser.setWindowSize(width, 900);
+    await expectHeaderFits(
+      browser,
+      'Search companies',
+      `narrow-companies-header-${width}`,
+      `${width}px`
+    );
+    for (const kept of ['Create CRM record', 'Search companies'])
+      assert(
+        await browser.$(`button[aria-label="${kept}"]`).isDisplayed(),
+        `Companies header at ${width}px shows no ${kept}`
+      );
+  }
+  await browser.setWindowSize(windowSize.width, windowSize.height);
+  for (const restored of ['Display options', 'Filter'])
+    await browser
+      .$(`button[aria-label="${restored}"]`)
+      .waitForDisplayed({ timeout: 5000 });
+  await expectHeaderFits(
+    browser,
+    'Search companies',
+    'restored-companies-header',
+    'the restored window'
+  );
+  console.log(
+    `PASS: Companies header fits ${COMPANIES_WIDTHS.join(', ')}px windows and restores its controls`
   );
   await browser.$('button[aria-label="Email"]').click();
   await browser
