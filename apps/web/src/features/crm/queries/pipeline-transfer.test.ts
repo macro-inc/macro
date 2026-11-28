@@ -1,5 +1,5 @@
-import type { DatabaseOp } from '@core/database-sql/generated/types';
 import { ThrownResultError } from '@core/util/result';
+import type { InsertCrmPipelineRowsInput } from '@service-storage/graphql/generated/graphql';
 import { QueryClient } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
@@ -10,6 +10,10 @@ import { createPipelineTransfer } from './pipeline-transfer';
 
 const refreshGraphqlLists = vi.hoisted(() => vi.fn(async () => undefined));
 const creates = vi.hoisted(() => ({ company: vi.fn(), contact: vi.fn() }));
+const insert = vi.hoisted(() => vi.fn());
+vi.mock('@service-storage/graphql-crm-edits', () => ({
+  insertGraphqlCrmPipelineRows: insert,
+}));
 vi.mock('@service-storage/graphql-crm-create', () => ({
   createGraphqlCrmCompany: creates.company,
   createGraphqlCrmContact: creates.contact,
@@ -47,7 +51,10 @@ const stage: DatabaseViewColumn = {
 };
 
 function setup(recordType: Pipeline['recordType'] = 'company') {
-  const applied: DatabaseOp[][] = [];
+  const applied: InsertCrmPipelineRowsInput[] = [];
+  insert.mockReset().mockImplementation(async (input) => {
+    applied.push(input);
+  });
   creates.company.mockReset().mockImplementation(async ({ domain }) => {
     // A slow create, so concurrent contacts at one domain overlap it.
     await new Promise((resolve) => setTimeout(resolve, 10));
@@ -66,19 +73,6 @@ function setup(recordType: Pipeline['recordType'] = 'company') {
         ? err([{ code: 'SERVER_ERROR', message: 'unavailable' }])
         : ok({ contact: null })
     ),
-    applyCrmPipelineOps: vi.fn(
-      async (
-        _id: string,
-        request: { ops: DatabaseOp[] }
-      ): Promise<
-        Awaited<
-          ReturnType<CrmCreateDependencies['storage']['applyCrmPipelineOps']>
-        >
-      > => {
-        applied.push(request.ops);
-        return ok({ results: [], changes: [] });
-      }
-    ),
   };
   const deps = {
     storage,
@@ -94,26 +88,21 @@ function setup(recordType: Pipeline['recordType'] = 'company') {
 
 describe('pipeline transfer', () => {
   it('isolates refused entries and only remembers options from committed writes', async () => {
-    const { transfer, storage } = setup();
-    const saved: DatabaseOp[][] = [];
-    storage.applyCrmPipelineOps.mockImplementation(async (_id, request) => {
-      const insert = request.ops.find((op) => op.kind === 'rows');
-      if (insert?.kind !== 'rows' || insert.change.kind !== 'insert')
-        throw new Error('Missing insert');
+    const { transfer } = setup();
+    const saved: InsertCrmPipelineRowsInput[] = [];
+    insert.mockImplementation(async (request: InsertCrmPipelineRowsInput) => {
       if (
-        insert.change.rows.some((row) =>
-          row.some((cell) => cell.column === 'bad')
+        request.rows.some(({ cells }) =>
+          cells.some((cell) => cell.columnId === 'bad')
         )
       )
-        return err([
+        throw new ThrownResultError([
           {
             code: 'INVALID_OP',
-            refusal: null,
             message: 'Fill in Amount before entering Lead.',
           },
         ]);
-      saved.push(request.ops);
-      return ok({ results: [], changes: [] });
+      saved.push(request);
     });
     const stageCell = {
       column: 'stage',
@@ -133,18 +122,12 @@ describe('pipeline transfer', () => {
       0,
       'Fill in Amount before entering Lead.'
     );
-    expect(
-      saved.flatMap((ops) => ops.filter((op) => op.kind === 'column'))
-    ).toHaveLength(1);
-    expect(
-      saved.flatMap((ops) =>
-        ops.flatMap((op) =>
-          op.kind === 'rows' && op.change.kind === 'insert'
-            ? op.change.rows
-            : []
-        )
-      )
-    ).toHaveLength(2);
+    expect(saved.flatMap(({ optionGroups }) => optionGroups)).toHaveLength(1);
+    const rows = saved.flatMap(({ rows }) => rows);
+    expect(rows).toHaveLength(2);
+    expect(rows.map(({ id }) => id)).toEqual(
+      insert.mock.calls[0][0].rows.slice(1).map(({ id }: { id: string }) => id)
+    );
   });
 
   it('matches companies by domain and creates the missing ones once', async () => {
@@ -213,13 +196,12 @@ describe('pipeline transfer', () => {
       [stage]
     );
     expect(applied).toHaveLength(2);
-    expect(applied[0]).toHaveLength(1);
-    expect(applied[1]).toHaveLength(2);
-    expect(applied[1][0]).toMatchObject({
-      kind: 'column',
-      column: 'stage',
-      change: { kind: 'add_options', options: [{ label: 'Won' }] },
-    });
+    expect(applied[0]).toMatchObject({ optionGroups: [] });
+    expect(applied[0].rows).toHaveLength(500);
+    expect(applied[1].rows).toHaveLength(2);
+    expect(applied[1].optionGroups).toMatchObject([
+      { columnId: 'stage', options: [{ label: 'Won' }] },
+    ]);
   });
 
   it('reads GraphQL lists that can show the imported records again', async () => {

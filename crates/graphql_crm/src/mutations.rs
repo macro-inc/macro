@@ -14,8 +14,13 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use uuid::Uuid;
 
+mod pipeline_import;
 mod record_merge;
-use crm::domain::record_merge::service::RecordMerges;
+use crm::domain::{pipelines::PipelineService, record_merge::service::RecordMerges};
+use pipeline_import::{
+    CrmPipelineImportAdapter, CrmPipelineImportApi, CrmPipelineImportPayload,
+    InsertCrmPipelineRowsInput,
+};
 use record_merge::{CommitCrmMergeInput, CrmMergePayload, CrmMergeWriteAdapter, CrmMergeWriteApi};
 
 /// Manual company creation request.
@@ -147,6 +152,24 @@ impl<E> Default for CrmMutationRoot<E> {
 
 #[Object]
 impl<E: SoupEntityEdges> CrmMutationRoot<E> {
+    /// Insert an imported batch and any new column options into a CRM pipeline.
+    #[tracing::instrument(name = "crm.insert_pipeline_rows", skip_all, err(Debug), fields(pipeline_id = %input.pipeline_id.as_str(), row_count = input.rows.len()))]
+    async fn insert_crm_pipeline_rows(
+        &self,
+        ctx: &Context<'_>,
+        input: InsertCrmPipelineRowsInput,
+    ) -> async_graphql::Result<CrmPipelineImportPayload> {
+        let user = require_authenticated_user(ctx)?;
+        ctx.data::<CrmMutationContext>()?
+            .pipeline_import
+            .as_ref()
+            .ok_or_else(|| {
+                coded_error("CRM pipeline service unavailable", "INTERNAL_SERVER_ERROR")
+            })?
+            .insert_rows(user, input)
+            .await
+    }
+
     /// Commit a previously reviewed CRM merge.
     #[tracing::instrument(name = "crm.commit_merge", skip_all, err(Debug), fields(survivor_id = %input.survivor_id.as_str()))]
     async fn commit_crm_merge(
@@ -255,6 +278,7 @@ impl<E: SoupEntityEdges> CrmMutationRoot<E> {
 pub struct CrmMutationContext {
     records: Arc<dyn CrmWriteApi>,
     merges: Option<Arc<dyn CrmMergeWriteApi>>,
+    pipeline_import: Option<Arc<dyn CrmPipelineImportApi>>,
 }
 
 impl CrmMutationContext {
@@ -263,6 +287,7 @@ impl CrmMutationContext {
         Self {
             records: Arc::new(CrmWriteAdapter { crm, access }),
             merges: None,
+            pipeline_import: None,
         }
     }
 
@@ -273,6 +298,16 @@ impl CrmMutationContext {
         access: Arc<A>,
     ) -> Self {
         self.merges = Some(Arc::new(CrmMergeWriteAdapter { merges, access }));
+        self
+    }
+
+    /// Compose the service used for authorized writes to a pipeline's rows.
+    pub fn with_pipeline_service<P: PipelineService, A: EntityAccessService>(
+        mut self,
+        pipelines: Arc<P>,
+        access: Arc<A>,
+    ) -> Self {
+        self.pipeline_import = Some(Arc::new(CrmPipelineImportAdapter { pipelines, access }));
         self
     }
 }

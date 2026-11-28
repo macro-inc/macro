@@ -1,0 +1,16 @@
+mutation InsertCrmPipelineRows($input: InsertCrmPipelineRowsInput!) {
+  insertCrmPipelineRows(input: $input) {
+    rowIds
+    rows {
+      __typename
+      id
+      pipelineId
+      cells {
+        columnId
+        value {
+          ...SoupPropertyValueFields
+        }
+      }
+    }
+  }
+}

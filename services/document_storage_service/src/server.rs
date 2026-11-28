@@ -2856,7 +2856,8 @@ async fn run_server() -> anyhow::Result<()> {
             Arc::new(crm_service.clone()),
             entity_access_service.clone(),
         )
-        .with_merge_service(merge_service.clone(), entity_access_service.clone()),
+        .with_merge_service(merge_service.clone(), entity_access_service.clone())
+        .with_pipeline_service(pipeline_service.clone(), entity_access_service.clone()),
         graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext::new(
             initiative_service.clone(),
             entity_access_service.clone(),

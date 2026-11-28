@@ -49,6 +49,8 @@ const policies = {
     'custom: durable domain change and company Soup effects',
   CommitCrmMerge:
     'custom: durable reviewed merge, source tombstones and survivor',
+  InsertCrmPipelineRows:
+    'custom: bounded import with durable client-minted row IDs',
   UpdateCalendarEvent: 'custom: event and occurrence edits',
   DeleteCalendarEvent: 'custom: event and occurrence removal',
   RespondToCalendarEvent: 'custom: attendee response',

@@ -26,6 +26,9 @@ async fn crm_edit_mutations_require_an_authenticated_actor() {
         format!(
             r#"commitCrmMerge(input: {{recordType: COMPANY, survivorId: "{company}", sourceIds: ["{source}"], revision: "rev", requestKey: "{source}", sharingRules: KEEP}}) {{ survivorId }}"#
         ),
+        format!(
+            r#"insertCrmPipelineRows(input: {{pipelineId: "{company}", tableId: "{source}", rows: [], optionGroups: []}}) {{ rowIds }}"#
+        ),
     ] {
         let response = schema.execute(format!("mutation {{ {field} }}")).await;
         assert_eq!(response.errors.len(), 1);

@@ -1,14 +1,16 @@
-import type { CellWrite, DatabaseOp } from '@core/database-sql/generated/types';
+import type { CellValue, DatabaseOp } from '@core/database-sql/generated/types';
 import {
   catchToResult,
   ThrownResultError,
   throwOnErr,
 } from '@core/util/result';
 import { soupKeys } from '@queries/soup/keys';
+import type { CrmPipelineImportCellValue } from '@service-storage/graphql/generated/graphql';
 import {
   createGraphqlCrmCompany,
   createGraphqlCrmContact,
 } from '@service-storage/graphql-crm-create';
+import { insertGraphqlCrmPipelineRows } from '@service-storage/graphql-crm-edits';
 import { v7 as uuidv7 } from 'uuid';
 import { missingOptionLabels } from '../../database/core/cell-ops';
 import type { PipelineTransfer } from '../context/pipelines';
@@ -26,8 +28,37 @@ import { crmKeys } from './keys';
 import { pipelineCell, pipelineViewColumn } from './pipeline-data';
 
 const CONCURRENCY = 4;
-/** Rows per write; the service accepts up to 10,000. */
+/** Bound both the write and post-commit row read. */
 const INSERT_BATCH = 500;
+
+function importCellValue(cell: CellValue): CrmPipelineImportCellValue | null {
+  switch (cell.type) {
+    case 'text':
+      return { text: cell.value };
+    case 'number':
+      return { number: cell.value };
+    case 'boolean':
+      return { boolean: cell.value };
+    case 'date':
+      return { date: cell.value };
+    case 'date_range':
+      return { dateRange: cell.value };
+    case 'link':
+      return { links: cell.value };
+    case 'options':
+      return {
+        options: cell.value.map((option) =>
+          option.id !== undefined ? { id: option.id } : { label: option.label }
+        ),
+      };
+    case 'entities':
+      return { entities: cell.value };
+    case 'rows':
+      return { rowIds: cell.value };
+    case 'clear':
+      return null;
+  }
+}
 
 /** Bulk reads and writes of one pipeline, over its own routes. */
 export function createPipelineTransfer(
@@ -171,6 +202,7 @@ export function createPipelineTransfer(
       return ids;
     },
     async insertRows(rows, columns, onRejected) {
+      const entries = rows.map((cells) => ({ id: uuidv7(), cells }));
       const labels = new Map(
         columns.map((column) => [
           column.id,
@@ -178,37 +210,41 @@ export function createPipelineTransfer(
         ])
       );
       async function write(
-        batch: readonly CellWrite[][],
+        batch: typeof entries,
         start: number
       ): Promise<void> {
         const insert: DatabaseOp = {
           kind: 'rows',
           table: pipeline.tableId,
-          change: { kind: 'insert', rows: [...batch] },
+          change: { kind: 'insert', rows: batch.map(({ cells }) => cells) },
         };
         const additions = missingOptionLabels(
           insert,
           (id) => labels.get(id) ?? []
         );
-        const options: DatabaseOp[] = additions.map(
-          ({ column, labels: added }) => ({
-            kind: 'column',
-            table: pipeline.tableId,
-            column,
-            change: {
-              kind: 'add_options',
-              options: added.map((label) => ({ id: uuidv7(), label })),
-            },
-          })
-        );
-        const applied = await storage.applyCrmPipelineOps(pipeline.id, {
-          ops: [...options, insert],
-        });
-        if (applied.isErr()) {
-          const refusal = applied.error.find(
-            (error) => error.code === 'INVALID_OP'
+        const optionGroups = additions.map(({ column, labels: added }) => ({
+          columnId: column,
+          options: added.map((label) => ({ id: uuidv7(), label })),
+        }));
+        try {
+          await insertGraphqlCrmPipelineRows({
+            pipelineId: pipeline.id,
+            tableId: pipeline.tableId,
+            optionGroups,
+            rows: batch.map(({ id, cells }) => ({
+              id,
+              cells: cells.map(({ column, value }) => ({
+                columnId: column,
+                value: importCellValue(value),
+              })),
+            })),
+          });
+        } catch (error) {
+          if (!(error instanceof ThrownResultError)) throw error;
+          const refusal = error.errors.find(
+            ({ code }) => code === 'INVALID_OP'
           );
-          if (!refusal) throw new ThrownResultError(applied.error);
+          if (!refusal) throw error;
           if (!onRejected) throw new PipelineImportRefusal(refusal.message);
           // A refusal rolls back the entire batch, including new options. Split
           // only refused batches so valid rows still commit with their options.
@@ -224,8 +260,8 @@ export function createPipelineTransfer(
         for (const { column, labels: added } of additions)
           labels.set(column, [...(labels.get(column) ?? []), ...added]);
       }
-      for (let start = 0; start < rows.length; start += INSERT_BATCH)
-        await write(rows.slice(start, start + INSERT_BATCH), start);
+      for (let start = 0; start < entries.length; start += INSERT_BATCH)
+        await write(entries.slice(start, start + INSERT_BATCH), start);
     },
     async refresh() {
       await Promise.all([
