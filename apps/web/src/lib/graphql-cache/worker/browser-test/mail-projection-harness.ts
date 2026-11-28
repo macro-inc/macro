@@ -12,6 +12,7 @@ import {
   type MailItemFieldsFragment,
   SaveEmailDraftDocument,
   type SaveEmailDraftMutation,
+  SoupUpdatesDocument,
 } from '../../../service-clients/service-storage/graphql/generated/graphql';
 import { entityFromArgument } from '../../exchange/entity-resolvers';
 import { normalizedCacheExchange } from '../../exchange/normalized-cache-exchange';
@@ -85,6 +86,8 @@ async function refresh(append = false) {
     literals.push({ literal: { owner: id(Number(select('account').value)) } });
   if (select('sharing').value !== 'EXCLUDE')
     literals.push({ literal: { shared: select('sharing').value } });
+  if (select('attachment').value !== 'all')
+    literals.push({ literal: { attachment: select('attachment').value } });
   const tree = literals.reduce<Record<string, unknown> | undefined>(
     (left, right) => (left ? { and: { left, right } } : right),
     undefined
@@ -179,6 +182,69 @@ document
       result.dataset.status = 'failed';
       result.textContent = String(error);
     }
+  });
+
+// A Soup push as the websocket delivers it: the SoupUpdates document the
+// normalized cache exchange writes, with the thread's attachments and the
+// flags it already had, so only its attachments change.
+async function pushAttachments(
+  threads: [number, readonly string[]][]
+): Promise<void> {
+  await host.writeQuery({
+    generation: (await host.authority!.current()).generation,
+    query: stringifyDocument(SoupUpdatesDocument),
+    operationName: 'SoupUpdates',
+    identity: 'offline-mail-viewer',
+    data: {
+      soupUpdates: threads.map(([n, mimeTypes]) => ({
+        __typename: 'SoupUpdated',
+        item: {
+          __typename: 'GraphqlSoupEmailThread',
+          id: id(n),
+          ownerId: 'offline-mail-viewer',
+          linkId: id(1000),
+          isRead: n % 4 === 0,
+          inboxVisible: n % 2 === 0,
+          isSignal: n % 3 === 0,
+          attachments: mimeTypes.map((mimeType, index) => ({
+            __typename: 'GraphqlSoupEmailAttachment',
+            id: id(40000 + n * 10 + index),
+            messageId: id(n + 10000),
+            providerAttachmentId: null,
+            filename: `attachment-${index}`,
+            mimeType,
+            sizeBytes: 1024,
+            contentId: null,
+            createdAt: '2025-01-03T00:00:00Z',
+          })),
+        },
+      })),
+    },
+  });
+  await refresh();
+}
+const pdf = 'application/pdf';
+const png = 'image/png';
+const xlsx =
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+document
+  .querySelector('#deliver-attachments')!
+  .addEventListener('click', () => {
+    pushAttachments([
+      [10, [pdf]],
+      [14, [png]],
+      [22, [pdf, xlsx]],
+      [26, ['application/zip']],
+    ]).catch(showFailure);
+  });
+document
+  .querySelector('#deliver-more-attachments')!
+  .addEventListener('click', () => {
+    // A new message brings thread 14 a PDF; a deleted one takes thread 10's.
+    pushAttachments([
+      [14, [png, pdf]],
+      [10, []],
+    ]).catch(showFailure);
   });
 
 const draftStatus =

@@ -10,10 +10,13 @@
 <label>Status <select id="archive"><option value="all">All</option><option value="true">Not Done</option><option value="false">Done</option></select></label>
 <label>Account <select id="account"><option value="all">All</option><option value="1000">Primary</option><option value="1001">Delegated</option></select></label>
 <label>Calendar <select id="calendar"><option value="all">All</option><option value="true">Calendar invites</option></select></label>
+<label>Attachment <select id="attachment"><option value="all">All</option><option value="PDF">PDF</option><option value="IMAGE">Image</option><option value="DOCUMENT">Document</option></select></label>
 <label>Sharing <select id="sharing"><option value="EXCLUDE">Owned/delegated</option><option value="ONLY">Shared</option><option value="INCLUDE">Include shared</option></select></label>
 <p id="result" role="status" data-status="loading">Initializing…</p>
 <ol id="rows"></ol><button id="more" disabled>Load more cached mail</button>
 <button id="deliver-reminders">Deliver reminders</button>
+<button id="deliver-attachments">Deliver attachments</button>
+<button id="deliver-more-attachments">Deliver attachment changes</button>
 <button id="create-draft">Create offline draft</button>
 <button id="reopen-draft">Reopen cached draft</button>
 <button id="resume-draft">Resume draft sync</button>
