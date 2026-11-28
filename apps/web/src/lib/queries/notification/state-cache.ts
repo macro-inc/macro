@@ -6,8 +6,13 @@ import {
   NotificationStateCacheWriteDocument,
   type NotificationStateCacheWriteSubscription,
 } from '@service-storage/graphql/generated/graphql';
-import { getGraphqlCacheHost } from '@service-storage/graphql-soup';
+import {
+  getGraphqlCacheHost,
+  getGraphqlSoupClient,
+} from '@service-storage/graphql-soup';
 import { stringifyDocument } from '@urql/core';
+import { refreshActiveGraphqlSoupQueries } from '../soup/graphql/active-queries';
+import { revalidateNotificationReaders } from './revalidation';
 
 const stateWrite = stringifyDocument(NotificationStateCacheWriteDocument);
 
@@ -50,10 +55,27 @@ export function confirmEntityNotificationsDone(
 ): boolean {
   const host = getGraphqlCacheHost();
   if (!host || ids.length === 0) return false;
-  // The Done overlay retries reconciliation if the rows never read done.
   fireAndForget(
-    writeNotificationStates(host, ids, 'DONE'),
+    writeConfirmedDoneStates(host, ids),
     'notification-state-cache'
   );
   return true;
+}
+
+async function writeConfirmedDoneStates(
+  host: CacheHost,
+  ids: readonly string[]
+) {
+  const generation = cacheSessionGeneration.capture();
+  try {
+    await writeNotificationStates(host, ids, 'DONE');
+  } catch (error) {
+    if (cacheSessionGeneration.isCurrent(generation)) {
+      await Promise.all([
+        refreshActiveGraphqlSoupQueries(),
+        revalidateNotificationReaders(getGraphqlSoupClient()),
+      ]);
+    }
+    throw error;
+  }
 }

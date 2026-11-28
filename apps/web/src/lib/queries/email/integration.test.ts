@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   mutation: vi.fn(),
   reminders: vi.fn(),
   revalidations: vi.fn(() => [] as unknown[]),
+  refresh: vi.fn(async () => {}),
 }));
 vi.mock('@service-email/client', () => ({ emailClient: {} }));
 vi.mock('@service-storage/client', () => ({ storageServiceClient: {} }));
@@ -17,6 +18,7 @@ vi.mock('../reminders/email-collection', () => ({
 }));
 vi.mock('../soup/graphql/active-queries', () => ({
   getUnmaintainedGraphqlSoupRevalidations: mocks.revalidations,
+  refreshActiveGraphqlSoupQueries: mocks.refresh,
 }));
 
 import { predictOptimisticMutation } from '@graphql-cache/exchange/optimistic-resolvers';
@@ -108,6 +110,36 @@ describe('GraphQL email archive writes', () => {
     } finally {
       list.unsubscribe();
     }
+  });
+
+  it('recovers mounted lists after a committed archive whose cache write failed', async () => {
+    mocks.mutation.mockReturnValue({
+      toPromise: async () => ({
+        data: {
+          setEmailThreadsArchived: {
+            threads: [
+              {
+                __typename: 'GraphqlSoupEmailThread',
+                id: 'thread',
+                inboxVisible: false,
+              },
+            ],
+            failedThreadIds: [],
+          },
+        },
+        extensions: {
+          __macroNormalizedCache: {
+            source: 'live-network',
+            cacheEffectsApplied: false,
+          },
+        },
+      }),
+    });
+    await expect(archiveEmailThreads(['thread'], true)).resolves.toEqual([
+      { status: 'fulfilled', value: 'committed' },
+    ]);
+    expect(mocks.refresh).toHaveBeenCalledOnce();
+    expect(mocks.mutation).toHaveBeenCalledOnce();
   });
 
   it('gives Done, Undo and Redo distinct ordered mutation intents', async () => {

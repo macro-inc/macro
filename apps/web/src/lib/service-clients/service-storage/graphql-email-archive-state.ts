@@ -2,11 +2,26 @@ import {
   optimisticMutationDispositionOf,
   type QueryRevalidation,
 } from '@graphql-cache/exchange/optimistic';
-import type { Client } from '@urql/core';
+import type { Client, OperationResult } from '@urql/core';
+import { refreshActiveGraphqlSoupQueries } from '../../queries/soup/graphql/active-queries';
 import {
   SetEmailThreadArchivedDocument,
   SetEmailThreadsArchivedDocument,
 } from './graphql/generated/graphql';
+
+function recoverArchiveLists(result: OperationResult) {
+  const metadata = normalizedCacheResultMetadata(result);
+  if (
+    networkRevalidationIncomplete(result) ||
+    (metadata?.source === 'live-network' &&
+      metadata.cacheEffectsApplied === false)
+  ) {
+    fireAndForget(
+      refreshActiveGraphqlSoupQueries(),
+      'email-archive-revalidation'
+    );
+  }
+}
 
 /** Archive, unarchive, and Undo share an ordered durable normalized-cache write. */
 export async function setGraphqlEmailThreadArchived(
@@ -26,6 +41,7 @@ export async function setGraphqlEmailThreadArchived(
   if (disposition?.kind === 'queued') return 'queued';
   if (disposition?.kind === 'permanently-failed') throw disposition.error;
   if (result.error) throw result.error;
+  recoverArchiveLists(result);
   if (disposition?.kind === 'committed') return 'committed';
   if (!result.data?.setEmailThreadArchived) {
     throw new Error('Email archive mutation returned no data');
@@ -56,6 +72,7 @@ export async function setGraphqlEmailThreadsArchived(
   if (disposition?.kind === 'queued') return { kind: 'queued' };
   if (disposition?.kind === 'permanently-failed') throw disposition.error;
   if (result.error) throw result.error;
+  recoverArchiveLists(result);
   if (disposition?.kind === 'committed' && !disposition.data)
     return { kind: 'committed-without-content' };
   if (!result.data?.setEmailThreadsArchived) {
@@ -68,3 +85,7 @@ export async function setGraphqlEmailThreadsArchived(
     ),
   };
 }
+
+import { fireAndForget } from '@core/util/fireAndForget';
+import { networkRevalidationIncomplete } from '@graphql-cache/exchange/network-revalidation-exchange';
+import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';

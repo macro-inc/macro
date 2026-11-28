@@ -4,6 +4,7 @@ import {
   networkRevalidated,
   networkRevalidationIncomplete,
 } from '@graphql-cache/exchange/network-revalidation-exchange';
+import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
 import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import type { Client, OperationResult } from '@urql/core';
@@ -101,6 +102,15 @@ function recordOutcome(
   }
 }
 
+/** Direct writes report when the server committed but the cache rejected the rows. */
+function notificationCacheWriteFailed(result: OperationResult): boolean {
+  const metadata = normalizedCacheResultMetadata(result);
+  return (
+    metadata?.source === 'live-network' &&
+    metadata.cacheEffectsApplied === false
+  );
+}
+
 /** Authoritative rows returned after an entity-scoped notification write. */
 export type GraphqlUpdateNotificationsForEntitiesResult =
   UpdateNotificationsForEntityMutation['updateNotificationsForEntity'];
@@ -151,7 +161,9 @@ export async function executeGraphqlUpdateNotifications(
     // the client's own exchange may already have read the lists again. With a
     // disabled host the queue commits the write but leaves the reads to that
     // exchange, so a read it could not finish is done here.
-    if (!result.error && networkRevalidationIncomplete(result)) {
+    if (!result.error && notificationCacheWriteFailed(result)) {
+      readAgainAfterFailedReread(span, [revalidateNotificationReaders(client)]);
+    } else if (!result.error && networkRevalidationIncomplete(result)) {
       readAgainAfterFailedReread(span, [revalidateChannelLists(client)]);
     } else if (
       !result.error &&
@@ -207,7 +219,11 @@ export async function executeGraphqlUpdateNotificationsForEntities(
     );
     // Without the cache the client's exchange already read every mounted
     // query again before the write settled.
-    if (!result.error && networkRevalidationIncomplete(result)) {
+    if (
+      !result.error &&
+      (networkRevalidationIncomplete(result) ||
+        notificationCacheWriteFailed(result))
+    ) {
       // The saved page requests are read again too: a grouped list rebuilds
       // its continuations only from them without the cache.
       readAgainAfterFailedReread(span, [revalidateNotificationReaders(client)]);

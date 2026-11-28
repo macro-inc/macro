@@ -2,9 +2,19 @@ import { beforeEach, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   host: undefined as { writeQuery: ReturnType<typeof vi.fn> } | undefined,
+  refreshSoup: vi.fn(async () => {}),
+  refreshNotifications: vi.fn(async () => {}),
+  client: {},
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlCacheHost: () => mocks.host,
+  getGraphqlSoupClient: () => mocks.client,
+}));
+vi.mock('../../soup/graphql/active-queries', () => ({
+  refreshActiveGraphqlSoupQueries: mocks.refreshSoup,
+}));
+vi.mock('../revalidation', () => ({
+  revalidateNotificationReaders: mocks.refreshNotifications,
 }));
 
 import {
@@ -13,6 +23,7 @@ import {
 } from '../state-cache';
 
 beforeEach(() => {
+  vi.clearAllMocks();
   mocks.host = { writeQuery: vi.fn(async () => ({ kind: 'written' })) };
 });
 
@@ -66,12 +77,16 @@ it('reports that it cannot confirm without a cache or notifications', () => {
   expect(confirmEntityNotificationsDone(['n1'])).toBe(false);
 });
 
-it('keeps a failed cache write from escaping', async () => {
+it('recovers readers when the cache rejects confirmed Done states', async () => {
   const error = vi.spyOn(console, 'error').mockImplementation(() => {});
   mocks.host = {
     writeQuery: vi.fn(async () => Promise.reject(new Error('closed'))),
   };
   expect(confirmEntityNotificationsDone(['n1'])).toBe(true);
   await vi.waitFor(() => expect(error).toHaveBeenCalledOnce());
+  expect(mocks.refreshSoup).toHaveBeenCalledOnce();
+  expect(mocks.refreshNotifications).toHaveBeenCalledExactlyOnceWith(
+    mocks.client
+  );
   error.mockRestore();
 });

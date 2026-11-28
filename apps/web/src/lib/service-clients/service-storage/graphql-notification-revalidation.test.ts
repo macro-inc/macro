@@ -118,6 +118,41 @@ describe('entity notification reconciliation without the normalized cache', () =
     expect(result.data?.updateNotificationsForEntity).toBe(changed);
   });
 
+  it('recovers a maintained reader when the cache rejects the returned Done rows', async () => {
+    const { client, query } = setup();
+    const refresh = vi.fn(async () => undefined);
+    const changed = [
+      { __typename: 'GraphqlNotification', id: 'changed', state: 'DONE' },
+    ];
+    const mutation = vi.fn(() => ({
+      toPromise: async () => ({
+        data: { updateNotificationsForEntity: changed },
+        extensions: {
+          __macroNormalizedCache: {
+            source: 'live-network',
+            cacheEffectsApplied: false,
+          },
+        },
+      }),
+    }));
+    const mixedClient = { ...client, mutation } as Client;
+    cleanup.push(
+      registerNotificationReader({
+        client: () => mixedClient,
+        isEnabled: () => true,
+        refresh,
+        cacheMaintained: () => true,
+      })
+    );
+    const result = await executeGraphqlUpdateNotificationsForEntities(
+      mixedClient,
+      { ...input, operation: 'MARK_DONE' }
+    );
+    expect(result.data?.updateNotificationsForEntity).toEqual(changed);
+    expect(query).toHaveBeenCalled();
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
   it('refreshes only enabled feeds belonging to this client and unregisters disposed feeds', async () => {
     const { client } = setup();
     const active = vi.fn(async () => undefined);
