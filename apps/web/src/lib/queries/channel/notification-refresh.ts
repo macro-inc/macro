@@ -35,8 +35,11 @@ type Waiter = {
   reject: (error: unknown) => void;
   /** Waits its turn as live updates do, not as an explicit refresh. */
   background?: boolean;
-  /** A read again's: when it was asked for, and since when its page missed updates. */
-  readAgain?: { queuedAt: number; missedSince: number };
+  /**
+   * A read again's: when it was asked for, since when its page missed updates,
+   * and how many attempts it has waited on.
+   */
+  readAgain?: { queuedAt: number; missedSince: number; attempts: number };
 };
 /** How one attempt for a read again ended, for its span. */
 type ReadAgainOutcome = 'landed' | 'retrying' | 'failed' | 'dropped';
@@ -68,17 +71,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 /**
  * The span for one attempt at a job a read again waits on: how long that read
- * has waited in the queue, how long its page has missed updates, and which
- * attempt this is. Undefined for a job no read again waits on.
+ * has waited in the queue, how long its page has missed updates, and which of
+ * its attempts this is (the job's failures before it was asked for are not
+ * its own). Undefined for a job no read again waits on.
  */
 function startReadAgainAttempt(job: Job): Span | undefined {
   const readAgain = job.waiters.find((waiter) => waiter.readAgain)?.readAgain;
   if (!readAgain) return undefined;
+  readAgain.attempts += 1;
   const now = Date.now();
   const span = Telemetry.span('channel_list.read_again');
   span.setAttr('channel_list.queued_ms', now - readAgain.queuedAt);
   span.setAttr('channel_list.missed_ms', now - readAgain.missedSince);
-  span.setAttr('channel_list.read_attempt', job.failures + 1);
+  span.setAttr('channel_list.read_attempt', readAgain.attempts);
   return span;
 }
 
@@ -220,7 +225,7 @@ export class ChannelNotificationRefresh {
         resolve: () => resolve(true),
         reject: () => resolve(false),
         background: true,
-        readAgain: { queuedAt: Date.now(), missedSince },
+        readAgain: { queuedAt: Date.now(), missedSince, attempts: 0 },
       });
     });
     this.schedule();
@@ -479,7 +484,9 @@ export class ChannelNotificationRefresh {
         // Later generations cannot run while blocked; reject their callers too.
         this.settle(job, Infinity, error);
       }
-      attempt?.error(error);
+      // A fixed message: an error's own text can carry the request's URL. The
+      // outcome says whether it retries.
+      attempt?.error('Channel list read again failed');
       console.warn('Failed to refresh channel notifications', error);
     } finally {
       attempt?.setAttr('channel_list.read_outcome', outcome);

@@ -73,6 +73,38 @@ const deletion = (
   graphqlTypeName,
 });
 const tick = () => vi.advanceTimersByTimeAsync(100);
+type FakeSpan = {
+  attrs: Record<string, unknown>;
+  error: ReturnType<typeof vi.fn>;
+  end: ReturnType<typeof vi.fn>;
+  run: ReturnType<typeof vi.fn>;
+};
+/** Each `channel_list.read_again` span opened from here on; others are real. */
+function fakeReadAgainSpans(): FakeSpan[] {
+  const spans: FakeSpan[] = [];
+  const span = Telemetry.span.bind(Telemetry) as (
+    ...args: unknown[]
+  ) => unknown;
+  vi.spyOn(Telemetry, 'span').mockImplementation(((
+    name: string,
+    ...rest: unknown[]
+  ) => {
+    if (name !== 'channel_list.read_again') return span(name, ...rest);
+    const attrs: Record<string, unknown> = {};
+    const fake = {
+      attrs,
+      setAttr: (key: string, value: unknown) => {
+        attrs[key] = value;
+      },
+      error: vi.fn(),
+      end: vi.fn(),
+      run: vi.fn(<T>(work: () => T) => work()),
+    };
+    spans.push(fake);
+    return fake;
+  }) as typeof Telemetry.span);
+  return spans;
+}
 function deferred() {
   let resolve!: (result: {}) => void;
   const promise = new Promise<{}>((done) => {
@@ -491,33 +523,7 @@ describe('shared channel notification refresh', () => {
   it('records each attempt of a read again on its own span, and live updates on none', async () => {
     const f = setup();
     f.register();
-    const spans: {
-      attrs: Record<string, unknown>;
-      error: ReturnType<typeof vi.fn>;
-      end: ReturnType<typeof vi.fn>;
-      run: ReturnType<typeof vi.fn>;
-    }[] = [];
-    const span = Telemetry.span.bind(Telemetry) as (
-      ...args: unknown[]
-    ) => unknown;
-    vi.spyOn(Telemetry, 'span').mockImplementation(((
-      name: string,
-      ...rest: unknown[]
-    ) => {
-      if (name !== 'channel_list.read_again') return span(name, ...rest);
-      const attrs: Record<string, unknown> = {};
-      const fake = {
-        attrs,
-        setAttr: (key: string, value: unknown) => {
-          attrs[key] = value;
-        },
-        error: vi.fn(),
-        end: vi.fn(),
-        run: vi.fn(<T>(work: () => T) => work()),
-      };
-      spans.push(fake);
-      return fake;
-    }) as typeof Telemetry.span);
+    const spans = fakeReadAgainSpans();
     f.request.mockResolvedValueOnce({
       error: new CombinedError({ networkError: new Error('offline') }),
     });
@@ -551,7 +557,10 @@ describe('shared channel notification refresh', () => {
       },
     ]);
     expect(spans.map((entry) => entry.end.mock.calls.length)).toEqual([1, 1]);
-    expect(spans[0]?.error).toHaveBeenCalledOnce();
+    // A fixed message: an error's own text can carry the request's URL.
+    expect(spans[0]?.error.mock.calls).toEqual([
+      ['Channel list read again failed'],
+    ]);
     expect(spans[1]?.error).not.toHaveBeenCalled();
     // Each attempt's request runs in its span once; a re-sent operation would
     // join no ended trace. The live update's read names no trace.
@@ -564,6 +573,26 @@ describe('shared channel notification refresh', () => {
       expect(spans[index]?.run).toHaveBeenCalledOnce();
     }
     expect(contexts[2]).toEqual({ requestPolicy: 'network-only' });
+  });
+
+  it("counts a read again's attempts from when it was asked for", async () => {
+    const f = setup();
+    f.register();
+    const spans = fakeReadAgainSpans();
+    // A live update's read fails, and a read again asked for during its
+    // backoff waits for the retry: that retry is the read again's first try.
+    f.request.mockResolvedValueOnce({
+      error: new CombinedError({ networkError: new Error('offline') }),
+    });
+    f.queue.onPatch(patch(), false);
+    await tick();
+    expect(f.query).toHaveBeenCalledOnce();
+    const landed = f.queue.readAgain(descriptor(), Date.now());
+    await vi.advanceTimersByTimeAsync(1000);
+    await expect(landed).resolves.toBe(true);
+    expect(
+      spans.map((entry) => entry.attrs['channel_list.read_attempt'])
+    ).toEqual([1]);
   });
 
   it('answers that a read again did not land when its reader closes first', async () => {
