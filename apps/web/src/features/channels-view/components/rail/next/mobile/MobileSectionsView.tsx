@@ -85,9 +85,11 @@ export function MobileSectionsView(props: {
   const directory = useChannelDirectory();
   // Until the directory settles, its pool may still bring a section's members.
   const directorySettled = () => directory.complete() || directory.failed();
-  // The pool carries no unread state, so a section's rows take it from here.
+  // The pool carries no unread state, so a section's rows take it from here:
+  // every unread channel under Unread only, otherwise the newest page.
   const unread = useCollapsedUnreadChannels(
-    () => sectionsEnabled() && Boolean(selectedLabel())
+    () => sectionsEnabled() && Boolean(selectedLabel()),
+    () => preferences()?.unreadOnly === true
   );
   const liveIds = createMemo(
     () =>

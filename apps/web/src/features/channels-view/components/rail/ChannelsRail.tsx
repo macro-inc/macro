@@ -457,9 +457,23 @@ export function ChannelsRail(props: ChannelsRailProps) {
         !state.expandedGroups[section] &&
         state.sectionPreferences[section]?.unreadWhenCollapsed !== false
     );
-  // The pool carries no unread state, so referenced rows take it from here.
+  // An open favorites or custom section filtered to Unread only lists every
+  // unread member, and the pool carries no unread state.
+  const referencesListEveryUnread = () =>
+    sectionsEnabled() &&
+    ((state.expandedGroups.favorites &&
+      state.sectionPreferences.favorites?.unreadOnly === true) ||
+      labels().some(
+        (label) =>
+          !state.collapsedLabels.includes(label.id) &&
+          state.sectionPreferences[`label:${label.id}`]?.unreadOnly === true
+      ));
+  // Referenced rows take unread state from here: every unread channel for a
+  // view that lists each one, otherwise the newest page, which section counts
+  // read. Rows on screen also carry it in their own records.
   const unreadChannels = useCollapsedUnreadChannels(
-    () => builtInSectionCollapsed() || hasReferences()
+    () => builtInSectionCollapsed() || hasReferences(),
+    () => builtInSectionCollapsed() || referencesListEveryUnread()
   );
   const collapsedUnread = () =>
     builtInSectionCollapsed() ? unreadChannels() : [];

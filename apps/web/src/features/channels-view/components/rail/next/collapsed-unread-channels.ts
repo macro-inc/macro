@@ -15,8 +15,16 @@ const UNREAD_CHANNEL_FILTERS = defineQueryFilters({
   include: { channelSeen: false, channelIsParticipant: [true] },
 });
 
-/** Read unread membership directly instead of exhausting every collapsed channel list. */
-export function useCollapsedUnreadChannels(enabled: Accessor<boolean>) {
+/**
+ * Read unread membership directly instead of exhausting every collapsed
+ * channel list. It reads the 100 most recently updated unread channels, and
+ * every page only while `listsEvery` holds: a view that lists each unread
+ * channel, such as a collapsed section or an Unread only filter.
+ */
+export function useCollapsedUnreadChannels(
+  enabled: Accessor<boolean>,
+  listsEvery: Accessor<boolean> = enabled
+) {
   const query = useSoupAstItemsQuery(
     () => ({
       params: { limit: 100, sort_method: 'updated_at' },
@@ -34,6 +42,7 @@ export function useCollapsedUnreadChannels(enabled: Accessor<boolean>) {
   );
   createEffect(() => {
     if (
+      !listsEvery() ||
       !query.isEnabled ||
       query.isPending ||
       query.isFetching ||
