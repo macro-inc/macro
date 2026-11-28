@@ -555,6 +555,16 @@ projection rebuild upgrades existing indexes once on open, preserving normalized
 records, storage generation, and queued mutations. Routine opens with the current
 projection version do not scan the corpus.
 
+Mail attachment kind facts (`mail-attachment`, one exact value per kind) come from
+a thread's `attachments` and each attachment record's `mimeType`, by the MIME
+prefixes the server's thread attachment flags use (`AttachmentKind::mime_prefixes`).
+A cache written before the projection carried them gets them once on open
+(`storage/mail_attachments.rs`, meta `mail_attachment_facts`) from the records it
+holds, a batch of 256 Mail documents at a time; documents past the attribute limit
+are marked incomplete, as the derived sort backfill does. Records, queued mutations,
+storage generation and the storage version stay. An attachment record the cache
+does not hold gives no kind until a response names it with its type.
+
 ## Local filter execution
 
 Single-partition queries first probe at most `max(64, 2 * limit)` sort-index

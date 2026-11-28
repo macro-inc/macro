@@ -897,8 +897,8 @@ must still refresh affected lists after commit. Scroll across a retained row and
 check that the next page remains ordered; a baseline beyond 5,000 rows returns to
 the live server list instead of freezing local membership.
 Tag selections use cached property postings;
-attachment filters list from the server, which has the thread flags this local
-profile lacks. Sender/recipient filters and
+attachment filters use the `mail-attachment` facts projected from each thread's
+attachment types, by the MIME prefixes of the server's thread flags. Sender/recipient filters and
 non-created/updated sorts remain outside this local profile. Grouping and sort-selector
 coverage are separate from the filter-selection matrix. No cache-format wipe is required: Mail uses a separate versioned profile
 and a new backfill checkpoint, preserving existing queued work. Deploy the backend
