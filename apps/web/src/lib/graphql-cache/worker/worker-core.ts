@@ -633,7 +633,7 @@ export class CacheWorkerCore {
     void this.dispatch(queued.request)
       .then(
         async (result) => {
-          this.recordSlowRequest(queued, startedAt, queueDepth);
+          this.recordSlowRequest(queued, startedAt, queueDepth, { result });
           // Resolve the cache result before the bounded observation checkpoint.
           for (const waiter of queued.waiters) waiter.resolve(result);
           if (isStorageTransactionRequest(queued.request)) {
@@ -743,10 +743,13 @@ export class CacheWorkerCore {
     queued: QueuedEngineRequest,
     startedAt: number,
     queueDepth: number,
-    failure?: { error: unknown }
+    outcome: { result: unknown } | { error: unknown }
   ): void {
     const finishedAt = this.now();
     if (finishedAt - queued.enqueuedAt < SLOW_REQUEST_MS) return;
+    const failure = 'error' in outcome ? outcome : undefined;
+    const proofMs =
+      'result' in outcome ? writeProofMs(outcome.result) : undefined;
     this.telemetry.record({
       name: 'graphql_cache.slow_request',
       operationCategory: operationCategoryForRequest(queued.request),
@@ -756,6 +759,7 @@ export class CacheWorkerCore {
       queueWaitMs: startedAt - queued.enqueuedAt,
       durationMs: finishedAt - startedAt,
       queueDepth,
+      ...(proofMs === undefined ? {} : { proofMs }),
     });
   }
 
@@ -948,7 +952,7 @@ export class CacheWorkerCore {
         const queueDepth = this.queue.length;
         try {
           const result = await this.dispatch(queued.request);
-          this.recordSlowRequest(queued, startedAt, queueDepth);
+          this.recordSlowRequest(queued, startedAt, queueDepth, { result });
           for (const waiter of queued.waiters) waiter.resolve(result);
         } catch (error) {
           this.executingAuthority = authority;
@@ -1903,4 +1907,20 @@ export class CacheWorkerCore {
     }
     return this.engine;
   }
+}
+
+/** The view proof time a write result reports, inside its authority envelope. */
+function writeProofMs(dispatched: unknown): number | undefined {
+  const result =
+    typeof dispatched === 'object' &&
+    dispatched !== null &&
+    'result' in dispatched
+      ? dispatched.result
+      : dispatched;
+  return typeof result === 'object' &&
+    result !== null &&
+    'proofMs' in result &&
+    typeof result.proofMs === 'number'
+    ? result.proofMs
+    : undefined;
 }

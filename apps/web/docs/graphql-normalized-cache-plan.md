@@ -1480,10 +1480,17 @@ specification again. Older binaries without a token continue using full requests
 Revision/reset/delta semantics remain the same. Empty explicit-key selections
 need only a fresh engine revision and send no unused selection document.
 
-Soup's revision observer and maintained predicate reader both use
-`subscribeToVisibleCacheChanges`: leading/trailing 250 ms coalescing while
-visible, one dirty refresh after visibility returns, and serialized asynchronous
-reads. Generation resets and explicit/initial reads remain immediate. The
+Soup's revision observer uses `subscribeToVisibleCacheChanges`: leading/trailing
+250 ms coalescing while visible, one dirty refresh after visibility returns, and
+serialized asynchronous reads. The maintained predicate reader
+(`createPredicateQuery`) instead reads on each change through
+`createHiddenDeferral`: at once while visible, once after visibility returns
+while hidden, one read at a time. It keeps the highest revision it has been
+notified of, because write and hydration notices arrive on separate paths and
+can arrive out of order; a reply at or past that revision covers every change
+seen during the read, and an older reply reads again. A read that fails after a
+change asks again through the deferral. Generation resets and explicit/initial
+reads remain immediate. The
 revision fence still observes every accepted notification before scheduling
 work, so a late persistence acknowledgement cannot regain network authority.
 Predicate snapshots publish revision progress independently of stable row/order
@@ -1502,7 +1509,10 @@ selected and baseline keys, and a proven full-window sort cutoff. A matching
 entrant, selected dependency change, uncertain facts, optimistic composition,
 journal barrier/gap, or evicted token prevents a proof. Observations are bounded
 to 64 snapshots. Proof failure preserves the committed hydration or write and
-broadcasts broadly. Older native engines omit tokens and continue conservative refreshes;
+broadcasts broadly. A foreground write records the proof's time on its span
+(`graphql_cache.write.proof_ms` and the proven count on the native
+`graphql_cache.native.write`; `proofMs` on a browser write's
+`graphql_cache.slow_request`), and the native engine warns when it fails. Older native engines omit tokens and continue conservative refreshes;
 no new request arguments are sent across that deployed boundary.
 
 Mail cutoffs additionally require a known matching lookahead row, tracked as a

@@ -835,7 +835,11 @@ impl EngineHandle {
     #[tracing::instrument(
         name = "graphql_cache.native.write",
         skip_all,
-        fields(graphql_cache.write.background = false),
+        fields(
+            graphql_cache.write.background = false,
+            graphql_cache.write.proof_ms = tracing::field::Empty,
+            graphql_cache.write.unchanged_views = tracing::field::Empty,
+        ),
         err
     )]
     pub async fn write(&self, request: WriteRequest) -> Result<WriteResultWire, String> {
@@ -924,7 +928,22 @@ impl EngineHandle {
         // already reports, so their readers skip a read. Optional: a failed
         // proof leaves every view to read again.
         if wire.revision_advanced && !wire.reset {
-            wire.unchanged_views = engine.unchanged_observed_windows().await.ok();
+            let started = std::time::Instant::now();
+            let proof = engine.unchanged_observed_windows().await;
+            let span = tracing::Span::current();
+            span.record(
+                "graphql_cache.write.proof_ms",
+                started.elapsed().as_secs_f64() * 1_000.0,
+            );
+            match proof {
+                Ok(views) => {
+                    span.record("graphql_cache.write.unchanged_views", views.len());
+                    wire.unchanged_views = Some(views);
+                }
+                Err(error) => {
+                    tracing::warn!(%error, "write proof failed; every live view reads again");
+                }
+            }
         }
         Ok(wire)
     }

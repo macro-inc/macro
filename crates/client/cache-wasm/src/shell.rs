@@ -158,6 +158,9 @@ struct JsQueryRegistration {
 struct JsWriteResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     unchanged_views: Option<Vec<String>>,
+    /// How long proving `unchanged_views` took, whether or not it succeeded.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    proof_ms: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     field_changes: Option<Vec<cache_core::field_changes::RecordFieldChange>>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -540,6 +543,7 @@ enum JsRollbackOptimisticWriteResult {
 fn js_write_result(result: WriteResult, ops: &OpInterner) -> JsWriteResult {
     JsWriteResult {
         unchanged_views: None,
+        proof_ms: None,
         field_changes: result.field_changes,
         identity_errors: result.identity_errors,
         unwritable_response: result.unwritable_response,
@@ -2458,7 +2462,9 @@ impl CacheEngine {
                 && !written.reset
                 && let Ok(engine) = state.engine_mut()
             {
+                let started = js_sys::Date::now();
                 written.unchanged_views = engine.unchanged_observed_windows().await.ok();
+                written.proof_ms = Some(js_sys::Date::now() - started);
             }
             to_js(&written)
         })
