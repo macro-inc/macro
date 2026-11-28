@@ -502,6 +502,7 @@ describe('bulk delete GraphQL optimism', () => {
     await expect(result).resolves.toMatchObject({ results: [true, true] });
     await vi.waitFor(() => expect(mutation.isPending).toBe(false));
     expect(mocks.refresh).toHaveBeenCalledWith({
+      refreshed: expect.any(WeakSet),
       throwOnError: true,
       where: expect.any(Function),
     });

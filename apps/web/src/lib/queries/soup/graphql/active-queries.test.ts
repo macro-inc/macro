@@ -13,6 +13,7 @@ import {
   registerActiveGraphqlSoupQuery,
   registerGraphqlSoupRevalidations,
 } from './active-queries';
+import { recoverActiveGraphqlSoupQueries } from './recover-queries';
 
 vi.mock('@queries/client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
@@ -26,6 +27,37 @@ function register(query: Parameters<typeof registerActiveGraphqlSoupQuery>[0]) {
 }
 
 describe('active GraphQL Soup queries', () => {
+  it('retries failed readers and includes newly enabled readers without rereading successes', async () => {
+    vi.useFakeTimers();
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+    onTestFinished(() => {
+      consoleError.mockRestore();
+      vi.useRealTimers();
+    });
+    const successful = vi.fn(async () => {});
+    const retried = vi
+      .fn(async () => {})
+      .mockRejectedValueOnce(new Error('offline'));
+    const newlyEnabled = vi.fn(async () => {});
+    let enabled = false;
+    register({ isEnabled: () => true, refresh: successful });
+    register({ isEnabled: () => true, refresh: retried });
+    register({ isEnabled: () => enabled, refresh: newlyEnabled });
+    const ready = recoverActiveGraphqlSoupQueries();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(successful).toHaveBeenCalledOnce();
+    expect(newlyEnabled).not.toHaveBeenCalled();
+
+    enabled = true;
+    await vi.advanceTimersByTimeAsync(1000);
+    await expect(ready).resolves.toBe(true);
+    expect(successful).toHaveBeenCalledOnce();
+    expect(retried).toHaveBeenCalledTimes(2);
+    expect(newlyEnabled).toHaveBeenCalledOnce();
+  });
+
   it('drops a recovery read queued by a retired session', async () => {
     const pending = Promise.withResolvers<void>();
     const refresh = vi.fn(() => pending.promise);

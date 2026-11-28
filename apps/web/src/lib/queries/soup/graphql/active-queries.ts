@@ -1,8 +1,9 @@
 import type { QueryRevalidation } from '@graphql-cache/exchange/optimistic';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { type Client, createRequest } from '@urql/core';
 import { forgetSoupNetworkAnswers } from './network-freshness';
 
-type ActiveGraphqlSoupQuery = {
+export type ActiveGraphqlSoupQuery = {
   isEnabled: () => boolean;
   refresh: () => Promise<void>;
   /** REST-shaped filters with optional sort/group inputs for scoped list refreshes. */
@@ -124,6 +125,8 @@ export async function refreshActiveGraphqlSoupQueries(
     where?: (body: unknown) => boolean;
     /** Skip lists the cache keeps current: the write already updated them. */
     unmaintainedOnly?: boolean;
+    /** Successful readers from earlier attempts of the same recovery. */
+    refreshed?: WeakSet<ActiveGraphqlSoupQuery>;
   } = {}
 ): Promise<void> {
   forgetSoupNetworkAnswers();
@@ -132,10 +135,10 @@ export async function refreshActiveGraphqlSoupQueries(
     if (options.unmaintainedOnly && query.cacheMaintained?.()) return false;
     return !options.where || options.where(query.body?.());
   };
-  const refreshed = new Set<ActiveGraphqlSoupQuery>();
+  const refreshed = options.refreshed ?? new WeakSet<ActiveGraphqlSoupQuery>();
   await Promise.all(
     [...activeQueries].map(async (query) => {
-      if (!applicable(query)) return;
+      if (refreshed.has(query) || !applicable(query)) return;
       try {
         await refreshReader(query);
         refreshed.add(query);
@@ -157,5 +160,3 @@ export async function refreshActiveGraphqlSoupQueries(
     );
   }
 }
-
-import { cacheSessionGeneration } from '@graphql-cache/session-generation';

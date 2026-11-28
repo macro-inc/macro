@@ -1,6 +1,9 @@
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry, type TraceContext } from '@macro-inc/observability';
-import { refreshActiveGraphqlSoupQueries } from './active-queries';
+import {
+  type ActiveGraphqlSoupQuery,
+  refreshActiveGraphqlSoupQueries,
+} from './active-queries';
 
 /** Retry a failed post-write read while the write's session is current. */
 export async function recoverActiveGraphqlSoupQueries(
@@ -12,6 +15,7 @@ export async function recoverActiveGraphqlSoupQueries(
 ): Promise<boolean> {
   const generation = cacheSessionGeneration.capture();
   const trace = options.trace ?? Telemetry.captureContext();
+  const refreshed = new WeakSet<ActiveGraphqlSoupQuery>();
   for (const [attempt, delay] of [0, 1000, 2000].entries()) {
     if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
     if (
@@ -24,6 +28,7 @@ export async function recoverActiveGraphqlSoupQueries(
         Telemetry.span('soup.revalidation.recovery', async (span) => {
           span.setAttr('revalidation.attempt', attempt + 1);
           await refreshActiveGraphqlSoupQueries({
+            refreshed,
             throwOnError: true,
             ...(options.where ? { where: options.where } : {}),
           });
