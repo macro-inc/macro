@@ -83,7 +83,11 @@ import {
   tap,
 } from 'wonka';
 import { supportsStoreReconciliation } from '../../urql-solid/reactive-selection';
-import { mutationTraceParentOf } from '../../urql-solid/trace-parent-exchange';
+import {
+  firstRequestIn,
+  mutationTraceParentOf,
+  TRACE_PARENT_CONTEXT_KEY,
+} from '../../urql-solid/trace-parent-exchange';
 import { CacheWriteSupersededError } from '../host/errors';
 import type { CacheHost } from '../host/types';
 import {
@@ -1075,7 +1079,9 @@ export function normalizedCacheExchange(
         affectedOps?: readonly string[],
         refetchAll = false
       ): Promise<void> {
-        if (refetchAll) refetchActiveQueries();
+        // The reads join the write's trace when its caller named one.
+        if (refetchAll)
+          refetchActiveQueries(mutation && mutationTraceParentOf(mutation));
         const reportError = (error: unknown, operation = mutation) => {
           // Diagnostics cannot turn a durably settled attempt back into a retry.
           if (!operation) return;
@@ -1757,18 +1763,21 @@ export function normalizedCacheExchange(
         );
       }
 
-      function refetchActiveQueries() {
+      function refetchActiveQueries(parent?: TraceContext) {
         for (const operation of activeOps.values()) {
           if (operation.context.requestPolicy !== 'cache-only')
             owedRefetches.set(operation.key, operation);
-          refetchActiveQuery(operation);
+          refetchActiveQuery(operation, parent);
         }
       }
 
-      function refetchActiveQuery(operation: Operation) {
+      function refetchActiveQuery(operation: Operation, parent?: TraceContext) {
         client.reexecuteOperation(
           makeOperation('query', operation, {
             ...operation.context,
+            ...(parent && {
+              [TRACE_PARENT_CONTEXT_KEY]: firstRequestIn(parent),
+            }),
             requestPolicy:
               operation.context.requestPolicy === 'cache-only'
                 ? 'cache-only'

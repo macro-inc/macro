@@ -144,10 +144,12 @@ entire cache in browser memory. With 10s of thousands of cached objects
     failure counter survives reloads and tab handoff in pending-mutation metadata;
     `attempt_count` still counts every claim for backoff and coalescing safety.
     Settlement removes the pending mutation and counter; there is no retained DLQ.
-    A response whose only GraphQL errors sit under an `effect` or `effects` field
-    committed: the server could not read its rows back. It settles as committed,
-    not as a failure, and reads every mounted query again
-    (`mutation_queue.rows_missing`), including when it is applied after a reload.
+    A response that carries its data and whose only GraphQL errors sit under an
+    `effect` or `effects` field committed: the server could not read some of its
+    rows back, and returns the rest. It settles as committed, not as a failure,
+    and reads every mounted query again (`mutation_queue.rows_missing`), in the
+    write's trace when its caller named one, including when it is applied after
+    a reload.
     An HTTP 5xx response keeps its retry.
     Each queued network attempt has a one-minute timeout, comfortably inside its
     five-minute lease. A page that reloads or closes mid-attempt never settles

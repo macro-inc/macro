@@ -6877,6 +6877,52 @@ describe('normalizedCacheExchange', () => {
       });
     });
 
+    it('reads every mounted query in the write’s trace when it commits without its rows', async () => {
+      const traced: string[] = [];
+      const parent = {
+        run: <T>(work: () => T) => {
+          traced.push('write');
+          return work();
+        },
+      };
+      const { ops, client } = harness(host, (op) =>
+        op.kind === 'mutation'
+          ? {
+              data: optimistic,
+              error: new CombinedError({
+                graphQLErrors: [
+                  {
+                    message: 'A changed item could not be read back',
+                    path: ['setEntityProperty', 'effects'],
+                  },
+                ],
+              }),
+            }
+          : {}
+      );
+      ops.next(makeOp(1, 'network-only'));
+      await tick();
+      const mutation = makeMutationOp(2, optimistic);
+      ops.next(
+        makeOperation(mutation.kind, mutation, {
+          ...mutation.context,
+          [TRACE_PARENT_CONTEXT_KEY]: parent,
+        })
+      );
+      await tick();
+
+      const reread = vi
+        .mocked(client.reexecuteOperation)
+        .mock.calls.map(([operation]) => operation)
+        .find((operation) => operation.key === 1);
+      expect(reread?.context.requestPolicy).toBe('network-only');
+      traced.length = 0;
+      reread?.context[TRACE_PARENT_CONTEXT_KEY]?.run(() => undefined);
+      reread?.context[TRACE_PARENT_CONTEXT_KEY]?.run(() => undefined);
+      // Only the reread's first request joins the write's trace.
+      expect(traced).toEqual(['write']);
+    });
+
     it.each(['initial', 'continuation'] as const)(
       'fences a contextless %s fallback shared by a later CRM observer',
       async (mode) => {
