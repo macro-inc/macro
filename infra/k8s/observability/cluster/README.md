@@ -247,24 +247,25 @@ its group (`service.name` is the group's name without `/aws/lambda/`,
 `-prod` or `-dev` suffix, which becomes `deployment.environment`) and hands it
 to the OTLP log path, so emails are hashed as in every other log. The group,
 stream and function name are structured metadata (`aws_log_group_names`,
-`aws_log_stream_names`, `faas_name`). An AWS WAF event (`aws-waf-logs-*`) also
-gets the trace and span ID of its first `traceparent` header, as Datadog's WAF
-pipeline does, when a service would accept that header: a header the Rust
-propagator rejects (upper-case hex, an all-zero ID, version `ff`, extra parts
-on version `00`) gives none. The event loses its client address: `clientIp`, a
-rate-based rule's `limitValue`, the value of an `IP` or `FORWARDED_IP` custom
-key, and the value of every header, `HEADER` custom key and rule match
-(`matchedData`) whose name holds `forwarded`, an `ip` word or `addr` read
-`redacted` (`x-forwarded-for`, `cf-connecting-ip`, `X-Azure-ClientIP`,
-`CloudFront-Viewer-Address`, ...). `x-forwarded-proto`, `-host`, `-port` and
-`-server` stay. The patterns are regular expressions over WAF's JSON, whose
-entries are flat: they allow whitespace, either field order and other fields
-within an entry. Firehose has its answer once the events are handed on: a batch
-the memory limiter then refuses is lost, not retried (the limiter's
+`aws_log_stream_names`, `faas_name`). An AWS WAF event (`aws-waf-logs-*`, only
+blocked or challenged requests, which never reached a service) also gets the
+trace and span ID of its first `traceparent` header (Datadog's WAF pipeline
+links it from that header too): the caller's trace, so the block shows in the
+browser's or the calling service's trace. A header W3C calls invalid gives none. The event loses its
+client address: `clientIp` and a rate-based rule's `limitValue` read
+`redacted`, and so does every value in a header, custom key or rule match
+(`matchedData`) that isn't named for a header kept as is (`host`, `user-agent`,
+`accept*`, `content-type`, `origin`, `x-forwarded-proto`, `-host` and `-port`,
+the trace headers, `sec-fetch-*`, ...; the full list is in the module). WAF
+already redacts credentials, the path and the query string. The patterns are
+regular expressions over WAF's JSON, whose entries are flat: they allow
+whitespace, either field order and other fields within an entry.
+
+Firehose has its answer once the events are handed on: a batch the memory
+limiter then refuses is lost, not retried (the limiter's
 `otelcol_processor_incoming_items_total` minus `outgoing_items_total`, and the
-error "failed to consume log entries"). Events
-from Firehose's own log groups are dropped, so its delivery errors can't loop
-back through it.
+error "failed to consume log entries"). Events from Firehose's own log groups
+are dropped, so its delivery errors can't loop back through it.
 
 ### Trace sampling
 
