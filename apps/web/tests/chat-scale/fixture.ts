@@ -400,7 +400,7 @@ export type SectionCoverage = {
   /** Channels a section or favorite names, which the rail resolves. */
   referenced: number;
   /** Of those, the ones outside the `FIRST_PAGE_CHANNELS` most recently
-   * updated, which no first page shows. */
+   * updated. */
   outsideFirstPages: number;
 };
 

@@ -71,9 +71,9 @@ describe('limitFailures', () => {
   it('fails a heap over its ceiling at that size', () => {
     expect(
       limitFailures([
-        run(3_500, (name) => (name === 'seed' ? { heapMb: 910 } : {})),
+        run(3_500, (name) => (name === 'seed' ? { heapMb: 1_410 } : {})),
       ])
-    ).toEqual(['3500 channels, seed: heap (MB): 910, limit 900']);
+    ).toEqual(['3500 channels, seed: heap (MB): 1410, limit 1400']);
   });
 
   it('holds the steps after the seed to a lower heap ceiling', () => {
@@ -105,10 +105,10 @@ describe('limitFailures', () => {
         match(name)
           .with('seed', () => ({ rowsMs: 8_100 }))
           .with('coldOpen', () => ({
-            longTasks: { count: 300, totalMs: 211_000, maxMs: 900 },
+            longTasks: { count: 300, totalMs: 241_000, maxMs: 900 },
           }))
           .with('scroll', () => ({
-            longTasks: { count: 60, totalMs: 15_100, maxMs: 300 },
+            longTasks: { count: 60, totalMs: 30_100, maxMs: 300 },
           }))
           .with('collapse', () => ({ domNodes: 4_100 }))
           .otherwise(() => ({}))
@@ -116,8 +116,8 @@ describe('limitFailures', () => {
     ]);
     expect(failures).toEqual([
       '3500 channels, seed: rows on screen (ms): 8100, limit 8000',
-      '3500 channels, coldOpen: long tasks in all (ms): 211000, limit 210000',
-      '3500 channels, scroll: long tasks in all (ms): 15100, limit 15000',
+      '3500 channels, coldOpen: long tasks in all (ms): 241000, limit 240000',
+      '3500 channels, scroll: long tasks in all (ms): 30100, limit 30000',
       '3500 channels, collapse: DOM nodes: 4100, limit 4000',
     ]);
   });
