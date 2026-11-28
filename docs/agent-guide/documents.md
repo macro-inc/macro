@@ -297,6 +297,11 @@ tags, opens it in an adjacent split, and inserts its mention in the source edito
 An empty title uses **New Note** when expanding.
 **Create → Document** continues to open a document directly.
 
+To verify initial tags, keep a list filtered to one of the selected tags open
+while creating the document. The new document should appear when its tags
+commit. If connectivity drops after the document is created, the tag save can
+queue and finish when connectivity returns.
+
 ## Create a task from a Markdown selection
 
 Select text in a Markdown document and choose **Task** in the selection toolbar

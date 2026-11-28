@@ -56,6 +56,7 @@ mod database_activity;
 mod database_row;
 mod database_view_rows;
 mod email_archive;
+mod entity_property_effects;
 mod form_activity;
 mod initiative;
 mod notification_inbox;

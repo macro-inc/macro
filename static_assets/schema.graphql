@@ -361,6 +361,10 @@ type CompleteMutationRoot {
 	"""
 	updateEntityPropertyOptions(input: UpdateEntityPropertyOptionsInput!): [GraphqlProperty!]!
 	"""
+	Apply option deltas and return the document or folder for normalized readers.
+	"""
+	updateSoupEntityPropertyOptions(input: UpdateEntityPropertyOptionsInput!): EntityPropertyOptionEffects!
+	"""
 	Create a property definition owned by the viewer or their team.
 	"""
 	createPropertyDefinition(input: CreatePropertyDefinitionInput!): GraphqlPropertyDefinition!
@@ -1735,6 +1739,16 @@ input EntityPropertyOptionDeltaInput {
 	Options to strip from the currently stored value.
 	"""
 	removeOptionIds: [ID!]!
+}
+
+"""
+The parent entity after its property options have been committed.
+"""
+type EntityPropertyOptionEffects {
+	"""
+	The current entity, including the committed option assignments.
+	"""
+	effect: SoupPatch
 }
 
 """

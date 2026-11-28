@@ -9,6 +9,8 @@
 
 /// Cross-domain fields composed onto Soup entities.
 mod edges;
+/// Property mutations whose normalized reply spans the Soup and properties adapters.
+mod entity_property_effects;
 mod mail_cache_profile;
 mod realtime;
 mod saved_view;

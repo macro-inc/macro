@@ -1,0 +1,7 @@
+mutation UpdateSoupEntityPropertyOptions($input: UpdateEntityPropertyOptionsInput!) {
+  updateSoupEntityPropertyOptions(input: $input) {
+    effect {
+      ...SoupPatchFields
+    }
+  }
+}

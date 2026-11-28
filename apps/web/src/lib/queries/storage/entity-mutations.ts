@@ -1,4 +1,3 @@
-import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult } from '@core/util/result';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/schemas/updateSharePermissionRequestV2';
@@ -16,36 +15,12 @@ import {
   trashGraphqlEntity,
   updateGraphqlEntitySharePolicy,
 } from '@service-storage/graphql-entity-mutations';
-import { getGraphqlCacheHost } from '@service-storage/graphql-soup';
 import { match } from 'ts-pattern';
-import {
-  getUnmaintainedGraphqlSoupRevalidations,
-  refreshActiveGraphqlSoupQueries,
-} from '../soup/graphql/active-queries';
+import { getUnmaintainedGraphqlSoupRevalidations } from '../soup/graphql/active-queries';
 import { soupEntityKey } from '../soup/graphql/entity-input';
 import { prepareGraphqlSoupRestore } from '../soup/graphql/optimistic-deletions';
 import { soupItemKey } from '../soup/graphql/reconciliation';
-
-/** Reads again the lists a committed write left stale. Without a live cache
- * the client's exchange reads every mounted list before the write settles;
- * when it did, each successfully, nothing is read here, and when one of its
- * reads failed every list is read in its own cursor order. With a live cache
- * the write's returned rows update every list the cache keeps current, so only
- * the others are read. A write whose rows never came back leaves every list
- * stale. A failed read must not turn a committed write into a retryable
- * failure. */
-function refreshAfterWrite(result: {
-  effectsResolved: boolean;
-  listsReadAgain: boolean;
-}) {
-  if (result.listsReadAgain) return;
-  const unmaintainedOnly =
-    result.effectsResolved && getGraphqlCacheHost() !== undefined;
-  fireAndForget(
-    refreshActiveGraphqlSoupQueries({ unmaintainedOnly }),
-    'entity-mutation'
-  );
-}
+import { refreshAfterWrite } from '../soup/graphql/refresh-after-write';
 
 export async function moveEntity(
   entity: EntityRefInput,

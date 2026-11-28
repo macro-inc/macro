@@ -102,6 +102,11 @@ so the DataLoader can batch them. Missing items are logged and omitted, never in
 to be deleted. Hydration service errors remain GraphQL errors. Do not reintroduce
 lazy nullable item lookup inside the update.
 
+The document and folder composers use `updateSoupEntityPropertyOptions`.
+It applies the same permission-checked option deltas as the property picker
+and hydrates the full parent on the primary so Soup can admit a newly tagged
+entity to a maintained list.
+
 ## Regenerating the SDL
 
 After schema changes:

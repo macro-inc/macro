@@ -41,6 +41,8 @@ const policies = {
   ReorderFavorites: 'custom: ordered favorite links',
   SetEntityProperty: 'custom: assignment identity and parent links',
   UpdateEntityPropertyOptions: 'custom: ordered option deltas',
+  UpdateSoupEntityPropertyOptions:
+    'authoritative: durable option additions settle with the full parent row',
   CreateCalendarEvent: 'custom: client event identity and occurrences',
   UpdateCalendarEvent: 'custom: event and occurrence edits',
   DeleteCalendarEvent: 'custom: event and occurrence removal',

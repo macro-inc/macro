@@ -1,10 +1,11 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { uploadFiles } from '@core/util/upload';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry } from '@macro-inc/observability';
 import { refetchHistory } from '@queries/history/history';
+import { saveCreatedEntityTags } from '@queries/properties/graphql/created-entity-tags';
 import { refetchSoupEntity } from '@queries/soup/cache';
 import { createProject } from '@queries/storage/projects';
-import { propertiesServiceClient } from '@service-properties/client';
 import type { FolderCreationCommands } from '../core/folder-composer';
 
 const reportRefetchError = (error: unknown) =>
@@ -14,6 +15,7 @@ export function createFolderCommands(options: {
   parentId?: string;
   source?: string;
 }): FolderCreationCommands {
+  const generation = cacheSessionGeneration.capture();
   return {
     async create(name) {
       const id = await createProject({ name, ...options });
@@ -21,24 +23,20 @@ export function createFolderCommands(options: {
       return id;
     },
     async saveTags(id, tags) {
+      if (!cacheSessionGeneration.isCurrent(generation)) return;
       const properties = Object.entries(tags)
         .filter(([, ids]) => ids.length > 0)
-        .map(([property_id, add_option_ids]) => ({
-          property_id,
-          add_option_ids,
-          remove_option_ids: [],
+        .map(([propertyDefinitionId, addOptionIds]) => ({
+          propertyDefinitionId,
+          addOptionIds,
+          removeOptionIds: [],
         }));
       if (!properties.length) return;
-      const result =
-        await propertiesServiceClient.bulkUpdateEntityPropertyOptions({
-          entity_type: 'PROJECT',
-          entity_id: id,
-          body: { properties },
-        });
-      if (result.isErr()) throw result.error;
-      refetchSoupEntity(id, 'project', { refreshGraphql: true }).catch(
-        reportRefetchError
-      );
+      await saveCreatedEntityTags({
+        entityType: 'PROJECT',
+        entityId: id,
+        properties,
+      });
     },
     async upload(id, file) {
       const [result] = await uploadFiles([file], 'dss', { projectId: id });

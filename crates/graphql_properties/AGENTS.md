@@ -21,7 +21,8 @@ edge.
   set is listed whenever the viewer is on a team, with a null definition until
   it is provisioned.
 - `src/mutations.rs`: `PropertiesMutationRoot` — setting/clearing a property
-  value on an entity.
+  value on an entity. The composed Soup mutation uses the same option-delta
+  writer and selects the entire parent through the Soup edge.
 - `src/catalog.rs`: `PropertyCatalogMutationRoot` — creating and deleting
   definitions, adding/updating/deleting their options, and provisioning,
   promoting and merging tags. Each mutation makes the same properties-service

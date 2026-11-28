@@ -94,6 +94,7 @@ use soup_realtime::domain::ports::{
 };
 
 use crate::SoupEdges;
+use crate::entity_property_effects::EntityPropertyEffectsRoot;
 
 /// Mutation root combining independent domain GraphQL adapters.
 #[derive(MergedObject)]
@@ -109,6 +110,7 @@ pub struct CompleteMutationRoot<
     ES: EmailService + EmailSendService,
 >(
     PropertiesMutationRoot<W>,
+    EntityPropertyEffectsRoot<W, E>,
     PropertyCatalogMutationRoot<W, PR>,
     EntityMutationRoot<M, E>,
     FavoriteMutationRoot<F, E>,
@@ -140,6 +142,7 @@ impl<
     fn new() -> Self {
         Self(
             PropertiesMutationRoot::<W>::new(),
+            EntityPropertyEffectsRoot::<W, E>::default(),
             PropertyCatalogMutationRoot::<W, PR>::new(),
             EntityMutationRoot::<M, E>::new(),
             FavoriteMutationRoot::<F, E>::new(),

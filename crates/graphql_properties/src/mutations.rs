@@ -41,6 +41,13 @@ pub struct EntityPropertyOptionDelta {
 
 /// GraphQL boundary for setting an entity property.
 pub trait EntityPropertyWriter: PropertyCatalogWriter + Send + Sync + 'static {
+    /// Apply option deltas when a composed response will load the parent entity.
+    fn apply_entity_property_options(
+        &self,
+        entity: model_entity::Entity<'static>,
+        updates: Vec<EntityPropertyOptionDelta>,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
+
     /// Delete one property assignment after checking edit access to its entity.
     fn delete_entity_property(
         &self,
@@ -78,6 +85,14 @@ pub struct NoOpEntityPropertyWriter;
 impl PropertyCatalogWriter for NoOpEntityPropertyWriter {}
 
 impl EntityPropertyWriter for NoOpEntityPropertyWriter {
+    async fn apply_entity_property_options(
+        &self,
+        _entity: model_entity::Entity<'static>,
+        _updates: Vec<EntityPropertyOptionDelta>,
+    ) -> Result<(), rootcause::Report> {
+        Err(rootcause::report!("property writer is not configured"))
+    }
+
     async fn delete_entity_property(
         &self,
         _entity_type: model_entity::EntityType,
@@ -141,11 +156,62 @@ impl<P, A> PropertiesEntityPropertyWriter<P, A> {
     }
 }
 
+impl<P: PropertiesService, A: EntityAccessService> PropertiesEntityPropertyWriter<P, A> {
+    /// Commit the option deltas using the caller's entity edit receipt.
+    async fn apply_option_deltas(
+        &self,
+        entity_type: model_entity::EntityType,
+        entity_id: &str,
+        updates: Vec<EntityPropertyOptionDelta>,
+    ) -> Result<
+        entity_access::domain::models::EntityAccessReceipt<EditAccessLevel>,
+        rootcause::Report,
+    > {
+        let receipt = self
+            .entity_access_service
+            .generate_entity_access_receipt::<EditAccessLevel>(
+                &self.user_id,
+                None,
+                entity_id,
+                entity_type,
+            )
+            .await
+            .map_err(|err| rootcause::report!(err))?;
+
+        self.properties_service
+            .bulk_update_entity_property_options(
+                &receipt,
+                updates
+                    .into_iter()
+                    .map(|update| EntityPropertyOptionUpdate {
+                        property_definition_id: update.property_definition_id,
+                        add_option_ids: update.add_option_ids,
+                        remove_option_ids: update.remove_option_ids,
+                    })
+                    .collect(),
+            )
+            .await
+            .map_err(|err| rootcause::report!(err))?;
+
+        Ok(receipt)
+    }
+}
+
 impl<P, A> EntityPropertyWriter for PropertiesEntityPropertyWriter<P, A>
 where
     P: PropertiesService,
     A: EntityAccessService,
 {
+    async fn apply_entity_property_options(
+        &self,
+        entity: model_entity::Entity<'static>,
+        updates: Vec<EntityPropertyOptionDelta>,
+    ) -> Result<(), rootcause::Report> {
+        self.apply_option_deltas(entity.entity_type, &entity.entity_id, updates)
+            .await?;
+        Ok(())
+    }
+
     async fn delete_entity_property(
         &self,
         entity_type: model_entity::EntityType,
@@ -199,36 +265,14 @@ where
         entity_id: String,
         updates: Vec<EntityPropertyOptionDelta>,
     ) -> Result<Vec<EntityPropertyWithDefinition>, rootcause::Report> {
-        let entity_access_receipt = self
-            .entity_access_service
-            .generate_entity_access_receipt::<EditAccessLevel>(
-                &self.user_id,
-                None,
-                &entity_id,
-                entity_type,
-            )
-            .await
-            .map_err(|err| rootcause::report!(err))?;
-
         let touched_definition_ids: Vec<Uuid> = updates
             .iter()
             .map(|update| update.property_definition_id)
             .collect();
 
-        self.properties_service
-            .bulk_update_entity_property_options(
-                &entity_access_receipt,
-                updates
-                    .into_iter()
-                    .map(|update| EntityPropertyOptionUpdate {
-                        property_definition_id: update.property_definition_id,
-                        add_option_ids: update.add_option_ids,
-                        remove_option_ids: update.remove_option_ids,
-                    })
-                    .collect(),
-            )
-            .await
-            .map_err(|err| rootcause::report!(err))?;
+        let entity_access_receipt = self
+            .apply_option_deltas(entity_type, &entity_id, updates)
+            .await?;
 
         // The domain returns reconciled option ids only. Re-read the committed
         // rows so the response carries whole property records: the client's
@@ -313,13 +357,34 @@ struct SetEntityPropertyInput {
 
 /// Input for applying option deltas across one entity's properties.
 #[derive(async_graphql::InputObject)]
-struct UpdateEntityPropertyOptionsInput {
+pub struct UpdateEntityPropertyOptionsInput {
     /// Type of entity whose properties are changing.
     entity_type: GraphqlPropertyTargetEntityType,
     /// Identifier of the entity whose properties are changing.
     entity_id: String,
     /// Per-property option deltas applied in one transaction.
     properties: Vec<EntityPropertyOptionDeltaInput>,
+}
+
+impl UpdateEntityPropertyOptionsInput {
+    /// Convert the target and deltas to domain types.
+    pub fn into_model(
+        self,
+    ) -> async_graphql::Result<(
+        model_entity::Entity<'static>,
+        Vec<EntityPropertyOptionDelta>,
+    )> {
+        let entity = self
+            .entity_type
+            .into_model()
+            .with_entity_string(self.entity_id);
+        let updates = self
+            .properties
+            .into_iter()
+            .map(EntityPropertyOptionDeltaInput::try_into_model)
+            .collect::<async_graphql::Result<Vec<_>>>()?;
+        Ok((entity, updates))
+    }
 }
 
 /// One property's option delta within an options update.
@@ -542,16 +607,12 @@ where
         input: UpdateEntityPropertyOptionsInput,
     ) -> async_graphql::Result<Vec<GraphqlProperty>> {
         let writer = ctx.data::<T>()?;
-        let updates = input
-            .properties
-            .into_iter()
-            .map(EntityPropertyOptionDeltaInput::try_into_model)
-            .collect::<async_graphql::Result<Vec<_>>>()?;
+        let (entity, updates) = input.into_model()?;
 
         let properties = writer
             .update_entity_property_options(
-                input.entity_type.into_model(),
-                input.entity_id,
+                entity.entity_type,
+                entity.entity_id.into_owned(),
                 updates,
             )
             .await
@@ -602,6 +663,14 @@ mod tests {
     impl crate::catalog::PropertyCatalogWriter for CapturingWriter {}
 
     impl EntityPropertyWriter for CapturingWriter {
+        async fn apply_entity_property_options(
+            &self,
+            _entity: model_entity::Entity<'static>,
+            _updates: Vec<EntityPropertyOptionDelta>,
+        ) -> Result<(), rootcause::Report> {
+            unreachable!("this test does not request composed option updates")
+        }
+
         async fn delete_entity_property(
             &self,
             _entity_type: model_entity::EntityType,

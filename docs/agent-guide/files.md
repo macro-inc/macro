@@ -299,7 +299,10 @@ On touch devices, the folder composer uses the same bottom drawer as Task, with
 the name and tags fields; the upload area and file/folder picker buttons are hidden.
 Expanding into a split keeps the draft. Creation preserves the current location
 and offers an **Open** toast action when finished. On failure, the toast’s **Retry**
-action restores the draft, retaining any created folder and only unsuccessful uploads. Close an unused draft
+action restores the draft, retaining any created folder and only unsuccessful
+uploads. Keep a relevant tag-filtered list open to verify that a newly tagged
+folder appears once its tags commit. A tag save queued after the folder is
+created finishes when connectivity returns. Close an unused draft
 without submitting when verifying against hosted dev data. In a folder
 opened in its own split or an inline preview, drop files from the computer onto
 the empty state or file list, then reopen the folder to verify membership.

@@ -165,6 +165,14 @@ impl PropertyCatalogWriter for FakeWriter {
 }
 
 impl EntityPropertyWriter for FakeWriter {
+    async fn apply_entity_property_options(
+        &self,
+        _entity: model_entity::Entity<'static>,
+        _updates: Vec<EntityPropertyOptionDelta>,
+    ) -> Result<(), rootcause::Report> {
+        unreachable!("this test does not request composed option updates")
+    }
+
     async fn delete_entity_property(
         &self,
         _entity_type: model_entity::EntityType,

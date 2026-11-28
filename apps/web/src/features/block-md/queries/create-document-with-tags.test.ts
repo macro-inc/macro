@@ -1,20 +1,22 @@
-import { err, ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   updateTags: vi.fn(),
-  refresh: vi.fn(),
   failure: vi.fn(),
+  current: vi.fn(),
 }));
 vi.mock('@core/util/create', () => ({ createMarkdownFile: mocks.create }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: mocks.failure },
 }));
-vi.mock('@queries/soup/cache', () => ({ refetchSoupEntity: mocks.refresh }));
-vi.mock('@service-properties/client', () => ({
-  propertiesServiceClient: {
-    bulkUpdateEntityPropertyOptions: mocks.updateTags,
+vi.mock('@queries/properties/graphql/created-entity-tags', () => ({
+  saveCreatedEntityTags: mocks.updateTags,
+}));
+vi.mock('@graphql-cache/session-generation', () => ({
+  cacheSessionGeneration: {
+    capture: () => 'initial',
+    isCurrent: mocks.current,
   },
 }));
 
@@ -23,7 +25,8 @@ import { createDocumentWithTags } from './create-document-with-tags';
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.create.mockResolvedValue('document-id');
-  mocks.updateTags.mockResolvedValue(ok({}));
+  mocks.updateTags.mockResolvedValue(undefined);
+  mocks.current.mockReturnValue(true);
 });
 
 describe('slash document creation', () => {
@@ -56,7 +59,7 @@ describe('slash document creation', () => {
     expect(mocks.updateTags).not.toHaveBeenCalled();
   });
 
-  it('persists personal and team tags and refreshes the created entity', async () => {
+  it('submits personal and team tag additions with the new document identity', async () => {
     await createDocumentWithTags(
       'Title',
       'Body',
@@ -72,25 +75,20 @@ describe('slash document creation', () => {
       vi.fn()
     );
     expect(mocks.updateTags).toHaveBeenCalledWith({
-      entity_type: 'DOCUMENT',
-      entity_id: 'document-id',
-      body: {
-        properties: [
-          {
-            property_id: 'personal',
-            add_option_ids: ['tag-1', 'tag-2'],
-            remove_option_ids: [],
-          },
-          {
-            property_id: 'team',
-            add_option_ids: ['tag-3'],
-            remove_option_ids: [],
-          },
-        ],
-      },
-    });
-    expect(mocks.refresh).toHaveBeenCalledWith('document-id', 'document', {
-      refreshGraphql: true,
+      entityType: 'DOCUMENT',
+      entityId: 'document-id',
+      properties: [
+        {
+          propertyDefinitionId: 'personal',
+          addOptionIds: ['tag-1', 'tag-2'],
+          removeOptionIds: [],
+        },
+        {
+          propertyDefinitionId: 'team',
+          addOptionIds: ['tag-3'],
+          removeOptionIds: [],
+        },
+      ],
     });
   });
 
@@ -104,25 +102,35 @@ describe('slash document creation', () => {
     expect(mocks.updateTags).not.toHaveBeenCalled();
   });
 
-  it.each(['result', 'throw'])(
-    'keeps the created document when tag saving fails via %s',
-    async (failure) => {
-      if (failure === 'result')
-        mocks.updateTags.mockResolvedValue(err(new Error('offline')));
-      else mocks.updateTags.mockRejectedValue(new Error('offline'));
-      expect(
-        await createDocumentWithTags(
-          'Title',
-          '',
-          [['personal', { valueType: 'SELECT_STRING', values: ['tag-1'] }]],
-          new Map(),
-          vi.fn()
-        )
-      ).toEqual({ documentId: 'document-id' });
-      expect(mocks.failure).toHaveBeenCalledWith(
-        expect.stringContaining('Document created, but tags')
-      );
-      expect(mocks.create).toHaveBeenCalledOnce();
-    }
-  );
+  it('keeps the created document when tag saving fails', async () => {
+    mocks.updateTags.mockRejectedValue(new Error('write denied'));
+    expect(
+      await createDocumentWithTags(
+        'Title',
+        '',
+        [['personal', { valueType: 'SELECT_STRING', values: ['tag-1'] }]],
+        new Map(),
+        vi.fn()
+      )
+    ).toEqual({ documentId: 'document-id' });
+    expect(mocks.failure).toHaveBeenCalledWith(
+      expect.stringContaining('Document created, but tags')
+    );
+    expect(mocks.create).toHaveBeenCalledOnce();
+  });
+
+  it('does not submit the old draft after the viewer changes', async () => {
+    mocks.current.mockReturnValue(false);
+    const history = vi.fn();
+    await createDocumentWithTags(
+      'Title',
+      '',
+      [['personal', { valueType: 'SELECT_STRING', values: ['tag-1'] }]],
+      new Map(),
+      history
+    );
+    expect(mocks.current).toHaveBeenCalledWith('initial');
+    expect(history).not.toHaveBeenCalled();
+    expect(mocks.updateTags).not.toHaveBeenCalled();
+  });
 });
