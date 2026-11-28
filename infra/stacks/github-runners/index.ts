@@ -1,6 +1,7 @@
+import * as pulumi from '@pulumi/pulumi';
 import { config, stack } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
-import { SmokeTestRunner } from './runner';
+import { DbMigratorRunner } from './runner';
 
 const tags = {
   environment: stack,
@@ -8,19 +9,18 @@ const tags = {
   project: 'github-runners',
 };
 
-const vpc = get_coparse_api_vpc();
+// One runner for every environment: it migrates dev and prod alike, so this
+// stack exists only in dev (see docs/runbooks/db-migrator-runner.md).
+const dbMigrator = new DbMigratorRunner(
+  `${pulumi.getProject()}-db-migrator-${stack}`,
+  {
+    vpc: get_coparse_api_vpc(),
+    tags,
+    runnerUrl: config.require('runnerUrl'),
+    instanceType: config.require('dbMigratorInstanceType'),
+    databaseSecretNames: ['macro-db-dev', 'macro-db-prod'],
+  }
+);
 
-const runnerUrl = config.require('runnerUrl');
-const runnerToken = config.requireSecret('runnerToken');
-
-const smokeRunner = new SmokeTestRunner('macro-smoke-runner', {
-  vpc,
-  tags,
-  runnerUrl,
-  runnerToken,
-  instanceType: config.get('instanceType') || 't3.large',
-  keyPairName: config.get('keyPairName'),
-});
-
-export const instanceId = smokeRunner.instance.id;
-export const privateIp = smokeRunner.instance.privateIp;
+export const dbMigratorInstanceId = dbMigrator.instance.id;
+export const dbMigratorPrivateIp = dbMigrator.instance.privateIp;

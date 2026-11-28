@@ -89,6 +89,7 @@ check	deploy_all_services.yml	warm-lambdas	Warm shared lambda deps onto sticky d
 check	deploy_all_services.yml	build-service-binaries	Build ${{ matrix.service }} binaries
 check	deploy_all_services.yml	build-lambda-artifacts	Build ${{ matrix.service }} Lambda artifacts
 check	deploy_all_services.yml	migrate-db	Run Database Migrations
+check	deploy_all_services.yml	migration-runner-watchdog	Wait for the migration runner
 check	deploy_all_services.yml	deploy-services	Deploy ${{ matrix.service }}
 check	deploy_all_services.yml	deployment-summary	Deployment Summary
 check	deploy_cla_worker.yml	deploy	Deploy to Cloudflare
@@ -104,6 +105,7 @@ check	deploy_on_push.yml	deploy-cloud-storage/warm-lambdas	Deploy Cloud Storage 
 check	deploy_on_push.yml	deploy-cloud-storage/build-service-binaries	Deploy Cloud Storage Services / Build ${{ matrix.service }} binaries
 check	deploy_on_push.yml	deploy-cloud-storage/build-lambda-artifacts	Deploy Cloud Storage Services / Build ${{ matrix.service }} Lambda artifacts
 check	deploy_on_push.yml	deploy-cloud-storage/migrate-db	Deploy Cloud Storage Services / Run Database Migrations
+check	deploy_on_push.yml	deploy-cloud-storage/migration-runner-watchdog	Deploy Cloud Storage Services / Wait for the migration runner
 check	deploy_on_push.yml	deploy-cloud-storage/deploy-services	Deploy Cloud Storage Services / Deploy ${{ matrix.service }}
 check	deploy_on_push.yml	deploy-cloud-storage/deployment-summary	Deploy Cloud Storage Services / Deployment Summary
 check	deploy_on_push.yml	deploy-sync-service/deploy	Deploy Sync Service / Deploy to Cloudflare
@@ -208,6 +210,7 @@ check	release-production.yml	deploy-cloud-storage/warm-lambdas	Deploy Cloud Stor
 check	release-production.yml	deploy-cloud-storage/build-service-binaries	Deploy Cloud Storage Services / Build ${{ matrix.service }} binaries
 check	release-production.yml	deploy-cloud-storage/build-lambda-artifacts	Deploy Cloud Storage Services / Build ${{ matrix.service }} Lambda artifacts
 check	release-production.yml	deploy-cloud-storage/migrate-db	Deploy Cloud Storage Services / Run Database Migrations
+check	release-production.yml	deploy-cloud-storage/migration-runner-watchdog	Deploy Cloud Storage Services / Wait for the migration runner
 check	release-production.yml	deploy-cloud-storage/deploy-services	Deploy Cloud Storage Services / Deploy ${{ matrix.service }}
 check	release-production.yml	deploy-cloud-storage/deployment-summary	Deploy Cloud Storage Services / Deployment Summary
 check	release-production.yml	deploy-sync-service/deploy	Deploy Sync Service / Deploy to Cloudflare

@@ -1,6 +1,7 @@
 echo "Running migrations for $MIGRATION_ENVIRONMENT environment..."
+# `sqlx`, not `cargo sqlx`: the db-migrator runner has no Rust toolchain.
 if [ "$MIGRATION_ENVIRONMENT" = "dev" ]; then
-  cargo sqlx migrate run --ignore-missing
+  sqlx migrate run --ignore-missing
 else
-  cargo sqlx migrate run
+  sqlx migrate run
 fi

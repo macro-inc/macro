@@ -145,3 +145,54 @@ fn summary_uses_the_verified_immutable_bun_action() {
         "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6"
     );
 }
+
+#[test]
+fn the_watchdog_starts_with_the_migration_and_watches_its_job() {
+    let workflow = serde_json::to_value(deploy_all_services()).unwrap();
+    let jobs = workflow["jobs"].as_object().unwrap();
+    let migrate = &jobs[MIGRATE_DB.id()];
+    let watchdog = &jobs[MIGRATION_RUNNER_WATCHDOG.id()];
+
+    assert_eq!(watchdog["needs"], migrate["needs"]);
+    assert_eq!(watchdog["if"], migrate["if"]);
+    assert_eq!(migrate["name"], MIGRATE_DB_NAME);
+    assert_eq!(watchdog["name"], MIGRATION_RUNNER_WATCHDOG_NAME);
+    assert_eq!(watchdog["runs-on"], "namespace-profile-linux-tiny-no-cache");
+    // It cancels the run, and needs nothing else.
+    assert_eq!(
+        watchdog["permissions"],
+        serde_json::json!({"actions": "write"})
+    );
+
+    let env = &watchdog["steps"][0]["env"];
+    assert_eq!(env["MIGRATION_JOB"], migrate["name"]);
+    assert_eq!(env["MIGRATION_RUNNER_LABEL"], migrate["runs-on"]);
+    assert_eq!(env["WATCHDOG_JOB"], watchdog["name"]);
+    assert_eq!(
+        env["WAIT_MINUTES"],
+        MIGRATION_RUNNER_WAIT_MINUTES.to_string()
+    );
+    assert_eq!(
+        env["DRAIN_MINUTES"],
+        MIGRATION_RUNNER_DRAIN_MINUTES.to_string()
+    );
+}
+
+#[test]
+fn the_watchdog_cancels_only_a_migration_no_runner_takes() {
+    let output = std::process::Command::new("node")
+        .args(["--test", "migration_runner_watchdog.test.ts"])
+        .current_dir(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/workflows/scripts"
+        ))
+        .env_remove("BASH_ENV")
+        .output()
+        .expect("run the migration runner watchdog scenarios with Node");
+    assert!(
+        output.status.success(),
+        "migration runner watchdog scenarios failed:\n{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}

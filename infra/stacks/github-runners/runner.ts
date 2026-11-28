@@ -2,45 +2,66 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { stack } from '../../packages/shared';
+import { awsRegion } from '../../packages/shared';
 
-type SmokeTestRunnerArgs = {
+type DbMigratorRunnerArgs = {
   vpc: {
     vpcId: string;
     privateSubnetIds: string[];
   };
   tags: { [key: string]: string };
+  /** The organization the runners register with. */
   runnerUrl: string;
-  runnerToken: pulumi.Output<string>;
-  instanceType?: string;
-  keyPairName?: string;
+  instanceType: string;
+  /** Secrets Manager names of the database URLs the jobs read. */
+  databaseSecretNames: string[];
   volumeSizeGb?: number;
 };
 
-export class SmokeTestRunner extends pulumi.ComponentResource {
+/**
+ * The in-VPC self-hosted GitHub Actions runner behind the `db-migrator` label
+ * (`runners::DB_MIGRATOR` in `xtask_workflows`): it runs every MacroDB
+ * migration, dev and prod, and the jobs that need the database from inside the
+ * VPC. One instance, two runner processes so a long rollout job cannot hold
+ * the only slot.
+ *
+ * It must not wedge silently again (2026-11-25: a job compiled Rust on the old
+ * 1 GiB hand-made box, which ran out of memory and stopped answering for days):
+ *
+ * - The runners share a memory-capped systemd slice, so a runaway job is
+ *   killed and fails instead of starving the machine. Nothing on the box
+ *   compiles: there is no Rust toolchain or Nix, and its `cargo` only
+ *   forwards `cargo sqlx` for deploys of older commits.
+ * - systemd restarts a runner process that exits.
+ * - EC2 reboots the instance when its instance status check fails and
+ *   recovers it onto new hardware when the system status check fails. Both
+ *   keep the disk, so the runners keep their registration.
+ * - No SSH and no public address: reach it with SSM Session Manager.
+ * - The runners register after the first boot, from a Session Manager shell,
+ *   so the registration token is never in the user data, which every job on
+ *   the box can read from the instance metadata service.
+ *
+ * See `docs/runbooks/db-migrator-runner.md`.
+ */
+export class DbMigratorRunner extends pulumi.ComponentResource {
   public instance: aws.ec2.Instance;
-  public sg: aws.ec2.SecurityGroup;
-  public role: aws.iam.Role;
-  public instanceProfile: aws.iam.InstanceProfile;
 
   constructor(
     name: string,
-    args: SmokeTestRunnerArgs,
+    args: DbMigratorRunnerArgs,
     opts?: pulumi.ComponentResourceOptions
   ) {
-    super('macro:components:SmokeTestRunner', name, {}, opts);
+    super('macro:components:DbMigratorRunner', name, {}, opts);
 
     const {
       vpc,
       tags,
       runnerUrl,
-      runnerToken,
-      instanceType = 't3.large',
-      keyPairName,
-      volumeSizeGb = 100,
+      instanceType,
+      databaseSecretNames,
+      volumeSizeGb = 40,
     } = args;
 
-    // ── AMI ───────────────────────────────────────────────────────────────
     const ami = aws.ec2.getAmiOutput({
       mostRecent: true,
       owners: ['099720109477'], // Canonical
@@ -55,13 +76,14 @@ export class SmokeTestRunner extends pulumi.ComponentResource {
       ],
     });
 
-    // ── Security Group ────────────────────────────────────────────────────
-    this.sg = new aws.ec2.SecurityGroup(
+    // Outbound only: GitHub, the package mirrors at bootstrap, SSM, and the
+    // databases, whose security groups admit the VPC's CIDR.
+    const securityGroup = new aws.ec2.SecurityGroup(
       `${name}-sg`,
       {
-        name: `${name}-sg-${stack}`,
+        name: `${name}-sg`,
         vpcId: vpc.vpcId,
-        description: `GitHub Actions runner: ${name}`,
+        description: 'GitHub Actions db-migrator runner: outbound only',
         tags,
       },
       { parent: this }
@@ -70,7 +92,7 @@ export class SmokeTestRunner extends pulumi.ComponentResource {
     new aws.vpc.SecurityGroupEgressRule(
       `${name}-all-out`,
       {
-        securityGroupId: this.sg.id,
+        securityGroupId: securityGroup.id,
         description: 'Allow all outbound',
         cidrIpv4: '0.0.0.0/0',
         ipProtocol: '-1',
@@ -79,23 +101,10 @@ export class SmokeTestRunner extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    new aws.vpc.SecurityGroupIngressRule(
-      `${name}-vpc-in`,
-      {
-        securityGroupId: this.sg.id,
-        description: 'Allow VPC inbound',
-        cidrIpv4: '10.0.0.0/16',
-        ipProtocol: '-1',
-        tags,
-      },
-      { parent: this }
-    );
-
-    // ── IAM ───────────────────────────────────────────────────────────────
-    this.role = new aws.iam.Role(
+    const role = new aws.iam.Role(
       `${name}-role`,
       {
-        name: `${name}-role-${stack}`,
+        name: `${name}-role`,
         assumeRolePolicy: JSON.stringify({
           Version: '2012-10-17',
           Statement: [
@@ -114,63 +123,138 @@ export class SmokeTestRunner extends pulumi.ComponentResource {
     new aws.iam.RolePolicyAttachment(
       `${name}-ssm`,
       {
-        role: this.role.name,
+        role: role.name,
         policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
       },
       { parent: this }
     );
 
-    this.instanceProfile = new aws.iam.InstanceProfile(
-      `${name}-instance-profile`,
+    // The migration and rollout jobs read only the database URLs, through
+    // the instance's own credentials.
+    const databaseSecretArns = databaseSecretNames.map(
+      (secretName) =>
+        aws.secretsmanager.getSecretOutput({ name: secretName }).arn
+    );
+    new aws.iam.RolePolicy(
+      `${name}-database-secrets`,
       {
-        name: `${name}-profile-${stack}`,
-        role: this.role.name,
+        role: role.id,
+        policy: pulumi.all(databaseSecretArns).apply((arns) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: 'secretsmanager:GetSecretValue',
+                Resource: arns,
+              },
+            ],
+          })
+        ),
+      },
+      { parent: this }
+    );
+
+    const instanceProfile = new aws.iam.InstanceProfile(
+      `${name}-profile`,
+      {
+        name: `${name}-profile`,
+        role: role.name,
         tags,
       },
       { parent: this }
     );
 
-    // ── User Data ─────────────────────────────────────────────────────────
-    const userDataScript = fs.readFileSync(
-      path.join(__dirname, 'user-data.sh'),
-      'utf-8'
-    );
-
-    const userData = runnerToken.apply((token) =>
-      userDataScript.replace(
+    // No secret: the runners register later (see user-data.sh), and keep
+    // their registration on disk across reboots and recoveries.
+    const userData = fs
+      .readFileSync(path.join(__dirname, 'user-data.sh'), 'utf-8')
+      .replace(
         'set -euo pipefail',
         [
           'set -euo pipefail',
-          `export GITHUB_RUNNER_URL="${runnerUrl}"`,
-          `export GITHUB_RUNNER_TOKEN="${token}"`,
-          `export GITHUB_RUNNER_NAME="${name}-$(curl -s http://169.254.169.254/latest/meta-data/instance-id)"`,
+          `GITHUB_RUNNER_URL='${runnerUrl}'`,
+          `AWS_REGION='${awsRegion}'`,
         ].join('\n')
-      )
-    );
+      );
 
-    // ── EC2 Instance ──────────────────────────────────────────────────────
     this.instance = new aws.ec2.Instance(
-      `${name}`,
+      name,
       {
         ami: ami.id,
         instanceType,
         subnetId: vpc.privateSubnetIds[0],
-        vpcSecurityGroupIds: [this.sg.id],
-        iamInstanceProfile: this.instanceProfile.name,
-        keyName: keyPairName,
+        associatePublicIpAddress: false,
+        vpcSecurityGroupIds: [securityGroup.id],
+        iamInstanceProfile: instanceProfile.name,
         userData,
         userDataReplaceOnChange: true,
+        metadataOptions: {
+          httpTokens: 'required',
+          httpEndpoint: 'enabled',
+          httpPutResponseHopLimit: 1,
+        },
         rootBlockDevice: {
           volumeSize: volumeSizeGb,
           volumeType: 'gp3',
           encrypted: true,
         },
-        tags: {
-          ...tags,
-          Name: `${name}-${stack}`,
-        },
+        tags: { ...tags, Name: name },
+      },
+      {
+        parent: this,
+        // A newer Ubuntu image must not replace a registered runner; the
+        // instance takes security updates through unattended-upgrades.
+        ignoreChanges: ['ami'],
+      }
+    );
+
+    // Instance status check: the guest stopped answering (out of memory, a
+    // kernel hang). Three failed minutes reboot it.
+    new aws.cloudwatch.MetricAlarm(
+      `${name}-instance-check`,
+      {
+        name: `${name}-instance-check`,
+        alarmDescription:
+          'The db-migrator runner failed its instance status check for 3 minutes; EC2 reboots it. See docs/runbooks/db-migrator-runner.md.',
+        namespace: 'AWS/EC2',
+        metricName: 'StatusCheckFailed_Instance',
+        dimensions: { InstanceId: this.instance.id },
+        statistic: 'Maximum',
+        period: 60,
+        evaluationPeriods: 3,
+        threshold: 1,
+        comparisonOperator: 'GreaterThanOrEqualToThreshold',
+        treatMissingData: 'missing',
+        alarmActions: [`arn:aws:automate:${awsRegion}:ec2:reboot`],
+        tags,
       },
       { parent: this }
     );
+
+    // System status check: the underlying host failed. Recovery moves the
+    // same instance, disk and address onto healthy hardware.
+    new aws.cloudwatch.MetricAlarm(
+      `${name}-system-check`,
+      {
+        name: `${name}-system-check`,
+        alarmDescription:
+          'The db-migrator runner failed its system status check for 2 minutes; EC2 recovers it onto new hardware. See docs/runbooks/db-migrator-runner.md.',
+        namespace: 'AWS/EC2',
+        metricName: 'StatusCheckFailed_System',
+        dimensions: { InstanceId: this.instance.id },
+        statistic: 'Maximum',
+        period: 60,
+        evaluationPeriods: 2,
+        threshold: 1,
+        comparisonOperator: 'GreaterThanOrEqualToThreshold',
+        treatMissingData: 'missing',
+        alarmActions: [`arn:aws:automate:${awsRegion}:ec2:recover`],
+        tags,
+      },
+      { parent: this }
+    );
+
+    this.registerOutputs({ instanceId: this.instance.id });
   }
 }

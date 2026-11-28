@@ -4,8 +4,9 @@
 set -euo pipefail
 
 # One line per migration: `<version>/<status> <description>`, where status is
-# `installed`, `pending`, or `installed (different checksum)`.
-migration_statuses=$(cargo sqlx migrate info)
+# `installed`, `pending`, or `installed (different checksum)`. `sqlx`, not
+# `cargo sqlx`: the db-migrator runner has no Rust toolchain.
+migration_statuses=$(sqlx migrate info)
 
 if [[ -z "$migration_statuses" ]]; then
   echo "::error::Could not read migration status for $ENVIRONMENT."
