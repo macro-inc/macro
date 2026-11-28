@@ -1,6 +1,6 @@
 use super::*;
 use crate::workflows::{
-    channels_e2e, connectors_e2e, email_e2e, email_e2e_browser, email_e2e_full_stack,
+    channels_e2e, chat_scale, connectors_e2e, email_e2e, email_e2e_browser, email_e2e_full_stack,
     render_gh_workflow,
 };
 
@@ -30,6 +30,10 @@ fn workflows() -> Vec<(&'static str, serde_yaml::Value)> {
                 parse(
                     render_gh_workflow(channels_e2e::channels_e2e)().expect("the workflow renders"),
                 ),
+            ),
+            (
+                "chat_scale",
+                parse(render_gh_workflow(chat_scale::chat_scale)().expect("the workflow renders")),
             ),
             (
                 "connectors_e2e",
@@ -121,8 +125,10 @@ fn a_streams_alert_jobs_run_one_at_a_time() {
 /// queue, where a re-run would replace the push waiting with an older commit.
 #[test]
 fn a_workflows_runs_queue_without_cancelling_the_one_running() {
+    let workflows = workflows();
+    let count = workflows.len();
     let mut groups = Vec::new();
-    for (name, workflow) in workflows() {
+    for (name, workflow) in workflows {
         let concurrency = &workflow["concurrency"];
         assert_eq!(
             concurrency["cancel-in-progress"].as_bool(),
@@ -144,7 +150,11 @@ fn a_workflows_runs_queue_without_cancelling_the_one_running() {
     }
     groups.sort_unstable();
     groups.dedup();
-    assert_eq!(groups.len(), 5, "two workflows share a queue: {groups:?}");
+    assert_eq!(
+        groups.len(),
+        count,
+        "two workflows share a queue: {groups:?}"
+    );
 }
 
 /// The script reads the job and its steps by the names the workflow gives

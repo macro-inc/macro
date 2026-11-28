@@ -60,6 +60,14 @@ to the channel `CONNECTORS_E2E_ALERT_WEBHOOK_URL` names, so what follows holds
 for it too, with the nightly run in place of the sweep; its report names the
 failed scenarios, and the run's log has each one's error.
 
+The Chat scale tier (`chat_scale.yml`,
+[its guide](../../apps/web/tests/chat-scale/AGENTS.md)) opens Chat in the built
+app over 3,500 and 7,000 channels and checks heap, long tasks and DOM size
+against loose limits. It runs nightly at 05:30 UTC and by hand
+(`gh workflow run chat_scale.yml --ref <branch>`), not in `PR CI`. Its last
+job is the same `Tell Macro Alerts` job, with the nightly run in place of the
+sweep; the run's summary has the measurements.
+
 The CAPTCHA vision lab's browser tests (`captcha_vision_lab.yml`) are not in
 `PR CI` either, because they stalled at random on the runners while Bun drove
 Chromium. They run nightly at 06:00 UTC, on pushes to `main` that change
