@@ -47,9 +47,11 @@ pub(super) fn backfill(connection: &Db) -> Result<(), TursoStorageError> {
 
 /// Gives the Mail documents of queued writes their threads' attachment facts.
 /// Each later push for a thread composes its shadow from them again, and a
-/// write queued by a build without the facts holds none. A document whose
-/// thread the cache does not hold, or that the facts would take over the
-/// attribute limit, stays as it is: replay validates the payload.
+/// write queued by a build without the facts holds none. Only such a document
+/// changes: one with kinds of its own was written by a build with the facts
+/// (before a rollback), and the records the cache holds may name fewer. One
+/// whose thread the cache does not hold, or that the facts would take over
+/// the attribute limit, stays as it is too: replay validates the payload.
 fn conform_queue(connection: &Db) -> Result<(), TursoStorageError> {
     let layer_update =
         "UPDATE optimistic_layers SET optimistic_data_json = ?2 WHERE mutation_id = ?1";
@@ -63,16 +65,18 @@ fn conform_queue(connection: &Db) -> Result<(), TursoStorageError> {
             let OptimisticProjectionMutation::Replace(document) = mutation else {
                 continue;
             };
-            if !is_mail(document) {
+            if !is_mail(document)
+                || document
+                    .exact_facts
+                    .iter()
+                    .any(|fact| fact.attribute.as_str() == mail::ATTACHMENT_ATTRIBUTE)
+            {
                 continue;
             }
             let Some(thread) = thread_record(connection, document)? else {
                 continue;
             };
             let mut conformed = document.clone();
-            conformed
-                .exact_facts
-                .retain(|fact| fact.attribute.as_str() != mail::ATTACHMENT_ATTRIBUTE);
             conformed.exact_facts.extend(
                 kinds_of(connection, &[Some(thread)])?
                     .into_iter()

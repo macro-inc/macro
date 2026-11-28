@@ -603,9 +603,10 @@ async fn queue_and_open(
 
 /// A later save of a created draft can still name the thread's local key,
 /// which the create's settlement made an alias of the server's: the rewrite
-/// reads the thread through it. A document whose thread the cache does not
-/// hold keeps the kinds it has, and one the facts would take over the
-/// attribute limit stays as it is, since replay validates it.
+/// reads the thread through it. A document with kinds of its own keeps them,
+/// whatever the records the cache holds name, as does one whose thread the
+/// cache does not hold; one the facts would take over the attribute limit
+/// stays as it is, since replay validates it.
 #[test]
 fn the_queue_rewrite_follows_aliases_and_keeps_what_it_cannot_improve() {
     block_on(async {
@@ -632,7 +633,8 @@ fn the_queue_rewrite_follows_aliases_and_keeps_what_it_cannot_improve() {
         );
         // Three attributes of its own (owner, server relation, updated-at)
         // and enough more to reach the limit.
-        let missing = thread_document("t-missing", "queued", &[AttachmentKind::Image]);
+        let missing = thread_document("t-missing", "queued", &[]);
+        let own = thread_document("t-0", "own", &[AttachmentKind::Image]);
         let mut full = thread_document("t-0", "queued", &[]);
         let attributes = 3;
         full.exact_facts.extend(
@@ -650,6 +652,7 @@ fn the_queue_rewrite_follows_aliases_and_keeps_what_it_cannot_improve() {
             vec![
                 thread_document("local-0", "queued", &[]),
                 missing.clone(),
+                own.clone(),
                 full.clone(),
             ],
         )
@@ -659,6 +662,7 @@ fn the_queue_rewrite_follows_aliases_and_keeps_what_it_cannot_improve() {
             vec![
                 thread_document("local-0", "queued", &[AttachmentKind::Pdf]),
                 missing,
+                own,
                 full,
             ]
         );
