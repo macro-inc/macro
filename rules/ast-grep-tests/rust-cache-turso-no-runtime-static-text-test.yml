@@ -5,10 +5,12 @@ valid:
   - |
     static NAMES: [&str; 2] = ["records", "meta"];
   - |
-    static NEXT: AtomicU64 = AtomicU64::new(1);
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
   - |
     use std::sync::atomic::AtomicU64;
     type Slot = u64;
+  - |
+    use std::sync::atomic::AtomicBool as Flag;
   - |
     static READY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
   - |
@@ -53,5 +55,19 @@ invalid:
   - |
     use std::sync::OnceLock as AtomicU64;
     static SQL: AtomicU64<String> = AtomicU64::new();
+  - |
+    static NEXT: AtomicU64 = AtomicU64::new(1);
+  - |
+    type r#AtomicBool = OnceLock<String>;
+    static SQL: r#AtomicBool = r#AtomicBool::new();
+  - |
+    struct AtomicBool(OnceLock<String>);
+    static SQL: AtomicBool = AtomicBool(OnceLock::new());
+  - |
+    struct u64(OnceLock<String>);
+  - |
+    type r#bool = OnceLock<String>;
+  - |
+    mod std { pub struct Text; }
   - |
     static SQL: AtomicPtr<u8> = AtomicPtr::new(std::ptr::null_mut());

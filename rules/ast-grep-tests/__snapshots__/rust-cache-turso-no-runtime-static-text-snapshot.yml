@@ -22,6 +22,24 @@ snapshots:
       start: 37
       end: 48
   ? |
+    mod std { pub struct Text; }
+  : labels:
+    - source: mod std { pub struct Text; }
+      style: primary
+      start: 0
+      end: 28
+    - source: std
+      style: secondary
+      start: 4
+      end: 7
+  ? |
+    static NEXT: AtomicU64 = AtomicU64::new(1);
+  : labels:
+    - source: 'static NEXT: AtomicU64 = AtomicU64::new(1);'
+      style: primary
+      start: 0
+      end: 43
+  ? |
     static SQL: AtomicPtr<u8> = AtomicPtr::new(std::ptr::null_mut());
   : labels:
     - source: 'static SQL: AtomicPtr<u8> = AtomicPtr::new(std::ptr::null_mut());'
@@ -79,6 +97,14 @@ snapshots:
       start: 7
       end: 10
   ? |
+    struct AtomicBool(OnceLock<String>);
+    static SQL: AtomicBool = AtomicBool(OnceLock::new());
+  : labels:
+    - source: 'static SQL: AtomicBool = AtomicBool(OnceLock::new());'
+      style: primary
+      start: 37
+      end: 90
+  ? |
     struct Holder(OnceLock<String>);
     static SQL: Holder = Holder(OnceLock::new());
   : labels:
@@ -87,17 +113,24 @@ snapshots:
       start: 33
       end: 78
   ? |
+    struct u64(OnceLock<String>);
+  : labels:
+    - source: struct u64(OnceLock<String>);
+      style: primary
+      start: 0
+      end: 29
+    - source: u64
+      style: secondary
+      start: 7
+      end: 10
+  ? |
     type AtomicBool = OnceLock<String>;
     static SQL: AtomicBool = AtomicBool::new();
   : labels:
-    - source: type AtomicBool = OnceLock<String>;
+    - source: 'static SQL: AtomicBool = AtomicBool::new();'
       style: primary
-      start: 0
-      end: 35
-    - source: AtomicBool
-      style: secondary
-      start: 5
-      end: 15
+      start: 36
+      end: 79
   ? |
     type AtomicText = OnceLock<String>;
     static SQL: AtomicText = AtomicText::new();
@@ -115,14 +148,29 @@ snapshots:
       start: 32
       end: 63
   ? |
+    type r#AtomicBool = OnceLock<String>;
+    static SQL: r#AtomicBool = r#AtomicBool::new();
+  : labels:
+    - source: 'static SQL: r#AtomicBool = r#AtomicBool::new();'
+      style: primary
+      start: 38
+      end: 85
+  ? |
+    type r#bool = OnceLock<String>;
+  : labels:
+    - source: type r#bool = OnceLock<String>;
+      style: primary
+      start: 0
+      end: 31
+    - source: r#bool
+      style: secondary
+      start: 5
+      end: 11
+  ? |
     use std::sync::OnceLock as AtomicU64;
     static SQL: AtomicU64<String> = AtomicU64::new();
   : labels:
-    - source: std::sync::OnceLock as AtomicU64
+    - source: 'static SQL: AtomicU64<String> = AtomicU64::new();'
       style: primary
-      start: 4
-      end: 36
-    - source: AtomicU64
-      style: secondary
-      start: 27
-      end: 36
+      start: 38
+      end: 87

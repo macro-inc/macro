@@ -48,8 +48,6 @@ use std::path::{Path, PathBuf};
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::Mutex;
 #[cfg(not(target_arch = "wasm32"))]
-use std::sync::atomic::AtomicU64;
-#[cfg(not(target_arch = "wasm32"))]
 use turso_core::{Database, IO, MemoryIO, OpenOptions, PlatformIO, SqliteDialect, TempStore};
 #[cfg(target_arch = "wasm32")]
 use turso_opfs::{
@@ -987,7 +985,8 @@ pub enum TursoStorageCloseOutcome {
 impl TursoStorage {
     /// Opens a one-use isolated Turso `MemoryIO` database.
     pub fn open_in_memory(scope: &str) -> Result<Self, TursoStorageError> {
-        static NEXT_MEMORY_DATABASE: AtomicU64 = AtomicU64::new(1);
+        static NEXT_MEMORY_DATABASE: std::sync::atomic::AtomicU64 =
+            std::sync::atomic::AtomicU64::new(1);
         let id = NEXT_MEMORY_DATABASE.fetch_add(1, Ordering::Relaxed);
         TursoMemoryDatabase::new(format!("cache-turso-memory-{id}.db")).open(scope)
     }
