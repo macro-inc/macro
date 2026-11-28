@@ -6,7 +6,7 @@ import {
 } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { CrmRecordDependencies } from './dependencies';
+import type { CrmCreateDependencies } from './dependencies';
 
 const track = vi.hoisted(() => vi.fn());
 vi.mock('@app/lib/analytics', () => ({ analytics: { track } }));
@@ -16,9 +16,6 @@ vi.mock('@service-storage/crm-contacts', () => ({
 const refreshGraphqlLists = vi.hoisted(() => vi.fn(async () => undefined));
 const creates = vi.hoisted(() => ({ company: vi.fn(), contact: vi.fn() }));
 const cacheHost = vi.hoisted(() => vi.fn());
-vi.mock('@service-storage/graphql-soup', () => ({
-  getGraphqlCacheHost: cacheHost,
-}));
 vi.mock('@service-storage/graphql-crm-create', () => ({
   createGraphqlCrmCompany: creates.company,
   createGraphqlCrmContact: creates.contact,
@@ -63,7 +60,11 @@ afterEach(() => {
 });
 
 function mount() {
-  const deps = { storage, client } as unknown as CrmRecordDependencies;
+  const deps = {
+    storage,
+    client,
+    hasLiveCache: () => Boolean(cacheHost()),
+  } as unknown as CrmCreateDependencies;
   let mutations!: {
     company: ReturnType<typeof useCreateCompanyMutation>;
     contact: ReturnType<typeof useCreateContactMutation>;
@@ -188,8 +189,12 @@ it('refreshes company lists once after a batch of GraphQL creates', async () => 
   const importer = createCompanyImporter({
     client,
     storage,
-  } as unknown as CrmRecordDependencies);
-  const inputs = [{ name: 'First company' }, { name: 'Second company' }];
+    hasLiveCache: () => false,
+  } as unknown as CrmCreateDependencies);
+  const inputs = [
+    { name: 'First company', domain: 'first.example' },
+    { name: 'Second company', domain: 'second.example' },
+  ];
 
   await Promise.all(inputs.map((input) => importer.create(input)));
   expect(creates.company.mock.calls).toEqual(

@@ -44,7 +44,10 @@ import {
 } from '@service-storage/crm-access-authority';
 import { crmEmailPolicyClient } from '@service-storage/crm-email-policy';
 import { crmEmailPrivacyClient } from '@service-storage/crm-email-privacy';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import {
+  getGraphqlSoupClient,
+  hasGraphqlCacheHost,
+} from '@service-storage/graphql-soup';
 import { useNavigate } from '@solidjs/router';
 import { useQueryClient } from '@tanstack/solid-query';
 import { createMemo } from 'solid-js';
@@ -224,6 +227,7 @@ export function createAppCrmContext(): CrmContext {
     client: useQueryClient(),
     storage: storageServiceClient,
     feedback: toast,
+    hasLiveCache: hasGraphqlCacheHost,
   };
   const userId = useUserId();
   const layout = useSplitLayout();

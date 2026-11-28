@@ -11,13 +11,13 @@ import { type Client, createClient, fetchExchange } from '@urql/core';
 import { err, ok } from 'neverthrow';
 import { createSignal, Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { CrmRecordDependencies } from '../queries/dependencies';
+import type { CrmCreateDependencies } from '../queries/dependencies';
 
 const fixtures = vi.hoisted(() => ({
   proof: vi.fn(),
   retire: vi.fn(),
   refetch: vi.fn(),
-  deps: undefined as CrmRecordDependencies | undefined,
+  deps: undefined as CrmCreateDependencies | undefined,
   graphql: undefined as Client | undefined,
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
@@ -114,7 +114,10 @@ beforeEach(async () => {
   setCrmAccessSession('viewer');
   await crmAccessAuthority.refresh();
   client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
-  fixtures.deps = { client } as CrmRecordDependencies;
+  fixtures.deps = {
+    client,
+    hasLiveCache: () => false,
+  } as CrmCreateDependencies;
   fixtures.graphql = createClient({
     url: 'http://localhost/dss/graphql',
     fetch: (...args) => globalThis.fetch(...args),

@@ -5,14 +5,11 @@ import { err, ok } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 import type { DatabaseViewColumn } from '../../database/core/database-view';
 import type { Pipeline } from '../core/pipeline';
-import type { CrmRecordDependencies } from './dependencies';
+import type { CrmCreateDependencies } from './dependencies';
 import { createPipelineTransfer } from './pipeline-transfer';
 
 const refreshGraphqlLists = vi.hoisted(() => vi.fn(async () => undefined));
 const creates = vi.hoisted(() => ({ company: vi.fn(), contact: vi.fn() }));
-vi.mock('@service-storage/graphql-soup', () => ({
-  getGraphqlCacheHost: () => undefined,
-}));
 vi.mock('@service-storage/graphql-crm-create', () => ({
   createGraphqlCrmCompany: creates.company,
   createGraphqlCrmContact: creates.contact,
@@ -75,7 +72,7 @@ function setup(recordType: Pipeline['recordType'] = 'company') {
         request: { ops: DatabaseOp[] }
       ): Promise<
         Awaited<
-          ReturnType<CrmRecordDependencies['storage']['applyCrmPipelineOps']>
+          ReturnType<CrmCreateDependencies['storage']['applyCrmPipelineOps']>
         >
       > => {
         applied.push(request.ops);
@@ -86,7 +83,8 @@ function setup(recordType: Pipeline['recordType'] = 'company') {
   const deps = {
     storage,
     client: new QueryClient(),
-  } as unknown as CrmRecordDependencies;
+    hasLiveCache: () => false,
+  } as unknown as CrmCreateDependencies;
   return {
     transfer: createPipelineTransfer(deps, { ...pipeline, recordType }),
     storage,

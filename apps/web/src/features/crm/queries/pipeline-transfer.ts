@@ -20,7 +20,7 @@ import {
 } from '../core/pipeline-csv';
 import { runConcurrently } from '../core/run-concurrently';
 import { refreshCrmCreateLists } from './create-refresh';
-import type { CrmRecordDependencies } from './dependencies';
+import type { CrmCreateDependencies } from './dependencies';
 import { fetchCrmExportCompanies } from './export';
 import { crmKeys } from './keys';
 import { pipelineCell, pipelineViewColumn } from './pipeline-data';
@@ -31,7 +31,7 @@ const INSERT_BATCH = 500;
 
 /** Bulk reads and writes of one pipeline, over its own routes. */
 export function createPipelineTransfer(
-  deps: CrmRecordDependencies,
+  deps: CrmCreateDependencies,
   pipeline: Pipeline
 ): PipelineTransfer {
   const { storage } = deps;
@@ -230,7 +230,7 @@ export function createPipelineTransfer(
     async refresh() {
       await Promise.all([
         deps.client.invalidateQueries({ queryKey: soupKeys._def }),
-        refreshCrmCreateLists(),
+        refreshCrmCreateLists(deps.hasLiveCache()),
         deps.client.invalidateQueries({
           queryKey: crmKeys.pipelineTable(pipeline.id).queryKey,
         }),
