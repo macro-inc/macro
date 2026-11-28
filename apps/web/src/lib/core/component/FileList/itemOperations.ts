@@ -5,7 +5,6 @@ import { duplicateDatabase } from '@queries/storage/databases';
 import { getDeletedTree } from '@queries/storage/deleted';
 import {
   duplicateEntity,
-  moveEntity,
   permanentlyDeleteEntity,
   restoreEntity,
   trashEntity,
@@ -22,7 +21,6 @@ const ENTITY_TYPES = {
   document: 'DOCUMENT',
   project: 'PROJECT',
   chat: 'CHAT',
-  email: 'EMAIL_THREAD',
 } as const;
 
 export async function getItemAccessLevel({
@@ -174,97 +172,6 @@ export async function bulkDelete(
   };
 }
 
-export async function moveToFolder(args: {
-  itemType: ItemType;
-  id: string;
-  /** null removes the item from its folder */
-  folderId: string | null;
-}): Promise<boolean> {
-  const { itemType, id, folderId } = args;
-  // Databases and forms move only through the entity mutation; there is no
-  // REST route for them.
-  if (itemType === 'database' || itemType === 'form') {
-    const result = await catchToResult(() =>
-      moveEntity(
-        { type: itemType === 'database' ? 'DATABASE' : 'FORM', id },
-        folderId
-      )
-    );
-    if (result.isErr()) return false;
-    trackMovedToFolder(itemType, id, folderId);
-    return true;
-  }
-  if (
-    itemType !== 'document' &&
-    itemType !== 'project' &&
-    itemType !== 'chat' &&
-    itemType !== 'email'
-  )
-    return false;
-
-  const result = await catchToResult(() =>
-    moveEntity({ type: ENTITY_TYPES[itemType], id }, folderId)
-  );
-  if (result.isErr()) {
-    return false;
-  }
-
-  trackMovedToFolder(itemType, id, folderId);
-  refetchResources();
-  return true;
-}
-
-function trackMovedToFolder(
-  itemType: ItemType,
-  id: string,
-  folderId: string | null
-) {
-  analytics.track('update_entity', {
-    entityType: itemType,
-    entityId: id,
-    property: 'parent_project',
-    newProjectId: folderId,
-  });
-}
-
-export async function bulkMoveToFolder(
-  selectedItems: Item[],
-  folderId: string,
-  chunkSize: number = DEFAULT_CHUNK_SIZE
-): Promise<{ success: boolean; failedItems: Item[] }> {
-  const failedItems: Item[] = [];
-
-  // Process items in chunks
-  for (let i = 0; i < selectedItems.length; i += chunkSize) {
-    const chunk = selectedItems.slice(i, i + chunkSize);
-
-    const results = await Promise.allSettled(
-      chunk.map((item) =>
-        moveToFolder({
-          itemType: item.type,
-          id: item.id,
-          folderId,
-        })
-      )
-    );
-
-    // Process results for this chunk
-    results.forEach((result, index) => {
-      if (
-        result.status === 'rejected' ||
-        (result.status === 'fulfilled' && !result.value)
-      ) {
-        failedItems.push(chunk[index]);
-      }
-    });
-  }
-
-  return {
-    success: failedItems.length === 0,
-    failedItems,
-  };
-}
-
 /** Whether an item type can be duplicated; folders copy with their contents. */
 export function canDuplicateItemType(itemType: ItemType): boolean {
   return (
@@ -311,43 +218,6 @@ export async function copyItem(args: {
 
   refetchResources();
   return newId;
-}
-
-export async function bulkCopy(
-  selectedItems: Item[],
-  chunkSize: number = DEFAULT_CHUNK_SIZE
-): Promise<{ success: boolean; failedItems: Item[] }> {
-  const failedItems: Item[] = [];
-
-  // Process items in chunks
-  for (let i = 0; i < selectedItems.length; i += chunkSize) {
-    const chunk = selectedItems.slice(i, i + chunkSize);
-
-    const results = await Promise.allSettled(
-      chunk.map((item) =>
-        copyItem({
-          itemType: item.type,
-          id: item.id,
-          name: item.name,
-        })
-      )
-    );
-
-    // Process results for this chunk
-    results.forEach((result, index) => {
-      if (
-        result.status === 'rejected' ||
-        (result.status === 'fulfilled' && !result.value)
-      ) {
-        failedItems.push(chunk[index]);
-      }
-    });
-  }
-
-  return {
-    success: failedItems.length === 0,
-    failedItems,
-  };
 }
 
 export async function revertDelete(args: {

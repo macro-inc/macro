@@ -4,12 +4,20 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   mutation: vi.fn(),
   refresh: vi.fn(),
+  host: vi.fn(),
+  unmaintained: vi.fn(),
+  readAgain: vi.fn(),
+}));
+vi.mock('@graphql-cache/exchange/network-revalidation-exchange', () => ({
+  networkRevalidated: mocks.readAgain,
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
   getEntityGraphqlClient: () => ({ mutation: mocks.mutation }),
+  getGraphqlCacheHost: mocks.host,
 }));
 vi.mock('../soup/graphql/active-queries', () => ({
   refreshActiveGraphqlSoupQueries: mocks.refresh,
+  getUnmaintainedGraphqlSoupRevalidations: mocks.unmaintained,
 }));
 vi.mock('@queries/client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
@@ -19,10 +27,16 @@ vi.mock('@queries/client', async () => {
 import { UpdateEntitySharePoliciesDocument } from '@service-storage/graphql/generated/graphql';
 import { queryClient } from '../client';
 import { createGraphqlSoupDeletion } from '../soup/graphql/optimistic-deletions';
+
+const UNMAINTAINED = [{ document: 'unmaintained-list', variables: {} }];
+
 import {
+  duplicateEntities,
   duplicateEntity,
+  moveEntities,
   moveEntity,
   restoreEntity,
+  trashEntity,
   updateEntitySharePolicy,
   usesGraphqlSharePolicy,
 } from './entity-mutations';
@@ -30,6 +44,9 @@ import {
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.refresh.mockResolvedValue(undefined);
+  mocks.host.mockReturnValue({ disabled: false });
+  mocks.unmaintained.mockReturnValue(UNMAINTAINED);
+  mocks.readAgain.mockReturnValue(false);
   mocks.mutation.mockReturnValue({
     toPromise: async () => ({
       data: {
@@ -47,6 +64,125 @@ beforeEach(() => {
 });
 
 afterEach(() => queryClient.clear());
+
+const trashed = (effects: unknown) => ({
+  toPromise: async () => ({
+    data: {
+      trashEntities: {
+        results: [{ __typename: 'GraphqlMutationSuccess', effects }],
+      },
+    },
+    error:
+      effects === null
+        ? new CombinedError({
+            graphQLErrors: [
+              {
+                message: 'effects',
+                path: ['trashEntities', 'results', 0, 'effects'],
+              },
+            ],
+          })
+        : undefined,
+  }),
+});
+
+it('reads only the lists the cache cannot keep current after a write', async () => {
+  mocks.mutation.mockReturnValue(trashed([]));
+  await trashEntity({ type: 'DOCUMENT', id: 'entity' });
+  expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith({
+    unmaintainedOnly: true,
+  });
+});
+
+it('leaves the lists to the client when its exchange read them all', async () => {
+  // Without a live cache the exchange read every mounted list, each
+  // successfully, before the write settled.
+  mocks.host.mockReturnValue(undefined);
+  mocks.readAgain.mockReturnValue(true);
+  mocks.mutation.mockReturnValue(trashed([]));
+  await trashEntity({ type: 'DOCUMENT', id: 'entity' });
+  expect(mocks.refresh).not.toHaveBeenCalled();
+});
+
+it.each([
+  ['a live cache', { disabled: false }],
+  ['no live cache', undefined],
+])(
+  'reads every list after a write whose rows never came back, with %s',
+  async (_, host) => {
+    mocks.host.mockReturnValue(host);
+    mocks.mutation.mockReturnValue(trashed(null));
+    await trashEntity({ type: 'DOCUMENT', id: 'entity' });
+    expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith({
+      unmaintainedOnly: false,
+    });
+  }
+);
+
+it('queues a move with the lists to read once it commits, and reads none itself', async () => {
+  mocks.mutation.mockReturnValue({
+    toPromise: async () => ({
+      data: {
+        moveEntities: {
+          results: [{ __typename: 'GraphqlMutationSuccess', effects: [] }],
+        },
+      },
+    }),
+  });
+  await moveEntity({ type: 'DOCUMENT', id: 'entity' }, 'project');
+  expect(mocks.mutation.mock.calls[0]?.[2]).toEqual({
+    macroTraceParent: expect.anything(),
+    optimisticMutation: { revalidations: UNMAINTAINED },
+  });
+  expect(mocks.refresh).not.toHaveBeenCalled();
+});
+
+it.each([true, false])(
+  'uses the uncached exchange receipt for batched moves and copies (%s)',
+  async (listsReadAgain) => {
+    mocks.host.mockReturnValue(undefined);
+    mocks.readAgain.mockReturnValue(listsReadAgain);
+    const entities = [
+      { type: 'DOCUMENT', id: 'first' },
+      { type: 'DOCUMENT', id: 'second' },
+    ] as const;
+    const results = entities.map(({ id }) => ({
+      __typename: 'GraphqlMutationSuccess',
+      effects: [
+        {
+          __typename: 'SoupUpdated',
+          item: { __typename: 'GraphqlSoupDocument', id: `${id}-copy` },
+        },
+      ],
+    }));
+    mocks.mutation.mockReturnValue({
+      toPromise: async () => ({
+        data: {
+          moveEntities: { results },
+          duplicateEntities: { results },
+        },
+      }),
+    });
+
+    await moveEntities(entities.map((entity) => ({ entity, projectId: null })));
+    expect(mocks.refresh.mock.calls).toEqual(
+      listsReadAgain ? [] : [[{ unmaintainedOnly: false }]]
+    );
+    mocks.refresh.mockClear();
+
+    const copies = await duplicateEntities(
+      entities.map((entity) => ({ entity }))
+    );
+    expect(copies.listsReadAgain).toBe(listsReadAgain);
+    expect(copies.copies).toMatchObject([
+      { copyId: 'first-copy' },
+      { copyId: 'second-copy' },
+    ]);
+    expect(mocks.refresh.mock.calls).toEqual(
+      listsReadAgain ? [] : [[{ unmaintainedOnly: false }]]
+    );
+  }
+);
 
 it('shows a confirmed restore immediately while retaining unrelated and newer deletes', async () => {
   mocks.refresh.mockReturnValue(new Promise<void>(() => {}));
@@ -170,7 +306,9 @@ it.each([
       // The request and cache writes join the `entity.*` span's trace.
       { macroTraceParent: expect.anything() }
     );
-    expect(mocks.refresh).toHaveBeenCalledOnce();
+    expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith({
+      unmaintainedOnly: true,
+    });
   }
 );
 
@@ -284,3 +422,35 @@ it('never mistakes a source or parent patch for the duplicated entity', async ()
   ).rejects.toThrow('no copy identity');
   expect(mocks.mutation).toHaveBeenCalledOnce();
 });
+
+it.each([
+  [
+    'trash',
+    () => trashEntity({ type: 'DOCUMENT', id: 'entity' }),
+    'trashEntities',
+  ],
+  [
+    'move',
+    () => moveEntity({ type: 'DOCUMENT', id: 'entity' }, 'project'),
+    'moveEntities',
+  ],
+])(
+  'reads every list in its own order when the exchange could not, after a %s without a live cache',
+  async (_, write, field) => {
+    mocks.host.mockReturnValue(undefined);
+    mocks.readAgain.mockReturnValue(false);
+    mocks.mutation.mockReturnValue({
+      toPromise: async () => ({
+        data: {
+          [field]: {
+            results: [{ __typename: 'GraphqlMutationSuccess', effects: [] }],
+          },
+        },
+      }),
+    });
+    await write();
+    expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith({
+      unmaintainedOnly: false,
+    });
+  }
+);

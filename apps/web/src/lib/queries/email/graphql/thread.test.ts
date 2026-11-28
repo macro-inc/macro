@@ -40,11 +40,9 @@ vi.mock('@service-storage/graphql-soup', () => {
 
 beforeEach(() => activeClientMock.mockReset());
 
+import { networkRevalidationExchange } from '@graphql-cache/exchange/network-revalidation-exchange';
 import { EmailThreadPageDocument } from '@service-storage/graphql/generated/graphql';
-import {
-  refreshActiveGraphqlSoupQueries,
-  registerActiveGraphqlSoupQuery,
-} from '../../soup/graphql/active-queries';
+import { refreshActiveGraphqlSoupQueries } from '../../soup/graphql/active-queries';
 import { archiveEmailThread } from '../integration';
 import {
   createGraphqlEmailThreadQuery,
@@ -334,19 +332,16 @@ describe('open-thread revalidation without normalized caching', () => {
     const client = createClient({
       url: 'http://example.test/graphql',
       preferGetMethod: false,
-      exchanges: [cacheOnlyGuard, fetchExchange],
+      // As the app builds it: without a working cache the exchange reads
+      // every mounted query again after a committed mutation.
+      exchanges: [
+        cacheOnlyGuard,
+        networkRevalidationExchange(() => !cacheEnabledMock()),
+        fetchExchange,
+      ],
       fetch,
     });
     activeClientMock.mockReturnValue(client);
-    let listInboxVisible = false;
-    cleanup.push(
-      registerActiveGraphqlSoupQuery({
-        isEnabled: () => true,
-        refresh: async () => {
-          listInboxVisible = server.inboxVisible;
-        },
-      })
-    );
     const root = createRoot((dispose) => ({
       dispose,
       ...createGraphqlEmailThreadQuery(
@@ -362,7 +357,6 @@ describe('open-thread revalidation without normalized caching', () => {
       readIds,
       readIdentity,
       notifyIdentityChange: () => notifyIdentityChange(),
-      listInboxVisible: () => listInboxVisible,
     };
   }
 
@@ -374,7 +368,6 @@ describe('open-thread revalidation without normalized caching', () => {
     await expect(
       archiveEmailThread({ id: 'thread-1', value: false })
     ).resolves.toBe('committed');
-    expect(f.listInboxVisible()).toBe(true);
     expect(f.query.data?.pages[0].inbox_visible).toBe(true);
     expect(f.reads).toEqual([0, 0]);
     await archiveEmailThread({ id: 'thread-1', value: true });
@@ -446,26 +439,20 @@ describe('open-thread revalidation without normalized caching', () => {
     expect(f.server.inboxVisible).toBe(true);
     expect(f.query.error).toBeDefined();
     f.server.failThreadRead = false;
-    await refreshActiveGraphqlSoupQueries({
-      throwOnError: true,
-      target: { kind: 'email-archive', threadId: 'thread-1' },
-    });
+    await archiveEmailThread({ id: 'thread-1', value: false });
     expect(f.query.data?.pages[0].inbox_visible).toBe(true);
   });
 
-  it('leaves open threads alone during generic refreshes used by seen/unread and unrelated mutations', async () => {
+  it('leaves open threads alone during generic Soup list refreshes', async () => {
     const f = setup();
     await vi.waitFor(() => expect(f.query.isSuccess).toBe(true));
     f.server.failThreadRead = true;
     await refreshActiveGraphqlSoupQueries({ throwOnError: true });
     expect(f.reads).toEqual([0]);
     expect(f.query.error).toBeNull();
-    await archiveEmailThread({ id: 'another-thread', value: false });
-    expect(f.reads).toEqual([0]);
-    expect(f.query.error).toBeNull();
   });
 
-  it('refreshes only the matching open thread for archive/unarchive', async () => {
+  it('reads every open thread once after an archive, the changed one included', async () => {
     const f = setup();
     const other = createRoot((dispose) => ({
       dispose,
@@ -481,7 +468,7 @@ describe('open-thread revalidation without normalized caching', () => {
     await archiveEmailThread({ id: 'thread-1', value: false });
     expect(f.query.data?.pages[0].inbox_visible).toBe(true);
     expect(f.readIds.filter((id) => id === 'thread-1')).toHaveLength(2);
-    expect(f.readIds.filter((id) => id === 'other-thread')).toHaveLength(1);
+    expect(f.readIds.filter((id) => id === 'other-thread')).toHaveLength(2);
   });
 
   it.each([false, true])(
@@ -518,10 +505,7 @@ describe('open-thread revalidation without normalized caching', () => {
     });
     f.notifyIdentityChange();
     await vi.waitFor(() => expect(f.readIdentity).toHaveBeenCalledTimes(2));
-    await refreshActiveGraphqlSoupQueries({
-      throwOnError: true,
-      target: { kind: 'email-archive', threadId: 'local-thread' },
-    });
+    await archiveEmailThread({ id: 'local-thread', value: false });
     expect(f.reads).toEqual([]);
   });
 

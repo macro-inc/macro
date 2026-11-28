@@ -6,13 +6,9 @@ import {
 import {
   getGraphqlCacheHost,
   getGraphqlSoupClient,
-  graphqlCacheEnabled,
 } from '@service-storage/graphql-soup';
 import { queryAccountSession } from '../auth/account-scope';
-import {
-  getUnmaintainedGraphqlSoupRevalidations,
-  refreshActiveGraphqlSoupQueries,
-} from '../soup/graphql/active-queries';
+import { getUnmaintainedGraphqlSoupRevalidations } from '../soup/graphql/active-queries';
 import { invalidateEmailFolderQueries } from './folder-cache';
 
 export type MarkThreadAsSeenParams = { threadId: string };
@@ -29,14 +25,11 @@ export async function markEmailThreadSeen(
   params: MarkThreadAsSeenParams
 ): Promise<void> {
   try {
-    const disposition = await markGraphqlEmailThreadSeen(
+    await markGraphqlEmailThreadSeen(
       getGraphqlSoupClient(),
       params.threadId,
       getUnmaintainedGraphqlSoupRevalidations()
     );
-    if (disposition === 'committed' && !graphqlCacheEnabled()) {
-      await refreshActiveGraphqlSoupQueries({ notificationsOnly: true });
-    }
   } finally {
     await invalidateEmailFolderQueries();
   }
@@ -83,8 +76,6 @@ export async function markEmailThreadUnread(
     );
     queued = disposition === 'queued';
     if (queued) return { kind: 'queued', settlement: tracked?.settlement };
-    if (!graphqlCacheEnabled())
-      await refreshActiveGraphqlSoupQueries({ notificationsOnly: true });
     return { kind: 'committed' };
   } finally {
     if (!queued) tracked?.stop();

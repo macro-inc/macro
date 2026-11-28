@@ -16,6 +16,11 @@ const mocks = vi.hoisted(() => ({
   deleteSchedule: vi.fn(),
   trashDatabase: vi.fn(),
   graphqlClient: { mutation: vi.fn() },
+  moveEntity: vi.fn(),
+  moveEntities: vi.fn(),
+  duplicateEntities: vi.fn(),
+  refetchResources: vi.fn(),
+  cacheHost: vi.fn(),
   moveToFolder: vi.fn(),
   copyItem: vi.fn(),
   removeSoup: vi.fn(),
@@ -66,6 +71,12 @@ vi.mock('@queries/soup/graphql/active-queries', () => ({
 }));
 vi.mock('@queries/storage/entity-mutations', () => ({
   permanentlyDeleteEntity: mocks.deleteCallGraphql,
+  moveEntity: mocks.moveEntity,
+  moveEntities: mocks.moveEntities,
+  duplicateEntities: mocks.duplicateEntities,
+}));
+vi.mock('@service-storage/util/refetchResources', () => ({
+  refetchResources: mocks.refetchResources,
 }));
 vi.mock('@service-scheduled-action/client', () => ({
   scheduledActionClient: { deleteSchedule: mocks.deleteSchedule },
@@ -77,6 +88,7 @@ vi.mock('@service-storage/client', () => ({
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
   getEntityGraphqlClient: () => mocks.graphqlClient,
+  getGraphqlCacheHost: mocks.cacheHost,
 }));
 
 import { scheduledActionKeys } from '@app/features/routines/queries/keys';
@@ -101,6 +113,11 @@ import {
 
 let client: QueryClient;
 let dispose: (() => void) | undefined;
+const success = { __typename: 'GraphqlMutationSuccess', effects: [] };
+const forbidden = {
+  __typename: 'GraphqlMutationError',
+  errorCode: 'FORBIDDEN',
+};
 const entity = (id: string, type: EntityData['type'] = 'document') =>
   ({ id, type }) as EntityData;
 
@@ -146,6 +163,15 @@ beforeEach(() => {
   mocks.trashDatabase.mockReturnValue(okAsync(undefined));
   mocks.moveToFolder.mockResolvedValue(true);
   mocks.copyItem.mockResolvedValue('copied-task');
+  mocks.moveEntities.mockImplementation((inputs: unknown[]) =>
+    Promise.resolve(inputs.map(() => success))
+  );
+  mocks.duplicateEntities.mockImplementation((inputs: unknown[]) =>
+    Promise.resolve({
+      copies: inputs.map(() => ({ ...success, copyId: 'copied-task' })),
+      listsReadAgain: true,
+    })
+  );
   onlineManager.setOnline(true);
   client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
 });
@@ -208,70 +234,163 @@ const folderTask: TaskEntity = {
   projectId: 'source',
 };
 
-// These writes still use REST transport even though Soup readers use GraphQL.
-// Their successful completion must revalidate GraphQL membership too; marking
-// only TanStack soup keys stale cannot update a mounted urql list.
 describe('GraphQL Soup membership after list actions', () => {
-  it('revalidates GraphQL Soup after single folder moves', async () => {
+  it('lets GraphQL mutation effects maintain Soup after a single move', async () => {
     const mutation = mountMutation(createMoveToProjectDssEntityMutation);
     await mutation.mutateAsync({
       entity: folderTask,
       project: { id: 'destination' },
     });
-    expect(mocks.moveToFolder).toHaveBeenCalledWith({
-      itemType: 'document',
-      id: 'task',
-      folderId: 'destination',
-    });
-    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+    expect(mocks.moveEntity).toHaveBeenCalledWith(
+      { type: 'DOCUMENT', id: 'task' },
+      'destination'
+    );
+    expect(mocks.refresh).not.toHaveBeenCalled();
   });
 
-  it('revalidates GraphQL Soup after bulk folder moves', async () => {
+  it('moves multiple items in one request without a Soup refresh', async () => {
     const mutation = mountMutation(createBulkMoveToProjectDssEntityMutation);
     await mutation.mutateAsync({
-      entities: [folderTask],
+      entities: [folderTask, { ...folderTask, id: 'another-task' }],
       project: { id: 'destination', name: 'Destination' },
     });
-    expect(mocks.moveToFolder).toHaveBeenCalledWith({
-      itemType: 'document',
-      id: 'task',
-      folderId: 'destination',
-    });
-    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+    expect(mocks.moveEntities).toHaveBeenCalledExactlyOnceWith([
+      { entity: { type: 'DOCUMENT', id: 'task' }, projectId: 'destination' },
+      {
+        entity: { type: 'DOCUMENT', id: 'another-task' },
+        projectId: 'destination',
+      },
+    ]);
+    expect(mocks.refresh).not.toHaveBeenCalled();
   });
 
-  it('revalidates GraphQL Soup after folder removal', async () => {
+  it('moves items to the root while offline when the cache can queue them', async () => {
+    mocks.cacheHost.mockReturnValue({ disabled: false });
+    onlineManager.setOnline(false);
     const mutation = mountMutation(
       createBulkRemoveFromProjectDssEntityMutation
     );
     await mutation.mutateAsync({
       entities: [folderTask],
     });
-    expect(mocks.moveToFolder).toHaveBeenCalledWith({
-      itemType: 'document',
-      id: 'task',
-      folderId: null,
-    });
-    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+    expect(mocks.moveEntities).toHaveBeenCalledExactlyOnceWith([
+      { entity: { type: 'DOCUMENT', id: 'task' }, projectId: null },
+    ]);
+    expect(mocks.refresh).not.toHaveBeenCalled();
   });
 
-  it('refreshes GraphQL Soup after duplicate returns its new id', async () => {
-    const response = deferred<string>();
-    mocks.copyItem.mockReturnValue(response.promise);
-    const mutation = mountMutation(createBulkCopyDssEntityMutation);
+  it('queues the Soup rows in a mixed move while the listed rows wait for reconnect', async () => {
+    mocks.cacheHost.mockReturnValue({ disabled: false });
+    onlineManager.setOnline(false);
+    const mutation = mountMutation(createBulkMoveToProjectDssEntityMutation);
+    const paused = Promise.withResolvers<void>();
+    const unsubscribe = client.getMutationCache().subscribe((event) => {
+      if (event.type === 'updated' && event.mutation.state.isPaused)
+        paused.resolve();
+    });
     const result = mutation.mutateAsync({
-      entities: [folderTask],
-      name: 'Task copy',
+      entities: [
+        folderTask,
+        { ...entity('database', 'database'), name: 'Plan' },
+      ],
+      project: { id: 'destination', name: 'Destination' },
     });
     try {
-      await vi.waitFor(() => expect(mocks.copyItem).toHaveBeenCalledOnce());
-      // No optimistic placeholder is required when the new id is unknown.
-      expect(mocks.refresh).not.toHaveBeenCalled();
-    } finally {
-      response.resolve('copied-task');
+      await paused.promise;
+      expect(mocks.moveEntities).toHaveBeenCalledExactlyOnceWith([
+        { entity: { type: 'DOCUMENT', id: 'task' }, projectId: 'destination' },
+      ]);
+      onlineManager.setOnline(true);
       await result;
+      expect(mocks.moveEntities).toHaveBeenLastCalledWith([
+        {
+          entity: { type: 'DATABASE', id: 'database' },
+          projectId: 'destination',
+        },
+      ]);
+    } finally {
+      unsubscribe();
+      onlineManager.setOnline(true);
     }
-    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('duplicates items with server-assigned ids without a Soup refresh', async () => {
+    const mutation = mountMutation(createBulkCopyDssEntityMutation);
+    await mutation.mutateAsync({
+      entities: [folderTask, { ...folderTask, id: 'other', name: 'Other' }],
+      name: (name) => name,
+    });
+    expect(mocks.duplicateEntities).toHaveBeenCalledExactlyOnceWith([
+      { entity: { type: 'DOCUMENT', id: 'task' }, displayName: 'Task copy' },
+      { entity: { type: 'DOCUMENT', id: 'other' }, displayName: 'Other copy' },
+    ]);
+    expect(mocks.refresh).not.toHaveBeenCalled();
+  });
+
+  it.each([true, false])(
+    'reads the folder catalog after copying only when the exchange did not (%s)',
+    async (listsReadAgain) => {
+      mocks.duplicateEntities.mockResolvedValue({
+        copies: [{ ...success, copyId: 'copied-folder' }],
+        listsReadAgain,
+      });
+      const mutation = mountMutation(createBulkCopyDssEntityMutation);
+      await mutation.mutateAsync({
+        entities: [{ ...entity('folder', 'project'), name: 'Folder' }],
+        name: 'Folder',
+      });
+      expect(mocks.refetchResources).toHaveBeenCalledExactlyOnceWith({
+        refreshFolders: !listsReadAgain,
+      });
+    }
+  );
+
+  it('pauses a copy while offline and submits it once after reconnecting', async () => {
+    onlineManager.setOnline(false);
+    const mutation = mountMutation(createBulkCopyDssEntityMutation);
+    const paused = Promise.withResolvers<void>();
+    const unsubscribe = client.getMutationCache().subscribe((event) => {
+      if (event.type === 'updated' && event.mutation.state.isPaused)
+        paused.resolve();
+    });
+    const result = mutation.mutateAsync({
+      entities: [folderTask],
+      name: 'Plan',
+    });
+    try {
+      await paused.promise;
+      expect(mocks.duplicateEntities).not.toHaveBeenCalled();
+      onlineManager.setOnline(true);
+      await result;
+      expect(mocks.duplicateEntities).toHaveBeenCalledExactlyOnceWith([
+        { entity: { type: 'DOCUMENT', id: 'task' }, displayName: 'Plan copy' },
+      ]);
+    } finally {
+      unsubscribe();
+      onlineManager.setOnline(true);
+    }
+  });
+
+  it('still moves later chunks after a partial refusal', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    mocks.moveEntities.mockResolvedValueOnce([
+      forbidden,
+      ...Array.from({ length: 99 }, () => success),
+    ]);
+    const mutation = mountMutation(createBulkMoveToProjectDssEntityMutation);
+    await expect(
+      mutation.mutateAsync({
+        entities: Array.from({ length: 101 }, (_, i) => ({
+          ...folderTask,
+          id: `task-${i}`,
+        })),
+        project: { id: 'destination', name: 'Destination' },
+      })
+    ).rejects.toThrow('One or more DSS items failed to move');
+    expect(
+      mocks.moveEntities.mock.calls.map(([inputs]) => inputs.length)
+    ).toEqual([100, 1]);
+    expect(mocks.failure).toHaveBeenCalledOnce();
   });
 });
 
@@ -693,10 +812,10 @@ describe('moving databases and forms between folders', () => {
     client.setQueryData(formsKeys.list.queryKey, [listedForm]);
   };
 
-  it('files them in the Drive lists at once and moves each through moveToFolder', async () => {
+  it('files them in the Drive lists at once and sends both moves together', async () => {
     seed();
-    const pending = deferred<boolean>();
-    mocks.moveToFolder.mockReturnValue(pending.promise);
+    const pending = deferred<(typeof success)[]>();
+    mocks.moveEntities.mockReturnValue(pending.promise);
     const mutation = mountMutation(createBulkMoveToProjectDssEntityMutation);
     const result = mutation.mutateAsync({
       entities: [
@@ -708,11 +827,11 @@ describe('moving databases and forms between folders', () => {
     await vi.waitFor(() =>
       expect(filed()).toEqual({ database: 'clients', form: 'clients' })
     );
-    pending.resolve(true);
+    pending.resolve([success, success]);
     await result;
-    expect(mocks.moveToFolder.mock.calls).toEqual([
-      [{ itemType: 'database', id: 'intake', folderId: 'clients' }],
-      [{ itemType: 'form', id: 'survey', folderId: 'clients' }],
+    expect(mocks.moveEntities).toHaveBeenCalledExactlyOnceWith([
+      { entity: { type: 'DATABASE', id: 'intake' }, projectId: 'clients' },
+      { entity: { type: 'FORM', id: 'survey' }, projectId: 'clients' },
     ]);
     expect(
       client.getQueryState(databasesKeys.list.queryKey)?.isInvalidated
@@ -722,9 +841,10 @@ describe('moving databases and forms between folders', () => {
     );
   });
 
-  it('puts them back when the move fails', async () => {
+  it('rolls back the optimistic Drive lists and toasts on a partial refusal', async () => {
     seed();
-    mocks.moveToFolder.mockResolvedValue(false);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    mocks.moveEntities.mockResolvedValue([success, forbidden]);
     const mutation = mountMutation(createBulkMoveToProjectDssEntityMutation);
     await expect(
       mutation.mutateAsync({
@@ -736,6 +856,7 @@ describe('moving databases and forms between folders', () => {
       })
     ).rejects.toThrow();
     expect(filed()).toEqual({ database: null, form: 'old' });
+    expect(mocks.failure).toHaveBeenCalledOnce();
   });
 
   it('takes them out of their folder', async () => {
@@ -747,9 +868,9 @@ describe('moving databases and forms between folders', () => {
       entities: [entity('intake', 'database'), entity('survey', 'form')],
     });
     expect(filed()).toEqual({ database: null, form: null });
-    expect(mocks.moveToFolder.mock.calls).toEqual([
-      [{ itemType: 'database', id: 'intake', folderId: null }],
-      [{ itemType: 'form', id: 'survey', folderId: null }],
+    expect(mocks.moveEntities).toHaveBeenCalledExactlyOnceWith([
+      { entity: { type: 'DATABASE', id: 'intake' }, projectId: null },
+      { entity: { type: 'FORM', id: 'survey' }, projectId: null },
     ]);
   });
 });

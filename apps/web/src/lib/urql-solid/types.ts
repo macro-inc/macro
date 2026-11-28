@@ -61,6 +61,15 @@ export type UrqlQueryRefetchOptions = {
   throwOnError?: boolean;
 };
 
+/** Refetch options for a paged query. */
+export type UrqlInfiniteQueryRefetchOptions = UrqlQueryRefetchOptions & {
+  /**
+   * Never join a refetch that started earlier: wait for it, then read again.
+   * A read that must see a write committed after that refetch began sets it.
+   */
+  fresh?: boolean;
+};
+
 /** TanStack-style high-level status for an urql query. */
 export type UrqlQueryStatus = 'pending' | 'success' | 'error';
 
@@ -192,7 +201,7 @@ export type UrqlInfiniteQueryResult<
     UrqlInfiniteQueryResult<PageData, Variables, PageParam, SelectedData>
   >;
   refetch(
-    options?: UrqlQueryRefetchOptions
+    options?: UrqlInfiniteQueryRefetchOptions
   ): Promise<
     UrqlInfiniteQueryResult<PageData, Variables, PageParam, SelectedData>
   >;

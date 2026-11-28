@@ -3,42 +3,84 @@ import { catchToResult } from '@core/util/result';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/schemas/updateSharePermissionRequestV2';
 import type {
+  DuplicateEntityInput,
+  EntityMutationResultFieldsFragment,
   EntityRefInput,
   EntitySharePolicyInput,
   GraphqlEntityAccessLevel,
   GraphqlSharePolicyOperation,
+  MoveEntityInput,
 } from '@service-storage/graphql/generated/graphql';
 import {
+  duplicateGraphqlEntities,
   duplicateGraphqlEntity,
+  moveGraphqlEntities,
   moveGraphqlEntity,
   permanentlyDeleteGraphqlEntity,
   restoreGraphqlEntity,
   trashGraphqlEntity,
   updateGraphqlEntitySharePolicy,
 } from '@service-storage/graphql-entity-mutations';
+import { getGraphqlCacheHost } from '@service-storage/graphql-soup';
 import { match } from 'ts-pattern';
-import { refreshActiveGraphqlSoupQueries } from '../soup/graphql/active-queries';
+import {
+  getUnmaintainedGraphqlSoupRevalidations,
+  refreshActiveGraphqlSoupQueries,
+} from '../soup/graphql/active-queries';
 import { soupEntityKey } from '../soup/graphql/entity-input';
 import { prepareGraphqlSoupRestore } from '../soup/graphql/optimistic-deletions';
 import { soupItemKey } from '../soup/graphql/reconciliation';
 
-// Membership changes need a refresh even when the normalized cache is disabled.
-// A failed refresh must not turn a committed write into a retryable UI failure.
-function refreshSoup() {
-  fireAndForget(refreshActiveGraphqlSoupQueries(), 'entity-mutation');
+/** Reads again the lists a committed write left stale. Without a live cache
+ * the client's exchange reads every mounted list before the write settles;
+ * when it did, each successfully, nothing is read here, and when one of its
+ * reads failed every list is read in its own cursor order. With a live cache
+ * the write's returned rows update every list the cache keeps current, so only
+ * the others are read. A write whose rows never came back leaves every list
+ * stale. A failed read must not turn a committed write into a retryable
+ * failure. */
+function refreshAfterWrite(result: {
+  effectsResolved: boolean;
+  listsReadAgain: boolean;
+}) {
+  if (result.listsReadAgain) return;
+  const unmaintainedOnly =
+    result.effectsResolved && getGraphqlCacheHost() !== undefined;
+  fireAndForget(
+    refreshActiveGraphqlSoupQueries({ unmaintainedOnly }),
+    'entity-mutation'
+  );
 }
 
 export async function moveEntity(
   entity: EntityRefInput,
   projectId: string | null
 ) {
-  await moveGraphqlEntity({ entity, projectId });
-  refreshSoup();
+  // With a live cache a move is queued with the lists to read once it
+  // commits, so only one whose rows never came back reads them here.
+  const result = await moveGraphqlEntity(
+    { entity, projectId },
+    getUnmaintainedGraphqlSoupRevalidations()
+  );
+  if (getGraphqlCacheHost() && result.effectsResolved) return;
+  refreshAfterWrite(result);
+}
+
+export async function moveEntities(inputs: MoveEntityInput[]) {
+  // Database and form metadata lives outside Soup. The GraphQL resolver
+  // applies their moves directly, so there is no queue to revalidate readers.
+  const direct = inputs.some(({ entity }) => !soupEntityKey(entity));
+  const result = await moveGraphqlEntities(
+    inputs,
+    direct ? [] : getUnmaintainedGraphqlSoupRevalidations()
+  );
+  if (direct || !result.effectsResolved || !getGraphqlCacheHost())
+    refreshAfterWrite(result);
+  return result.results;
 }
 
 export async function trashEntity(entity: EntityRefInput) {
-  await trashGraphqlEntity(entity);
-  refreshSoup();
+  refreshAfterWrite(await trashGraphqlEntity(entity));
 }
 
 export async function restoreEntity(entity: EntityRefInput) {
@@ -51,12 +93,11 @@ export async function restoreEntity(entity: EntityRefInput) {
       effect.__typename === 'SoupUpdated' ? [soupItemKey(effect.item)] : []
     ),
   ]);
-  refreshSoup();
+  refreshAfterWrite(result);
 }
 
 export async function permanentlyDeleteEntity(entity: EntityRefInput) {
-  await permanentlyDeleteGraphqlEntity(entity);
-  refreshSoup();
+  refreshAfterWrite(await permanentlyDeleteGraphqlEntity(entity));
 }
 
 export async function duplicateEntity(
@@ -64,8 +105,24 @@ export async function duplicateEntity(
   displayName?: string
 ): Promise<string> {
   const result = await duplicateGraphqlEntity({ entity, displayName });
-  refreshSoup();
-  for (const effect of result.effects) {
+  refreshAfterWrite(result);
+  const copyId = duplicatedEntityId(entity, result.effects);
+  if (copyId) return copyId;
+  throw new Error(
+    'Duplication succeeded but returned no copy identity; do not retry automatically'
+  );
+}
+
+type EntityMutationEffects = Extract<
+  EntityMutationResultFieldsFragment,
+  { __typename?: 'GraphqlMutationSuccess' }
+>['effects'];
+
+function duplicatedEntityId(
+  entity: EntityRefInput,
+  effects: EntityMutationEffects
+) {
+  for (const effect of effects) {
     if (effect.__typename !== 'SoupUpdated' || effect.item.id === entity.id)
       continue;
     if (
@@ -78,9 +135,30 @@ export async function duplicateEntity(
     )
       return effect.item.id;
   }
-  throw new Error(
-    'Duplication succeeded but returned no copy identity; do not retry automatically'
-  );
+}
+
+export async function duplicateEntities(inputs: DuplicateEntityInput[]) {
+  const result = await duplicateGraphqlEntities(inputs);
+  let effectsResolved = result.effectsResolved;
+  let copied = false;
+  const copies = result.results.map((outcome, index) => {
+    if (outcome.__typename === 'GraphqlMutationError') return outcome;
+    copied = true;
+    const { entity } = inputs[index];
+    // The batch UI only needs the outcome; a database has no Soup identity.
+    const copyId = result.effectsResolved
+      ? duplicatedEntityId(entity, outcome.effects)
+      : undefined;
+    if (entity.type !== 'DATABASE' && copyId === undefined)
+      effectsResolved = false;
+    return { ...outcome, copyId };
+  });
+  if (copied)
+    refreshAfterWrite({
+      effectsResolved,
+      listsReadAgain: result.listsReadAgain,
+    });
+  return { copies, listsReadAgain: result.listsReadAgain };
 }
 
 function shareEntityType(itemType: string) {
@@ -138,10 +216,11 @@ export function updateEntitySharePolicy(
   return catchToResult(async () => {
     const type = shareEntityType(itemType);
     if (!type) throw new Error(`Unsupported GraphQL share policy: ${itemType}`);
-    await updateGraphqlEntitySharePolicy({
-      entity: { type, id },
-      policy: sharePolicy(request),
-    });
-    refreshSoup();
+    refreshAfterWrite(
+      await updateGraphqlEntitySharePolicy({
+        entity: { type, id },
+        policy: sharePolicy(request),
+      })
+    );
   });
 }

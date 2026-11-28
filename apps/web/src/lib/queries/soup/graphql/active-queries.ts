@@ -2,23 +2,13 @@ import type { QueryRevalidation } from '@graphql-cache/exchange/optimistic';
 import { type Client, createRequest } from '@urql/core';
 import { forgetSoupNetworkAnswers } from './network-freshness';
 
-/** An explicit mutation target; detail readers opt out of generic list refreshes. */
-export type GraphqlSoupRefreshTarget = {
-  kind: 'email-archive';
-  threadId: string;
-};
-
 type ActiveGraphqlSoupQuery = {
   isEnabled: () => boolean;
   refresh: () => Promise<void>;
-  /** Only refresh this reader for its matching mutation, never for broad Soup work. */
-  target?: () => GraphqlSoupRefreshTarget;
   /** REST-shaped filters with optional sort/group inputs for scoped list refreshes. */
   body?: () => unknown;
   /** The normalized cache keeps this list's rows and membership current. */
   cacheMaintained?: () => boolean;
-  /** The list never shows, filters or sorts by notification or read state. */
-  ignoresNotifications?: () => boolean;
 };
 
 const activeQueries = new Set<ActiveGraphqlSoupQuery>();
@@ -118,35 +108,24 @@ export function registerActiveGraphqlSoupQuery(
   return () => activeQueries.delete(query);
 }
 
-/** Refresh enabled list readers and any explicitly targeted detail readers.
+/** Refresh enabled list readers.
  * Strict callers may only release optimistic state after every applicable reader
  * succeeded. Other callers retain the existing best-effort behavior.
  */
 export async function refreshActiveGraphqlSoupQueries(
   options: {
     throwOnError?: boolean;
-    target?: GraphqlSoupRefreshTarget;
     /** Only refresh list readers whose filters or sort/group inputs match. */
     where?: (body: unknown) => boolean;
     /** Skip lists the cache keeps current: the write already updated them. */
     unmaintainedOnly?: boolean;
-    /** The write changed only notification or read state. */
-    notificationsOnly?: boolean;
   } = {}
 ): Promise<void> {
   forgetSoupNetworkAnswers();
   const applicable = (query: ActiveGraphqlSoupQuery) => {
     if (!query.isEnabled()) return false;
     if (options.unmaintainedOnly && query.cacheMaintained?.()) return false;
-    if (options.notificationsOnly && query.ignoresNotifications?.())
-      return false;
-    if (options.where && !options.where(query.body?.())) return false;
-    if (!query.target) return true;
-    const target = query.target();
-    return (
-      target.kind === options.target?.kind &&
-      target.threadId === options.target.threadId
-    );
+    return !options.where || options.where(query.body?.());
   };
   const refreshed = new Set<ActiveGraphqlSoupQuery>();
   await Promise.all(

@@ -8,15 +8,12 @@ import {
 } from '@solid-primitives/rootless';
 import { ToastType, toast } from '../Toast/Toast';
 import {
-  bulkCopy as bulkCopyOp,
   bulkDelete as bulkDeleteOp,
-  bulkMoveToFolder as bulkMoveToFolderOp,
   bulkPermanentlyDelete as bulkPermanentlyDeleteOp,
   bulkRevertDelete as bulkRevertDeleteOp,
   copyItem as copyItemOp,
   deleteItem as deleteItemOp,
   getItemAccessLevel as getItemAccessLevelOp,
-  moveToFolder as moveToFolderOp,
   permanentlyDelete as permanentlyDeleteOp,
   revertDelete as revertDeleteOp,
 } from './itemOperations';
@@ -35,43 +32,6 @@ export const useItemOperations = createSingletonRoot(() => {
         toast.failure('Unable to delete item');
       }
       return success;
-    }
-  );
-
-  const moveToFolder = createCallback(
-    async (args: {
-      itemType: ItemType;
-      id: string;
-      itemName: string;
-      folderId: string;
-      folderName: string;
-    }) => {
-      const success = await moveToFolderOp(args);
-      if (success) {
-        toast.success(`${args.itemName} moved to ${args.folderName}`);
-      } else {
-        toast.failure('Unable to move item');
-      }
-      return success;
-    }
-  );
-
-  const bulkMoveToFolder = createCallback(
-    async (items: Item[], folderId: string, folderName: string) => {
-      const result = await toast.promise(bulkMoveToFolderOp(items, folderId), {
-        loading: `Moving ${items.length} ${items.length === 1 ? 'item' : 'items'}...`,
-        success: ({ failedItems }) => {
-          if (failedItems.length > 0) {
-            return `Failed to move ${failedItems.length} ${failedItems.length === 1 ? 'item' : 'items'}`;
-          }
-          return `Successfully moved ${items.length} ${items.length === 1 ? 'item' : 'items'} to ${folderName}`;
-        },
-        error: (error) =>
-          `Failed to move items: ${error.message || 'Unknown error'}`,
-        toastTypeDeterminer: (result) =>
-          result.failedItems.length > 0 ? ToastType.FAILURE : ToastType.SUCCESS,
-      });
-      return result;
     }
   );
 
@@ -104,23 +64,6 @@ export const useItemOperations = createSingletonRoot(() => {
       },
       error: (error) =>
         `Failed to delete items: ${error.message || 'Unknown error'}`,
-      toastTypeDeterminer: (result) =>
-        result.failedItems.length > 0 ? ToastType.FAILURE : ToastType.SUCCESS,
-    });
-    return result;
-  });
-
-  const bulkCopy = createCallback(async (items: Item[]) => {
-    const result = await toast.promise(bulkCopyOp(items), {
-      loading: `Copying ${items.length} ${items.length === 1 ? 'item' : 'items'}...`,
-      success: ({ failedItems }) => {
-        if (failedItems.length > 0) {
-          return `Failed to copy ${failedItems.length} ${failedItems.length === 1 ? 'item' : 'items'}`;
-        }
-        return `Successfully copied ${items.length} ${items.length === 1 ? 'item' : 'items'}`;
-      },
-      error: (error) =>
-        `Failed to copy items: ${error.message || 'Unknown error'}`,
       toastTypeDeterminer: (result) =>
         result.failedItems.length > 0 ? ToastType.FAILURE : ToastType.SUCCESS,
     });
@@ -186,11 +129,8 @@ export const useItemOperations = createSingletonRoot(() => {
 
   return {
     deleteItem,
-    moveToFolder,
     copyItem,
     bulkDelete,
-    bulkCopy,
-    bulkMoveToFolder,
     getItemAccessLevel,
     revertDelete,
     permanentlyDelete,
