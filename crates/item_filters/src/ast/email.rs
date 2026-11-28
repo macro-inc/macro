@@ -70,6 +70,48 @@ pub enum AttachmentKind {
     Document,
 }
 
+impl AttachmentKind {
+    /// Every kind, in declaration order.
+    pub const ALL: [Self; 3] = [Self::Pdf, Self::Image, Self::Document];
+
+    /// The MIME type prefixes an attachment of this kind starts with. The
+    /// server's thread attachment flags and the local Mail index both read
+    /// this list, so they agree on which threads a kind matches.
+    #[must_use]
+    pub const fn mime_prefixes(self) -> &'static [&'static str] {
+        match self {
+            Self::Pdf => &["application/pdf"],
+            Self::Image => &[
+                "image/png",
+                "image/jpeg",
+                "image/gif",
+                "image/webp",
+                "image/svg+xml",
+            ],
+            Self::Document => &[
+                "application/msword",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "application/vnd.ms-excel",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "application/vnd.ms-powerpoint",
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                "text/plain",
+                "text/csv",
+            ],
+        }
+    }
+
+    /// Whether an attachment with this MIME type is of this kind: the type
+    /// starts with one of [`Self::mime_prefixes`], case-sensitively, as the
+    /// server's `LIKE` patterns match.
+    #[must_use]
+    pub fn matches_mime_type(self, mime_type: &str) -> bool {
+        self.mime_prefixes()
+            .iter()
+            .any(|prefix| mime_type.starts_with(prefix))
+    }
+}
+
 /// Returns true if `s` looks like a bare domain: no `@`, at least two
 /// dot-separated segments, each made of alphanumeric or `-` characters.
 fn looks_like_domain(s: &str) -> bool {

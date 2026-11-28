@@ -10,6 +10,7 @@ chrono = { workspace = true }
 doppleganger = { workspace = true }
 email_utils = { path = "../email_utils" }
 futures = { workspace = true }
+item_filters = { path = "../item_filters", default-features = false }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 models_email = { path = "../models_email" }
