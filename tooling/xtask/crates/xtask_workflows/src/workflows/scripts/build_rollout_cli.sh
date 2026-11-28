@@ -11,9 +11,9 @@ export X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_INCLUDE_DIR="$openssl_dev/include"
 export X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_LIB_DIR="$openssl_out/lib"
 export X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_STATIC=1
 cargo zigbuild --release --locked --target "$target" -p hosted_runtimes \
-  --features image-upgrade-cli --bin image-upgrade
+  --features "$CLI_FEATURE" --bin "$CLI_BIN"
 
-binary="${CARGO_TARGET_DIR:-target}/$target/release/image-upgrade"
+binary="${CARGO_TARGET_DIR:-target}/$target/release/$CLI_BIN"
 headers=$(readelf -lW "$binary")
 if grep -qE '^[[:space:]]*INTERP[[:space:]]' <<<"$headers"; then
   echo '::error::the rollout CLI depends on shared libraries'
@@ -21,6 +21,6 @@ if grep -qE '^[[:space:]]*INTERP[[:space:]]' <<<"$headers"; then
 fi
 "$binary" --help
 mkdir -p "$CLI_DIR"
-install -m 0755 "$binary" "$CLI_DIR/image-upgrade"
-digest=$(sha256sum "$CLI_DIR/image-upgrade" | cut -d ' ' -f1)
+install -m 0755 "$binary" "$CLI_DIR/$CLI_BIN"
+digest=$(sha256sum "$CLI_DIR/$CLI_BIN" | cut -d ' ' -f1)
 printf 'sha256=%s\n' "$digest" >>"$GITHUB_OUTPUT"

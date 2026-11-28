@@ -176,9 +176,11 @@ Dispatch **Agent runtime rollout** from `main` with `environment=dev`, one
 computer ID and a full commit SHA on `main`. The workflow publishes the
 `macro-agent-runtime` built with that commit's pinned Bun lock. Its version
 is the commit SHA. The immutable manifest records the archive SHA-256, the
-Muppet API level and the package versions. The in-VPC runner submits the
-request to dev Postgres, and the harness controller runs the fixed updater
-on the selected Firecracker guest. Wait for the migration and every dev
+Muppet API level and the package versions. The Namespace build job compiles
+the static `agent-runtime-update` CLI from the workflow commit and uploads it
+as an artifact. The in-VPC runner verifies its SHA-256 before using it to submit
+the request to dev Postgres. The harness controller runs the fixed updater on
+the selected Firecracker guest. Wait for the migration and every dev
 controller replica's deployment before dispatching. An unfinished request
 holds that computer against image upgrades and moves. Fleet reconcile and
 power effects consult the hold before starting work.

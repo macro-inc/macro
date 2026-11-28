@@ -1,13 +1,24 @@
 set -euo pipefail
 [[ $ENVIRONMENT == dev && $GITHUB_REF == refs/heads/main ]]
+
+fail() {
+  echo "::error::$1"
+  exit 1
+}
+
+bin="$CLI_DIR/agent-runtime-update"
+[[ ${CLI_SHA256:-} =~ ^[0-9a-f]{64}$ ]] || fail "the rollout CLI checksum is missing or invalid"
+printf '%s  %s\n' "$CLI_SHA256" "$bin" | sha256sum --check --strict - \
+  || fail "the rollout CLI checksum could not be verified"
+# Artifact downloads discard executable permissions.
+chmod +x "$bin"
+
 [[ $NIX_CACHE_URL =~ ^s3://([a-z0-9.-]+)\?(.*\&)?region=([a-z0-9-]+) ]]
 bucket=${BASH_REMATCH[1]}
 region=${BASH_REMATCH[3]}
 secrets=$(mktemp -d "$RUNNER_TEMP/runtime-update.XXXXXX")
 chmod 700 "$secrets"
 trap 'rm -rf "$secrets"' EXIT
-
-cargo build --release --locked -p hosted_runtimes --features runtime-update-cli --bin agent-runtime-update
 
 manifest="$ARTIFACT_DIR/manifest.json"
 digest=$(jq -er --arg version "$SOURCE_SHA" \
@@ -26,5 +37,5 @@ fi
 echo "::add-mask::$database_url"
 printf '%s' "$database_url" >"$secrets/database.url"
 
-target/release/agent-runtime-update --environment dev --database-url-file "$secrets/database.url" \
+"$bin" --environment dev --database-url-file "$secrets/database.url" \
   --request "$secrets/request.json" --computer "$COMPUTER" | tee -a "$GITHUB_STEP_SUMMARY"

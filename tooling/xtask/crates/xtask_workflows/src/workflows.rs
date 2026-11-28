@@ -108,6 +108,9 @@ mod vars;
 mod web_app_check_main;
 mod web_artifact_paths;
 
+#[cfg(test)]
+mod test;
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
