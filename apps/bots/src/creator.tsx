@@ -21,11 +21,16 @@ import {
   type Draft,
   defaultDraft,
   draftName,
-  namePartLimit,
+  nameLimit,
+  readPendingHireDraft,
   readRestoredHireDraft,
+  readWorkingDraft,
+  savePendingHireDraft,
   saveRestoredHireDraft,
+  saveWorkingDraft,
   storeHireDraft,
   takeHireDraft,
+  withPreset,
 } from './draft';
 import { Portrait } from './portrait';
 import {
@@ -36,7 +41,7 @@ import {
   presets,
   stageExamples,
 } from './presets';
-import { buildSignInUrl, hireIntent } from './return-intent';
+import { buildSignInUrl, hireIntent, isHireHandoff } from './return-intent';
 import { fixtureTeamName } from './routes';
 import { useSession } from './session';
 import './creator.css';
@@ -52,6 +57,8 @@ export default function Creator() {
   const [draft, setDraft] = createSignal(defaultDraft());
   const [restored, setRestored] =
     createSignal<ReturnType<typeof takeHireDraft>>();
+  const [pending, setPending] =
+    createSignal<ReturnType<typeof readPendingHireDraft>>();
   const [sampleSignedIn, setSampleSignedIn] = createSignal(false);
   const [reviewOpen, setReviewOpen] = createSignal(false);
   const [reviewPending, setReviewPending] = createSignal(false);
@@ -102,12 +109,23 @@ export default function Creator() {
         if (
           params.size === 2 &&
           handoffs.length === 1 &&
-          params.get('intent') === 'hire'
+          params.get('intent') === 'hire' &&
+          isHireHandoff(handoffs[0])
         ) {
           result = takeHireDraft(sessionStorage, handoffs[0]);
         }
       } else {
         result = readRestoredHireDraft(sessionStorage);
+        if (!result) {
+          const waiting = readPendingHireDraft(sessionStorage);
+          if (waiting) {
+            setDraft(waiting.draft);
+            setPending(waiting);
+          } else {
+            const working = readWorkingDraft(sessionStorage);
+            if (working) setDraft(working);
+          }
+        }
       }
 
       if (result) {
@@ -123,7 +141,8 @@ export default function Creator() {
       return;
     }
 
-    if (returning) navigate('/', { replace: true, scroll: false });
+    if (returning || params.has('intent'))
+      navigate('/', { replace: true, scroll: false });
   });
 
   function openReview() {
@@ -141,29 +160,27 @@ export default function Creator() {
   function updateDraft(change: Partial<Draft>) {
     const updated = setDraft((previous) => ({ ...previous, ...change }));
     const existing = restored();
-    if (!existing) return;
+    const waiting = pending();
 
     try {
-      saveRestoredHireDraft(sessionStorage, { ...existing, draft: updated });
+      saveWorkingDraft(sessionStorage, updated);
+    } catch {
+      setStorageUnavailable(true);
+    }
+
+    try {
+      if (waiting) savePendingHireDraft(sessionStorage, waiting, updated);
+      if (existing) {
+        saveRestoredHireDraft(sessionStorage, { ...existing, draft: updated });
+      }
     } catch {
       setStorageUnavailable(true);
     }
   }
 
   function selectPreset(id: PresetId) {
-    const { first, last, look } = presets[id];
-    const current = draft();
-
     setPose(0);
-    updateDraft({
-      preset: id,
-      first: current.firstEdited ? current.first : first,
-      last: current.lastEdited ? current.last : last,
-      look: {
-        ...look,
-        gender: current.genderEdited ? current.look.gender : look.gender,
-      },
-    });
+    updateDraft(withPreset(draft(), id));
   }
 
   function startHire() {
@@ -339,34 +356,19 @@ export default function Creator() {
           <h2 id="hire-heading">Hire teammate</h2>
           <p>A teammate for Macro, with its own email once set up.</p>
         </div>
-        <div class="names">
-          <label>
-            First name
-            <input
-              value={draft().first}
-              maxLength={namePartLimit}
-              onInput={(event) =>
-                updateDraft({
-                  first: event.currentTarget.value,
-                  firstEdited: Boolean(event.currentTarget.value.trim()),
-                })
-              }
-            />
-          </label>
-          <label>
-            Last name
-            <input
-              value={draft().last}
-              maxLength={namePartLimit}
-              onInput={(event) =>
-                updateDraft({
-                  last: event.currentTarget.value,
-                  lastEdited: Boolean(event.currentTarget.value.trim()),
-                })
-              }
-            />
-          </label>
-        </div>
+        <label class="creator-name">
+          Name
+          <input
+            value={draft().name}
+            maxLength={nameLimit}
+            onInput={(event) =>
+              updateDraft({
+                name: event.currentTarget.value,
+                nameEdited: Boolean(event.currentTarget.value.trim()),
+              })
+            }
+          />
+        </label>
         <div class="profile-summary">
           <Portrait preset={draft().preset} look={draft().look} />
           <div>
@@ -374,7 +376,7 @@ export default function Creator() {
             <Show
               when={
                 (__BOTS_FIXTURES__ && sampleSignedIn()) ||
-                identity()?.status === 'signed-in'
+                (!identity.loading && identity()?.status === 'signed-in')
               }
             >
               <p>

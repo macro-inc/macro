@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{Context, Result, bail};
+use sha2::{Digest, Sha256};
 
 use super::super::arch::Target;
 use super::super::inventory::{RUST_SERVICES, RustService};
@@ -169,14 +170,13 @@ fn workspace_packages(ws: &Path) -> Result<HashSet<String>> {
     Ok(packages)
 }
 
-/// Install JavaScript dependencies a fresh worktree doesn't have yet.
+/// Install the JS workspace before either build lane tries to read it.
 pub(super) fn ensure_js_dependencies(stage: &Stage, root: &Path) -> Result<()> {
-    // The installer creates node_modules before finishing. Acquire the lock
-    // before looking for it so parallel named instances wait for completion.
+    let generated = root.join("infra/local/generated");
+    let stamp = generated.join(".js-dependencies-installed");
     let _lock = if stage.is_dry_run() {
         None
     } else {
-        let generated = root.join("infra/local/generated");
         std::fs::create_dir_all(&generated)?;
         let path = generated.join(".js-dependencies.lock");
         let lock =
@@ -185,14 +185,49 @@ pub(super) fn ensure_js_dependencies(stage: &Stage, root: &Path) -> Result<()> {
             .with_context(|| format!("locking {}", path.display()))?;
         Some(lock)
     };
-    for dir in missing_js_dependency_dirs(root) {
-        let mut install = Command::new("bun");
-        install
-            .current_dir(root.join(dir))
+
+    let lockfile = root.join("bun.lock");
+    let expected = format!(
+        "{:x}",
+        Sha256::digest(
+            std::fs::read(&lockfile).with_context(|| format!("reading {}", lockfile.display()))?
+        )
+    );
+    if js_dependencies_ready(root, &stamp, &expected) {
+        return Ok(());
+    }
+
+    if !stage.is_dry_run() && stamp.exists() {
+        std::fs::remove_file(&stamp)?;
+    }
+
+    let install = |dir: &str| {
+        let mut cmd = Command::new("bun");
+        cmd.current_dir(root.join(dir))
             .args(["install", "--frozen-lockfile"]);
-        stage.run(&format!("Installing JS dependencies ({dir})"), &mut install)?;
+        stage.run(&format!("Installing JS dependencies ({dir})"), &mut cmd)
+    };
+    install(".")?;
+    if !root.join("packages/sdk/node_modules").exists() {
+        install("packages/sdk")?;
+    }
+
+    if !stage.is_dry_run() {
+        if !js_dependency_paths_ready(root) {
+            bail!("Bun install did not populate the workspace JS dependencies");
+        }
+        std::fs::write(&stamp, expected)?;
     }
     Ok(())
+}
+
+fn js_dependencies_ready(root: &Path, stamp: &Path, expected: &str) -> bool {
+    std::fs::read_to_string(stamp).is_ok_and(|value| value == expected)
+        && js_dependency_paths_ready(root)
+}
+
+fn js_dependency_paths_ready(root: &Path) -> bool {
+    missing_js_dependency_dirs(root).is_empty() && root.join("node_modules/.bin/vite").is_file()
 }
 
 fn missing_js_dependency_dirs(root: &Path) -> Vec<&'static str> {

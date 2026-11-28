@@ -359,14 +359,12 @@
 .creator .profile-summary p {
   color: var(--muted);
 }
-.names {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+.creator-name {
+  display: block;
   padding-top: 6px;
   border-top: 1px solid #28313f;
 }
-.names input {
+.creator-name input {
   display: block;
   width: 100%;
   min-width: 0;

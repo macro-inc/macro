@@ -3,6 +3,7 @@ import { createMemo, createSignal, Show } from 'solid-js';
 import { hireReturnUrl, markFixtureHireSignIn } from './draft';
 import {
   editIntent,
+  isHireHandoff,
   macroLoginPath,
   parseReturnIntent,
   returnPath,
@@ -18,16 +19,15 @@ export default function SignIn() {
     const params = new URLSearchParams(location.search);
     const handoffs = params.getAll('handoff');
     params.delete('handoff');
-    const intent = parseReturnIntent(params.toString());
-    const handoff =
+    const candidate = parseReturnIntent(params.toString());
+    const hireHandoff =
+      candidate?.route === 'creator' &&
+      candidate.action === 'hire' &&
       handoffs.length === 1 &&
-      /^[a-f\d]{8}-(?:[a-f\d]{4}-){3}[a-f\d]{12}$/.test(handoffs[0])
+      isHireHandoff(handoffs[0])
         ? handoffs[0]
         : undefined;
-    const hireHandoff =
-      intent?.route === 'creator' && intent.action === 'hire'
-        ? handoff
-        : undefined;
+    const intent = handoffs.length > 0 && !hireHandoff ? undefined : candidate;
 
     return {
       hireHandoff,
@@ -43,6 +43,9 @@ export default function SignIn() {
   return (
     <section class="panel sign-in">
       <h1>Sign in with Macro</h1>
+      <Show when={__BOTS_NATIVE__ && identity.loading}>
+        <p role="status">Checking your Macro session…</p>
+      </Show>
       {__BOTS_FIXTURES__ ? (
         <Show when={state()?.hireHandoff}>
           {(handoff) => (
@@ -77,7 +80,7 @@ export default function SignIn() {
       <Show
         when={
           __BOTS_NATIVE__ &&
-          state()?.macroHref &&
+          !identity.loading &&
           identity()?.status === 'signed-out'
         }
       >
@@ -85,18 +88,30 @@ export default function SignIn() {
           Sign in with Macro
         </a>
       </Show>
-      <Show when={__BOTS_NATIVE__ && identity()?.status === 'signed-in'}>
+      <Show
+        when={
+          __BOTS_NATIVE__ &&
+          !identity.loading &&
+          identity()?.status === 'signed-in'
+        }
+      >
         <A class="primary" href={state()?.back ?? '/'} replace>
           Continue
         </A>
       </Show>
-      <Show when={__BOTS_NATIVE__ && identity()?.status === 'team-unresolved'}>
+      <Show
+        when={
+          __BOTS_NATIVE__ &&
+          !identity.loading &&
+          identity()?.status === 'team-unresolved'
+        }
+      >
         <p role="status">Macro could not verify your team.</p>
       </Show>
       <Show
         when={
           (!__BOTS_NATIVE__ && !__BOTS_FIXTURES__) ||
-          identity()?.status === 'unavailable'
+          (!identity.loading && identity()?.status === 'unavailable')
         }
       >
         <p>Macro sign-in is unavailable.</p>

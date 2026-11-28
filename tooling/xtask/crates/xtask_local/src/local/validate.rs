@@ -74,6 +74,7 @@ fn local_compose_flavor(
         instance,
         &binaries,
         static_frontend,
+        false,
         sidecars,
         computers,
     )?;

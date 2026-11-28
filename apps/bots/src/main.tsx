@@ -3,6 +3,8 @@ import {
   createResource,
   ErrorBoundary,
   lazy,
+  onCleanup,
+  onMount,
   type ParentProps,
   Show,
 } from 'solid-js';
@@ -34,7 +36,27 @@ const Billing = lazy(() => import('./billing'));
 function Shell(props: ParentProps) {
   const matches = useCurrentMatches();
   const route = () => matches().at(-1)?.route.originalPath;
-  const [identity] = createResource(() => session.getSession());
+  const [identity, { refetch }] = createResource(() => session.getSession());
+
+  onMount(() => {
+    if (!__BOTS_NATIVE__) return;
+
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted && !identity.loading) void refetch();
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && !identity.loading) {
+        void refetch();
+      }
+    };
+
+    window.addEventListener('pageshow', onPageShow);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    onCleanup(() => {
+      window.removeEventListener('pageshow', onPageShow);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    });
+  });
 
   const intent = () => {
     if (route() === '/passwords') return passwordsIntent;
@@ -70,12 +92,19 @@ function Shell(props: ParentProps) {
         </nav>
         <div class="top-identity">
           <Show
-            when={identity()?.status === 'signed-out' && route() !== '/sign-in'}
+            when={
+              !identity.loading &&
+              identity()?.status === 'signed-out' &&
+              route() !== '/sign-in'
+            }
           >
             <A href={buildSignInUrl(intent())}>Sign in with Macro</A>
           </Show>
           <Show
-            when={route() === '/sign-in' || identity()?.status === 'signed-in'}
+            when={
+              route() === '/sign-in' ||
+              (!identity.loading && identity()?.status === 'signed-in')
+            }
           >
             <span>{route() === '/sign-in' ? 'Sign-in' : 'Signed in'}</span>
           </Show>

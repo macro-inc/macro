@@ -47,6 +47,23 @@ fn a_fresh_worktree_needs_both_js_installs_and_a_ready_one_needs_none() {
 }
 
 #[test]
+fn js_install_requires_the_current_success_stamp_and_vite() {
+    let tmp = TempDir::new("js-deps-stamp");
+    let root = tmp.path();
+    let stamp = root.join("installed");
+    std::fs::create_dir_all(root.join("node_modules/.bin")).unwrap();
+    std::fs::create_dir_all(root.join("packages/sdk/node_modules")).unwrap();
+    std::fs::write(&stamp, "lock-one").unwrap();
+
+    assert!(!js_dependencies_ready(root, &stamp, "lock-one"));
+    std::fs::write(root.join("node_modules/.bin/vite"), "").unwrap();
+    assert!(js_dependencies_ready(root, &stamp, "lock-one"));
+    assert!(!js_dependencies_ready(root, &stamp, "lock-two"));
+    std::fs::remove_file(&stamp).unwrap();
+    assert!(!js_dependencies_ready(root, &stamp, "lock-one"));
+}
+
+#[test]
 fn drops_the_variables_cargo_run_sets() {
     let names = [
         "CARGO_MANIFEST_DIR",

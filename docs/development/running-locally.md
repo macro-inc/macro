@@ -116,9 +116,10 @@ The local stack runs on Linux. The Nix dev shell supplies the Docker CLI, daemon
 
 The service binaries are built natively and link the Nix shell's libraries, so a macOS build can't run in the stack's Linux containers. On macOS, `run_local` and `stack up` stop before building and say so; for frontend-only work, [run the frontend against hosted services](#run-the-frontend-against-hosted-services).
 
-The first build in a checkout or worktree runs `bun install --frozen-lockfile`
-at the repository root and in `packages/sdk` when either has no `node_modules`:
-a Rust build script bundles the SDK from them.
+The stack runs `bun install --frozen-lockfile` before the first build in a
+checkout, when the workspace lockfile changes, or when required dependencies
+are missing. It also prepares `packages/sdk` if needed. The native Bots build
+and the Rust build script that bundles the SDK share this setup.
 
 Run the preflight check before the first start:
 

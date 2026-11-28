@@ -36,9 +36,19 @@ export function buildSignInUrl(intent: ReturnIntent, handoff?: string): string {
   return `/sign-in?${search}`;
 }
 
+export function isHireHandoff(value: string | undefined): value is string {
+  return !!value && /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(value);
+}
+
 export function macroLoginPath(intent: ReturnIntent, handoff?: string): string {
-  const search = new URLSearchParams({ return: 'bots' });
-  if (intent.route === 'creator' && intent.action === 'hire' && handoff) {
+  const search = new URLSearchParams({
+    return: intent.route === 'creator' ? 'bots' : `bots-${intent.route}`,
+  });
+  if (
+    intent.route === 'creator' &&
+    intent.action === 'hire' &&
+    isHireHandoff(handoff)
+  ) {
     search.set('handoff', handoff);
   }
   return `/app/login?${search}`;

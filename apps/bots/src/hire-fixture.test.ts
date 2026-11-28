@@ -25,7 +25,11 @@ test('only this tab’s verified mock receipt selects the exact Hire identity', 
   if (result.status !== 'accepted')
     throw new Error('Expected a fixture receipt');
   const { agent } = result;
-  const draft = { ...defaultDraft(), first: intent.request.name, last: '' };
+  const draft = {
+    ...defaultDraft(),
+    name: intent.request.name,
+    nameEdited: true,
+  };
 
   expect(agent.teamId).toBe(scope.team);
   expect(agent.userId).not.toBe(intent.request.purchaseKey);
@@ -67,7 +71,7 @@ test('only this tab’s verified mock receipt selects the exact Hire identity', 
 
   saveHireReceipt({
     agent: another.agent,
-    draft: { ...draft, first: another.agent.name },
+    draft: { ...draft, name: another.agent.name },
     portrait: 'second-portrait',
   });
   expect(hireReceipts()).toHaveLength(2);

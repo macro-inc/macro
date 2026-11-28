@@ -5,9 +5,10 @@ The Creator, Fleet, Passwords and Billing links stay within that base path.
 
 Edit a Creator profile and select **Hire** while signed out to retain a draft
 for sign-in. **Sign in with Macro** opens the standard Macro login on the
-same origin. The link describes a Creator return and can carry an opaque
-draft reference. The profile stays in the tab. Restoring the draft after
-login requires the Web login handler to support the Bots return.
+same origin. The link can carry an opaque draft reference. Cancel or go back
+to keep editing the same draft in that tab. Fleet, Passwords and Billing
+send a fixed return choice for their own route. Completing these returns
+requires the matching Web login handler.
 
 This startup layer verifies the signed viewer and current team. Hire terms
 and team data remain unavailable until their scoped service adapters are

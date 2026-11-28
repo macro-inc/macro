@@ -292,14 +292,16 @@ pub(crate) fn bring_up(
     if plan.static_bundle && stage.is_dry_run() {
         frontend::build_static(stage, instance, mode)?;
     }
+    let bots_lane = (bots_frontend && !stage.is_dry_run()).then(|| {
+        let instance = instance.clone();
+        let stage = stage.background(telemetry::FRONTEND_LANE);
+        std::thread::spawn(move || frontend::build_bots(&stage, &instance))
+    });
     let frontend_lane = (!stage.is_dry_run() && (plan.static_bundle || plan.vite)).then(|| {
         let instance = instance.clone();
         let stage = stage.background(telemetry::FRONTEND_LANE);
         let static_bundle = plan.static_bundle;
         std::thread::spawn(move || {
-            if bots_frontend {
-                frontend::build_bots(&stage, &instance)?;
-            }
             if static_bundle {
                 frontend::build_static(&stage, &instance, mode)
             } else {
@@ -475,9 +477,12 @@ pub(crate) fn bring_up(
                 .map_err(|_| anyhow::anyhow!("frontend build panicked"))?
         })
     };
+    if let Some(handle) = bots_lane {
+        join_frontend("Staging Bots frontend", handle)?;
+    }
     let frontend_lane = match frontend_lane {
-        Some(handle) if plan.static_bundle || bots_frontend => {
-            join_frontend("Preparing static frontend assets", handle)?;
+        Some(handle) if plan.static_bundle => {
+            join_frontend("Building frontend (static bundle)", handle)?;
             None
         }
         other => other,
