@@ -168,15 +168,12 @@ function emailMatchesSearchScope(
     .exhaustive(() => true);
 }
 
-// Provider-neutral folder membership needs a server lookup; arbitrary realtime
-// entities cannot establish it from labels (Outlook has no Gmail system labels).
-const rejectFolderInsert = () => false;
+// Spam and Trash are server pages with no local membership: another tab's rows
+// must not stand in for them while their first page loads. Their rows are
+// dated by the folder's own sort key, which only their pages select.
 const folderQueryOptions = (tab: EmailTab) =>
   isExcludedEmailFolder(tab)
-    ? {
-        keepPreviousData: false,
-        meta: { normalize: false, insertFilter: rejectFolderInsert },
-      }
+    ? { keepPreviousData: false, graphqlProjection: 'mail-folder' as const }
     : {};
 
 type AdmittedEmails = {
@@ -299,7 +296,6 @@ export function useEmailDataSource(
   });
   const query = useSoupAstItemsQuery(queryArgs, () => ({
     enabled: listEnabled(),
-    // Folder previews must not overwrite the same thread's All Mail preview.
     ...folderQueryOptions(state.tab),
   }));
   const localDrafts = createLocalDraftSource(

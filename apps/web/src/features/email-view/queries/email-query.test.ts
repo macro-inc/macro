@@ -177,7 +177,7 @@ describe('buildEmailQuery', () => {
   });
 
   it.each(['spam', 'trash'] as const)(
-    'keeps %s in its provider folder with inbox and alias scope',
+    'lists %s from GraphQL in its provider folder with inbox and alias scope',
     (tab) => {
       const args = buildEmailQuery(
         contextFor({
@@ -189,8 +189,11 @@ describe('buildEmailQuery', () => {
           },
         })
       );
-      expect(args.transport).toBe('rest');
+      expect(args.transport).toBeUndefined();
       expect(args.body.emailView).toBe(tab);
+      expect(makeGraphqlSoupInput(args).initial?.emailView).toBe(
+        tab === 'spam' ? 'SPAM' : 'TRASH'
+      );
       expect(serialize(args.body.ef)).toContain('inbox-a');
       expect(serialize(args.body.ef)).toContain('alias@example.com');
     }
@@ -408,13 +411,13 @@ describe('buildEmailQuery', () => {
       );
     });
 
-    it('keeps the labels over REST, in a saved view and on rows looked up by id', () => {
+    it('keeps the labels in a folder, in a saved view and on rows looked up by id', () => {
       const facets = { labels: [LARKSPUR] };
       const label = serialize({ l: { Label: LARKSPUR } });
       const trash = buildEmailQuery(contextFor({ tab: 'trash', facets }));
 
-      expect(trash.transport).toBe('rest');
       expect(serialize(trash.body)).toContain(label);
+      expect(makeGraphqlSoupInput(trash).initial?.emailView).toBe('TRASH');
       expect(
         serialize(buildEmailQuery(contextFor({ facets }), ['thread-a']).body)
       ).toContain(label);

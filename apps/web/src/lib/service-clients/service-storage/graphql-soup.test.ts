@@ -130,6 +130,33 @@ describe('email thread sort keys', () => {
     }
   );
 
+  it("shows a folder page's own message and date, not the shared fields", () => {
+    const folderRow = {
+      ...thread,
+      emailName: 'Kept in the inbox',
+      snippet: 'Inbox reply',
+      senderName: 'Hal',
+      pagePreview: {
+        sortTs: '2026-09-27T10:00:00+00:00',
+        subject: 'Trashed',
+        snippet: 'Trashed original',
+        isDraft: false,
+        senderEmail: 'grace@example.com',
+        senderName: 'Grace',
+        senderPhotoUrl: null,
+      },
+    } as unknown as SoupItemFieldsFragment;
+    expect(
+      mapGraphqlSoupItem(folderRow, { emailView: 'TRASH' })?.data
+    ).toMatchObject({
+      name: 'Trashed',
+      snippet: 'Trashed original',
+      senderName: 'Grace',
+      senderEmail: 'grace@example.com',
+      sortTs: '2026-09-27T10:00:00+00:00',
+    });
+  });
+
   it('falls back to the thread update time when the view has no key', () => {
     const bare = {
       ...thread,

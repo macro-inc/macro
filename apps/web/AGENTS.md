@@ -1060,11 +1060,16 @@ not to account-wide paired machine count; a user can pair several computers.
 - All Mail previews exclude spam/junk and trash. Keep draft edits from restoring
   an excluded preview or timestamp, including synced Macro drafts; Drafts and
   Sent retain their own canonical membership.
-- Spam and Trash use scoped REST pages without shared preview normalization or
-  service search; restore through the provider-neutral thread-state mutation.
-  Refresh these isolated lists after read-state writes, provider sync events, and
-  settled Outlook operations; shared-cache updates cannot reach them. Preserve
-  newer selections when a pending folder restore finishes.
+- Spam and Trash are GraphQL server pages (`emailView: SPAM | TRASH`) with no
+  local predicate or service search. Their rows show the folder message and date
+  from `pagePreview(page: $page)`, keyed by the list (view, filters, sort),
+  because opening the thread or reading another view rewrites the shared
+  `name`, `snippet` and `sortTs`;
+  restore through the provider-neutral thread-state mutation. The cache cannot
+  keep their membership current, so read-state writes pass them as unmaintained
+  revalidations, and provider sync events, settled Outlook operations, inbox
+  backfill and inbox removal call `revalidateMailFolderLists`. Preserve newer selections when a
+  pending folder restore finishes.
 
 Agent split headers show live viewers through `BlockLiveIndicators` with the
 resolved session ID; keep the existing `AgentSessionProvider` subscription to

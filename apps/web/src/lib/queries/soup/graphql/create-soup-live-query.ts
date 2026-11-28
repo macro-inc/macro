@@ -34,6 +34,9 @@ import {
   ChannelListItemFieldsFragmentDoc,
   ChannelListSoupDocument,
   type ChannelListSoupQuery,
+  MailFolderSoupDocument,
+  type MailFolderSoupQuery,
+  type MailFolderSoupQueryVariables,
   MailItemFieldsFragmentDoc,
   SoupDocument,
   type SoupInitialInput,
@@ -85,7 +88,7 @@ import {
 /** A Soup query declaration. The source owns page cursors and cache baselines. */
 export type SoupLiveQueryInput = Omit<SoupInitialInput, 'expand'>;
 
-export type SoupProjection = 'channel-list' | 'preview';
+export type SoupProjection = 'channel-list' | 'preview' | 'mail-folder';
 
 export type SoupLiveQueryOptions = {
   enabled?: boolean;
@@ -95,7 +98,9 @@ export type SoupLiveQueryOptions = {
   localOnly?: boolean;
   /**
    * `channel-list` selects bounded unread evidence for channel navigation;
-   * `preview` selects rows without notifications, for lists that show none.
+   * `preview` selects rows without notifications, for lists that show none;
+   * `mail-folder` selects Spam and Trash server pages like `preview`, plus
+   * the row each page shows.
    */
   projection?: SoupProjection;
   /** Select known entities locally, then fetch only missing records. */
@@ -115,16 +120,55 @@ type FreshDecision = { key: string; client: object; fresh: boolean };
 const SOUP_DOCUMENTS = {
   'channel-list': ChannelListSoupDocument,
   preview: SoupPreviewPageDocument,
+  'mail-folder': MailFolderSoupDocument,
 } satisfies Record<SoupProjection, unknown>;
 
 const soupDocumentFor = (projection: SoupProjection | undefined) =>
   projection ? SOUP_DOCUMENTS[projection] : SoupDocument;
 
+// A 53-bit string hash (cyrb53): short, stable cache keys for long list keys.
+const hashListKey = (key: string): string => {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < key.length; i += 1) {
+    const code = key.charCodeAt(i);
+    h1 = Math.imul(h1 ^ code, 2654435761);
+    h2 = Math.imul(h2 ^ code, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
+  h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
+  h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+};
+
+// A folder page keys the row it shows (`MailFolderSoup`'s `pagePreview`) by
+// its list: the view and filters pick each thread's folder message, so an
+// alias-filtered Trash and the whole Trash keep their own rows. Continuation
+// pages share their first page's key.
+const soupVariables = (
+  projection: SoupProjection | undefined,
+  input: GraphqlSoupInput,
+  listKey: string
+): SoupQueryVariables | MailFolderSoupQueryVariables => {
+  if (projection !== 'mail-folder') return { input };
+  const view =
+    'initial' in input
+      ? input.initial?.emailView
+      : input.continuation?.emailView;
+  if (!view) throw new Error('a mail folder page needs an email view');
+  return { input, page: `${view}:${hashListKey(listKey)}` };
+};
+
 // A page result can carry the viewer without its `soup` field. Selection runs
 // over every loaded page, so such a page reads as unloaded instead of failing
 // the whole list.
 const hasSoupPage = (
-  page: SoupQuery | ChannelListSoupQuery | SoupPreviewPageQuery
+  page:
+    | SoupQuery
+    | ChannelListSoupQuery
+    | SoupPreviewPageQuery
+    | MailFolderSoupQuery
 ): boolean => page.user?.soup != null;
 
 /** Owns network pages, live cache records, Mail cursors, and fallback selection.
@@ -270,6 +314,8 @@ export function createSoupLiveQuery(
   const projectionSelections = {
     'channel-list': channelListItemSelection,
     preview: previewItemSelection,
+    // Folder pages never read locally; their rows select like previews.
+    'mail-folder': previewItemSelection,
   } satisfies Record<SoupProjection, unknown>;
   const mailItemSelection = selectRecords(MailItemFieldsFragmentDoc);
   let localRequest = 0;
@@ -451,7 +497,10 @@ export function createSoupLiveQuery(
     pages,
     pageParams,
   }: UrqlInfiniteData<
-    SoupQuery | ChannelListSoupQuery | SoupPreviewPageQuery,
+    | SoupQuery
+    | ChannelListSoupQuery
+    | SoupPreviewPageQuery
+    | MailFolderSoupQuery,
     string | null
   >): ServerProjection => {
     const soupPages = pages.filter(hasSoupPage);
@@ -484,8 +533,11 @@ export function createSoupLiveQuery(
   );
 
   const query = createUrqlInfiniteQuery<
-    SoupQuery | ChannelListSoupQuery | SoupPreviewPageQuery,
-    SoupQueryVariables,
+    | SoupQuery
+    | ChannelListSoupQuery
+    | SoupPreviewPageQuery
+    | MailFolderSoupQuery,
+    SoupQueryVariables | MailFolderSoupQueryVariables,
     string | null,
     ServerProjection
   >(() => {
@@ -508,7 +560,7 @@ export function createSoupLiveQuery(
         if (!input) {
           throw new Error('GraphQL Soup input became unsupported');
         }
-        return { input };
+        return soupVariables(queryOptions.projection, input, firstInputKey);
       },
       getNextPageParam: (lastPage) =>
         hasSoupPage(lastPage)
@@ -631,12 +683,26 @@ export function createSoupLiveQuery(
     if (!isEnabled()) return [];
     if (cacheFirstEntities()) {
       const input = firstPageInput();
-      return input ? [{ document: queryDocument(), variables: { input } }] : [];
+      return input
+        ? [
+            {
+              document: queryDocument(),
+              variables: soupVariables(options().projection, input, inputKey()),
+            },
+          ]
+        : [];
     }
     const cursors = new Set([null, ...(query.data?.pageParams ?? [])]);
     return [...cursors].flatMap((cursor) => {
       const input = inputForCursor(cursor);
-      return input ? [{ document: queryDocument(), variables: { input } }] : [];
+      return input
+        ? [
+            {
+              document: queryDocument(),
+              variables: soupVariables(options().projection, input, inputKey()),
+            },
+          ]
+        : [];
     });
   };
   onCleanup(
@@ -673,6 +739,9 @@ export function createSoupLiveQuery(
       return;
     const initial = input.initial;
     if (!isLocallySortable(initial.sortMethod)) return;
+    // Spam and Trash have no local membership or folder dates: their lists
+    // are server pages, which a predicate over all mail would widen.
+    if (initial.emailView && !isCachedMailView(initial.emailView)) return;
     const withoutEmail = queryOptions.localReconciliation === 'without-email';
     const mailView =
       !withoutEmail && isCachedMailView(initial.emailView)

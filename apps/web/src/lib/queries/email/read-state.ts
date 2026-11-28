@@ -13,7 +13,6 @@ import {
   getUnmaintainedGraphqlSoupRevalidations,
   refreshActiveGraphqlSoupQueries,
 } from '../soup/graphql/active-queries';
-import { invalidateEmailFolderQueries } from './folder-cache';
 
 export type MarkThreadAsSeenParams = { threadId: string };
 export type MarkThreadAsUnreadParams = { threadId: string };
@@ -28,17 +27,13 @@ export type MarkThreadAsUnreadResult =
 export async function markEmailThreadSeen(
   params: MarkThreadAsSeenParams
 ): Promise<void> {
-  try {
-    const disposition = await markGraphqlEmailThreadSeen(
-      getGraphqlSoupClient(),
-      params.threadId,
-      getUnmaintainedGraphqlSoupRevalidations()
-    );
-    if (disposition === 'committed' && !graphqlCacheEnabled()) {
-      await refreshActiveGraphqlSoupQueries({ notificationsOnly: true });
-    }
-  } finally {
-    await invalidateEmailFolderQueries();
+  const disposition = await markGraphqlEmailThreadSeen(
+    getGraphqlSoupClient(),
+    params.threadId,
+    getUnmaintainedGraphqlSoupRevalidations()
+  );
+  if (disposition === 'committed' && !graphqlCacheEnabled()) {
+    await refreshActiveGraphqlSoupQueries({ notificationsOnly: true });
   }
 }
 

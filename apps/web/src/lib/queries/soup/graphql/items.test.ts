@@ -1637,6 +1637,73 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }
   });
 
+  it.each([
+    [undefined, true],
+    ['SPAM', false],
+    ['TRASH', false],
+  ] as const)(
+    'lists %s mail from server pages, evaluating locally: %s',
+    async (emailView, evaluatesLocally) => {
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      makeGraphqlSoupInputMock.mockReturnValue({
+        initial: { limit: 50, sortMethod: 'UPDATED_AT', emailView },
+      });
+      getGraphqlSoupCacheHostMock.mockReturnValue({
+        liveQueries: true,
+        currentRevision: async () => REVISION_1,
+        entityFilter: entityFilterMock,
+        onCacheChanged: () => () => {},
+        onCacheGenerationChanged: () => () => {},
+      });
+      entityFilterMock.mockResolvedValue({
+        kind: 'live-query',
+        revision: parseCacheRevision(REVISION_1),
+        reset: true,
+        keys: [],
+        upserts: [],
+        patches: [],
+        removed: [],
+        retainedKeys: [],
+        optimistic: false,
+      });
+      const { query, dispose } = createRoot((dispose) => ({
+        dispose,
+        query: createGraphqlSoupAstItemsQuery(
+          () => ({ params: {}, body: {} }) as never,
+          () => ({ enabled: true })
+        ),
+      }));
+      try {
+        fake.executions[0].next(
+          graphqlSoupPage({
+            items: [{ __typename: 'GraphqlSoupEmailThread', id: 'folder' }],
+            next_cursor: null,
+          }),
+          { source: 'live-network', revision: REVISION_1 }
+        );
+        await vi.waitFor(() =>
+          expect(query.data()?.entities.map((entity) => entity.id)).toEqual([
+            'folder',
+          ])
+        );
+        if (evaluatesLocally) {
+          await vi.waitFor(() => expect(entityFilterMock).toHaveBeenCalled());
+        } else {
+          await Promise.resolve();
+          await Promise.resolve();
+          expect(entityFilterMock).not.toHaveBeenCalled();
+        }
+        expect(mapGraphqlSoupItemMock).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'folder' }),
+          { emailView }
+        );
+      } finally {
+        dispose();
+      }
+    }
+  );
+
   it('owns fetching, continuation arguments, refresh and reset from a Soup declaration', async () => {
     const fake = makeFakeClient();
     getGraphqlSoupClientMock.mockReturnValue(fake.client);
@@ -2577,6 +2644,82 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     } finally {
       dispose();
     }
+  });
+
+  it('reads Spam and Trash pages with their folder row on every page', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    makeGraphqlSoupInputMock.mockImplementation(({ cursor }) =>
+      cursor
+        ? { continuation: { cursor, emailView: 'SPAM' } }
+        : {
+            initial: { limit: 50, sortMethod: 'UPDATED_AT', emailView: 'SPAM' },
+          }
+    );
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: {}, body: {} }),
+        () => ({ enabled: true, projection: 'mail-folder' })
+      ),
+    }));
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({ items: [], next_cursor: 'next' })
+      );
+      const more = query.fetchNextPage();
+      fake.executions[1].next(
+        graphqlSoupPage({ items: [], next_cursor: null })
+      );
+      await more;
+      // The folder row is keyed by the page's list, apart from shared fields,
+      // and a continuation page shares its first page's key.
+      const pageKeys = new Set<unknown>();
+      for (const entry of getActiveGraphqlSoupRevalidations()) {
+        expect(print(entry.document)).toContain('query MailFolderSoup');
+        pageKeys.add(entry.variables?.page);
+      }
+      for (const execution of fake.executions) {
+        expect(print(execution.document)).toContain('query MailFolderSoup');
+        expect(print(execution.document)).toContain('pagePreview(page: $page)');
+        pageKeys.add(execution.variables.page);
+      }
+      expect([...pageKeys]).toEqual([expect.stringMatching(/^SPAM:/)]);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('keys a filtered Trash folder row apart from the whole Trash', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    const pageKey = (filters: object | undefined) => {
+      makeGraphqlSoupInputMock.mockImplementation(() => ({
+        initial: {
+          limit: 50,
+          sortMethod: 'UPDATED_AT',
+          emailView: 'TRASH',
+          filters,
+        },
+      }));
+      const dispose = createRoot((dispose) => {
+        createGraphqlSoupAstItemsQuery(
+          () => ({ params: {}, body: {} }),
+          () => ({ enabled: true, projection: 'mail-folder' })
+        );
+        return dispose;
+      });
+      const key = fake.executions.at(-1)?.variables.page;
+      dispose();
+      return key;
+    };
+    const whole = pageKey(undefined);
+    const alias = pageKey({
+      emailFilter: { tree: { literal: { recipient: 'alias@example.com' } } },
+    });
+    expect(whole).toMatch(/^TRASH:/);
+    expect(alias).toMatch(/^TRASH:/);
+    expect(alias).not.toBe(whole);
   });
 
   it('reads a list the network answered within its staleTime from the cache', async () => {

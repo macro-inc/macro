@@ -5458,6 +5458,16 @@ enum GraphqlEmailView {
 	The other option.
 	"""
 	OTHER
+	"""
+	Threads with a message in the spam folder. Date sorts use their newest
+	spam message.
+	"""
+	SPAM
+	"""
+	Threads with a message in the trash folder. Date sorts use their newest
+	trashed message.
+	"""
+	TRASH
 }
 
 """
@@ -10327,6 +10337,43 @@ type GraphqlSoupEmailMessageLabel {
 }
 
 """
+One page's row for an email thread, embedded in the thread per list.
+
+An embedded value with no `id`: each list picks its own message, so
+these fields must not overwrite the thread's shared preview fields.
+"""
+type GraphqlSoupEmailPagePreview {
+	"""
+	The page's sort timestamp, in RFC 3339 format.
+	"""
+	sortTs: String!
+	"""
+	The subject of the message the page picks.
+	"""
+	subject: String
+	"""
+	The snippet of the message the page picks, never a body.
+	"""
+	snippet: String
+	"""
+	Whether the message the page picks is a draft.
+	"""
+	isDraft: Boolean!
+	"""
+	The sender email.
+	"""
+	senderEmail: String
+	"""
+	The sender name.
+	"""
+	senderName: String
+	"""
+	The sender photo url.
+	"""
+	senderPhotoUrl: String
+}
+
+"""
 Legacy contact-keyed participant, retained for older clients during rollout.
 """
 type GraphqlSoupEmailParticipant {
@@ -10467,6 +10514,17 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	Timestamp used for email thread sorting, in RFC 3339 format.
 	"""
 	sortTs: String!
+	"""
+	The row the page that returned this thread shows: its sort timestamp
+	and the message its `emailView` and filters pick (for Spam and Trash,
+	the newest matching message in the folder). The plain `name`,
+	`snippet`, sender and `sortTs` fields carry the same values, but a
+	client cache shares those across every view and the thread itself.
+	Pass a key of the page's list (its view, filters and sort) as `page`
+	to cache this row per list: `page` only keys the cache and never
+	changes the value.
+	"""
+	pagePreview(page: String!): GraphqlSoupEmailPagePreview!
 	"""
 	The created timestamp in RFC 3339 format.
 	"""

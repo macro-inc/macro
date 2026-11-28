@@ -157,7 +157,8 @@ All registered Email and Tasks tabs must have an explicit source classification.
 The nine Soup-backed Email tabs include Favorites and Archived; the three task
 predicate tabs are My tasks, All tasks and Created by me. Scheduled email uses
 the scheduled-message service, Reminders gets membership from its reminder
-collection, Spam and Trash use network-backed provider folder pages, and
+collection, Spam and Trash read GraphQL Soup server pages for provider
+folders (`provider-folder-server-page`), and
 Tasks → My projects, All projects and Created by me use project collections.
 Those separate surfaces are reported in `outsidePredicateMatrix`, not exercised through their
 dormant Soup queries or claimed as offline predicate coverage. They need separate

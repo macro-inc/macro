@@ -121,9 +121,10 @@ entire cache in browser memory. With 10s of thousands of cached objects
     `GraphqlProperty.propertyDefinitionId` and
     `GraphqlSoupChannelMessage.id`); the build fails on malformed shapes.
     Soup pages return entities directly: `frecencyScore` is a per-entity
-    fact shared by every view through the normalized record, and the only
+    fact shared by every view through the normalized record, and the
     per-view state is list membership and order, which live in each page's
-    own `items` list. Optimistic membership moves patch those reference
+    own `items` list, plus the Spam and Trash row (`pagePreview(page:)`),
+    embedded in the thread under an argument that names the list. Optimistic membership moves patch those reference
     lists, while entity-field mutations update the shared records.
 
     The normalized entity contract lives on `GraphqlSoupEntity`, not only on

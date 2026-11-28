@@ -135,6 +135,7 @@ import {
   type GroupSoupQuery,
   GroupSoupDocument as GroupSoupQueryDocument,
   type GroupSoupQueryVariables,
+  type MailFolderSoupQuery,
   type SoupAgentSessionFieldsFragment,
   type SoupBackfillResult,
   type SoupInitialInput,
@@ -1300,6 +1301,9 @@ export type GraphqlGroupedSoupPage = {
 
 export type GraphqlSoupItem =
   | SoupQuery['user']['soup']['items'][number]
+  | (MailFolderSoupQuery['user']['soup']['items'][number] & {
+      notifications?: never;
+    })
   | (ChannelListItemFieldsFragment & { notifications?: never })
   | (SoupItemPreviewFieldsFragment & { notifications?: never });
 type GraphqlSoupEntity = GraphqlSoupItem;
@@ -2492,73 +2496,84 @@ export function mapGraphqlSoupItem(
           },
         }) as SoupApiItem
     )
-    .with(
-      { __typename: 'GraphqlSoupEmailThread' },
-      (entity) =>
-        ({
-          tag: 'emailThread',
-          frecency_score: frecency,
-          is_favorited: entity.isFavorited,
-          // Native invitations can arrive as calendar parts without attachments.
-          hasCalendarInvite:
-            'mailDraftState' in entity &&
-            (entity.mailDraftState?.baseline.hasCalendarAttachment === true ||
-              entity.mailDraftState?.drafts.some(
-                (draft) => draft.facts.hasCalendarAttachment
-              ) === true),
-          data: {
-            id: entity.id,
-            providerId: entity.providerId ?? undefined,
-            ownerId: entity.ownerId,
-            inboxVisible: entity.inboxVisible,
-            hasReceivedMail: entity.hasReceivedMail,
-            name: entity.emailName ?? undefined,
-            snippet: entity.snippet ?? undefined,
-            senderEmail: entity.senderEmail ?? undefined,
-            senderName: entity.senderName ?? undefined,
-            senderPhotoUrl: entity.senderPhotoUrl ?? undefined,
-            isRead: entity.isRead,
+    .with({ __typename: 'GraphqlSoupEmailThread' }, (entity) => {
+      // Spam and Trash rows show the message and date their own page picked:
+      // opening the thread or reading another view rewrites the shared fields.
+      const page = 'pagePreview' in entity ? entity.pagePreview : undefined;
+      const preview = page
+        ? { ...page, emailName: page.subject }
+        : {
+            emailName: entity.emailName,
+            snippet: entity.snippet,
             isDraft: entity.isDraft,
-            isImportant: entity.isImportant,
-            isSignal: entity.isSignal,
-            projectId: entity.projectId ?? undefined,
+            senderEmail: entity.senderEmail,
+            senderName: entity.senderName,
+            senderPhotoUrl: entity.senderPhotoUrl,
             sortTs: emailThreadSortTs(entity, options?.emailView),
-            createdAt: entity.createdAt,
-            updatedAt: entity.updatedAt,
-            viewedAt: entity.viewedAt ?? undefined,
-            participants: entity.participants.map((participant) => ({
-              id: participant.contactId,
-              linkId: participant.linkId,
-              name: participant.name ?? undefined,
-              emailAddress: participant.email ?? undefined,
-              sfsPhotoUrl: participant.sfsPhotoUrl ?? undefined,
-            })),
-            attachments: entity.attachments.map((attachment) => ({
-              id: attachment.id,
-              messageId: attachment.messageId,
-              providerAttachmentId:
-                attachment.providerAttachmentId ?? undefined,
-              filename: attachment.filename ?? undefined,
-              mimeType: attachment.mimeType ?? undefined,
-              sizeBytes: attachment.sizeBytes ?? undefined,
-              contentId: attachment.contentId ?? undefined,
-              createdAt: attachment.createdAt,
-            })),
-            labels: entity.labels.map((label) => ({
-              id: label.id,
-              linkId: label.linkId,
-              providerLabelId: label.providerLabelId,
-              name: label.name,
-              createdAt: label.createdAt,
-              messageListVisibility: label.messageListVisibility,
-              labelListVisibility: label.labelListVisibility,
-              type: label.type,
-            })),
-            properties: mapGraphqlProperties(entity.properties),
-            notifications: mapGraphqlNotifications(entity.notifications),
-          },
-        }) as SoupItemWithCalendarInvite
-    )
+          };
+      return {
+        tag: 'emailThread',
+        frecency_score: frecency,
+        is_favorited: entity.isFavorited,
+        // Native invitations can arrive as calendar parts without attachments.
+        hasCalendarInvite:
+          'mailDraftState' in entity &&
+          (entity.mailDraftState?.baseline.hasCalendarAttachment === true ||
+            entity.mailDraftState?.drafts.some(
+              (draft) => draft.facts.hasCalendarAttachment
+            ) === true),
+        data: {
+          id: entity.id,
+          providerId: entity.providerId ?? undefined,
+          ownerId: entity.ownerId,
+          inboxVisible: entity.inboxVisible,
+          hasReceivedMail: entity.hasReceivedMail,
+          name: preview.emailName ?? undefined,
+          snippet: preview.snippet ?? undefined,
+          senderEmail: preview.senderEmail ?? undefined,
+          senderName: preview.senderName ?? undefined,
+          senderPhotoUrl: preview.senderPhotoUrl ?? undefined,
+          isRead: entity.isRead,
+          isDraft: preview.isDraft,
+          isImportant: entity.isImportant,
+          isSignal: entity.isSignal,
+          projectId: entity.projectId ?? undefined,
+          sortTs: preview.sortTs,
+          createdAt: entity.createdAt,
+          updatedAt: entity.updatedAt,
+          viewedAt: entity.viewedAt ?? undefined,
+          participants: entity.participants.map((participant) => ({
+            id: participant.contactId,
+            linkId: participant.linkId,
+            name: participant.name ?? undefined,
+            emailAddress: participant.email ?? undefined,
+            sfsPhotoUrl: participant.sfsPhotoUrl ?? undefined,
+          })),
+          attachments: entity.attachments.map((attachment) => ({
+            id: attachment.id,
+            messageId: attachment.messageId,
+            providerAttachmentId: attachment.providerAttachmentId ?? undefined,
+            filename: attachment.filename ?? undefined,
+            mimeType: attachment.mimeType ?? undefined,
+            sizeBytes: attachment.sizeBytes ?? undefined,
+            contentId: attachment.contentId ?? undefined,
+            createdAt: attachment.createdAt,
+          })),
+          labels: entity.labels.map((label) => ({
+            id: label.id,
+            linkId: label.linkId,
+            providerLabelId: label.providerLabelId,
+            name: label.name,
+            createdAt: label.createdAt,
+            messageListVisibility: label.messageListVisibility,
+            labelListVisibility: label.labelListVisibility,
+            type: label.type,
+          })),
+          properties: mapGraphqlProperties(entity.properties),
+          notifications: mapGraphqlNotifications(entity.notifications),
+        },
+      } as SoupItemWithCalendarInvite;
+    })
     .with(
       { __typename: 'GraphqlSoupChannel' },
       (entity) =>

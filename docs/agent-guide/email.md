@@ -738,8 +738,11 @@ The desktop sidebar and mobile tabs include **Spam** and **Trash**. Spam reads
 Gmail Spam or Outlook Junk; Trash reads Gmail Trash or Outlook Deleted Items.
 Account, alias, and facet filters stay within the selected folder. Mixed threads
 show their latest message in that folder, and folder membership is checked before
-pagination. These views load server pages; full-text search and offline predicate
-filtering are not available for them yet.
+pagination. These views read GraphQL server pages that the cache does not
+maintain: a page already read can show offline, but full-text search, offline
+membership and pages not yet read are not available for them. Rows share read state with the thread, so a
+read/unread change shows in the open folder without a reload, but keep their
+folder message and date: opening a mixed thread does not change its folder row.
 
 Opening a row loads the thread by id. A thread whose every message is in Spam or
 Trash renders as its folder row does, while All Mail lists and previews still leave
@@ -765,8 +768,8 @@ queued provider write completes.
 Outlook uses pending mailbox operations, and the thread's operation notice shows
 provider confirmation or failure. Gmail uses the existing queued label-sync path
 and does not expose those operation notices. A success toast means the request was
-accepted, not that the provider has confirmed it. Read/unread actions and provider
-sync events refresh the isolated folder lists. Outlook operation polling runs
+accepted, not that the provider has confirmed it. Read/unread actions, provider
+sync events, inbox backfill and inbox removal read the open folder list again. Outlook operation polling runs
 while the thread is open; otherwise
 folder refresh follows the provider sync event. The unread facet remains
 thread-level, so an unread reply outside Spam can make its Spam row unread.

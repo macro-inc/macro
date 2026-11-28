@@ -11,6 +11,36 @@ query Soup($input: SoupInput!) {
 	}
 }
 
+# Spam and Trash pages: the list rows without notifications, which these rows
+# never show (REST folder pages returned none), plus the row each page shows.
+# The folder date and the folder message depend on the page's view and
+# filters, not only on the thread, so they are keyed by `$page`, a key of the
+# list: opening the thread or reading another view rewrites the shared `name`,
+# `snippet` and `sortTs`.
+query MailFolderSoup($input: SoupInput!, $page: String!) {
+	user {
+		id
+		emailLinks @cacheOnly { ...MailAccountFields }
+		soup(input: $input) {
+			items {
+				...SoupItemPreviewFields
+				... on GraphqlSoupEmailThread {
+					pagePreview(page: $page) {
+						sortTs
+						subject
+						snippet
+						isDraft
+						senderEmail
+						senderName
+						senderPhotoUrl
+					}
+				}
+			}
+			nextCursor
+		}
+	}
+}
+
 # One-shot reads (exports, previews, recently viewed): the list rows without
 # their notifications, which these readers never show and the server would
 # otherwise look up for every row.

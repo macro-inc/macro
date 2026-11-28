@@ -49,7 +49,6 @@ import {
 } from '@service-storage/graphql/generated/graphql';
 import { soupOptimisticResolvers } from '../optimistic-resolvers';
 import { registerGraphqlSoupRevalidations } from '../soup/graphql/active-queries';
-import { soupKeys } from '../soup/keys';
 import { emailKeys } from './keys';
 import { markEmailThreadUnread } from './read-state';
 import {
@@ -150,20 +149,11 @@ describe('email read state with GraphQL Soup', () => {
   it.each([true, false])(
     'propagates isRead=%s before the request settles',
     async (read) => {
-      const folderKeys = ['spam', 'trash'].map(
-        (emailView) =>
-          soupKeys.astItems({
-            params: {},
-            body: { emailView },
-            transport: 'rest',
-          }).queryKey
-      );
-      const allKey = soupKeys.astItems({
-        params: {},
-        body: { emailView: 'all' },
-      }).queryKey;
-      for (const key of [...folderKeys, allKey])
-        client.setQueryData(key, { pages: [] });
+      // Spam and Trash are server pages the cache cannot keep current.
+      const folder = { input: { initial: { emailView: 'SPAM' } } };
+      const unregisterFolder = registerGraphqlSoupRevalidations(() => [
+        { document: SoupDocument, variables: folder },
+      ]);
       let finish!: () => void;
       const network = new Promise<void>((resolve) => {
         finish = resolve;
@@ -214,12 +204,14 @@ describe('email read state with GraphQL Soup', () => {
       } finally {
         finish();
         await result;
+        unregisterFolder();
       }
-      // Shared-cache lists stay local; isolated folder previews need a new read.
+      // Shared-cache lists stay local; the folder pages are read again with
+      // the write, not by a separate refetch.
       expect(mocks.refresh).not.toHaveBeenCalled();
-      for (const key of folderKeys)
-        expect(client.getQueryState(key)?.isInvalidated).toBe(true);
-      expect(client.getQueryState(allKey)?.isInvalidated).toBe(false);
+      expect(
+        mocks.graphqlMutation.mock.calls[0][2].optimisticMutation.revalidations
+      ).toEqual([{ document: SoupDocument, variables: folder }]);
     }
   );
 

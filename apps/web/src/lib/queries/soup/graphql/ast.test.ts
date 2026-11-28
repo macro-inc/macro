@@ -596,6 +596,25 @@ describe('makeGraphqlSoupInput', () => {
     }
   );
 
+  it.each([
+    ['spam', 'SPAM'],
+    ['trash', 'TRASH'],
+  ] as const)(
+    'maps the %s folder view on first and later pages',
+    (view, mapped) => {
+      const request = {
+        params: { limit: 100, sort_method: 'updated_at' },
+        body: { emailView: view },
+      } as const;
+
+      expect(makeGraphqlSoupInput(request).initial?.emailView).toBe(mapped);
+      expect(
+        makeGraphqlSoupInput({ ...request, cursor: 'opaque-cursor' })
+          .continuation?.emailView
+      ).toBe(mapped);
+    }
+  );
+
   it('rejects unknown email views instead of using the GraphQL default', () => {
     expect(() =>
       makeGraphqlSoupInput({

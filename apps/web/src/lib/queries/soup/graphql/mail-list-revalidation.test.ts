@@ -1,7 +1,10 @@
 import type { SoupUpdatesSubscription } from '@service-storage/graphql/generated/graphql';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { registerActiveGraphqlSoupQuery } from './active-queries';
-import { revalidateMailAttachmentListsForSoupUpdates } from './mail-list-revalidation';
+import {
+  revalidateMailAttachmentListsForSoupUpdates,
+  revalidateMailFolderLists,
+} from './mail-list-revalidation';
 
 type SoupPatch = SoupUpdatesSubscription['soupUpdates'][number];
 
@@ -78,5 +81,31 @@ describe('revalidateMailAttachmentListsForSoupUpdates', () => {
     ]);
 
     expect(maintained).not.toHaveBeenCalled();
+  });
+});
+
+describe('revalidateMailFolderLists', () => {
+  function registerView(emailView: string) {
+    const refresh = vi.fn(async () => {});
+    onTestFinished(
+      registerActiveGraphqlSoupQuery({
+        isEnabled: () => true,
+        refresh,
+        body: () => ({ emailView }),
+      })
+    );
+    return refresh;
+  }
+
+  it('reads Spam and Trash again and leaves other mail lists alone', async () => {
+    const spam = registerView('spam');
+    const trash = registerView('trash');
+    const all = registerView('all');
+
+    await revalidateMailFolderLists();
+
+    expect(spam).toHaveBeenCalledTimes(1);
+    expect(trash).toHaveBeenCalledTimes(1);
+    expect(all).not.toHaveBeenCalled();
   });
 });
