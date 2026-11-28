@@ -53,24 +53,25 @@ data:
     // ECS's FireLens parses the line, so the sidecar sends its fields as the
     // record's attributes; CloudWatch, through Firehose, sends the line itself as
     // the body. Either way they become the record's trace and span, which Grafana
-    // links, unless the record already has its own. A span ID is taken only with
-    // a trace ID. In a body the entrypoint's IDs come last, after any span field
-    // of the same name, so the last match wins.
+    // links, for a record with neither ID of its own. A span ID is taken only with
+    // a trace ID, and an all-zero ID is no ID. In a body the entrypoint's IDs come
+    // last, after any span field of the same name, so the last match wins.
     otelcol.processor.transform "log_traces" {
       error_mode = "ignore"
       log_statements {
         context = "log"
         statements = [
-          `set(cache["trace_id"], attributes["otel.trace_id"]) where IsMatch(trace_id.string, "^0*$") and IsString(attributes["otel.trace_id"]) and IsMatch(attributes["otel.trace_id"], "^[0-9a-f]{32}$")`,
-          `merge_maps(cache, ExtractPatterns(body, "(?s).*\"otel\\.trace_id\":\"(?P<trace_id>[0-9a-f]{32})\""), "upsert") where IsMatch(trace_id.string, "^0*$") and cache["trace_id"] == nil and IsString(body) and IsMatch(body, "\"otel\\.trace_id\":")`,
+          `set(cache["trace_id"], attributes["otel.trace_id"]) where IsMatch(trace_id.string, "^0*$") and IsMatch(span_id.string, "^0*$") and IsString(attributes["otel.trace_id"]) and IsMatch(attributes["otel.trace_id"], "^[0-9a-f]{32}$") and not IsMatch(attributes["otel.trace_id"], "^0+$")`,
+          `set(cache["span_id"], attributes["otel.span_id"]) where cache["trace_id"] != nil and IsString(attributes["otel.span_id"]) and IsMatch(attributes["otel.span_id"], "^[0-9a-f]{16}$") and not IsMatch(attributes["otel.span_id"], "^0+$")`,
+          `merge_maps(cache, ExtractPatterns(body, "(?s).*\"otel\\.trace_id\":\"(?P<trace_id>[0-9a-f]{32})\""), "upsert") where cache["trace_id"] == nil and IsMatch(trace_id.string, "^0*$") and IsMatch(span_id.string, "^0*$") and IsString(body) and IsMatch(body, "\"otel\\.trace_id\":")`,
           `delete_key(cache, "trace_id") where cache["trace_id"] != nil and IsMatch(cache["trace_id"], "^0+$")`,
-          `set(cache["span_id"], attributes["otel.span_id"]) where cache["trace_id"] != nil and IsMatch(span_id.string, "^0*$") and IsString(attributes["otel.span_id"]) and IsMatch(attributes["otel.span_id"], "^[0-9a-f]{16}$")`,
-          `merge_maps(cache, ExtractPatterns(body, "(?s).*\"otel\\.span_id\":\"(?P<span_id>[0-9a-f]{16})\""), "upsert") where cache["trace_id"] != nil and cache["span_id"] == nil and IsMatch(span_id.string, "^0*$") and IsString(body)`,
+          `merge_maps(cache, ExtractPatterns(body, "(?s).*\"otel\\.span_id\":\"(?P<span_id>[0-9a-f]{16})\""), "upsert") where cache["trace_id"] != nil and cache["span_id"] == nil and IsString(body) and IsMatch(body, "\"otel\\.span_id\":")`,
+          `delete_key(cache, "span_id") where cache["span_id"] != nil and IsMatch(cache["span_id"], "^0+$")`,
           `set(trace_id.string, cache["trace_id"]) where cache["trace_id"] != nil`,
-          `set(span_id.string, cache["span_id"]) where cache["span_id"] != nil and not IsMatch(cache["span_id"], "^0+$")`,
+          `set(span_id.string, cache["span_id"]) where cache["span_id"] != nil`,
           // Kept once, as the record's own IDs.
-          `delete_key(attributes, "otel.trace_id") where cache["trace_id"] != nil`,
-          `delete_key(attributes, "otel.span_id") where cache["trace_id"] != nil`,
+          `delete_key(attributes, "otel.trace_id") where cache["trace_id"] != nil and attributes["otel.trace_id"] == cache["trace_id"]`,
+          `delete_key(attributes, "otel.span_id") where cache["span_id"] != nil and attributes["otel.span_id"] == cache["span_id"]`,
         ]
       }
       output { logs = [otelcol.processor.transform.emails.input] }

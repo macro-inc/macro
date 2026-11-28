@@ -204,7 +204,7 @@ A Rust service's JSON log line carries Datadog's half of its trace ID
 parses the line, so those arrive as the record's attributes; CloudWatch,
 through Firehose, and any other sender that passes the whole line send it as
 the body. `nixos/ingest.alloy` (`log_traces`) sets the record's trace and span
-from either, unless the record already has its own, and Grafana's Loki links
+from either, for a record with neither ID of its own, and Grafana's Loki links
 the line to its trace. The link finds the trace only when the service also
 sends its spans to Grafana (dev, see "Dev dual export", and each production
 service once its copy is turned on) and the sampler kept that trace.
