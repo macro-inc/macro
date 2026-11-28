@@ -476,8 +476,13 @@ export function loadCacheWasm(): Promise<CacheWasmModule> {
                 outcome: checkpoint.success ? 'success' : 'error',
                 errorCode: checkpoint.success ? 'none' : 'unknown',
                 durationMs: checkpoint.durationMs,
-                count: checkpoint.backfilledFrames,
-                walFrames: checkpoint.walFrames,
+                // A failed copy reports no frame counts.
+                ...(checkpoint.success
+                  ? {
+                      count: checkpoint.backfilledFrames,
+                      walFrames: checkpoint.walFrames,
+                    }
+                  : {}),
                 ...storageIoFields(checkpoint),
               });
             }

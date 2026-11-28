@@ -439,7 +439,9 @@ fn telemetry_splits_each_commit_s_writes_and_flushes_and_reports_the_capped_copy
     // Every write committed once, and each COMMIT appended and flushed once.
     let totals = commit_totals();
     assert_eq!(totals.commits - commits_before, next as u64);
-    assert!(totals.commit_ms >= 250.0 * next as f64, "{totals:?}");
+    // Each COMMIT's time is its statement's one clock step (this clock moves
+    // 250 ms a read), without the slow report that follows it.
+    assert_eq!(totals.commit_ms, 250.0 * next as f64, "{totals:?}");
     let commit = fingerprint("COMMIT");
     let commits: Vec<_> = recorder
         .slow

@@ -14,7 +14,8 @@ contract and the multi-target verification commands.
 - `README.md`: the ownership/recovery boundary — read before touching
   `OpfsOwner`, `OpfsSession`, or close/reset paths.
 - `src/browser.rs` (wasm32 only): `OpfsOwner`, `OpfsSession`, `ConnectedOpfsSession`,
-  close/reset state types.
+  close/reset state types, and `io_totals` (completed OPFS writes and flushes
+  since the worker started, across every file and session).
 - `src/browser/sidecar.rs` (wasm32 only): `Sidecar`, the file beside the pair
   that a wipe leaves alone.
 - `src/state.rs`, `src/write_batch.rs`: target-independent lifecycle machine,

@@ -83,6 +83,9 @@ pub trait QueryTelemetry {
 
 thread_local! {
     static TELEMETRY: RefCell<Option<Rc<dyn QueryTelemetry>>> = const { RefCell::new(None) };
+    // The last execution's time, taken before any slow report, so a COMMIT's
+    // time never includes the cost of reporting it.
+    static LAST_EXECUTION_MS: Cell<f64> = const { Cell::new(f64::NAN) };
     static COMMITS: Cell<CommitTotals> = const {
         Cell::new(CommitTotals {
             commits: 0,
@@ -95,6 +98,23 @@ thread_local! {
 /// installed.
 pub fn commit_totals() -> CommitTotals {
     COMMITS.with(Cell::get)
+}
+
+/// Counts a COMMIT that wrote, with the time its statement took. Call it
+/// right after the COMMIT ran; it does nothing without instrumentation.
+pub(crate) fn record_commit() {
+    let duration_ms = LAST_EXECUTION_MS.with(|last| last.replace(f64::NAN));
+    if TELEMETRY.with(|slot| slot.borrow().is_none()) {
+        return;
+    }
+    COMMITS.with(|totals| {
+        let mut next = totals.get();
+        next.commits += 1;
+        if duration_ms.is_finite() && duration_ms >= 0.0 {
+            next.commit_ms += duration_ms;
+        }
+        totals.set(next);
+    });
 }
 
 /// Install (or disable) instrumentation on the current cache engine thread.
@@ -131,23 +151,11 @@ impl QueryTimer {
 
     pub(crate) fn finish(self, sql: &str, success: bool) {
         let duration_ms = self.elapsed_ms();
+        LAST_EXECUTION_MS.with(|last| last.set(duration_ms));
         if duration_ms.is_finite() && duration_ms > SLOW_QUERY_THRESHOLD_MS {
             self.telemetry
                 .slow_query(&fingerprint(sql), duration_ms, success, self.io());
         }
-    }
-
-    /// Counts a COMMIT that wrote, timed from `start`.
-    pub(crate) fn finish_commit(self) {
-        let duration_ms = self.elapsed_ms();
-        COMMITS.with(|totals| {
-            let mut next = totals.get();
-            next.commits += 1;
-            if duration_ms.is_finite() && duration_ms >= 0.0 {
-                next.commit_ms += duration_ms;
-            }
-            totals.set(next);
-        });
     }
 
     /// Reports the capped copy timed from `start`, when it ran or failed.

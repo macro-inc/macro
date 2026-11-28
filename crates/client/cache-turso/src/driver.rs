@@ -722,7 +722,6 @@ fn transaction<T>(
 
     match operation() {
         Ok(value) => {
-            let commit_timer = crate::query_telemetry::QueryTimer::start();
             match execute_control(connection, "COMMIT", TestControlPhase::Commit) {
                 Ok(_) => {
                     // Turso's own checkpoint would have run here at 1,000 frames.
@@ -730,9 +729,7 @@ fn transaction<T>(
                     // runs; a failed copy leaves the WAL whole. Only a transaction
                     // that wrote copies, so a read never retries a failed copy.
                     if wal_end.is_some() && connection.owned_wal_end() != wal_end {
-                        if let Some(timer) = commit_timer {
-                            timer.finish_commit();
-                        }
+                        crate::query_telemetry::record_commit();
                         let copy_timer = crate::query_telemetry::QueryTimer::start();
                         let copy = connection.checkpoint_over(CHECKPOINT_CAP_FRAMES);
                         if let Some(timer) = copy_timer {

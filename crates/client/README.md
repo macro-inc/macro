@@ -692,15 +692,20 @@ A copy that ran is reported as `graphql_cache.wal_checkpoint` with
 10,000 frames runs), `cache.duration_ms`, `cache.count` (frames copied) and
 `cache.wal_frames` (frames in the WAL when it ran; a count below it is a partial
 copy). A capped copy also carries the `cache.storage.*` writes and flushes it
-made, since it runs inside the write that triggered it.
+made, since it runs inside the write that triggered it. A failed idle copy is
+reported with its error class and retried once the next request has run; it
+leaves the WAL whole and resets the cache only when the error means corruption.
+A failed capped copy is reported with `cache.error_code` `unknown` and no frame
+counts; it also leaves the WAL whole, and the next COMMIT that writes tries it
+again.
 
 The engine worker also reports `graphql_cache.storage_io` when the engine
 opens, at most once a minute while it runs, and when it drains: the COMMITs
-(`cache.storage.commits`, `cache.storage.commit_ms`) and the OPFS writes and
-flushes (`cache.storage.*`) since its last report. Flushes per COMMIT is
-`cache.storage.flushes / cache.storage.commits`. A failed copy is
-reported with its error class and retried once the next request has run; it
-leaves the WAL whole and resets the cache only when the error means corruption.
+that wrote (`cache.storage.commits`, `cache.storage.commit_ms`) and the
+completed OPFS writes and flushes (`cache.storage.*`) since its last report.
+The OPFS counts cover every file of the worker, so
+`cache.storage.flushes / cache.storage.commits` is the worker's flushes per
+COMMIT, checkpoint and close flushes included.
 
 ## Slow request telemetry
 

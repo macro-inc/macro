@@ -62,8 +62,9 @@ extern "C" {
     fn performance_now() -> f64;
 }
 
-/// The writes and flushes Turso has made through this worker's OPFS handles
-/// since the worker started, and the time they took. Telemetry takes the
+/// The writes and flushes Turso has completed through this worker's OPFS
+/// handles since the worker started, across every file and session, and the
+/// time they took. A failed write or flush is not counted. Telemetry takes the
 /// difference across a statement or a checkpoint to split its time into
 /// writing (appending to the WAL, or copying it) and flushing.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -1281,7 +1282,9 @@ impl File for OpfsFile {
                 })
             })
             .map_err(LimboError::CompletionError);
-        count_write(buffer.as_slice().len(), started_at);
+        if result.is_ok() {
+            count_write(buffer.as_slice().len(), started_at);
+        }
         finish_completion(&completion, result);
         Ok(completion)
     }
@@ -1324,10 +1327,12 @@ impl File for OpfsFile {
             }
         })()
         .map_err(LimboError::CompletionError);
-        count_write(
-            buffers.iter().map(|buffer| buffer.as_slice().len()).sum(),
-            started_at,
-        );
+        if result.is_ok() {
+            count_write(
+                buffers.iter().map(|buffer| buffer.as_slice().len()).sum(),
+                started_at,
+            );
+        }
         finish_completion(&completion, result);
         Ok(completion)
     }
@@ -1345,7 +1350,9 @@ impl File for OpfsFile {
             })?;
             Ok(0)
         });
-        count_flush(started_at);
+        if result.is_ok() {
+            count_flush(started_at);
+        }
         finish_completion(&completion, result);
         Ok(completion)
     }
