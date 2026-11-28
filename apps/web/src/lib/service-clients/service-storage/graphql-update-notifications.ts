@@ -74,6 +74,33 @@ function readAgainAfterFailedReread(
   );
 }
 
+/**
+ * A failed write marks its span failed with a fixed message, since a server
+ * message may carry user text, and records whether the request reached the
+ * server. A queued write's rows are this client's guess, so only a write the
+ * server answered records how many rows it changed.
+ */
+function recordOutcome(
+  span: Span,
+  result: OperationResult,
+  changed: number | undefined
+): void {
+  const disposition = optimisticMutationDispositionOf(result)?.kind;
+  span.setAttr('notification.disposition', disposition ?? 'none');
+  if (result.error) {
+    span.setAttr(
+      'notification.error_kind',
+      result.error.networkError ? 'network' : 'graphql'
+    );
+    span.error('Notification update failed');
+  } else if (
+    changed !== undefined &&
+    (disposition === undefined || disposition === 'committed')
+  ) {
+    span.setAttr('notification.changed_count', changed);
+  }
+}
+
 /** Authoritative rows returned after an entity-scoped notification write. */
 export type GraphqlUpdateNotificationsForEntitiesResult =
   UpdateNotificationsForEntityMutation['updateNotificationsForEntity'];
@@ -107,6 +134,8 @@ export async function executeGraphqlUpdateNotifications(
   return Telemetry.span('notification.update_status', async (span) => {
     span.setAttr('notification.operation', args.operation);
     span.setAttr('notification.count', args.notificationIds.length);
+    if (args.notificationIds.length === 1)
+      span.setAttr('notification.id', args.notificationIds[0]);
     // Its request, queue attempt and the exchange's rereads join this trace.
     const result = await client
       .mutation(UpdateNotificationsDocument, variables, {
@@ -116,6 +145,7 @@ export async function executeGraphqlUpdateNotifications(
         [TRACE_PARENT_CONTEXT_KEY]: span,
       })
       .toPromise();
+    recordOutcome(span, result, result.data?.updateNotifications.length);
 
     // Without the normalized exchange there is no durable revalidation runner;
     // the client's own exchange may already have read the lists again. With a
@@ -160,11 +190,21 @@ export async function executeGraphqlUpdateNotificationsForEntities(
   return Telemetry.span('notification.update_for_entities', async (span) => {
     span.setAttr('notification.operation', args.operation);
     span.setAttr('notification.entity_count', variables.input.entities.length);
+    const [first] = variables.input.entities;
+    if (variables.input.entities.length === 1 && first) {
+      span.setAttr('entity.id', String(first.entityId));
+      span.setAttr('entity.type', first.entityType);
+    }
     const result = await client
       .mutation(UpdateNotificationsForEntityDocument, variables, {
         [TRACE_PARENT_CONTEXT_KEY]: span,
       })
       .toPromise();
+    recordOutcome(
+      span,
+      result,
+      result.data?.updateNotificationsForEntity.length
+    );
     // Without the cache the client's exchange already read every mounted
     // query again before the write settled.
     if (!result.error && networkRevalidationIncomplete(result)) {

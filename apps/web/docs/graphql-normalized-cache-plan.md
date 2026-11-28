@@ -1036,8 +1036,9 @@ its client, because a list mounted while another list's request for the same
 page is in flight never sends its own operation. The exchange records a
 `graphql.mutation.network_revalidation` span, in the trace the write's caller
 named, with the queries it sent, the lists it read, failed or cut off at 15 s,
-and `revalidation.complete`; every query and page it sends joins that span for
-that send only. Other paged queries, grouped Soup lists included,
+and `revalidation.complete`; every query it sends, and every page a paged list
+sends before the exchange stops waiting at 15 s, joins that span for that send
+only, and a page sent later joins nothing. Other paged queries, grouped Soup lists included,
 are sent again page by page. A write whose response was lost (a network error)
 may still have committed, so its queries are read again in the background,
 without holding back its error. Mail archive and read-state writes add no
@@ -1047,7 +1048,8 @@ refresh of their own. Notification status writes and renames add none when
 read every mounted Soup list again through its own refresh
 (`refreshActiveGraphqlSoupQueries`, which starts after any read of the list
 already in flight), with their other readers, in the background, so the write
-settles at once. Other writes read mounted Soup lists again
+settles at once. Those reads start their own traces, since the refresh
+coalesces callers; the write's span records `revalidation.fallback`. Other writes read mounted Soup lists again
 (`refreshActiveGraphqlSoupQueries`), and so do agent-session metadata events
 (`agent-session/list-sync.ts`), which otherwise only read the session's row
 into the cache. A row read while the engine is still opening is written only

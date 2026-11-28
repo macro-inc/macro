@@ -10,6 +10,7 @@ import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   type Client,
+  CombinedError,
   createClient,
   type Exchange,
   type Operation,
@@ -546,12 +547,89 @@ describe('a notification write whose exchange read failed', () => {
       expect(fallbacks).toEqual([runs[0]]);
     });
 
+    it(`marks the write's span failed without the server's message (${name})`, async () => {
+      const failures: unknown[] = [];
+      const attrs = new Map<string, unknown>();
+      vi.spyOn(Telemetry, 'span').mockImplementation(((
+        _spanName: string,
+        operation: (span: Span) => Promise<unknown>
+      ) =>
+        operation({
+          setAttr: (key: string, value: unknown) => attrs.set(key, value),
+          error: (error: unknown) => failures.push(error),
+          run: <T>(work: () => T) => work(),
+        } as unknown as Span)) as typeof Telemetry.span);
+      const refusing: Exchange = () => (operations$) =>
+        pipe(
+          operations$,
+          filter((operation) => operation.kind === 'mutation'),
+          map(
+            (operation): OperationResult => ({
+              operation,
+              error: new CombinedError({
+                graphQLErrors: [{ message: 'server text' }],
+              }),
+              stale: false,
+              hasNext: false,
+            })
+          )
+        );
+      const client = createClient({
+        url: 'http://graphql.test',
+        exchanges: [refusing],
+      });
+      const result = await write(client);
+      expect(result.error).toBeDefined();
+      expect(failures).toEqual(['Notification update failed']);
+      expect(attrs.get('notification.error_kind')).toBe('graphql');
+    });
+
     it(`leaves the lists to the exchange when its read succeeded (${name})`, async () => {
       const { client, listRefresh } = revalidatingClient(async () => {});
       await write(client);
       expect(listRefresh).not.toHaveBeenCalled();
     });
   }
+});
+
+it('counts changed rows only once the server answers a queued notification write', async () => {
+  const attrs = new Map<string, unknown>();
+  vi.spyOn(Telemetry, 'span').mockImplementation(((
+    _spanName: string,
+    operation: (span: Span) => Promise<unknown>
+  ) =>
+    operation({
+      setAttr: (key: string, value: unknown) => attrs.set(key, value),
+      error: () => {},
+      run: <T>(work: () => T) => work(),
+    } as unknown as Span)) as typeof Telemetry.span);
+  // Offline: the queue accepts the write and answers with its own guess.
+  const queuing: Exchange = () => (operations$) =>
+    pipe(
+      operations$,
+      filter((operation) => operation.kind === 'mutation'),
+      map((operation) =>
+        withOptimisticMutationDisposition(
+          {
+            operation,
+            data: { updateNotifications: [{ id: 'one' }] },
+            stale: false,
+            hasNext: false,
+          },
+          { kind: 'queued', transactionId: 'pending' }
+        )
+      )
+    );
+  const client = createClient({
+    url: 'http://graphql.test',
+    exchanges: [queuing],
+  });
+  await executeGraphqlUpdateNotifications(client, {
+    notificationIds: ['one'],
+    operation: 'MARK_SEEN',
+  });
+  expect(attrs.get('notification.disposition')).toBe('queued');
+  expect(attrs.has('notification.changed_count')).toBe(false);
 });
 
 it('settles a notification write without waiting for the lists it reads again', async () => {
