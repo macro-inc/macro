@@ -658,7 +658,8 @@ export function createSoupLiveQuery(
     registerGraphqlSoupRevalidations(
       revalidationQueries,
       getGraphqlSoupClient,
-      () => cacheMaintained()
+      () => cacheMaintained(),
+      () => request()?.filters
     )
   );
 

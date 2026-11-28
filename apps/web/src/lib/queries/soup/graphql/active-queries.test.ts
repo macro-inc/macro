@@ -77,6 +77,32 @@ describe('active GraphQL Soup queries', () => {
     expect(getActiveGraphqlSoupRevalidations()).toEqual([descriptor]);
   });
 
+  it('uses the initial filters to scope continuations and skips maintained readers', () => {
+    const document = gql`query Soup($cursor: String) { soup(cursor: $cursor) { nextCursor } }`;
+    const contact = { document, variables: { cursor: 'contact' } };
+    const company = { document, variables: { cursor: 'company' } };
+    const maintained = { document, variables: { cursor: 'maintained' } };
+    for (const [descriptor, hasContacts, cacheMaintained] of [
+      [contact, true, false],
+      [company, false, false],
+      [maintained, true, true],
+    ] as const)
+      onTestFinished(
+        registerGraphqlSoupRevalidations(
+          () => [descriptor],
+          undefined,
+          () => cacheMaintained,
+          () => hasContacts
+        )
+      );
+    expect(
+      getActiveGraphqlSoupRevalidations(undefined, {
+        unmaintainedOnly: true,
+        where: (filters) => filters === true,
+      })
+    ).toEqual([contact]);
+  });
+
   it('coalesces refreshes requested while one is in flight into one follow-up', async () => {
     const settle: Array<() => void> = [];
     const refresh = vi.fn(

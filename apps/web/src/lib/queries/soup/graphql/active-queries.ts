@@ -62,6 +62,7 @@ const revalidationSources = new Set<{
   queries: () => readonly QueryRevalidation[];
   client?: () => Pick<Client, 'query'>;
   cacheMaintained?: () => boolean;
+  filters?: () => unknown;
 }>();
 
 /** Each reader supplies its enabled, loaded pages for durable mutation replay. */
@@ -69,9 +70,10 @@ export function registerGraphqlSoupRevalidations(
   queries: () => readonly QueryRevalidation[],
   client?: () => Pick<Client, 'query'>,
   /** The normalized cache keeps these pages current (see FE-58). */
-  cacheMaintained?: () => boolean
+  cacheMaintained?: () => boolean,
+  filters?: () => unknown
 ): () => void {
-  const source = { queries, client, cacheMaintained };
+  const source = { queries, client, cacheMaintained, filters };
   revalidationSources.add(source);
   return () => revalidationSources.delete(source);
 }
@@ -81,7 +83,10 @@ export function registerGraphqlSoupRevalidations(
  * ones a write that updates the cache still has to read again. */
 export function getActiveGraphqlSoupRevalidations(
   client?: Pick<Client, 'query'>,
-  options: { unmaintainedOnly?: boolean } = {}
+  options: {
+    unmaintainedOnly?: boolean;
+    where?: (filters: unknown) => boolean;
+  } = {}
 ): QueryRevalidation[] {
   // Asked for by a write: lists that mount after it read the server again.
   forgetSoupNetworkAnswers();
@@ -89,6 +94,8 @@ export function getActiveGraphqlSoupRevalidations(
   for (const source of revalidationSources) {
     if (client && source.client && source.client() !== client) continue;
     if (options.unmaintainedOnly && source.cacheMaintained?.()) continue;
+    if (options.where && (!source.filters || !options.where(source.filters())))
+      continue;
     for (const query of source.queries()) {
       queries.set(createRequest(query.document, query.variables).key, query);
     }
