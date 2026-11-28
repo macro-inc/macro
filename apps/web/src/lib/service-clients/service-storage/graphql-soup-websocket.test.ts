@@ -36,6 +36,7 @@ afterEach(() => {
 });
 
 import { registerActivityRevalidator } from '../../queries/activity/push-registry';
+import { channelNotificationRefresh } from '../../queries/channel/notification-refresh';
 import { registerActiveGraphqlSoupQuery } from '../../queries/soup/graphql/active-queries';
 import {
   ActivityUpdatesDocument,
@@ -262,7 +263,7 @@ describe('GraphQL Soup subscription lifecycle', () => {
       expect(unsubscribe).toHaveBeenCalledOnce();
   });
 
-  it('marks the Soup stream unavailable when a lagged subscription ends', () => {
+  it('catches up after a lagged Soup stream ends and reattaches', () => {
     const receive = new Map<unknown, (result: { hasNext: boolean }) => void>();
     const client = {
       query: vi.fn(),
@@ -279,11 +280,17 @@ describe('GraphQL Soup subscription lifecycle', () => {
       { disabled: false, onCacheGenerationChanged: () => () => {} } as never
     );
     expect(lifecycle.receivesSoupUpdates()).toBe(true);
+    const reconnect = vi.spyOn(
+      channelNotificationRefresh(client as never),
+      'reconnect'
+    );
 
     receive.get(SoupUpdatesDocument)?.({ hasNext: false });
     expect(lifecycle.receivesSoupUpdates()).toBe(false);
+    expect(reconnect).toHaveBeenCalledTimes(1);
     setVisibility('visible');
     expect(lifecycle.receivesSoupUpdates()).toBe(true);
+    expect(reconnect).toHaveBeenCalledTimes(2);
     lifecycle.dispose();
     expect(lifecycle.receivesSoupUpdates()).toBe(false);
   });

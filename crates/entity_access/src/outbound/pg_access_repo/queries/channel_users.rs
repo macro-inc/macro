@@ -42,7 +42,7 @@ pub async fn get_channel_users(
 }
 
 /// Get the active roster at one fresh snapshot, past the audience cache.
-/// Each page walks the active-membership index even when its statistics lag.
+/// Keyset pages let the query use the channel and user keys to find the next page.
 #[tracing::instrument(err, skip(pool))]
 pub async fn read_channel_users(
     pool: &PgPool,

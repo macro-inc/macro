@@ -445,6 +445,7 @@ export function createGraphqlSoupSubscriptionsLifecycle(
           });
         return () => subscription.unsubscribe();
       });
+      if (resubscribed && soupUpdatesActive) channelHandler.reconnect();
     },
     connected: () => {
       signaledFailure = false;

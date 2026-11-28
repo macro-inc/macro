@@ -14,6 +14,7 @@ function isTopLevelWitness(notification: SoupNotificationFieldsFragment) {
   switch (notification.eventType) {
     case 'channel_message_send':
     case 'channel_access_requested':
+      // These events are channel-scoped. Thread replies have a separate event type.
       return true;
     case 'channel_mention':
       return (
