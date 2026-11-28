@@ -20,6 +20,8 @@ import { useChannelsByIdsQuery } from './by-ids';
 export const MAX_CHANNEL_WINDOW_IDS = 200;
 /** IDs per by-ID lookup; a window that slides keeps the chunks it still covers. */
 export const CHANNEL_WINDOW_CHUNK_SIZE = 25;
+/** The most lookups one window makes, however many sparse lists it spans. */
+export const MAX_CHANNEL_WINDOW_CHUNKS = 16;
 /** Records kept after their IDs leave the window, so off-screen rows stay. */
 const RETAINED_CHANNELS = 1_000;
 
@@ -48,14 +50,14 @@ export type ChannelWindowChunk = {
 
 /**
  * A bounded set of channel IDs to resolve, built only by `channelIdWindow`:
- * at most `MAX_CHANNEL_WINDOW_IDS` IDs, in chunks of at most
- * `CHANNEL_WINDOW_CHUNK_SIZE`.
+ * at most `MAX_CHANNEL_WINDOW_IDS` IDs, in at most
+ * `MAX_CHANNEL_WINDOW_CHUNKS` chunks of at most `CHANNEL_WINDOW_CHUNK_SIZE`.
  */
 export type ChannelIdWindow = {
   readonly [channelIdWindowBrand]: true;
   readonly chunks: readonly ChannelWindowChunk[];
   readonly size: number;
-  /** IDs in range left out to stay within the cap. */
+  /** IDs in range left out to stay within the caps. */
   readonly dropped: number;
 };
 
@@ -74,8 +76,9 @@ const REGION_BLOCKS = [64, 8] as const;
  * for their aligned region of 8 or 64 blocks, keyed
  * `<slice key>:<blocks>x<region>`; a region with IDs in one block only keeps
  * that block's key. An ID in several slices is resolved by
- * the first; IDs past `limit` (at most `MAX_CHANNEL_WINDOW_IDS`) are
- * dropped, never queued for later.
+ * the first; IDs past `limit` (at most `MAX_CHANNEL_WINDOW_IDS`), and those
+ * of chunks past `MAX_CHANNEL_WINDOW_CHUNKS`, are dropped, never queued for
+ * later.
  */
 export function channelIdWindow(
   slices: readonly ChannelWindowSlice[],
@@ -158,7 +161,14 @@ export function channelIdWindow(
       pack(0, region);
     }
   }
-  return { chunks, size: taken.size, dropped } as unknown as ChannelIdWindow;
+  // Each chunk is one lookup, so a window over many sparse lists stops at
+  // the chunk cap too; its IDs count as dropped.
+  const kept = chunks.slice(0, MAX_CHANNEL_WINDOW_CHUNKS);
+  for (const chunk of chunks.slice(MAX_CHANNEL_WINDOW_CHUNKS)) {
+    dropped += chunk.ids.length;
+  }
+  const size = kept.reduce((total, chunk) => total + chunk.ids.length, 0);
+  return { chunks: kept, size, dropped } as unknown as ChannelIdWindow;
 }
 
 export const EMPTY_CHANNEL_WINDOW = channelIdWindow([]);

@@ -26,6 +26,7 @@ import {
   type ChannelIdWindow,
   channelIdWindow,
   EMPTY_CHANNEL_WINDOW,
+  MAX_CHANNEL_WINDOW_CHUNKS,
   MAX_CHANNEL_WINDOW_IDS,
   useChannelWindow,
 } from './window';
@@ -152,9 +153,11 @@ describe('channelIdWindow', () => {
         },
       ]);
     const window = sparse(CHANNEL_WINDOW_CHUNK_SIZE);
-    expect(window.size).toBe(MAX_CHANNEL_WINDOW_IDS);
-    // Eight blocks share a chunk: 25 lookups for 200 IDs, not 200.
-    expect(window.chunks).toHaveLength(MAX_CHANNEL_WINDOW_IDS / 8);
+    // Eight blocks share a chunk: one lookup for 8 IDs, not eight, up to the
+    // chunk cap.
+    expect(window.chunks).toHaveLength(MAX_CHANNEL_WINDOW_CHUNKS);
+    expect(window.size).toBe(MAX_CHANNEL_WINDOW_CHUNKS * 8);
+    expect(window.dropped).toBe(7000 / CHANNEL_WINDOW_CHUNK_SIZE - window.size);
     expect(window.chunks[0]).toEqual({
       key: 'label:big:8x0',
       ids: [
@@ -187,6 +190,18 @@ describe('channelIdWindow', () => {
       'label:big:64x4',
     ]);
     expect(sparser.size).toBe(70);
+  });
+
+  it('makes no more lookups than the chunk cap across many lists', () => {
+    const window = channelIdWindow(
+      ids(30).map((id) => ({ key: `section:${id}`, ids: [id] }))
+    );
+    expect(window.chunks).toHaveLength(MAX_CHANNEL_WINDOW_CHUNKS);
+    expect(window.chunks.map((chunk) => chunk.ids[0])).toEqual(
+      ids(MAX_CHANNEL_WINDOW_CHUNKS)
+    );
+    expect(window.size).toBe(MAX_CHANNEL_WINDOW_CHUNKS);
+    expect(window.dropped).toBe(30 - MAX_CHANNEL_WINDOW_CHUNKS);
   });
 
   it('resolves nothing for an empty range', () => {
