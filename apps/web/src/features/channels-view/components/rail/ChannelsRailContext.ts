@@ -189,7 +189,10 @@ export type ChannelsRailContext = {
    * projection reads its later pages only for sections on screen that list
    * every unread member.
    */
-  reportSectionOnScreen: (section: ChannelSectionKey, onScreen: boolean) => void;
+  reportSectionOnScreen: (
+    section: ChannelSectionKey,
+    onScreen: boolean
+  ) => void;
   isLabelOpen: (labelId: string) => boolean;
   toggleLabel: (labelId: string) => void;
   /** The Channels section's rendered rows: label headings and channels. */
