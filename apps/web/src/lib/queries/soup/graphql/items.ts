@@ -1,6 +1,6 @@
 import type { ChannelEntity } from '@entity';
 import type { CombinedError } from '@urql/core';
-import { type Accessor, createMemo, createSignal, untrack } from 'solid-js';
+import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { arrayEquals } from '../../../core/util/compareUtils';
 import { readRowSnapshot } from '../../../graphql-cache/exchange/live-query';
 import type { QueryRevalidation } from '../../../graphql-cache/exchange/optimistic';
@@ -20,6 +20,7 @@ import {
 } from '../transform-utils';
 import { makeGraphqlSoupInput } from './ast';
 import {
+  type ChannelListRow,
   channelListRow,
   finishChannelListRow,
   isChannelListRow,
@@ -107,6 +108,27 @@ export function createGraphqlSoupAstItemsQuery(
     record: SoupLiveRecord;
     fetched?: GraphqlSoupItem;
   };
+  // A channel-list view shows server rows (before the cache serves it, or
+  // while the network is authoritative) as the rows the engine shapes, so a
+  // row keeps one path whichever source holds it. Server rows are versioned
+  // in place: reading one subscribes to its version, and an unchanged shape
+  // keeps the row it had.
+  const serverRows = new WeakMap<
+    object,
+    { json: string; row: ChannelListRow }
+  >();
+  const shapeServerRow = (record: SoupLiveRecord): SoupLiveRecord => {
+    if (isChannelListRow(record)) return record;
+    const raw = readRowSnapshot(record);
+    const row = channelListRow(raw);
+    if (!isChannelListRow(row)) return record;
+    const json = JSON.stringify(row);
+    const cached = serverRows.get(raw);
+    if (cached?.json === json) return cached.row;
+    serverRows.set(raw, { json, row });
+    return row;
+  };
+  const shapesRows = createMemo(() => options().projection === 'channel-list');
   const records = createMemo((previous: ProjectionRow[]) => {
     const fetched = new Map<string, GraphqlSoupItem>(
       source.fetchedRecords().map((record) => [soupItemKey(record), record])
@@ -115,7 +137,9 @@ export function createGraphqlSoupAstItemsQuery(
     for (const record of source.data() ?? [])
       visible.set(soupItemKey(record), record);
     const old = new Map(previous.map((row) => [row.key, row]));
-    return [...visible].map(([key, record]) => {
+    const shapes = shapesRows();
+    return [...visible].map(([key, visibleRecord]) => {
+      const record = shapes ? shapeServerRow(visibleRecord) : visibleRecord;
       const row = old.get(key);
       const baseline = fetched.get(key);
       return row?.record === record && row.fetched === baseline
@@ -188,21 +212,28 @@ export function createGraphqlSoupAstItemsQuery(
   };
   const channelItems = new WeakMap<
     ProjectionRow,
-    { sort: SoupAstParams['sort_method']; item: ChannelItem }
+    {
+      sort: SoupAstParams['sort_method'];
+      fetched: SoupLiveRecord | undefined;
+      item: ChannelItem;
+    }
   >();
   const projectedChannels = createMemo(() => {
     const sort = sortMethod();
     return records().flatMap((row): ChannelItem[] => {
       if (!isChannelListRow(row.record)) return [];
       const entity = finishChannelListRow(row.record);
-      const previous = channelItems.get(row);
-      if (previous && previous.sort === sort && previous.item.entity === entity)
-        return [previous.item];
       // Sort by the fetched version, as the keyed path does: a local edit
       // must not move page coverage.
-      const fetched = row.fetched
-        ? untrack(() => channelListRow(row.fetched!))
-        : undefined;
+      const fetched = row.fetched ? shapeServerRow(row.fetched) : undefined;
+      const previous = channelItems.get(row);
+      if (
+        previous &&
+        previous.sort === sort &&
+        previous.fetched === fetched &&
+        previous.item.entity === entity
+      )
+        return [previous.item];
       const item = {
         key: row.key,
         entity,
@@ -211,7 +242,7 @@ export function createGraphqlSoupAstItemsQuery(
             ? soupEntityTimestamp(finishChannelListRow(fetched), sort)
             : undefined,
       };
-      channelItems.set(row, { sort, item });
+      channelItems.set(row, { sort, fetched, item });
       return [item];
     });
   });
