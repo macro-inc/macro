@@ -249,7 +249,8 @@ to the OTLP log path, so emails are hashed as in every other log. The group,
 stream and function name are structured metadata (`aws_log_group_names`,
 `aws_log_stream_names`, `faas_name`). An AWS WAF event (`aws-waf-logs-*`) also
 gets the trace and span ID of its `traceparent` header, as Datadog's WAF
-pipeline does, and loses its client address: `clientIp`, a rate-based rule's
+pipeline does (none from a header with an all-zero trace or parent ID, which
+W3C calls invalid), and loses its client address: `clientIp`, a rate-based rule's
 `limitValue` and its `IP` or `FORWARDED_IP` custom key's value, and every
 header or `HEADER` custom key named for forwarding or a client address
 (`x-forwarded-for`, `forwarded`, `cf-connecting-ip`, ...) read `redacted`.
