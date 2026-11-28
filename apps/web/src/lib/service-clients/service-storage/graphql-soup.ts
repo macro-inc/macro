@@ -120,7 +120,10 @@ import {
   installCrmCacheHost,
 } from './crm-access-cache';
 import { emailCacheDeletionKeys } from './email-cache-deletions';
-import { emailMailboxEffectsExchange } from './email-mailbox-effects-exchange';
+import {
+  createEmailMailboxEffectsExchange,
+  emailMailboxEffectsExchange,
+} from './email-mailbox-effects-exchange';
 import { emailThreadSortTs } from './email-thread-sort';
 import type { SoupApiItem } from './generated/schemas/soupApiItem';
 import type { SoupCalendarEventSoupPropertiesField } from './generated/schemas/soupCalendarEventSoupPropertiesField';
@@ -1240,7 +1243,7 @@ export function getGraphqlSoupClient(): Client {
             graphqlWsClient,
             stripGraphqlSoupClientDirectives
           ),
-          emailMailboxEffectsExchange,
+          createEmailMailboxEffectsExchange(host),
           traceParentExchange,
           fetchExchange,
         ],

@@ -6,7 +6,7 @@
 import { graphqlOperation, loadAppSteadily } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
 import { trashFolder } from './harness/journeys';
-import { focusRow, rowIds, watchRowIds } from './harness/list';
+import { focusRow, rowIds, sentOperations, watchRowIds } from './harness/list';
 import { followup } from './harness/organise';
 import { anInbox, PROVIDERS } from './harness/providers';
 import { notice } from './harness/send';
@@ -122,6 +122,7 @@ for (const provider of PROVIDERS) {
     }) => {
       const ids = await deliverEach(mailbox, ['Bin', 'Stays']);
       await mailbox.open();
+      const sent = sentOperations(page);
       const marks = await holdOperation(page, 'MarkEmailThreadSeen', (body) =>
         body.includes(ids.Bin)
       );
@@ -152,6 +153,12 @@ for (const provider of PROVIDERS) {
       await expect
         .poll(async () => (await held(mailbox, 'Bin'))?.labels)
         .toContain(trashFolder(provider));
+      expect(sent).toContainEqual({
+        name: 'SetEmailThreadFolderStates',
+        variables: {
+          input: { threadIds: [ids.Bin], field: 'TRASHED', value: true },
+        },
+      });
       await focusRow(page, ids.Stays);
       await page.keyboard.press('s');
       did('AL-061', 'F-073');

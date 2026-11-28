@@ -123,6 +123,7 @@ async function setEmailMailboxFolderState(
       .toPromise();
     const disposition = optimisticMutationDispositionOf(result);
     queued = disposition?.kind === 'queued';
+    // Admission is the caller's receipt. Replay settles each thread independently.
     if (queued)
       return input.threadIds.map(() => ({
         status: 'fulfilled',

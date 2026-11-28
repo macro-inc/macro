@@ -23,6 +23,7 @@ import {
 } from './harness/states-list';
 import { GRACE } from './harness/ways-list1';
 import { listShows, row, rowCheckbox } from './harness/ways-list2';
+import { held } from './harness/ways-thread';
 import { did, saw } from './ledger/record';
 
 // A disconnected trash must leave All Mail, reach the provider on reconnect,
@@ -122,6 +123,107 @@ test('replays a disconnected trash and restores All Mail without a Soup read', a
   expect(sent.slice(beforeUndo).filter(({ name }) => name === 'Soup')).toEqual(
     []
   );
+});
+
+// Replay must acknowledge accepted and rejected writes independently and
+// preserve a pre-existing Trash membership.
+test('settles each thread of a partially rejected offline trash independently', async ({
+  page,
+  mailbox,
+}) => {
+  test.setTimeout(120_000);
+  await mailbox.deliver({ from: GRACE, subject: 'Agenda', text: 'Ready.' });
+  await mailbox.deliver({ from: GRACE, subject: 'Minutes', text: 'Ready.' });
+  await deliverToTrash(mailbox, {
+    from: GRACE,
+    subject: 'Discarded notes',
+    text: 'Old copy.',
+  });
+  const accepted = (await mailbox.synced('Agenda')).id;
+  const rejected = (await mailbox.synced('Minutes')).id;
+  const alreadyTrashed = (
+    await syncedInView(mailbox, 'trash', 'Discarded notes')
+  ).id;
+  const missing = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+  await mailbox.open();
+  await sidebarTab(page, 'All mail');
+  await listShows(page, [accepted, rejected]);
+  await expect
+    .poll(() => catchUpFinished(page), { timeout: 60_000 })
+    .toBe(true);
+  for (const id of [accepted, rejected])
+    await (await rowCheckbox(page, id)).click();
+  await expect(page.getByText('2 selected')).toBeVisible();
+
+  let replay = false;
+  await page.route(/\/graphql(\?|$)/, async (route) => {
+    const request = route.request();
+    if (!replay || graphqlOperation(request) !== 'SetEmailThreadFolderStates')
+      return route.fallback();
+    const requestBody = request.postDataJSON();
+    const input = requestBody.variables.input;
+    if (input.field !== 'TRASHED' || !input.value) return route.fallback();
+    expect(input.threadIds).toEqual(
+      expect.arrayContaining([accepted, rejected])
+    );
+    await route.fulfill({
+      response: await route.fetch({
+        postData: {
+          ...requestBody,
+          variables: {
+            input: { ...input, threadIds: [accepted, alreadyTrashed, missing] },
+          },
+        },
+      }),
+    });
+  });
+  const settled = page.waitForResponse(
+    (response) =>
+      replay &&
+      graphqlOperation(response.request()) === 'SetEmailThreadFolderStates' &&
+      response.request().postData()?.includes('"value":true') === true
+  );
+  const sent = sentOperations(page);
+  await page.context().setOffline(true);
+  try {
+    await page.keyboard.press('Shift+Digit3');
+    await listShows(page, []);
+    expect((await held(mailbox, 'Agenda'))?.labels).not.toContain('TRASH');
+    replay = true;
+  } finally {
+    await page.context().setOffline(false);
+  }
+
+  expect(await (await settled).json()).toMatchObject({
+    data: {
+      setEmailThreadFolderStates: [
+        {
+          threadId: accepted,
+          error: null,
+          effect: { id: accepted, mailAllPreview: null },
+        },
+        {
+          threadId: alreadyTrashed,
+          error: null,
+          effect: { id: alreadyTrashed, mailAllPreview: null },
+        },
+        {
+          threadId: missing,
+          error: expect.any(String),
+          effect: null,
+        },
+      ],
+    },
+  });
+  await listShows(page, [rejected]);
+  await expect
+    .poll(async () => (await held(mailbox, 'Agenda'))?.labels)
+    .toContain('TRASH');
+  expect((await held(mailbox, 'Discarded notes'))?.labels).toContain('TRASH');
+  expect(
+    sent.filter(({ name }) => name === 'SetEmailThreadFolderStates')
+  ).toHaveLength(1);
+  expect(sent.filter(({ name }) => name === 'Soup')).toEqual([]);
 });
 
 for (const provider of PROVIDERS) {

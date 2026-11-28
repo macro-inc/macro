@@ -2,7 +2,11 @@ import {
   TRACE_PARENT_CONTEXT_KEY,
   traceParentExchange,
 } from '@app/lib/urql-solid/trace-parent-exchange';
-import { emailMailboxEffectsExchange } from '@service-storage/email-mailbox-effects-exchange';
+import type { MutationSettlement } from '@graphql-cache/protocol';
+import {
+  createEmailMailboxEffectsExchange,
+  emailMailboxEffectsExchange,
+} from '@service-storage/email-mailbox-effects-exchange';
 import {
   ChannelListSoupDocument,
   MailFolderSoupDocument,
@@ -10,8 +14,14 @@ import {
   type SetEmailThreadFolderStatesInput,
   SoupDocument,
 } from '@service-storage/graphql/generated/graphql';
-import { type Client, createClient, fetchExchange } from '@urql/core';
+import {
+  type Client,
+  createClient,
+  fetchExchange,
+  makeOperation,
+} from '@urql/core';
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { map, pipe } from 'wonka';
 import { registerGraphqlSoupRevalidations } from '../soup/graphql/active-queries';
 
 const mocks = vi.hoisted(() => ({
@@ -227,6 +237,124 @@ describe('restore provider folders', () => {
       ]);
     }
   );
+
+  it('preserves an HTTP server failure even when it carries an effect error', async () => {
+    const fetch = vi.fn(async () =>
+      Response.json(
+        {
+          data: {
+            setEmailThreadFolderStates: [
+              { threadId: 'one', error: null, effect: null },
+            ],
+          },
+          errors: [
+            {
+              message: 'Upstream unavailable',
+              path: ['setEmailThreadFolderStates', 0, 'effect'],
+            },
+          ],
+        },
+        { status: 503 }
+      )
+    );
+    mocks.client = createClient({
+      url: 'http://localhost/graphql',
+      exchanges: [emailMailboxEffectsExchange, fetchExchange],
+      fetch,
+    });
+
+    await expect(
+      restoreEmailFolderThreads({ folder: 'trash', threadIds: ['one'] })
+    ).resolves.toEqual({ restoredIds: [], failedIds: ['one'] });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it('settles the acknowledgement when a primary row read stalls', async () => {
+    const deadline = new AbortController();
+    vi.spyOn(AbortSignal, 'timeout').mockReturnValueOnce(deadline.signal);
+    onTestFinished(() => {
+      vi.restoreAllMocks();
+    });
+    let emitSettlement!: (settlement: MutationSettlement) => void;
+    const stop = vi.fn();
+    const host = {
+      onMutationSettled: (
+        callback: (settlement: MutationSettlement) => void
+      ) => {
+        emitSettlement = callback;
+        return stop;
+      },
+    };
+    let abortRead!: () => void;
+    const readAborted = new Promise<void>((resolve) => {
+      abortRead = resolve;
+    });
+    let completeRetry!: () => void;
+    const retried = new Promise<void>((resolve) => {
+      completeRetry = resolve;
+    });
+    let reads = 0;
+    mocks.client = createClient({
+      url: 'http://localhost/graphql',
+      preferGetMethod: false,
+      exchanges: [
+        ({ forward }) =>
+          (operations) =>
+            forward(
+              pipe(
+                operations,
+                map((operation) =>
+                  operation.kind === 'mutation'
+                    ? makeOperation(operation.kind, operation, {
+                        ...operation.context,
+                        normalizedCacheQueueAttempt: {
+                          transactionId: 'folder-write',
+                          leaseOwner: 'owner',
+                          leaseGeneration: 'generation',
+                        },
+                      })
+                    : operation
+                )
+              )
+            ),
+        createEmailMailboxEffectsExchange(host),
+        fetchExchange,
+      ],
+      fetch: async (_input, init) => {
+        const { operationName } = JSON.parse(String(init?.body));
+        if (operationName === 'RecoverEmailThreadFolderRow') {
+          if (++reads === 1) {
+            init?.signal?.addEventListener('abort', abortRead, { once: true });
+            deadline.abort();
+            return new Promise<Response>(() => {});
+          }
+          completeRetry();
+          return Response.json({
+            data: { user: { id: 'viewer', soupEntity: null } },
+          });
+        }
+        return Response.json({
+          data: {
+            setEmailThreadFolderStates: [
+              { threadId: 'one', error: null, effect: null },
+            ],
+          },
+        });
+      },
+    });
+
+    await expect(
+      restoreEmailFolderThreads({ folder: 'trash', threadIds: ['one'] })
+    ).resolves.toEqual({ restoredIds: ['one'], failedIds: [] });
+    await readAborted;
+    expect(reads).toBe(1);
+    emitSettlement({ transactionId: 'other-write', status: 'committed' });
+    expect(reads).toBe(1);
+    emitSettlement({ transactionId: 'folder-write', status: 'committed' });
+    await retried;
+    expect(reads).toBe(2);
+    expect(stop).toHaveBeenCalledOnce();
+  }, 2_000);
 
   it('does not refresh lists when every request fails', async () => {
     mocks.update.mockRejectedValue(new Error('Offline'));
