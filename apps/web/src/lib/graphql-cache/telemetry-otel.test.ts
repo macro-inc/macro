@@ -98,6 +98,31 @@ describe('cache OpenTelemetry sink', () => {
     expect(span.end).toHaveBeenCalledOnce();
   });
 
+  it('exports the proof time and failure of a write', () => {
+    createOtelCacheTelemetrySink().emit({
+      browserFamily: 'chromium',
+      browserVersion: '152',
+      appVersion: '0.1',
+      backend: 'turso-wasm-opfs',
+      rolloutCohort: 'treatment',
+      name: 'graphql_cache.slow_request',
+      operationCategory: 'write',
+      requestKind: 'write',
+      outcome: 'success',
+      errorCode: 'none',
+      queueWaitMs: 0,
+      durationMs: 5,
+      queueDepth: 0,
+      proofMs: 3,
+      proofFailed: true,
+    });
+
+    expect(Object.fromEntries(span.setAttr.mock.calls)).toMatchObject({
+      'cache.proof_ms': 3,
+      'cache.proof_failed': true,
+    });
+  });
+
   it('exports a slow execution as a correlated warning without SQL or parameters', () => {
     createOtelCacheTelemetrySink().emit({
       browserFamily: 'firefox',

@@ -189,6 +189,8 @@ describe('cache telemetry privacy contract', () => {
       queueWaitMs: 40,
       durationMs: 1_200,
       queueDepth: 2,
+      proofMs: 4,
+      proofFailed: true,
     } as const;
     expect(isCacheTelemetryObservation(slowRequest)).toBe(true);
     reporter.emit(slowRequest);

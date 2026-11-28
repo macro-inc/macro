@@ -352,7 +352,7 @@ export type CacheTelemetryObservation = {
   requestKind?: CacheRequest['kind'];
   /** How long a `slow_request` waited in the engine queue before it ran. */
   queueWaitMs?: number;
-  /** How long a slow write spent proving which live views it left unchanged. */
+  /** How long a reported write spent proving which live views it left unchanged. */
   proofMs?: number;
   /** A write whose view proof failed, reported even when the write was fast. */
   proofFailed?: boolean;

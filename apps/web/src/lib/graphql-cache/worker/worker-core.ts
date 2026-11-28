@@ -737,7 +737,9 @@ export class CacheWorkerCore {
   /**
    * Reports a request answered a second or more after it arrived, split into
    * the time it waited behind others and the time it ran, so a page timeout
-   * can be traced to the request that held the engine.
+   * can be traced to the request that held the engine. A write whose view
+   * proof failed is reported however fast, since its extra reads show nowhere
+   * else.
    */
   private recordSlowRequest(
     queued: QueuedEngineRequest,
