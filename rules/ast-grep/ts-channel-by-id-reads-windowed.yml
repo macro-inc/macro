@@ -11,6 +11,8 @@ note: |-
   builds: at most 200 IDs, in chunks of 25. Give it the rows on screen (a
   slice with a `range`), or the first rows of a list, and show the rest from
   the channel directory's records.
+  Namespace imports, `export *` and dynamic imports of by-ids hand the hooks
+  on, so they are refused too: import its other names by name.
   The exact-set hooks stay for the Threads tab, whose IDs are the channels
   of the thread pages it has loaded: 100 threads a page, five pages on
   their own and more only as the list scrolls.
@@ -27,15 +29,43 @@ ignores:
 utils:
   by-ids-source:
     kind: string
-    regex: ^['"](@queries/channel|(\.{1,2}/)+(.+/)?(lib/)?queries/channel)/by-ids(\.ts)?['"]$
-rule:
-  kind: import_specifier
-  has:
-    field: name
-    regex: ^(useChannelsByIdsQuery|channelsByIdsQueryArgs)$
-  inside:
-    kind: import_statement
-    stopBy: end
+    regex: ^['"](@queries/channel|@app/lib/queries/channel|(\.{1,2}/)+(.+/)?channel)/by-ids(\.ts)?['"]$
+  from-by-ids:
+    any:
+      - kind: import_statement
+      - kind: export_statement
     has:
       field: source
       matches: by-ids-source
+rule:
+  any:
+    # import { useChannelsByIdsQuery } from, export { … } from
+    - any:
+        - kind: import_specifier
+        - kind: export_specifier
+      has:
+        field: name
+        regex: ^(useChannelsByIdsQuery|channelsByIdsQueryArgs)$
+      inside:
+        stopBy: end
+        matches: from-by-ids
+    # import * as byIds from, and export * from: each hands on the hooks
+    - kind: namespace_import
+      inside:
+        stopBy: end
+        matches: from-by-ids
+    - kind: export_statement
+      matches: from-by-ids
+      not:
+        has:
+          kind: export_clause
+    # import('…/by-ids')
+    - kind: call_expression
+      all:
+        - has:
+            field: function
+            kind: import
+        - has:
+            field: arguments
+            has:
+              matches: by-ids-source

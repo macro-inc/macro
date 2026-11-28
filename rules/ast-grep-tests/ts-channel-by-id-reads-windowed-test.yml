@@ -6,6 +6,12 @@ valid:
     import { registerChannelListNotificationRefresh } from '@queries/channel/by-ids';
   - |
     import { useChannelsByIdsQuery } from './somewhere-else';
+  - |
+    export { registerChannelListNotificationRefresh } from '@queries/channel/by-ids';
+  - |
+    import * as windows from '@queries/channel/window';
+  - |
+    const module = await import('@queries/channel/window');
 invalid:
   - |
     import { useChannelsByIdsQuery } from '@queries/channel/by-ids';
@@ -13,3 +19,15 @@ invalid:
     import { channelsByIdsQueryArgs, registerChannelListNotificationRefresh } from '@queries/channel/by-ids';
   - |
     import { useChannelsByIdsQuery as resolve } from '../../lib/queries/channel/by-ids';
+  - |
+    import { useChannelsByIdsQuery } from '@app/lib/queries/channel/by-ids';
+  - |
+    import * as byIds from '@queries/channel/by-ids';
+  - |
+    export { useChannelsByIdsQuery } from '@queries/channel/by-ids';
+  - |
+    export { channelsByIdsQueryArgs as args } from '../channel/by-ids';
+  - |
+    export * from '@queries/channel/by-ids';
+  - |
+    const { useChannelsByIdsQuery } = await import('@queries/channel/by-ids');
