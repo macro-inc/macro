@@ -35,6 +35,9 @@ tools/HTTP/GraphQL surfaces over them.
   existing deal entry is found from its company's entries
   (`record_entries`, indexed by record), never by scanning the pipeline.
 - `src/inbound/axum_router.rs` (+ `axum_router/*.rs`): HTTP handlers.
+- `../graphql_crm/src/mutations.rs`: the web's GraphQL company and contact
+  creates, company rename, domain edits, and merge commits use these domain
+  services and return Soup effects. The SDK also uses the HTTP write routes.
 - `src/inbound/pipeline_workflows.rs`: HTTP routes over the pipeline workflows
   and CSV transfers (entries by record, fields by name, options by label),
   merged into `/crm` beside `src/inbound/pipelines.rs`; the SDK's pipeline

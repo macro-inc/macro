@@ -12,6 +12,28 @@ use models_soup::crm_company::SoupCrmCompany;
 use super::*;
 
 #[tokio::test]
+async fn crm_edit_mutations_require_an_authenticated_actor() {
+    let schema = crate::build_schema();
+    let company = "b6ed8d66-e5ed-4656-9130-2abfaf7a7ba0";
+    let source = "71825bff-4ec8-4334-84a6-0bdf9fbc6b34";
+    for field in [
+        format!(
+            r#"renameCrmCompany(input: {{companyId: "{company}", name: "New"}}) {{ companyId }}"#
+        ),
+        format!(
+            r#"editCrmCompanyDomain(input: {{companyId: "{company}", change: ADD, domain: "example.org"}}) {{ companyId }}"#
+        ),
+        format!(
+            r#"commitCrmMerge(input: {{recordType: COMPANY, survivorId: "{company}", sourceIds: ["{source}"], revision: "rev", requestKey: "{source}", sharingRules: KEEP}}) {{ survivorId }}"#
+        ),
+    ] {
+        let response = schema.execute(format!("mutation {{ {field} }}")).await;
+        assert_eq!(response.errors.len(), 1);
+        assert_eq!(response.errors[0].message, "authentication required");
+    }
+}
+
+#[tokio::test]
 async fn crm_create_mutations_require_authentication_and_team_membership() {
     let schema = crate::build_schema();
     for field in ["createCrmCompany", "createCrmContact"] {

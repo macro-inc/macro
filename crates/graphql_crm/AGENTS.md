@@ -2,7 +2,7 @@
 
 ## What it is
 
-Backs the CRM feature with typed record creation and pipeline entries
+Backs the CRM feature with typed record mutations and pipeline entries
 composed onto CRM Soup entities.
 
 ## Start here
@@ -16,10 +16,13 @@ composed onto CRM Soup entities.
 - `src/mutations.rs`: `createCrmCompany` and `createCrmContact` call the
   same authorized CRM domain methods as the REST routes. Both take a stable
   client request ID for replay and return primary-backed Soup effects.
+- `src/mutations.rs` and `src/mutations/record_merge.rs`: company rename,
+  domain edits, and reviewed merges use the same domain receipts as their
+  REST counterparts. Merges return source tombstones and the survivor.
 
 ## Scope
 
-- Owns: the GraphQL shape over CRM creates and pipeline entries.
+- Owns: the GraphQL shape over CRM record writes and pipeline entries.
 - Not here: pipeline domain logic and storage → `crates/crm` (built on
   `crates/databases`).
 

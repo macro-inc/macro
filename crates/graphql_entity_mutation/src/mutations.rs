@@ -449,10 +449,19 @@ impl<E: SoupEntityEdges> GraphqlEntityMutationResult<E> {
 
     /// Construct a successful result that refreshes the affected Soup records.
     pub fn from_updated_entities(entities: impl IntoIterator<Item = Entity<'static>>) -> Self {
+        Self::from_updated_and_deleted_entities(entities, [])
+    }
+
+    /// Construct a successful result with tombstones followed by refreshed records.
+    pub fn from_updated_and_deleted_entities(
+        updated: impl IntoIterator<Item = Entity<'static>>,
+        deleted: impl IntoIterator<Item = Entity<'static>>,
+    ) -> Self {
         Self::Success(GraphqlMutationSuccess {
-            effects: entities
+            effects: deleted
                 .into_iter()
-                .map(EntityMutationEffect::updated)
+                .map(EntityMutationEffect::deleted)
+                .chain(updated.into_iter().map(EntityMutationEffect::updated))
                 .collect(),
             edges: PhantomData,
         })
