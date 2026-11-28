@@ -2670,7 +2670,10 @@ impl<S: Storage> Engine<S> {
             Some(Ok(Some(claimed))) => InitialClaimOutcome::Claimed(Box::new(claimed)),
             Some(Ok(None)) => InitialClaimOutcome::NotRunnable,
             Some(Err(error)) => InitialClaimOutcome::Failed(EngineError::Storage(error)),
-            None => unreachable!("a claim was asked for"),
+            // A claim was asked for, so it is never missing; were it, the
+            // queued mutation would wait for the next claim rather than fail
+            // an enqueue that is already durable.
+            None => InitialClaimOutcome::NotRunnable,
         };
         Ok(EnqueueOptimisticMutationResult {
             transaction_id: begun.transaction_id,
