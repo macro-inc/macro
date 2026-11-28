@@ -904,7 +904,7 @@ coverage are separate from the filter-selection matrix. No cache-format wipe is 
 and a new backfill checkpoint, preserving existing queued work. Deploy the backend
 schema additions before the client: it selects canonical message eligibility/recency
 fields, body-free canonical preview references, and viewer-relative share facts.
-The `soup-mail-v3` property-aware profile and new backfill checkpoint rebuild Mail proof without
+The property-aware profile (`soup-mail-v6` now) and new backfill checkpoint rebuild Mail proof without
 changing the persisted mutation queue format. Native Tauri maintains the same
 predicate projections and local page contract as the browser.
 Checkpoint v14 restarts older scans to populate property-aware indexes without wiping
