@@ -75,8 +75,9 @@ const POLL_MS = 20;
 const SETTLE_LIMIT_MS = 120_000;
 /** Bounds the "Show more" rounds a cold open makes for the viewport. */
 const LOAD_MORE_ROUNDS = 20;
-/** The section the expand and collapse scenarios toggle. */
-const TOGGLED_SECTION: ChannelsRailSection = 'channels';
+/** The section the expand and collapse scenarios toggle: one whose rows are on
+ * screen when Chat opens, so its heading is one the viewer can click. */
+const TOGGLED_SECTION: ChannelsRailSection = 'direct_messages';
 
 export const SCENARIOS = [
   'appShell',
@@ -416,6 +417,17 @@ async function measureStep(
   };
 }
 
+/** Fails the run when `section` has no rows in view: a toggle the viewer
+ * could not make measures nothing they see. */
+function assertOnScreen(view: ChatView, section: ChannelsRailSection): void {
+  const ranges = view.path()?.viewport().ranges ?? [];
+  if (ranges.some((range) => range.sectionKey === section)) return;
+  const shown = ranges.map((range) => range.sectionKey).join(', ');
+  throw new Error(
+    `The ${section} section is not on screen (${shown || 'none'})`
+  );
+}
+
 /** The earlier visit: the channel lane's backfill and one open of Chat.
  * Returns the origin to load the measured page over. */
 export async function seedChatCache(fixture: ChatFixture): Promise<{
@@ -565,6 +577,7 @@ export async function measureChat(
     });
     // Expand from collapsed, then collapse again; the setup collapse is not
     // counted.
+    assertOnScreen(view, TOGGLED_SECTION);
     view.path()?.setExpanded(TOGGLED_SECTION, false);
     await settle(graph);
     scenarios.expand = await measureStep(graph, view, solid, async () => {

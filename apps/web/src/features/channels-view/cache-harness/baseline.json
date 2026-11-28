@@ -112,8 +112,8 @@
         "solid.owners": 6,
         "solid.signals": 561,
         "solid.storeNodes": 5896,
-        "rows.built": 451,
-        "rows.resolved": 435,
+        "rows.built": 433,
+        "rows.resolved": 417,
         "rows.rendered": 48
       }
     },
@@ -228,8 +228,8 @@
         "solid.owners": 12,
         "solid.signals": 1130,
         "solid.storeNodes": 11875,
-        "rows.built": 590,
-        "rows.resolved": 574,
+        "rows.built": 552,
+        "rows.resolved": 536,
         "rows.rendered": 48
       }
     }

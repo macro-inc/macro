@@ -122,7 +122,7 @@ const WINDOW_CAPS: WindowCaps = {
     'mappers.trackedWalks': 0,
     'solid.signals': 1_250,
     'solid.storeNodes': 13_100,
-    'rows.resolved': 640,
+    'rows.resolved': 590,
   },
 };
 

@@ -85,9 +85,12 @@ in the PR. Reviewers read its diff as the change's cost.
 ## Gotchas
 
 - A run fails before the gate if any request left the process, the fixture saw
-  a filter it cannot serve, or the network logged an error: a filter shape the
-  fixture cannot serve is a fault, not an empty answer, so add it to
-  `fixture.ts`.
+  a filter it cannot serve, the network logged an error, or an engine call
+  failed (`engineErrors`): a filter shape the fixture cannot serve is a fault,
+  not an empty answer, so add it to `fixture.ts`.
+- Expand and collapse toggle Direct messages (`TOGGLED_SECTION`), whose rows
+  are on screen when Chat opens; the run fails if that section is not, since
+  a viewer can only click a heading they see.
 - A step has settled once nothing moved for `QUIET_MS`, longer than the
   channel directory's 2 s refresh spacing; a shorter wait lets the refresh a
   step caused land in the next step's counts.
