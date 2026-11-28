@@ -72,6 +72,10 @@ const SETTLE_FRAMES = 120;
 /** Passes from the end up, each from a fresh jump to the end, before the
  * headings check gives up on a heading. */
 const HEADING_PASSES = 3;
+/** How often, and for how long, a load waits for the channel lane to
+ * record its finished pass after the last page was served. */
+const LANE_POLL_MS = 250;
+const LANE_TIMEOUT_MS = 120_000;
 const TOGGLED_SECTION = 'Direct messages';
 /** Chat's saved view (`features/channels-view/persistence.ts`), per viewer. */
 const SAVED_VIEW_KEY = 'macro:channels:view-state:v1';
@@ -230,6 +234,32 @@ async function readLaneCheckpoint(page: Page): Promise<LaneCheckpoint> {
   }, CHANNEL_LANE_KEY_SUFFIX);
 }
 
+/** Waits until the channel lane's checkpoint records a finished pass that
+ * completed after `after` (any finished pass when null). */
+async function laneFinished(page: Page, after: string | null): Promise<void> {
+  await page.waitForFunction(
+    ({ suffix, after }) => {
+      const key = Object.keys(localStorage).find(
+        (each) =>
+          each.startsWith('graphql-soup-backfill:') && each.endsWith(suffix)
+      );
+      const text = key === undefined ? null : localStorage.getItem(key);
+      if (text === null) return false;
+      const stored = JSON.parse(text) as {
+        completed?: boolean;
+        completedAt?: string | null;
+      };
+      return (
+        stored.completed === true &&
+        typeof stored.completedAt === 'string' &&
+        (after === null || Date.parse(stored.completedAt) > Date.parse(after))
+      );
+    },
+    { suffix: CHANNEL_LANE_KEY_SUFFIX, after },
+    { polling: LANE_POLL_MS, timeout: LANE_TIMEOUT_MS }
+  );
+}
+
 async function readStorageMb(page: Page): Promise<number> {
   const bytes = await page.evaluate(
     async () => (await navigator.storage.estimate()).usage ?? 0
@@ -366,12 +396,12 @@ function savedHeadings(fixture: ChatFixture): Record<string, boolean> {
 
 /** Moves the scroller to its end or one page up, then waits until its
  * scroll height holds for `STABLE_FRAMES` frames, as the rail measures the
- * sections the move mounted. Returns where it started and whether it rests
- * at the end. */
+ * sections the move mounted. Returns where it started, whether the height
+ * held before `SETTLE_FRAMES` ran out, and whether it rests at the end. */
 async function scrollAndSettle(
   scroller: Locator,
   to: 'end' | 'pageUp'
-): Promise<{ from: number; atEnd: boolean }> {
+): Promise<{ from: number; settled: boolean; atEnd: boolean }> {
   return await scroller.evaluate(
     async (element, { to, stableFrames, settleFrames }) => {
       const from = element.scrollTop;
@@ -387,6 +417,7 @@ async function scrollAndSettle(
       }
       return {
         from,
+        settled: stable >= stableFrames,
         atEnd:
           element.scrollTop + element.clientHeight >= element.scrollHeight - 1,
       };
@@ -413,8 +444,8 @@ async function headingsFromTheEnd(
   };
   for (let pass = 0; pass < HEADING_PASSES; pass += 1) {
     for (let jump = 0; jump < END_JUMPS; jump += 1) {
-      const { atEnd } = await scrollAndSettle(scroller, 'end');
-      if ((await collect()) || atEnd) break;
+      const { settled, atEnd } = await scrollAndSettle(scroller, 'end');
+      if ((await collect()) || (settled && atEnd)) break;
     }
     for (let page = 0; page < HEADING_PAGES; page += 1) {
       if (await collect()) break;
@@ -614,6 +645,7 @@ async function measureSize(
       await page.goto(`${server.origin}/app/channels`);
       await rowsShown();
       await pass;
+      await laneFinished(page, null);
     });
     const seeded = await readLaneCheckpoint(page);
     const seededMb = await readStorageMb(page);
@@ -625,6 +657,9 @@ async function measureSize(
       await page.reload();
       await rowsShown();
       await pass;
+      // Within the step: the refresh pass is finished once the lane records
+      // it, after the last page was served.
+      await laneFinished(page, seeded?.completedAt ?? null);
     });
     evidence.lane = { seed: seeded, coldOpen: await readLaneCheckpoint(page) };
     evidence.storageMb = {

@@ -11,9 +11,10 @@ DOM size, and time to the first rows. Loose limits fail it.
 
 Each size gets a fresh browser context. `seed` is the earlier visit (the
 channel lane's whole pass into an empty cache), `coldOpen` the next load over
-that cache through the lane's refresh pass, then one message pushed over the
-socket, up to twenty pages of scroll (the rail's rows run out after about
-eight), and Direct messages collapsed and expanded. After each step settles
+that cache through the lane's refresh pass (each load lasts until the lane
+records its pass finished), then one message pushed over the socket, up to
+twenty pages of scroll (the rail's rows run out after about eight), and
+Direct messages collapsed and expanded. After each step settles
 (nothing in flight and nothing moving for 3 s) the spec takes the requests
 and the rows the step asked the server for and got back (Soup reads and
 channel previews), then the long tasks, DOM and the conversation rows the
