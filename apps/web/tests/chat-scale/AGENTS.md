@@ -90,8 +90,9 @@ reading under one is a measurement that did not happen.
 - A GraphQL field the fixture does not resolve gets an empty value for its
   type and is counted in `requests.defaulted`; a non-null field left `null`
   would fail the whole query.
-- The viewer is the only member of its team (`TEAM_ID`), which owns the team
-  channels and sections, and has no CRM access: the CRM access hint must be
+- The viewer is a member of its team (`TEAM_ID`), which owns the team
+  channels and sections, not an admin (admin-only surfaces such as the Slack
+  import stay shut), and has no CRM access: the CRM access hint must be
   `none` or a UUID policy.
 - Request counts per step include the app's periodic polls, so they are
   recorded, not limited.

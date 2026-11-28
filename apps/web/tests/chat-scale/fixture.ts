@@ -20,6 +20,9 @@ import { match } from 'ts-pattern';
 export const VIEWER_ID = 'user-1';
 /** The viewer's team, which owns the team channels and team sections. */
 export const TEAM_ID = '0190b6a0-0000-7000-8000-000000000001';
+/** The team's owner, one of the account's people; the viewer is a member,
+ * as most people in a team this size are, so admin-only surfaces stay shut. */
+export const TEAM_OWNER_ID = personId(0);
 const ORGANIZATION_ID = '1';
 const PEOPLE = 400;
 const PARTICIPANTS_PER_CHANNEL = 75;

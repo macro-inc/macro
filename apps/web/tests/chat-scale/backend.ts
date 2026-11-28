@@ -2,7 +2,7 @@
  * Everything the Chat scale tier's page talks to, answered in the test
  * process: the built app's files, the fixture (`fixture.ts`) over Soup GraphQL,
  * its websocket, the section lists and channel previews, a signed-in viewer
- * alone in its team, and an empty account's answer, in each response type, to the
+ * in a team, and an empty account's answer, in each response type, to the
  * other services the app asks at startup.
  *
  * The page's own requests are routed here (`routePage`); a worker's go to
@@ -41,7 +41,13 @@ import {
 } from 'graphql';
 import { match } from 'ts-pattern';
 import { bundleFile } from '../email-e2e/harness/front';
-import { type ChatFixture, FIXTURE_NOW, TEAM_ID, VIEWER_ID } from './fixture';
+import {
+  type ChatFixture,
+  FIXTURE_NOW,
+  TEAM_ID,
+  TEAM_OWNER_ID,
+  VIEWER_ID,
+} from './fixture';
 
 const SCHEMA = buildSchema(
   [
@@ -60,22 +66,28 @@ const DSS_HEADERS = { 'x-macro-crm-access': 'none' };
  * method and path, in each service's response type. A service request that is
  * not here, in `NOT_FOUND` or in `NO_CONTENT` fails the run: add its answer
  * here. */
-/** The viewer's team, which owns the team channels and sections: the viewer
- * alone, as its owner, without CRM access. */
+/** The viewer's team, which owns the team channels and sections: its owner
+ * and the viewer, a member without CRM access. */
 const VIEWER_TEAM: TeamWithMembers = {
   team: {
     id: TEAM_ID,
     name: 'Scale Team',
     slug: 'scale-team',
-    owner_id: VIEWER_ID,
+    owner_id: TEAM_OWNER_ID,
     allow_non_admin_invites: true,
     crm_enabled: true,
     enterprise: false,
   },
   members: [
-    { user_id: VIEWER_ID, team_id: TEAM_ID, role: 'owner', plan: 'premium' },
+    {
+      user_id: TEAM_OWNER_ID,
+      team_id: TEAM_ID,
+      role: 'owner',
+      plan: 'premium',
+    },
+    { user_id: VIEWER_ID, team_id: TEAM_ID, role: 'member', plan: 'premium' },
   ],
-  crm_member_access: { [VIEWER_ID]: false },
+  crm_member_access: { [TEAM_OWNER_ID]: false, [VIEWER_ID]: false },
 };
 
 const REST_ANSWERS: Record<string, unknown> = {
