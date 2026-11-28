@@ -24,12 +24,15 @@ vi.mock('@queries/storage/deleted', () => ({
 }));
 vi.mock('@queries/soup/graphql/active-queries', () => ({
   refreshActiveGraphqlSoupQueries: mocks.refresh,
+  getUnmaintainedGraphqlSoupRevalidations: () => [],
 }));
 vi.mock('@service-storage/util/refetchResources', () => ({
   refetchResources: mocks.resources,
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
   getEntityGraphqlClient: () => ({ mutation: mocks.mutation }),
+  // No live cache: entity writes read lists after they commit.
+  getGraphqlCacheHost: () => undefined,
 }));
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: {
