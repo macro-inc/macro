@@ -514,3 +514,17 @@ describe('a notification write whose exchange read failed', () => {
     });
   }
 });
+
+it('settles a notification write without waiting for the lists it reads again', async () => {
+  const { client, listRefresh } = revalidatingClient(() =>
+    Promise.reject(new Error('offline'))
+  );
+  // The list's own read stalls, as the one that timed out the exchange did.
+  listRefresh.mockReturnValue(new Promise<void>(() => {}));
+  const result = await executeGraphqlUpdateNotifications(client, {
+    notificationIds: ['one'],
+    operation: 'MARK_DONE',
+  });
+  expect(result.data).toBeDefined();
+  expect(listRefresh).toHaveBeenCalledOnce();
+});

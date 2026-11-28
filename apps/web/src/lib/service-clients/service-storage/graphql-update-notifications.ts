@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   networkRevalidated,
   networkRevalidationIncomplete,
@@ -54,13 +55,13 @@ function missedExpectedSeen(
 /**
  * When a list read the exchange started after this write failed or timed out,
  * every mounted Soup list reads again through its own refresh, in cursor
- * order: a saved page request cannot follow a cursor the write moved.
+ * order: a saved page request cannot follow a cursor the write moved. The
+ * write does not wait for them: a read that stalled the exchange would stall
+ * its caller again.
  */
-async function refreshListsTheExchangeMissed(
-  result: OperationResult
-): Promise<void> {
+function refreshListsTheExchangeMissed(result: OperationResult): void {
   if (networkRevalidationIncomplete(result))
-    await refreshActiveGraphqlSoupQueries();
+    fireAndForget(refreshActiveGraphqlSoupQueries(), 'notification-write');
 }
 
 /** Authoritative rows returned after an entity-scoped notification write. */
@@ -113,7 +114,7 @@ export async function executeGraphqlUpdateNotifications(
   ) {
     await revalidateChannelLists(client);
   }
-  await refreshListsTheExchangeMissed(result);
+  refreshListsTheExchangeMissed(result);
   return result;
 }
 
@@ -156,6 +157,6 @@ export async function executeGraphqlUpdateNotificationsForEntities(
       ),
     });
   }
-  await refreshListsTheExchangeMissed(result);
+  refreshListsTheExchangeMissed(result);
   return result;
 }
