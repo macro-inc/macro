@@ -60,11 +60,22 @@ export type ChannelIdWindow = {
 };
 
 /**
+ * Blocks per region, coarsest first: a region whose IDs fit one chunk is
+ * looked up as one, so a sparse list makes few chunks. Regions are aligned to
+ * their size, so a region keeps its key until its count crosses a chunk.
+ */
+const REGION_BLOCKS = [64, 8] as const;
+
+/**
  * Build a window from slices in priority order. Each slice is cut into
  * blocks of `CHANNEL_WINDOW_CHUNK_SIZE` indexes, keyed `<slice key>:<block>`,
- * so one list growing or scrolling never moves another's chunks. An ID in
- * several slices is resolved by the first; IDs past `limit` (at most
- * `MAX_CHANNEL_WINDOW_IDS`) are dropped, never queued for later.
+ * so one list growing or scrolling never moves another's chunks. Neighbouring
+ * blocks with few IDs left to look up (the rest held elsewhere) share a chunk
+ * for their aligned region of 8 or 64 blocks, keyed
+ * `<slice key>:<blocks>x<region>`; a region with IDs in one block only keeps
+ * that block's key. An ID in several slices is resolved by
+ * the first; IDs past `limit` (at most `MAX_CHANNEL_WINDOW_IDS`) are
+ * dropped, never queued for later.
  */
 export function channelIdWindow(
   slices: readonly ChannelWindowSlice[],
@@ -80,6 +91,7 @@ export function channelIdWindow(
     if (end <= start) continue;
     const firstBlock = Math.floor(start / CHANNEL_WINDOW_CHUNK_SIZE);
     const lastBlock = Math.floor((end - 1) / CHANNEL_WINDOW_CHUNK_SIZE);
+    const blocks = new Map<number, string[]>();
     for (let block = firstBlock; block <= lastBlock; block += 1) {
       const ids: string[] = [];
       const blockEnd = Math.min(
@@ -100,7 +112,50 @@ export function channelIdWindow(
         taken.add(id);
         ids.push(id);
       }
-      if (ids.length > 0) chunks.push({ key: `${slice.key}:${block}`, ids });
+      if (ids.length > 0) blocks.set(block, ids);
+    }
+    const pack = (level: number, region: number) => {
+      const size = REGION_BLOCKS[level];
+      const ids: string[] = [];
+      const holding: number[] = [];
+      for (let block = region * size; block < (region + 1) * size; block += 1) {
+        const blockIds = blocks.get(block);
+        if (!blockIds) continue;
+        ids.push(...blockIds);
+        holding.push(block);
+      }
+      if (holding.length === 0) return;
+      // A region of one block keeps that block's key as it grows or shrinks.
+      if (holding.length === 1) {
+        chunks.push({ key: `${slice.key}:${holding[0]}`, ids });
+        return;
+      }
+      if (ids.length <= CHANNEL_WINDOW_CHUNK_SIZE) {
+        chunks.push({ key: `${slice.key}:${size}x${region}`, ids });
+        return;
+      }
+      const next = REGION_BLOCKS[level + 1];
+      if (next === undefined) {
+        for (const block of holding) {
+          chunks.push({
+            key: `${slice.key}:${block}`,
+            ids: blocks.get(block) ?? [],
+          });
+        }
+        return;
+      }
+      const parts = size / next;
+      for (let part = 0; part < parts; part += 1) {
+        pack(level + 1, region * parts + part);
+      }
+    };
+    const coarsest = REGION_BLOCKS[0];
+    for (
+      let region = Math.floor(firstBlock / coarsest);
+      region <= Math.floor(lastBlock / coarsest);
+      region += 1
+    ) {
+      pack(0, region);
     }
   }
   return { chunks, size: taken.size, dropped } as unknown as ChannelIdWindow;
@@ -317,27 +372,35 @@ export function useChannelWindow(
   const liveIds = createMemo(
     () => new Set(chunks().flatMap((chunk) => chunk.ids()))
   );
+  // Rows read these once each, so each set is built once per change.
+  const pendingIds = createMemo<ReadonlySet<string>>(
+    () =>
+      new Set(
+        chunks().flatMap((chunk) => (chunk.loading() ? chunk.unresolved() : []))
+      )
+  );
+  const failedIds = createMemo<ReadonlySet<string>>(
+    () =>
+      new Set(
+        chunks().flatMap((chunk) => (chunk.error() ? chunk.unresolved() : []))
+      )
+  );
+  const unavailableIds = createMemo<ReadonlySet<string>>(() => {
+    const live = liveIds();
+    return new Set([
+      ...chunks().flatMap(settledMissing),
+      ...retainedMissing().filter((id) => !live.has(id)),
+    ]);
+  });
   return {
     channels,
     retained: createMemo(() => {
       const returned = new Set(channels().map((channel) => channel.id));
       return retainedRows().filter((row) => !returned.has(row.id));
     }),
-    pendingIds: () =>
-      new Set(
-        chunks().flatMap((chunk) => (chunk.loading() ? chunk.unresolved() : []))
-      ),
-    failedIds: () =>
-      new Set(
-        chunks().flatMap((chunk) => (chunk.error() ? chunk.unresolved() : []))
-      ),
-    unavailableIds: () => {
-      const live = liveIds();
-      return new Set([
-        ...chunks().flatMap(settledMissing),
-        ...retainedMissing().filter((id) => !live.has(id)),
-      ]);
-    },
+    pendingIds,
+    failedIds,
+    unavailableIds,
     isLoading: () =>
       chunks().some(
         (chunk) => chunk.loading() && chunk.unresolved().length > 0

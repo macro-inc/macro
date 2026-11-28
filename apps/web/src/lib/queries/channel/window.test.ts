@@ -139,6 +139,56 @@ describe('channelIdWindow', () => {
     expect(window.size).toBe(MAX_CHANNEL_WINDOW_IDS);
   });
 
+  it('packs a sparse list into a chunk per region, keyed by the region', () => {
+    // One ID in 25 left to look up, as when the directory holds the rest.
+    const list = ids(7000);
+    const sparse = (step: number, alsoLoaded?: string) =>
+      channelIdWindow([
+        {
+          key: 'label:big',
+          ids: list,
+          isLoaded: (id) =>
+            id === alsoLoaded || Number(id.slice(3)) % step !== 0,
+        },
+      ]);
+    const window = sparse(CHANNEL_WINDOW_CHUNK_SIZE);
+    expect(window.size).toBe(MAX_CHANNEL_WINDOW_IDS);
+    // Eight blocks share a chunk: 25 lookups for 200 IDs, not 200.
+    expect(window.chunks).toHaveLength(MAX_CHANNEL_WINDOW_IDS / 8);
+    expect(window.chunks[0]).toEqual({
+      key: 'label:big:8x0',
+      ids: [
+        'ch-0000',
+        'ch-0025',
+        'ch-0050',
+        'ch-0075',
+        'ch-0100',
+        'ch-0125',
+        'ch-0150',
+        'ch-0175',
+      ],
+    });
+    for (const chunk of window.chunks) {
+      expect(chunk.ids.length).toBeLessThanOrEqual(CHANNEL_WINDOW_CHUNK_SIZE);
+    }
+    // Another ID loading only shrinks its chunk; no key moves.
+    const fewer = sparse(CHANNEL_WINDOW_CHUNK_SIZE, 'ch-0025');
+    expect(fewer.chunks.map((chunk) => chunk.key)).toEqual(
+      window.chunks.map((chunk) => chunk.key)
+    );
+    expect(fewer.chunks[0].ids).not.toContain('ch-0025');
+    // Sparser still, 64 blocks share one.
+    const sparser = sparse(100);
+    expect(sparser.chunks.map((chunk) => chunk.key)).toEqual([
+      'label:big:64x0',
+      'label:big:64x1',
+      'label:big:64x2',
+      'label:big:64x3',
+      'label:big:64x4',
+    ]);
+    expect(sparser.size).toBe(70);
+  });
+
   it('resolves nothing for an empty range', () => {
     const window = channelIdWindow([
       { key: 's', ids: ids(100), range: { start: 10, end: 10 } },
@@ -388,6 +438,8 @@ describe('useChannelWindow', () => {
       setPending(false);
       expect(result.channels().map(({ id }) => id)).toEqual(['ch-0000']);
       expect([...result.unavailableIds()]).toEqual(['ch-0001']);
+      // Each read of an unchanged window shares one set.
+      expect(result.unavailableIds()).toBe(result.unavailableIds());
       setError(new Error('offline'));
       expect([...result.unavailableIds()]).toEqual([]);
       expect([...result.failedIds()]).toEqual(['ch-0001']);
