@@ -22,6 +22,13 @@ snapshots:
       start: 37
       end: 48
   ? |
+    static SQL: AtomicPtr<u8> = AtomicPtr::new(std::ptr::null_mut());
+  : labels:
+    - source: 'static SQL: AtomicPtr<u8> = AtomicPtr::new(std::ptr::null_mut());'
+      style: primary
+      start: 0
+      end: 65
+  ? |
     static TEXT: LazyLock<String> = LazyLock::new(|| std::env::args().collect());
   : labels:
     - source: 'static TEXT: LazyLock<String> = LazyLock::new(|| std::env::args().collect());'
@@ -79,6 +86,14 @@ snapshots:
       style: primary
       start: 33
       end: 78
+  ? |
+    type AtomicText = OnceLock<String>;
+    static SQL: AtomicText = AtomicText::new();
+  : labels:
+    - source: 'static SQL: AtomicText = AtomicText::new();'
+      style: primary
+      start: 36
+      end: 79
   ? |
     type Slot = OnceLock<Box<str>>;
     static SQL: Slot = Slot::new();
