@@ -14,9 +14,9 @@ note: |-
   text, such as a record field or a search term, look like source text and
   lets it reach telemetry. `extern crate`, and a `static` written inside a
   macro call or a `macro_rules!` body (other than `thread_local!`), are
-  refused too, since this check cannot see through them. Bind the value as a parameter instead, or run a
-  statement that must embed outside text as an `UnreportedSql`. Tests are
-  exempt.
+  refused too, since this check cannot see through them. Bind the value as a
+  parameter instead, or run a statement that must embed outside text as an
+  `UnreportedSql`. Tests are exempt.
 files:
   - crates/client/cache-turso/src/**
 ignores:
@@ -35,12 +35,12 @@ rule:
     # Macro arguments and `macro_rules!` bodies are token trees, where a
     # static is not a `static_item`: refuse the `static` token itself, except
     # in a `'static` lifetime and in `thread_local!`, whose values cannot be
-    # borrowed for `'static`.
+    # borrowed for `'static`. Only the token tree directly under it: a block
+    # in its initializer can still hold a static of its own.
     - kind: token_tree
       not:
         inside:
           kind: macro_invocation
-          stopBy: end
           has:
             field: macro
             regex: "(^|::)thread_local$"

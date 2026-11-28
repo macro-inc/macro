@@ -52,6 +52,8 @@ invalid:
   - |
     macro_rules! text { () => { static SQL: OnceLock<String> = OnceLock::new(); }; }
   - |
+    thread_local! { static T: &'static str = { static P: OnceLock<String> = OnceLock::new(); P.get_or_init(|| record_field()).as_str() }; }
+  - |
     static TEXT: LazyLock<String> = LazyLock::new(|| std::env::args().collect());
   - |
     static TEXT: OnceLock<String> = OnceLock::new();
