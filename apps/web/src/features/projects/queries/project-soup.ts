@@ -130,6 +130,7 @@ export function createProjectSoupSource(
   const client = createMemo(soupClient);
   // Without the cache, a committed write reads the list again in cursor order.
   const networkRevalidation = createPagedNetworkRevalidation(() => query, {
+    client,
     chain: () => JSON.stringify(input()),
     reads: enabled,
   });

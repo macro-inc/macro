@@ -701,6 +701,7 @@ describe('createUrqlInfiniteQuery under the revalidation exchange', () => {
       disposals.push(dispose);
       // As a Soup list does: its pages are read again through its own chain.
       const networkRevalidation = createPagedNetworkRevalidation(() => query, {
+        client: () => server.client,
         chain: () => null,
         reads: () => true,
       });
@@ -736,6 +737,7 @@ describe('createUrqlInfiniteQuery under the revalidation exchange', () => {
         const networkRevalidation = createPagedNetworkRevalidation(
           () => query,
           {
+            client: () => server.client,
             chain: () => null,
             reads: () => true,
           }
@@ -772,6 +774,7 @@ describe('createUrqlInfiniteQuery under the revalidation exchange', () => {
       disposals.push(dispose);
       const before = vi.fn();
       const networkRevalidation = createPagedNetworkRevalidation(() => query, {
+        client: () => server.client,
         chain: () => null,
         reads: () => true,
         before,
@@ -809,6 +812,7 @@ describe('createUrqlInfiniteQuery under the revalidation exchange', () => {
       disposals.push(dispose);
       const [filter, setFilter] = createSignal('all');
       const networkRevalidation = createPagedNetworkRevalidation(() => query, {
+        client: () => server.client,
         chain: filter,
         reads: () => true,
       });
@@ -851,6 +855,7 @@ describe('createUrqlInfiniteQuery under the revalidation exchange', () => {
       const [paused, setPaused] = createSignal(false);
       const before = vi.fn();
       const networkRevalidation = createPagedNetworkRevalidation(() => query, {
+        client: () => server.client,
         chain: () => null,
         reads: () => !paused(),
         before,
@@ -877,6 +882,75 @@ describe('createUrqlInfiniteQuery under the revalidation exchange', () => {
 
       expect(server.reads).toEqual([]);
       expect(before).not.toHaveBeenCalled();
+    });
+  });
+
+  it('reads a list whose requests urql joined onto another list', async () => {
+    const server = serve(['a', 'b', 'c', 'd', 'e']);
+    await createRoot(async (dispose) => {
+      disposals.push(dispose);
+      const mountList = () => {
+        const networkRevalidation = createPagedNetworkRevalidation(
+          () => query,
+          {
+            client: () => server.client,
+            chain: () => null,
+            reads: () => true,
+          }
+        );
+        const query = createUrqlInfiniteQuery(() => ({
+          client: server.client,
+          query: LIST,
+          initialPageParam: null as string | null,
+          context: { networkRevalidation: networkRevalidation() },
+          variables: (cursor: string | null) => ({ cursor }),
+          getNextPageParam: (data: { page: Page }) => data.page.nextCursor,
+          select: ({ pages }: { pages: { page: Page }[] }) =>
+            pages.flatMap((data) => data.page.values),
+        }));
+        return query;
+      };
+      // Mounted together, the second list's pages join the first's requests,
+      // so its operations (and its owner) never reach the exchange.
+      const lists = [mountList(), mountList()];
+      for (const list of lists) {
+        await vi.waitFor(() => expect(list.data).toEqual(['a', 'b']));
+      }
+      await Promise.all(lists.map((list) => list.fetchNextPage()));
+      for (const list of lists) expect(list.data).toEqual(['a', 'b', 'c', 'd']);
+
+      await server.client.mutation(ARCHIVE, {}).toPromise();
+
+      for (const list of lists) expect(list.data).toEqual(['b', 'c', 'd', 'e']);
+    });
+  });
+
+  it('never lets a refetch that throws join one that keeps its failures', async () => {
+    const server = serve(['a', 'b', 'c']);
+    await createRoot(async (dispose) => {
+      disposals.push(dispose);
+      const query = createUrqlInfiniteQuery(() => ({
+        client: server.client,
+        query: LIST,
+        initialPageParam: null as string | null,
+        variables: (cursor: string | null) => ({ cursor }),
+        getNextPageParam: (data: { page: Page }) => data.page.nextCursor,
+        select: ({ pages }: { pages: { page: Page }[] }) =>
+          pages.flatMap((data) => data.page.values),
+      }));
+      await vi.waitFor(() => expect(query.data).toEqual(['a', 'b']));
+      server.reads.length = 0;
+
+      const loose = query.refetch({ requestPolicy: 'network-only' });
+      const strict = query.refetch({
+        requestPolicy: 'network-only',
+        throwOnError: true,
+      });
+      const looseAgain = query.refetch({ requestPolicy: 'network-only' });
+      await Promise.all([loose, strict, looseAgain]);
+
+      // The strict caller reads after the loose one; a loose caller joins.
+      expect(server.reads).toEqual([null, null]);
     });
   });
 });

@@ -29,7 +29,13 @@ vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
 }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
-vi.mock('@macro-inc/observability', () => ({ Telemetry: { error: vi.fn() } }));
+vi.mock('@macro-inc/observability', () => ({
+  Telemetry: {
+    error: vi.fn(),
+    span: (_name: string, run: (span: object) => unknown) =>
+      run({ setAttr: () => {} }),
+  },
+}));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlCacheHost: mocks.getCacheHost,
   getGraphqlSoupClient: () =>

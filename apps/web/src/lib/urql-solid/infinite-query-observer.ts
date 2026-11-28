@@ -164,6 +164,8 @@ export class InfiniteQueryObserver<
   private refetchPromise:
     | Promise<InfiniteResult<PageData, Variables, PageParam, SelectedData>>
     | undefined;
+  /** Whether the refetch in `refetchPromise` throws its failures. */
+  private refetchThrows = false;
 
   constructor(
     client: Client,
@@ -379,7 +381,11 @@ export class InfiniteQueryObserver<
     InfiniteResult<PageData, Variables, PageParam, SelectedData>
   > => {
     const pending = this.refetchPromise;
-    if (pending && fresh) return this.refetchAfter(pending, refetchOptions);
+    // A caller that needs failures thrown never joins a refetch that keeps them.
+    const stricter =
+      refetchOptions.throwOnError === true && !this.refetchThrows;
+    if (pending && (fresh || stricter))
+      return this.refetchAfter(pending, refetchOptions);
     if (pending) return pending;
 
     const signal = this.actionController.signal;
@@ -394,6 +400,7 @@ export class InfiniteQueryObserver<
     });
 
     this.refetchPromise = trackedAction;
+    this.refetchThrows = refetchOptions.throwOnError === true;
 
     return trackedAction;
   };

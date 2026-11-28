@@ -491,6 +491,7 @@ export function createSoupLiveQuery(
   // cursor chain: re-sending each loaded page with its old cursor would repeat
   // or drop the row at a boundary the write moved.
   const networkRevalidation = createPagedNetworkRevalidation(() => query, {
+    client: getGraphqlSoupClient,
     chain: inputKey,
     reads: () => fetches() && !options().networkPaused,
     before: () => options().beforeNetworkRevalidation?.(),

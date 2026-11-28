@@ -1027,9 +1027,15 @@ again before it settles (`networkRevalidationExchange`). A flat Soup list
 or a project list reads its loaded pages again in cursor order, through the
 `networkRevalidation` its pages carry (`createPagedNetworkRevalidation`), so a
 moved page boundary neither repeats nor drops a row; a refetch already running
-when the write commits is followed by another. The owner reads only while its
-list reads the network (enabled, not paused) and only for its current chain: a
-page key the list has left is sent again for any reader still holding it. Other paged queries, grouped Soup
+when the write commits is followed by another, and a page whose request is
+still in flight is sent again, since urql joins a new read onto it. The owner
+reads only while its list reads the network (enabled, not paused), and a paused
+list's pages are left alone; once the list leaves a chain, a page key of it is
+sent again for any reader still holding it. Each owner is also registered with
+its client, because a list mounted while another list's request for the same
+page is in flight never sends its own operation. The exchange records a
+`graphql.mutation.network_revalidation` span with the queries it sent and the
+lists it read, failed or cut off at 15 s. Other paged queries, grouped Soup
 lists included, are sent again page by page. Mail
 archive and read-state writes therefore add no refresh of their own; other
 writes read mounted Soup lists again (`refreshActiveGraphqlSoupQueries`), and so do agent-session metadata events
