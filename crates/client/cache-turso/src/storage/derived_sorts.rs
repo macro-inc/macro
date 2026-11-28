@@ -11,15 +11,16 @@ const VERSION_KEY: &str = "sort_fact_derivations";
 const META_SELECT: &str = "SELECT value FROM meta WHERE key = ?1";
 const META_UPSERT: &str = "INSERT INTO meta (key, value) VALUES (?1, ?2) ON CONFLICT (key) DO UPDATE SET value = excluded.value";
 
-struct Tables {
-    documents: &'static str,
-    exact: &'static str,
-    integers: &'static str,
-    sorts: &'static str,
-    optimistic: bool,
+/// The tables of one layer of index documents.
+pub(super) struct Tables {
+    pub(super) documents: &'static str,
+    pub(super) exact: &'static str,
+    pub(super) integers: &'static str,
+    pub(super) sorts: &'static str,
+    pub(super) optimistic: bool,
 }
 
-const AUTHORITATIVE: Tables = Tables {
+pub(super) const AUTHORITATIVE: Tables = Tables {
     documents: "index_documents",
     exact: "exact_facts",
     integers: "integer_facts",
@@ -27,7 +28,7 @@ const AUTHORITATIVE: Tables = Tables {
     optimistic: false,
 };
 
-const OPTIMISTIC: Tables = Tables {
+pub(super) const OPTIMISTIC: Tables = Tables {
     documents: "optimistic_index_documents",
     exact: "optimistic_exact_facts",
     integers: "optimistic_integer_facts",
@@ -135,7 +136,7 @@ fn derive(connection: &Db, derivation: &SortFactDerivation) -> Result<(), TursoS
             ),
             parameters,
         )?;
-        mark_over_limit_incomplete(connection, &tables, derivation)?;
+        mark_over_limit_incomplete(connection, &tables, sorts, derivation.target)?;
     }
     derive_uncertainty(connection, derivation)
 }
@@ -183,16 +184,18 @@ fn derive_uncertainty(
     Ok(())
 }
 
-/// A document the derived fact took past `MAX_ATTRIBUTES_PER_DOCUMENT`
-/// distinct attributes becomes incomplete, as composition makes it, so its
-/// queries fall back and loads do not refuse it: an authority `Missing`, which
-/// keeps retained server rows, a shadow `Dirty`. Row counts bound
-/// distinct attributes from above, so SQL selects the few documents holding
-/// the fact with that many rows and Rust counts their distinct attributes.
-fn mark_over_limit_incomplete(
+/// A document an added `attribute` of the `facts` table took past
+/// `MAX_ATTRIBUTES_PER_DOCUMENT` distinct attributes becomes incomplete, as
+/// composition makes it, so its queries fall back and loads do not refuse it:
+/// an authority `Missing`, which keeps retained server rows, a shadow `Dirty`.
+/// Row counts bound distinct attributes from above, so SQL selects the few
+/// documents holding the fact with that many rows and Rust counts their
+/// distinct attributes.
+pub(super) fn mark_over_limit_incomplete(
     connection: &Db,
     tables: &Tables,
-    derivation: &SortFactDerivation,
+    facts: &str,
+    attribute: &str,
 ) -> Result<(), TursoStorageError> {
     let Tables {
         documents,
@@ -205,9 +208,9 @@ fn mark_over_limit_incomplete(
     let candidates = driver::query(
         connection,
         &format!(
-            "SELECT s.document_id FROM {sorts} AS s WHERE s.attribute = ?1 AND (SELECT COUNT(*) FROM {exact} AS c WHERE c.document_id = s.document_id) + (SELECT COUNT(*) FROM {integers} AS c WHERE c.document_id = s.document_id) + (SELECT COUNT(*) FROM {sorts} AS c WHERE c.document_id = s.document_id) > {limit}"
+            "SELECT DISTINCT s.document_id FROM {facts} AS s WHERE s.attribute = ?1 AND (SELECT COUNT(*) FROM {exact} AS c WHERE c.document_id = s.document_id) + (SELECT COUNT(*) FROM {integers} AS c WHERE c.document_id = s.document_id) + (SELECT COUNT(*) FROM {sorts} AS c WHERE c.document_id = s.document_id) > {limit}"
         ),
-        vec![text(derivation.target)],
+        vec![text(attribute)],
     )?;
     for row in candidates {
         let document_id = required_i64(&row, 0)?;

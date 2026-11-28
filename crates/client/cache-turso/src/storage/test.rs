@@ -10,6 +10,7 @@ mod fact_lookup_cost;
 mod filter_scope_cost;
 mod filter_scope_semantics;
 mod id_list_semantics;
+mod mail_attachments;
 mod migration;
 // Its I/O, CPU and memory counters read Linux's `/proc`.
 #[cfg(target_os = "linux")]
@@ -524,7 +525,7 @@ fn fresh_schema_metadata_foreign_keys_quick_check_and_cascade_are_real() {
         let mut storage = TursoStorage::open_in_memory("schema-scope").unwrap();
         assert_eq!(raw_scalar(&storage, "PRAGMA foreign_keys"), 1);
         storage.check_integrity().unwrap();
-        assert_eq!(raw_scalar(&storage, "SELECT COUNT(*) FROM meta"), 7);
+        assert_eq!(raw_scalar(&storage, "SELECT COUNT(*) FROM meta"), 8);
 
         let violation = driver::execute(
             &storage.connection(),
