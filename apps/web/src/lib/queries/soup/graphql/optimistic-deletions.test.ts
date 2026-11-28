@@ -71,6 +71,21 @@ function data(): SoupAstItemsData {
 }
 
 describe('GraphQL Soup deletion lifecycle', () => {
+  it('delivers same-tab restores to overlays held by another query client', () => {
+    const key = 'GraphqlSoupDocument:restored';
+    const otherClient = new QueryClient();
+    const deletion = createGraphqlSoupDeletion([key], otherClient);
+    try {
+      deletion.markDispatched(key, soupOperationTime());
+      deletion.settle([key]);
+      prepareGraphqlSoupRestore()([key]);
+      expect(deletion.keys()).toEqual([]);
+    } finally {
+      deletion.release();
+      otherClient.clear();
+    }
+  });
+
   it('awaits only readers that belong to the deletion’s query client', async () => {
     const key = 'GraphqlSoupDocument:deleted';
     const otherClient = new QueryClient();

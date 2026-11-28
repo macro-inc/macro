@@ -1,5 +1,6 @@
 import type { QueryRevalidation } from '@graphql-cache/exchange/optimistic';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
+import { hashKey } from '@tanstack/solid-query';
 import { type Client, createRequest } from '@urql/core';
 import { forgetSoupNetworkAnswers } from './network-freshness';
 
@@ -126,7 +127,7 @@ export async function refreshActiveGraphqlSoupQueries(
     /** Skip lists the cache keeps current: the write already updated them. */
     unmaintainedOnly?: boolean;
     /** Successful readers from earlier attempts of the same recovery. */
-    refreshed?: WeakSet<ActiveGraphqlSoupQuery>;
+    refreshed?: WeakMap<ActiveGraphqlSoupQuery, string>;
   } = {}
 ): Promise<void> {
   forgetSoupNetworkAnswers();
@@ -135,13 +136,19 @@ export async function refreshActiveGraphqlSoupQueries(
     if (options.unmaintainedOnly && query.cacheMaintained?.()) return false;
     return !options.where || options.where(query.body?.());
   };
-  const refreshed = options.refreshed ?? new WeakSet<ActiveGraphqlSoupQuery>();
+  const refreshed =
+    options.refreshed ?? new WeakMap<ActiveGraphqlSoupQuery, string>();
+  const scopeOf = options.refreshed
+    ? (query: ActiveGraphqlSoupQuery) => hashKey([query.body?.()])
+    : () => '';
   await Promise.all(
     [...activeQueries].map(async (query) => {
-      if (refreshed.has(query) || !applicable(query)) return;
+      if (!applicable(query)) return;
+      const scope = scopeOf(query);
+      if (refreshed.get(query) === scope) return;
       try {
         await refreshReader(query);
-        refreshed.add(query);
+        if (scopeOf(query) === scope) refreshed.set(query, scope);
       } catch (error) {
         console.error('[graphql-soup] failed to refresh active query', error);
       }
@@ -152,7 +159,7 @@ export async function refreshActiveGraphqlSoupQueries(
   if (
     options.throwOnError &&
     [...activeQueries].some(
-      (query) => applicable(query) && !refreshed.has(query)
+      (query) => applicable(query) && refreshed.get(query) !== scopeOf(query)
     )
   ) {
     throw new Error(

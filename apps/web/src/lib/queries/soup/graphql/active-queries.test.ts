@@ -41,21 +41,31 @@ describe('active GraphQL Soup queries', () => {
       .fn(async () => {})
       .mockRejectedValueOnce(new Error('offline'));
     const newlyEnabled = vi.fn(async () => {});
+    const changed = vi.fn(async () => {});
     let enabled = false;
+    let scope = 'original';
     register({ isEnabled: () => true, refresh: successful });
     register({ isEnabled: () => true, refresh: retried });
     register({ isEnabled: () => enabled, refresh: newlyEnabled });
+    register({
+      isEnabled: () => true,
+      refresh: changed,
+      body: () => ({ scope }),
+    });
     const ready = recoverActiveGraphqlSoupQueries();
     await vi.advanceTimersByTimeAsync(0);
     expect(successful).toHaveBeenCalledOnce();
     expect(newlyEnabled).not.toHaveBeenCalled();
+    expect(changed).toHaveBeenCalledOnce();
 
     enabled = true;
+    scope = 'changed';
     await vi.advanceTimersByTimeAsync(1000);
     await expect(ready).resolves.toBe(true);
     expect(successful).toHaveBeenCalledOnce();
     expect(retried).toHaveBeenCalledTimes(2);
     expect(newlyEnabled).toHaveBeenCalledOnce();
+    expect(changed).toHaveBeenCalledTimes(2);
   });
 
   it('drops a recovery read queued by a retired session', async () => {

@@ -279,8 +279,6 @@ it.each([
       authenticated: true,
     });
     const parentKey = 'GraphqlSoupProject:parent';
-    // These overlays are absent from the sender's mutation cache. They can only
-    // receive the restore through the same receipt handler as a sibling tab.
     const parent = createGraphqlSoupDeletion([parentKey]);
     const restored = createGraphqlSoupDeletion(restoredKeys);
     const dispatchedAt = soupOperationTime();
@@ -313,6 +311,11 @@ it.each([
     });
     try {
       await restoreEntity(entity);
+      expect(broadcast).toHaveBeenCalledExactlyOnceWith({
+        viewerId: 'viewer',
+        startedAt: expect.any(Number),
+        keys: restoredKeys,
+      });
       await vi.waitFor(() => expect(restored.keys()).toEqual([]));
       expect(parent.keys()).toEqual([parentKey]);
     } finally {

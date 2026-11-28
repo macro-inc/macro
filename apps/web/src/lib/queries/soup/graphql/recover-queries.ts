@@ -15,7 +15,7 @@ export async function recoverActiveGraphqlSoupQueries(
 ): Promise<boolean> {
   const generation = cacheSessionGeneration.capture();
   const trace = options.trace ?? Telemetry.captureContext();
-  const refreshed = new WeakSet<ActiveGraphqlSoupQuery>();
+  const refreshed = new WeakMap<ActiveGraphqlSoupQuery, string>();
   for (const [attempt, delay] of [0, 1000, 2000].entries()) {
     if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
     if (

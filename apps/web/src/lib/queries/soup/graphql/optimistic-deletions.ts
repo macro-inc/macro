@@ -59,6 +59,7 @@ const restoreReceipt = z.object({
   startedAt: z.number(),
   keys: z.array(z.string()),
 });
+const localRestoreListeners = new Set<GraphqlSoupDeletion['confirmRestore']>();
 let restoreChannel: BroadcastChannel | null | undefined;
 function getRestoreChannel() {
   if (restoreChannel !== undefined) return restoreChannel;
@@ -121,6 +122,7 @@ export function createGraphqlSoupDeletion(
     clearTimeout(expiryTimer);
     detachReaders?.();
     unsubscribeRestores?.();
+    localRestoreListeners.delete(deletion.confirmRestore);
     setDeletedKeys([]);
     client.setQueryData<RetainedDeletions>(RETAINED_DELETIONS_KEY, (retained) =>
       retained?.filter((entry) => entry.keys !== deletedKeys)
@@ -222,6 +224,7 @@ export function createGraphqlSoupDeletion(
       }
     },
   };
+  localRestoreListeners.add(deletion.confirmRestore);
   if (account) {
     const channel = getRestoreChannel();
     const onRestore = (event: MessageEvent) => {
@@ -240,34 +243,25 @@ export function createGraphqlSoupDeletion(
   return deletion;
 }
 
-/** Snapshot before the restore request: a later delete must keep its own intent.
- * Call the returned function only after server confirmation. Retained entries
- * survive mutation GC, so consult both sources. */
+/** Capture the restore's start time before dispatch. Confirm only after the server succeeds. */
 export function prepareGraphqlSoupRestore() {
   const account = currentQueryAccount();
+  const session = queryAccountSession();
   const startedAt = soupOperationTime();
-  const deletions = new Set([
-    ...(queryClient.getQueryData<RetainedDeletions>(RETAINED_DELETIONS_KEY) ??
-      []),
-    ...queryClient
-      .getMutationCache()
-      .findAll({
-        mutationKey: GRAPHQL_SOUP_DELETE_MUTATION_KEY,
-        exact: true,
-      })
-      .flatMap((mutation) => {
-        const deletion = (
-          mutation.state.context as GraphqlSoupDeleteContext | undefined
-        )?.graphqlDeletion;
-        return deletion ? [deletion] : [];
-      }),
-  ]);
   return (restoredKeys: readonly string[]) => {
+    if (
+      restoredKeys.length === 0 ||
+      session !== queryAccountSession() ||
+      (account && !isCurrentQueryAccount(account))
+    )
+      return;
     batch(() => {
-      for (const deletion of deletions)
-        deletion.confirmRestore(restoredKeys, startedAt);
+      // BroadcastChannel excludes its sender. Deliver the receipt to this
+      // tab's overlays as well, including readers under another provider.
+      for (const confirm of localRestoreListeners)
+        confirm(restoredKeys, startedAt);
     });
-    if (account && isCurrentQueryAccount(account) && restoredKeys.length > 0) {
+    if (account) {
       getRestoreChannel()?.postMessage({
         viewerId: account.userId,
         startedAt,
