@@ -360,6 +360,41 @@ try {
   console.log(
     'PASS: Tasks header fits 520px to 400px windows and restores its controls'
   );
+
+  // Drive's header gives up Sort, then Filter, never New or Search, as the
+  // window narrows, and shows them again once there is room.
+  await browser.$('[data-sidebar-next-item="documents"]').click();
+  await browser
+    .$('[aria-label="Search Drive"]')
+    .waitForDisplayed({ timeout: 30_000 });
+  for (const width of [440, 400, 360, 340, 320]) {
+    await browser.setWindowSize(width, 900);
+    await expectHeaderFits(
+      browser,
+      'Search Drive',
+      `narrow-drive-header-${width}`,
+      `${width}px`
+    );
+    for (const kept of ['^="New file or folder"', '="Search Drive"'])
+      assert(
+        await browser.$(`button[aria-label${kept}]`).isDisplayed(),
+        `Drive header at ${width}px shows no button[aria-label${kept}]`
+      );
+  }
+  await browser.setWindowSize(windowSize.width, windowSize.height);
+  for (const restored of ['Filter files', 'Sort files'])
+    await browser
+      .$(`button[aria-label="${restored}"]`)
+      .waitForDisplayed({ timeout: 5000 });
+  await expectHeaderFits(
+    browser,
+    'Search Drive',
+    'restored-drive-header',
+    'the restored window'
+  );
+  console.log(
+    'PASS: Drive header fits 440px to 320px windows and restores its controls'
+  );
   await browser.$('button[aria-label="Email"]').click();
   await browser
     .$('[aria-label="Search email"]')

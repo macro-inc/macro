@@ -41,6 +41,9 @@ They then open two more splits beside Email, resize the window to 1000px and
 They then open Tasks, narrow the window from 520px to 400px and expect every
 Tasks list header control, New and Search included, inside the header, then
 restore the size and expect the layout switch and Group by back.
+They then open Drive, narrow the window from 440px to 320px and expect every
+Drive list header control, New and Search included, inside the header, then
+restore the size and expect Filter and Sort back.
 They then open Calendar and expect its header controls, Search events included
 (a field at the default size, a button in a narrow pane), inside the header and
 uncovered at the default size, at 440px, 400px, 360px and 320px (where Search
