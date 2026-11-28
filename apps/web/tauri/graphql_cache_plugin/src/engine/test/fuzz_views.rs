@@ -98,6 +98,9 @@ struct View {
     revision: Option<String>,
     observation: Option<String>,
     keys: Vec<String>,
+    /// Members kept at their baseline sort because their predicate cannot be
+    /// evaluated; the page shows them as it shows rows.
+    retained: Value,
     rows: BTreeMap<String, Value>,
 }
 
@@ -166,17 +169,20 @@ impl View {
                 .map(|key| key.as_str().unwrap().to_owned())
                 .collect();
         }
+        self.retained = update["retainedKeys"].clone();
         self.revision = update["revision"].as_str().map(str::to_owned);
         self.observation = update["observationId"].as_str().map(str::to_owned);
     }
 
     /// The ordered rows; a member whose record the fragment cannot read (a
     /// thin write left it without fields) has no row, as on the page.
-    fn shown(&self) -> Vec<(&String, Option<&Value>)> {
-        self.keys
+    fn shown(&self) -> (Vec<(&String, Option<&Value>)>, &Value) {
+        let rows = self
+            .keys
             .iter()
             .map(|key| (key, self.rows.get(key)))
-            .collect()
+            .collect();
+        (rows, &self.retained)
     }
 }
 
@@ -199,6 +205,7 @@ fn views(rng: &mut Rng) -> Vec<View> {
                 revision: None,
                 observation: None,
                 keys: Vec::new(),
+                retained: Value::Null,
                 rows: BTreeMap::new(),
             }
         })
