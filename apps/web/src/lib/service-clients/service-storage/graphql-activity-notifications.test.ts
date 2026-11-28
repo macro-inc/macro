@@ -1,3 +1,4 @@
+import { TRACE_PARENT_CONTEXT_KEY } from '@app/lib/urql-solid/trace-parent-exchange';
 import { predictOptimisticMutation } from '@graphql-cache/exchange/optimistic-resolvers';
 import { notificationStateFromGraphql } from '@notifications/notification-state';
 import { soupOptimisticResolvers } from '@queries/optimistic-resolvers';
@@ -116,6 +117,7 @@ describe('channel activity and notification GraphQL cache separation', () => {
         optimisticMutation: {
           revalidations: [],
         },
+        [TRACE_PARENT_CONTEXT_KEY]: expect.anything(),
       }
     );
     expect(unreadFilterFn(channel)).toBe(false);

@@ -225,8 +225,11 @@ async function sendGraphqlRenames(
         { optimisticMutation: { uuid }, [TRACE_PARENT_CONTEXT_KEY]: span }
       )
       .toPromise();
-    if (networkRevalidationIncomplete(result))
+    if (networkRevalidationIncomplete(result)) {
+      // The registry's reads start their own traces; this span says it fell back.
+      span.setAttr('revalidation.fallback', true);
       fireAndForget(readAgainAfterFailedReread(operations), 'entity-rename');
+    }
     const disposition = optimisticMutationDispositionOf(result);
     span.setAttr('entity.disposition', disposition?.kind ?? 'none');
     if (disposition?.kind === 'queued') {

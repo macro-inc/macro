@@ -1,3 +1,4 @@
+import { TRACE_PARENT_CONTEXT_KEY } from '@app/lib/urql-solid/trace-parent-exchange';
 import { registerNotificationReader } from '@queries/notification/revalidation';
 import { registerGraphqlSoupRevalidations } from '@queries/soup/graphql/active-queries';
 import { type Client, CombinedError } from '@urql/core';
@@ -85,7 +86,10 @@ describe('entity notification reconciliation without the normalized cache', () =
         UpdateNotificationsForEntityDocument,
         {
           input: { ...input, operation },
-        }
+        },
+        expect.objectContaining({
+          [TRACE_PARENT_CONTEXT_KEY]: expect.anything(),
+        })
       );
       expect(query).toHaveBeenCalledTimes(pages.length);
       for (const { document, variables } of pages) {
@@ -282,7 +286,8 @@ describe('entity notification reconciliation with the normalized cache', () => {
     });
     expect(client.mutation).toHaveBeenCalledWith(
       UpdateNotificationsForEntityDocument,
-      { input }
+      { input },
+      expect.anything()
     );
   });
 });

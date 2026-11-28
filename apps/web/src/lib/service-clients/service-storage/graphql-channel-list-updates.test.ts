@@ -7,6 +7,7 @@ import { withOptimisticMutationDisposition } from '@graphql-cache/exchange/optim
 import type { CacheHost } from '@graphql-cache/host/types';
 import { parseCacheRevision } from '@graphql-cache/protocol';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   type Client,
   createClient,
@@ -516,6 +517,33 @@ describe('a notification write whose exchange read failed', () => {
       );
       await write(client);
       expect(listRefresh).toHaveBeenCalledOnce();
+    });
+
+    it(`rereads in the write's trace and records the fallback (${name})`, async () => {
+      const runs: string[] = [];
+      const fallbacks: string[] = [];
+      const fakeSpan = (spanName: string) =>
+        ({
+          setAttr: (key: string, value: unknown) => {
+            if (key === 'revalidation.fallback' && value === true)
+              fallbacks.push(spanName);
+          },
+          run: <T>(work: () => T) => {
+            runs.push(spanName);
+            return work();
+          },
+        }) as unknown as Span;
+      vi.spyOn(Telemetry, 'span').mockImplementation(((
+        spanName: string,
+        operation: (span: Span) => Promise<unknown>
+      ) => operation(fakeSpan(spanName))) as typeof Telemetry.span);
+      const { client } = revalidatingClient(() =>
+        Promise.reject(new Error('offline'))
+      );
+      await write(client);
+      // The exchange's reread runs in the trace the write named.
+      expect(runs[0]).toMatch(/^notification\./);
+      expect(fallbacks).toEqual([runs[0]]);
     });
 
     it(`leaves the lists to the exchange when its read succeeded (${name})`, async () => {
