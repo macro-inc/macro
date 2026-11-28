@@ -218,6 +218,21 @@ export const SCRIPTS: ScriptedScenario[] = [
       { waitMs: 180_000 },
     ],
   },
+  // The owner would drain on hiding and park, and a newer build would then
+  // open the free database without asking, under a head still out.
+  {
+    name: 'every tab hides while a write is out, then a newer build opens',
+    pages: [1, 1],
+    script: [
+      { waitMs: 5_000 },
+      { send: 'tab2', serverMs: 10_000 },
+      { kind: 'hide', page: 'tab1' },
+      { kind: 'hide', page: 'tab2' },
+      { waitMs: 4_000 },
+      { kind: 'open-newer' },
+      { waitMs: 400_000 },
+    ],
+  },
   // Past it: the newer build goes ahead, and the answer finds nothing to settle.
   {
     name: 'a tab is frozen while it sends a write and a newer build opens',
