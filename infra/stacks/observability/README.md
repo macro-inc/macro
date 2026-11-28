@@ -995,11 +995,13 @@ smallest first, a few at a time, and check before each batch:
 - the cluster's ingest, Tempo and Loki have headroom for the project's spans and
   logs (Datadog's `datadog.estimated_usage.apm.ingested_spans` and
   `datadog.estimated_usage.logs.ingested_bytes` by `service`);
-- the task has memory for Alloy, which reserves 128 MiB but has used up to
-  402 MiB. Fargate sizes the task from the reservation alone, so a task without
-  that room sets a larger size when `grafanaTelemetryEnabled`, as
-  `unfurl-service`, `lexical-service` and `convert-service` do;
-  `static-file-service` needs one first.
+- the task has memory for Alloy, which reserves 128 MiB, has used up to
+  402 MiB and is limited to 512 MiB. Fargate sizes the task from reservations
+  alone, so check the worst case: the service at its limit, Alloy at 512 MiB,
+  and the Datadog agent and FireLens at their resident peaks
+  (`ecs.fargate.mem.rss`; `ecs.fargate.mem.usage` counts page cache). A task
+  without that room sets a larger size when `grafanaTelemetryEnabled`, as
+  `unfurl-service` does.
 
 A merged list change reaches prod with the next published release that contains
 it, or for one project with *Deploy Service (Generic)* with `prod` selected. The

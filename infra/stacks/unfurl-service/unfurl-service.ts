@@ -158,8 +158,8 @@ export class UnfurlService extends pulumi.ComponentResource {
         ],
         taskDefinitionArgs: {
           // Fargate sizes a task from reservations, which leave Alloy too
-          // little room in 1 GB: its hard limit is 512 MiB, prod's Datadog agent
-          // has used 417 MiB and the service has a 512 MiB limit.
+          // little room in 1 GB: the service and Alloy have 512 MiB limits, and
+          // prod's Datadog agent and FireLens have used 216 MiB resident.
           cpu: '256',
           memory: grafanaTelemetryEnabled ? '2048' : '1024',
           taskRole: {
