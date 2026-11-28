@@ -9,6 +9,7 @@ import * as pulumi from '@pulumi/pulumi';
 // token, which ECS needs to replace tasks of a revision that still has Alloy.
 // Delete the entry after the revision without Alloy is steady.
 const PROD_GRAFANA_PROJECTS: Record<string, boolean> = {
+  'authentication-service': true,
   'contacts-service': true,
   'convert-service': true,
   'image-proxy-service': true,
