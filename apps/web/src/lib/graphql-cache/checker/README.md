@@ -17,7 +17,7 @@ its host (`Page` in `world.ts`; keep the two the same).
 | `properties.ts` | What must hold, S1–S8 over the run and L1–L3 after it. |
 | `explore.ts` | Runs one schedule, every schedule within a bound, or a script. |
 | `scenarios.ts` | The scenarios with their bounds, and the scripts. |
-| `known-violations.ts` | What is known to break, and why: a head sent from a tab that stays frozen past the handover wait. |
+| `known-violations.ts` | What is known to break, and why: a head sent from a tab that stays frozen past the handover wait, and one out when the owner's engine crashes just as a newer build opens. |
 | `handover.checker.test.ts` | Explores, and compares with the known violations. |
 | `handover-plants.checker.test.ts` | Breaks the real code on purpose; the checker must notice. |
 

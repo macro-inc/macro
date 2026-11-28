@@ -23,4 +23,13 @@ export const KNOWN_VIOLATIONS: KnownViolation[] = [
       'after SETTLEMENT_WAIT_MS, when the newer build has the database: the ' +
       'head stays queued and is sent again, at least once as for a lost page.',
   },
+  {
+    symptom: 'S8:answered head still queued (unsettled)',
+    faults: ['crash-engine owner', 'open-newer'],
+    reordered: false,
+    cause:
+      "Until the coordinator sees that the owner's engine is gone, the lock is " +
+      'free, and a newer build opening then takes the database without asking. ' +
+      'The old build cannot settle the head it had out, so it is sent again.',
+  },
 ];

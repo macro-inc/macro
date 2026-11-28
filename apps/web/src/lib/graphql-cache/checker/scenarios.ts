@@ -263,6 +263,37 @@ export const SCRIPTS: ScriptedScenario[] = [
       { waitMs: 400_000 },
     ],
   },
+  // The engine starts in the tab sending the answer, not in a frozen one.
+  {
+    name: 'the owner closes while a hidden tab sends a write and another hidden tab is frozen',
+    pages: [1, 1, 1],
+    script: [
+      { waitMs: 5_000 },
+      { send: 'tab3', serverMs: 10_000 },
+      { waitMs: 1_000 },
+      { kind: 'hide', page: 'tab2' },
+      { kind: 'freeze', page: 'tab2' },
+      { kind: 'hide', page: 'tab3' },
+      { kind: 'close', page: 'tab1' },
+      { waitMs: 2_000 },
+      { kind: 'open-newer' },
+      { waitMs: 400_000 },
+    ],
+  },
+  // Until the coordinator sees the engine is gone, the lock is free.
+  {
+    name: "the owner's engine crashes while another tab sends a write, and a newer build opens",
+    pages: [1, 1],
+    script: [
+      { waitMs: 5_000 },
+      { send: 'tab2', serverMs: 10_000 },
+      { waitMs: 1_000 },
+      { kind: 'crash-engine', page: 'tab1' },
+      { kind: 'open-newer' },
+      { waitMs: 400_000 },
+    ],
+    unwritten: true,
+  },
   // Past it: the newer build goes ahead, and the answer finds nothing to settle.
   {
     name: 'a tab is frozen while it sends a write and a newer build opens',
