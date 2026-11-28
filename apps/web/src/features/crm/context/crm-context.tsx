@@ -293,14 +293,15 @@ export type CrmContext = {
   createPersonalViews(): PersonalViewsSource;
   createTeamViews(): TeamViewsSource;
   createLists(teamId: Accessor<string | undefined>): ListsSource;
-  createCompany(): CrmMutation<
-    { name: string; domain?: string },
-    { id: string }
-  >;
+  createCompany(
+    allowQueue?: boolean
+  ): CrmMutation<{ name: string; domain?: string }, { id?: string }>;
   createCompanyImporter(): CompanyImporter;
-  createContact(): CrmMutation<
+  createContact(
+    allowQueue?: boolean
+  ): CrmMutation<
     { companyId?: string; name: string; email?: string },
-    { id: string }
+    { id?: string }
   >;
   renameCompany(): CrmMutation<{ companyId: string; name: string }>;
   renameContact(): CrmMutation<{

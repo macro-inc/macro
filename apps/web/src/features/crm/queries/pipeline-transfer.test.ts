@@ -1,4 +1,5 @@
 import type { DatabaseOp } from '@core/database-sql/generated/types';
+import { ThrownResultError } from '@core/util/result';
 import { QueryClient } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
@@ -8,6 +9,14 @@ import type { CrmRecordDependencies } from './dependencies';
 import { createPipelineTransfer } from './pipeline-transfer';
 
 const refreshGraphqlLists = vi.hoisted(() => vi.fn(async () => undefined));
+const creates = vi.hoisted(() => ({ company: vi.fn(), contact: vi.fn() }));
+vi.mock('@service-storage/graphql-soup', () => ({
+  getGraphqlCacheHost: () => undefined,
+}));
+vi.mock('@service-storage/graphql-crm-create', () => ({
+  createGraphqlCrmCompany: creates.company,
+  createGraphqlCrmContact: creates.contact,
+}));
 vi.mock('@queries/soup/graphql/active-queries', () => ({
   refreshActiveGraphqlSoupQueries: refreshGraphqlLists,
 }));
@@ -42,21 +51,23 @@ const stage: DatabaseViewColumn = {
 
 function setup(recordType: Pipeline['recordType'] = 'company') {
   const applied: DatabaseOp[][] = [];
+  creates.company.mockReset().mockImplementation(async ({ domain }) => {
+    // A slow create, so concurrent contacts at one domain overlap it.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    if (domain === 'gmail.com')
+      throw new ThrownResultError([
+        { code: 'BAD_REQUEST', message: 'generic domain' },
+      ]);
+    return { id: `${domain}-id` };
+  });
+  creates.contact.mockReset().mockImplementation(async ({ email }) => ({
+    id: `${email}-id`,
+  }));
   const storage = {
-    createCompany: vi.fn(async ({ domain }: { domain: string }) => {
-      // A slow create, so concurrent contacts at one domain overlap it.
-      await new Promise((resolve) => setTimeout(resolve, 10));
-      return domain === 'gmail.com'
-        ? err([{ code: 'BAD_REQUEST', message: 'generic domain' }])
-        : ok({ id: `${domain}-id` });
-    }),
     getContactByEmail: vi.fn(async ({ email }: { email: string }) =>
       email === 'down@acme.com'
         ? err([{ code: 'SERVER_ERROR', message: 'unavailable' }])
         : ok({ contact: null })
-    ),
-    createContact: vi.fn(async ({ email }: { email: string }) =>
-      ok({ id: `${email}-id` })
     ),
     applyCrmPipelineOps: vi.fn(
       async (
@@ -139,7 +150,7 @@ describe('pipeline transfer', () => {
   });
 
   it('matches companies by domain and creates the missing ones once', async () => {
-    const { transfer, storage } = setup();
+    const { transfer } = setup();
     const ids = await transfer.resolveRecords(
       [
         { name: 'Acme', key: 'acme.com' },
@@ -154,14 +165,14 @@ describe('pipeline transfer', () => {
       ['acme.com', 'acme-id'],
       ['beta.io', 'beta.io-id'],
     ]);
-    expect(storage.createCompany.mock.calls.map(([input]) => input)).toEqual([
+    expect(creates.company.mock.calls.map(([input]) => input)).toEqual([
       { name: 'Beta', domain: 'beta.io' },
       { name: 'Gmail', domain: 'gmail.com' },
     ]);
   });
 
   it('creates one company for new contacts that share its domain', async () => {
-    const { transfer, storage } = setup('contact');
+    const { transfer } = setup('contact');
     const ids = await transfer.resolveRecords(
       [
         { name: 'Jane', key: 'jane@beta.io' },
@@ -174,11 +185,11 @@ describe('pipeline transfer', () => {
     );
     expect(ids.size).toBe(3);
     expect(ids.has('down@acme.com')).toBe(false);
-    expect(storage.createContact).toHaveBeenCalledTimes(3);
-    expect(storage.createCompany.mock.calls.map(([input]) => input)).toEqual([
+    expect(creates.contact).toHaveBeenCalledTimes(3);
+    expect(creates.company.mock.calls.map(([input]) => input)).toEqual([
       { name: 'beta.io', domain: 'beta.io' },
     ]);
-    expect(storage.createContact.mock.calls.map(([input]) => input)).toEqual(
+    expect(creates.contact.mock.calls.map(([input]) => input)).toEqual(
       expect.arrayContaining([
         { companyId: 'beta.io-id', name: 'Jane', email: 'jane@beta.io' },
         { companyId: 'beta.io-id', name: 'Raj', email: 'raj@beta.io' },
