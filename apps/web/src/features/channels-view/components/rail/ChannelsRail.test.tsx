@@ -78,6 +78,7 @@ const mocks = vi.hoisted(() => ({
   sectionsEnabled: true,
   unreadRows: [] as ChannelEntity[],
   closedGroups: [] as string[],
+  collapsedLabels: [] as string[],
   sectionPreferences: {} as Partial<
     Record<ChannelSectionKey, ChannelSectionPreferences>
   >,
@@ -372,7 +373,9 @@ vi.mock('../../channels-view-context', () => ({
           return !mocks.closedGroups.includes('direct_messages');
         },
       },
-      collapsedLabels: [],
+      get collapsedLabels() {
+        return mocks.collapsedLabels;
+      },
       sectionPreferences: mocks.sectionPreferences,
       sortBy: {
         channels: 'viewed_at',
@@ -672,6 +675,7 @@ beforeEach(() => {
   mocks.sectionsEnabled = true;
   mocks.unreadRows = [];
   mocks.closedGroups = [];
+  mocks.collapsedLabels = [];
   mocks.sectionPreferences = {};
   mocks.listRows = undefined;
   mocks.hotkeys.clear();
@@ -953,6 +957,51 @@ describe('bounded reference window', () => {
     const window = mocks.referenceWindow!();
     expect(windowIds()).toEqual(ids.slice(30, 230));
     expect(window.dropped).toBe(20);
+  });
+
+  it("looks up nothing for the original rail's collapsed favorites and labels", () => {
+    mocks.sectionsEnabled = false;
+    mocks.flags = ['enable-channel-tags'];
+    mocks.favorites = favoritesOf(numbered('fav', 30));
+    const members = numbered('member', 40);
+    mocks.labels = [
+      {
+        id: 'section',
+        teamId: 'team',
+        name: 'Section',
+        channelIds: members,
+        channelCount: members.length,
+        sortOrder: 0,
+        createdAt: '2026-01-01',
+        updatedAt: '2026-01-01',
+      },
+    ];
+    mocks.closedGroups = ['favorites'];
+    mocks.collapsedLabels = ['section'];
+    mount();
+    expect(windowIds()).toEqual([]);
+  });
+
+  it("looks up an open original-rail label's members while favorites stay collapsed", () => {
+    mocks.sectionsEnabled = false;
+    mocks.flags = ['enable-channel-tags'];
+    mocks.favorites = favoritesOf(numbered('fav', 30));
+    const members = numbered('member', 40);
+    mocks.labels = [
+      {
+        id: 'section',
+        teamId: 'team',
+        name: 'Section',
+        channelIds: members,
+        channelCount: members.length,
+        sortOrder: 0,
+        createdAt: '2026-01-01',
+        updatedAt: '2026-01-01',
+      },
+    ];
+    mocks.closedGroups = ['favorites'];
+    mount();
+    expect(windowIds()).toEqual(members);
   });
 });
 

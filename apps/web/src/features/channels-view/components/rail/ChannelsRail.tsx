@@ -596,18 +596,26 @@ export function ChannelsRail(props: ChannelsRailProps) {
   }
   // The original rail lists every favorite and label member, which are joined
   // channels; the pool holds them once the directory fills.
+  // The original rail renders an open section whole, so it looks up every
+  // member of each open section that no list holds, up to the window's cap;
+  // a collapsed section shows only its heading and looks up nothing.
   function legacyReferenceSlices(): ChannelWindowSlice[] {
     const loaded = loadedChannelIds();
     const pool = poolById();
     const isLoaded = (id: string) => loaded.has(id) || pool.has(id);
-    return [
-      { key: 'favorites', ids: favoriteChannelIds(), isLoaded },
-      ...labels().map((label) => ({
+    const slices: ChannelWindowSlice[] = [];
+    if (state.expandedGroups.favorites) {
+      slices.push({ key: 'favorites', ids: favoriteChannelIds(), isLoaded });
+    }
+    for (const label of labels()) {
+      if (state.collapsedLabels.includes(label.id)) continue;
+      slices.push({
         key: `label:${label.id}`,
         ids: label.channelIds,
         isLoaded,
-      })),
-    ];
+      });
+    }
+    return slices;
   }
 
   const favoriteChannels = createMemo(() =>
