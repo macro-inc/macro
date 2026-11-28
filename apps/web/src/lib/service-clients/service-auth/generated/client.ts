@@ -89,6 +89,7 @@ import type {
   PowerBody,
   ProfilePictures,
   ProfilePictureUpload,
+  PublicComputerCatalog,
   PublicGtmInviteLink,
   PurchaseBody,
   Purchased,
@@ -985,6 +986,46 @@ export const cancelCodexLogin = async (
     status: res.status,
     headers: res.headers,
   } as cancelCodexLoginResponse;
+};
+
+/**
+ * @summary List current computer specifications for an anonymous visitor.
+ */
+export type listPublicComputerCatalogResponse200 = {
+  data: PublicComputerCatalog;
+  status: 200;
+};
+
+export type listPublicComputerCatalogResponseSuccess =
+  listPublicComputerCatalogResponse200 & {
+    headers: Headers;
+  };
+
+export type listPublicComputerCatalogResponse =
+  listPublicComputerCatalogResponseSuccess;
+
+export const getListPublicComputerCatalogUrl = () => {
+  return `/computers/catalog`;
+};
+
+export const listPublicComputerCatalog = async (
+  options?: RequestInit
+): Promise<listPublicComputerCatalogResponse> => {
+  const res = await fetch(getListPublicComputerCatalogUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listPublicComputerCatalogResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listPublicComputerCatalogResponse;
 };
 
 /**

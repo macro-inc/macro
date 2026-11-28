@@ -1830,6 +1830,55 @@ export type ProfilePictures = {
 };
 
 /**
+ * The current public computer catalog.
+ */
+export type PublicComputerCatalog = {
+    /**
+     * Current versioned resource tiers, in catalog order.
+     */
+    plans: Array<PublicComputerPlan>;
+    /**
+     * Whether public pricing is available.
+     */
+    pricing: PublicComputerPricing;
+};
+
+/**
+ * The published specification for a computer tier.
+ */
+export type PublicComputerPlan = {
+    /**
+     * The versioned identity of this specification.
+     */
+    catalogId: string;
+    /**
+     * Total disk quota in GiB.
+     */
+    diskGib: number;
+    /**
+     * The display label from the computer size.
+     */
+    label: string;
+    /**
+     * Memory limit in GiB.
+     */
+    memoryGib: number;
+    /**
+     * The computer size.
+     */
+    size: ComputerSize;
+    /**
+     * Virtual CPU count.
+     */
+    vcpus: number;
+};
+
+/**
+ * Public pricing availability.
+ */
+export type PublicComputerPricing = 'unavailable';
+
+/**
  * What the public welcome page learns about a link.
  */
 export type PublicGtmInviteLink = {
@@ -3317,6 +3366,19 @@ export type PollCodexLoginResponses = {
 };
 
 export type PollCodexLoginResponse = PollCodexLoginResponses[keyof PollCodexLoginResponses];
+
+export type ListPublicComputerCatalogData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/computers/catalog';
+};
+
+export type ListPublicComputerCatalogResponses = {
+    200: PublicComputerCatalog;
+};
+
+export type ListPublicComputerCatalogResponse = ListPublicComputerCatalogResponses[keyof ListPublicComputerCatalogResponses];
 
 export type DeleteCursorApiKeyData = {
     body?: never;
