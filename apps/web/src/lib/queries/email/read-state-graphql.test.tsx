@@ -31,6 +31,7 @@ vi.mock('@app/lib/analytics/analytics-context', () => ({
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
 vi.mock('@macro-inc/observability', () => ({
   Telemetry: {
+    captureContext: vi.fn(),
     error: vi.fn(),
     span: (_name: string, run: (span: object) => unknown) =>
       run({ setAttr: () => {} }),
