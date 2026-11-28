@@ -15,10 +15,12 @@ import {
   DopplerEcsEnvironment,
   getGatewayAlb,
   GatewayService,
+  grafanaTelemetryEnabled,
   stack,
 } from '../../packages/shared';
 
 const gatewayLoadBalancer = getGatewayAlb();
+const prodTaskMemory = grafanaTelemetryEnabled ? '10240' : '9216';
 
 const BASE_NAME = pulumi.getProject();
 const REPO_ROOT = '../../..';
@@ -203,6 +205,11 @@ export class ConvertService extends pulumi.ComponentResource {
           },
         ],
         taskDefinitionArgs: {
+          // Fargate sizes a task from reservations: 4 GB in dev, 9 GB in prod.
+          // Prod's 9 GB leaves Alloy too little room: the service reaches its
+          // 8 GB limit there, and Alloy's hard limit is 512 MiB.
+          cpu: stack === 'prod' ? '4096' : '512',
+          memory: stack === 'prod' ? prodTaskMemory : '4096',
           taskRole: {
             roleArn: this.role.arn,
           },

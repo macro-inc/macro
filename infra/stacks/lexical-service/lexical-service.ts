@@ -14,6 +14,7 @@ import {
   DopplerEcsEnvironment,
   getGatewayAlb,
   GatewayService,
+  grafanaTelemetryEnabled,
   stack,
 } from '../../packages/shared';
 
@@ -183,6 +184,11 @@ export class LexicalService extends pulumi.ComponentResource {
           },
         ],
         taskDefinitionArgs: {
+          // Fargate sizes a task from reservations, which leave Alloy too
+          // little room in 3 GB: prod tasks have used 2.5 GB with the service
+          // at its 2 GB limit, and Alloy's hard limit is 512 MiB.
+          cpu: '1024',
+          memory: grafanaTelemetryEnabled ? '4096' : '3072',
           taskRole: {
             roleArn: this.role.arn,
           },

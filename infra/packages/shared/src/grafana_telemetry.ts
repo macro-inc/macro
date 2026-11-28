@@ -10,8 +10,11 @@ import * as pulumi from '@pulumi/pulumi';
 // Delete the entry after the revision without Alloy is steady.
 const PROD_GRAFANA_PROJECTS: Record<string, boolean> = {
   'contacts-service': true,
+  'convert-service': true,
   'image-proxy-service': true,
+  'lexical-service': true,
   'notification-service': true,
+  'unfurl-service': true,
   'whatsapp-session-service': true,
 };
 
