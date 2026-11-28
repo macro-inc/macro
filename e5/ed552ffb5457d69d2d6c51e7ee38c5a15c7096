@@ -1,0 +1,27 @@
+apps/web/src/features/drive-view/views/drive-header.tsx
+  s_9a7b3753cf0d43::t_d5a26d808f6bc9 71
+  s_9a7b3753cf0d43::t_ad85fdb2cd4031 12-14,21-23,36-42,63,66-70,72-89
+docs/agent-guide/files.md
+  s_9a7b3753cf0d43::t_24f4780901eab3 98-100
+docs/agent-guide/ui-conventions.md
+  s_9a7b3753cf0d43::t_24f4780901eab3 63-64
+apps/web/src/features/drive-view/views/drive-filter-menu.tsx
+  s_9a7b3753cf0d43::t_d5a26d808f6bc9 9-15,28
+  s_9a7b3753cf0d43::t_a4a6679f927217 29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e5ed552ffb5457d69d2d6c51e7ee38c5a15c7096",
+  "prompts": {},
+  "sessions": {
+    "s_9a7b3753cf0d43": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e92eee65-6980-40cb-9ea0-eb765e9b183b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
