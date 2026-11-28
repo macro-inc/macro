@@ -1,4 +1,5 @@
-import { createRoot, createSignal } from 'solid-js';
+import { createComponent, createRoot, createSignal } from 'solid-js';
+import { render } from 'solid-js/web';
 import { describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -68,6 +69,7 @@ import {
   prStatusBand,
 } from '../primitives/pr-page-state';
 import { usePrDetail } from './PrDetail';
+import { PrDetailsSection } from './shared/pr-details';
 
 describe('PR refresh wiring', () => {
   it('passes the PR details and changes summary keys to the refresh', () => {
@@ -191,5 +193,42 @@ describe('PR scroll chrome', () => {
       expect(scroll.topBarVisible()).toBe(true);
       dispose();
     });
+  });
+});
+
+describe('PR detail section refs', () => {
+  it('accepts an omitted getter-only ref and forwards a supplied callback', () => {
+    const container = document.createElement('div');
+    const omitted = {
+      title: 'Section',
+      children: null,
+      get sectionRef() {
+        return undefined;
+      },
+    };
+    const disposeOmitted = render(
+      () => createComponent(PrDetailsSection, omitted),
+      container
+    );
+    disposeOmitted();
+    const forwarded = vi.fn();
+    const supplied = {
+      title: 'Section',
+      children: null,
+      get sectionRef() {
+        return forwarded;
+      },
+    };
+    const disposeSupplied = render(
+      () => createComponent(PrDetailsSection, supplied),
+      container
+    );
+    try {
+      expect(forwarded).toHaveBeenCalledExactlyOnceWith(
+        container.querySelector('section')
+      );
+    } finally {
+      disposeSupplied();
+    }
   });
 });

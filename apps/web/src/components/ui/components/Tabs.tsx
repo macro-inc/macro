@@ -150,7 +150,7 @@ export function Tabs<T extends string>(props: TabsProps<T>) {
 
   return (
     <KSegmentedControl
-      ref={props.ref}
+      ref={(element) => props.ref?.(element)}
       aria-label={props['aria-label']}
       value={props.value ?? ''}
       onChange={select}

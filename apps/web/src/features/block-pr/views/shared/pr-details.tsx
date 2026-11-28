@@ -70,7 +70,7 @@ export function PrDetailsSection(props: {
   };
   return (
     <section
-      ref={props.sectionRef}
+      ref={(element) => props.sectionRef?.(element)}
       class="group flex min-w-0 flex-col gap-2 py-3"
     >
       <button

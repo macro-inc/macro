@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { createComponent, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Tabs, type TabsTouchStyle } from './Tabs';
 
@@ -179,4 +179,18 @@ describe('on touch', () => {
     ).toBeTruthy();
     expect(slidingPill() !== null).toBe(row.slides);
   });
+});
+
+it('accepts a getter-only omitted ref without assigning into props', () => {
+  device.touch = false;
+  const props = {
+    'aria-label': 'Choice',
+    options: [{ value: 'first', label: 'First' }],
+    value: 'first',
+    onChange: () => undefined,
+    get ref() {
+      return undefined;
+    },
+  };
+  render(() => createComponent(Tabs, props));
 });
