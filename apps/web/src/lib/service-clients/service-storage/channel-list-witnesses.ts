@@ -62,7 +62,7 @@ function channelListWitnesses(
   return { unreadNotifications, unreadMentions };
 }
 
-const SOUP_UPDATES_KEY = createRequest(SoupUpdatesDocument, {}).key;
+let soupUpdatesKey: number | undefined;
 
 /** Add bounded links to the same normalized write as the complete pushed row. */
 export const channelListWitnessExchange: Exchange =
@@ -73,11 +73,13 @@ export const channelListWitnessExchange: Exchange =
       map((result) => {
         if (
           result.operation.kind !== 'subscription' ||
-          result.operation.key !== SOUP_UPDATES_KEY ||
           result.data == null ||
           result.error
         )
           return result;
+
+        soupUpdatesKey ??= createRequest(SoupUpdatesDocument, {}).key;
+        if (result.operation.key !== soupUpdatesKey) return result;
 
         const source = result.data as SoupUpdatesSubscription;
         if (
