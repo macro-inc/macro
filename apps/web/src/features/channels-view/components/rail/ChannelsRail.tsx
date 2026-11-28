@@ -33,6 +33,7 @@ import {
 } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { enableChannelTags } from '@core/constant/featureFlags';
+import { useChannelDirectory } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
@@ -443,6 +444,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const hasReferences = () =>
     favoriteChannelIds().length > 0 ||
     labels().some((label) => label.channelIds.length > 0);
+  const directory = useChannelDirectory();
+  // Until the directory settles, its pool may still bring a section's members.
+  const directorySettled = () => directory.complete() || directory.failed();
   const poolById = createMemo(
     () => new Map(props.localChannels().map((channel) => [channel.id, channel]))
   );
@@ -534,7 +538,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
   });
   const channelById = (channelId: string) => membersById().get(channelId);
 
-  /** Each section on screen, and the next unknown members below an open one. */
+  /**
+   * Each section on screen, and the next unknown members below an open one
+   * once the directory has settled.
+   */
   function onScreenReferenceSlices(): ChannelWindowSlice[] {
     if (!Object.values(sectionRanges).some(Boolean)) return [];
     const loaded = loadedChannelIds();
@@ -557,7 +564,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
       const rows = sections.get(key)?.rows;
       const status = rows?.findIndex((row) => row.kind === 'reference-status');
       if (!range || status === undefined || status < range.start) continue;
-      if (status >= range.end) continue;
+      if (status >= range.end || !directorySettled()) continue;
       const unknown = unknownMembers(label);
       const unavailable = referenceWindow.unavailableIds();
       const next = unknown.findIndex((id) => !unavailable.has(id));

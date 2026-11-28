@@ -510,6 +510,9 @@ function BrowseSection(props: {
         virtualizer,
         () => size.height,
         () => props.scrollVersion,
+        // Sections above growing move this one on or off screen unscrolled.
+        () => props.sectionStart,
+        () => props.layoutVersion,
       ],
       () => {
         if (!open()) {
