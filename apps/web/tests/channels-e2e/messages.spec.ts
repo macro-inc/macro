@@ -772,10 +772,11 @@ test('MSG-18 messages two people send at the same moment end in one order for bo
   ] as const) {
     // Known defect on main: an open page sometimes does not show a message
     // the other person sent. The reload below requires every message.
-    const missed: string[] = [];
-    for (const text of everyMessage.filter((t) => t.startsWith(other))) {
-      if (await missedLive(view.message(text))) missed.push(text);
-    }
+    const theirs = everyMessage.filter((text) => text.startsWith(other));
+    const wasMissed = await Promise.all(
+      theirs.map((text) => missedLive(view.message(text)))
+    );
+    const missed = theirs.filter((_, at) => wasMissed[at]);
     // A missed message may still come, but only once.
     await expect
       .poll(async () => withoutOneOf(await view.topLevel(), missed).sort())

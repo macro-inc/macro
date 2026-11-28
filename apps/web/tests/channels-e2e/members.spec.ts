@@ -125,8 +125,8 @@ test('MEM-02 the owner removes a person in the Participants tab and everyone who
       timeout: 5_000,
     });
   });
+  expect(await wasRefused).toBe(false);
   if ((await participant(page, 'Cy Teammate').count()) > 0) {
-    expect(await wasRefused).toBe(false);
     await remove.click();
   }
   await expect(participant(page, 'Cy Teammate')).toHaveCount(0);
