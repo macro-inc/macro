@@ -3,19 +3,88 @@
 // Restore, which waits while a restore is on its way. Each for a Gmail and
 // an Outlook inbox.
 
-import type { Route } from '@playwright/test';
 import { loadAppSteadily } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
 import { deliverToSpam, syncedInView } from './harness/journeys';
+import {
+  catchUpFinished,
+  focusRow,
+  rowIds,
+  sentOperations,
+} from './harness/list';
 import { anInbox, PROVIDERS } from './harness/providers';
+import { notice } from './harness/send';
 import {
   deliverToTrash,
+  holdOperation,
+  refuseOperation,
   sidebarTab,
   toolbarButton,
 } from './harness/states-list';
 import { GRACE } from './harness/ways-list1';
 import { listShows, row, rowCheckbox } from './harness/ways-list2';
 import { did, saw } from './ledger/record';
+
+// A disconnected trash must leave All Mail, reach the provider on reconnect,
+// and return to the mounted list from Undo's mutation result.
+test('replays a disconnected trash and restores All Mail without a Soup read', async ({
+  page,
+  mailbox,
+}) => {
+  test.setTimeout(120_000);
+  await mailbox.deliver({ from: GRACE, subject: 'Old invoice', text: 'Paid.' });
+  const thread = (await mailbox.synced('Old invoice')).id;
+  await mailbox.open();
+  await sidebarTab(page, 'All mail');
+  await listShows(page, [thread]);
+  await expect
+    .poll(() => catchUpFinished(page), { timeout: 60_000 })
+    .toBe(true);
+  const sent = sentOperations(page);
+  const stateWrites = () =>
+    sent.filter(({ name }) => name === 'SetEmailThreadState');
+  const isTrashed = async () =>
+    (await mailbox.providerMessages()).some((message) =>
+      message.labels.includes('TRASH')
+    );
+
+  await focusRow(page, thread);
+  await page.context().setOffline(true);
+  let attemptedOffline = 0;
+  try {
+    await page.keyboard.press('Shift+Digit3');
+    await expect.poll(() => rowIds(page)).not.toContain(thread);
+    expect(await isTrashed()).toBe(false);
+    attemptedOffline = stateWrites().length;
+  } finally {
+    await page.context().setOffline(false);
+  }
+  await expect.poll(isTrashed).toBe(true);
+  expect(
+    stateWrites()
+      .slice(attemptedOffline)
+      .map(({ variables }) => variables)
+  ).toContainEqual({
+    input: { threadId: thread, field: 'TRASHED', value: true },
+  });
+
+  const moved = notice(page, 'Moved to Trash');
+  await moved.hover();
+  const beforeUndo = sent.length;
+  await page.context().setOffline(true);
+  try {
+    await moved.getByRole('button', { name: 'Undo' }).click();
+    await expect(notice(page, 'Restored from Trash')).toBeVisible();
+    expect(await isTrashed()).toBe(true);
+  } finally {
+    await page.context().setOffline(false);
+  }
+  await listShows(page, [thread]);
+  await expect.poll(isTrashed).toBe(false);
+  expect(sent.slice(beforeUndo).filter(({ name }) => name === 'Soup')).toEqual(
+    []
+  );
+});
 
 for (const provider of PROVIDERS) {
   test.describe(`bringing mail back from Spam and Trash of ${anInbox(provider)}`, () => {
@@ -42,14 +111,8 @@ for (const provider of PROVIDERS) {
         await syncedInView(mailbox, 'trash', 'Old invoice'),
         await syncedInView(mailbox, 'trash', 'Older invoice'),
       ];
-      // Every restore waits until the test lets it fail, and so do the
-      // service client's tries again.
-      const held: Route[] = [];
-      let failing = false;
-      await page.route(/\/email\/threads\/[^/]+\/state(\?|$)/, (route) => {
-        if (failing) return route.fulfill({ status: 500, body: '{}' });
-        held.push(route);
-      });
+      await refuseOperation(page, 'SetEmailThreadState');
+      const held = await holdOperation(page, 'SetEmailThreadState');
 
       await mailbox.open();
       await sidebarTab(page, 'Spam');
@@ -77,13 +140,11 @@ for (const provider of PROVIDERS) {
       await expect(restore).toBeEnabled();
       await restore.click();
       did('AL-406', 'F-076');
-      await expect.poll(() => held.length).toBe(2);
+      await expect.poll(held.count).toBeGreaterThan(0);
       await expect(restore).toBeDisabled();
       saw('STL-402');
 
-      failing = true;
-      for (const route of held.splice(0))
-        await route.fulfill({ status: 500, body: '{}' });
+      await held.release();
       await expect(restore).toBeEnabled();
       await expect(page.getByText('2 selected')).toBeVisible();
       await listShows(page, trashed);

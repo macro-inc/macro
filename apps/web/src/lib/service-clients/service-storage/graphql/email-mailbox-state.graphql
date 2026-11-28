@@ -1,0 +1,5 @@
+mutation SetEmailThreadState($input: SetEmailThreadStateInput!) {
+	setEmailThreadState(input: $input) {
+		...SoupItemFields
+	}
+}

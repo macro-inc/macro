@@ -51,7 +51,6 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import type { DateValue } from '@core/util/date';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { throwOnErr } from '@core/util/result';
 import { waitForFrames } from '@core/util/sleep';
 import { openExternalUrl } from '@core/util/url';
 import {
@@ -94,11 +93,11 @@ import {
 } from '@notifications/top-level-channel-notification';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import { queryClient } from '@queries/client';
-import { updateEmailThreadState } from '@queries/email/cache-cleanup';
 import {
   archiveEmailThreads,
   type EmailArchiveDisposition,
 } from '@queries/email/integration';
+import { setEmailMailboxFolderStates } from '@queries/email/mailbox-state';
 import {
   type NotificationEntityRef,
   updateNotificationsForEntities,
@@ -108,7 +107,6 @@ import {
   bulkMarkNotificationsAsUndone,
 } from '@queries/notification/user-notifications';
 import { invalidateSoupEntity, removeSoupEntities } from '@queries/soup/cache';
-import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { isAfter } from 'date-fns';
 import { match } from 'ts-pattern';
 import { applyGraphqlDoneOptimistic } from './actions/graphql-done-optimism';
@@ -1040,7 +1038,7 @@ export type TrashEmailTarget = { id: string; linkId?: string };
  * Returns synchronously so the caller can show the undo toast immediately.
  */
 export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
-  const ids = targets.map((t) => t.id);
+  const ids = [...new Set(targets.map((t) => t.id))];
   queryClient.cancelQueries({ queryKey: queryKeys.all.email });
 
   const previousEmail = queryClient.getQueriesData<{
@@ -1074,38 +1072,18 @@ export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
   const done = (async () => {
     try {
       // Settle every request so a partial failure can be compensated.
-      const outcomes = await Promise.allSettled(
-        ids.map((id) =>
-          throwOnErr(() =>
-            updateEmailThreadState({
-              thread_id: id,
-              field: 'trashed',
-              value: true,
-            })
-          )
-        )
-      );
+      const outcomes = await setEmailMailboxFolderStates(ids, 'TRASHED', true);
 
       const failure = outcomes.find((o) => o.status === 'rejected');
       if (failure) {
         // Revert the threads that did trash so the server matches the rollback
         // below; best effort, so a failed revert can't mask the original error.
-        await Promise.allSettled(
-          ids.flatMap((id, i) =>
-            outcomes[i]?.status === 'fulfilled'
-              ? [
-                  throwOnErr(() =>
-                    updateEmailThreadState({
-                      thread_id: id,
-                      field: 'trashed',
-                      value: false,
-                    })
-                  ),
-                ]
-              : []
-          )
+        await setEmailMailboxFolderStates(
+          ids.filter((_, index) => outcomes[index].status === 'fulfilled'),
+          'TRASHED',
+          false
         );
-        throw (failure as PromiseRejectedResult).reason;
+        throw failure.reason;
       }
     } catch (err) {
       rollback();
@@ -1114,7 +1092,6 @@ export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
         ...ids.map((id) => invalidateSoupEntity(id)),
-        refreshActiveGraphqlSoupQueries(),
       ]);
     }
   })();
@@ -1134,25 +1111,21 @@ export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
       rollback();
 
       try {
-        await Promise.all(
-          ids.map((id) => {
-            return throwOnErr(() =>
-              updateEmailThreadState({
-                thread_id: id,
-                field: 'trashed',
-                value: false,
-              })
-            );
-          })
+        const outcomes = await setEmailMailboxFolderStates(
+          ids,
+          'TRASHED',
+          false
         );
+        const failure = outcomes.find(
+          (outcome) => outcome.status === 'rejected'
+        );
+        if (failure) throw failure.reason;
       } finally {
-        // The rollback restores REST lists, but GraphQL membership must be
-        // reconciled with the server after undo (including partial failures).
+        // The legacy lists take their restored rows from the rollback.
         await queryClient.invalidateQueries({
           queryKey: queryKeys.all.email,
           refetchType: 'none',
         });
-        await refreshActiveGraphqlSoupQueries();
       }
     },
   };

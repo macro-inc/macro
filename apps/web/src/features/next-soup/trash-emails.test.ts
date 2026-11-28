@@ -1,19 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// updateThreadState returns a Result (an HTTP failure resolves to Err rather
-// than rejecting), so the mock mirrors that shape; trashEmails wraps it in
-// throwOnErr.
-type ResultLike = {
-  isErr: () => boolean;
-  value?: undefined;
-  error?: { code: string; message: string }[];
-};
-const okResult: ResultLike = { isErr: () => false, value: undefined };
-const errResult: ResultLike = {
-  isErr: () => true,
-  error: [{ code: 'ERR', message: 'boom' }],
-};
-
 const operationMocks = vi.hoisted(() => ({
   cancelQueries: vi.fn(async () => {}),
   fetchAndCacheThread: vi.fn(),
@@ -23,14 +9,14 @@ const operationMocks = vi.hoisted(() => ({
   invalidateQueries: vi.fn(async () => {}),
   invalidateSoupEntity: vi.fn(async () => {}),
   setQueryData: vi.fn(),
-  refreshGraphqlSoup: vi.fn(async () => {}),
-  updateThreadState: vi.fn(
-    async (_args: {
-      thread_id: string;
-      field: 'trashed';
-      value: boolean;
-    }): Promise<ResultLike> => ({ isErr: () => false, value: undefined })
-  ),
+  setMailboxState:
+    vi.fn<
+      (input: {
+        threadId: string;
+        field: 'TRASHED';
+        value: boolean;
+      }) => Promise<void>
+    >(),
 }));
 
 // utils.ts transitively imports websocket clients that would otherwise open
@@ -63,8 +49,17 @@ vi.mock('@queries/client', () => ({
     setQueryData: operationMocks.setQueryData,
   },
 }));
-vi.mock('@queries/soup/graphql/active-queries', () => ({
-  refreshActiveGraphqlSoupQueries: operationMocks.refreshGraphqlSoup,
+vi.mock('@queries/email/mailbox-state', () => ({
+  setEmailMailboxFolderStates: (
+    ids: string[],
+    field: 'TRASHED',
+    value: boolean
+  ) =>
+    Promise.allSettled(
+      ids.map((threadId) =>
+        operationMocks.setMailboxState({ threadId, field, value })
+      )
+    ),
 }));
 vi.mock('@queries/email/thread', () => ({
   fetchAndCacheThread: operationMocks.fetchAndCacheThread,
@@ -85,7 +80,6 @@ vi.mock('@queries/soup/cache', () => ({
 vi.mock('@service-email/client', () => ({
   emailClient: {
     getUserLabels: vi.fn(async () => ({ labels: [] })),
-    updateThreadState: operationMocks.updateThreadState,
   },
 }));
 
@@ -95,41 +89,11 @@ afterEach(() => {
   vi.clearAllMocks();
   operationMocks.getQueriesData.mockReturnValue([]);
   operationMocks.getQueryData.mockReturnValue(undefined);
-  operationMocks.updateThreadState.mockImplementation(async () => okResult);
+  operationMocks.setMailboxState.mockResolvedValue(undefined);
   operationMocks.fetchAndCacheThread.mockReset();
 });
 
 describe('trashEmails', () => {
-  it('revalidates mounted GraphQL Soup membership after trash succeeds', async () => {
-    const handle = trashEmails([{ id: 'thread-a', linkId: 'link-a' }]);
-    await handle.done;
-    expect(operationMocks.updateThreadState).toHaveBeenCalledWith({
-      thread_id: 'thread-a',
-      field: 'trashed',
-      value: true,
-    });
-    expect(
-      operationMocks.refreshGraphqlSoup,
-      'TanStack invalidation cannot remove a row from a mounted GraphQL Soup list'
-    ).toHaveBeenCalled();
-  });
-
-  it('revalidates mounted GraphQL Soup membership after trash undo succeeds', async () => {
-    const handle = trashEmails([{ id: 'thread-b', linkId: 'link-b' }]);
-    await handle.done;
-    operationMocks.refreshGraphqlSoup.mockClear();
-    await handle.undo();
-    expect(operationMocks.updateThreadState).toHaveBeenLastCalledWith({
-      thread_id: 'thread-b',
-      field: 'trashed',
-      value: false,
-    });
-    expect(
-      operationMocks.refreshGraphqlSoup,
-      'Restoring a legacy snapshot cannot restore GraphQL Soup membership'
-    ).toHaveBeenCalled();
-  });
-
   it('trashes and restores threads across providers independently', async () => {
     const handle = trashEmails([
       { id: 'thread-a', linkId: 'link-a' },
@@ -138,30 +102,30 @@ describe('trashEmails', () => {
 
     await handle.done;
 
-    expect(operationMocks.updateThreadState).toHaveBeenCalledTimes(2);
-    expect(operationMocks.updateThreadState).toHaveBeenCalledWith({
-      thread_id: 'thread-a',
-      field: 'trashed',
+    expect(operationMocks.setMailboxState).toHaveBeenCalledTimes(2);
+    expect(operationMocks.setMailboxState).toHaveBeenCalledWith({
+      threadId: 'thread-a',
+      field: 'TRASHED',
       value: true,
     });
-    expect(operationMocks.updateThreadState).toHaveBeenCalledWith({
-      thread_id: 'thread-b',
-      field: 'trashed',
+    expect(operationMocks.setMailboxState).toHaveBeenCalledWith({
+      threadId: 'thread-b',
+      field: 'TRASHED',
       value: true,
     });
     expect(operationMocks.fetchAndCacheThread).not.toHaveBeenCalled();
 
     await handle.undo();
 
-    expect(operationMocks.updateThreadState).toHaveBeenCalledTimes(4);
-    expect(operationMocks.updateThreadState).toHaveBeenCalledWith({
-      thread_id: 'thread-a',
-      field: 'trashed',
+    expect(operationMocks.setMailboxState).toHaveBeenCalledTimes(4);
+    expect(operationMocks.setMailboxState).toHaveBeenCalledWith({
+      threadId: 'thread-a',
+      field: 'TRASHED',
       value: false,
     });
-    expect(operationMocks.updateThreadState).toHaveBeenCalledWith({
-      thread_id: 'thread-b',
-      field: 'trashed',
+    expect(operationMocks.setMailboxState).toHaveBeenCalledWith({
+      threadId: 'thread-b',
+      field: 'TRASHED',
       value: false,
     });
   });
@@ -171,9 +135,9 @@ describe('trashEmails', () => {
     await handle.done;
     expect(operationMocks.fetchAndCacheThread).not.toHaveBeenCalled();
     expect(operationMocks.fetchQuery).not.toHaveBeenCalled();
-    expect(operationMocks.updateThreadState).toHaveBeenCalledWith({
-      thread_id: 'thread-b',
-      field: 'trashed',
+    expect(operationMocks.setMailboxState).toHaveBeenCalledWith({
+      threadId: 'thread-b',
+      field: 'TRASHED',
       value: true,
     });
   });
@@ -183,33 +147,33 @@ describe('trashEmails', () => {
     const handle = trashEmails([{ id: 'outlook-thread', linkId: 'outlook' }]);
     await handle.done;
     expect(operationMocks.fetchQuery).not.toHaveBeenCalled();
-    expect(operationMocks.updateThreadState).toHaveBeenCalledWith({
-      thread_id: 'outlook-thread',
-      field: 'trashed',
+    expect(operationMocks.setMailboxState).toHaveBeenCalledWith({
+      threadId: 'outlook-thread',
+      field: 'TRASHED',
       value: true,
     });
   });
 
   it('surfaces an API failure and rejects done', async () => {
-    operationMocks.updateThreadState.mockImplementation(async () => errResult);
+    operationMocks.setMailboxState.mockRejectedValue(
+      new Error('Provider unavailable')
+    );
 
     const handle = trashEmails([{ id: 'thread-a', linkId: 'link-a' }]);
 
     await expect(handle.done).rejects.toThrow();
-    // A failed trash must not silently look like a success (throwOnErr).
-    expect(operationMocks.updateThreadState).toHaveBeenCalledWith({
-      thread_id: 'thread-a',
-      field: 'trashed',
+    expect(operationMocks.setMailboxState).toHaveBeenCalledWith({
+      threadId: 'thread-a',
+      field: 'TRASHED',
       value: true,
     });
   });
 
   it('reverts threads that trashed when a sibling fails', async () => {
-    operationMocks.updateThreadState.mockImplementation(async (args) =>
-      args.thread_id === 'thread-b' && args.value === true
-        ? errResult
-        : okResult
-    );
+    operationMocks.setMailboxState.mockImplementation(async (args) => {
+      if (args.threadId === 'thread-b' && args.value)
+        throw new Error('Provider unavailable');
+    });
 
     const handle = trashEmails([
       { id: 'thread-a', linkId: 'link-a' },
@@ -220,15 +184,15 @@ describe('trashEmails', () => {
 
     // thread-a trashed, thread-b failed -> thread-a is reverted so the server
     // matches the rolled-back UI, and undo has nothing left to restore.
-    expect(operationMocks.updateThreadState).toHaveBeenCalledWith({
-      thread_id: 'thread-a',
-      field: 'trashed',
+    expect(operationMocks.setMailboxState).toHaveBeenCalledWith({
+      threadId: 'thread-a',
+      field: 'TRASHED',
       value: false,
     });
 
     await handle.undo();
-    expect(operationMocks.updateThreadState).not.toHaveBeenCalledWith(
-      expect.objectContaining({ value: false, thread_id: 'thread-b' })
+    expect(operationMocks.setMailboxState).not.toHaveBeenCalledWith(
+      expect.objectContaining({ value: false, threadId: 'thread-b' })
     );
   });
 });

@@ -47,12 +47,12 @@ test.describe('the failure notices of the list of a Gmail inbox', () => {
       NOT_DONE,
       () => refusingUndo
     );
-    // The service client tries a failed request again: every try fails.
-    await page.route(/\/email\/threads\/[^/]+\/state(\?|$)/, (route) => {
-      const body = route.request().postData() ?? '';
-      if (!failingTrash || !body.includes('"trashed"')) return route.fallback();
-      return route.fulfill({ status: 500, body: '{}' });
-    });
+    await refuseOperation(
+      page,
+      'SetEmailThreadState',
+      () => true,
+      () => failingTrash
+    );
 
     await mailbox.open();
     await listShows(page, [ids.Agenda, ids.Minutes]);
