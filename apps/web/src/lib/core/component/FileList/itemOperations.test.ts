@@ -30,6 +30,7 @@ vi.mock('@service-storage/util/refetchResources', () => ({
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
   getEntityGraphqlClient: () => ({ mutation: mocks.mutation }),
+  getGraphqlCacheHost: () => undefined,
 }));
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: {
@@ -51,7 +52,6 @@ import {
   canDuplicateItemType,
   copyItem,
   deleteItem,
-  moveToFolder,
   permanentlyDelete,
   revertDelete,
 } from './itemOperations';
@@ -82,30 +82,6 @@ function variables() {
 }
 
 describe('entity callers', () => {
-  it.each([
-    ['document', 'DOCUMENT'],
-    ['chat', 'CHAT'],
-    ['project', 'PROJECT'],
-    ['email', 'EMAIL_THREAD'],
-    ['database', 'DATABASE'],
-    ['form', 'FORM'],
-  ] as const)(
-    'moves %s to a folder and root without REST preflights',
-    async (itemType, type) => {
-      for (const folderId of ['folder', null]) {
-        mocks.mutation.mockClear();
-        expect(await moveToFolder({ itemType, id: 'source', folderId })).toBe(
-          true
-        );
-        expect(variables()).toEqual({
-          inputs: [{ entity: { type, id: 'source' }, projectId: folderId }],
-        });
-      }
-      expect(mocks.edit).not.toHaveBeenCalled();
-      expect(mocks.metadata).not.toHaveBeenCalled();
-    }
-  );
-
   it.each(['document', 'chat', 'project'] as const)(
     'trashes/restores/permanently deletes %s through GraphQL',
     async (itemType) => {
@@ -201,7 +177,7 @@ describe('entity callers', () => {
     mocks.mutation.mockReturnValue({
       toPromise: async () => ({
         data: {
-          moveEntities: {
+          duplicateEntities: {
             results: [
               {
                 __typename: 'GraphqlMutationError',
@@ -214,12 +190,12 @@ describe('entity callers', () => {
       }),
     });
     expect(
-      await moveToFolder({
+      await copyItem({
         itemType: 'document',
         id: 'source',
-        folderId: 'folder',
+        name: 'Original',
       })
-    ).toBe(false);
+    ).toBeNull();
     expect(mocks.edit).not.toHaveBeenCalled();
     expect(mocks.refresh).not.toHaveBeenCalled();
     expect(mocks.resources).not.toHaveBeenCalled();
