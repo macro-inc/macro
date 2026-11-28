@@ -8,6 +8,40 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn manual_company_replays_by_record_id(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    seed_team(&pool, team_id, "macro|owner@example.com").await?;
+    let repo = CompaniesRepositoryImpl::new(pool);
+    let id = Uuid::now_v7();
+    let now = Utc::now();
+    let (first, replay) = tokio::try_join!(
+        repo.create_company_for_team_with_id(
+            &team_id,
+            Some("example.com"),
+            "Company",
+            now,
+            Some(id)
+        ),
+        repo.create_company_for_team_with_id(
+            &team_id,
+            Some("example.com"),
+            "Company",
+            now,
+            Some(id)
+        ),
+    )?;
+    assert_eq!(first.company.id, id);
+    assert_eq!(replay.company.id, id);
+    assert_eq!(replay.company.domains.len(), 1);
+    assert!(matches!(
+        repo.create_company_for_team(&team_id, Some("example.com"), "Company", now)
+            .await,
+        Err(CrmError::CompanyAlreadyExistsForTeam)
+    ));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn create_company_inserts_company_and_domain(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
     seed_team(&pool, team_id, "macro|owner@example.com").await?;

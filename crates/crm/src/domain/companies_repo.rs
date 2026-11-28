@@ -190,6 +190,18 @@ pub trait CompaniesRepository:
         email: Option<&str>,
         name: &str,
         now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send {
+        self.create_contact_for_team_with_id(team_id, email, name, now, None)
+    }
+
+    /// Create a manual record, reusing the same ID on replay when supplied.
+    fn create_contact_for_team_with_id(
+        &self,
+        team_id: &uuid::Uuid,
+        email: Option<&str>,
+        name: &str,
+        now: DateTime<Utc>,
+        id: Option<uuid::Uuid>,
     ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send;
 
     /// [`Self::create_contact_for_team`] for an address on a company domain:
@@ -208,6 +220,18 @@ pub trait CompaniesRepository:
         email: &str,
         name: &str,
         now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send {
+        self.create_contact_for_email_domain_with_id(team_id, email, name, now, None)
+    }
+
+    /// Create a manual record, reusing the same ID on replay when supplied.
+    fn create_contact_for_email_domain_with_id(
+        &self,
+        team_id: &uuid::Uuid,
+        email: &str,
+        name: &str,
+        now: DateTime<Utc>,
+        id: Option<uuid::Uuid>,
     ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send;
 
     /// The domains `team_id` keeps out of email sync, alphabetically.
@@ -250,6 +274,18 @@ pub trait CompaniesRepository:
         domain: Option<&str>,
         name: &str,
         now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<CrmCompanyWithContacts, CrmError>> + Send {
+        self.create_company_for_team_with_id(team_id, domain, name, now, None)
+    }
+
+    /// Create a manual record, reusing the same ID on replay when supplied.
+    fn create_company_for_team_with_id(
+        &self,
+        team_id: &uuid::Uuid,
+        domain: Option<&str>,
+        name: &str,
+        now: DateTime<Utc>,
+        id: Option<uuid::Uuid>,
     ) -> impl Future<Output = Result<CrmCompanyWithContacts, CrmError>> + Send;
 
     /// Manually creates a contact under `company_id` (scoped to
@@ -290,6 +326,29 @@ pub trait CompaniesRepository:
         name: &str,
         now: DateTime<Utc>,
         include_hidden: bool,
+    ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send {
+        self.create_contact_for_company_with_id(
+            team_id,
+            company_id,
+            email,
+            name,
+            now,
+            include_hidden,
+            None,
+        )
+    }
+
+    /// Create a manual record, reusing the same ID on replay when supplied.
+    #[allow(clippy::too_many_arguments)]
+    fn create_contact_for_company_with_id(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        email: Option<&str>,
+        name: &str,
+        now: DateTime<Utc>,
+        include_hidden: bool,
+        id: Option<uuid::Uuid>,
     ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send;
 
     /// Read the cached [`DomainMetadata`] for `domain` from

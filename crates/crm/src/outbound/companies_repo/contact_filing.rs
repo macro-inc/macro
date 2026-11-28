@@ -42,15 +42,23 @@ impl CompaniesRepositoryImpl {
             return Ok(ManualContactCompany::BlockedDomain);
         }
 
-        let (id, created) = match Self::find_company_by_domain(tx, team_id, normalized_domain)
-            .await?
-        {
-            Some((id, _)) => (id, false),
-            None => {
-                Self::insert_company(tx, team_id, Some(normalized_domain), None, false, now, now)
+        let (id, created) =
+            match Self::find_company_by_domain(tx, team_id, normalized_domain).await? {
+                Some((id, _)) => (id, false),
+                None => {
+                    Self::insert_company(
+                        tx,
+                        Uuid::now_v7(),
+                        team_id,
+                        Some(normalized_domain),
+                        None,
+                        false,
+                        now,
+                        now,
+                    )
                     .await?
-            }
-        };
+                }
+            };
 
         let hidden = sqlx::query_scalar!(
             "SELECT hidden FROM crm_companies WHERE id = $1 AND team_id = $2 FOR UPDATE",

@@ -9,9 +9,9 @@
 //! entity it addresses; there is no way to call a per-entity CRM method
 //! with a bare UUID.
 //!
-//! The company / contact / comment receipts are minted by the CRM
-//! access extractors in [`crate::inbound::axum_extractors`] via
-//! crate-private constructors. [`CrmTeamReceipt::from_team_receipt`] is
+//! CRM access adapters mint these receipts after authorization. Company
+//! access uses [`CrmCompanyReceipt::for_user`] for HTTP and GraphQL.
+//! [`CrmTeamReceipt::from_team_receipt`] is
 //! public because the team receipt it wraps is itself the capability
 //! (only `entity_access` can produce one) and the team id is derived
 //! from it — there is nothing to forge. The `dangerously_internal`
@@ -19,8 +19,11 @@
 //! caller can mint a receipt without passing an access check.
 
 use entity_access::domain::models::{
-    EntityAccessReceipt, EntityType, RequiredPermission, TeamRole,
+    AccessError, Entity, EntityAccessReceipt, EntityPermission, EntityType, RequiredPermission,
+    TeamRole,
 };
+use entity_access::domain::ports::EntityAccessService;
+use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use crate::domain::model::{CrmError, CrmPermissionRole};
@@ -51,11 +54,34 @@ pub struct CrmCompanyReceipt<T: RequiredPermission> {
 }
 
 impl<T: RequiredPermission> CrmCompanyReceipt<T> {
-    /// Mint a company receipt. Crate-private so only the CRM access
-    /// extractors can produce one off a verified access check. Unused
-    /// when the extractor seam (`axum`) isn't compiled (e.g. crm pulled
-    /// in for `ports` only).
-    #[cfg_attr(not(feature = "axum"), allow(dead_code))]
+    /// Resolve aliases and mint the caller's company receipt against the owning team.
+    pub async fn for_user(
+        service: &impl EntityAccessService,
+        user_id: MacroUserIdStr<'static>,
+        company_id: &str,
+    ) -> Result<Self, AccessError> {
+        let company_id = service
+            .current_entity_id(company_id, EntityType::CrmCompany)
+            .await?;
+        let (permission, team_id, team_role) = service
+            .get_crm_entity_permission_with_team(
+                Some(&user_id),
+                &company_id,
+                EntityType::CrmCompany,
+            )
+            .await?;
+        let receipt = EntityAccessReceipt::try_new_authenticated_user(
+            user_id,
+            Entity {
+                entity_id: company_id,
+                entity_type: EntityType::CrmCompany,
+            },
+            permission,
+        )?;
+        Ok(Self::new(receipt, team_id, team_role))
+    }
+
+    /// Wrap a verified company receipt with its owning team and the caller's role.
     pub(crate) fn new(receipt: EntityAccessReceipt<T>, team_id: Uuid, team_role: TeamRole) -> Self {
         Self {
             receipt,
@@ -220,6 +246,29 @@ pub struct CrmTeamReceipt<T: RequiredPermission> {
 }
 
 impl<T: RequiredPermission> CrmTeamReceipt<T> {
+    /// Mint a CRM team receipt using the authenticated user's current team membership.
+    pub async fn for_user(
+        service: &impl EntityAccessService,
+        user_id: MacroUserIdStr<'static>,
+    ) -> Result<Self, AccessError> {
+        let team = service
+            .get_user_team(&user_id)
+            .await?
+            .ok_or(AccessError::UnauthorizedWithMessage("not in a team"))?;
+        let receipt = EntityAccessReceipt::try_new_authenticated_user(
+            user_id,
+            Entity {
+                entity_id: team.team_id.to_string(),
+                entity_type: EntityType::Team,
+            },
+            EntityPermission::TeamRole { role: team.role },
+        )?;
+        Ok(Self {
+            receipt,
+            team_id: team.team_id,
+        })
+    }
+
     /// Mint from a verified team-scoped access receipt (e.g. one
     /// produced by `MacroUserTeamExtractorV2`). Public because the receipt
     /// is itself the capability and `team_id` is derived from its entity

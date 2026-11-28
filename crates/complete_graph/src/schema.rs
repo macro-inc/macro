@@ -30,6 +30,7 @@ use graphql_channel::{
     NoOpChannelActivityMutationService,
 };
 use graphql_common::{GraphqlSoupEntityType, parse_id, require_authorized_user};
+use graphql_crm::CrmMutationRoot;
 use graphql_email::{
     GraphqlEmailMutation, GraphqlEmailQuery, NoOpSoupEmailContentEdgeReader, SoupEmailEdgeReader,
     load_email_focus_thread_ids,
@@ -119,6 +120,7 @@ pub struct CompleteMutationRoot<
     InitiativeMutationRoot<E>,
     TimeTrackingMutationRoot<E>,
     CalendarMutationRoot,
+    CrmMutationRoot<E>,
     WorkFeedMutationRoot<E>,
     NotificationInboxMutationRoot<E>,
     SavedViewMutationRoot,
@@ -150,6 +152,7 @@ impl<
             InitiativeMutationRoot::<E>::default(),
             TimeTrackingMutationRoot::<E>::default(),
             CalendarMutationRoot,
+            CrmMutationRoot::<E>::default(),
             WorkFeedMutationRoot::<E>::default(),
             NotificationInboxMutationRoot::<E>::default(),
             SavedViewMutationRoot,

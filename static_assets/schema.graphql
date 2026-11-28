@@ -579,6 +579,14 @@ type CompleteMutationRoot {
 	"""
 	inviteCalendarEventGuests(input: InviteCalendarEventGuestsInput!): GraphqlCalendarMutationPayload!
 	"""
+	Create a company for the authenticated user's team.
+	"""
+	createCrmCompany(input: CreateCrmCompanyInput!): CreateCrmRecordPayload!
+	"""
+	Create a contact for a visible company or for the authenticated user's team.
+	"""
+	createCrmContact(input: CreateCrmContactInput!): CreateCrmRecordPayload!
+	"""
 	Mark work feed items done for the authenticated user: acknowledge the
 	notifications each entry showed and archive inbox email.
 	Notifications newer than an entry's `revision` stay active. Own work
@@ -802,6 +810,57 @@ input CreateCalendarEventInput {
 	What guests may do; omit for Google's defaults.
 	"""
 	guestPolicy: CalendarGuestPolicyInput
+}
+
+"""
+Manual company creation request.
+"""
+input CreateCrmCompanyInput {
+	"""
+	Client-generated request ID, retained across retries of this write.
+	"""
+	requestId: ID!
+	"""
+	Display name of the company.
+	"""
+	name: String!
+	"""
+	Optional company's website domain.
+	"""
+	domain: String
+}
+
+"""
+Manual contact creation request.
+"""
+input CreateCrmContactInput {
+	"""
+	Client-generated request ID, retained across retries of this write.
+	"""
+	requestId: ID!
+	"""
+	Display name of the contact.
+	"""
+	name: String!
+	"""
+	Optional contact email address.
+	"""
+	email: String
+	"""
+	Existing parent company. When omitted, the team may file the contact by email domain.
+	"""
+	companyId: ID
+}
+
+type CreateCrmRecordPayload {
+	"""
+	ID of the created record.
+	"""
+	recordId: ID!
+	"""
+	Cache effects, including the parent company when a team contact files there by domain.
+	"""
+	result: GraphqlEntityMutationResult
 }
 
 """

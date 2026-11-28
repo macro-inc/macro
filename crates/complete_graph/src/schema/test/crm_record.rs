@@ -11,6 +11,32 @@ use models_soup::crm_company::SoupCrmCompany;
 
 use super::*;
 
+#[tokio::test]
+async fn crm_create_mutations_require_authentication_and_team_membership() {
+    let schema = crate::build_schema();
+    for field in ["createCrmCompany", "createCrmContact"] {
+        let mutation = format!(
+            r#"mutation {{ {field}(input: {{requestId: "b6ed8d66-e5ed-4656-9130-2abfaf7a7ba0", name: "Draft"}}) {{ recordId }} }}"#
+        );
+        let anonymous = schema.execute(mutation.as_str()).await;
+        assert_eq!(anonymous.errors.len(), 1);
+        assert_eq!(anonymous.errors[0].message, "authentication required");
+
+        let request = async_graphql::Request::new(mutation)
+            .data(MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap())
+            .data(graphql_crm::CrmMutationContext::new(
+                Arc::new(::crm::domain::service::NoOpCrmService),
+                Arc::new(NoOpEntityAccessService),
+            ));
+        let no_team = schema.execute(request).await;
+        assert_eq!(no_team.errors.len(), 1);
+        assert_eq!(
+            no_team.errors[0].extensions.as_ref().unwrap().get("code"),
+            Some(&async_graphql::Value::from("FORBIDDEN"))
+        );
+    }
+}
+
 /// Records the records it is asked about; every other use case is out of scope.
 #[derive(Default)]
 struct RecordingPipelines {

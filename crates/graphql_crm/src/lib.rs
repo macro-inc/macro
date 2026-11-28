@@ -1,9 +1,9 @@
-//! Typed GraphQL inbound adapter for CRM records: the pipeline rows that
-//! reference a company or contact, composed onto their Soup entities.
+//! Typed GraphQL inbound adapter for CRM record creation and pipeline entries.
 #![deny(missing_docs)]
 
 mod context;
 mod loaders;
+mod mutations;
 mod objects;
 
 #[cfg(test)]
@@ -13,6 +13,7 @@ pub use context::CrmGraphqlContext;
 pub use loaders::{
     CrmRecord, PipelineEntriesLoader, load_pipeline_entries, pipeline_entries_loader,
 };
+pub use mutations::{CrmMutationContext, CrmMutationRoot};
 pub use objects::{
     GraphqlCrmPipeline, GraphqlCrmPipelineCell, GraphqlCrmPipelineColumn, GraphqlCrmPipelineEntry,
     GraphqlCrmPipelineRecordType, GraphqlCrmPipelineSharing,

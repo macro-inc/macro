@@ -238,6 +238,7 @@ impl CompaniesRepositoryImpl {
                 // display name from `crm_domain_directory`.
                 let (id, created) = Self::insert_company(
                     &mut tx,
+                    uuid::Uuid::now_v7(),
                     team_id,
                     Some(&normalized_domain),
                     None,
@@ -1048,8 +1049,10 @@ impl CompaniesRepositoryImpl {
     /// if it fires we'd orphan the company we just inserted, so we
     /// recover by deleting it and returning the winner's id with
     /// `created = false`.
+    #[allow(clippy::too_many_arguments)]
     async fn insert_company(
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        company_id: uuid::Uuid,
         team_id: &uuid::Uuid,
         normalized_domain: Option<&str>,
         custom_name: Option<&str>,
@@ -1069,7 +1072,7 @@ impl CompaniesRepositoryImpl {
             manually_created,
             first_at,
             last_at,
-            uuid::Uuid::now_v7(),
+            company_id,
         )
         .fetch_one(&mut **tx)
         .await
@@ -1131,6 +1134,7 @@ impl CompaniesRepositoryImpl {
         name: &str,
         now: DateTime<Utc>,
         file_by_domain: bool,
+        id: Option<uuid::Uuid>,
     ) -> Result<CrmContact, CrmError> {
         let normalized_email = email.map(str::to_ascii_lowercase);
         let domain = normalized_email
@@ -1154,6 +1158,13 @@ impl CompaniesRepositoryImpl {
             return Err(CrmError::CrmDisabledForTeam);
         }
 
+        if let Some(id) = id {
+            Self::lock_team_domain(&mut tx, team_id, &format!("create-contact:{id}")).await?;
+            if let Some(contact) = Self::read_contact(&mut *tx, team_id, &id, false).await? {
+                return Ok(contact);
+            }
+        }
+
         let company_id = match domain.filter(|_| file_by_domain) {
             Some(domain) => {
                 match Self::company_for_manual_contact(&mut tx, team_id, domain, now).await? {
@@ -1170,8 +1181,8 @@ impl CompaniesRepositoryImpl {
             Some(company_id) => sqlx::query_scalar!(
                 r#"
                 INSERT INTO crm_contacts
-                    (team_id, company_id, email, name, first_interaction, last_interaction, manually_created)
-                SELECT $1, $2, $3, $4, $5, $5, TRUE
+                    (team_id, company_id, email, name, first_interaction, last_interaction, manually_created, id)
+                SELECT $1, $2, $3, $4, $5, $5, TRUE, COALESCE($6, gen_random_uuid())
                 WHERE NOT EXISTS (
                     SELECT 1 FROM crm_contacts
                     WHERE team_id = $1 AND LOWER(email) = $3 AND company_id IS NULL
@@ -1184,14 +1195,15 @@ impl CompaniesRepositoryImpl {
                 normalized_email,
                 name,
                 now,
+                id,
             )
             .fetch_optional(&mut *tx)
             .await,
             None => sqlx::query_scalar!(
                 r#"
                 INSERT INTO crm_contacts
-                    (team_id, company_id, email, name, first_interaction, last_interaction, manually_created)
-                VALUES ($1, NULL, $2, $3, $4, $4, TRUE)
+                    (team_id, company_id, email, name, first_interaction, last_interaction, manually_created, id)
+                VALUES ($1, NULL, $2, $3, $4, $4, TRUE, COALESCE($5, gen_random_uuid()))
                 ON CONFLICT (team_id, LOWER(email)) WHERE company_id IS NULL DO NOTHING
                 RETURNING id
                 "#,
@@ -1199,6 +1211,7 @@ impl CompaniesRepositoryImpl {
                 normalized_email,
                 name,
                 now,
+                id,
             )
             .fetch_optional(&mut *tx)
             .await,
@@ -1349,27 +1362,29 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
     }
 
     #[tracing::instrument(skip_all, fields(%team_id), err)]
-    async fn create_contact_for_team(
+    async fn create_contact_for_team_with_id(
         &self,
         team_id: &uuid::Uuid,
         email: Option<&str>,
         name: &str,
         now: DateTime<Utc>,
+        id: Option<uuid::Uuid>,
     ) -> Result<CrmContact, CrmError> {
-        self.insert_manual_contact(team_id, email, name, now, false)
+        self.insert_manual_contact(team_id, email, name, now, false, id)
             .await
     }
 
     #[tracing::instrument(skip_all, fields(%team_id, filed = tracing::field::Empty), err)]
-    async fn create_contact_for_email_domain(
+    async fn create_contact_for_email_domain_with_id(
         &self,
         team_id: &uuid::Uuid,
         email: &str,
         name: &str,
         now: DateTime<Utc>,
+        id: Option<uuid::Uuid>,
     ) -> Result<CrmContact, CrmError> {
         let contact = self
-            .insert_manual_contact(team_id, Some(email), name, now, true)
+            .insert_manual_contact(team_id, Some(email), name, now, true, id)
             .await?;
         tracing::Span::current().record("filed", contact.company_id.is_some());
         Ok(contact)
@@ -1406,12 +1421,13 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
     }
 
     #[tracing::instrument(skip_all, fields(%team_id), err)]
-    async fn create_company_for_team(
+    async fn create_company_for_team_with_id(
         &self,
         team_id: &uuid::Uuid,
         domain: Option<&str>,
         name: &str,
         now: DateTime<Utc>,
+        id: Option<uuid::Uuid>,
     ) -> Result<CrmCompanyWithContacts, CrmError> {
         let normalized_domain = domain.map(str::to_ascii_lowercase);
 
@@ -1433,6 +1449,27 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             return Err(CrmError::CrmDisabledForTeam);
         }
 
+        if let Some(id) = id {
+            Self::lock_team_domain(&mut tx, team_id, &format!("create-company:{id}")).await?;
+            let existing = sqlx::query_scalar!(
+                "SELECT id FROM crm_companies WHERE id = $1 AND team_id = $2",
+                id,
+                team_id,
+            )
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            if existing.is_some() {
+                tx.commit()
+                    .await
+                    .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+                return self
+                    .get_company_for_team(team_id, &id, false, false)
+                    .await?
+                    .ok_or(CrmError::CompanyNotFoundForTeam);
+            }
+        }
+
         if let Some(domain) = &normalized_domain
             && Self::find_company_by_domain(&mut tx, team_id, domain)
                 .await?
@@ -1446,6 +1483,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         // LEAST/GREATEST.
         let (company_id, created) = Self::insert_company(
             &mut tx,
+            id.unwrap_or_else(uuid::Uuid::now_v7),
             team_id,
             normalized_domain.as_deref(),
             Some(name),
@@ -1465,7 +1503,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
 
         // Hydrate through the shared read path so domains + directory
         // metadata resolve identically to the GET endpoint.
-        self.get_company_for_team(team_id, &company_id, true, true)
+        self.get_company_for_team(team_id, &company_id, true, id.is_none())
             .await?
             .ok_or_else(|| {
                 CrmError::StorageLayerError(anyhow::anyhow!(
@@ -1475,7 +1513,8 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
     }
 
     #[tracing::instrument(skip_all, fields(%team_id, %company_id), err)]
-    async fn create_contact_for_company(
+    #[allow(clippy::too_many_arguments)]
+    async fn create_contact_for_company_with_id(
         &self,
         team_id: &uuid::Uuid,
         company_id: &uuid::Uuid,
@@ -1483,6 +1522,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         name: &str,
         now: DateTime<Utc>,
         include_hidden: bool,
+        id: Option<uuid::Uuid>,
     ) -> Result<CrmContact, CrmError> {
         let normalized_email = email.map(str::to_ascii_lowercase);
 
@@ -1501,6 +1541,10 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
 
         if !Self::team_exists(&mut tx, team_id).await? {
             return Err(CrmError::CrmDisabledForTeam);
+        }
+
+        if let Some(id) = id {
+            Self::lock_team_domain(&mut tx, team_id, &format!("create-contact:{id}")).await?;
         }
 
         // Scope + authorize on the company row. FOR UPDATE serializes
@@ -1529,6 +1573,16 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             return Err(CrmError::CompanyNotFoundForTeam);
         };
 
+        if let Some(id) = id
+            && let Some(contact) =
+                Self::read_contact(&mut *tx, team_id, &id, include_hidden).await?
+        {
+            if contact.company_id == Some(*company_id) {
+                return Ok(contact);
+            }
+            return Err(CrmError::ContactAlreadyExistsForCompany);
+        }
+
         // New contacts inherit the company's `hidden` (matches
         // populate). `manually_created = TRUE` shields the row from the
         // depopulate orphan cleanup — it has no sources by
@@ -1538,8 +1592,8 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         let row = sqlx::query!(
             r#"
             INSERT INTO crm_contacts
-                (company_id, email, name, first_interaction, last_interaction, hidden, manually_created, team_id)
-            VALUES ($1, $2, $3, $4, $4, $5, TRUE, $6)
+                (company_id, email, name, first_interaction, last_interaction, hidden, manually_created, team_id, id)
+            VALUES ($1, $2, $3, $4, $4, $5, TRUE, $6, COALESCE($7, gen_random_uuid()))
             ON CONFLICT (company_id, email) DO NOTHING
             RETURNING id
             "#,
@@ -1549,6 +1603,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             now,
             company.hidden,
             team_id,
+            id,
         )
         .fetch_optional(&mut *tx)
         .await

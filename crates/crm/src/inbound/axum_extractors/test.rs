@@ -391,20 +391,22 @@ impl CrmService for FakeCrmService {
         panic!("unexpected get_team_id_for_user call")
     }
 
-    async fn create_company(
+    async fn create_company_with_request_id(
         &self,
         _access: &CrmTeamReceipt<MemberTeamRole>,
         _name: &str,
         _domain: Option<&str>,
+        _id: Option<uuid::Uuid>,
     ) -> Result<CrmCompanyWithContacts, CrmError> {
         panic!("unexpected create_company call")
     }
 
-    async fn create_contact(
+    async fn create_contact_with_request_id(
         &self,
         _access: &CrmCompanyReceipt<ViewAccessLevel>,
         _name: &str,
         _email: Option<&str>,
+        _id: Option<uuid::Uuid>,
     ) -> Result<CrmContact, CrmError> {
         panic!("unexpected create_contact call")
     }
@@ -619,11 +621,12 @@ impl CrmService for FakeCrmService {
         panic!("unexpected update_team_settings call")
     }
 
-    async fn create_team_contact(
+    async fn create_team_contact_with_request_id(
         &self,
         _access: &CrmTeamReceipt<MemberTeamRole>,
         _name: &str,
         _email: Option<&str>,
+        _id: Option<uuid::Uuid>,
     ) -> Result<CrmContact, CrmError> {
         panic!("unexpected create_team_contact call")
     }
