@@ -217,6 +217,9 @@ export function lastDeployed(deployed: Run | null, runs: Run[]): Run | null {
   );
 }
 
+/** The jobs of `run`'s latest attempt, of `jobs` from all its attempts. */
+const ofLatestAttempt = (run: Run, jobs: Job[]) => jobs.filter((job) => (job.run_attempt ?? 1) === (run.run_attempt ?? 1));
+
 /** The latest attempt of each of a run's jobs, in the order the run started them. */
 export function latestAttempts(jobs: Job[]): Job[] {
   const latest = new Map<string, Job>();
@@ -321,8 +324,8 @@ export async function assess({
     const jobs = await Promise.all(batch.map((run) => (needsJobs(run) ? jobsOf(run) : Promise.resolve([]))));
     for (const [index, run] of batch.entries()) {
       if (run.status === 'completed') {
-        if (run.conclusion === 'cancelled' && jobs[index].length === 0) {
-          // Replaced while it waited.
+        if (run.conclusion === 'cancelled' && ofLatestAttempt(run, jobs[index]).length === 0) {
+          // Replaced while it waited, also when started again by hand.
           continue;
         }
         ended = endedProblem(run, jobs[index]);
@@ -330,7 +333,8 @@ export async function assess({
       }
       if (STARTED.has(run.status)) {
         deploying ??= run;
-        const waited = longestWait(jobs[index], now);
+        // Jobs of an earlier attempt waited for an earlier run of it.
+        const waited = longestWait(ofLatestAttempt(run, jobs[index]), now);
         if (waited && waited.minutes >= RUNNER_WAIT_MINUTES) {
           problems.push({ kind: 'waiting', run, job: waited });
         }

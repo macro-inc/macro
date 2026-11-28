@@ -183,6 +183,33 @@ describe('assess', () => {
     assert.deepEqual(result, { problems: [], deployed: DEPLOYED });
   });
 
+  test('reads past a run started again by hand that was replaced before it started a job', async () => {
+    const again: Run = { ...REPLACED[0], run_attempt: 2 };
+    const failed = job(1, 'Build Web App / Build', { conclusion: 'failure', steps: [{ name: 'Build', conclusion: 'failure' }] });
+    const result = await health([again, DEPLOYED], new Map([[again.id, [failed]]]), '2026-11-26T00:10:00Z');
+    assert.deepEqual(result, { problems: [], deployed: DEPLOYED });
+  });
+
+  test('a run started again by hand counts only the runner waits of its new attempt', async () => {
+    const going: Run = { ...STUCK, run_attempt: 2 };
+    const waited = job(1, 'Deploy Cloud Storage Services / Run Database Migrations', {
+      created_at: '2026-11-25T21:53:00Z',
+      started_at: '2026-11-25T23:03:00Z',
+      completed_at: '2026-11-25T23:10:00Z',
+    });
+    const failed = job(2, 'Build Web App / Build', { conclusion: 'failure', completed_at: '2026-11-25T23:20:00Z' });
+    const rerun = job(3, 'Build Web App / Build', {
+      run_attempt: 2,
+      status: 'in_progress',
+      conclusion: null,
+      created_at: '2026-11-26T00:00:00Z',
+      started_at: '2026-11-26T00:00:20Z',
+      completed_at: null,
+    });
+    const result = await health([going, DEPLOYED], new Map([[going.id, [waited, failed, rerun]]]), '2026-11-26T00:10:00Z');
+    assert.deepEqual(result, { problems: [], deployed: DEPLOYED });
+  });
+
   test('reads past pushes replaced while they waited: they never started a job', async () => {
     const result = await health([...REPLACED, DEPLOYED], new Map(), '2026-11-25T23:30:00Z');
     assert.deepEqual(result.problems, []);
