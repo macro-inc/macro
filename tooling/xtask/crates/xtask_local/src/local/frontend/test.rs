@@ -191,17 +191,22 @@ fn bots_publish_keeps_the_current_bundle_when_staging_is_incomplete() {
     .unwrap();
     std::fs::write(next.join("index.html"), "new document").unwrap();
 
-    assert!(publish_bots_bundle(root.path(), &next).is_err());
+    assert!(publish_bots_bundle(root.path(), &next, Some(Path::new("bundle-old"))).is_err());
     assert_eq!(
         std::fs::read_to_string(root.path().join("current/index.html")).unwrap(),
         "old document"
     );
 
     std::fs::write(next.join("entry.js"), "").unwrap();
-    publish_bots_bundle(root.path(), &next).unwrap();
+    publish_bots_bundle(root.path(), &next, Some(Path::new("bundle-old"))).unwrap();
     assert_eq!(
         std::fs::read_to_string(root.path().join("current/index.html")).unwrap(),
         "new document"
+    );
+
+    assert_eq!(
+        std::fs::read_to_string(root.path().join("current/.previous/index.html")).unwrap(),
+        "old document"
     );
 
     let removed = root.path().join("bundle-retired");

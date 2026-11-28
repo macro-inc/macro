@@ -472,10 +472,27 @@ const BOTS_STATIC: &str = r#"    redir /bots "/bots/?{query}" 308
     handle_path /bots/* {
         @read method GET HEAD
         handle @read {
-            root * /srv/bots/current
             @doc path_regexp (?i)^/(|fleet/?|passwords/?|billing/?|sign-in/?|teams/[^/]+/bots/[^/]+/(overview|activity(/[^/]+)?|email|access)/?)$
-            rewrite @doc /index.html
-            file_server
+            handle @doc {
+                root * /srv/bots/current
+                rewrite * /index.html
+                file_server
+            }
+            handle /assets/* {
+                @currentAsset file {
+                    root /srv/bots/current
+                    try_files {path}
+                }
+                handle @currentAsset {
+                    root * /srv/bots/current
+                    file_server
+                }
+                handle {
+                    root * /srv/bots/current/.previous
+                    file_server
+                }
+            }
+            respond 404
         }
         respond 405
     }

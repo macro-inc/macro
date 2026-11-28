@@ -602,7 +602,10 @@ fn bots_routes_only_mount_when_requested() {
     assert!(native.contains("handle_path /bots/*"));
     assert!(native.contains("root * /srv/bots/current"));
     assert!(native.contains("@read method GET HEAD"));
-    assert!(native.contains("rewrite @doc /index.html"));
+    assert!(native.contains("handle @doc"));
+    assert!(native.contains("rewrite * /index.html"));
+    assert!(native.contains("handle /assets/*"));
+    assert!(native.contains("root * /srv/bots/current/.previous"));
     assert!(native.contains("handle_path /auth/*"));
     let backend_only = caddyfile(&test_instance(), Mode::Local, false, false);
     assert!(!backend_only.contains("handle_path /bots/*"));

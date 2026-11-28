@@ -193,7 +193,7 @@ pub fn build_bots(stage: &Stage, instance: &Instance) -> Result<()> {
     )?;
     stage.run_step("Publishing Bots frontend", || {
         let previous = std::fs::read_link(root.join("current")).ok();
-        publish_bots_bundle(&root, staged.path())?;
+        publish_bots_bundle(&root, staged.path(), previous.as_deref())?;
         let current = staged.keep();
 
         // Retain the previous generation for inspection or rollback.
@@ -219,7 +219,7 @@ fn bots_build_command(out_dir: &Path) -> Command {
     cmd
 }
 
-fn publish_bots_bundle(root: &Path, staged: &Path) -> Result<()> {
+fn publish_bots_bundle(root: &Path, staged: &Path, previous: Option<&Path>) -> Result<()> {
     let manifest: serde_json::Value =
         serde_json::from_reader(File::open(staged.join(".vite/manifest.json"))?)?;
     let asset = manifest["index.html"]["file"]
@@ -230,6 +230,10 @@ fn publish_bots_bundle(root: &Path, staged: &Path) -> Result<()> {
     }
 
     let name = staged.file_name().context("Bots bundle has no name")?;
+    if let Some(previous) = previous.and_then(Path::file_name) {
+        // The activation flips the document and its previous asset fallback together.
+        std::os::unix::fs::symlink(Path::new("..").join(previous), staged.join(".previous"))?;
+    }
     let next = staged.join(".activate");
     std::os::unix::fs::symlink(name, &next)?;
     std::fs::rename(next, root.join("current")).context("switching Bots bundle")
