@@ -308,7 +308,8 @@ impl MacroEntrypoint {
                 let otel_layer = otel_layer_with_error_mapping(tracer).with_filter(otel_filter);
 
                 // Build the JSON event format, then wrap it with DatadogFormat
-                // to inject dd.trace_id / dd.span_id for trace-log correlation.
+                // to inject dd.trace_id / dd.span_id (and the W3C otel.* IDs) for
+                // trace-log correlation.
                 let json_format = tracing_subscriber::fmt::format::Format::default()
                     .json()
                     .with_current_span(true)

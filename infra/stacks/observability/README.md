@@ -196,6 +196,19 @@ other sender together. Only `local-telemetry`'s run events reach Loki. The
 (`nixos/grafana-provisioning/local-dashboard.nix`, not the shared report spec)
 shows sampled traces by machine.
 
+### Logs linked to traces
+
+A Rust service's JSON log line carries Datadog's half of its trace ID
+(`dd.trace_id`, which can't find the trace in Tempo) and the W3C IDs
+(`otel.trace_id`, `otel.span_id`, from `macro_entrypoint`). ECS's FireLens
+parses the line, so those arrive as the record's attributes; CloudWatch,
+through Firehose, and any other sender that passes the whole line send it as
+the body. `nixos/ingest.alloy` (`log_traces`) sets the record's trace and span
+from either, for a record with neither ID of its own, and Grafana's Loki links
+the line to its trace. The link finds the trace only when the service also
+sends its spans to Grafana (dev, see "Dev dual export", and each production
+service once its copy is turned on) and the sampler kept that trace.
+
 ### What ingest removes
 
 Before storage, `nixos/ingest.alloy` removes what people and models wrote from

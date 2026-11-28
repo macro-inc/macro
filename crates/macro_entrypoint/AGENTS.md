@@ -15,6 +15,7 @@ nearly every Rust service's `main.rs` calls.
   `.force_flush()` after invocation spans close, without shutting down warm
   providers. The caller must bound flush time and preserve its operation result.
 - `src/datadog_fmt.rs`: JSON log format injecting `dd.trace_id`/`dd.span_id`
+  (Datadog) and `otel.trace_id`/`otel.span_id` (W3C hex, which Grafana's ingest links)
   for prod/develop trace-log correlation.
 - `src/grafana.rs`: a second, best-effort span exporter that mirrors spans to
   Grafana in `develop` without affecting the primary (Datadog) exporter.

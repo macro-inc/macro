@@ -1,9 +1,10 @@
-//! Datadog trace-log correlation for JSON logs.
+//! Trace-log correlation for JSON logs.
 //!
 //! Wraps a [`FormatEvent`] to inject `dd.trace_id` and `dd.span_id` into each
-//! JSON log line so that Datadog APM can correlate logs with distributed traces.
+//! JSON log line so that Datadog APM can correlate logs with distributed traces,
+//! and `otel.trace_id` and `otel.span_id`, the W3C IDs, for Grafana.
 
-use opentelemetry::trace::TraceContextExt as _;
+use opentelemetry::trace::{SpanContext, TraceContextExt as _};
 use tracing::Subscriber;
 use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 use tracing_subscriber::{
@@ -11,11 +12,16 @@ use tracing_subscriber::{
     registry::LookupSpan,
 };
 
-/// Wraps an inner [`FormatEvent`] formatter to inject `dd.trace_id` and
-/// `dd.span_id` into each JSON log line.
+#[cfg(test)]
+mod test;
+
+/// Wraps an inner [`FormatEvent`] formatter to inject `dd.trace_id`,
+/// `dd.span_id`, `otel.trace_id` and `otel.span_id` into each JSON log line.
 ///
 /// Datadog expects trace IDs as the lower 64 bits of the 128-bit OpenTelemetry
-/// trace ID, represented as a decimal string.
+/// trace ID, represented as a decimal string. That half can't find the trace
+/// anywhere else, so the line also carries the IDs as W3C hex, which the
+/// observability stack's ingest sets as the log record's trace and span.
 pub(crate) struct DatadogFormat<F> {
     pub(crate) inner: F,
 }
@@ -54,13 +60,16 @@ where
 }
 
 /// Read the OpenTelemetry span context from the current [`tracing::Span`] and
-/// insert `dd.trace_id` / `dd.span_id` as decimal strings.
+/// insert its trace fields.
 fn inject_dd_trace_context(obj: &mut serde_json::Map<String, serde_json::Value>) {
     let span = tracing::Span::current();
     let cx = span.context();
-    let otel_span = cx.span();
-    let sc = otel_span.span_context();
+    insert_trace_fields(obj, cx.span().span_context());
+}
 
+/// Insert `dd.trace_id` / `dd.span_id` as decimal strings and
+/// `otel.trace_id` / `otel.span_id` as lowercase hex.
+fn insert_trace_fields(obj: &mut serde_json::Map<String, serde_json::Value>, sc: &SpanContext) {
     if !sc.is_valid() {
         return;
     }
@@ -81,5 +90,13 @@ fn inject_dd_trace_context(obj: &mut serde_json::Map<String, serde_json::Value>)
     obj.insert(
         "dd.span_id".into(),
         serde_json::Value::String(dd_span_id.to_string()),
+    );
+    obj.insert(
+        "otel.trace_id".into(),
+        serde_json::Value::String(sc.trace_id().to_string()),
+    );
+    obj.insert(
+        "otel.span_id".into(),
+        serde_json::Value::String(sc.span_id().to_string()),
     );
 }
