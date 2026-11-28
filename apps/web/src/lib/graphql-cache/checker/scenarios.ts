@@ -292,7 +292,7 @@ export const SCRIPTS: ScriptedScenario[] = [
       { kind: 'hide', page: 'tab3' },
       { kind: 'freeze', page: 'tab3' },
       { kind: 'close', page: 'tab1' },
-      { waitMs: 15_000 },
+      { waitMs: 35_000 },
       { kind: 'open-newer' },
       { waitMs: 30_000 },
       { kind: 'thaw', page: 'tab3' },

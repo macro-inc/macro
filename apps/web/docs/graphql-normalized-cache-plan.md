@@ -632,9 +632,12 @@ draining it, answers:
   answer first), until the head settles or its lease ends: a parked build
   holds no lock, and a newer build would open the database without asking.
   A hidden tab may be frozen and never open that engine, so one still loading
-  its assets after `HIDDEN_SETTLEMENT_STARTUP_TIMEOUT_MS` (10 s) is given up
-  for another tab, and a tab shown before then starts its own; a newer build
-  that opens within that window takes the free lock. On the page, a head claimed before
+  its assets after `HIDDEN_SETTLEMENT_STARTUP_TIMEOUT_MS` (30 s) is given up
+  for another tab when there is one, and another tab shown before then starts
+  its own (handing over instead if that one would wipe a database a newer
+  build waits for). Nothing tells a frozen page from a slow one: a newer build
+  that opens within that window takes the free lock, and a hidden tab slower
+  than it is given up. On the page, a head claimed before
   retirement settles through the host that claimed it
   (`createRetirableCacheHost` pins it until the head settles or its lease
   ends), and a retired host refuses any other settlement
