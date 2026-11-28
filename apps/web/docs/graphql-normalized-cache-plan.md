@@ -2193,6 +2193,17 @@ specifications, release, reset and disposal invalidate retention. Older
 installed binaries omit the token and keep receiving full requests. Empty record
 selections fetch only the current revision, with no unused fragment.
 
+A live view can name a row shape (`row: 'channel-list'`): the engine then
+retains, diffs and sends that row instead of the selected record, so a patch
+names a row field, and the page keeps the rows as immutable values rather than
+store rows. The page asks for a row only while the host says it shapes rows
+(`liveQueryRows`), and the host marks each reply to such a request (`row`),
+which is what the reader trusts. Native hosts send these requests through
+`graphql_cache_entity_filter_rows`; on a binary without that command the host
+reads selected records through `graphql_cache_entity_filter` for the rest of
+the session and the page shapes them with the TypeScript port, which a shared
+corpus pins to the engine's rows.
+
 `graphql_cache.ipc.request` is a `perf`-class span (`sampling: 'perf'`) that
 records command and outcome, plus `graphql_cache.ipc.page_stall_ms` when a page
 stall extended its deadline. The webview does not re-encode read

@@ -74,6 +74,11 @@ identifies one retained specification, not the caller's reusable view id.
 the engine owner serializes token lookup and the read. Replacement, release,
 eviction and reset make it miss. A miss requires full registration and never reuses another specification.
 
+A specification can name a row shape (`LiveQuerySpec.row`). The view then
+retains, diffs and sends the shaped row: shaping runs before the diff, so a
+patch names a row field. The shape is part of the specification, so a request
+with another shape (or none) is a new specification and the view resets.
+
 ## Checks
 
 - Person transport models derive their schemas in `src/people/schema.rs`; the Rust test detects source drift. From `apps/web`, run `bun run gen-cache-people-schema --rust` after changing a model (or `--check --rust` to verify). The `schema` feature is generation-only, not required at runtime.
