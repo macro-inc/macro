@@ -34,14 +34,26 @@ export type NetworkRevalidation = {
 };
 
 const CLIENT_OWNERS = new WeakMap<Client, Set<NetworkRevalidation>>();
-const REVALIDATED = new WeakSet<OperationResult>();
+// Each committed result the exchange read again for: whether every read succeeded.
+const REVALIDATED = new WeakMap<OperationResult, boolean>();
 
 /**
  * Whether the exchange read the mounted queries again before this mutation
  * result settled; a caller that would read them itself then skips that read.
  */
 export function networkRevalidated(result: OperationResult): boolean {
-  return REVALIDATED.has(result);
+  return REVALIDATED.get(result) === true;
+}
+
+/**
+ * Whether the exchange read the mounted queries again for this committed
+ * result and a read failed or timed out. The lists it was to read may be stale
+ * even when a durable queue committed the write.
+ */
+export function networkRevalidationIncomplete(
+  result: OperationResult
+): boolean {
+  return REVALIDATED.get(result) === false;
 }
 
 /**
@@ -290,7 +302,7 @@ export function networkRevalidationExchange(
             return fromValue(result);
           async function refreshBeforeSettling() {
             // A caller may skip its own read only if every one succeeded.
-            if (await revalidate()) REVALIDATED.add(result);
+            REVALIDATED.set(result, await revalidate());
             return result;
           }
           return fromPromise(refreshBeforeSettling());

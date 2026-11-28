@@ -1,4 +1,7 @@
-import { networkRevalidated } from '@graphql-cache/exchange/network-revalidation-exchange';
+import {
+  networkRevalidated,
+  networkRevalidationIncomplete,
+} from '@graphql-cache/exchange/network-revalidation-exchange';
 import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
 import type { Client, OperationResult } from '@urql/core';
 import { revalidateNotificationReaders } from '../../queries/notification/revalidation';
@@ -86,11 +89,14 @@ export async function executeGraphqlUpdateNotifications(
     .toPromise();
 
   // Without the normalized exchange there is no durable revalidation runner;
-  // the client's own exchange may already have read the lists again.
+  // the client's own exchange may already have read the lists again. With a
+  // disabled host the queue commits the write but leaves the reads to that
+  // exchange, so a read it could not finish is done here.
   if (
     !result.error &&
-    optimisticMutationDispositionOf(result) === undefined &&
-    !networkRevalidated(result)
+    !networkRevalidated(result) &&
+    (optimisticMutationDispositionOf(result) === undefined ||
+      networkRevalidationIncomplete(result))
   ) {
     await revalidateChannelLists(client);
   }
