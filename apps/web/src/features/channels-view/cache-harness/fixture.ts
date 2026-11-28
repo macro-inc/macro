@@ -403,7 +403,10 @@ export function createChatFixture(
     const ids = page.ids.slice(page.offset, page.offset + page.limit);
     const next = page.offset + page.limit;
     let nextCursor: string | null = null;
-    if (next < page.ids.length) {
+    // As the server pages (`models_pagination`'s cursor): a full page gets a
+    // cursor even when no row follows, so a client that reads to the end
+    // asks for one more, empty page.
+    if (ids.length >= page.limit) {
       nextCursor = `cursor-${cursors.size + 1}`;
       cursors.set(nextCursor, { ...page, offset: next });
     }
