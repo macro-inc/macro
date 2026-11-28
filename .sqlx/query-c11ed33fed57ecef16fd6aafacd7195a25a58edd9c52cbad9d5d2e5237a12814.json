@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT cp.user_id\nFROM comms_channel_participants cp\nWHERE cp.channel_id = $1 AND cp.left_at IS NULL AND cp.user_id > $2\nORDER BY cp.user_id\nLIMIT 500",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c11ed33fed57ecef16fd6aafacd7195a25a58edd9c52cbad9d5d2e5237a12814"
+}

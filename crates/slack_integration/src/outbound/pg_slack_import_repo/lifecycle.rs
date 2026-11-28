@@ -311,17 +311,21 @@ impl ExecutionRepo for PgSlackImportRepo {
         let mut tx = self.pool.begin().await.map_err(internal)?;
         fence(&mut tx, lease).await?;
         if status == "completed" {
-            let complete = sqlx::query_scalar!(
-                r#"SELECT checkpoint_part = part_count AND checkpoint_record = 0 AS "complete!"
-                   FROM slack_import_conversation WHERE job_id = $1 AND slack_channel_id = $2"#,
+            let completed = sqlx::query!(
+                r#"UPDATE slack_import_conversation
+                   SET channel_updates_queued = channel_id IS NOT NULL
+                   WHERE job_id = $1 AND slack_channel_id = $2
+                     AND checkpoint_part = part_count AND checkpoint_record = 0
+                   RETURNING channel_id"#,
                 Uuid::from(lease.event.job_id),
                 lease.event.slack_channel_id.as_str(),
             )
-            .fetch_one(&mut *tx)
+            .fetch_optional(&mut *tx)
             .await
-            .map_err(internal)?;
-            if !complete {
-                return Err(ImportError::Conflict.into());
+            .map_err(internal)?
+            .ok_or(ImportError::Conflict)?;
+            if let Some(channel) = completed.channel_id {
+                channel_updates::enqueue(&mut tx, channel).await?;
             }
         }
         terminal(&mut tx, &lease.event, status, error).await?;

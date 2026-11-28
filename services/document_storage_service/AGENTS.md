@@ -34,6 +34,8 @@ threads, pins, recents, notifications, folders, activity.
   notification/withdrawal/realtime ports. Policy lives in `crates/access_requests`.
   It also builds the attention feeds (Home's work feed and the notifications
   inbox) from one set of `attention_feed` adapters, triggers and viewer lookup.
+- `src/imported_channel_updates.rs`: drains committed archive changes through
+  the existing Soup fanout with current channel membership.
 - `src/external_chat.rs`: composes `ExternalChatService<WhatsAppProvider>`,
   mounts `/external-chats` (`crates/external_chat`) and `/whatsapp`
   (`crates/whatsapp_linked`) and runs the notification/import worker (LISTEN

@@ -32,7 +32,7 @@ use slack_integration::{
     },
     outbound::pg_slack_import_repo::{
         batches::{self, BatchStart, WriteContext},
-        references,
+        channel_updates, references,
     },
 };
 use sqlx::PgPool;
@@ -204,6 +204,7 @@ impl<A: EntityAccessService> HistoricalSink for ChannelImportSink<A> {
             channels_pg::advance_historical_activity(fenced.transaction(), channel, activity)
                 .await
                 .map_err(retry)?;
+            channel_updates::enqueue(fenced.transaction(), channel).await?;
         }
         let counters = fenced.finish(batch.skipped, reactions).await?;
         tx.commit().await.map_err(retry)?;
@@ -341,6 +342,7 @@ impl<A: EntityAccessService> ImportTargets for ChannelImportSink<A> {
             .await?;
         validate_pair(plan, &facts)?;
         batches::write_context(&mut tx, lease).await?;
+        channel_updates::enqueue(&mut tx, plan.channel_id).await?;
         tx.commit().await.map_err(retry)?;
         Ok((facts, true))
     }
@@ -377,6 +379,7 @@ impl<A: EntityAccessService> ImportTargets for ChannelImportSink<A> {
             .map_err(retry)?;
         }
         batches::bind_target(&mut tx, lease, plan.channel_id).await?;
+        channel_updates::enqueue(&mut tx, plan.channel_id).await?;
         batches::record_warnings(&mut tx, lease, warnings).await?;
         tx.commit().await.map_err(retry)
     }

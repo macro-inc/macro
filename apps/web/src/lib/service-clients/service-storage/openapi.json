@@ -40007,6 +40007,10 @@
             "format": "uuid",
             "description": "Authorized target only; absent for inaccessible reused targets."
           },
+          "channelUpdatesQueued": {
+            "type": ["boolean", "null"],
+            "description": "Whether this worker records committed channel changes for Soup delivery.\nOlder progress responses omit it."
+          },
           "counters": {
             "$ref": "#/components/schemas/ImportCounters",
             "description": "Durably committed record counts."

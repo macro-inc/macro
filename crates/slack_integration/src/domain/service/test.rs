@@ -441,6 +441,7 @@ async fn receipts_revalidate_disclosure_without_hiding_selected_work_or_failing_
         archived: true,
         status: ConversationStatus::Completed,
         channel_id: Some(readable),
+        channel_updates_queued: None,
         part_count: Some(0),
         verified_parts: 0,
         counters: ImportCounters::default(),

@@ -15,6 +15,8 @@ use crate::domain::{models::*, ports::PortResult};
 
 /// Transaction-scoped import mappings, checkpoints and dirty-search persistence.
 pub mod batches;
+/// Committed channel changes waiting for realtime Soup publication.
+pub mod channel_updates;
 mod lifecycle;
 /// Job-scoped body-reference templates and atomic reconciliation checkpoints.
 pub mod references;
@@ -231,7 +233,7 @@ impl PgSlackImportRepo {
         .collect();
         let conversations = sqlx::query!(
             r#"SELECT c.job_id, c.slack_channel_id, c.name, c.kind, c.archived, c.status, c.channel_id, c.part_count,
-                      c.processed, c.imported, c.duplicates, c.skipped, c.reactions,
+                      c.channel_updates_queued, c.processed, c.imported, c.duplicates, c.skipped, c.reactions,
                       c.search_state, c.search_receipt_id, c.last_error, c.warnings,
                       (SELECT count(*) FROM slack_import_upload u
                        WHERE u.job_id = c.job_id AND u.slack_channel_id = c.slack_channel_id
@@ -277,6 +279,7 @@ impl PgSlackImportRepo {
                     archived: row.archived,
                     status: parse_enum(&row.status)?,
                     channel_id,
+                    channel_updates_queued: Some(row.channel_updates_queued),
                     part_count: row.part_count.map(|n| n as u32),
                     verified_parts: row.verified_parts.try_into().map_err(internal)?,
                     counters: ImportCounters {

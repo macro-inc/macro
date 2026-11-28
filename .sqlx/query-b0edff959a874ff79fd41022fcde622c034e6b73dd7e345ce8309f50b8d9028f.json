@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH due AS (\n            SELECT channel_id\n            FROM slack_import_channel_updates\n            WHERE next_attempt_at <= $1\n            ORDER BY next_attempt_at, channel_id\n            LIMIT 16\n            FOR UPDATE SKIP LOCKED\n         )\n         UPDATE slack_import_channel_updates queued\n         SET next_attempt_at = $1 + INTERVAL '1 minute'\n         FROM due\n         WHERE queued.channel_id = due.channel_id\n         RETURNING queued.channel_id, queued.revision",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "revision",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "b0edff959a874ff79fd41022fcde622c034e6b73dd7e345ce8309f50b8d9028f"
+}

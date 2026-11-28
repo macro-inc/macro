@@ -59,5 +59,24 @@ async fn the_current_roster_sees_a_member_leave_that_the_cached_roster_has_not(
         ),
         cached[1..].to_vec()
     );
+
+    sqlx::query!(
+        "INSERT INTO comms_channel_participants (channel_id, user_id, role)
+         SELECT $1, 'macro|roster-' || n || '@example.com', 'member'
+         FROM generate_series(1, 503) n",
+        CHANNEL_ID,
+    )
+    .execute(&pool)
+    .await?;
+    let roster = sorted(
+        service
+            .get_current_channel_users(&CHANNEL_ID.to_string())
+            .await?,
+    );
+    assert_eq!(roster.len(), 505);
+    assert!(!roster.contains(&leaver));
+    for n in 1..=503 {
+        assert!(roster.contains(&format!("macro|roster-{n}@example.com")));
+    }
     Ok(())
 }

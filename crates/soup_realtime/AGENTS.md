@@ -64,6 +64,8 @@ tasks itself.
 - Property definition/option lifecycle events are intentionally ignored; they
   don't identify every affected entity.
 - Channel threads use their containing channel as the access source.
+- Archive imports publish the channel for its current uncached roster through
+  the same recipient-targeted Soup stream.
 - Recipients come from current access when the event is processed, so an
   entity hard-deleted before then reaches no one by lookup. `channel.deleted`
   names the members it had (`participant_user_ids`), and its `Deleted` patch

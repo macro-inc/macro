@@ -2443,6 +2443,15 @@ async fn run_server() -> anyhow::Result<()> {
         }
     });
 
+    consumer_tracker.spawn(crate::imported_channel_updates::run(
+        db.clone(),
+        SoupRealtimeServiceImpl::new(
+            EntityAccessExpander::new(entity_access_service.as_ref().clone()),
+            KafkaSoupRealtimePublisher::new(macro_event_broker.clone()),
+        ),
+        consumer_cancellation_token.clone(),
+    ));
+
     let favorites_mutation_service = Arc::new(FavoritesMutationServiceImpl::new(
         favorites_service.clone(),
         entity_access_service.clone(),

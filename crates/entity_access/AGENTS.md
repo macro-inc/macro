@@ -84,6 +84,8 @@ the entity-access domain service.
   `get_entity_users`. Channel rosters there are cached for 10 s per process
   (`get_channel_users`); `get_current_channel_users` reads one now, for a
   caller reacting to a membership change (`soup_realtime`).
+  Fresh rosters walk the active-membership index in 500-user pages inside
+  one read-only snapshot so imports and membership changes reach every member.
   `tests/current_channel_users.rs` runs with that cache on.
 - `get_user_source_ids` is cached for 10 s per process and concurrent misses
   for one user share one query through `single_flight`. A failure then arrives

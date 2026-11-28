@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO slack_import_channel_updates (channel_id, revision, next_attempt_at)\n         VALUES ($1, $2, NOW())\n         ON CONFLICT (channel_id) DO UPDATE\n         SET revision = EXCLUDED.revision,\n             next_attempt_at = LEAST(slack_import_channel_updates.next_attempt_at, NOW() + INTERVAL '2 seconds')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7cc2f99114bb8094debc1274b201aaf12a5b94ed9aeff2f32648dc4aace1919a"
+}

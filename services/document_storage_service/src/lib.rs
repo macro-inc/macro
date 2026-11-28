@@ -6,6 +6,7 @@ mod api;
 mod config;
 mod db_pools;
 mod external_chat;
+mod imported_channel_updates;
 pub mod model;
 mod outbound;
 mod passwords_cleanup;
