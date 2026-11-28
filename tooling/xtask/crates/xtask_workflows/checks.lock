@@ -164,6 +164,7 @@ check	pr-ci.yml	web-app/generated-code	Web App / Generated Code Check
 check	pr-ci.yml	web-app/biome-check	Web App / Biome Check
 check	pr-ci.yml	web-app/test	Web App / Test (${{ matrix.shard }}/6)
 check	pr-ci.yml	web-app/functional	Web App / Functional Tests
+check	pr-ci.yml	web-app/cache-harness	Web App / Cache Harness
 check	pr-ci.yml	web-app/browser	Web App / Browser Tests
 check	pr-ci.yml	web-app/cycles	Web App / Cycles Import Check
 check	pr-ci.yml	web-app/build	Web App / Build
@@ -236,6 +237,7 @@ check	web-app-check-main.yml	generated-code	Generated Code Check
 check	web-app-check-main.yml	biome-check	Biome Check
 check	web-app-check-main.yml	test	Test (${{ matrix.shard }}/6)
 check	web-app-check-main.yml	functional	Functional Tests
+check	web-app-check-main.yml	cache-harness	Cache Harness
 check	web-app-check-main.yml	browser	Browser Tests
 check	web-app-check-main.yml	cycles	Cycles Import Check
 check	web-app-check-main.yml	build	Build

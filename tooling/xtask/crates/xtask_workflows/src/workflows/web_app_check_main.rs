@@ -67,6 +67,7 @@ const GENERATED_CODE: JobHandle<()> = JobHandle::new("generated-code", ());
 const BIOME_CHECK: JobHandle<()> = JobHandle::new("biome-check", ());
 const TEST: JobHandle<()> = JobHandle::new("test", ());
 const FUNCTIONAL: JobHandle<()> = JobHandle::new("functional", ());
+const CACHE_HARNESS: JobHandle<()> = JobHandle::new("cache-harness", ());
 const BROWSER: JobHandle<()> = JobHandle::new("browser", ());
 const CYCLES: JobHandle<()> = JobHandle::new("cycles", ());
 const BUILD: JobHandle<()> = JobHandle::new("build", ());
@@ -124,6 +125,7 @@ pub fn web_app_check_main() -> Workflow {
         .add_job(BIOME_CHECK, biome_check())
         .add_job(TEST, test())
         .add_job(FUNCTIONAL, functional())
+        .add_job(CACHE_HARNESS, cache_harness())
         .add_job(BROWSER, browser())
         .add_job(CYCLES, cycles())
         .add_job(BUILD, build())
@@ -422,6 +424,26 @@ fn functional() -> Job {
         .add_step(steps::start_sccache_server())
         .add_step(build_wasm_for_functional_tests())
         .add_step(run_functional_tests())
+        .add_step(steps::show_sccache_stats())
+        .add_step(steps::teardown_nix())
+}
+
+/// The headless cache harnesses (`apps/web/src/lib/graphql-cache/headless`):
+/// the real cache engine and Chat's sidebar data path in jsdom, counting the
+/// work of each scenario at 3,500 and 7,000 channels against a committed
+/// baseline. Its own job, so a failure in either it or the functional suite
+/// never hides the other's; it needs only the cache engine package.
+fn cache_harness() -> Job {
+    gated_web_job("Cache Harness")
+        .timeout_minutes(15u32)
+        .runs_on(mid_web_runner())
+        .add_step(checkout("Checkout Repo", false))
+        .add_step(steps::mount_web_build_check_cache_volume(true))
+        .add_step(steps::setup_nix_with_seed())
+        .add_step(steps::setup_reqs_web("Setup", false))
+        .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
+        .add_step(steps::start_sccache_server())
+        .add_step(run_cache_harness())
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
 }
@@ -741,6 +763,17 @@ fn build_wasm_for_functional_tests() -> Step<Run> {
     with_pr_wasm_env(
         Step::new("Build wasm packages")
             .run("just build-wasm")
+            .working_directory(xtask_paths::repo_dir!("apps/web")),
+    )
+}
+
+/// `just test-cache-harness` builds the engine first (`build-cache-wasm`,
+/// restored from the package cache when its sources are unchanged), so the
+/// counts are always the engine of this commit.
+fn run_cache_harness() -> Step<Run> {
+    with_wasm_pkg_cache(
+        Step::new("Cache Harness")
+            .run("just test-cache-harness")
             .working_directory(xtask_paths::repo_dir!("apps/web")),
     )
 }

@@ -427,9 +427,40 @@ fn functional_job(yaml: &str) -> &str {
         .find("name: Functional Tests\n")
         .expect("Functional Tests job");
     let end = yaml[start..]
+        .find("name: Cache Harness\n")
+        .map_or(yaml.len(), |offset| start + offset);
+    &yaml[start..end]
+}
+
+fn cache_harness_job(yaml: &str) -> &str {
+    let start = yaml
+        .find("name: Cache Harness\n")
+        .expect("Cache Harness job");
+    let end = yaml[start..]
         .find("name: Browser Tests\n")
         .map_or(yaml.len(), |offset| start + offset);
     &yaml[start..end]
+}
+
+/// The harness compares the engine of the commit under test against its
+/// baseline, so its recipe builds the engine (restored from the package cache
+/// when unchanged) rather than trusting whatever package is on the volume.
+#[test]
+fn cache_harness_job_builds_the_engine_it_measures() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    let job = cache_harness_job(&yaml);
+    assert!(
+        job.contains("run: just test-cache-harness"),
+        "the job runs every headless harness: {job}"
+    );
+    assert!(
+        job.contains(&format!("WASM_PKG_CACHE_DIR: {}", vars::WASM_PKG_CACHE_DIR)),
+        "an unchanged engine is restored, not rebuilt: {job}"
+    );
+    assert!(
+        !job.contains("playwright: 'true'"),
+        "the harness runs no browser: {job}"
+    );
 }
 
 #[test]
