@@ -337,6 +337,8 @@ export class CoordinatorCore {
   private awaitingSettlements = false;
   /** Late in the wait no head is claimed, so each claim gets its full wait. */
   private claimsClosed = false;
+  /** A hidden owner kept its engine for a claimed head; it drains once settled. */
+  private hiddenDrainDeferred = false;
   private readonly queuedRequests: QueuedRequest[] = [];
   private readonly inFlight = new Map<RouteId, InFlightRequest>();
   private readonly cacheChanges = new CacheChangeBatch();
@@ -454,6 +456,15 @@ export class CoordinatorCore {
       return [this.rejectUnavailable(tabId, request.id, this.outage.reason)];
     }
 
+    // Late in the wait an enqueue could claim a head that has no time left to
+    // settle. Refused as superseded, it never reaches an engine and the page
+    // sends it as it would with no cache, rather than waiting to time out.
+    if (
+      this.awaitingSettlements &&
+      this.claimsClosed &&
+      request.kind === 'enqueue-optimistic-mutation'
+    )
+      return [this.rejectSuperseded(tabId, request.id, SUPERSEDED_REASON)];
     const queued = { tabId, request, queuedAt };
     // A head claimed now would be sent with the engine about to go. The
     // handover refuses the claim as superseded.
@@ -754,7 +765,7 @@ export class CoordinatorCore {
         request.request.transactionId,
         request.request.leaseGeneration
       );
-    actions.push(...this.handOverIfSettled());
+    actions.push(...this.afterSettlement());
     return actions;
   }
 
@@ -764,7 +775,22 @@ export class CoordinatorCore {
     leaseGeneration: string | undefined
   ): CoordinatorAction[] {
     this.forgetClaim(transactionId, leaseGeneration);
-    return this.handOverIfSettled();
+    return this.afterSettlement();
+  }
+
+  /** Hands over, or drains a hidden owner that stayed only for these heads. */
+  private afterSettlement(): CoordinatorAction[] {
+    const handover = this.handOverIfSettled();
+    const state = this.stateValue;
+    if (
+      handover.length > 0 ||
+      !this.hiddenDrainDeferred ||
+      state.kind !== 'active' ||
+      this.awaitingSettlements ||
+      this.unsettled()
+    )
+      return handover;
+    return this.drainHiddenOwner(state.ownerEpoch);
   }
 
   /** From here on the wait claims no head: what it holds runs to the limit. */
@@ -978,16 +1004,17 @@ export class CoordinatorCore {
     if (this.claims.size > 0) return true;
     for (const { request } of this.inFlight.values())
       if (mayClaim(request)) return true;
-    return false;
+    // A settlement handed over already must still be written, even when the
+    // page that sent it has gone.
+    return this.queuedRequests.some(({ request }) =>
+      isMutationSettlement(request)
+    );
   }
 
   /** While a newer build waits, no page claims a head the wait does not see. */
   private holdsForNewerBuild(request: CacheRequest): boolean {
     if (!this.awaitingSettlements) return false;
-    return (
-      request.kind === 'claim-next-mutation' ||
-      (this.claimsClosed && request.kind === 'enqueue-optimistic-mutation')
-    );
+    return request.kind === 'claim-next-mutation';
   }
 
   /** Hands the database to the newer build once nothing claimed is unsettled. */
@@ -1343,11 +1370,21 @@ export class CoordinatorCore {
     if (
       state.kind !== 'active' ||
       state.ownerEpoch !== ownerEpoch ||
-      this.visibleTabs.has(state.tabId) ||
-      // Its pages' settlements land here; the newer build drains it after.
-      this.awaitingSettlements
+      this.visibleTabs.has(state.tabId)
     )
       return [];
+    // Its pages' settlements land here. With no visible tab to take over,
+    // holding the lock also makes a newer build ask for the database rather
+    // than open it under a head still out. It drains once they have settled,
+    // or the newer build drains it.
+    if (
+      this.awaitingSettlements ||
+      (this.unsettled() && this.chooseCandidate(state.tabId) === undefined)
+    ) {
+      this.hiddenDrainDeferred = true;
+      return [];
+    }
+    this.hiddenDrainDeferred = false;
     this.stateValue = { ...state, kind: 'draining' };
     return [
       {
@@ -1372,19 +1409,12 @@ export class CoordinatorCore {
     const candidates =
       visible.length === 0 &&
       this.awaitingSettlements &&
-      this.settlementsWaiting()
+      this.unsettled()
         ? eligible
         : visible;
     return candidates.find((tabId) => tabId !== avoid) ?? candidates[0];
   }
 
-  /** A claimed head is out, or its settlement waits for an engine. */
-  private settlementsWaiting(): boolean {
-    return (
-      this.unsettled() ||
-      this.queuedRequests.some(({ request }) => isMutationSettlement(request))
-    );
-  }
 
   private route(
     queued: QueuedRequest,

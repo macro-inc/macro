@@ -571,25 +571,71 @@ describe('CoordinatorCore', () => {
           id: 5,
           kind: 'enqueue-optimistic-mutation',
         } as unknown as CacheRequest)
-      ).toEqual([]);
+      ).toEqual([
+        expect.objectContaining({
+          kind: 'reject-request',
+          errorCode: 'cache-superseded',
+        }),
+      ]);
       expect(core.request('tab-b', claimNext(6))).toEqual([]);
-      expect(core.snapshot().queuedRequestCount).toBe(2);
+      expect(core.snapshot().queuedRequestCount).toBe(1);
+    });
+
+    it('keeps a hidden engine while a head is out and no tab is visible', () => {
+      const core = claimed();
+      core.setTabVisibility('tab-a', false);
+      core.setTabVisibility('tab-b', false);
+      // The lock stays held, so a newer build asks for it.
+      expect(core.drainHiddenOwner(1)).toEqual([]);
+      expect(core.state.kind).toBe('active');
+      const settle = action(core.request('tab-b', commit(2)), 'route-request');
+      expect(
+        core.engineResponse(1, settle.routeId, ok({ kind: 'committed' }))
+      ).toContainEqual(
+        expect.objectContaining({ kind: 'drain-owner', ownerEpoch: 1 })
+      );
+    });
+
+    it('keeps waiting for a settlement whose page has gone', () => {
+      const core = new CoordinatorCore('scope');
+      for (const tab of ['tab-a', 'tab-b']) core.registerTab(tab);
+      ready(core, 'tab-a', 1, 'opened-existing');
+      const claim = action(
+        core.request('tab-a', claimNext(1)),
+        'route-request'
+      );
+      core.engineResponse(1, claim.routeId, ok({ transactionId: '7' }));
+      core.supersede();
+      action(core.request('tab-a', commit(2)), 'route-request');
+      // The owner is also the page that claimed the head, and it leaves.
+      expect(core.tabLost('tab-a')).not.toContainEqual(
+        expect.objectContaining({ kind: 'broadcast-cache-superseded' })
+      );
+      const next = core.state as { tabId: string };
+      expect(next.tabId).toBe('tab-b');
+      const routes = ready(core, 'tab-b', 2, 'opened-existing').filter(
+        (route) => route.kind === 'route-request'
+      );
+      expect(routes).toEqual([
+        expect.objectContaining({
+          request: expect.objectContaining({ kind: 'commit-optimistic-write' }),
+        }),
+      ]);
     });
 
     it('starts a hidden engine to write a settlement during the wait', () => {
       const core = new CoordinatorCore('scope');
-      core.registerTab('tab-a');
-      core.registerTab('tab-b');
+      for (const tab of ['tab-a', 'tab-b', 'tab-c']) core.registerTab(tab);
       ready(core, 'tab-a', 1, 'opened-existing');
       const claim = action(
         core.request('tab-b', claimNext(1)),
         'route-request'
       );
       core.engineResponse(1, claim.routeId, ok({ transactionId: '7' }));
-      core.setTabVisibility('tab-a', false);
       core.setTabVisibility('tab-b', false);
-      core.drainHiddenOwner(1);
-      core.engineDrained('tab-a', 1);
+      core.setTabVisibility('tab-c', false);
+      // The owner goes with every other tab hidden, so the database parks.
+      core.tabLost('tab-a');
       expect(core.state.kind).toBe('parked');
       // No tab is visible, yet the claimed head needs an engine of this build.
       expect(core.supersede()).toContainEqual(
