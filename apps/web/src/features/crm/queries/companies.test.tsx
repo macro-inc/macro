@@ -28,6 +28,7 @@ vi.mock('@queries/soup/graphql/active-queries', () => ({
 }));
 
 import {
+  createCompanyImporter,
   useCreateCompanyMutation,
   useCreateContactMutation,
   useEditCompanyDomainMutation,
@@ -167,6 +168,36 @@ it('reads GraphQL lists that can show contacts again after a contact create', as
   expect(where(CONTACTS)).toBe(true);
   expect(where(COMPANIES)).toBe(false);
   expect(where(NO_CRM)).toBe(false);
+});
+
+it('limits the live-cache fallback even when the create returned no usable effects', async () => {
+  creates.company.mockResolvedValue({
+    ...confirmed('company-1'),
+    effectsResolved: false,
+  });
+  cacheHost.mockReturnValue({});
+  const mutations = mount();
+
+  await mutations.company.mutateAsync({ name: 'Acme' });
+
+  expect(refreshedLists(true)(COMPANIES)).toBe(true);
+});
+
+it('refreshes company lists once after a batch of GraphQL creates', async () => {
+  creates.company.mockResolvedValue(confirmed('company-1'));
+  const importer = createCompanyImporter({
+    client,
+    storage,
+  } as unknown as CrmRecordDependencies);
+  const inputs = [{ name: 'First company' }, { name: 'Second company' }];
+
+  await Promise.all(inputs.map((input) => importer.create(input)));
+  expect(creates.company.mock.calls).toEqual(
+    inputs.map((input) => [input, 'batch'])
+  );
+  expect(refreshGraphqlLists).not.toHaveBeenCalled();
+  await importer.refresh();
+  expect(refreshedLists(false)(COMPANIES)).toBe(true);
 });
 
 it('reads GraphQL lists that can show the company again after a rename', async () => {

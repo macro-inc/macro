@@ -11,6 +11,7 @@ import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { Telemetry } from '@macro-inc/observability';
 import { getActiveGraphqlSoupRevalidations } from '@queries/soup/graphql/active-queries';
 import { crmExternalWriteTypes } from '@queries/soup/graphql/external-write-scope';
+import type { CombinedError } from '@urql/core';
 import {
   CreateCrmCompanyDocument,
   type CreateCrmCompanyInput,
@@ -37,6 +38,32 @@ type CrmCreateOutcome =
       listsReadAgain: boolean;
       cacheRevalidates: boolean;
     };
+
+function requireCreatedRecord(
+  record: CreatedRecord | undefined,
+  error: CombinedError | undefined
+): CreatedRecord {
+  // Effects resolve after the write. Preserve the authoritative ID if its
+  // Soup rows could not be hydrated.
+  if (
+    error &&
+    (!record?.recordId ||
+      error.networkError ||
+      error.graphQLErrors.some(
+        (item) => item.path?.[1] !== 'result' || item.path[2] !== 'effects'
+      ))
+  ) {
+    if (error.graphQLErrors.length === 0) throw error;
+    throw new ThrownResultError(
+      error.graphQLErrors.map((item) => ({
+        code: String(item.extensions.code ?? 'UNKNOWN'),
+        message: item.message,
+      }))
+    );
+  }
+  if (!record?.recordId) throw new Error('CRM create returned no record ID');
+  return record;
+}
 
 async function createCrmRecord<
   Data,
@@ -89,28 +116,10 @@ async function createCrmRecord<
     const disposition = optimisticMutationDispositionOf(result);
     if (disposition?.kind === 'queued') return { queued: true };
 
-    const record = result.data && select(result.data);
-    const errors = result.error?.graphQLErrors ?? [];
-    // Effects resolve after the write. Preserve the authoritative ID if its
-    // Soup rows could not be hydrated.
-    if (
-      result.error &&
-      (!record?.recordId ||
-        result.error.networkError ||
-        errors.some(
-          (error) => error.path?.[1] !== 'result' || error.path[2] !== 'effects'
-        ))
-    ) {
-      span.error('CRM create failed');
-      if (errors.length === 0) throw result.error;
-      throw new ThrownResultError(
-        errors.map((error) => ({
-          code: String(error.extensions.code ?? 'UNKNOWN'),
-          message: error.message,
-        }))
-      );
-    }
-    if (!record?.recordId) throw new Error('CRM create returned no record ID');
+    const record = requireCreatedRecord(
+      result.data && select(result.data),
+      result.error
+    );
     const metadata = normalizedCacheResultMetadata(result);
     const queueCommit = queuedMutationCommitOf(result);
     const effectsResolved =
@@ -120,7 +129,7 @@ async function createCrmRecord<
           effect.__typename === 'SoupUpdated' &&
           effect.item.id === record.recordId
       ) &&
-      errors.length === 0 &&
+      !result.error &&
       queueCommit?.cacheEffectsApplied !== false &&
       !(
         metadata?.source === 'live-network' &&

@@ -6,7 +6,6 @@ import { listCanIncludeCrm, listCanIncludeCrmContacts } from './list-refresh';
 export function refreshCrmCreateLists(
   outcome?: {
     cacheRevalidates: boolean;
-    effectsResolved: boolean;
     listsReadAgain: boolean;
   },
   contactsOnly = false
@@ -14,7 +13,6 @@ export function refreshCrmCreateLists(
   if (outcome?.cacheRevalidates || outcome?.listsReadAgain) return;
   return refreshActiveGraphqlSoupQueries({
     where: contactsOnly ? listCanIncludeCrmContacts : listCanIncludeCrm,
-    unmaintainedOnly:
-      outcome?.effectsResolved !== false && getGraphqlCacheHost() !== undefined,
+    unmaintainedOnly: getGraphqlCacheHost() !== undefined,
   });
 }
