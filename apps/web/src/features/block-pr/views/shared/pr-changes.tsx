@@ -9,7 +9,6 @@ import { useChanges } from '@app/features/changes/changes';
 import { t } from '@app/lib/i18n';
 import { useFlow } from '@app/observability/flow';
 import { fireAndForget } from '@core/util/fireAndForget';
-import type { createScrollIntentTracker } from '@core/util/scroll-intent';
 import ArrowsClockwise from '@icon/system/regular/arrows-clockwise.svg';
 import ArrowsIn from '@icon/system/regular/arrows-in.svg';
 import Chat from '@icon/system/regular/chat.svg';
@@ -25,14 +24,7 @@ import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Button, Card, Checkbox, CopyButton, Dropdown, Input } from '@ui';
 import { FileTree } from '@ui/components/FileTree';
 import { buildFileTree, visibleNodes } from '@ui/utils/file-tree';
-import {
-  createMemo,
-  createSignal,
-  type JSX,
-  Match,
-  Show,
-  Switch,
-} from 'solid-js';
+import { createMemo, createSignal, Match, Show, Switch } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { usePrPage } from '../../context/pr-page-context';
 import {
@@ -49,13 +41,7 @@ type PrTreeState = {
   popover: boolean;
   closedFolders: string[];
 };
-export function PrChangesView(props: {
-  onScroll?: (top: number) => void;
-  scrollerRef?: (element: HTMLDivElement) => void;
-  scrollerHandlers?: ReturnType<typeof createScrollIntentTracker>['handlers'];
-  scrollCompensation?: JSX.Element;
-  reviewAction?: JSX.Element;
-}) {
+export function PrChangesView(props: { scroller?: HTMLDivElement }) {
   const { page, actions } = usePrPage();
   const flow = useFlow();
   const { model, review, layout, diffStyle, setDiffStyle, context } =
@@ -352,7 +338,7 @@ export function PrChangesView(props: {
   return (
     <div
       ref={setRoot}
-      class="relative flex min-h-0 min-w-0 flex-1 @container/pr-changes"
+      class="relative flex min-h-[calc(var(--pr-page-height)-var(--pr-tabs-height))] min-w-0 bg-panel @container/pr-changes"
     >
       <DiffView.Root
         files={model.files()}
@@ -366,8 +352,11 @@ export function PrChangesView(props: {
           anyExpanded: review.anyExpanded,
         }}
       >
-        <div data-pr-diff class="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div class="sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 border-b border-edge-muted bg-panel px-4 @min-[720px]/pr-changes:pl-[58px] @min-[720px]/pr-changes:pr-6">
+        <div data-pr-diff class="flex min-w-0 flex-1 flex-col">
+          <div
+            class="sticky z-10 flex h-12 shrink-0 items-center gap-2 border-b border-edge-muted bg-panel px-4 @min-[720px]/pr-changes:pl-[58px] @min-[720px]/pr-changes:pr-6"
+            style={{ top: 'var(--pr-tabs-height, 0px)' }}
+          >
             <Show when={width() >= 802}>
               <DiffView.StyleToggle
                 value={diffStyle()}
@@ -471,12 +460,8 @@ export function PrChangesView(props: {
               when={model.patch() !== undefined && model.files().length > 0}
             >
               <DiffView.Stack
-                scrollerRef={props.scrollerRef}
-                scrollerHandlers={props.scrollerHandlers}
-                onScrollerScroll={(element) =>
-                  props.onScroll?.(element.scrollTop)
-                }
-                endContent={props.scrollCompensation}
+                scrollElement={props.scroller}
+                stickyOffset="calc(var(--pr-tabs-height, 0px) + 3rem)"
                 contentClass="px-4 @min-[720px]/pr-changes:pl-[58px] @min-[720px]/pr-changes:pr-6"
                 headerClass="rounded-t-none bg-panel"
                 hunkSeparators="metadata"
@@ -597,12 +582,17 @@ export function PrChangesView(props: {
           </Switch>
         </div>
         <Show when={docked() && layout.treeOpen()}>
-          <aside class="flex w-[360px] shrink-0 flex-col border-l border-edge-muted">
+          <aside
+            class="sticky flex w-[360px] shrink-0 flex-col self-start border-l border-edge-muted bg-panel"
+            style={{
+              top: 'var(--pr-tabs-height, 0px)',
+              height: 'calc(var(--pr-page-height) - var(--pr-tabs-height))',
+            }}
+          >
             <TreeBody />
           </aside>
         </Show>
       </DiffView.Root>
-      {props.reviewAction}
     </div>
   );
 }

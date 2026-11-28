@@ -8,13 +8,11 @@ import { MobileHeader } from '@components/app/mobile-header/mobile-header';
 import Chat from '@icon/system/regular/chat.svg';
 import Copy from '@icon/system/regular/copy.svg';
 import Info from '@icon/system/regular/info.svg';
-import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Button, CountBadge } from '@ui';
 import { createSignal, Match, Show, Switch } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { PrStatusIcon } from '../../component/PrStatus';
 import { usePrPage } from '../../context/pr-page-context';
-import { createScrollHideReveal } from '../../primitives/create-scroll-hide-reveal';
 import { prLifecycleStatus } from '../../primitives/pr-page-state';
 import { PrBranchNames } from '../shared/pr-branch';
 import { PrChangesView } from '../shared/pr-changes';
@@ -36,9 +34,9 @@ import {
   PrStatusFade,
   PrTitleRow,
 } from '../shared/pr-header';
+import { PrPageContent } from '../shared/pr-page-content';
 import type { PrPageViewProps } from '../shared/pr-page-view-props';
 import { PrCommentForm, PrReviewForm } from '../shared/pr-review';
-import { PrChromeRow, PrChromeSpace } from '../shared/pr-scroll-chrome';
 import { PrTabs } from '../shared/pr-tabs';
 import { PrDescription, PrTimeline } from '../shared/pr-timeline';
 
@@ -57,14 +55,7 @@ export function PrPageMobile(props: PrPageViewProps) {
     checksOpen: true,
     checksDialog: false,
   });
-  const scroll = createScrollHideReveal(() =>
-    layout.changesVisible() ? 'changes' : 'overview'
-  );
-  const [expandedHeader, setExpandedHeader] = createSignal<HTMLDivElement>();
-  const [expandedHeight, setExpandedHeight] = createSignal(0);
-  createResizeObserver(expandedHeader, (_size, element) =>
-    setExpandedHeight(element.getBoundingClientRect().height)
-  );
+  const [scroller, setScroller] = createSignal<HTMLDivElement>();
   const closeSheet = (sheet: PhoneSheet, open: boolean) => {
     if (!open && state.sheet === sheet) setState('sheet', undefined);
   };
@@ -105,104 +96,88 @@ export function PrPageMobile(props: PrPageViewProps) {
         />
         {props.fileMenu}
       </MobileHeader>
-      <PrChromeRow animate={scroll.animate()} shown={!scroll.scrolled()}>
-        <div ref={setExpandedHeader} class="flex flex-col gap-4 px-3 pt-6 pb-3">
-          <Show
-            when={page()}
-            fallback={
-              <ListSkeleton.Root label={t('prPage.loading')}>
-                <ListSkeleton.Bar class="h-6 w-4/5" />
-              </ListSkeleton.Root>
-            }
-          >
-            {(current) => (
-              <>
-                <PrTitleRow page={current()} onChecks={openChecks} />
-                <div class="pl-7">
-                  <PrMetadataPills
-                    page={current()}
-                    onTask={props.onTask}
-                    branch={
-                      <PrBranchPill
+      <PrPageContent
+        tab={layout.changesVisible() ? 'changes' : 'overview'}
+        scrollerRef={setScroller}
+        header={
+          <>
+            <PrStatusFade page={page()} />
+            <div class="flex flex-col gap-4 px-3 pt-6 pb-3">
+              <Show
+                when={page()}
+                fallback={
+                  <ListSkeleton.Root label={t('prPage.loading')}>
+                    <ListSkeleton.Bar class="h-6 w-4/5" />
+                  </ListSkeleton.Root>
+                }
+              >
+                {(current) => (
+                  <>
+                    <PrTitleRow page={current()} onChecks={openChecks} />
+                    <div class="pl-7">
+                      <PrMetadataPills
                         page={current()}
-                        onClick={() => setState('sheet', 'branch')}
-                        trailing={<Copy class="size-4 shrink-0" />}
+                        onTask={props.onTask}
+                        branch={
+                          <PrBranchPill
+                            page={current()}
+                            onClick={() => setState('sheet', 'branch')}
+                            trailing={<Copy class="size-4 shrink-0" />}
+                          />
+                        }
+                        stack={
+                          <PrStackPill page={current()} onClick={openDetails} />
+                        }
                       />
-                    }
-                    stack={
-                      <PrStackPill page={current()} onClick={openDetails} />
-                    }
-                  />
-                </div>
-              </>
-            )}
-          </Show>
-        </div>
-      </PrChromeRow>
-      <div class="relative z-10 shrink-0 px-3 pt-3 pb-2">
-        <PrTabs size="lg" fullWidth />
-      </div>
-      <div
-        class="relative flex min-h-0 flex-1 flex-col"
-        classList={{ hidden: !layout.changesVisible() }}
-      >
-        <PrChangesView
-          onScroll={(top) => scroll.onScroll('changes', top)}
-          scrollerHandlers={scroll.handlers('changes')}
-          scrollCompensation={
-            <PrChromeSpace
-              expandedHeight={expandedHeight()}
-              scrolled={scroll.scrolled('changes')}
-              animate={scroll.animate()}
-            />
-          }
-        />
-      </div>
-      <div
-        class="relative min-h-0 flex-1 overflow-y-auto px-3 pb-[calc(var(--mobile-content-inset-bottom,0px)+6rem)]"
-        classList={{ hidden: layout.changesVisible() }}
-        onScroll={(event) => {
-          if (event.target === event.currentTarget)
-            scroll.onScroll('overview', event.currentTarget.scrollTop);
-        }}
-        {...scroll.handlers('overview')}
-      >
-        <Switch>
-          <Match when={page()}>
-            {(current) => (
-              <>
-                <PrDescription page={current()} />
-                <PrTimeline page={current()} onFile={openFile} />
-                <PrCommentForm />
-                <PrMergeBox page={current()} />
-              </>
-            )}
-          </Match>
-          <Match when={status?.() === 'error'}>
-            <div class="flex flex-col items-start gap-3 py-8 text-sm text-ink-muted">
-              <span>{t('prPage.loadError')}</span>
-              <Button size="sm" variant="secondary" onClick={retry}>
-                {t('prPage.retry')}
-              </Button>
+                    </div>
+                  </>
+                )}
+              </Show>
             </div>
-          </Match>
-          <Match when={true}>
-            <ListSkeleton.Root
-              label={t('prPage.loading')}
-              class="flex flex-col gap-4 py-8"
-            >
-              <ListSkeleton.Bar class="w-full" />
-              <ListSkeleton.Bar class="w-4/5" />
-              <ListSkeleton.Bar class="w-3/4" />
-            </ListSkeleton.Root>
-          </Match>
-        </Switch>
-        <PrChromeSpace
-          expandedHeight={expandedHeight()}
-          scrolled={scroll.scrolled('overview')}
-          animate={scroll.animate()}
-        />
-      </div>
+          </>
+        }
+        tabsClass="px-3 pt-3 pb-2"
+        tabs={<PrTabs size="lg" fullWidth />}
+      >
+        <div classList={{ hidden: !layout.changesVisible() }}>
+          <PrChangesView scroller={scroller()} />
+        </div>
+        <div
+          class="px-3 pb-[calc(var(--mobile-content-inset-bottom,0px)+6rem)]"
+          classList={{ hidden: layout.changesVisible() }}
+        >
+          <Switch>
+            <Match when={page()}>
+              {(current) => (
+                <>
+                  <PrDescription page={current()} />
+                  <PrTimeline page={current()} onFile={openFile} />
+                  <PrCommentForm />
+                  <PrMergeBox page={current()} />
+                </>
+              )}
+            </Match>
+            <Match when={status?.() === 'error'}>
+              <div class="flex flex-col items-start gap-3 py-8 text-sm text-ink-muted">
+                <span>{t('prPage.loadError')}</span>
+                <Button size="sm" variant="secondary" onClick={retry}>
+                  {t('prPage.retry')}
+                </Button>
+              </div>
+            </Match>
+            <Match when={true}>
+              <ListSkeleton.Root
+                label={t('prPage.loading')}
+                class="flex flex-col gap-4 py-8"
+              >
+                <ListSkeleton.Bar class="w-full" />
+                <ListSkeleton.Bar class="w-4/5" />
+                <ListSkeleton.Bar class="w-3/4" />
+              </ListSkeleton.Root>
+            </Match>
+          </Switch>
+        </div>
+      </PrPageContent>
       <Show
         when={
           actions.submitReview.available() ||
@@ -380,7 +355,6 @@ export function PrPageMobile(props: PrPageViewProps) {
         {(current) => (
           <PrChecksDialog
             page={current()}
-            density="touch"
             open={state.checksDialog}
             onOpenChange={(open) => setState('checksDialog', open)}
             returnFocus={state.checksTrigger}

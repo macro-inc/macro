@@ -6,14 +6,19 @@ const mocks = vi.hoisted(() => ({
   refreshedKeys: undefined as (() => readonly unknown[]) | undefined,
 }));
 
+vi.mock('@solid-primitives/resize-observer', () => ({
+  createResizeObserver: () => {},
+}));
 vi.mock('../data/prDiscussionSource', () => ({
   createPrDiscussionSource: () => ({}),
 }));
-vi.mock('@app/components/view-shell', () => ({ ViewShell: {} }));
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: vi.fn(),
 }));
-vi.mock('@components/app/side-panel', () => ({ SidePanel: {} }));
+vi.mock('@components/app/side-panel', () => ({
+  SidePanel: {},
+  useSidePanel: () => undefined,
+}));
 vi.mock('@components/app/split-panel', () => ({ SplitPanel: {} }));
 vi.mock(
   '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
@@ -69,7 +74,9 @@ import {
   prStatusBand,
 } from '../primitives/pr-page-state';
 import { usePrDetail } from './PrDetail';
+import { PrPageTopBar } from './pr-page-top-bar';
 import { PrDetailsSection } from './shared/pr-details';
+import { PrPageContent } from './shared/pr-page-content';
 
 describe('PR refresh wiring', () => {
   it('passes the PR details and changes summary keys to the refresh', () => {
@@ -229,6 +236,82 @@ describe('PR detail section refs', () => {
       );
     } finally {
       disposeSupplied();
+    }
+  });
+});
+
+describe('PR page scroll ownership and top-bar placement', () => {
+  it('puts the action group after a growing real title element at the bar right edge', () => {
+    const container = document.createElement('div');
+    const dispose = render(
+      () =>
+        createComponent(PrPageTopBar, {
+          changesVisible: true,
+          floatingDetails: false,
+          detailsOpen: false,
+          checksOpen: true,
+          onDetailsOpenChange: () => {},
+          onChecksOpenChange: () => {},
+          onFile: () => {},
+          share: () => {},
+          onTask: () => {},
+        }),
+      container
+    );
+    try {
+      const bar = container.querySelector('[data-view-shell-top-bar]');
+      const title = bar?.firstElementChild;
+      const actions = bar?.lastElementChild;
+      expect(title).toBeInstanceOf(HTMLDivElement);
+      expect(actions).toBeInstanceOf(HTMLDivElement);
+      if (!(title instanceof HTMLElement) || !(actions instanceof HTMLElement))
+        throw new Error('Top-bar layout groups are missing');
+      expect(getComputedStyle(title).flexGrow).toBe('1');
+      expect(getComputedStyle(title).flexBasis).toBe('0%');
+      expect(getComputedStyle(actions).marginLeft).toBe('auto');
+      expect(title.nextElementSibling).toBe(actions);
+      expect(actions.querySelectorAll('button').length).toBeGreaterThan(0);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('restores each tab on the same page scroller and ignores nested scrolls', () => {
+    const container = document.createElement('div');
+    const [tab, setTab] = createSignal<'overview' | 'changes'>('overview');
+    const refs: HTMLDivElement[] = [];
+    const nested = document.createElement('div');
+    const dispose = render(
+      () =>
+        createComponent(PrPageContent, {
+          get tab() {
+            return tab();
+          },
+          header: document.createElement('header'),
+          tabs: document.createElement('nav'),
+          children: nested,
+          scrollerRef: (element) => refs.push(element),
+        }),
+      container
+    );
+    try {
+      const scroller = refs[0];
+      scroller.scrollTop = 240;
+      scroller.dispatchEvent(new Event('scroll'));
+      setTab('changes');
+      expect(scroller.scrollTop).toBe(0);
+      scroller.scrollTop = 600;
+      scroller.dispatchEvent(new Event('scroll'));
+      nested.scrollTop = 90;
+      nested.dispatchEvent(new Event('scroll', { bubbles: true }));
+      setTab('overview');
+      expect(scroller.scrollTop).toBe(240);
+      setTab('changes');
+      expect(scroller.scrollTop).toBe(600);
+      expect(refs).toEqual([scroller]);
+      expect(scroller.contains(nested)).toBe(true);
+    } finally {
+      dispose();
     }
   });
 });

@@ -54,9 +54,10 @@ The host composes the rest:
   Pierre `hunkSeparators`; omitted props retain the shared agent-session defaults.
 - File-level `footer` content when stored comments do not include a reliable diff
   side. Do not invent line anchors from incomplete comment metadata.
-- Native-scroller bindings through `scrollerRef`, `scrollerHandlers`, and
-  `onScrollerScroll`; nested editor scrolls do not invoke the host callback.
-  `endContent` lets a host mirror collapsing chrome inside its scroll range.
+- Optional `scrollElement` uses a host page as the vertical scroll owner. Viewport
+  gating, file/line anchoring, and user-input release bind to that element;
+  `stickyOffset` accounts for host tabs/toolbars in headers and file jumps.
+  Omit both props to retain the standalone agent-session scroller and offsets.
 - Collapse state that persists, by passing `collapse`; the default lives in memory.
   Files with at most 40 additions + deletions start expanded; larger files start
   collapsed. Individual toggles and Collapse all / Expand all override defaults.

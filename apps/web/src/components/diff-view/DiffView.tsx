@@ -7,7 +7,6 @@
  */
 
 import { createRenderQueue } from '@app/lib/utils/create-render-queue';
-import type { createScrollIntentTracker } from '@core/util/scroll-intent';
 import ArrowsInIcon from '@icon/system/regular/arrows-in.svg';
 import ArrowsOutIcon from '@icon/system/regular/arrows-out.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
@@ -145,11 +144,10 @@ type DiffListProps = {
   contentClass?: string;
   headerClass?: string;
   class?: string;
-  /** Optional bindings for the Stack native scroller, not its descendants. */
-  scrollerRef?: (element: HTMLDivElement) => void;
-  onScrollerScroll?: (element: HTMLDivElement) => void;
-  scrollerHandlers?: ReturnType<typeof createScrollIntentTracker>['handlers'];
-  endContent?: JSX.Element;
+  /** Use the host page for vertical scrolling; omitted keeps the standalone stack scroller. */
+  scrollElement?: HTMLElement;
+  /** Sticky file-header offset inside the scroll owner, including host toolbars. */
+  stickyOffset?: string;
 };
 
 const FLASH_MS = 900;
@@ -176,8 +174,9 @@ function Stack(props: DiffListProps) {
   const view = useDiffView();
   const activePath = createMemo(view.active);
   const [flashing, setFlashing] = createSignal<string>();
-  let scroller!: HTMLDivElement;
-  const diffReveal = createDiffReveal(() => scroller);
+  let stack!: HTMLDivElement;
+  const scroller = () => props.scrollElement ?? stack;
+  const diffReveal = createDiffReveal(scroller);
   let anchoredPath: string | undefined;
   let pendingSelection = activePath();
   let scrollingToAnchor = false;
@@ -188,7 +187,7 @@ function Stack(props: DiffListProps) {
   const keepRevealed = () => {
     if (!revealed?.isConnected) return;
     const box = revealed.getBoundingClientRect();
-    const view = scroller.getBoundingClientRect();
+    const view = scroller().getBoundingClientRect();
     const drift = box.top + box.height / 2 - (view.top + view.height / 2);
     if (Math.abs(drift) > 1) {
       revealed.scrollIntoView({ block: 'center', behavior: 'instant' });
@@ -201,8 +200,8 @@ function Stack(props: DiffListProps) {
       Number.parseFloat(getComputedStyle(card).scrollMarginTop) || 0;
     const offset =
       card.getBoundingClientRect().top -
-      scroller.getBoundingClientRect().top -
-      scroller.clientTop -
+      scroller().getBoundingClientRect().top -
+      scroller().clientTop -
       margin;
     if (Math.abs(offset) > 1) {
       card.scrollIntoView({ block: 'start', behavior: 'instant' });
@@ -303,28 +302,37 @@ function Stack(props: DiffListProps) {
     )
   );
 
+  // Host scroll events do not bubble from the page to this descendant. Bind
+  // anchoring and user-intent release to the actual vertical scroll owner.
+  createEffect(() => {
+    const element = scroller();
+    const onScroll = () => {
+      if (scrollingToAnchor) settleAnchor();
+    };
+    element.addEventListener('scroll', onScroll);
+    element.addEventListener('wheel', releaseAnchor, { passive: true });
+    element.addEventListener('pointerdown', releaseAnchor);
+    element.addEventListener('keydown', releaseAnchor);
+    onCleanup(() => {
+      element.removeEventListener('scroll', onScroll);
+      element.removeEventListener('wheel', releaseAnchor);
+      element.removeEventListener('pointerdown', releaseAnchor);
+      element.removeEventListener('keydown', releaseAnchor);
+    });
+  });
+
   // Padding lives on the inner column: on the scroller itself it insets the
   // sticky headers, leaving a band above them where lines scroll into view.
   return (
     <div
-      ref={(element) => {
-        scroller = element;
-        props.scrollerRef?.(element);
-      }}
+      ref={stack}
       class={cn(
-        'min-h-0 min-w-0 flex-1 overflow-y-auto scroll-smooth motion-reduce:scroll-auto',
+        'min-w-0',
+        !props.scrollElement &&
+          'min-h-0 flex-1 overflow-y-auto scroll-smooth motion-reduce:scroll-auto',
         props.class
       )}
       aria-busy={!view.ready()}
-      {...props.scrollerHandlers}
-      on:wheel={releaseAnchor}
-      on:pointerdown={releaseAnchor}
-      on:keydown={releaseAnchor}
-      onScroll={(event) => {
-        if (event.target !== event.currentTarget) return;
-        if (scrollingToAnchor) settleAnchor();
-        props.onScrollerScroll?.(event.currentTarget);
-      }}
     >
       <Show when={!view.ready()}>
         <div class="flex h-40 items-center justify-center text-xs text-ink-placeholder">
@@ -348,6 +356,13 @@ function Stack(props: DiffListProps) {
                   ref={(element: HTMLDivElement) =>
                     diffReveal.register(path(), element)
                   }
+                  style={
+                    props.stickyOffset
+                      ? {
+                          'scroll-margin-top': `calc(${props.stickyOffset} + 0.75rem)`,
+                        }
+                      : undefined
+                  }
                   class={cn(
                     'shrink-0 scroll-mt-3 overflow-clip transition',
                     flashing() === path() &&
@@ -356,6 +371,11 @@ function Stack(props: DiffListProps) {
                   data-path={path()}
                 >
                   <header
+                    style={
+                      props.stickyOffset
+                        ? { top: props.stickyOffset }
+                        : undefined
+                    }
                     class={cn(
                       'sticky top-0 z-5 flex h-10 items-center gap-1 bg-surface px-1.5 transition-colors duration-150 hover:overlay-hover motion-reduce:transition-none',
                       !collapsed() && 'border-b border-edge-muted',
@@ -407,7 +427,6 @@ function Stack(props: DiffListProps) {
             );
           }}
         </For>
-        {props.endContent}
       </div>
     </div>
   );
