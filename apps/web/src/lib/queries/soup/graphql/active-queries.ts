@@ -14,6 +14,7 @@ type ActiveGraphqlSoupQuery = {
 const activeQueries = new Set<ActiveGraphqlSoupQuery>();
 type ReaderRefresh = {
   generation: number;
+  session: string;
   inFlight: Promise<void>;
   followUp?: Promise<void>;
 };
@@ -36,26 +37,30 @@ async function runReaderRefresh(
  * shares a single follow-up that starts after it, so each caller still gets a
  * fetch issued after its write instead of a burst of chain refetches. */
 async function refreshReader(query: ActiveGraphqlSoupQuery): Promise<void> {
+  const session = cacheSessionGeneration.capture();
   const current = readerRefreshes.get(query);
-  if (current) {
-    current.followUp ??= refreshAfter(current.inFlight, query);
+  if (current?.session === session) {
+    current.followUp ??= refreshAfter(current.inFlight, query, session);
     return current.followUp;
   }
   const generation = ++refreshGeneration;
   const inFlight = runReaderRefresh(query, generation);
-  readerRefreshes.set(query, { generation, inFlight });
+  readerRefreshes.set(query, { generation, session, inFlight });
   return inFlight;
 }
 
 async function refreshAfter(
   inFlight: Promise<void>,
-  query: ActiveGraphqlSoupQuery
+  query: ActiveGraphqlSoupQuery,
+  session: string
 ): Promise<void> {
   try {
     await inFlight;
   } catch {
     // The follow-up runs whether or not the refresh it waited on succeeded.
   }
+  if (!cacheSessionGeneration.isCurrent(session))
+    throw new Error('GraphQL Soup refresh belongs to a retired session');
   return refreshReader(query);
 }
 const revalidationSources = new Set<{
@@ -152,3 +157,5 @@ export async function refreshActiveGraphqlSoupQueries(
     );
   }
 }
+
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';

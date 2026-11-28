@@ -6,6 +6,7 @@ import {
 } from '@graphql-cache/exchange/network-revalidation-exchange';
 import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
 import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import type { Client, OperationResult } from '@urql/core';
 import { revalidateNotificationReaders } from '../../queries/notification/revalidation';
@@ -70,7 +71,10 @@ function readAgainAfterFailedReread(
 ): void {
   span.setAttr('revalidation.fallback', true);
   fireAndForget(
-    Promise.allSettled([recoverActiveGraphqlSoupQueries(), ...reads]),
+    Promise.allSettled([
+      recoverActiveGraphqlSoupQueries({ trace: span }),
+      ...reads,
+    ]),
     'notification-write'
   );
 }
@@ -147,6 +151,7 @@ export async function executeGraphqlUpdateNotifications(
     if (args.notificationIds.length === 1)
       span.setAttr('notification.id', args.notificationIds[0]);
     // Its request, queue attempt and the exchange's rereads join this trace.
+    const generation = cacheSessionGeneration.capture();
     const result = await client
       .mutation(UpdateNotificationsDocument, variables, {
         optimisticMutation: {
@@ -156,6 +161,7 @@ export async function executeGraphqlUpdateNotifications(
       })
       .toPromise();
     recordOutcome(span, result, result.data?.updateNotifications.length);
+    if (!cacheSessionGeneration.isCurrent(generation)) return result;
 
     // Without the normalized exchange there is no durable revalidation runner;
     // the client's own exchange may already have read the lists again. With a
@@ -207,6 +213,7 @@ export async function executeGraphqlUpdateNotificationsForEntities(
       span.setAttr('entity.id', String(first.entityId));
       span.setAttr('entity.type', first.entityType);
     }
+    const generation = cacheSessionGeneration.capture();
     const result = await client
       .mutation(UpdateNotificationsForEntityDocument, variables, {
         [TRACE_PARENT_CONTEXT_KEY]: span,
@@ -217,6 +224,7 @@ export async function executeGraphqlUpdateNotificationsForEntities(
       result,
       result.data?.updateNotificationsForEntity.length
     );
+    if (!cacheSessionGeneration.isCurrent(generation)) return result;
     // Without the cache the client's exchange already read every mounted
     // query again before the write settled.
     if (

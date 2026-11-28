@@ -1,3 +1,4 @@
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { CombinedError } from '@urql/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -140,6 +141,32 @@ describe('GraphQL email archive writes', () => {
     ]);
     expect(mocks.refresh).toHaveBeenCalledOnce();
     expect(mocks.mutation).toHaveBeenCalledOnce();
+  });
+
+  it('does not recover an old archive in the replacement session', async () => {
+    const response = {
+      data: {
+        setEmailThreadsArchived: {
+          threads: [],
+          failedThreadIds: [],
+        },
+      },
+      extensions: {
+        __macroNormalizedCache: {
+          source: 'live-network',
+          cacheEffectsApplied: false,
+        },
+      },
+    };
+    const network = Promise.withResolvers<typeof response>();
+    mocks.mutation.mockReturnValue({ toPromise: () => network.promise });
+    const archived = archiveEmailThreads(['thread'], true);
+    await cacheSessionGeneration.transition(async () => {});
+    network.resolve(response);
+    await expect(archived).resolves.toEqual([
+      { status: 'fulfilled', value: 'committed' },
+    ]);
+    expect(mocks.refresh).not.toHaveBeenCalled();
   });
 
   it('gives Done, Undo and Redo distinct ordered mutation intents', async () => {

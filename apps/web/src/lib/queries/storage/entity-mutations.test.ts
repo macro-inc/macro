@@ -26,6 +26,7 @@ vi.mock('@queries/client', async () => {
 });
 
 import { UpdateEntitySharePoliciesDocument } from '@service-storage/graphql/generated/graphql';
+import { authKeys } from '../auth/keys';
 import { queryClient } from '../client';
 import { createGraphqlSoupDeletion } from '../soup/graphql/optimistic-deletions';
 
@@ -224,6 +225,83 @@ it('queues a move with the lists to read once it commits, and reads none itself'
   });
   expect(mocks.refresh).not.toHaveBeenCalled();
 });
+
+it.each([
+  {
+    entity: { type: 'CHAT' as const, id: 'chat' },
+    items: [{ __typename: 'GraphqlSoupChat', id: 'chat', projectId: 'parent' }],
+    restoredKeys: ['GraphqlSoupChat:chat'],
+  },
+  {
+    entity: { type: 'PROJECT' as const, id: 'folder' },
+    items: [
+      {
+        __typename: 'GraphqlSoupDocument',
+        id: 'nested-document',
+        projectId: 'nested-folder',
+      },
+      {
+        __typename: 'GraphqlSoupProject',
+        id: 'nested-folder',
+        parentId: 'folder',
+      },
+      { __typename: 'GraphqlSoupProject', id: 'folder', parentId: 'parent' },
+    ],
+    restoredKeys: [
+      'GraphqlSoupProject:folder',
+      'GraphqlSoupProject:nested-folder',
+      'GraphqlSoupDocument:nested-document',
+    ],
+  },
+])(
+  'publishes only restored identities for a sibling-tab $entity.type restore',
+  async ({ entity, items, restoredKeys }) => {
+    queryClient.setQueryData(authKeys.userInfo.queryKey, {
+      id: 'viewer',
+      authenticated: true,
+    });
+    const parentKey = 'GraphqlSoupProject:parent';
+    // These overlays are absent from the sender's mutation cache. They can only
+    // receive the restore through the same receipt handler as a sibling tab.
+    const parent = createGraphqlSoupDeletion([parentKey]);
+    const restored = createGraphqlSoupDeletion(restoredKeys);
+    const peer = new BroadcastChannel('macro:soup-restore');
+    const send = peer.postMessage.bind(peer);
+    const broadcast = vi
+      .spyOn(BroadcastChannel.prototype, 'postMessage')
+      .mockImplementation(send);
+    mocks.mutation.mockReturnValue({
+      toPromise: async () => ({
+        data: {
+          restoreEntities: {
+            results: [
+              {
+                __typename: 'GraphqlMutationSuccess',
+                effects: [
+                  {
+                    __typename: 'SoupUpdated',
+                    item: { __typename: 'GraphqlSoupProject', id: 'parent' },
+                  },
+                  ...items.map((item) => ({ __typename: 'SoupUpdated', item })),
+                ],
+              },
+            ],
+          },
+        },
+      }),
+    });
+    try {
+      await restoreEntity(entity);
+      await vi.waitFor(() => expect(restored.keys()).toEqual([]));
+      expect(parent.keys()).toEqual([parentKey]);
+    } finally {
+      broadcast.mockRestore();
+      peer.close();
+      parent.release();
+      restored.release();
+    }
+  }
+);
 
 it('shows a confirmed restore immediately while retaining unrelated and newer deletes', async () => {
   mocks.refresh.mockReturnValue(new Promise<void>(() => {}));

@@ -233,33 +233,27 @@ describe('GraphQL Soup deletion lifecycle', () => {
     }
   });
 
-  it('honors a sibling restore receipt only for older deletes of the same account', () => {
+  it('honors a sibling restore receipt only for older deletes of the same account', async () => {
     client.setQueryData(authKeys.userInfo.queryKey, {
       id: 'viewer',
       authenticated: true,
     });
     const clock = vi.spyOn(performance, 'now');
     const key = 'GraphqlSoupDocument:shared';
+    const otherKey = 'GraphqlSoupDocument:other';
     clock.mockReturnValue(1);
-    const older = createGraphqlSoupDeletion([key]);
+    const older = createGraphqlSoupDeletion([key, otherKey]);
     clock.mockReturnValue(3);
     const newer = createGraphqlSoupDeletion([key]);
+    const peer = new BroadcastChannel('macro:soup-restore');
     try {
-      for (const viewerId of ['other', 'viewer']) {
-        window.dispatchEvent(
-          new StorageEvent('storage', {
-            key: 'macro:soup-restore',
-            newValue: JSON.stringify({
-              viewerId,
-              startedAt: performance.timeOrigin + 2,
-              keys: [key],
-            }),
-          })
-        );
-        expect(older.keys()).toEqual(viewerId === 'viewer' ? [] : [key]);
-        expect(newer.keys()).toEqual([key]);
-      }
+      const startedAt = performance.timeOrigin + 2;
+      peer.postMessage({ viewerId: 'other', startedAt, keys: [otherKey] });
+      peer.postMessage({ viewerId: 'viewer', startedAt, keys: [key] });
+      await vi.waitFor(() => expect(older.keys()).toEqual([otherKey]));
+      expect(newer.keys()).toEqual([key]);
     } finally {
+      peer.close();
       older.release();
       newer.release();
       clock.mockRestore();

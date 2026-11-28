@@ -1,4 +1,3 @@
-import { createCrossTabBus } from '@core/cross-tab/cross-tab-bus';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { skipToken, useMutationState, useQuery } from '@tanstack/solid-query';
 import {
@@ -31,23 +30,39 @@ const RETAINED_DELETIONS_KEY = graphqlSoupKeys.retainedDeletions.queryKey;
 const EMPTY_DELETE_KEYS: readonly string[] = [];
 type RetainedDeletions = GraphqlSoupDeletion[];
 type DeletionReader = (keys: ReadonlySet<string>) => Iterable<string>;
-const [deletionReaders, setDeletionReaders] = createSignal<
-  readonly DeletionReader[]
->([]);
+const readerRegistries = new WeakMap<
+  typeof queryClient,
+  ReturnType<typeof createSignal<readonly DeletionReader[]>>
+>();
+
+function deletionReaderRegistry() {
+  const existing = readerRegistries.get(queryClient);
+  if (existing) return existing;
+  const registry = createSignal<readonly DeletionReader[]>([]);
+  readerRegistries.set(queryClient, registry);
+  return registry;
+}
+
 const restoreReceipt = z.object({
   viewerId: z.string(),
   startedAt: z.number(),
   keys: z.array(z.string()),
 });
-const restoreReceipts = createCrossTabBus({
-  channelName: 'macro:soup-restore',
-  storageKey: 'macro:soup-restore',
-  parse: (value) => restoreReceipt.safeParse(value).data ?? null,
-});
+let restoreChannel: BroadcastChannel | null | undefined;
+function getRestoreChannel() {
+  if (restoreChannel !== undefined) return restoreChannel;
+  try {
+    restoreChannel = new BroadcastChannel('macro:soup-restore');
+  } catch {
+    restoreChannel = null;
+  }
+  return restoreChannel;
+}
 const operationTime = () => performance.timeOrigin + performance.now();
 
 /** A live list may still show its previous snapshot after the cache confirms a tombstone. */
 export function observeGraphqlSoupDeletions(reader: DeletionReader) {
+  const [, setDeletionReaders] = deletionReaderRegistry();
   setDeletionReaders((readers) => [...readers, reader]);
   onCleanup(() =>
     setDeletionReaders((readers) => readers.filter((entry) => entry !== reader))
@@ -74,6 +89,7 @@ export function createGraphqlSoupDeletion(
   const session = queryAccountSession();
   const account = currentQueryAccount();
   const startedAt = operationTime();
+  const targetKeys = new Set(keys);
   const [pendingKeys, setDeletedKeys] = createSignal(keys);
   const deletedKeys = () =>
     session === queryAccountSession() ? pendingKeys() : EMPTY_DELETE_KEYS;
@@ -100,7 +116,9 @@ export function createGraphqlSoupDeletion(
     release,
     restore: (keys) => {
       if (released) return;
-      for (const key of keys) restoredKeys.add(key);
+      for (const key of keys) {
+        if (targetKeys.has(key)) restoredKeys.add(key);
+      }
       setDeletedKeys((previous) =>
         previous.filter((key) => !restoredKeys.has(key))
       );
@@ -130,6 +148,7 @@ export function createGraphqlSoupDeletion(
         GRAPHQL_SOUP_DELETE_RETENTION_MS
       );
       const acknowledged = new Set<string>();
+      const [deletionReaders] = deletionReaderRegistry();
       const [acknowledgementCount, setAcknowledgementCount] = createSignal(0);
       let notifyScheduled = false;
       createRoot((dispose) => {
@@ -181,9 +200,11 @@ export function createGraphqlSoupDeletion(
     },
   };
   if (account) {
-    unsubscribeRestores = restoreReceipts.subscribe((receipt) => {
+    const channel = getRestoreChannel();
+    const onRestore = (event: MessageEvent) => {
+      const { data: receipt } = restoreReceipt.safeParse(event.data);
       if (
-        receipt.viewerId === account.userId &&
+        receipt?.viewerId === account.userId &&
         startedAt < receipt.startedAt &&
         isCurrentQueryAccount(account)
       ) {
@@ -191,7 +212,10 @@ export function createGraphqlSoupDeletion(
         // sees it absent. The restore request still has to postdate this delete.
         deletion.restore(receipt.keys);
       }
-    });
+    };
+    channel?.addEventListener('message', onRestore);
+    unsubscribeRestores = () =>
+      channel?.removeEventListener('message', onRestore);
   }
   return deletion;
 }
@@ -223,7 +247,7 @@ export function prepareGraphqlSoupRestore() {
       for (const deletion of deletions) deletion.restore(restoredKeys);
     });
     if (account && isCurrentQueryAccount(account) && restoredKeys.length > 0) {
-      restoreReceipts.publish({
+      getRestoreChannel()?.postMessage({
         viewerId: account.userId,
         startedAt,
         keys: [...restoredKeys],

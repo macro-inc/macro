@@ -1,4 +1,5 @@
 import type { QueryRevalidation } from '@graphql-cache/exchange/optimistic';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { queryClient } from '@queries/client';
 import { type Client, gql } from '@urql/core';
@@ -25,6 +26,20 @@ function register(query: Parameters<typeof registerActiveGraphqlSoupQuery>[0]) {
 }
 
 describe('active GraphQL Soup queries', () => {
+  it('drops a recovery read queued by a retired session', async () => {
+    const pending = Promise.withResolvers<void>();
+    const refresh = vi.fn(() => pending.promise);
+    register({ isEnabled: () => true, refresh });
+    const first = refreshActiveGraphqlSoupQueries();
+    const second = expect(
+      refreshActiveGraphqlSoupQueries({ throwOnError: true })
+    ).rejects.toThrow('revalidation did not succeed');
+    await cacheSessionGeneration.transition(async () => {});
+    pending.resolve();
+    await Promise.all([first, second]);
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
   it('snapshots and deduplicates live descriptors, excluding disabled and unmounted readers', () => {
     const document = gql`query Soup($input: SoupInput!) { soup(input: $input) { nextCursor } }`;
     const initial = { document, variables: { input: { initial: {} } } };

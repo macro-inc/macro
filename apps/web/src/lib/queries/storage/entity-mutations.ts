@@ -141,16 +141,58 @@ export function trashEntity(
   return deleteEntity(entity, trashGraphqlEntity, onDeletion);
 }
 
+/** A restore can also update the enclosing folder. Only the target and its
+ * restored subtree can supersede previous delete intents. */
+function restoredEntityKeys(
+  entity: EntityRefInput,
+  effects: Awaited<ReturnType<typeof restoreGraphqlEntity>>['effects']
+): string[] {
+  const key = soupEntityKey(entity);
+  if (!key) return [];
+  if (entity.type !== 'PROJECT') return [key];
+
+  const children = new Map<string, { key: string; projectId?: string }[]>();
+  for (const effect of effects) {
+    if (effect.__typename !== 'SoupUpdated') continue;
+    const item = effect.item;
+    let folderId: string | null | undefined;
+    switch (item.__typename) {
+      case 'GraphqlSoupProject':
+        folderId = item.parentId;
+        break;
+      case 'GraphqlSoupDocument':
+      case 'GraphqlSoupChat':
+        folderId = item.projectId;
+        break;
+      default:
+        continue;
+    }
+    if (!folderId || item.deletedAt) continue;
+    const child = {
+      key: soupItemKey(item),
+      projectId: item.__typename === 'GraphqlSoupProject' ? item.id : undefined,
+    };
+    const siblings = children.get(folderId);
+    if (siblings) siblings.push(child);
+    else children.set(folderId, [child]);
+  }
+
+  const restored = new Set([key]);
+  const projects = [String(entity.id)];
+  for (const projectId of projects) {
+    for (const child of children.get(projectId) ?? []) {
+      if (restored.has(child.key)) continue;
+      restored.add(child.key);
+      if (child.projectId) projects.push(child.projectId);
+    }
+  }
+  return [...restored];
+}
+
 export async function restoreEntity(entity: EntityRefInput) {
   const confirmRestore = prepareGraphqlSoupRestore();
   const result = await restoreGraphqlEntity(entity);
-  const restoredKey = soupEntityKey(entity);
-  confirmRestore([
-    ...(restoredKey ? [restoredKey] : []),
-    ...result.effects.flatMap((effect) =>
-      effect.__typename === 'SoupUpdated' ? [soupItemKey(effect.item)] : []
-    ),
-  ]);
+  confirmRestore(restoredEntityKeys(entity, result.effects));
   refreshAfterWrite(result);
 }
 

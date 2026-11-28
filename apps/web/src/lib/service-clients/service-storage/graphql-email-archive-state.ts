@@ -2,6 +2,7 @@ import {
   optimisticMutationDispositionOf,
   type QueryRevalidation,
 } from '@graphql-cache/exchange/optimistic';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import type { Client, OperationResult } from '@urql/core';
 import { recoverActiveGraphqlSoupQueries } from '../../queries/soup/graphql/recover-queries';
 import {
@@ -9,7 +10,8 @@ import {
   SetEmailThreadsArchivedDocument,
 } from './graphql/generated/graphql';
 
-function recoverArchiveLists(result: OperationResult) {
+function recoverArchiveLists(result: OperationResult, generation: string) {
+  if (!cacheSessionGeneration.isCurrent(generation)) return;
   const metadata = normalizedCacheResultMetadata(result);
   if (
     networkRevalidationIncomplete(result) ||
@@ -30,6 +32,7 @@ export async function setGraphqlEmailThreadArchived(
   archived: boolean,
   revalidations: readonly QueryRevalidation[] = []
 ): Promise<'committed' | 'queued'> {
+  const generation = cacheSessionGeneration.capture();
   const result = await client
     .mutation(
       SetEmailThreadArchivedDocument,
@@ -41,7 +44,7 @@ export async function setGraphqlEmailThreadArchived(
   if (disposition?.kind === 'queued') return 'queued';
   if (disposition?.kind === 'permanently-failed') throw disposition.error;
   if (result.error) throw result.error;
-  recoverArchiveLists(result);
+  recoverArchiveLists(result, generation);
   if (disposition?.kind === 'committed') return 'committed';
   if (!result.data?.setEmailThreadArchived) {
     throw new Error('Email archive mutation returned no data');
@@ -61,6 +64,7 @@ export async function setGraphqlEmailThreadsArchived(
   archived: boolean,
   revalidations: readonly QueryRevalidation[] = []
 ): Promise<GraphqlEmailThreadsArchiveResult> {
+  const generation = cacheSessionGeneration.capture();
   const result = await client
     .mutation(
       SetEmailThreadsArchivedDocument,
@@ -72,7 +76,7 @@ export async function setGraphqlEmailThreadsArchived(
   if (disposition?.kind === 'queued') return { kind: 'queued' };
   if (disposition?.kind === 'permanently-failed') throw disposition.error;
   if (result.error) throw result.error;
-  recoverArchiveLists(result);
+  recoverArchiveLists(result, generation);
   if (disposition?.kind === 'committed' && !disposition.data)
     return { kind: 'committed-without-content' };
   if (!result.data?.setEmailThreadsArchived) {
