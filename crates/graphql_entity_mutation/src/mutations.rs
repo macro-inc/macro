@@ -1,7 +1,9 @@
-use std::{collections::HashSet, marker::PhantomData, sync::Arc};
+use std::{borrow::Cow, collections::HashSet, marker::PhantomData, sync::Arc};
 
 use async_graphql::{
-    Context, Enum, ErrorExtensions, ID, InputObject, MaybeUndefined, Object, SimpleObject, Union,
+    Context, ContextSelectionSet, Enum, ErrorExtensions, ID, InputObject, MaybeUndefined, Object,
+    OutputType, Positioned, ServerResult, SimpleObject, Union, Value, parser::types::Field,
+    registry::Registry,
 };
 use entity_mutation::{
     DuplicateEntityRequest, EntityMutationActor, EntityMutationEffect, EntityMutationErrorCode,
@@ -367,18 +369,49 @@ pub struct GraphqlMutationSuccess<E> {
     edges: PhantomData<E>,
 }
 
+/// A failure selecting fields on a post-commit row must also leave the write
+/// outcome intact. Expose the ordinary GraphQL list type for these effects.
+struct CommittedEffects<T>(Vec<T>);
+
+impl<T: OutputType> OutputType for CommittedEffects<T> {
+    fn type_name() -> Cow<'static, str> {
+        Vec::<T>::type_name()
+    }
+
+    fn create_type_info(registry: &mut Registry) -> String {
+        Vec::<T>::create_type_info(registry)
+    }
+
+    async fn resolve(
+        &self,
+        ctx: &ContextSelectionSet<'_>,
+        field: &Positioned<Field>,
+    ) -> ServerResult<Value> {
+        match self.0.resolve(ctx, field).await {
+            Ok(value) => Ok(value),
+            Err(error) => {
+                ctx.add_error(error);
+                Ok(Value::List(Vec::new()))
+            }
+        }
+    }
+}
+
 /// Successful result for one requested entity mutation.
 #[Object]
 impl<E: SoupEntityEdges> GraphqlMutationSuccess<E> {
     /// Ordered normalized-cache effects produced by the mutation.
-    async fn effects(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<SoupPatch<E>>> {
+    async fn effects(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<CommittedEffects<SoupPatch<E>>> {
         let user_id = mutation_actor(ctx)?.user_id;
         // The rows a write just committed, which a replica may not have
         // replayed yet: a replica read would return the old row or none.
         let loader = ctx
             .data_opt::<PrimarySoupItemLoader>()
             .map(PrimarySoupItemLoader::loader);
-        let patches = async_graphql::futures_util::future::try_join_all(
+        let patches = async_graphql::futures_util::future::join_all(
             self.effects
                 .iter()
                 .filter(|effect| has_soup_record(effect.entity().entity_type))
@@ -396,8 +429,19 @@ impl<E: SoupEntityEdges> GraphqlMutationSuccess<E> {
                     }
                 }),
         )
-        .await?;
-        Ok(patches.into_iter().flatten().collect())
+        .await;
+        let mut rendered = Vec::new();
+        for patch in patches {
+            match patch {
+                Ok(patch) => rendered.extend(patch),
+                // These reads happen after the write has committed. Report
+                // the missing effect without nulling the mutation outcomes.
+                Err(error) => {
+                    ctx.add_error(ctx.set_error_path(error.into_server_error(ctx.item.pos)))
+                }
+            }
+        }
+        Ok(CommittedEffects(rendered))
     }
 }
 

@@ -154,6 +154,19 @@ impl QueryRoot {
         }
     }
 
+    /// Return two committed outcomes, one with a broken cache effect.
+    async fn committed_copies(&self) -> Vec<super::GraphqlEntityMutationResult<TestSoupEdges>> {
+        vec![
+            super::GraphqlEntityMutationResult::from_updated_entity(
+                EntityType::Document.with_entity_string("committed-copy".to_string()),
+            ),
+            super::GraphqlEntityMutationResult::Success(super::GraphqlMutationSuccess {
+                effects: Vec::new(),
+                edges: std::marker::PhantomData,
+            }),
+        ]
+    }
+
     /// Return a successful outcome whose effects touch only entities listed outside Soup.
     async fn database_and_form_effects(&self) -> super::GraphqlMutationSuccess<TestSoupEdges> {
         super::GraphqlMutationSuccess {
@@ -246,6 +259,42 @@ async fn unsupported_soup_deletion_is_a_graphql_error() {
         response.errors[0]
             .message
             .contains("cannot be represented as a Soup cache deletion")
+    );
+}
+
+#[tokio::test]
+async fn an_effect_error_preserves_committed_batch_outcomes() {
+    let actor = EntityMutationActor {
+        user_id: MacroUserIdStr::parse_from_str("macro|graphql-test@example.com").unwrap(),
+        organization_id: None,
+    };
+    let response = Schema::build(QueryRoot, async_graphql::EmptyMutation, EmptySubscription)
+        .finish()
+        .execute(
+            Request::new(
+                "{ committedCopies { __typename ... on GraphqlMutationSuccess { effects { __typename } } } }",
+            )
+            .data(actor),
+        )
+        .await;
+
+    assert_eq!(response.errors.len(), 1);
+    assert_eq!(
+        response.errors[0].path,
+        [
+            async_graphql::PathSegment::Field("committedCopies".into()),
+            async_graphql::PathSegment::Index(0),
+            async_graphql::PathSegment::Field("effects".into()),
+        ],
+    );
+    assert_eq!(
+        response.data,
+        value!({
+            "committedCopies": [
+                { "__typename": "GraphqlMutationSuccess", "effects": [] },
+                { "__typename": "GraphqlMutationSuccess", "effects": [] },
+            ],
+        }),
     );
 }
 
