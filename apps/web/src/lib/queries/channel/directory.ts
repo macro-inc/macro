@@ -2316,6 +2316,7 @@ export function createCachedChannelDirectory(
         departures.reset();
         // What was read, and seen since, was of the cache in other hands.
         lastRead = undefined;
+        publishedLane = LANE_NOT_STARTED;
         restartFallback();
         render();
       });
@@ -2323,6 +2324,7 @@ export function createCachedChannelDirectory(
       // Another viewer's cache: nothing in it is this viewer's.
       lane = LANE_NOT_STARTED;
       lastRead = undefined;
+      publishedLane = LANE_NOT_STARTED;
       render();
     }
     return scope;
@@ -2447,6 +2449,9 @@ export function createCachedChannelDirectory(
         generation = undefined;
         lane = LANE_NOT_STARTED;
         lastRead = undefined;
+        // A by-id read in the new storage, before a full read lists it,
+        // shows no pass of the old one.
+        publishedLane = LANE_NOT_STARTED;
         adopted = undefined;
         batch(() => {
           // What a by-id read wrote into the old one is gone, and the

@@ -1509,6 +1509,34 @@ describe('cached channel directory', () => {
       expect(directory.complete()).toBe(false);
     });
 
+    it('shows no pass of the old storage as current from a by-id read after a reset', async () => {
+      const { cache, directory, host, resetStorage } = mountCachedDirectory(
+        [channelRecord('b')],
+        {
+          sessionStartedAt: Date.parse(LOADED_AT),
+          updatesLiveSince: () => Date.parse(LOADED_AT),
+        }
+      );
+      cache.put(channelRecord('a'));
+      lanePass('g1', '2026-11-21T08:00:01.000Z', 'finished');
+      await vi.waitFor(() => expect(directory.removalsCurrent()).toBe(true));
+
+      // The new storage's first full read fails before it lists anything.
+      const listings = host.search.mock.calls.length;
+      host.search.mockRejectedValue(new Error('storage busy'));
+      resetStorage('g2');
+      await vi.waitFor(() => {
+        expect(host.search.mock.calls.length).toBeGreaterThan(listings);
+        expect(host.search.mock.settledResults.at(-1)?.type).toBe('rejected');
+      });
+
+      // A lookup's by-id read lands in the new storage.
+      directory.lookup(channelUuid('b'));
+      await vi.waitFor(() => expect(ids(directory.channels())).toContain('b'));
+      expect(directory.viewsCurrent()).toBe(false);
+      expect(directory.removalsCurrent()).toBe(false);
+    });
+
     it('is not current again once the storage resets', async () => {
       const { cache, directory, resetStorage } = mountCachedDirectory([], {
         sessionStartedAt: Date.parse(LOADED_AT),
