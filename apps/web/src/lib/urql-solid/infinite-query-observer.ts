@@ -81,8 +81,18 @@ type SelectionCache<PageData, PageParam, SelectedData> = {
 };
 
 /** Waits for a promise to settle, whatever its outcome. */
-const settled = (promise: Promise<unknown>): Promise<unknown> =>
-  ResultAsync.fromPromise(promise, () => undefined).then(() => undefined);
+async function settled(promise: Promise<unknown>): Promise<void> {
+  await ResultAsync.fromPromise(promise, () => undefined);
+}
+
+/** Runs `next` once `pending` settles; `pending`'s failure stays its own. */
+async function afterSettled<T>(
+  pending: Promise<unknown>,
+  next: () => Promise<T>
+): Promise<T> {
+  await settled(pending);
+  return next();
+}
 
 function sameReferences<T>(left: readonly T[], right: readonly T[]): boolean {
   return (
@@ -366,7 +376,7 @@ export class InfiniteQueryObserver<
     const pendingRefetch = this.refetchPromise;
     // A failed refetch belongs to whoever started it; this page still loads.
     const action = pendingRefetch
-      ? settled(pendingRefetch).then(() =>
+      ? afterSettled(pendingRefetch, () =>
           this.runFetchNextPage(refetchOptions, signal)
         )
       : this.runFetchNextPage(refetchOptions, signal);
@@ -396,13 +406,13 @@ export class InfiniteQueryObserver<
     // One that keeps failures never inherits a strict refetch's rejection.
     if (pending)
       return this.refetchThrows && refetchOptions.throwOnError !== true
-        ? settled(pending).then(() => this.actionResult())
+        ? afterSettled(pending, async () => this.actionResult())
         : pending;
 
     const signal = this.actionController.signal;
     const pendingFetchNext = this.fetchNextPromise;
     const action = pendingFetchNext
-      ? settled(pendingFetchNext).then(() =>
+      ? afterSettled(pendingFetchNext, () =>
           this.runRefetch(refetchOptions, signal)
         )
       : this.runRefetch(refetchOptions, signal);
