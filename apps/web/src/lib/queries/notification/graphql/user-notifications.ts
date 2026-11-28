@@ -124,8 +124,14 @@ export function createGraphqlNotificationsQuery(
       isEnabled: () => query.isEnabled,
       // Rows render each notification's cached state.
       cacheMaintained: hasGraphqlCacheHost,
+      // Starts after any read in flight, which may predate the write or be
+      // the one a write's reread gave up on.
       refresh: () =>
-        query.refetch({ requestPolicy: 'network-only', throwOnError: true }),
+        query.refetch({
+          requestPolicy: 'network-only',
+          throwOnError: true,
+          fresh: true,
+        }),
     })
   );
 

@@ -89,7 +89,7 @@ export interface SoupItemsQueryOptions {
   onBeforeGraphqlRefresh?: () => void;
   /**
    * The reader neither shows nor filters or sorts by notification or read
-   * state, so writes that change only that state skip reading it again.
+   * state, so it reads the lighter preview projection.
    */
   ignoresNotifications?: boolean;
 }
@@ -468,7 +468,6 @@ export function useSoupAstItemsQuery(
       }),
       // Grouped lists don't report it yet, so writes still read them again.
       cacheMaintained: () => activeGraphqlQuery().cacheMaintained?.() ?? false,
-      ignoresNotifications: () => options?.().ignoresNotifications ?? false,
     })
   );
 

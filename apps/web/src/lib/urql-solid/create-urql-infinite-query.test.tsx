@@ -1,4 +1,12 @@
-import { networkRevalidationExchange } from '@graphql-cache/exchange/network-revalidation-exchange';
+import {
+  networkRevalidated,
+  networkRevalidationExchange,
+} from '@graphql-cache/exchange/network-revalidation-exchange';
+import {
+  type Span,
+  Telemetry,
+  type TraceContext,
+} from '@macro-inc/observability';
 import {
   type Client,
   CombinedError,
@@ -11,7 +19,7 @@ import {
 } from '@urql/core';
 import { createRoot, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import {
   empty,
   fromPromise,
@@ -24,6 +32,7 @@ import {
 import { createUrqlInfiniteQuery } from './create-urql-infinite-query';
 import { InfiniteQueryObserver } from './infinite-query-observer';
 import { createPagedNetworkRevalidation } from './paged-network-revalidation';
+import { TRACE_PARENT_CONTEXT_KEY } from './trace-parent-exchange';
 
 type Page = {
   values: string[];
@@ -467,6 +476,83 @@ describe('createUrqlInfiniteQuery', () => {
     expect(query.data).toEqual(['first-refreshed', 'second-refreshed']);
   });
 
+  it('reports the error when a strict refetch loses a replacement page', async () => {
+    const fake = makeFakeClient();
+    let query!: ReturnType<
+      typeof createUrqlInfiniteQuery<Page, Variables, string | null, string[]>
+    >;
+    const dispose = createRoot((rootDispose) => {
+      query = createUrqlInfiniteQuery<Page, Variables, string | null, string[]>(
+        () => ({
+          query: DOCUMENT,
+          client: fake.client,
+          initialPageParam: null,
+          variables: (cursor) => ({ cursor }),
+          getNextPageParam: (lastPage) => lastPage.nextCursor,
+          select: ({ pages }) => pages.flatMap((page) => page.values),
+        })
+      );
+      return rootDispose;
+    });
+    disposals.push(dispose);
+
+    fake.executions[0]?.next({ values: ['first'], nextCursor: 'cursor-1' });
+    const nextPage = query.fetchNextPage();
+    fake.executions[1]?.next({ values: ['second'], nextCursor: null });
+    await nextPage;
+
+    const refetch = query.refetch({ throwOnError: true });
+    fake.executions[2]?.next({
+      values: ['first-refreshed'],
+      nextCursor: 'cursor-2',
+    });
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(4));
+    const offline = new CombinedError({ networkError: new Error('offline') });
+    fake.executions[3]?.fail(offline);
+
+    await expect(refetch).rejects.toBe(offline);
+    expect(query.data).toEqual(['first-refreshed', 'second']);
+    expect(query.error).toBe(offline);
+    expect(fake.executions[3]?.unsubscribed).toBe(true);
+  });
+
+  it('keeps a failed strict refetch from failing the actions that wait on it', async () => {
+    const fake = makeFakeClient();
+    let query!: ReturnType<
+      typeof createUrqlInfiniteQuery<Page, Variables, string | null, string[]>
+    >;
+    const dispose = createRoot((rootDispose) => {
+      query = createUrqlInfiniteQuery<Page, Variables, string | null, string[]>(
+        () => ({
+          query: DOCUMENT,
+          client: fake.client,
+          initialPageParam: null,
+          variables: (cursor) => ({ cursor }),
+          getNextPageParam: (lastPage) => lastPage.nextCursor,
+          select: ({ pages }) => pages.flatMap((page) => page.values),
+        })
+      );
+      return rootDispose;
+    });
+    disposals.push(dispose);
+    fake.executions[0]?.next({ values: ['first'], nextCursor: 'cursor-1' });
+
+    // A background reread after a write, then the user's own actions.
+    const strict = query.refetch({ throwOnError: true });
+    const joined = query.refetch();
+    const loadMore = query.fetchNextPage();
+    const offline = new CombinedError({ networkError: new Error('offline') });
+    fake.executions[1]?.fail(offline);
+
+    await expect(strict).rejects.toBe(offline);
+    await expect(joined).resolves.toBeDefined();
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(3));
+    expect(fake.executions[2]?.variables).toEqual({ cursor: 'cursor-1' });
+    fake.executions[2]?.next({ values: ['second'], nextCursor: null });
+    await expect(loadMore).resolves.toBeDefined();
+    expect(query.data).toEqual(['first', 'second']);
+  });
+
   it('releases a pending replacement page as soon as the refetch is cancelled', async () => {
     const fake = makeFakeClient();
     let query!: ReturnType<
@@ -654,8 +740,18 @@ describe('createUrqlInfiniteQuery under the revalidation exchange', () => {
   `;
 
   /** A server listing `rows` two at a time, after the row named by a cursor. */
-  function serve(rows: string[]) {
+  function serve(
+    rows: string[],
+    {
+      failReadsAfterWrite = false,
+      onRead,
+    }: {
+      failReadsAfterWrite?: boolean;
+      onRead?: (operation: Operation) => void;
+    } = {}
+  ) {
     const reads: (string | null)[] = [];
+    let written = false;
     const client = createClient({
       url: 'http://test/graphql',
       exchanges: [
@@ -665,9 +761,26 @@ describe('createUrqlInfiniteQuery under the revalidation exchange', () => {
             operations$,
             mergeMap((operation) => {
               if (operation.kind === 'teardown') return empty;
-              if (operation.kind === 'mutation') rows.shift();
+              if (operation.kind === 'mutation') {
+                rows.shift();
+                written = true;
+              }
+              if (operation.kind === 'query' && failReadsAfterWrite && written)
+                return fromPromise(
+                  Promise.resolve({
+                    operation,
+                    error: new CombinedError({
+                      networkError: new Error('offline'),
+                    }),
+                    stale: false,
+                    hasNext: false,
+                  } as OperationResult)
+                );
               const cursor: string | null = operation.variables?.cursor ?? null;
-              if (operation.kind === 'query') reads.push(cursor);
+              if (operation.kind === 'query') {
+                reads.push(cursor);
+                onRead?.(operation);
+              }
               const start = cursor === null ? 0 : rows.indexOf(cursor) + 1;
               const values = rows.slice(start, start + 2);
               const data =
@@ -726,6 +839,97 @@ describe('createUrqlInfiniteQuery under the revalidation exchange', () => {
       // Re-sending page 2 after b would show c twice.
       expect(query.data).toEqual(['b', 'c', 'd', 'e']);
       expect(server.reads).toEqual([null, 'c']);
+    });
+  });
+
+  it("sends every page it reads again after a write in the write's trace", async () => {
+    let trace = 'none';
+    const sentIn: string[] = [];
+    const reread = {
+      setAttr: () => {},
+      run: <T,>(work: () => T) => {
+        trace = 'reread';
+        try {
+          return work();
+        } finally {
+          trace = 'none';
+        }
+      },
+    } as unknown as Span;
+    const original = Telemetry.span.bind(Telemetry);
+    // Only the exchange's reread span is faked; the queries keep their own.
+    const span = vi
+      .spyOn(Telemetry, 'span')
+      .mockImplementation(((...args: Parameters<typeof Telemetry.span>) =>
+        args[0] === 'graphql.mutation.network_revalidation'
+          ? (args.at(-1) as (span: Span) => unknown)(reread)
+          : original(...args)) as typeof Telemetry.span);
+    onTestFinished(() => span.mockRestore());
+    const server = serve(['a', 'b', 'c', 'd', 'e'], {
+      // As the trace exchange's fetch does when it sends.
+      onRead: (operation) => {
+        const parent: TraceContext | undefined =
+          operation.context[TRACE_PARENT_CONTEXT_KEY];
+        sentIn.push(parent ? parent.run(() => trace) : trace);
+      },
+    });
+    await createRoot(async (dispose) => {
+      disposals.push(dispose);
+      const networkRevalidation = createPagedNetworkRevalidation(() => query, {
+        client: () => server.client,
+        chain: () => null,
+        reads: () => true,
+      });
+      const query = createUrqlInfiniteQuery(() => ({
+        client: server.client,
+        query: LIST,
+        initialPageParam: null as string | null,
+        context: { networkRevalidation: networkRevalidation() },
+        variables: (cursor: string | null) => ({ cursor }),
+        getNextPageParam: (data: { page: Page }) => data.page.nextCursor,
+        select: ({ pages }: { pages: { page: Page }[] }) =>
+          pages.flatMap((data) => data.page.values),
+      }));
+      await vi.waitFor(() => expect(query.data).toEqual(['a', 'b']));
+      await query.fetchNextPage();
+      sentIn.length = 0;
+
+      await server.client.mutation(ARCHIVE, {}).toPromise();
+      // Page 2 is sent after page 1's await, outside the span's own run.
+      expect(sentIn).toEqual(['reread', 'reread']);
+
+      // A later read of the same pages is not part of the write.
+      await query.refetch({ requestPolicy: 'network-only' });
+      expect(sentIn).toEqual(['reread', 'reread', 'none', 'none']);
+    });
+  });
+
+  it('does not report a write as read again when the list read fails', async () => {
+    const server = serve(['a', 'b', 'c'], { failReadsAfterWrite: true });
+    await createRoot(async (dispose) => {
+      disposals.push(dispose);
+      const networkRevalidation = createPagedNetworkRevalidation(() => query, {
+        client: () => server.client,
+        chain: () => null,
+        reads: () => true,
+      });
+      const query = createUrqlInfiniteQuery(() => ({
+        client: server.client,
+        query: LIST,
+        initialPageParam: null as string | null,
+        context: { networkRevalidation: networkRevalidation() },
+        variables: (cursor: string | null) => ({ cursor }),
+        getNextPageParam: (data: { page: Page }) => data.page.nextCursor,
+        select: ({ pages }: { pages: { page: Page }[] }) =>
+          pages.flatMap((data) => data.page.values),
+      }));
+      await vi.waitFor(() => expect(query.data).toEqual(['a', 'b']));
+
+      const result = await server.client.mutation(ARCHIVE, {}).toPromise();
+
+      // A caller that would read the list itself must still do so.
+      expect(result.data).toEqual({ archive: true });
+      expect(networkRevalidated(result)).toBe(false);
     });
   });
 

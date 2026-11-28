@@ -1,15 +1,11 @@
 import type { UnifiedNotification } from '@notifications/types';
-import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import type {
   GraphqlEntityType,
   NotificationEntityInput,
   NotificationUpdateOperation,
 } from '@service-storage/graphql/generated/graphql';
 import { updateNotificationsForEntities as updateGraphqlNotificationsForEntities } from '@service-storage/graphql-notifications';
-import {
-  graphqlCacheEnabled,
-  mapGraphqlNotification,
-} from '@service-storage/graphql-soup';
+import { mapGraphqlNotification } from '@service-storage/graphql-soup';
 
 type SimpleNotificationEntityType =
   | 'agent_session'
@@ -125,10 +121,10 @@ export function toNotificationEntityInput(
  * reader the cache maintains, and the rest are read again. A Done records the
  * rows this client showed but the server left out
  * (`confirmEntityNotificationsDone`); a mark seen that left out an expected
- * row reads every reader again. Without the cache, mounted readers are read
- * again. It is deliberately not mirrored into the legacy TanStack
- * notification cache. Returned rows include only the exact IDs needed by a
- * later ID-scoped undo.
+ * row reads every reader again. Without the cache, the client reads mounted
+ * readers again before the write settles. It is deliberately not mirrored
+ * into the legacy TanStack notification cache. Returned rows include only the
+ * exact IDs needed by a later ID-scoped undo.
  */
 export async function updateNotificationsForEntities(args: {
   entities: NotificationEntityRef[];
@@ -143,8 +139,5 @@ export async function updateNotificationsForEntities(args: {
     operation: args.operation,
     expectedNotificationIds: args.expectedNotificationIds,
   });
-  if (!graphqlCacheEnabled()) {
-    await refreshActiveGraphqlSoupQueries({ notificationsOnly: true });
-  }
   return rows.map((row) => mapGraphqlNotification(row));
 }

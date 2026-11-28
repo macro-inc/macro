@@ -1,6 +1,14 @@
+import { TRACE_PARENT_CONTEXT_KEY } from '@app/lib/urql-solid/trace-parent-exchange';
+import { fireAndForget } from '@core/util/fireAndForget';
+import {
+  networkRevalidated,
+  networkRevalidationIncomplete,
+} from '@graphql-cache/exchange/network-revalidation-exchange';
 import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import type { Client, OperationResult } from '@urql/core';
 import { revalidateNotificationReaders } from '../../queries/notification/revalidation';
+import { refreshActiveGraphqlSoupQueries } from '../../queries/soup/graphql/active-queries';
 import {
   getChannelListRevalidations,
   revalidateChannelLists,
@@ -46,6 +54,53 @@ function missedExpectedSeen(
   return (args.expectedNotificationIds ?? []).some((id) => !changed.has(id));
 }
 
+/**
+ * A list read the exchange started after this write failed or timed out: every
+ * mounted Soup list reads again through its own refresh, in cursor order (a
+ * saved page request cannot follow a cursor the write moved), with the
+ * caller's other readers. The write does not wait for them: a read that
+ * stalled the exchange would stall its caller again. The registry coalesces
+ * reads from many callers, so they start their own traces; the write's span
+ * records that it fell back.
+ */
+function readAgainAfterFailedReread(
+  span: Span,
+  reads: Promise<unknown>[]
+): void {
+  span.setAttr('revalidation.fallback', true);
+  fireAndForget(
+    Promise.allSettled([refreshActiveGraphqlSoupQueries(), ...reads]),
+    'notification-write'
+  );
+}
+
+/**
+ * A failed write marks its span failed with a fixed message, since a server
+ * message may carry user text, and records whether the request reached the
+ * server. A queued write's rows are this client's guess, so only a write the
+ * server answered records how many rows it changed.
+ */
+function recordOutcome(
+  span: Span,
+  result: OperationResult,
+  changed: number | undefined
+): void {
+  const disposition = optimisticMutationDispositionOf(result)?.kind;
+  span.setAttr('notification.disposition', disposition ?? 'none');
+  if (result.error) {
+    span.setAttr(
+      'notification.error_kind',
+      result.error.networkError ? 'network' : 'graphql'
+    );
+    span.error('Notification update failed');
+  } else if (
+    changed !== undefined &&
+    (disposition === undefined || disposition === 'committed')
+  ) {
+    span.setAttr('notification.changed_count', changed);
+  }
+}
+
 /** Authoritative rows returned after an entity-scoped notification write. */
 export type GraphqlUpdateNotificationsForEntitiesResult =
   UpdateNotificationsForEntityMutation['updateNotificationsForEntity'];
@@ -76,19 +131,37 @@ export async function executeGraphqlUpdateNotifications(
       operation: args.operation,
     },
   };
-  const result = await client
-    .mutation(UpdateNotificationsDocument, variables, {
-      optimisticMutation: {
-        revalidations: getChannelListRevalidations(client),
-      },
-    })
-    .toPromise();
+  return Telemetry.span('notification.update_status', async (span) => {
+    span.setAttr('notification.operation', args.operation);
+    span.setAttr('notification.count', args.notificationIds.length);
+    if (args.notificationIds.length === 1)
+      span.setAttr('notification.id', args.notificationIds[0]);
+    // Its request, queue attempt and the exchange's rereads join this trace.
+    const result = await client
+      .mutation(UpdateNotificationsDocument, variables, {
+        optimisticMutation: {
+          revalidations: getChannelListRevalidations(client),
+        },
+        [TRACE_PARENT_CONTEXT_KEY]: span,
+      })
+      .toPromise();
+    recordOutcome(span, result, result.data?.updateNotifications.length);
 
-  // Without the normalized exchange there is no durable revalidation runner.
-  if (!result.error && optimisticMutationDispositionOf(result) === undefined) {
-    await revalidateChannelLists(client);
-  }
-  return result;
+    // Without the normalized exchange there is no durable revalidation runner;
+    // the client's own exchange may already have read the lists again. With a
+    // disabled host the queue commits the write but leaves the reads to that
+    // exchange, so a read it could not finish is done here.
+    if (!result.error && networkRevalidationIncomplete(result)) {
+      readAgainAfterFailedReread(span, [revalidateChannelLists(client)]);
+    } else if (
+      !result.error &&
+      !networkRevalidated(result) &&
+      optimisticMutationDispositionOf(result) === undefined
+    ) {
+      await revalidateChannelLists(client);
+    }
+    return result;
+  });
 }
 
 /**
@@ -114,19 +187,41 @@ export async function executeGraphqlUpdateNotificationsForEntities(
     },
   };
 
-  const result = await client
-    .mutation(UpdateNotificationsForEntityDocument, variables)
-    .toPromise();
-  if (!result.error && result.data) {
-    // The changed rows update every reader the cache maintains; the others
-    // are read again. A stale mark seen reads every reader again: the rows
-    // it left out are seen or done, and only the server knows which.
-    await revalidateNotificationReaders(client, {
-      unmaintainedOnly: !missedExpectedSeen(
-        args,
-        result.data.updateNotificationsForEntity
-      ),
-    });
-  }
-  return result;
+  return Telemetry.span('notification.update_for_entities', async (span) => {
+    span.setAttr('notification.operation', args.operation);
+    span.setAttr('notification.entity_count', variables.input.entities.length);
+    const [first] = variables.input.entities;
+    if (variables.input.entities.length === 1 && first) {
+      span.setAttr('entity.id', String(first.entityId));
+      span.setAttr('entity.type', first.entityType);
+    }
+    const result = await client
+      .mutation(UpdateNotificationsForEntityDocument, variables, {
+        [TRACE_PARENT_CONTEXT_KEY]: span,
+      })
+      .toPromise();
+    recordOutcome(
+      span,
+      result,
+      result.data?.updateNotificationsForEntity.length
+    );
+    // Without the cache the client's exchange already read every mounted
+    // query again before the write settled.
+    if (!result.error && networkRevalidationIncomplete(result)) {
+      // The saved page requests are read again too: a grouped list rebuilds
+      // its continuations only from them without the cache.
+      readAgainAfterFailedReread(span, [revalidateNotificationReaders(client)]);
+    } else if (!result.error && result.data && !networkRevalidated(result)) {
+      // The changed rows update every reader the cache maintains; the others
+      // are read again. A stale mark seen reads every reader again: the rows
+      // it left out are seen or done, and only the server knows which.
+      await revalidateNotificationReaders(client, {
+        unmaintainedOnly: !missedExpectedSeen(
+          args,
+          result.data.updateNotificationsForEntity
+        ),
+      });
+    }
+    return result;
+  });
 }

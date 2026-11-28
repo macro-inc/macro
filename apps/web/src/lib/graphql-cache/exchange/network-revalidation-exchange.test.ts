@@ -1,4 +1,9 @@
 import {
+  type Span,
+  Telemetry,
+  type TraceContext,
+} from '@macro-inc/observability';
+import {
   CombinedError,
   createClient,
   gql,
@@ -8,10 +13,13 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { empty, makeSubject, mergeMap, pipe, type Subject } from 'wonka';
 import { createQueryAuthorization } from '../../queries/authorization';
+import { TRACE_PARENT_CONTEXT_KEY } from '../../urql-solid/trace-parent-exchange';
 import {
+  networkRevalidated,
   networkRevalidationExchange,
   registerNetworkRevalidation,
 } from './network-revalidation-exchange';
+import { withOptimisticMutationDisposition } from './optimistic';
 
 const LIST = gql`query List { items { id tags } }`;
 const DETAIL = gql`query Detail { item { id tags } }`;
@@ -62,7 +70,10 @@ function setup(enabled = () => true) {
 }
 
 describe('networkRevalidationExchange', () => {
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
   it('updates every mounted query before releasing mutation optimism', async () => {
     const { client, requests, respond, flush } = setup();
     const events: string[] = [];
@@ -90,6 +101,45 @@ describe('networkRevalidationExchange', () => {
     expect(events).toEqual(['list', 'detail', 'saved']);
     list.unsubscribe();
     detail.unsubscribe();
+  });
+
+  it('reads the queries again in the trace the write named', async () => {
+    const { client, requests, respond, flush } = setup();
+    const list = client.query(LIST, {}).subscribe(() => {});
+    respond(0);
+    const runs = { parent: 0, reread: 0 };
+    const parent: TraceContext = {
+      run: (work) => {
+        runs.parent += 1;
+        return work();
+      },
+    };
+    const reread = {
+      setAttr: () => {},
+      run: <T>(work: () => T) => {
+        runs.reread += 1;
+        return work();
+      },
+    } as unknown as Span;
+    vi.spyOn(Telemetry, 'span').mockImplementation(((
+      _name: string,
+      operation: (span: Span) => Promise<unknown>
+    ) => operation(reread)) as typeof Telemetry.span);
+    const saved = client
+      .mutation(SAVE, {}, { [TRACE_PARENT_CONTEXT_KEY]: parent })
+      .toPromise();
+    respond(1);
+    await flush();
+    expect(runs.parent).toBe(1);
+    // The re-sent list's request joins the reread's trace; a later send of
+    // the same operation, outside this write, does not.
+    const resent = requests[2].operation.context[TRACE_PARENT_CONTEXT_KEY];
+    resent?.run(() => {});
+    resent?.run(() => {});
+    expect(runs.reread).toBe(1);
+    respond(2);
+    await saved;
+    list.unsubscribe();
   });
 
   it('captures fresh authorization for mutation-triggered revalidation', async () => {
@@ -266,6 +316,8 @@ describe('networkRevalidationExchange', () => {
     respond(2, { data: undefined, error });
     expect((await saved).error).toBeUndefined();
     expect(errors.at(-1)).toBe(error);
+    // A caller that would read the list itself still does.
+    expect(networkRevalidated(await saved)).toBe(false);
     list.unsubscribe();
   });
 
@@ -283,6 +335,67 @@ describe('networkRevalidationExchange', () => {
       requests.filter(({ operation }) => operation.kind === 'query')
     ).toHaveLength(1);
     list.unsubscribe();
+  });
+
+  it('reads queries again after a write whose response was lost, without holding its error', async () => {
+    const { client, requests, respond, flush } = setup();
+    const list = client.query(LIST, {}).subscribe(() => {});
+    respond(0);
+    const saved = client.mutation(SAVE, {}).toPromise();
+    const error = new CombinedError({ networkError: new Error('dropped') });
+    respond(1, { data: undefined, error });
+    const result = await saved;
+    expect(result.error).toBe(error);
+    expect(networkRevalidated(result)).toBe(false);
+    await flush();
+    expect(
+      requests.filter(({ operation }) => operation.kind === 'query')
+    ).toHaveLength(2);
+    list.unsubscribe();
+  });
+
+  it('reads queries again after a lost write the cache gave up on', async () => {
+    const { client, requests, respond, flush } = setup();
+    const list = client.query(LIST, {}).subscribe(() => {});
+    respond(0);
+    const saved = client.mutation(SAVE, {}).toPromise();
+    const error = new CombinedError({ networkError: new Error('dropped') });
+    const failed = withOptimisticMutationDisposition(
+      {
+        operation: requests[1].operation,
+        data: undefined,
+        error,
+        stale: false,
+        hasNext: false,
+      },
+      { kind: 'permanently-failed' }
+    );
+    respond(1, failed);
+    expect((await saved).error).toBe(error);
+    await flush();
+    expect(
+      requests.filter(({ operation }) => operation.kind === 'query')
+    ).toHaveLength(2);
+    list.unsubscribe();
+  });
+
+  it('marks a write whose queries it read again before it settled', async () => {
+    const { client, respond, flush } = setup();
+    const list = client.query(LIST, {}).subscribe(() => {});
+    respond(0);
+    const saved = client.mutation(SAVE, {}).toPromise();
+    respond(1);
+    await flush();
+    respond(2);
+    expect(networkRevalidated(await saved)).toBe(true);
+    list.unsubscribe();
+  });
+
+  it('leaves a write it did not read for unmarked', async () => {
+    const { client, respond } = setup(() => false);
+    const saved = client.mutation(SAVE, {}).toPromise();
+    respond(0);
+    expect(networkRevalidated(await saved)).toBe(false);
   });
 
   it('lets a paged reader read its own pages again, once per write', async () => {
@@ -355,8 +468,56 @@ describe('networkRevalidationExchange', () => {
     await vi.advanceTimersByTimeAsync(15_000);
     await done;
     expect((await saved).error).toBeUndefined();
+    expect(networkRevalidated(await saved)).toBe(false);
     failing.unsubscribe();
     stalled.unsubscribe();
+  });
+
+  it('leaves a paged reader that outlasts the wait outside the write trace', async () => {
+    vi.useFakeTimers();
+    const { client, respond } = setup();
+    let rereadRuns = 0;
+    const reread = {
+      setAttr: () => {},
+      run: <T>(work: () => T) => {
+        rereadRuns += 1;
+        return work();
+      },
+    } as unknown as Span;
+    vi.spyOn(Telemetry, 'span').mockImplementation(((
+      _name: string,
+      operation: (span: Span) => Promise<unknown>
+    ) => operation(reread)) as typeof Telemetry.span);
+    let trace: TraceContext | undefined;
+    const list = client
+      .query(
+        LIST,
+        { page: 1 },
+        {
+          networkRevalidation: {
+            revalidate: (given) => {
+              trace = given;
+              return new Promise(() => {});
+            },
+            active: () => true,
+            gone: () => false,
+          },
+        }
+      )
+      .subscribe(() => {});
+    respond(0);
+    const saved = client.mutation(SAVE, {}).toPromise();
+    respond(1);
+    await vi.advanceTimersByTimeAsync(0);
+    // A page sent while the exchange waits joins the reread.
+    trace?.run(() => {});
+    expect(rereadRuns).toBe(1);
+    await vi.advanceTimersByTimeAsync(15_000);
+    await saved;
+    // One sent after it gave up, such as a recovery's read, does not.
+    trace?.run(() => {});
+    expect(rereadRuns).toBe(1);
+    list.unsubscribe();
   });
 
   it('re-sends a query whose paged reader is gone', async () => {

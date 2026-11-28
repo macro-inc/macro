@@ -20,7 +20,7 @@ export function mutationTraceParentOf(
  * The caller's context for the operation's first request only: a re-sent
  * operation (cache revalidation, refetch) must not join a trace that ended.
  */
-function firstRequestIn(parent: TraceContext): TraceContext {
+export function firstRequestIn(parent: TraceContext): TraceContext {
   let used = false;
   return {
     run(work) {

@@ -1454,9 +1454,13 @@ export function createSoupLiveQuery(
       }
       // An explicit list refresh rebuilds the cursor chain in order. The
       // notification queue observes isFetching and waits for this to finish.
+      // It reads after the write that asked for it: a read already in flight
+      // may predate the write, or be one the exchange gave up on, so this one
+      // starts once that settles instead of joining it.
       await query.refetch({
         requestPolicy: 'network-only',
         throwOnError: true,
+        fresh: true,
       });
     },
   };
