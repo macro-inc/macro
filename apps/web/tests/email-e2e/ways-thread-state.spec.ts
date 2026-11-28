@@ -114,9 +114,8 @@ for (const provider of PROVIDERS) {
         .toMatchObject({ state: 'pending', condition: 'if_no_reply' });
     });
 
-    // When this fails, a thread trashed while its mark read is still on its
-    // way stays in the list, read and with no time: the list's refresh after
-    // the Trash leaves it out, and the cache keeps it for the mark read.
+    // Trash hides the row locally while the durable write waits behind the
+    // mark-read request. Settling the older read must keep the row hidden.
     test('# right after opening a thread takes it out of the list before its mark read lands', async ({
       page,
       mailbox,
@@ -131,19 +130,28 @@ for (const provider of PROVIDERS) {
       await expect.poll(marks.held).toBeGreaterThan(0);
       await page.keyboard.press('Shift+Digit3');
       did('AL-145');
+      await expect(page).toHaveURL(/\/app\/mail$/);
+      await expect.poll(() => rowIds(page)).toEqual([ids.Stays]);
+      expect((await held(mailbox, 'Bin'))?.labels).not.toContain(
+        trashFolder(provider)
+      );
+      saw('STL-990');
+
+      const shown = await watchRowIds(page);
+      const settledRead = page.waitForResponse((response) => {
+        const request = response.request();
+        return (
+          graphqlOperation(request) === 'MarkEmailThreadSeen' &&
+          request.postData()?.includes(ids.Bin) === true
+        );
+      });
+      await marks.release();
+      expect(await (await settledRead).json()).toMatchObject({
+        data: { markEmailThreadSeen: { id: ids.Bin, isRead: true } },
+      });
       await expect
         .poll(async () => (await held(mailbox, 'Bin'))?.labels)
         .toContain(trashFolder(provider));
-      await expect(page).toHaveURL(/\/app\/mail$/);
-      await expect.poll(() => rowIds(page)).toEqual([ids.Stays]);
-      saw('STL-990');
-
-      // The mark read landing late does not bring it back. The star of the
-      // other row waits in the queue behind the mark reads: once it reaches
-      // the service, the cache has settled them.
-      const shown = await watchRowIds(page);
-      await marks.release();
-      await allRead(mailbox, ids.Bin);
       await focusRow(page, ids.Stays);
       await page.keyboard.press('s');
       did('AL-061', 'F-073');
