@@ -58,7 +58,8 @@ function getRestoreChannel() {
   }
   return restoreChannel;
 }
-const operationTime = () => performance.timeOrigin + performance.now();
+export const soupOperationTime = () =>
+  performance.timeOrigin + performance.now();
 
 /** A live list may still show its previous snapshot after the cache confirms a tombstone. */
 export function observeGraphqlSoupDeletions(reader: DeletionReader) {
@@ -75,7 +76,8 @@ export type GraphqlSoupDeletion = {
   settle: (
     deletedKeys: readonly string[],
     acknowledgements?: ReadonlyMap<string, Promise<boolean>>,
-    historyOnlyKeys?: ReadonlySet<string>
+    historyOnlyKeys?: ReadonlySet<string>,
+    dispatchedAt?: ReadonlyMap<string, number>
   ) => void;
   release: () => void;
   /** Retire only keys confirmed restored after this deletion began. */
@@ -88,7 +90,6 @@ export function createGraphqlSoupDeletion(
 ): GraphqlSoupDeletion {
   const session = queryAccountSession();
   const account = currentQueryAccount();
-  const startedAt = operationTime();
   const targetKeys = new Set(keys);
   const [pendingKeys, setDeletedKeys] = createSignal(keys);
   const deletedKeys = () =>
@@ -99,6 +100,8 @@ export function createGraphqlSoupDeletion(
   let detachReaders: (() => void) | undefined;
   let unsubscribeRestores: (() => void) | undefined;
   const restoredKeys = new Set<string>();
+  const peerRestores = new Map<string, number>();
+  let dispatches: ReadonlyMap<string, number> | undefined;
   const release = () => {
     if (released) return;
     released = true;
@@ -124,9 +127,20 @@ export function createGraphqlSoupDeletion(
       );
       if (deletedKeys().length === 0) release();
     },
-    settle: (successfulKeys, acknowledgements, historyOnlyKeys) => {
+    settle: (
+      successfulKeys,
+      acknowledgements,
+      historyOnlyKeys,
+      dispatchedAt
+    ) => {
       if (settled || released) return;
       settled = true;
+      dispatches = dispatchedAt;
+      for (const [key, restoreStartedAt] of peerRestores) {
+        if (restoreStartedAt > (dispatches?.get(key) ?? Infinity))
+          restoredKeys.add(key);
+      }
+      peerRestores.clear();
       setDeletedKeys(
         [...new Set(successfulKeys)].filter((key) => !restoredKeys.has(key))
       );
@@ -205,12 +219,19 @@ export function createGraphqlSoupDeletion(
       const { data: receipt } = restoreReceipt.safeParse(event.data);
       if (
         receipt?.viewerId === account.userId &&
-        startedAt < receipt.startedAt &&
         isCurrentQueryAccount(account)
       ) {
-        // A sibling tab can publish the restored row before this reader ever
-        // sees it absent. The restore request still has to postdate this delete.
-        deletion.restore(receipt.keys);
+        for (const key of receipt.keys) {
+          if (!targetKeys.has(key)) continue;
+          if (settled) {
+            if (receipt.startedAt > (dispatches?.get(key) ?? Infinity))
+              deletion.restore([key]);
+          } else if (receipt.startedAt > (peerRestores.get(key) ?? 0)) {
+            // The delete may still be waiting on access. Decide once its actual
+            // dispatch time is available.
+            peerRestores.set(key, receipt.startedAt);
+          }
+        }
       }
     };
     channel?.addEventListener('message', onRestore);
@@ -225,7 +246,7 @@ export function createGraphqlSoupDeletion(
  * survive mutation GC, so consult both sources. */
 export function prepareGraphqlSoupRestore() {
   const account = currentQueryAccount();
-  const startedAt = operationTime();
+  const startedAt = soupOperationTime();
   const deletions = new Set([
     ...(queryClient.getQueryData<RetainedDeletions>(RETAINED_DELETIONS_KEY) ??
       []),

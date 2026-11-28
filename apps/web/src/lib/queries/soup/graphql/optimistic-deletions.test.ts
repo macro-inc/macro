@@ -243,8 +243,20 @@ describe('GraphQL Soup deletion lifecycle', () => {
     const otherKey = 'GraphqlSoupDocument:other';
     clock.mockReturnValue(1);
     const older = createGraphqlSoupDeletion([key, otherKey]);
+    const waitingForAccess = createGraphqlSoupDeletion([key]);
+    const origin = performance.timeOrigin;
+    older.settle(
+      [key, otherKey],
+      undefined,
+      undefined,
+      new Map([
+        [key, origin + 1],
+        [otherKey, origin + 1],
+      ])
+    );
     clock.mockReturnValue(3);
     const newer = createGraphqlSoupDeletion([key]);
+    newer.settle([key], undefined, undefined, new Map([[key, origin + 3]]));
     const peer = new BroadcastChannel('macro:soup-restore');
     try {
       const startedAt = performance.timeOrigin + 2;
@@ -252,10 +264,19 @@ describe('GraphQL Soup deletion lifecycle', () => {
       peer.postMessage({ viewerId: 'viewer', startedAt, keys: [key] });
       await vi.waitFor(() => expect(older.keys()).toEqual([otherKey]));
       expect(newer.keys()).toEqual([key]);
+      expect(waitingForAccess.keys()).toEqual([key]);
+      waitingForAccess.settle(
+        [key],
+        undefined,
+        undefined,
+        new Map([[key, origin + 3]])
+      );
+      expect(waitingForAccess.keys()).toEqual([key]);
     } finally {
       peer.close();
       older.release();
       newer.release();
+      waitingForAccess.release();
       clock.mockRestore();
     }
   });

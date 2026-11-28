@@ -147,7 +147,8 @@ async function settleDssDeletes(
   entities: EntityData[],
   deletions: Promise<boolean>[],
   writer: QueryAccount | undefined,
-  acknowledgements: Map<string, Promise<boolean>>
+  acknowledgements: Map<string, Promise<boolean>>,
+  dispatches: ReadonlyMap<string, number>
 ) {
   const outcomes = await Promise.allSettled(deletions);
   const results = outcomes.map(
@@ -170,10 +171,11 @@ async function settleDssDeletes(
       entities,
       results,
       failure?.reason,
-      acknowledgements
+      acknowledgements,
+      dispatches
     );
   }
-  return { results, acknowledgements };
+  return { results, acknowledgements, dispatches };
 }
 
 function isHistoryList(body: object): boolean {
@@ -249,10 +251,14 @@ export function createBulkDeleteDssItemsMutation() {
       const writer = currentQueryAccount();
       const deletable = entities.filter(isDeletable);
       const acknowledgements = new Map<string, Promise<boolean>>();
+      const dispatches = new Map<string, number>();
       const deletions = deletable.map(async (e) => {
         const key = soupEntityKey(e);
         const acknowledge: OnSoupDeletion | undefined = key
-          ? (ready) => acknowledgements.set(key, ready)
+          ? (ready, dispatchedAt) => {
+              acknowledgements.set(key, ready);
+              dispatches.set(key, dispatchedAt);
+            }
           : undefined;
         if (e.type === 'agent_session') {
           await deleteAgentSession(e.id);
@@ -290,7 +296,13 @@ export function createBulkDeleteDssItemsMutation() {
         }
         return deleteItem({ id: e.id, itemType: e.type }, acknowledge);
       });
-      return settleDssDeletes(deletable, deletions, writer, acknowledgements);
+      return settleDssDeletes(
+        deletable,
+        deletions,
+        writer,
+        acknowledgements,
+        dispatches
+      );
     },
     onMutate: async (entities: EntityData[], context) => {
       if (context.meta?.accountSession !== queryAccountSession())
@@ -345,7 +357,12 @@ export function createBulkDeleteDssItemsMutation() {
         });
         for (const key of legacyKeys) acknowledgements.set(key, ready);
       }
-      deletion.settle(deletedKeys, acknowledgements, historyOnlyKeys);
+      deletion.settle(
+        deletedKeys,
+        acknowledgements,
+        historyOnlyKeys,
+        result?.dispatches
+      );
     },
     onError: (error, entities, context) => {
       if (context && !isCurrentContext(context)) {

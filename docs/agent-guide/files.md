@@ -42,7 +42,8 @@ until the list catches up or unmounts.
 Restore immediately after trash and confirm the row
 returns without waiting for retained deletion markers to expire, even if the
 trash's background refresh failed. Check the same restore from a sibling tab.
-A delete started after the restore request must still hide its row. Deletion and
+A delete sent after the restore request must still hide its row, including
+when the restore arrived during the delete's access lookup. Deletion and
 restore overlays distinguish entity type as
 well as ID, so an unrelated conversation with the same ID remains visible.
 Deleting a non-owned item still only removes it from history. Forking a markdown

@@ -28,7 +28,10 @@ vi.mock('@queries/client', async () => {
 import { UpdateEntitySharePoliciesDocument } from '@service-storage/graphql/generated/graphql';
 import { authKeys } from '../auth/keys';
 import { queryClient } from '../client';
-import { createGraphqlSoupDeletion } from '../soup/graphql/optimistic-deletions';
+import {
+  createGraphqlSoupDeletion,
+  soupOperationTime,
+} from '../soup/graphql/optimistic-deletions';
 
 const UNMAINTAINED = [{ document: 'unmaintained-list', variables: {} }];
 
@@ -265,6 +268,7 @@ it.each([
     // receive the restore through the same receipt handler as a sibling tab.
     const parent = createGraphqlSoupDeletion([parentKey]);
     const restored = createGraphqlSoupDeletion(restoredKeys);
+    const dispatchedAt = soupOperationTime();
     const peer = new BroadcastChannel('macro:soup-restore');
     const send = peer.postMessage.bind(peer);
     const broadcast = vi
@@ -292,6 +296,18 @@ it.each([
     });
     try {
       await restoreEntity(entity);
+      parent.settle(
+        [parentKey],
+        undefined,
+        undefined,
+        new Map([[parentKey, dispatchedAt]])
+      );
+      restored.settle(
+        restoredKeys,
+        undefined,
+        undefined,
+        new Map(restoredKeys.map((key) => [key, dispatchedAt]))
+      );
       await vi.waitFor(() => expect(restored.keys()).toEqual([]));
       expect(parent.keys()).toEqual([parentKey]);
     } finally {

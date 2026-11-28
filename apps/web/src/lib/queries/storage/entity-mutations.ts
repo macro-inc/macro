@@ -26,7 +26,10 @@ import {
   refreshActiveGraphqlSoupQueries,
 } from '../soup/graphql/active-queries';
 import { soupEntityKey } from '../soup/graphql/entity-input';
-import { prepareGraphqlSoupRestore } from '../soup/graphql/optimistic-deletions';
+import {
+  prepareGraphqlSoupRestore,
+  soupOperationTime,
+} from '../soup/graphql/optimistic-deletions';
 import { soupItemKey } from '../soup/graphql/reconciliation';
 
 type EntityWriteResult = {
@@ -67,7 +70,10 @@ function refreshAfterWrite(result: EntityWriteResult, strict = false) {
   fireAndForget(refresh, 'entity-mutation');
 }
 
-export type OnSoupDeletion = (acknowledgement: Promise<boolean>) => void;
+export type OnSoupDeletion = (
+  acknowledgement: Promise<boolean>,
+  dispatchedAt: number
+) => void;
 
 async function deleteEntity(
   entity: EntityRefInput,
@@ -77,6 +83,7 @@ async function deleteEntity(
   const generation = cacheSessionGeneration.capture();
   const host = onDeletion ? getGraphqlCacheHost() : undefined;
   let result: Awaited<ReturnType<typeof write>>;
+  const dispatchedAt = soupOperationTime();
   try {
     result = await write(entity);
   } catch (error) {
@@ -94,7 +101,7 @@ async function deleteEntity(
     throw error;
   }
   if (!cacheSessionGeneration.isCurrent(generation)) {
-    onDeletion?.(Promise.resolve(false));
+    onDeletion?.(Promise.resolve(false), dispatchedAt);
     return;
   }
   if (!onDeletion) {
@@ -113,10 +120,13 @@ async function deleteEntity(
     // Raw list snapshots gate release separately. A failed reread of an
     // unrelated unmaintained list must not veto this tombstone.
     refreshAfterWrite(result);
-    onDeletion(Promise.resolve(true));
+    onDeletion(Promise.resolve(true), dispatchedAt);
     return;
   }
-  onDeletion(refreshAfterWrite({ ...result, effectsResolved: false }, true));
+  onDeletion(
+    refreshAfterWrite({ ...result, effectsResolved: false }, true),
+    dispatchedAt
+  );
 }
 
 export async function moveEntity(
