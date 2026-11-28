@@ -12,16 +12,18 @@ DOM size, and time to the first rows. Loose limits fail it.
 Each size gets a fresh browser context. `seed` is the earlier visit (the
 channel lane's whole pass into an empty cache), `coldOpen` the next load over
 that cache through the lane's refresh pass, then one message pushed over the
-socket, twenty pages of scroll, and Direct messages collapsed and expanded.
-After each step settles (nothing in flight and nothing moving for 3 s) the
-spec collects garbage through CDP
-and reads the heap, DOM, long tasks, requests, the conversation rows the
-rail mounted, and the rows the step asked the server for and got back.
+socket, up to twenty pages of scroll (the rail's rows run out after about
+eight), and Direct messages collapsed and expanded. After each step settles
+(nothing in flight and nothing moving for 3 s) the spec takes the requests
+and the rows the step asked the server for and got back (Soup reads and
+channel previews), then the long tasks, DOM and the conversation rows the
+rail mounted, then collects garbage through CDP and reads the heap.
 
 Each step also checks that it did what it is named for, and the run fails
 when it did not: the seed finished the channel pass into the browser cache,
-the next load reopened that cache (the lane checkpoint's storage generation),
-a direct message far down its section, not among the rail's top rows before
+the next load reopened that cache (the lane checkpoint's storage generation)
+and finished a refresh pass of its own (a later completion time), a direct
+message far down its section, not among the rail's top rows before
 the message, is among them after it; the rail scrolled five pages (or to its
 end) and mounted rows the top did not show on the way down; and collapsing
 Direct messages hid conversations it showed, which expanding brought back.
@@ -107,4 +109,5 @@ reading under one is a measurement that did not happen.
   the viewer's key, only when nothing is there yet.
 - The rail virtualizes sections at estimated heights: one jump to its end
   lands short once they are measured, so the headings check jumps until the
-  end holds, then pages up.
+  end holds (the scroll height steady for a few frames), then pages up,
+  and starts over from the end while a heading is missing.

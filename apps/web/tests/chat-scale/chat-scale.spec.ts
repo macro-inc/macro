@@ -65,6 +65,13 @@ const SCROLL_STEPS = 20;
 const HEADING_PAGES = 400;
 /** Jumps to the rail's end before it holds there. */
 const END_JUMPS = 20;
+/** Frames in a row the rail's scroll height must hold for, after a jump
+ * or a page, before its headings are read; at most `SETTLE_FRAMES`. */
+const STABLE_FRAMES = 5;
+const SETTLE_FRAMES = 120;
+/** Passes from the end up, each from a fresh jump to the end, before the
+ * headings check gives up on a heading. */
+const HEADING_PASSES = 3;
 const TOGGLED_SECTION = 'Direct messages';
 /** Chat's saved view (`features/channels-view/persistence.ts`), per viewer. */
 const SAVED_VIEW_KEY = 'macro:channels:view-state:v1';
@@ -132,7 +139,7 @@ type RunEvidence = {
   savedView: { headings: Heading[] };
 };
 
-type Heading = { name: string; expanded: boolean };
+type Heading = { key: string; expanded: boolean };
 
 const ZERO_METRICS = Object.fromEntries(
   PERFORMANCE_METRICS.map((name) => [name, 0])
@@ -357,10 +364,42 @@ function savedHeadings(fixture: ChatFixture): Record<string, boolean> {
   };
 }
 
+/** Moves the scroller to its end or one page up, then waits until its
+ * scroll height holds for `STABLE_FRAMES` frames, as the rail measures the
+ * sections the move mounted. Returns where it started and whether it rests
+ * at the end. */
+async function scrollAndSettle(
+  scroller: Locator,
+  to: 'end' | 'pageUp'
+): Promise<{ from: number; atEnd: boolean }> {
+  return await scroller.evaluate(
+    async (element, { to, stableFrames, settleFrames }) => {
+      const from = element.scrollTop;
+      if (to === 'end') element.scrollTop = element.scrollHeight;
+      else element.scrollTop -= element.clientHeight;
+      let height = element.scrollHeight;
+      let stable = 0;
+      for (let frame = 0; frame < settleFrames; frame += 1) {
+        if (stable >= stableFrames) break;
+        await new Promise(requestAnimationFrame);
+        stable = element.scrollHeight === height ? stable + 1 : 0;
+        height = element.scrollHeight;
+      }
+      return {
+        from,
+        atEnd:
+          element.scrollTop + element.clientHeight >= element.scrollHeight - 1,
+      };
+    },
+    { to, stableFrames: STABLE_FRAMES, settleFrames: SETTLE_FRAMES }
+  );
+}
+
 /** Jumps to the rail's end and pages back up until every expected heading
  * has mounted or the top is reached, collecting the headings on the way.
  * The rail virtualizes its sections at estimated heights, so one jump lands
- * short of the end once they are measured: it jumps until the end holds. */
+ * short of the end once they are measured: it jumps until the end holds,
+ * and starts over from the end while a heading is still missing. */
 async function headingsFromTheEnd(
   rail: Locator,
   scroller: Locator,
@@ -372,28 +411,17 @@ async function headingsFromTheEnd(
       seen.set(heading.key, heading.expanded);
     return Object.keys(expected).every((key) => seen.has(key));
   };
-  for (let jump = 0; jump < END_JUMPS; jump += 1) {
-    const atEnd = await scroller.evaluate(async (element) => {
-      element.scrollTop = element.scrollHeight;
-      await new Promise(requestAnimationFrame);
-      await new Promise(requestAnimationFrame);
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      return (
-        element.scrollTop + element.clientHeight >= element.scrollHeight - 1
-      );
-    });
-    if ((await collect()) || atEnd) break;
-  }
-  for (let page = 0; page < HEADING_PAGES; page += 1) {
+  for (let pass = 0; pass < HEADING_PASSES; pass += 1) {
+    for (let jump = 0; jump < END_JUMPS; jump += 1) {
+      const { atEnd } = await scrollAndSettle(scroller, 'end');
+      if ((await collect()) || atEnd) break;
+    }
+    for (let page = 0; page < HEADING_PAGES; page += 1) {
+      if (await collect()) break;
+      const { from } = await scrollAndSettle(scroller, 'pageUp');
+      if (from === 0) break;
+    }
     if (await collect()) break;
-    const top = await scroller.evaluate(async (element) => {
-      const from = element.scrollTop;
-      element.scrollTop -= element.clientHeight;
-      await new Promise(requestAnimationFrame);
-      await new Promise(requestAnimationFrame);
-      return from;
-    });
-    if (top === 0) break;
   }
   await scrollToTop(scroller);
   return [...seen].map(([key, expanded]) => ({ key, expanded }));
@@ -425,9 +453,11 @@ type Session = {
   pageErrors: string[];
 };
 
-/** One step's cost: run it, wait until the app is quiet, collect garbage,
- * then read the heap, the DOM, and the long tasks and requests since it
- * started. `navigates` resets the counters the new document starts from. */
+/** One step's cost: run it and wait until the app is quiet; then take the
+ * requests and server reads since it started, the long tasks, metrics and
+ * DOM, and only then collect garbage, which runs as a task of its own, and
+ * read the heap. `navigates` resets the counters the new document starts
+ * from. */
 async function measure(
   session: Session,
   navigates: boolean,
@@ -443,8 +473,10 @@ async function measure(
   const started = Date.now();
   await action();
   const settled = await backend.quiet(QUIET_MS);
-  await cdp.send('HeapProfiler.collectGarbage');
-  const heap = await cdp.send('Runtime.getHeapUsage');
+  // Counted the moment the step settles, so a poll or socket update that
+  // lands during the readings below is not this step's.
+  const reads = fixture.readsSince(readMark);
+  const requests = backend.since(mark);
   const after = await readMetrics(cdp);
   const state = await readPageState(page);
   const tasks = state.longTasks
@@ -453,6 +485,9 @@ async function measure(
   const domNodes = await page.evaluate(
     () => document.getElementsByTagName('*').length
   );
+  const rowsMounted = await rail.locator(ROW).count();
+  await cdp.send('HeapProfiler.collectGarbage');
+  const heap = await cdp.send('Runtime.getHeapUsage');
   const memory = await page.evaluate(async () => {
     const measureMemory = (
       performance as {
@@ -479,19 +514,19 @@ async function measure(
     heapMb: heap.usedSize / 2 ** 20,
     agentMemoryMb: memory === null ? null : memory / 2 ** 20,
     domNodes,
-    rowsMounted: await rail.locator(ROW).count(),
-    server: (({ rowsRequested, idsRequested, rowsReturned }) => ({
-      rowsRequested,
-      idsRequested,
-      rowsReturned,
-    }))(fixture.readsSince(readMark)),
+    rowsMounted,
+    server: {
+      rowsRequested: reads.rowsRequested,
+      idsRequested: reads.idsRequested,
+      rowsReturned: reads.rowsReturned,
+    },
     metrics: Object.fromEntries(
       PERFORMANCE_METRICS.map((name) => [
         name,
         Math.round((after[name] - before[name]) * 1_000) / 1_000,
       ])
     ),
-    requests: backend.since(mark),
+    requests,
   };
 }
 
@@ -589,17 +624,25 @@ async function measureSize(
       seed: seededMb,
       coldOpen: await readStorageMb(page),
     };
-    expect(seeded?.completedAt, 'the seed finished the channel pass').toEqual(
-      expect.any(String)
-    );
+    expect(seeded, 'the seed finished the channel pass').toMatchObject({
+      completed: true,
+      completedAt: expect.any(String),
+    });
     expect(
       seeded?.storageGeneration,
       'the seed wrote into the browser cache'
     ).toEqual(expect.any(String));
+    const reopened = evidence.lane.coldOpen;
     expect(
-      evidence.lane.coldOpen?.storageGeneration,
+      reopened?.storageGeneration,
       'the next load reopened the cache the seed wrote'
     ).toBe(seeded?.storageGeneration);
+    expect(
+      reopened?.completed === true &&
+        Date.parse(reopened.completedAt ?? '') >
+          Date.parse(seeded?.completedAt ?? ''),
+      'the next load finished its own refresh pass'
+    ).toBe(true);
 
     const { scroller, described } = await railScroller(rail);
     evidence.savedView = { headings: [] };
@@ -616,6 +659,10 @@ async function measureSize(
         await backend.push('NotificationUpdates', frames.NotificationUpdates),
         'the page subscribed to NotificationUpdates'
       ).toBeGreaterThan(0);
+      // Part of the step: the row the message moves up mounts at the top.
+      await expect(
+        rail.locator(`${ROW}[id$="-channel:${messaged}"]`)
+      ).toBeVisible();
     });
     evidence.messagedRow = {
       before,
