@@ -23,6 +23,11 @@ export function retainCacheHost(
  * network, writes are dropped, and mutations bypass the durable queue,
  * instead of every call rejecting with "cache worker host was disposed".
  * Physical disposal waits for leases held by admitted writes and their cleanup.
+ *
+ * A queue head claimed before retirement settles through the host that claimed
+ * it: the request for it may be on its way to the server, and its answer must
+ * reach the engine, or another page sends it again. The pin lasts until the
+ * head settles or its lease runs out.
  */
 export function createRetirableCacheHost(inner: CacheHost): CacheHost {
   let current = inner;
@@ -67,6 +72,38 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
         },
       }
     : undefined;
+  const claimedHeads = new Map<string, () => void>();
+  const pinClaimedHead = (
+    transactionId: string,
+    { nowMs, leaseExpiresAtMs }: { nowMs: number; leaseExpiresAtMs: number }
+  ) => {
+    if (claimedHeads.has(transactionId)) return;
+    const pin = retain();
+    if (!pin) return;
+    let expiry: ReturnType<typeof setTimeout> | undefined;
+    const release = () => {
+      clearTimeout(expiry);
+      if (claimedHeads.get(transactionId) === release)
+        claimedHeads.delete(transactionId);
+      pin.release();
+    };
+    // Past its lease another page may claim the head; nothing is left to keep.
+    expiry = setTimeout(release, Math.max(0, leaseExpiresAtMs - nowMs));
+    claimedHeads.set(transactionId, release);
+  };
+  /** Settles a head through the host that claimed it, then lets that host go. */
+  const settle = async <T>(
+    transactionId: string,
+    call: (host: CacheHost) => Promise<T>
+  ): Promise<T> => {
+    const release = claimedHeads.get(transactionId);
+    if (!release) return call(current);
+    try {
+      return await call(inner);
+    } finally {
+      release();
+    }
+  };
   const wrapper: CacheHost = {
     clientId: inner.clientId,
     people,
@@ -103,15 +140,25 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
       current.calendarCommit(args, generation),
     writeQuery: (args) => current.writeQuery(args),
     hydrateQuery: (args) => current.hydrateQuery(args),
-    enqueueOptimisticMutation: (args, claim) =>
-      current.enqueueOptimisticMutation(args, claim),
+    async enqueueOptimisticMutation(args, claim) {
+      const host = current;
+      const result = await host.enqueueOptimisticMutation(args, claim);
+      if (host === inner && result.initialClaim.kind === 'claimed')
+        pinClaimedHead(result.initialClaim.mutation.transactionId, claim);
+      return result;
+    },
     inspectQueryVariants: (args) => current.inspectQueryVariants(args),
     inspectQuery: (args) => current.inspectQuery(args),
     inspectMutations: () =>
       current.inspectMutations?.() ??
       Promise.reject(new Error('Queue inspection is unavailable')),
-    claimNextMutation: (owner, nowMs, leaseExpiresAtMs) =>
-      current.claimNextMutation(owner, nowMs, leaseExpiresAtMs),
+    async claimNextMutation(owner, nowMs, leaseExpiresAtMs) {
+      const host = current;
+      const head = await host.claimNextMutation(owner, nowMs, leaseExpiresAtMs);
+      if (head && host === inner)
+        pinClaimedHead(head.transactionId, { nowMs, leaseExpiresAtMs });
+      return head;
+    },
     deferOptimisticWrite: (
       transactionId,
       claim,
@@ -119,17 +166,23 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
       error,
       serverFailure
     ) =>
-      current.deferOptimisticWrite(
-        transactionId,
-        claim,
-        nextAttemptAtMs,
-        error,
-        serverFailure
+      settle(transactionId, (host) =>
+        host.deferOptimisticWrite(
+          transactionId,
+          claim,
+          nextAttemptAtMs,
+          error,
+          serverFailure
+        )
       ),
     commitOptimisticWrite: (transactionId, claim, args) =>
-      current.commitOptimisticWrite(transactionId, claim, args),
+      settle(transactionId, (host) =>
+        host.commitOptimisticWrite(transactionId, claim, args)
+      ),
     rollbackOptimisticWrite: (transactionId, claim, error, errorCode) =>
-      current.rollbackOptimisticWrite(transactionId, claim, error, errorCode),
+      settle(transactionId, (host) =>
+        host.rollbackOptimisticWrite(transactionId, claim, error, errorCode)
+      ),
     invalidate: (keys) => current.invalidate(keys),
     deleteRecords: (keys, generation) =>
       current.deleteRecords(keys, generation),

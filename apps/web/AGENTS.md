@@ -1274,7 +1274,10 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   streamed compile that fails other than on an invalid binary is reported as a
   failed download and retried once from bytes.
 - Drain browser cache engines once their last visible consumer has been hidden
-  for a second, then park without retiring clients; end a drain that takes 15 s
+  for a second, then park without retiring clients, unless a queue head one of
+  their pages claimed is still out: an engine of this build, hidden if need be,
+  keeps the lock until it settles or its lease ends, so a newer build asks for
+  the database rather than opening it under the head; end a drain that takes 15 s
   while a page is visible like a departed owner, keeping its files; queue
   background work until a visible owner reopens storage, retaining accepted
   mutation settlements even if their caller leaves.

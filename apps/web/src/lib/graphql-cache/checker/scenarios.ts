@@ -156,12 +156,220 @@ export type ScriptedScenario = {
   name: string;
   pages: number[];
   script: ScriptStep[];
+  /** Its sends are not written: the server's answer comes too late. */
+  unwritten?: true;
 };
 
 const repeat = (times: number, steps: ScriptStep[]): ScriptStep[] =>
   Array.from({ length: times }, () => steps).flat();
 
 export const SCRIPTS: ScriptedScenario[] = [
+  // The server answers a head `SERVER_MS` after it was sent, long after the
+  // newer build asked for the database.
+  {
+    name: 'an older tab is sending a write when a newer build opens',
+    pages: [1, 1],
+    script: [
+      { waitMs: 5_000 },
+      { send: 'tab2' },
+      { kind: 'open-newer' },
+      { waitMs: 120_000 },
+    ],
+  },
+  {
+    name: 'the owner is sending a write when a newer build opens',
+    pages: [1, 1],
+    script: [
+      { waitMs: 5_000 },
+      { send: 'tab1' },
+      { kind: 'open-newer' },
+      { waitMs: 120_000 },
+    ],
+  },
+  // A refused write and one put back for a retry settle in the old engine too.
+  {
+    name: 'a write the server refused is rolled back as a newer build opens',
+    pages: [1, 1],
+    script: [
+      { waitMs: 5_000 },
+      { send: 'tab2', settle: 'rollback' },
+      { kind: 'open-newer' },
+      { waitMs: 120_000 },
+    ],
+  },
+  {
+    name: 'a write put back for a retry as a newer build opens',
+    pages: [1, 1],
+    script: [
+      { waitMs: 5_000 },
+      { send: 'tab1', settle: 'defer' },
+      { kind: 'open-newer' },
+      { waitMs: 120_000 },
+    ],
+  },
+  // Just inside `SETTLEMENT_WAIT_MS`, and the newer build still gets its cache.
+  {
+    name: 'a write sent as a newer build opens is answered a minute later',
+    pages: [1, 1],
+    script: [
+      { waitMs: 5_000 },
+      { send: 'tab2', serverMs: 65_000 },
+      { kind: 'open-newer' },
+      { waitMs: 180_000 },
+    ],
+  },
+  // The owner would drain on hiding and park, and a newer build would then
+  // open the free database without asking, under a head still out.
+  {
+    name: 'every tab hides while a write is out, then a newer build opens',
+    pages: [1, 1],
+    script: [
+      { waitMs: 5_000 },
+      { send: 'tab2', serverMs: 10_000 },
+      { kind: 'hide', page: 'tab1' },
+      { kind: 'hide', page: 'tab2' },
+      { waitMs: 4_000 },
+      { kind: 'open-newer' },
+      { waitMs: 400_000 },
+    ],
+  },
+  // The same, reached by the owner closing rather than hiding.
+  {
+    name: 'the owner closes while a hidden tab has a write out, then a newer build opens',
+    pages: [1, 1],
+    script: [
+      { waitMs: 5_000 },
+      { send: 'tab2', serverMs: 10_000 },
+      { waitMs: 1_000 },
+      { kind: 'hide', page: 'tab2' },
+      { kind: 'close', page: 'tab1' },
+      { waitMs: 2_000 },
+      { kind: 'open-newer' },
+      { waitMs: 400_000 },
+    ],
+  },
+  {
+    name: 'every tab hides while a write is out, the owner closes, then a newer build opens',
+    pages: [1, 1],
+    script: [
+      { waitMs: 5_000 },
+      { send: 'tab2', serverMs: 10_000 },
+      { kind: 'hide', page: 'tab1' },
+      { kind: 'hide', page: 'tab2' },
+      { waitMs: 4_000 },
+      { kind: 'close', page: 'tab1' },
+      { waitMs: 2_000 },
+      { kind: 'open-newer' },
+      { waitMs: 400_000 },
+    ],
+  },
+  // The engine starts in the tab sending the answer, not in a frozen one.
+  {
+    name: 'the owner closes while a hidden tab sends a write and another hidden tab is frozen',
+    pages: [1, 1, 1],
+    script: [
+      { waitMs: 5_000 },
+      { send: 'tab3', serverMs: 10_000 },
+      { waitMs: 1_000 },
+      { kind: 'hide', page: 'tab2' },
+      { kind: 'freeze', page: 'tab2' },
+      { kind: 'hide', page: 'tab3' },
+      { kind: 'close', page: 'tab1' },
+      { waitMs: 2_000 },
+      { kind: 'open-newer' },
+      { waitMs: 400_000 },
+    ],
+  },
+  // The sender itself is frozen as it is elected: another tab tries soon.
+  {
+    name: 'the owner closes while a frozen hidden tab has a write out',
+    pages: [1, 1, 1],
+    script: [
+      { waitMs: 5_000 },
+      { send: 'tab3', serverMs: 10_000 },
+      { waitMs: 1_000 },
+      { kind: 'hide', page: 'tab2' },
+      { kind: 'hide', page: 'tab3' },
+      { kind: 'freeze', page: 'tab3' },
+      { kind: 'close', page: 'tab1' },
+      { waitMs: 35_000 },
+      { kind: 'open-newer' },
+      { waitMs: 30_000 },
+      { kind: 'thaw', page: 'tab3' },
+      { waitMs: 400_000 },
+    ],
+  },
+  // A shown tab starts its own engine rather than waiting for a frozen one.
+  {
+    name: 'a tab is shown while a frozen hidden tab starts the engine for a write out',
+    pages: [1, 1, 1],
+    script: [
+      { waitMs: 5_000 },
+      { send: 'tab3', serverMs: 10_000 },
+      { waitMs: 1_000 },
+      { kind: 'hide', page: 'tab2' },
+      { kind: 'hide', page: 'tab3' },
+      { kind: 'freeze', page: 'tab3' },
+      { kind: 'close', page: 'tab1' },
+      { waitMs: 1_000 },
+      { kind: 'show', page: 'tab2' },
+      { waitMs: 2_000 },
+      { kind: 'open-newer' },
+      { waitMs: 30_000 },
+      { kind: 'thaw', page: 'tab3' },
+      { waitMs: 400_000 },
+    ],
+  },
+  // A newer build that opens before another tab tries takes the free lock.
+  {
+    name: 'a newer build opens while a frozen hidden tab starts the engine for a write out',
+    pages: [1, 1, 1],
+    script: [
+      { waitMs: 5_000 },
+      { send: 'tab3', serverMs: 10_000 },
+      { waitMs: 1_000 },
+      { kind: 'hide', page: 'tab2' },
+      { kind: 'hide', page: 'tab3' },
+      { kind: 'freeze', page: 'tab3' },
+      { kind: 'close', page: 'tab1' },
+      { waitMs: 2_000 },
+      { kind: 'open-newer' },
+      { waitMs: 30_000 },
+      { kind: 'thaw', page: 'tab3' },
+      { waitMs: 400_000 },
+    ],
+    unwritten: true,
+  },
+  // Until the coordinator sees the engine is gone, the lock is free.
+  {
+    name: "the owner's engine crashes while another tab sends a write, and a newer build opens",
+    pages: [1, 1],
+    script: [
+      { waitMs: 5_000 },
+      { send: 'tab2', serverMs: 10_000 },
+      { waitMs: 1_000 },
+      { kind: 'crash-engine', page: 'tab1' },
+      { kind: 'open-newer' },
+      { waitMs: 400_000 },
+    ],
+    unwritten: true,
+  },
+  // Past it: the newer build goes ahead, and the answer finds nothing to settle.
+  {
+    name: 'a tab is frozen while it sends a write and a newer build opens',
+    pages: [1, 1],
+    script: [
+      { waitMs: 5_000 },
+      { send: 'tab2' },
+      { kind: 'hide', page: 'tab2' },
+      { kind: 'freeze', page: 'tab2' },
+      { kind: 'open-newer' },
+      { waitMs: 120_000 },
+      { kind: 'thaw', page: 'tab2' },
+      { waitMs: 20_000 },
+    ],
+    unwritten: true,
+  },
   {
     name: "a database that cannot be read, when its owner's engine dies",
     pages: [1, 1],

@@ -14,10 +14,10 @@ its host (`Page` in `world.ts`; keep the two the same).
 | --- | --- |
 | `sim.ts` | Contexts, message delivery, Web Locks, BroadcastChannel, timers and the clock. Nothing happens unless the checker says so. |
 | `world.ts` | Pages, coordinators and engine workers on the sim; the faults. |
-| `properties.ts` | What must hold, S1–S6 over the run and L1–L3 after it. |
+| `properties.ts` | What must hold, S1–S8 over the run and L1–L3 after it. |
 | `explore.ts` | Runs one schedule, every schedule within a bound, or a script. |
 | `scenarios.ts` | The scenarios with their bounds, and the scripts. |
-| `known-violations.ts` | What is known to break, and why. Nothing today. |
+| `known-violations.ts` | What is known to break, and why: a head sent from a tab that stays frozen past the handover wait, or that is frozen as it is elected to keep an engine for the head, and one out when the owner's engine crashes just as a newer build opens. |
 | `handover.checker.test.ts` | Explores, and compares with the known violations. |
 | `handover-plants.checker.test.ts` | Breaks the real code on purpose; the checker must notice. |
 
@@ -29,6 +29,17 @@ page that is not frozen comes online and is shown, six minutes pass (longer than
 any timeout in the cache; a stretch of nothing but answered heartbeats is
 skipped, so a fault in one of those heartbeats goes unseen), and each page makes
 one more draft and read. The properties are checked last.
+
+A script can also have a page send the head of the queue (`{ send: page }`):
+claim it, wait `SERVER_MS` (or the step's `serverMs`) for the server, and
+commit, roll back or defer it (`settle`) through the host it claimed it from,
+as the queue runner does. The fake engine keeps the claim's lease, writes a
+settlement only under it, and records each lease it wrote for; S7 compares
+that with what the host answered, and S8 catches a head still queued, or sent
+again, after an answer that was not a deferral. The fake engine's enqueue
+claims nothing and its leases do not expire, so a head an enqueue claims
+during the wait is covered by the coordinator's unit tests only. The explored
+scenarios send nothing.
 
 ## What a bound covers
 
@@ -77,8 +88,8 @@ longer matches the code it stands for.
 ## What it does not cover
 
 The account and generation fences around a session, Safari's and Firefox's own
-timing, the WASM engine and real OPFS, the native host, requests the handover
-does not depend on, and more tabs, faults or delays than the bound. An end of a
+timing, the WASM engine and real OPFS, the native host, the queue runner itself
+(scripts stand in for it), requests the handover does not depend on, and more tabs, faults or delays than the bound. An end of a
 whole browser process takes the page and its build's coordinator
 (`crash-process`), not other pages of that process. A coordinator's name that
 answers nobody (`lose-coordinator`) does so until every page of its build closes,

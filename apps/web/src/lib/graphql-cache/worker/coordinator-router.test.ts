@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { INITIAL_CACHE_REVISION } from '../protocol';
 import {
+  SETTLEMENT_WAIT_LIMIT_MS,
+  SETTLEMENT_WAIT_MS,
+} from './coordinator-core';
+import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
   coordinatorLivenessLockName,
   databaseOwnerLockName,
@@ -12,6 +16,7 @@ import {
   queryHeldLockNames,
 } from './coordinator-router';
 import type { CacheTakeoverMessage } from './coordinator-takeover';
+import { HIDDEN_SETTLEMENT_STARTUP_TIMEOUT_MS } from './startup';
 
 class FakePort extends EventTarget {
   readonly messages: unknown[] = [];
@@ -1592,6 +1597,232 @@ describe('CoordinatorRouter', () => {
     expect(messagesOfKind(tabC, 'cache-unavailable')).toEqual([]);
     ask(3_000);
     expect(channel.posted).toHaveLength(1);
+  });
+
+  it('keeps serving a head a tab claimed until it settles, or for at most the wait', async () => {
+    const { router, observations, tabA, tabB, engine, ask } =
+      await holdTheDatabase(1_000);
+    const claim = async () => {
+      await router.handleTabMessage(tabB as CoordinatorMessagePort, {
+        ...version,
+        kind: 'cache-request',
+        tabId: 'tab-b',
+        request: {
+          id: 7,
+          kind: 'claim-next-mutation',
+          owner: 'exchange-live:tab-b',
+          nowMs: 0,
+          leaseExpiresAtMs: 300_000,
+        },
+      });
+      const route = messagesOfKind(engine, 'engine-request').at(
+        -1
+      ) as unknown as { routeId: number };
+      engine.receive({
+        ...version,
+        kind: 'engine-response',
+        ownerEpoch: 1,
+        routeId: route.routeId,
+        response: {
+          id: route.routeId,
+          ok: true,
+          result: { transactionId: '42' },
+        },
+      });
+    };
+    await claim();
+
+    ask(2_000);
+    expect(messagesOfKind(engine, 'drain-engine')).toEqual([]);
+    expect(
+      observations.filter(
+        ({ ownerEvent }) => ownerEvent === 'settlement-wait-started'
+      )
+    ).toEqual([expect.objectContaining({ count: 1 })]);
+
+    // Nobody settles it: the handover goes ahead when the wait runs out.
+    await vi.advanceTimersByTimeAsync(SETTLEMENT_WAIT_MS - 1);
+    expect(messagesOfKind(engine, 'drain-engine')).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(messagesOfKind(engine, 'drain-engine')).toHaveLength(1);
+    expect(
+      observations.filter(
+        ({ ownerEvent }) => ownerEvent === 'settlement-wait-ended'
+      )
+    ).toEqual([
+      expect.objectContaining({
+        outcome: 'abrupt',
+        count: 1,
+        durationMs: SETTLEMENT_WAIT_MS,
+      }),
+    ]);
+    engine.receive({
+      ...version,
+      kind: 'engine-drained',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+    });
+    for (const tab of [tabA, tabB])
+      expect(messagesOfKind(tab, 'cache-superseded')).toHaveLength(1);
+  });
+
+  describe('a hidden startup kept for a head out', () => {
+    // a starts and closes; b and c are hidden, and b hands over a commit.
+    const hiddenElection = async () => {
+      vi.useFakeTimers();
+      const observations: Array<{ ownerEvent?: string; outcome?: string }> = [];
+      const router = new CoordinatorRouter({
+        verifyTabLockHeld: async () => true,
+        watchTabLock: () => () => undefined,
+        telemetry: {
+          record: (observation) => observations.push(observation),
+          flush: vi.fn(),
+        },
+      });
+      const [a, b, c] = [new FakePort(), new FakePort(), new FakePort()];
+      await register(router, a, 'a');
+      await register(router, b, 'b');
+      await register(router, c, 'c');
+      for (const [port, tabId] of [
+        [b, 'b'],
+        [c, 'c'],
+      ] as const)
+        await router.handleTabMessage(port as CoordinatorMessagePort, {
+          ...version,
+          kind: 'tab-visibility',
+          tabId,
+          visible: false,
+        });
+      await router.handleTabMessage(
+        b as CoordinatorMessagePort,
+        {
+          ...version,
+          kind: 'cache-request',
+          tabId: 'b',
+          request: {
+            id: 9,
+            kind: 'commit-optimistic-write',
+            transactionId: '1',
+            leaseOwner: 'b',
+            leaseGeneration: '1',
+            query: 'mutation Saved { saved }',
+            data: { saved: true },
+          },
+        } as never
+      );
+      await router.handleTabMessage(
+        a as CoordinatorMessagePort,
+        {
+          ...version,
+          kind: 'disconnect-tab',
+          tabId: 'a',
+          reason: 'closed',
+        } as never
+      );
+      expect(router.snapshot()?.state).toMatchObject({
+        kind: 'activating',
+        tabId: 'b',
+      });
+      return { router, b, c, observations };
+    };
+
+    it('is given up for another tab once it loads too long', async () => {
+      const { router, b, c } = await hiddenElection();
+      await vi.advanceTimersByTimeAsync(
+        HIDDEN_SETTLEMENT_STARTUP_TIMEOUT_MS - 1
+      );
+      expect(messagesOfKind(b, 'terminate-engine')).toEqual([]);
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(messagesOfKind(b, 'terminate-engine')).toHaveLength(1);
+      expect(messagesOfKind(c, 'become-owner')).toHaveLength(1);
+      expect(router.snapshot()?.state).toMatchObject({ tabId: 'c' });
+    });
+
+    it('keeps the whole budget once its tab is shown', async () => {
+      const { router, b } = await hiddenElection();
+      await vi.advanceTimersByTimeAsync(5_000);
+      await router.handleTabMessage(b as CoordinatorMessagePort, {
+        ...version,
+        kind: 'tab-visibility',
+        tabId: 'b',
+        visible: true,
+      });
+      await vi.advanceTimersByTimeAsync(HIDDEN_SETTLEMENT_STARTUP_TIMEOUT_MS);
+      expect(messagesOfKind(b, 'terminate-engine')).toEqual([]);
+      expect(router.snapshot()?.state).toMatchObject({ tabId: 'b' });
+    });
+
+    it('records the startup a shown tab takes over by opening', async () => {
+      const { router, b, observations } = await hiddenElection();
+      const d = new FakePort();
+      await register(router, d, 'd');
+      expect(messagesOfKind(b, 'terminate-engine')).toHaveLength(1);
+      expect(router.snapshot()?.state).toMatchObject({ tabId: 'd' });
+      expect(observations).toContainEqual(
+        expect.objectContaining({
+          ownerEvent: 'replacement',
+          outcome: 'graceful',
+        })
+      );
+    });
+  });
+
+  it('gives a head claimed during the wait a wait of its own, and claims none late in it', async () => {
+    const { router, tabB, engine, ask } = await holdTheDatabase(1_000);
+    const claim = async (id: number) => {
+      await router.handleTabMessage(tabB as CoordinatorMessagePort, {
+        ...version,
+        kind: 'cache-request',
+        tabId: 'tab-b',
+        request: {
+          id,
+          kind: 'enqueue-optimistic-mutation',
+          uuid: `mutation-${id}`,
+          query: 'mutation M { m }',
+          data: { m: true },
+          createdAtMs: 0,
+          owner: 'exchange-live:tab-b',
+          nowMs: 0,
+          leaseExpiresAtMs: 300_000,
+        },
+      });
+      return messagesOfKind(engine, 'engine-request').at(-1) as unknown as {
+        routeId: number;
+      };
+    };
+    const answer = (routeId: number, transactionId: string) =>
+      engine.receive({
+        ...version,
+        kind: 'engine-response',
+        ownerEpoch: 1,
+        routeId,
+        response: {
+          id: routeId,
+          ok: true,
+          result: {
+            initialClaim: { kind: 'claimed', mutation: { transactionId } },
+          },
+        },
+      });
+    // The first enqueue is still out when the newer build asks.
+    const first = await claim(7);
+    ask(2_000);
+    await vi.advanceTimersByTimeAsync(60_000);
+    answer(first.routeId, '42');
+    // Another claim gets its own full wait.
+    await vi.advanceTimersByTimeAsync(5_000);
+    answer((await claim(8)).routeId, '43');
+    // Past this point a head claimed now could not settle before the limit.
+    await vi.advanceTimersByTimeAsync(
+      SETTLEMENT_WAIT_LIMIT_MS - SETTLEMENT_WAIT_MS - 65_000
+    );
+    const routed = messagesOfKind(engine, 'engine-request').length;
+    await claim(9);
+    expect(messagesOfKind(engine, 'engine-request')).toHaveLength(routed);
+    await vi.advanceTimersByTimeAsync(SETTLEMENT_WAIT_MS - 5_000 - 1);
+    expect(messagesOfKind(engine, 'drain-engine')).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(messagesOfKind(engine, 'drain-engine')).toHaveLength(1);
   });
 
   it('answers a newer build while draining and hands over once drained', async () => {

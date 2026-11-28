@@ -4,13 +4,13 @@
  * one.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CoordinatorGenerations } from '../host/coordinator-generations';
 import { CoordinatorCore } from '../worker/coordinator-core';
 import { CacheCoordinatorPageAdapter } from '../worker/coordinator-page-adapter';
 import { CoordinatorRouter } from '../worker/coordinator-router';
-import { explains, explore, violationKey } from './explore';
+import { explains, explore, runScript, violationKey } from './explore';
 import { DurableStorage } from './fake-engine';
 import { KNOWN_VIOLATIONS } from './known-violations';
+import { SCRIPTS } from './scenarios';
 import { Sim } from './sim';
 import { type FaultKind, usePlant } from './world';
 
@@ -100,6 +100,11 @@ describe('handover checker, on broken code', { timeout: 120_000 }, () => {
   });
 
   it('catches a name nobody answers under kept to the end', async () => {
+    // Imported here: loaded before `./world`, as a static import is, it
+    // leaves a page of a newer build without a coordinator in this file.
+    const { CoordinatorGenerations } = await import(
+      '../host/coordinator-generations'
+    );
     usePlant(() => {
       vi.spyOn(
         CoordinatorGenerations.prototype,
@@ -259,6 +264,26 @@ describe('handover checker, on broken code', { timeout: 120_000 }, () => {
     });
     expect(await newViolations(['hide'])).toContain(
       'S2:host retired on CacheRequestTimeoutError:request-timeout [no fault]'
+    );
+  });
+
+  it('catches a newer build handed the database while a head is out', async () => {
+    const supersede = CoordinatorCore.prototype.supersede;
+    usePlant(() => {
+      vi.spyOn(CoordinatorCore.prototype, 'supersede').mockImplementation(
+        function (this: CoordinatorCore) {
+          (this as unknown as { claims: Map<string, string> }).claims.clear();
+          return supersede.call(this);
+        }
+      );
+    });
+    const sending = SCRIPTS.find(({ name }) =>
+      name.includes('sending a write')
+    );
+    if (!sending) throw new Error('no scripted send');
+    const { violations } = await runScript(sending.pages, sending.script);
+    expect(violations.map(violationKey)).toContainEqual(
+      expect.stringMatching(/^S8:answered head still queued \(unsettled\)/)
     );
   });
 });

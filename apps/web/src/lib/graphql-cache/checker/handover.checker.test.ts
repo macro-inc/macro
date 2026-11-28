@@ -5,6 +5,7 @@
  * (`known-violations.ts`). See `README.md` for what it covers.
  */
 import { writeFileSync } from 'node:fs';
+import { match } from 'ts-pattern';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import {
   explains,
@@ -78,7 +79,7 @@ describe('handover checker', () => {
     );
   }
 
-  for (const { name, pages, script } of SCRIPTS) {
+  for (const { name, pages, script, unwritten } of SCRIPTS) {
     it(`finds nothing new: ${name}`, async () => {
       const result = await runScript(pages, script);
       report.push({
@@ -88,6 +89,25 @@ describe('handover checker', () => {
       });
       expect(unknown(result.violations)).toEqual([]);
       expect(result.cutShort, 'the run hit a step cap').toBe(false);
+      // Each head the script sent was answered and written by an engine, or,
+      // answered too late, refused rather than said to be written.
+      const outcomes = script.flatMap(
+        (
+          step
+        ): { settled: string | undefined; written: boolean | undefined }[] => {
+          if (!('send' in step)) return [];
+          if (unwritten) return [{ settled: undefined, written: undefined }];
+          const settled = match(step.settle ?? 'commit')
+            .with('commit', () => 'committed')
+            .with('rollback', () => 'rolled-back')
+            .with('defer', () => 'deferred')
+            .exhaustive();
+          return [{ settled, written: true }];
+        }
+      );
+      expect(
+        result.deliveries?.map(({ settled, written }) => ({ settled, written }))
+      ).toEqual(outcomes);
     }, 60_000);
   }
 

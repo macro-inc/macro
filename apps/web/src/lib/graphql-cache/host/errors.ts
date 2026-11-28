@@ -1,7 +1,11 @@
 import type { CacheRequest } from '../protocol';
 
 /** Why a host refused a request itself; a cache response's code is on the wire. */
-type CacheHostErrorCode = 'host-disposed' | 'host-failed' | 'request-timeout';
+type CacheHostErrorCode =
+  | 'host-disposed'
+  | 'host-failed'
+  | 'request-timeout'
+  | 'settlement-unwritten';
 
 /**
  * The page dropped this host before it answered. The database is kept, so a
@@ -24,6 +28,20 @@ export class CacheHostFailedError extends Error {
   constructor(cause: Error) {
     super(cause.message, { cause });
     this.name = 'CacheHostFailedError';
+  }
+}
+
+/**
+ * A queue settlement reached a host with no engine, through a host that
+ * retired after its head was claimed. Nothing was written: the head stays
+ * queued under that claim, which only an engine may say it settled.
+ */
+export class CacheSettlementUnwrittenError extends Error {
+  readonly errorCode: CacheHostErrorCode = 'settlement-unwritten';
+
+  constructor() {
+    super('the cache has no engine to write this settlement');
+    this.name = 'CacheSettlementUnwrittenError';
   }
 }
 

@@ -124,6 +124,17 @@ export type CoordinatorAction =
   | { kind: 'drop-tab'; tabId: string }
   | { kind: 'retire-tab'; tabId: string; ownerEpoch: OwnerEpoch }
   | { kind: 'schedule-reset-activation' }
+  /** Calls `settlementsOverdue` after `ms` unless the handover went ahead. */
+  | { kind: 'await-settlements'; ms: number; claims: number }
+  /** The wait for claimed heads is over: they settled, or `unsettled` did not. */
+  | { kind: 'settlement-wait-ended'; unsettled: number }
+  /** Calls `claimLeaseEnded` after `ms`, when another page may claim the head. */
+  | {
+      kind: 'claim-lease';
+      transactionId: string;
+      leaseGeneration: string | undefined;
+      ms: number;
+    }
   | {
       kind: 'broadcast-cache-unavailable';
       reason: string;
@@ -180,8 +191,79 @@ const STORAGE_BUSY_REASON =
 const SUPERSEDED_REASON =
   'a newer version of the app took over the local cache';
 
+/**
+ * How long a newer build waits for this build's pages to settle a queue head
+ * they claimed, counted from the takeover and again from each claim made
+ * during the wait. A queued request gives up after `QUEUE_REQUEST_TIMEOUT_MS`
+ * (60 s) and its page then settles it as a retry; this adds time for that
+ * settlement to reach the engine. Past it the handover goes ahead, and a page
+ * that settles later is refused: its server answer is not kept, and another
+ * page sends the mutation again.
+ */
+export const SETTLEMENT_WAIT_MS = 70_000;
+/** The longest a newer build waits however many claims the wait sees. */
+export const SETTLEMENT_WAIT_LIMIT_MS = 2 * SETTLEMENT_WAIT_MS;
+
+/** A queue head a page claimed, and the lease that may settle it. */
+type QueueClaim = { tabId: string; leaseGeneration: string | undefined };
+
+/** The queue head a response hands its page, if it hands one. */
+function claimedTransaction(
+  request: CacheRequest,
+  response: CacheResponse
+): { transactionId: string; leaseGeneration: string | undefined } | undefined {
+  if (!response.ok) return undefined;
+  const claimed = (claim: unknown) => {
+    const { transactionId, leaseGeneration } = (claim ?? {}) as {
+      transactionId?: unknown;
+      leaseGeneration?: unknown;
+    };
+    if (typeof transactionId !== 'string') return undefined;
+    return {
+      transactionId,
+      leaseGeneration:
+        typeof leaseGeneration === 'string' ? leaseGeneration : undefined,
+    };
+  };
+  if (request.kind === 'claim-next-mutation') return claimed(response.result);
+  if (request.kind === 'enqueue-optimistic-mutation') {
+    const result = response.result as {
+      initialClaim?: { kind?: unknown; mutation?: unknown };
+    } | null;
+    const claim = result?.initialClaim;
+    return claim?.kind === 'claimed' ? claimed(claim.mutation) : undefined;
+  }
+  return undefined;
+}
+
+/** A request whose answer may hand its page a queue head. */
+function mayClaim(request: CacheRequest): boolean {
+  return (
+    request.kind === 'claim-next-mutation' ||
+    request.kind === 'enqueue-optimistic-mutation'
+  );
+}
+
+/** How long a claim made by this request holds its head. */
+function leaseMs(request: CacheRequest): number {
+  if (!mayClaim(request)) return 0;
+  const { nowMs, leaseExpiresAtMs } = request as {
+    nowMs: number;
+    leaseExpiresAtMs: number;
+  };
+  return Math.max(0, leaseExpiresAtMs - nowMs);
+}
+
 /** Known outcomes must survive a caller leaving while storage is parked. */
-function isMutationSettlement(request: CacheRequest): boolean {
+function isMutationSettlement(request: CacheRequest): request is Extract<
+  CacheRequest,
+  {
+    kind:
+      | 'commit-optimistic-write'
+      | 'rollback-optimistic-write'
+      | 'defer-optimistic-write';
+  }
+> {
   return (
     request.kind === 'commit-optimistic-write' ||
     request.kind === 'rollback-optimistic-write' ||
@@ -241,6 +323,24 @@ export class CoordinatorCore {
   private supersededReason: string | undefined;
   /** A newer build asked while this engine may still be changing the files. */
   private supersedePending = false;
+  /**
+   * Queue heads tabs claimed and have not settled yet, by transaction id. A
+   * page's request for one may be on its way to the server.
+   */
+  private readonly claims = new Map<string, QueueClaim>();
+  /**
+   * A newer build waits until `claims` settle and no claim is on its way, or
+   * the router's deadline. Until then an engine keeps serving this build: one
+   * that drains or is lost is replaced, unless its successor would reset the
+   * database.
+   */
+  private awaitingSettlements = false;
+  /** Late in the wait no head is claimed, so each claim gets its full wait. */
+  private claimsClosed = false;
+  /** A hidden owner kept its engine for a claimed head; it drains once settled. */
+  private hiddenDrainDeferred = false;
+  /** The epoch elected in a hidden tab because no tab was visible. */
+  private hiddenElectionEpoch: OwnerEpoch | undefined;
   private readonly queuedRequests: QueuedRequest[] = [];
   private readonly inFlight = new Map<RouteId, InFlightRequest>();
   private readonly cacheChanges = new CacheChangeBatch();
@@ -273,7 +373,22 @@ export class CoordinatorCore {
 
   /** Visibility of eligible consumers, not merely the page owning an engine. */
   get hasVisibleTab(): boolean {
-    return this.chooseCandidate() !== undefined;
+    return this.eligibleTabs().some((tabId) => this.visibleTabs.has(tabId));
+  }
+
+  /** A hidden tab starts an engine only so that a head still out has one to
+   * settle in, it has not reached storage yet, and another tab could start
+   * one instead. Nobody waits to see it, so a startup that stalls, as in a
+   * frozen tab, is given up sooner. */
+  get startsForSettlement(): boolean {
+    const state = this.stateValue;
+    return (
+      state.kind === 'activating' &&
+      !this.hasVisibleTab &&
+      !startupPhaseMayTouchStorage(state.phase) &&
+      this.unsettled() &&
+      this.eligibleTabs().some((tabId) => tabId !== state.tabId)
+    );
   }
 
   /** Whether a newer app build took the database over. */
@@ -313,6 +428,24 @@ export class CoordinatorCore {
     const state = this.stateValue;
     if (state.kind === 'parked' || state.kind === 'waiting-for-tab')
       return this.activateNext(state.nextDatabaseAction);
+    // An engine started in a hidden tab for a head out may never open, as in
+    // a frozen tab. Before it reaches storage, a shown tab starts its own.
+    if (
+      shown &&
+      state.kind === 'activating' &&
+      state.ownerEpoch === this.hiddenElectionEpoch &&
+      !this.visibleTabs.has(state.tabId) &&
+      !startupPhaseMayTouchStorage(state.phase)
+    ) {
+      const released = this.releaseStartingOwner(
+        'a shown tab starts the engine instead'
+      );
+      // As for any owner that stops: a replacement that would wipe the
+      // database a newer build waits for hands it over instead.
+      return this.handsOverNow(state.databaseAction)
+        ? [...released, ...this.completeSupersede()]
+        : [...released, ...this.activateNext(state.databaseAction)];
+    }
     if (shown && state.kind === 'resetting-after-loss' && this.outage)
       return this.resumeAfterLoss();
     return this.handoffIfNeeded();
@@ -333,8 +466,15 @@ export class CoordinatorCore {
 
   setTabVisibility(tabId: string, visible: boolean): CoordinatorAction[] {
     if (!this.tabs.includes(tabId)) return [];
-    if (visible) this.visibleTabs.add(tabId);
-    else this.visibleTabs.delete(tabId);
+    if (visible) {
+      this.visibleTabs.add(tabId);
+      // A tab shown while it starts is alive; it keeps its engine.
+      const state = this.stateValue;
+      if (state.kind === 'activating' && state.tabId === tabId)
+        this.hiddenElectionEpoch = undefined;
+      // A later hide waits its grace again before the owner drains.
+      this.hiddenDrainDeferred = false;
+    } else this.visibleTabs.delete(tabId);
     return this.activateOrHandOff(visible);
   }
 
@@ -358,9 +498,30 @@ export class CoordinatorCore {
       return [this.rejectUnavailable(tabId, request.id, this.outage.reason)];
     }
 
+    // Late in the wait an enqueue could claim a head that has no time left to
+    // settle. Refused as the database being unavailable, it never reaches an
+    // engine and the page sends it as it would with no cache, rather than
+    // waiting to time out. Superseded would retire the page's host, and with
+    // it the heads it still has out.
+    if (
+      this.awaitingSettlements &&
+      this.claimsClosed &&
+      request.kind === 'enqueue-optimistic-mutation'
+    )
+      return [this.rejectUnavailable(tabId, request.id, SUPERSEDED_REASON)];
     const queued = { tabId, request, queuedAt };
-    if (this.stateValue.kind !== 'active') {
+    // A head claimed now would be sent with the engine about to go. The
+    // handover refuses the claim as superseded.
+    if (this.stateValue.kind !== 'active' || this.holdsForNewerBuild(request)) {
       this.queuedRequests.push(queued);
+      // While a newer build waits, a settlement reaches an engine even when
+      // every tab is hidden.
+      if (
+        this.stateValue.kind === 'parked' &&
+        this.awaitingSettlements &&
+        isMutationSettlement(request)
+      )
+        return this.activateNext(this.stateValue.nextDatabaseAction);
       return [];
     }
     return [this.route(queued, this.stateValue)];
@@ -458,7 +619,7 @@ export class CoordinatorCore {
     unavailableReason: CacheUnavailableReason
   ): CoordinatorAction[] {
     const { tabId, ownerEpoch, databaseAction } = state;
-    if (this.supersedePending) return this.completeSupersede();
+    if (this.handsOverNow(databaseAction)) return this.completeSupersede();
     this.stateValue = {
       kind: 'resetting-after-loss',
       previousTabId: tabId,
@@ -565,6 +726,7 @@ export class CoordinatorCore {
       ownerEpoch: state.ownerEpoch,
     };
     this.outage = undefined;
+    this.hiddenDrainDeferred = false;
     const actions: CoordinatorAction[] = [];
     if (state.ownerEpoch > 1) {
       actions.push({
@@ -574,7 +736,9 @@ export class CoordinatorCore {
         queue: ready.queue,
       });
     }
-    if (this.supersedePending) {
+    // A reset queue holds none of the heads claimed from the one before.
+    if (ready.queue === 'reset') this.claims.clear();
+    if (this.supersedePending && !this.awaitingSettlements) {
       actions.push(...this.drainForNewerBuild(this.stateValue));
       return actions;
     }
@@ -586,7 +750,9 @@ export class CoordinatorCore {
     if (drain.length > 0) return [...actions, ...drain];
     const held = this.queuedRequests.splice(0);
     for (const queued of inEngineArrivalOrder(held)) {
-      if (
+      if (this.holdsForNewerBuild(queued.request)) {
+        this.queuedRequests.push(queued);
+      } else if (
         this.tabs.includes(queued.tabId) ||
         isMutationSettlement(queued.request)
       ) {
@@ -614,14 +780,81 @@ export class CoordinatorCore {
     const actions = this.broadcastCacheChanges(
       this.cacheChanges.requestCompleted(this.inFlight.size === 0)
     );
+    const claimed = claimedTransaction(request.request, response);
     if (this.tabs.includes(request.tabId)) {
+      if (claimed !== undefined) {
+        this.claims.set(claimed.transactionId, {
+          tabId: request.tabId,
+          leaseGeneration: claimed.leaseGeneration,
+        });
+        actions.push({
+          kind: 'claim-lease',
+          ...claimed,
+          ms: leaseMs(request.request),
+        });
+        // A head claimed during the wait gets a wait of its own.
+        if (this.awaitingSettlements) actions.push(this.awaitSettlements());
+      }
       actions.push({
         kind: 'deliver-response',
         tabId: request.tabId,
         response: { ...response, id: request.request.id },
       });
     }
+    if (request.request.kind === 'clear' && response.ok) this.claims.clear();
+    // A settlement the engine answered took the head out, put it back, or
+    // found it gone (a failed commit rolls back); one it could not write keeps
+    // the claim for a retry.
+    if (isMutationSettlement(request.request) && response.ok)
+      this.forgetClaim(
+        request.request.transactionId,
+        request.request.leaseGeneration
+      );
+    actions.push(...this.afterSettlement());
     return actions;
+  }
+
+  /** The claim's lease ran out: another page may claim its head now. */
+  claimLeaseEnded(
+    transactionId: string,
+    leaseGeneration: string | undefined
+  ): CoordinatorAction[] {
+    this.forgetClaim(transactionId, leaseGeneration);
+    return this.afterSettlement();
+  }
+
+  /** Hands over, or drains a hidden owner that stayed only for these heads. */
+  private afterSettlement(): CoordinatorAction[] {
+    const handover = this.handOverIfSettled();
+    const state = this.stateValue;
+    if (
+      handover.length > 0 ||
+      !this.hiddenDrainDeferred ||
+      state.kind !== 'active' ||
+      this.awaitingSettlements ||
+      this.unsettled()
+    )
+      return handover;
+    return this.drainHiddenOwner(state.ownerEpoch);
+  }
+
+  /** From here on the wait claims no head: what it holds runs to the limit. */
+  closeClaims(): void {
+    if (this.awaitingSettlements) this.claimsClosed = true;
+  }
+
+  private forgetClaim(
+    transactionId: string,
+    leaseGeneration: string | undefined
+  ): void {
+    const claim = this.claims.get(transactionId);
+    // An older lease settles nothing of the head claimed again since.
+    if (
+      claim?.leaseGeneration === undefined ||
+      leaseGeneration === undefined ||
+      claim.leaseGeneration === leaseGeneration
+    )
+      this.claims.delete(transactionId);
   }
 
   enginePush(ownerEpoch: OwnerEpoch, push: CachePush): CoordinatorAction[] {
@@ -740,8 +973,9 @@ export class CoordinatorCore {
       kind: 'waiting-for-tab',
       nextDatabaseAction: 'open-existing',
     };
+    actions.push(...this.endWaitIfSettled());
     actions.push(
-      ...(this.supersedePending
+      ...(this.handsOverNow('open-existing')
         ? this.completeSupersede()
         : this.activateNext('open-existing'))
     );
@@ -770,6 +1004,17 @@ export class CoordinatorCore {
   supersede(): CoordinatorAction[] {
     const state = this.stateValue;
     if (this.supersededReason !== undefined) return [];
+    if (this.unsettled() && state.kind !== 'waiting-for-tab') {
+      // A page may have a claimed head on its way to the server. Its answer
+      // must reach an engine of this build, or another page sends it again.
+      this.supersedePending = true;
+      this.awaitingSettlements = true;
+      const wait = this.awaitSettlements();
+      // Every tab is hidden, so no engine runs to write the answer: start one.
+      if (state.kind === 'parked')
+        return [wait, ...this.activateNext(state.nextDatabaseAction)];
+      return [wait];
+    }
     if (
       state.kind === 'draining' ||
       (state.kind === 'resetting-after-loss' && !this.outage) ||
@@ -782,6 +1027,75 @@ export class CoordinatorCore {
     return this.completeSupersede();
   }
 
+  /** The pages had their time to settle their claims. */
+  settlementsOverdue(): CoordinatorAction[] {
+    if (!this.awaitingSettlements) return [];
+    const unsettled = this.claims.size;
+    this.claims.clear();
+    return this.handOverIfSettled(unsettled, true);
+  }
+
+  private awaitSettlements(): CoordinatorAction {
+    return {
+      kind: 'await-settlements',
+      ms: SETTLEMENT_WAIT_MS,
+      claims: this.claims.size,
+    };
+  }
+
+  /** A claimed head is unsettled, or a request on its way may claim one. */
+  private unsettled(): boolean {
+    if (this.claims.size > 0) return true;
+    for (const { request } of this.inFlight.values())
+      if (mayClaim(request)) return true;
+    // A settlement handed over already must still be written, even when the
+    // page that sent it has gone.
+    return this.queuedRequests.some(({ request }) =>
+      isMutationSettlement(request)
+    );
+  }
+
+  /** While a newer build waits, no page claims a head the wait does not see. */
+  private holdsForNewerBuild(request: CacheRequest): boolean {
+    if (!this.awaitingSettlements) return false;
+    return request.kind === 'claim-next-mutation';
+  }
+
+  /** Hands the database to the newer build once nothing claimed is unsettled. */
+  private handOverIfSettled(
+    unsettled = 0,
+    overdue = false
+  ): CoordinatorAction[] {
+    const ended = this.endWaitIfSettled(unsettled, overdue);
+    if (ended.length === 0) return [];
+    const state = this.stateValue;
+    if (state.kind === 'active')
+      return [...ended, ...this.drainForNewerBuild(state)];
+    // No engine runs, so nothing is left to drain; one starting or stopping
+    // hands over when it is done.
+    if (state.kind === 'waiting-for-tab' || state.kind === 'parked')
+      return [...ended, ...this.completeSupersede()];
+    return ended;
+  }
+
+  private endWaitIfSettled(
+    unsettled = 0,
+    overdue = false
+  ): CoordinatorAction[] {
+    if (!this.awaitingSettlements || (!overdue && this.unsettled())) return [];
+    this.awaitingSettlements = false;
+    return [{ kind: 'settlement-wait-ended', unsettled }];
+  }
+
+  /** The engine stopped while the newer build waits: start another, unless
+   * it would reset the database promised to that build. */
+  private handsOverNow(nextDatabaseAction: DatabaseAction): boolean {
+    return (
+      this.supersedePending &&
+      (!this.awaitingSettlements || nextDatabaseAction !== 'open-existing')
+    );
+  }
+
   private drainForNewerBuild({
     tabId,
     ownerEpoch,
@@ -792,10 +1106,17 @@ export class CoordinatorCore {
   }
 
   private completeSupersede(): CoordinatorAction[] {
+    const ended: CoordinatorAction[] = this.awaitingSettlements
+      ? [{ kind: 'settlement-wait-ended', unsettled: this.claims.size }]
+      : [];
     this.supersedePending = false;
+    this.awaitingSettlements = false;
+    this.claimsClosed = false;
+    this.claims.clear();
     const reason = SUPERSEDED_REASON;
     this.supersededReason = reason;
     const actions: CoordinatorAction[] = [
+      ...ended,
       ...this.releaseStartingOwner(reason),
       ...this.broadcastCacheChanges(this.cacheChanges.flush()),
       ...this.queuedRequests
@@ -877,6 +1198,7 @@ export class CoordinatorCore {
     if (this.inFlight.size === 0) {
       actions.push(...this.broadcastCacheChanges(this.cacheChanges.flush()));
     }
+    actions.push(...this.handOverIfSettled());
     this.assertInvariants();
     return actions;
   }
@@ -905,8 +1227,9 @@ export class CoordinatorCore {
       { kind: 'drop-tab', tabId }
     );
     this.stateValue = { kind: 'waiting-for-tab', nextDatabaseAction };
+    actions.push(...this.endWaitIfSettled());
     actions.push(
-      ...(this.supersedePending
+      ...(this.handsOverNow(nextDatabaseAction)
         ? this.completeSupersede()
         : this.activateNext(nextDatabaseAction))
     );
@@ -917,7 +1240,7 @@ export class CoordinatorCore {
   resumeAfterLoss(): CoordinatorAction[] {
     const state = this.stateValue;
     if (state.kind !== 'resetting-after-loss') return [];
-    if (this.supersedePending) {
+    if (this.handsOverNow(state.databaseAction)) {
       // The lost engine was promised to a newer build. Hand over now instead
       // of electing a reset owner that would wipe the database it agreed to
       // yield, queued mutations included.
@@ -936,6 +1259,7 @@ export class CoordinatorCore {
       return [];
     }
     this.currentEpoch = state.nextEpoch;
+    this.noteElection(candidate, state.nextEpoch);
     this.stateValue = {
       kind: 'activating',
       tabId: candidate,
@@ -1014,6 +1338,18 @@ export class CoordinatorCore {
     for (const [routeId, request] of this.inFlight) {
       if (request.ownerEpoch !== ownerEpoch) continue;
       this.inFlight.delete(routeId);
+      // While a newer build waits, the next engine writes it instead: the
+      // head is fenced by its lease, and refusing it here would leave the
+      // head for the newer build to send again.
+      if (
+        this.awaitingSettlements &&
+        isMutationSettlement(request.request) &&
+        this.claims.has(request.request.transactionId)
+      ) {
+        const { tabId, request: settlement, queuedAt } = request;
+        this.queuedRequests.push({ tabId, request: settlement, queuedAt });
+        continue;
+      }
       // Fencing an engine does not undo a durable enqueue. Even a planned
       // reset has not erased it yet, so a missing reply must never cause
       // the caller to retry or forward the mutation directly to the API.
@@ -1038,6 +1374,7 @@ export class CoordinatorCore {
       return [];
     }
     this.currentEpoch += 1;
+    this.noteElection(candidate, this.currentEpoch);
     this.stateValue = {
       kind: 'activating',
       tabId: candidate,
@@ -1082,6 +1419,15 @@ export class CoordinatorCore {
       this.visibleTabs.has(state.tabId)
     )
       return [];
+    // Its pages' settlements land here. With no visible tab to take over,
+    // holding the lock also makes a newer build ask for the database rather
+    // than open it under a head still out. It drains once they have settled,
+    // or the newer build drains it.
+    if (this.awaitingSettlements || (this.unsettled() && !this.hasVisibleTab)) {
+      this.hiddenDrainDeferred = true;
+      return [];
+    }
+    this.hiddenDrainDeferred = false;
     this.stateValue = { ...state, kind: 'draining' };
     return [
       {
@@ -1099,10 +1445,35 @@ export class CoordinatorCore {
   }
 
   private chooseCandidate(avoid?: string): string | undefined {
-    const visible = this.eligibleTabs().filter((tabId) =>
-      this.visibleTabs.has(tabId)
+    const eligible = this.eligibleTabs();
+    const visible = eligible.filter((tabId) => this.visibleTabs.has(tabId));
+    // A claimed head is settled by an engine of this build, even a hidden
+    // one: a parked build holds no lock, and a newer build would open the
+    // database under the head. The pages sending its answer go first, since
+    // a frozen tab elsewhere would never open the engine.
+    const candidates =
+      visible.length === 0 && this.unsettled()
+        ? [...eligible].sort(
+            (a, b) =>
+              Number(this.sendsSettlement(b)) - Number(this.sendsSettlement(a))
+          )
+        : visible;
+    return candidates.find((tabId) => tabId !== avoid) ?? candidates[0];
+  }
+
+  private noteElection(tabId: string, ownerEpoch: OwnerEpoch): void {
+    this.hiddenElectionEpoch = this.visibleTabs.has(tabId)
+      ? undefined
+      : ownerEpoch;
+  }
+
+  /** The tab claimed a head still out, or handed over its settlement. */
+  private sendsSettlement(tabId: string): boolean {
+    for (const claim of this.claims.values())
+      if (claim.tabId === tabId) return true;
+    return this.queuedRequests.some(
+      (queued) => queued.tabId === tabId && isMutationSettlement(queued.request)
     );
-    return visible.find((tabId) => tabId !== avoid) ?? visible[0];
   }
 
   private route(
@@ -1141,6 +1512,9 @@ export class CoordinatorCore {
     for (const [routeId, request] of this.inFlight) {
       if (request.tabId === tabId) this.inFlight.delete(routeId);
     }
+    // A page that left settles nothing; another page sends its head.
+    for (const [transactionId, claim] of this.claims)
+      if (claim.tabId === tabId) this.claims.delete(transactionId);
   }
 
   private acceptsEngineMessages(ownerEpoch: OwnerEpoch): boolean {

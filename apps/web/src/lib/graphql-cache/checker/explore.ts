@@ -11,7 +11,13 @@
  */
 import { check, QUIET_MS } from './properties';
 import { isHeartbeat } from './sim';
-import { type Fault, type Scenario, World } from './world';
+import {
+  type Delivery,
+  type Fault,
+  type Scenario,
+  type Settle,
+  World,
+} from './world';
 
 export type Bound = {
   maxFaults: number;
@@ -44,6 +50,8 @@ export type RunResult = {
   steps: string[];
   /** A step cap ended a phase early, so the run says less than it claims. */
   cutShort: boolean;
+  /** The queue heads pages sent, and what became of them. */
+  deliveries?: Delivery[];
 };
 
 /** A violation and the faults that led to it, sorted, repeats kept. */
@@ -363,8 +371,12 @@ export async function explore(
   return report;
 }
 
-/** One step of a scripted run: a fault, or time passing on the default schedule. */
-export type ScriptStep = Fault | { waitMs: number };
+/** One step of a scripted run: a fault, a page sending the head of the queue,
+ * or time passing on the default schedule. */
+export type ScriptStep =
+  | Fault
+  | { waitMs: number }
+  | { send: string; serverMs?: number; settle?: Settle };
 
 /**
  * Runs a fixed fault sequence on the default schedule, for defects that need
@@ -382,6 +394,8 @@ export async function runScript(
     for (const step of script) {
       if ('waitMs' in step)
         settled = (await quiesce(world, step.waitMs)) && settled;
+      else if ('send' in step)
+        await world.send(step.send, step.serverMs, step.settle);
       else await world.apply(step);
     }
     settled = (await quiet(world)) && settled;
@@ -391,6 +405,7 @@ export async function runScript(
       violations: found(world),
       steps: world.steps.map(describeStep),
       cutShort: !settled,
+      deliveries: world.deliveries,
     };
   } finally {
     world.uninstall();

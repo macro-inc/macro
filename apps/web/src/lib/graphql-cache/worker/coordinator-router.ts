@@ -16,7 +16,10 @@ import {
   type CoordinatorAction,
   CoordinatorCore,
   type CoordinatorSnapshot,
+  type CoordinatorState,
   type OwnerLockUnavailableReason,
+  SETTLEMENT_WAIT_LIMIT_MS,
+  SETTLEMENT_WAIT_MS,
   startupPhaseMayTouchStorage,
 } from './coordinator-core';
 import {
@@ -55,6 +58,7 @@ import {
 import {
   ENGINE_ASSET_LOAD_TIMEOUT_MS,
   ENGINE_DATABASE_OPEN_TIMEOUT_MS,
+  HIDDEN_SETTLEMENT_STARTUP_TIMEOUT_MS,
   LOCK_QUERY_TIMEOUT_MS,
   OWNER_LOCK_WAIT_TIMEOUT_MS,
   TAKEOVER_REPLY_TIMEOUT_MS,
@@ -315,6 +319,8 @@ export class CoordinatorRouter {
   >();
   private engineRoute: EngineRoute | undefined;
   private activationTimer: ReturnType<typeof setTimeout> | undefined;
+  /** The running startup watchdog has the hidden budget, not the phase's. */
+  private activationBudgetHidden = false;
   private heartbeatIntervalTimer: ReturnType<typeof setTimeout> | undefined;
   private heartbeatTimeoutTimer: ReturnType<typeof setTimeout> | undefined;
   private drain: DrainWatch | undefined;
@@ -382,6 +388,10 @@ export class CoordinatorRouter {
   private answeringOwnerEpoch: number | undefined;
   /** When the engine that now runs, or ran last, had opened the database. */
   private openedAt: number | undefined;
+  /** When a newer build began waiting for claimed heads. */
+  private settlementWaitStartedAt: number | undefined;
+  private settlementWaitTimer: ReturnType<typeof setTimeout> | undefined;
+  private claimsCloseTimer: ReturnType<typeof setTimeout> | undefined;
   private recoveryRetryTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly now = (): number =>
     globalThis.performance?.now() ?? Date.now();
@@ -528,7 +538,10 @@ export class CoordinatorRouter {
 
     match(message)
       .with({ kind: 'tab-visibility' }, ({ visible }) => {
-        this.applyActions(core.setTabVisibility(tabId, visible));
+        const before = core.state;
+        const actions = core.setTabVisibility(tabId, visible);
+        this.recordStartupTakenOver(before, actions);
+        this.applyActions(actions);
       })
       .with({ kind: 'ping' }, () => {
         this.postToTab(
@@ -690,7 +703,9 @@ export class CoordinatorRouter {
         ...(coordinatorLockName === undefined ? {} : { coordinatorLockName }),
       })
     );
+    const before = this.coreValue.state;
     const actions = this.coreValue.registerTab(message.tabId, message.visible);
+    this.recordStartupTakenOver(before, actions);
     const previousReadState = this.handoff.readState;
     this.applyActions(actions);
     const readState = this.handoff.readState;
@@ -708,6 +723,26 @@ export class CoordinatorRouter {
       const progress = this.startupProgress();
       if (progress) this.postToTab(message.tabId, progress);
     }
+  }
+
+  /** A shown tab took over a hidden startup: that owner left before it was
+   * ready, and a wipe it was to make passes to the next one. */
+  private recordStartupTakenOver(
+    before: CoordinatorState,
+    actions: readonly CoordinatorAction[]
+  ): void {
+    if (
+      before.kind === 'activating' &&
+      actions.some(
+        (action) =>
+          action.kind === 'release-owner' &&
+          action.ownerEpoch === before.ownerEpoch
+      )
+    )
+      this.recordOwnerLeft(before.ownerEpoch, {
+        outcome: 'graceful',
+        ownerEvent: 'replacement',
+      });
   }
 
   /** Without it pages work, but don't notice this coordinator's end. */
@@ -1260,6 +1295,74 @@ export class CoordinatorRouter {
         case 'schedule-reset-activation':
           this.scheduleResetActivation();
           break;
+        case 'await-settlements': {
+          // A head claimed during the wait extends it, up to the limit.
+          const now = this.now();
+          if (this.settlementWaitStartedAt === undefined) {
+            this.settlementWaitStartedAt = now;
+            this.telemetry.record({
+              name: 'graphql_cache.owner',
+              operationCategory: 'lifecycle',
+              outcome: 'success',
+              ownerEvent: 'settlement-wait-started',
+              count: action.claims,
+            });
+            // A claim made after this still gets its full wait.
+            const core = this.coreValue;
+            this.claimsCloseTimer = this.setTimeoutFn(() => {
+              this.claimsCloseTimer = undefined;
+              if (this.coreValue === core && core) core.closeClaims();
+            }, SETTLEMENT_WAIT_LIMIT_MS - SETTLEMENT_WAIT_MS);
+          }
+          const ms = Math.min(
+            action.ms,
+            this.settlementWaitStartedAt + SETTLEMENT_WAIT_LIMIT_MS - now
+          );
+          if (this.settlementWaitTimer !== undefined)
+            this.clearTimeoutFn(this.settlementWaitTimer);
+          const core = this.coreValue;
+          this.settlementWaitTimer = this.setTimeoutFn(() => {
+            this.settlementWaitTimer = undefined;
+            if (this.coreValue === core && core)
+              this.applyActions(core.settlementsOverdue());
+          }, ms);
+          break;
+        }
+        case 'claim-lease': {
+          // Past its lease another page may claim the head, so it is no
+          // longer this claim's to settle.
+          const core = this.coreValue;
+          const { transactionId, leaseGeneration } = action;
+          this.setTimeoutFn(() => {
+            if (this.coreValue === core && core)
+              this.applyActions(
+                core.claimLeaseEnded(transactionId, leaseGeneration)
+              );
+          }, action.ms);
+          break;
+        }
+        case 'settlement-wait-ended': {
+          const startedAt = this.settlementWaitStartedAt;
+          this.settlementWaitStartedAt = undefined;
+          if (this.settlementWaitTimer !== undefined)
+            this.clearTimeoutFn(this.settlementWaitTimer);
+          this.settlementWaitTimer = undefined;
+          if (this.claimsCloseTimer !== undefined)
+            this.clearTimeoutFn(this.claimsCloseTimer);
+          this.claimsCloseTimer = undefined;
+          // Abrupt: a head still out may reach a retired host, and be sent
+          // again by a page of the newer build.
+          this.telemetry.record({
+            name: 'graphql_cache.owner',
+            operationCategory: 'lifecycle',
+            outcome: action.unsettled > 0 ? 'abrupt' : 'graceful',
+            ownerEvent: 'settlement-wait-ended',
+            count: action.unsettled,
+            durationMs:
+              startedAt === undefined ? undefined : this.now() - startedAt,
+          });
+          break;
+        }
         case 'broadcast-cache-unavailable':
           this.broadcast(
             envelope<CoordinatorToTabEnvelope>({
@@ -1367,8 +1470,13 @@ export class CoordinatorRouter {
         this.handoff.park(core.snapshot().ownerEpoch)
       )
       .with({ kind: 'activating' }, ({ tabId, ownerEpoch }) => {
-        if (!core.hasVisibleTab) this.clearActivationTimer();
-        else if (this.activationTimer === undefined)
+        if (!core.hasVisibleTab && !core.startsForSettlement)
+          this.clearActivationTimer();
+        else if (
+          this.activationTimer === undefined ||
+          // A shown tab now waits for it: the phase gets its whole budget.
+          (this.activationBudgetHidden && core.hasVisibleTab)
+        )
           this.armStartupWatchdog(tabId, ownerEpoch);
         // Arming can end this owner, whose successor then synced for itself.
         if (core.snapshot().ownerEpoch !== ownerEpoch) return;
@@ -1425,9 +1533,16 @@ export class CoordinatorRouter {
     // It can also drop another tab, which arms this owner's on the way.
     this.clearActivationTimer();
     // A hidden startup may be suspended by the browser while we wait to park
-    // it. Resume the phase budget when there is a visible consumer again.
-    if (!this.coreValue?.hasVisibleTab) return;
-    const { phase, timeoutMs } = progress;
+    // it. Resume the phase budget when there is a visible consumer again,
+    // unless the engine is wanted for a head out: then a newer build would
+    // open the free database under it, so another tab tries soon.
+    const hidden = !this.coreValue?.hasVisibleTab;
+    if (hidden && !this.coreValue?.startsForSettlement) return;
+    const { phase } = progress;
+    const shortened = hidden && phase === 'loading-assets';
+    const timeoutMs = shortened
+      ? Math.min(progress.timeoutMs, HIDDEN_SETTLEMENT_STARTUP_TIMEOUT_MS)
+      : progress.timeoutMs;
     const reason = match(phase)
       .with('loading-assets', () => 'engine asset loading watchdog timed out')
       .with('awaiting-owner-lock', () => 'engine owner lock watchdog timed out')
@@ -1445,6 +1560,7 @@ export class CoordinatorRouter {
       ).catch(reportCoordinatorTaskFailure);
     }, timeoutMs);
     this.activationTimer = timer;
+    this.activationBudgetHidden = shortened;
   }
 
   /** Tab ids holding this scope's liveness locks without registering here,
@@ -2228,6 +2344,7 @@ export class CoordinatorRouter {
   }
 
   private clearActivationTimer(): void {
+    this.activationBudgetHidden = false;
     if (this.activationTimer !== undefined) {
       this.clearTimeoutFn(this.activationTimer);
       this.activationTimer = undefined;

@@ -609,7 +609,46 @@ draining it, answers:
 - **Yield**, if the requester is strictly newer. Every tab registered there gets
   `cache-superseded`, and later requests are refused with the
   `cache-superseded` error code rather than `owner-lock-unavailable`. Each page retires its host to the network. A
-  running engine is drained first, within the same limit as any drain (15 s), so
+  queue head a page claimed is on its way to the server, and only this build
+  can settle it, or a page of the newer build sends it again. So the
+  coordinator answers `yield` but keeps an engine serving this build until
+  every claimed head is settled (an answered commit, rollback or deferral
+  under its lease, a `clear` or `reset` queue, or the claim's lease ended), no
+  claim or enqueue is still on its way to the engine, and no claiming page is
+  left; or until `SETTLEMENT_WAIT_MS` (70 s, past the runner's 60 s request
+  timeout) has passed, from the takeover and again from each claim the wait
+  sees, up to `SETTLEMENT_WAIT_LIMIT_MS` (140 s). It holds
+  `claim-next-mutation` meanwhile, and refuses enqueues as
+  `owner-lock-unavailable` (so the page sends them itself and keeps its host)
+  once a claim could no longer get its full wait before the limit. An owner
+  that drains or leaves during the wait is replaced as usual, unless the
+  replacement would wipe the database, and a settlement the lost owner was
+  writing, or one whose page has gone, goes to the next engine. With every tab
+  hidden, the wait starts an engine in a hidden tab rather than parking, so a
+  settlement still has somewhere to land. Outside the wait, while a head its
+  pages claimed is out or its settlement waits for an engine, a hidden owner
+  with no visible tab to take over keeps its engine, and an owner that leaves
+  with every other tab hidden is replaced by a hidden one (a tab sending the
+  answer first), until the head settles or its lease ends: a parked build
+  holds no lock, and a newer build would open the database without asking.
+  A hidden tab may be frozen and never open that engine, so one still loading
+  its assets after `HIDDEN_SETTLEMENT_STARTUP_TIMEOUT_MS` (30 s) is given up
+  for another tab when there is one, and another tab shown before then starts
+  its own (handing over instead if that one would wipe a database a newer
+  build waits for). Nothing tells a frozen page from a slow one: a newer build
+  that opens within that window takes the free lock, and a hidden tab slower
+  than it is given up. On the page, a head claimed before
+  retirement settles through the host that claimed it
+  (`createRetirableCacheHost` pins it until the head settles or its lease
+  ends), and a retired host refuses any other settlement
+  (`CacheSettlementUnwrittenError`) rather than acknowledging one it did not
+  write; its attempt ends `ack-lost` with `LOCAL_SETTLEMENT_UNWRITTEN`. The
+  wait records the `settlement-wait-started` and `settlement-wait-ended`
+  owner events. A head still out after the wait, or whose coordinator restarted, or
+  out when the owner's engine crashed just before a newer build opened (the
+  lock is free until the coordinator notices), stays
+  queued and is sent again, at least once as on any lost page. A
+  running engine is then drained, within the same limit as any drain (15 s), so
   what it was given settles; it then releases the owner lock. An enqueue that
   was already sent and still has no answer is reported as uncertain rather than
   sent again, because it may be in the durable queue that the newer build
