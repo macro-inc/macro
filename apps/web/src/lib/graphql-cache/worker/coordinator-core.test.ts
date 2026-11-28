@@ -574,11 +574,30 @@ describe('CoordinatorCore', () => {
       ).toEqual([
         expect.objectContaining({
           kind: 'reject-request',
-          errorCode: 'cache-superseded',
+          errorCode: 'owner-lock-unavailable',
         }),
       ]);
       expect(core.request('tab-b', claimNext(6))).toEqual([]);
       expect(core.snapshot().queuedRequestCount).toBe(1);
+    });
+
+    it('drains as usual once shown again and hidden', () => {
+      const core = claimed();
+      core.setTabVisibility('tab-a', false);
+      core.setTabVisibility('tab-b', false);
+      expect(core.drainHiddenOwner(1)).toEqual([]);
+      core.setTabVisibility('tab-a', true);
+      const settle = action(core.request('tab-b', commit(2)), 'route-request');
+      core.engineResponse(1, settle.routeId, ok({ kind: 'committed' }));
+      core.setTabVisibility('tab-a', false);
+      // A read answered within the hide's grace drains nothing.
+      const read = action(
+        core.request('tab-b', { id: 3, kind: 'current-revision' }),
+        'route-request'
+      );
+      expect(core.engineResponse(1, read.routeId, ok(1))).not.toContainEqual(
+        expect.objectContaining({ kind: 'drain-owner' })
+      );
     });
 
     it('keeps a hidden engine while a head is out and no tab is visible', () => {
@@ -623,7 +642,7 @@ describe('CoordinatorCore', () => {
       ]);
     });
 
-    it('starts a hidden engine to write a settlement during the wait', () => {
+    it('starts a hidden engine for a head out when the owner goes', () => {
       const core = new CoordinatorCore('scope');
       for (const tab of ['tab-a', 'tab-b', 'tab-c']) core.registerTab(tab);
       ready(core, 'tab-a', 1, 'opened-existing');
@@ -634,13 +653,14 @@ describe('CoordinatorCore', () => {
       core.engineResponse(1, claim.routeId, ok({ transactionId: '7' }));
       core.setTabVisibility('tab-b', false);
       core.setTabVisibility('tab-c', false);
-      // The owner goes with every other tab hidden, so the database parks.
-      core.tabLost('tab-a');
-      expect(core.state.kind).toBe('parked');
-      // No tab is visible, yet the claimed head needs an engine of this build.
-      expect(core.supersede()).toContainEqual(
+      // The owner goes with every other tab hidden. Parked, the database
+      // would be free for a newer build to open under the head.
+      expect(core.tabLost('tab-a')).toContainEqual(
         expect.objectContaining({ kind: 'elect-owner', ownerEpoch: 2 })
       );
+      expect(core.supersede()).toEqual([
+        expect.objectContaining({ kind: 'await-settlements', claims: 1 }),
+      ]);
       const next = core.state as { tabId: string };
       const routes = ready(core, next.tabId, 2, 'opened-existing');
       expect(routes).not.toContainEqual(

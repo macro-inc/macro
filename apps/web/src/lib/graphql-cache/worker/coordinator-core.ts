@@ -371,7 +371,7 @@ export class CoordinatorCore {
 
   /** Visibility of eligible consumers, not merely the page owning an engine. */
   get hasVisibleTab(): boolean {
-    return this.chooseCandidate() !== undefined;
+    return this.eligibleTabs().some((tabId) => this.visibleTabs.has(tabId));
   }
 
   /** Whether a newer app build took the database over. */
@@ -431,8 +431,11 @@ export class CoordinatorCore {
 
   setTabVisibility(tabId: string, visible: boolean): CoordinatorAction[] {
     if (!this.tabs.includes(tabId)) return [];
-    if (visible) this.visibleTabs.add(tabId);
-    else this.visibleTabs.delete(tabId);
+    if (visible) {
+      this.visibleTabs.add(tabId);
+      // A later hide waits its grace again before the owner drains.
+      this.hiddenDrainDeferred = false;
+    } else this.visibleTabs.delete(tabId);
     return this.activateOrHandOff(visible);
   }
 
@@ -457,14 +460,16 @@ export class CoordinatorCore {
     }
 
     // Late in the wait an enqueue could claim a head that has no time left to
-    // settle. Refused as superseded, it never reaches an engine and the page
-    // sends it as it would with no cache, rather than waiting to time out.
+    // settle. Refused as the database being unavailable, it never reaches an
+    // engine and the page sends it as it would with no cache, rather than
+    // waiting to time out. Superseded would retire the page's host, and with
+    // it the heads it still has out.
     if (
       this.awaitingSettlements &&
       this.claimsClosed &&
       request.kind === 'enqueue-optimistic-mutation'
     )
-      return [this.rejectSuperseded(tabId, request.id, SUPERSEDED_REASON)];
+      return [this.rejectUnavailable(tabId, request.id, SUPERSEDED_REASON)];
     const queued = { tabId, request, queuedAt };
     // A head claimed now would be sent with the engine about to go. The
     // handover refuses the claim as superseded.
@@ -682,6 +687,7 @@ export class CoordinatorCore {
       ownerEpoch: state.ownerEpoch,
     };
     this.outage = undefined;
+    this.hiddenDrainDeferred = false;
     const actions: CoordinatorAction[] = [];
     if (state.ownerEpoch > 1) {
       actions.push({
@@ -1376,10 +1382,7 @@ export class CoordinatorCore {
     // holding the lock also makes a newer build ask for the database rather
     // than open it under a head still out. It drains once they have settled,
     // or the newer build drains it.
-    if (
-      this.awaitingSettlements ||
-      (this.unsettled() && this.chooseCandidate(state.tabId) === undefined)
-    ) {
+    if (this.awaitingSettlements || (this.unsettled() && !this.hasVisibleTab)) {
       this.hiddenDrainDeferred = true;
       return [];
     }
@@ -1403,10 +1406,12 @@ export class CoordinatorCore {
   private chooseCandidate(avoid?: string): string | undefined {
     const eligible = this.eligibleTabs();
     const visible = eligible.filter((tabId) => this.visibleTabs.has(tabId));
-    // While a newer build waits, a claimed head is settled by an engine of
-    // this build, even a hidden one.
+    // A claimed head is settled by an engine of this build, even a hidden
+    // one: a parked build holds no lock, and a newer build would open the
+    // database under the head.
     const candidates =
-      visible.length === 0 && this.awaitingSettlements && this.unsettled()
+      visible.length === 0 &&
+      (this.claims.size > 0 || (this.awaitingSettlements && this.unsettled()))
         ? eligible
         : visible;
     return candidates.find((tabId) => tabId !== avoid) ?? candidates[0];
