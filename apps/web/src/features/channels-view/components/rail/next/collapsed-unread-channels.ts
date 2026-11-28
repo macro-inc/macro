@@ -8,7 +8,7 @@ import { isChannelEntity } from '@entity';
 import { registerChannelListNotificationRefresh } from '@queries/channel/by-ids';
 import { queryReadyGate } from '@queries/gate';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
-import { type Accessor, createEffect, on, onCleanup } from 'solid-js';
+import { type Accessor, createEffect, on } from 'solid-js';
 import { channelTypesShownBy } from '../../../core/channel-types';
 
 const UNREAD_CHANNEL_FILTERS = defineQueryFilters({
@@ -16,8 +16,8 @@ const UNREAD_CHANNEL_FILTERS = defineQueryFilters({
 });
 
 /**
- * Pages kept while their view is off screen miss live updates; they are read
- * again once they have missed them this long, the time the query counts them
+ * Pages kept while their view is off screen miss live updates; each is read
+ * again once it has missed them this long, the time the query counts them
  * fresh, while the view is on screen.
  */
 const UNREAD_PAGES_FRESH_MS = 30_000;
@@ -50,11 +50,11 @@ export function useCollapsedUnreadChannels(
     })
   );
   const reading = () => listsEvery() && readsMore();
-  const readPagesAgain = registerChannelListNotificationRefresh(
+  registerChannelListNotificationRefresh(
     query,
     channelTypesShownBy(UNREAD_CHANNEL_FILTERS),
     undefined,
-    reading
+    { read: reading, freshMs: UNREAD_PAGES_FRESH_MS }
   );
   createEffect(() => {
     if (
@@ -69,37 +69,6 @@ export function useCollapsedUnreadChannels(
       return;
     fireAndForget(query.fetchNextPage(), 'channels-collapsed-unread');
   });
-  // When the kept later pages began to miss live updates; with none kept,
-  // nothing is missed.
-  const keepsLaterPages = () =>
-    listsEvery() && (query.revalidationQueries?.length ?? 0) > 1;
-  let missedSince: number | undefined;
-  createEffect(
-    on(
-      reading,
-      (now) => {
-        if (!now) {
-          missedSince = keepsLaterPages()
-            ? (missedSince ?? Date.now())
-            : undefined;
-          return;
-        }
-        const since = missedSince;
-        if (since === undefined) return;
-        // The refresh queue reads each page in turn, and drops the rest if
-        // the view leaves first; leaving keeps the deadline for its return.
-        const timer = setTimeout(
-          () => {
-            missedSince = undefined;
-            if (keepsLaterPages()) readPagesAgain();
-          },
-          Math.max(0, since + UNREAD_PAGES_FRESH_MS - Date.now())
-        );
-        onCleanup(() => clearTimeout(timer));
-      },
-      { defer: true }
-    )
-  );
   createEffect(
     on(
       listsEvery,

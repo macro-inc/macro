@@ -3,8 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const useSoupAstItemsQuery = vi.hoisted(() => vi.fn());
 const refreshes = vi.hoisted(() => ({
-  laterPages: undefined as (() => boolean) | undefined,
-  readPagesAgain: vi.fn(),
+  laterPages: undefined as { read: () => boolean; freshMs: number } | undefined,
 }));
 
 vi.mock('@queries/soup/items', () => ({ useSoupAstItemsQuery }));
@@ -13,10 +12,9 @@ vi.mock('@queries/channel/by-ids', () => ({
     _query: unknown,
     _types: unknown,
     _ids: unknown,
-    laterPages: () => boolean
+    laterPages: { read: () => boolean; freshMs: number }
   ) => {
     refreshes.laterPages = laterPages;
-    return refreshes.readPagesAgain;
   },
 }));
 vi.mock('@entity', () => ({
@@ -27,8 +25,6 @@ import { useCollapsedUnreadChannels } from './collapsed-unread-channels';
 
 afterEach(() => {
   useSoupAstItemsQuery.mockReset();
-  refreshes.readPagesAgain.mockReset();
-  vi.useRealTimers();
 });
 
 /**
@@ -135,78 +131,14 @@ describe('useCollapsedUnreadChannels', () => {
       return dispose;
     });
     try {
-      expect(refreshes.laterPages?.()).toBe(true);
+      // Kept pages are read again once they have been stale for as long as
+      // the query counts them fresh.
+      expect(refreshes.laterPages?.freshMs).toBe(30_000);
+      expect(refreshes.laterPages?.read()).toBe(true);
       setReadsMore(false);
-      expect(refreshes.laterPages?.()).toBe(false);
+      expect(refreshes.laterPages?.read()).toBe(false);
       setReadsMore(true);
-      expect(refreshes.laterPages?.()).toBe(true);
-    } finally {
-      dispose();
-    }
-  });
-
-  it('reads its kept pages again once they have missed live updates for 30 s while on screen', () => {
-    vi.useFakeTimers();
-    firstPageWithMore();
-    const [readsMore, setReadsMore] = createSignal(true);
-    const dispose = createRoot((dispose) => {
-      useCollapsedUnreadChannels(
-        () => true,
-        () => true,
-        readsMore
-      );
-      return dispose;
-    });
-    const readAgain = refreshes.readPagesAgain;
-    try {
-      vi.advanceTimersByTime(60_000);
-      expect(readAgain).not.toHaveBeenCalled();
-      // A short return keeps the deadline set when the view first left.
-      setReadsMore(false);
-      vi.advanceTimersByTime(10_000);
-      setReadsMore(true);
-      vi.advanceTimersByTime(5_000);
-      expect(readAgain).not.toHaveBeenCalled();
-      // Leaving again holds the catch-up until the view is back.
-      setReadsMore(false);
-      vi.advanceTimersByTime(60_000);
-      expect(readAgain).not.toHaveBeenCalled();
-      setReadsMore(true);
-      vi.advanceTimersByTime(0);
-      expect(readAgain).toHaveBeenCalledOnce();
-      // Pages read again are current until the view next leaves.
-      vi.advanceTimersByTime(60_000);
-      expect(readAgain).toHaveBeenCalledOnce();
-      setReadsMore(false);
-      vi.advanceTimersByTime(10_000);
-      setReadsMore(true);
-      vi.advanceTimersByTime(19_999);
-      expect(readAgain).toHaveBeenCalledOnce();
-      vi.advanceTimersByTime(1);
-      expect(readAgain).toHaveBeenCalledTimes(2);
-    } finally {
-      dispose();
-    }
-  });
-
-  it('catches up nothing once its later pages were dropped', () => {
-    vi.useFakeTimers();
-    firstPageWithMore();
-    const [listsEvery, setListsEvery] = createSignal(true);
-    const [readsMore, setReadsMore] = createSignal(true);
-    const dispose = createRoot((dispose) => {
-      useCollapsedUnreadChannels(() => true, listsEvery, readsMore);
-      return dispose;
-    });
-    try {
-      setReadsMore(false);
-      vi.advanceTimersByTime(10_000);
-      setListsEvery(false);
-      vi.advanceTimersByTime(60_000);
-      setListsEvery(true);
-      setReadsMore(true);
-      vi.advanceTimersByTime(60_000);
-      expect(refreshes.readPagesAgain).not.toHaveBeenCalled();
+      expect(refreshes.laterPages?.read()).toBe(true);
     } finally {
       dispose();
     }

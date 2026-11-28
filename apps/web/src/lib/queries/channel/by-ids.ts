@@ -5,8 +5,16 @@ import {
 } from '@app/features/next-soup/filters/filter-store';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isChannelEntity } from '@entity';
+import type { QueryRevalidation } from '@graphql-cache/exchange/optimistic';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
-import { type Accessor, createEffect, createMemo, untrack } from 'solid-js';
+import { createRequest } from '@urql/core';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  on,
+  onCleanup,
+} from 'solid-js';
 import {
   type SoupAstItemsQuery,
   type SoupAstItemsQueryArgs,
@@ -16,6 +24,17 @@ import { channelNotificationRefresh } from './notification-refresh';
 import { registerChannelNotificationRefresh } from './register-notification-refresh';
 
 const BATCH_SIZE = 500;
+
+/** When live updates read a list's later pages again. */
+export type LaterPageReads = {
+  /** Live updates read the later pages again only while this holds. */
+  read: Accessor<boolean>;
+  /** How long a later page may miss live updates before it is read again. */
+  freshMs: number;
+};
+
+/** A later page that has missed live updates since `since`. */
+type MissedPage = { query: QueryRevalidation; since: number };
 
 export function channelsByIdsQueryArgs(
   channelIds: readonly string[]
@@ -36,23 +55,23 @@ export function channelsByIdsQueryArgs(
 /**
  * Keep each channel list's bounded unread and mention projections current,
  * including cached rows. A list given `channelTypes` also waits for a new
- * channel of those types to reach its first page. While `laterPages` is
- * false, only the first page is read again. Returns a function that queues
- * every registered page to be read again; the queue skips a page whose
- * registration ends before its turn.
+ * channel of those types to reach its first page. With `laterPages`, live
+ * updates read only the first page while its `read` is false, and each later
+ * page is read once more after it has missed them for `freshMs`, while
+ * `read` holds.
  */
 export function registerChannelListNotificationRefresh(
   query: SoupAstItemsQuery,
   channelTypes?: readonly string[],
   channelIds?: Accessor<ReadonlySet<string>>,
-  laterPages: Accessor<boolean> = () => true
+  laterPages?: LaterPageReads
 ) {
   // The first page comes first (its cursor is null).
-  const pages = () =>
-    (query.revalidationQueries ?? []).slice(0, laterPages() ? undefined : 1);
+  const pages = () => query.revalidationQueries ?? [];
+  if (laterPages) catchUpLaterPages(pages, laterPages);
   registerChannelNotificationRefresh(() => ({
     client: getGraphqlSoupClient(),
-    queries: pages(),
+    queries: pages().slice(0, (laterPages?.read() ?? true) ? undefined : 1),
     reader: {
       enabled: query.transport === 'graphql' && query.isEnabled,
       fetching: query.isFetching,
@@ -71,10 +90,67 @@ export function registerChannelListNotificationRefresh(
             ),
     },
   }));
-  return () => {
-    const queue = channelNotificationRefresh(getGraphqlSoupClient());
-    for (const page of untrack(pages)) queue.invalidateQuery(page);
+}
+
+/**
+ * Later pages miss live updates while they are not read: from when reads
+ * stop, or from when a page lands while they are stopped. Once one has missed
+ * them for `freshMs`, it is read again while reads hold, in the refresh
+ * queue's turn; a page the queue does not read, because reads stopped first,
+ * keeps its deadline for when they resume.
+ */
+function catchUpLaterPages(
+  pages: Accessor<readonly QueryRevalidation[]>,
+  { read, freshMs }: LaterPageReads
+) {
+  const missed = new Map<number, MissedPage>();
+  const queued = new Set<number>();
+  const readAgain = async (key: number, page: MissedPage) => {
+    queued.add(key);
+    const landed = await channelNotificationRefresh(
+      getGraphqlSoupClient()
+    ).readAgain(page.query);
+    queued.delete(key);
+    if (landed && missed.get(key) === page) missed.delete(key);
   };
+  createEffect(
+    on([read, pages], ([reads, all]) => {
+      const later = new Map(
+        all
+          .slice(1)
+          .map((page) => [
+            createRequest(page.document, page.variables).key,
+            page,
+          ])
+      );
+      for (const key of [...missed.keys()])
+        if (!later.has(key)) missed.delete(key);
+      if (!reads) {
+        const now = Date.now();
+        for (const [key, query] of later)
+          if (!missed.has(key)) missed.set(key, { query, since: now });
+        return;
+      }
+      // A deadline, not a debounce: each page waits out its own.
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const wait = () => {
+        const waiting = [...missed].filter(([key]) => !queued.has(key));
+        if (waiting.length === 0) return;
+        const due = Math.min(...waiting.map(([, page]) => page.since));
+        timer = setTimeout(
+          () => {
+            for (const [key, page] of missed)
+              if (!queued.has(key) && page.since + freshMs <= Date.now())
+                fireAndForget(readAgain(key, page), 'channel-list-later-pages');
+            wait();
+          },
+          Math.max(0, due + freshMs - Date.now())
+        );
+      };
+      wait();
+      onCleanup(() => clearTimeout(timer));
+    })
+  );
 }
 
 /** One Soup owner supplies local rows, missing-record fetches, and unread updates. */
