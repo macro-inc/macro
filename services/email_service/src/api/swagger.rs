@@ -34,7 +34,8 @@ use ::email::inbound::axum::api_types::{
 };
 use ::email::inbound::axum::axum_impls::GetPreviewsCursorParams;
 use ::email::inbound::axum::email_filter_router::{
-    ApiEmailFilter, ListEmailFiltersResponse, UpsertEmailFilterRequest, UpsertEmailFilterResponse,
+    ApiEmailFilter, EmailFilterDeletePushStatus, ListEmailFiltersResponse,
+    UpsertEmailFilterRequest, UpsertEmailFilterResponse,
 };
 use ::email::inbound::axum::list_labels_router::ListLabelsResponse as HexListLabelsResponse;
 use ::email::inbound::axum::thread_labels_router::{
@@ -194,6 +195,7 @@ use utoipa::OpenApi;
             // Email filter types
             UpsertEmailFilterRequest,
             UpsertEmailFilterResponse,
+            EmailFilterDeletePushStatus,
             ListEmailFiltersResponse,
             ApiEmailFilter,
             // Sort/filter types

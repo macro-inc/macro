@@ -64,7 +64,8 @@ the app's disconnected paths.
 - The connection gateway is not run. The fixture answers the browser's gateway
   socket and passes on what the email services ask the gateway to send the user.
 - Not in the stack: the notification, search, contacts and calendar services.
-  New mail does not appear in an open list by itself; sync, then open.
+  The live Mail tests need an isolated Kafka broker. Other tests wait for sync
+  before opening the list.
 - The bundle has unified notifications on (`enable-unified-notifications` is
   on in dev), so the navigation's unread marks, the Mail badge among them,
   follow the server's count of unread notification rows, which only the
@@ -72,9 +73,9 @@ the app's disconnected paths.
   them on the full-stack tier.
 
 `authority-requests.spec.ts` counts permission reads through inbox navigation,
-thread reads and draft autosaves against the real services. Its Soup frames are
-protocol fixtures: the stack's HTTP recording proxy cannot relay WebSocket
-upgrades. Those counts measure client frame handling, not live Kafka delivery.
+thread reads and draft autosaves against the real services. It sends a fixed
+number of Soup protocol frames to keep the permission request budget
+deterministic. The live Mail tests exercise Kafka delivery.
 
 ## Writing a test
 
@@ -286,14 +287,13 @@ One spec file per area; helpers a file shares with others are in `harness/`.
 
 - `harness/linking.ts` stands in for the authentication service's link
   endpoints and the provider callback; the consent pages are the emulators'.
-- `list.spec.ts`'s new-mail test runs only with `EMAIL_E2E_LIVE_UPDATES=1`
+- `list.spec.ts`'s live Mail tests run only with `EMAIL_E2E_LIVE_UPDATES=1`
   and alone: every stack's services read live updates in one Kafka consumer
   group, so another running stack can take the event.
-  The per-test stack's recording proxy currently buffers HTTP responses and
-  removes `Connection`; it does not relay WebSocket upgrades. Its Soup socket
-  therefore fails the handshake even with a private broker, and the readiness
-  probe fails before the test exercises list updates. Live subscription delivery
-  remains unverified by this test until the proxy supports upgraded connections.
+  The front routes upgrades directly to the scenario's DSS listener. Ordinary
+  GraphQL requests still use the HTTP recording proxy. The sender filter test
+  writes through a separate HTTP client for the same account and counts list
+  requests from the browser while its open list moves the affected rows.
 
 ## Fixture tests
 

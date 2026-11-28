@@ -11,4 +11,6 @@ import type { ApiEmailFilter } from './apiEmailFilter';
  */
 export interface UpsertEmailFilterResponse {
   filter: ApiEmailFilter;
+  /** Whether some changed threads were omitted from the realtime publish. */
+  push_was_capped: boolean;
 }

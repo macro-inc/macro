@@ -513,6 +513,17 @@ export function getGraphqlSoupNetworkClient(): Client {
 }
 
 const reconnectListeners = new Set<() => void>();
+type SoupUpdateConnection = () => boolean;
+let captureCachedSoupConnection:
+  | (() => SoupUpdateConnection | undefined)
+  | undefined;
+
+/** Test whether the same cache-backed Soup subscription stayed connected through a write. */
+export function captureGraphqlSoupUpdateConnection():
+  | SoupUpdateConnection
+  | undefined {
+  return captureCachedSoupConnection?.();
+}
 
 /**
  * Hear every reconnect of the Soup GraphQL websocket after its first
@@ -1164,12 +1175,24 @@ export function getGraphqlSoupClient(): Client {
         );
       host = createHost(true);
       let websocketState: MutationQueueEnvironment['websocket'] = 'none';
+      let socketConnection: object | undefined;
       const graphqlWsClient = createGraphqlSoupWebSocketClient(
         subscriptionsLifecycle.connected,
         (state) => {
           websocketState = state;
+          socketConnection = state === 'connected' ? {} : undefined;
         }
       );
+      captureCachedSoupConnection = () => {
+        const connection = socketConnection;
+        const subscription = subscriptionsLifecycle.soupSubscription();
+        if (!connection || !subscription || lifetime.signal.aborted)
+          return undefined;
+        return () =>
+          !lifetime.signal.aborted &&
+          socketConnection === connection &&
+          subscriptionsLifecycle.soupSubscription() === subscription;
+      };
       websocketClient = graphqlWsClient;
       const mutationQueueTelemetry = createMutationQueueTelemetry({
         environment: () => ({

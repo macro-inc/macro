@@ -26,7 +26,9 @@ import type {
   CreateLabelRequest,
   CreateLabelResponse,
   DeleteDraftParams,
+  DeleteEmailFilterParams,
   DeleteScheduledDraftParams,
+  EmailFilterDeletePushStatus,
   EmlFile,
   EmptyResponse,
   ErrorResponse,
@@ -2046,6 +2048,11 @@ export const upsertEmailFilter = async (
 /**
  * @summary Delete an email filter by ID.
  */
+export type deleteEmailFilterResponse200 = {
+  data: EmailFilterDeletePushStatus;
+  status: 200;
+};
+
 export type deleteEmailFilterResponse204 = {
   data: void;
   status: 204;
@@ -2066,7 +2073,10 @@ export type deleteEmailFilterResponse500 = {
   status: 500;
 };
 
-export type deleteEmailFilterResponseSuccess = deleteEmailFilterResponse204 & {
+export type deleteEmailFilterResponseSuccess = (
+  | deleteEmailFilterResponse200
+  | deleteEmailFilterResponse204
+) & {
   headers: Headers;
 };
 export type deleteEmailFilterResponseError = (
@@ -2081,15 +2091,31 @@ export type deleteEmailFilterResponse =
   | deleteEmailFilterResponseSuccess
   | deleteEmailFilterResponseError;
 
-export const getDeleteEmailFilterUrl = (id: string) => {
-  return `/email/filters/${id}`;
+export const getDeleteEmailFilterUrl = (
+  id: string,
+  params?: DeleteEmailFilterParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/email/filters/${id}?${stringifiedParams}`
+    : `/email/filters/${id}`;
 };
 
 export const deleteEmailFilter = async (
   id: string,
+  params?: DeleteEmailFilterParams,
   options?: RequestInit
 ): Promise<deleteEmailFilterResponse> => {
-  const res = await fetch(getDeleteEmailFilterUrl(id), {
+  const res = await fetch(getDeleteEmailFilterUrl(id, params), {
     ...options,
     method: 'DELETE',
   });

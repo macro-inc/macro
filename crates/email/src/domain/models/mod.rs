@@ -29,7 +29,7 @@ pub use draft::{
     ParsedAddresses, ResolvedDraftInput, SavedUserDraft, SettledDraftIds, SimpleMessageInfo,
     UpsertedContacts, UpsertedRecipient,
 };
-pub use email_filter::{EmailFilter, UpsertEmailFilterInput};
+pub use email_filter::{EmailFilter, EmailFilterWrite, UpsertEmailFilterInput};
 pub use error::EmailErr;
 pub use label::{
     Label, LabelListVisibility, LabelType, LinkLabel, MAX_BULK_ARCHIVE_THREADS, MessageLabel,

@@ -300,10 +300,12 @@ export function createGraphqlSoupSubscriptionsLifecycle(
     host?: CacheHost
   ): void;
   connected(): void;
+  soupSubscription(): object | undefined;
   dispose(): void;
 } {
   let currentClient: Pick<Client, 'subscription' | 'query'> | undefined;
   let currentHost: CacheHost | undefined;
+  let soupSubscription: object | undefined;
   let suspended = false;
   let unsubscribes: Array<() => void> = [];
   let activity: ReturnType<typeof createActivityUpdatesHandler> | undefined;
@@ -324,6 +326,7 @@ export function createGraphqlSoupSubscriptionsLifecycle(
 
   const unsubscribeAll = () => {
     generation += 1;
+    soupSubscription = undefined;
     stopWatchingForReattach?.();
     stopWatchingForReattach = undefined;
     for (const unsubscribe of unsubscribes) unsubscribe();
@@ -375,11 +378,18 @@ export function createGraphqlSoupSubscriptionsLifecycle(
           : LIVE_UPDATE_SUBSCRIPTIONS.filter(
               ({ document }) => document !== SoupUpdatesDocument
             );
+      if (host && !host.disabled) soupSubscription = {};
       const setGeneration = generation;
       unsubscribes = subscriptions.map(({ document, errorMessage }) => {
         const subscription = client
           .subscription(document, {})
           .subscribe((result) => {
+            if (
+              document === SoupUpdatesDocument &&
+              setGeneration === generation &&
+              (result.error || result.hasNext === false)
+            )
+              soupSubscription = undefined;
             if (document === ActivityUpdatesDocument) {
               activityHandler.onResult(
                 result as OperationResult<ActivityUpdatesSubscription>
@@ -444,6 +454,8 @@ export function createGraphqlSoupSubscriptionsLifecycle(
           'graphql-soup-subscriptions'
         );
     },
+    soupSubscription: () =>
+      currentHost && !currentHost.disabled ? soupSubscription : undefined,
     dispose() {
       if (options.suspendOnPagehide) {
         removeEventListener('pagehide', onPagehide);

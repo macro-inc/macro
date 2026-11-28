@@ -1,10 +1,140 @@
 use super::*;
-use crate::domain::models::UpsertEmailFilterInput;
+use crate::domain::{
+    models::UpsertEmailFilterInput,
+    ports::{EmailService, NoOpEnqueuer},
+    service::EmailServiceImpl,
+};
+use crm::domain::service::NoOpCrmService;
+use entity_access_management::domain::{
+    models::EntityAccessManagementError, ports::EntityAccessManagementService,
+};
+use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
+use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
+use model_entity::EntityType;
+use std::sync::{Arc, Mutex};
 
 const LINK_ID: &str = "00000000-0000-0000-0000-000000000e01";
 const THREAD_PLAIN_SIGNAL: &str = "00000000-0000-0000-0000-00000000e201";
 const THREAD_PROMO_NOISE: &str = "00000000-0000-0000-0000-00000000e202";
 const THREAD_STALE_SIGNAL: &str = "00000000-0000-0000-0000-00000000e203";
+
+struct RecordingBroker(Arc<Mutex<Vec<serde_json::Value>>>);
+
+#[derive(Clone)]
+struct UnusedProjectAccess;
+
+impl EntityAccessManagementService for UnusedProjectAccess {
+    async fn add_entity_to_project(
+        &self,
+        _: &Uuid,
+        _: EntityType,
+        _: &Uuid,
+    ) -> Result<(), EntityAccessManagementError> {
+        unreachable!()
+    }
+
+    async fn remove_entity_from_project(
+        &self,
+        _: &Uuid,
+        _: EntityType,
+        _: &Uuid,
+    ) -> Result<(), EntityAccessManagementError> {
+        unreachable!()
+    }
+
+    async fn move_project(
+        &self,
+        _: &Uuid,
+        _: Option<&Uuid>,
+        _: Option<&Uuid>,
+    ) -> Result<(), EntityAccessManagementError> {
+        unreachable!()
+    }
+}
+
+impl MacroEventBroker for RecordingBroker {
+    fn send_event<E: MacroEvent + ?Sized>(
+        &self,
+        event: &E,
+    ) -> Result<tokio::task::JoinHandle<Result<(), EventBrokerError>>, EventBrokerError> {
+        self.0
+            .lock()
+            .unwrap()
+            .push(serde_json::to_value(event.event())?);
+        Ok(tokio::spawn(async { Ok(()) }))
+    }
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_signal_flag", "email_signal_fanout")
+    )
+)]
+async fn filter_changes_publish_bounded_reindex_batches(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let service = EmailServiceImpl::new(
+        EmailPgRepo::new(pool.clone()),
+        FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(pool.clone())),
+        NoOpEnqueuer,
+        NoOpCrmService,
+        UnusedProjectAccess,
+        0,
+    )
+    .with_macro_event_broker(RecordingBroker(events.clone()));
+    let link_id = Uuid::parse_str(LINK_ID)?;
+    let owner = MacroUserIdStr::try_from_email("sigflag_email@example.com")?;
+    let thread = Uuid::parse_str(THREAD_PLAIN_SIGNAL)?;
+    let link = service
+        .email_repo
+        .owned_link_for_thread(thread, owner)
+        .await?
+        .expect("fixture inbox");
+
+    for (size, batches) in [(50, 1), (100, 2), (300, 5)] {
+        let saved = service
+            .upsert_email_filter(
+                &link,
+                UpsertEmailFilterInput {
+                    email_address: Some(format!("fanout-{size}@example.com")),
+                    email_domain: None,
+                    is_important: false,
+                },
+            )
+            .await?;
+        assert_eq!(saved.push_was_capped, size > 250);
+        let changed = sqlx::query_scalar!(
+            r#"SELECT count(*) AS "count!" FROM email_threads
+               WHERE link_id = $1 AND NOT is_signal AND provider_id LIKE $2"#,
+            link_id,
+            format!("fixture-{size}-%"),
+        )
+        .fetch_one(&pool)
+        .await?;
+        assert_eq!(changed, size);
+        {
+            let captured = std::mem::take(&mut *events.lock().unwrap());
+            assert_eq!(captured.len(), batches);
+            for event in captured {
+                assert_eq!(event["event_type"], "email.threads_reindex_requested");
+                assert_eq!(event["metadata"]["link_id"], link_id.to_string());
+                assert_eq!(
+                    event["metadata"]["thread_ids"].as_array().unwrap().len(),
+                    50
+                );
+            }
+        }
+        let deleted = service.delete_email_filter(&link, saved.result.id).await?;
+        assert!(deleted.result);
+        assert_eq!(deleted.push_was_capped, size > 250);
+        assert_eq!(std::mem::take(&mut *events.lock().unwrap()).len(), batches);
+    }
+
+    Ok(())
+}
 
 async fn fetch_signal(pool: &Pool<Postgres>, thread_id: &str) -> anyhow::Result<bool> {
     Ok(sqlx::query_scalar!(
@@ -26,20 +156,33 @@ async fn filter_upsert_and_delete_resync_signal_flags(pool: Pool<Postgres>) -> a
     let link_id = Uuid::parse_str(LINK_ID)?;
 
     // Mute the sender: their unlabeled (signal) thread flips to noise.
-    let filter = repo
-        .upsert_email_filter(
-            link_id,
-            UpsertEmailFilterInput {
-                email_address: Some("plain@example.com".to_string()),
-                email_domain: None,
-                is_important: false,
-            },
-        )
-        .await?;
+    let input = UpsertEmailFilterInput {
+        email_address: Some("plain@example.com".to_string()),
+        email_domain: None,
+        is_important: false,
+    };
+    let change = repo.upsert_email_filter(link_id, input.clone()).await?;
+    let plain_thread = Uuid::parse_str(THREAD_PLAIN_SIGNAL)?;
+    let mut changed = change.changed_thread_ids;
+    changed.sort_unstable();
+    assert_eq!(
+        changed,
+        [
+            plain_thread,
+            uuid::uuid!("00000000-0000-0000-0000-00000000e204"),
+            uuid::uuid!("00000000-0000-0000-0000-00000000e206"),
+        ]
+    );
+    assert!(!change.truncated);
     assert!(!fetch_signal(&pool, THREAD_PLAIN_SIGNAL).await?);
+    let unchanged = repo.upsert_email_filter(link_id, input).await?;
+    assert!(unchanged.changed_thread_ids.is_empty());
 
     // Deleting the filter restores the heuristic verdict.
-    assert!(repo.delete_email_filter(filter.id, link_id).await?);
+    let mut deleted = repo.delete_email_filter(change.result.id, link_id).await?;
+    assert!(deleted.result);
+    deleted.changed_thread_ids.sort_unstable();
+    assert_eq!(deleted.changed_thread_ids, changed);
     assert!(fetch_signal(&pool, THREAD_PLAIN_SIGNAL).await?);
 
     Ok(())
@@ -308,7 +451,11 @@ async fn deleting_domain_filter_keeps_address_exception(
     assert!(fetch_signal(&pool, THREAD_PLAIN_SIGNAL).await?);
     assert!(!fetch_signal(&pool, THREAD_SAME_DOMAIN).await?);
 
-    assert!(repo.delete_email_filter(domain_filter.id, link_id).await?);
+    assert!(
+        repo.delete_email_filter(domain_filter.result.id, link_id)
+            .await?
+            .result
+    );
     assert!(fetch_signal(&pool, THREAD_PLAIN_SIGNAL).await?);
     assert!(fetch_signal(&pool, THREAD_SAME_DOMAIN).await?);
 

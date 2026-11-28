@@ -12,6 +12,8 @@ import type {
   ApiThread as Thread,
   UpsertScheduledResponse,
 } from '@service-email/generated/schemas';
+import { captureGraphqlSoupUpdateConnection } from '@service-storage/graphql-soup';
+import { mailCacheProfile } from '@service-storage/mail-cache-profile';
 import { type InfiniteData, useMutation } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import type { Accessor } from 'solid-js';
@@ -535,9 +537,19 @@ export async function blockSenderWithToast(
   });
 }
 
-function invalidateSenderFilterLists() {
+async function invalidateSenderFilterLists(
+  pushWasCapped: boolean | undefined,
+  stayedConnected: (() => boolean) | undefined
+) {
   invalidateAllSoup();
-  fireAndForget(revalidateMailImportanceLists(), 'email-sender-filter');
+  let unmaintainedOnly = false;
+  if (pushWasCapped === false && stayedConnected?.()) {
+    const { outcome } = await mailCacheProfile();
+    unmaintainedOnly =
+      (outcome === 'browser' || outcome === 'native_supported') &&
+      stayedConnected();
+  }
+  await revalidateMailImportanceLists(unmaintainedOnly);
 }
 
 async function upsertSenderFilterWithToast(
@@ -547,6 +559,7 @@ async function upsertSenderFilterWithToast(
 ) {
   const label = isImportant ? 'Signal' : 'Noise';
 
+  const connection = captureGraphqlSoupUpdateConnection();
   const result = await emailClient.upsertEmailFilter(
     {
       email_address: senderEmail,
@@ -563,7 +576,10 @@ async function upsertSenderFilterWithToast(
   }
 
   const filterId = result.value.filter.id;
-  invalidateSenderFilterLists();
+  fireAndForget(
+    invalidateSenderFilterLists(result.value.push_was_capped, connection),
+    'email-sender-filter'
+  );
 
   toast.success(`Sender marked as ${label}`, {
     dismissStyle: 'icon',
@@ -574,6 +590,7 @@ async function upsertSenderFilterWithToast(
         label: 'Undo',
         icon: ArrowCounterClockwise,
         onClick: async () => {
+          const connection = captureGraphqlSoupUpdateConnection();
           const undoResult = await emailClient.deleteEmailFilter(
             { id: filterId },
             linkId
@@ -581,7 +598,13 @@ async function upsertSenderFilterWithToast(
           if (undoResult.isErr()) {
             toast.failure('Failed to undo', { subtext: senderEmail });
           } else {
-            invalidateSenderFilterLists();
+            fireAndForget(
+              invalidateSenderFilterLists(
+                undoResult.value?.push_was_capped,
+                connection
+              ),
+              'email-sender-filter'
+            );
             toast.success('Sender filter removed');
           }
         },

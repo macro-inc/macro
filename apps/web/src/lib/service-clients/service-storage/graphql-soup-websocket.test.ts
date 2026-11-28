@@ -215,11 +215,12 @@ describe('GraphQL Soup subscription lifecycle', () => {
 
   it('keeps notification and activity updates active with or without a cache host', () => {
     const unsubscribes: Array<ReturnType<typeof vi.fn>> = [];
-    const receive = new Map<unknown, (result: { data?: unknown }) => void>();
+    type SubscriptionResult = { data?: unknown; hasNext?: boolean };
+    const receive = new Map<unknown, (result: SubscriptionResult) => void>();
     const client = {
       query: vi.fn(),
       subscription: vi.fn((document) => ({
-        subscribe: (next: (result: { data?: unknown }) => void) => {
+        subscribe: (next: (result: SubscriptionResult) => void) => {
           receive.set(document, next);
           const unsubscribe = vi.fn();
           unsubscribes.push(unsubscribe);
@@ -245,6 +246,13 @@ describe('GraphQL Soup subscription lifecycle', () => {
       expect(documents.includes(SoupUpdatesDocument)).toBe(
         host?.disabled === false
       );
+      expect(Boolean(lifecycle.soupSubscription())).toBe(
+        host?.disabled === false
+      );
+      if (host?.disabled === false) {
+        receive.get(SoupUpdatesDocument)?.({ hasNext: false });
+        expect(lifecycle.soupSubscription()).toBeUndefined();
+      }
       const patch = {
         __typename: 'GraphqlNewNotification',
         notification: { id: 'one' },

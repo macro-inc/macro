@@ -38,10 +38,14 @@ const filtersByAttachment = (body: unknown) =>
     (literal) => literal.Attachment !== undefined
   );
 
-/** Sender filter writes return the rule, so the cache needs fresh server
- * membership for lists that use the recomputed thread classification. */
-export function revalidateMailImportanceLists(): Promise<void> {
-  return refreshActiveGraphqlSoupQueries({ where: filtersByImportance });
+/** Reconcile network readers after the sender filter changes importance. */
+export function revalidateMailImportanceLists(
+  unmaintainedOnly = false
+): Promise<void> {
+  return refreshActiveGraphqlSoupQueries({
+    where: filtersByImportance,
+    unmaintainedOnly,
+  });
 }
 
 function carriesAttachment(patch: SoupPatch): boolean {

@@ -19,9 +19,8 @@ for (const provider of PROVIDERS) {
       let serviceRequests = 0;
       let frames = 0;
       let sendSoupUpdate: (() => void) | undefined;
-      // This harness's HTTP recording proxy cannot relay WebSocket upgrades.
-      // Serve valid Soup frames here; mailbox HTTP and permission reads still
-      // go through the real services, without mocking the authority endpoint.
+      // Use a fixed number of Soup frames to keep the request budget
+      // deterministic. Mailbox HTTP and permission reads use the real services.
       await page.routeWebSocket(
         /\/items\/soup\/graphql\/ws(?:\?|$)/,
         (socket) => {
