@@ -1,10 +1,9 @@
 import { useViewShell, ViewSidebar } from '@app/components/view-shell';
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { CopyAvailabilityButton } from '@app/features/calendar/availability/CopyAvailabilityButton';
-import { CalendarSwatch } from '@app/features/calendar/components/CalendarSwatch';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { CalendarColorPicker } from '@app/features/calendar/components/calendar-color-picker';
-import { SubscriptionMark } from '@app/features/calendar/components/SourceControls';
+import { CalendarSourceLabel } from '@app/features/calendar/components/SourceControls';
 import { useCalendarNavigation } from '@app/features/calendar/context/calendar-navigation-context';
 import { useSetCalendarColor } from '@app/features/calendar/hooks/use-calendar-color';
 import { useHasTeammates } from '@app/features/calendar/hooks/use-team-ooo';
@@ -242,17 +241,11 @@ export function MobileCalendarSidebar() {
                                 onChange={(checked) =>
                                   changeVisibility(source.id, checked)
                                 }
-                                class="flex min-h-11 w-full gap-3 rounded-lg px-3 text-base"
+                                class="flex min-h-11 w-full gap-3 rounded-lg px-3 py-1 text-base"
                               >
                                 <Checkbox.Control />
-                                <CalendarSwatch color={source.color} />
-                                <Checkbox.Label class="flex min-w-0 flex-1 items-center gap-2">
-                                  <span class="min-w-0 flex-1 truncate">
-                                    {source.name}
-                                  </span>
-                                  <Show when={source.isSubscription}>
-                                    <SubscriptionMark />
-                                  </Show>
+                                <Checkbox.Label class="flex min-w-0 flex-1 items-center gap-3">
+                                  <CalendarSourceLabel source={source} />
                                 </Checkbox.Label>
                               </Checkbox>
                             </div>

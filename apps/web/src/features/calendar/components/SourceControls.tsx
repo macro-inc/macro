@@ -147,7 +147,9 @@ export function CalendarAccountLabel(props: { group: CalendarAccountGroup }) {
  */
 export function CalendarSourceLabel(props: { source: CalendarSource }) {
   const syncFailure = () =>
-    props.source.syncError ? `Sync failed: ${props.source.syncError}` : '';
+    props.source.syncError
+      ? t('calendar.syncFailed', { error: props.source.syncError })
+      : '';
 
   return (
     <>

@@ -36,6 +36,14 @@ const SOURCES: CalendarSource[] = [
     emailLinkId: 'link-other',
     isSubscription: true,
   },
+  {
+    id: 'failing',
+    name: 'Projects',
+    color: '#ff00ff',
+    emailAddress: 'other@example.com',
+    emailLinkId: 'link-other',
+    syncError: 'Precondition check failed.',
+  },
 ];
 
 const state = vi.hoisted(() => ({
@@ -156,6 +164,25 @@ describe('MobileCalendarSidebar', () => {
       'own-holidays',
       false
     );
+  });
+
+  it('writes a failing calendar sync error under its name', () => {
+    const { getByRole, getByText, queryAllByText } = render(() => (
+      <MobileCalendarSidebar />
+    ));
+    expect(getByText('Sync failed: Precondition check failed.')).toBeTruthy();
+    expect(
+      getByRole('checkbox', {
+        name: 'Projects Sync failed: Precondition check failed.',
+      })
+    ).toBeTruthy();
+    expect(queryAllByText(/^Sync failed:/)).toHaveLength(1);
+  });
+
+  it('still shows or hides a failing calendar from its row', () => {
+    const { getByText } = render(() => <MobileCalendarSidebar />);
+    fireEvent.click(getByText('Sync failed: Precondition check failed.'));
+    expect(state.setSourceVisibility).toHaveBeenCalledWith('failing', false);
   });
 });
 

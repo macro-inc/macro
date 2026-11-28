@@ -12,6 +12,18 @@ let
     pkgs.git
     pkgs.findutils
   ];
+  # kind 0.31 (nixos-26.05) can't create a v1.37 node: kubeadm dropped the
+  # v1beta3 config it writes.
+  kind = pkgs.kind.overrideAttrs (_: {
+    version = "0.33.0";
+    src = pkgs.fetchFromGitHub {
+      owner = "kubernetes-sigs";
+      repo = "kind";
+      tag = "v0.33.0";
+      hash = "sha256-exqO/KERw/SOv3dywcrm/DSHY37dfTOhQezg6Nroew0=";
+    };
+    vendorHash = "sha256-tRpylYpEGF6XqtBl7ESYlXKEEAt+Jws4x4VlUVW8SNI=";
+  });
 in
 {
   render = script "render" (common ++ [ pkgs.rsync ]);
@@ -34,7 +46,7 @@ in
   kind-smoke = script "kind-smoke" (
     common
     ++ [
-      pkgs.kind
+      kind
       pkgs.kubectl
       pkgs.docker-client
       pkgs.yq-go

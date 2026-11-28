@@ -31,6 +31,7 @@ export default {
   views: 'Calendar views',
   calendars: 'Calendars',
   subscriptionCalendar: 'Subscription calendar',
+  syncFailed: 'Sync failed: {{error}}',
   connectAccount: 'Connect a calendar account',
   team: 'Team',
   options: 'Calendar options',
