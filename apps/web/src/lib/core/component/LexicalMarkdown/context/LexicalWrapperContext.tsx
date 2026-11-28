@@ -25,6 +25,7 @@ import {
   type PluginManager,
   type SelectionData,
 } from '../plugins';
+import { installIosSentenceCapitalization } from '../plugins/ios-sentence-capitalization/iosSentenceCapitalization';
 import { theme as baseTheme } from '../theme';
 
 type LexicalWrapperProps = {
@@ -86,6 +87,7 @@ export function createLexicalWrapper({
   withIds,
   theme,
 }: LexicalWrapperProps): LexicalWrapper {
+  installIosSentenceCapitalization();
   const owner = getOwner();
   _id++;
 
