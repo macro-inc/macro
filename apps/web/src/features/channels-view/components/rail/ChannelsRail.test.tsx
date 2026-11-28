@@ -78,6 +78,7 @@ const mocks = vi.hoisted(() => ({
   sectionsEnabled: true,
   unreadRows: [] as ChannelEntity[],
   unreadListsEvery: undefined as (() => boolean) | undefined,
+  unreadReadsMore: undefined as (() => boolean) | undefined,
   closedGroups: [] as string[],
   collapsedLabels: [] as string[],
   sectionPreferences: {} as Partial<
@@ -492,9 +493,11 @@ vi.mock('./hooks/useChannelRailActivity', () => ({
 vi.mock('./next/collapsed-unread-channels', () => ({
   useCollapsedUnreadChannels: (
     enabled: () => boolean,
-    listsEvery: () => boolean
+    listsEvery: () => boolean,
+    readsMore: () => boolean
   ) => {
     mocks.unreadListsEvery = listsEvery;
+    mocks.unreadReadsMore = readsMore;
     return () => (enabled() ? mocks.unreadRows : []);
   },
 }));
@@ -1120,6 +1123,29 @@ describe('unread pages', () => {
     mocks.collapsedLabels = ['section'];
     mount();
     expect(mocks.unreadListsEvery!()).toBe(true);
+  });
+
+  it('reads later unread pages only while a section listing them is on screen', () => {
+    mocks.flags = ['enable-channel-tags'];
+    mocks.labels = [section(['member-0'])];
+    mocks.collapsedLabels = ['section'];
+    mount();
+    expect(mocks.unreadReadsMore!()).toBe(false);
+    mocks.rail!.reportSectionOnScreen('label:section', true);
+    expect(mocks.unreadReadsMore!()).toBe(true);
+    mocks.rail!.reportSectionOnScreen('label:section', false);
+    expect(mocks.unreadReadsMore!()).toBe(false);
+    expect(mocks.unreadListsEvery!()).toBe(true);
+  });
+
+  it('reads later unread pages for a collapsed built-in section only on screen', () => {
+    mocks.closedGroups = ['channels'];
+    mount();
+    expect(mocks.unreadListsEvery!()).toBe(true);
+    mocks.rail!.reportSectionOnScreen('direct_messages', true);
+    expect(mocks.unreadReadsMore!()).toBe(false);
+    mocks.rail!.reportSectionOnScreen('channels', true);
+    expect(mocks.unreadReadsMore!()).toBe(true);
   });
 
   it('reads the first unread page for collapsed sections that hide their unread', () => {

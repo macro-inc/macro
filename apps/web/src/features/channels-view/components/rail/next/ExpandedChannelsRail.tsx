@@ -476,7 +476,18 @@ function BrowseSection(props: {
     });
   });
   // Only the rows on screen have their channels fetched by ID.
-  onCleanup(() => rail.reportSectionRange(props.sectionKey, undefined));
+  onCleanup(() => {
+    rail.reportSectionRange(props.sectionKey, undefined);
+    rail.reportSectionOnScreen(props.sectionKey, false);
+  });
+  const sectionOnScreen = () => {
+    const root = handle.root;
+    const outer = props.outerScrollRoot;
+    if (!root || !outer) return false;
+    const bounds = root.getBoundingClientRect();
+    const visible = outer.getBoundingClientRect();
+    return bounds.bottom > visible.top && bounds.top < visible.bottom;
+  };
   const onScreenRange = () => {
     const current = virtualizer();
     const viewport = scrollRoot();
@@ -526,12 +537,12 @@ function BrowseSection(props: {
         () => props.layoutVersion,
       ],
       () => {
-        if (!open()) {
-          rail.reportSectionRange(props.sectionKey, undefined);
-          return;
-        }
+        if (!open()) rail.reportSectionRange(props.sectionKey, undefined);
 
-        const frame = requestAnimationFrame(loadVisibleSections);
+        const frame = requestAnimationFrame(() => {
+          rail.reportSectionOnScreen(props.sectionKey, sectionOnScreen());
+          if (open()) loadVisibleSections();
+        });
         onCleanup(() => cancelAnimationFrame(frame));
       }
     )

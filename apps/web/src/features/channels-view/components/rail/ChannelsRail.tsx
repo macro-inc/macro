@@ -459,13 +459,28 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const poolById = createMemo(
     () => new Map(props.localChannels().map((channel) => [channel.id, channel]))
   );
-  const builtInSectionCollapsed = () =>
-    sectionsEnabled() &&
-    (['team_channels', 'channels', 'direct_messages'] as const).some(
+  // Sections with any part on screen, open or collapsed; the section stack
+  // mounts only those near the screen.
+  const [sectionsOnScreen, setSectionsOnScreen] = createStore<
+    Partial<Record<ChannelSectionKey, boolean>>
+  >({});
+  const reportSectionOnScreen = (
+    section: ChannelSectionKey,
+    onScreen: boolean
+  ) => {
+    if ((sectionsOnScreen[section] ?? false) === onScreen) return;
+    setSectionsOnScreen(section, onScreen);
+  };
+  const isSectionOnScreen = (section: ChannelSectionKey) =>
+    sectionsOnScreen[section] === true;
+  const collapsedBuiltInSections = () =>
+    (['team_channels', 'channels', 'direct_messages'] as const).filter(
       (section) =>
         !state.expandedGroups[section] &&
         state.sectionPreferences[section]?.unreadWhenCollapsed !== false
     );
+  const builtInSectionCollapsed = () =>
+    sectionsEnabled() && collapsedBuiltInSections().length > 0;
   // A favorites or custom section lists every unread member while it is
   // collapsed (unless it hides them) or filtered to Unread only, and the pool
   // carries no unread state.
@@ -475,28 +490,39 @@ export function ChannelsRail(props: ChannelsRailProps) {
       ? preferences?.unreadOnly === true
       : preferences?.unreadWhenCollapsed !== false;
   };
-  const referencesListEveryUnread = () =>
-    sectionsEnabled() &&
-    ((favoriteChannelIds().length > 0 &&
-      listsEveryUnreadMember('favorites', state.expandedGroups.favorites)) ||
-      labels().some(
-        (label) =>
-          label.channelIds.length > 0 &&
-          listsEveryUnreadMember(
-            `label:${label.id}`,
-            !state.collapsedLabels.includes(label.id)
-          )
-      ));
+  // Every section that lists each unread member: a collapsed built-in
+  // section showing its unread rows, and a favorites or custom section
+  // collapsed or filtered to Unread only.
+  const sectionsListingEveryUnread = createMemo((): ChannelSectionKey[] => {
+    if (!sectionsEnabled()) return [];
+    const keys: ChannelSectionKey[] = [...collapsedBuiltInSections()];
+    if (
+      favoriteChannelIds().length > 0 &&
+      listsEveryUnreadMember('favorites', state.expandedGroups.favorites)
+    ) {
+      keys.push('favorites');
+    }
+    for (const label of labels()) {
+      const key: ChannelSectionKey = `label:${label.id}`;
+      if (
+        label.channelIds.length > 0 &&
+        listsEveryUnreadMember(key, !state.collapsedLabels.includes(label.id))
+      ) {
+        keys.push(key);
+      }
+    }
+    return keys;
+  });
   // Search results and the other tabs show no section.
   const sectionsShown = () => !props.searchOpen && tab() === 'browse';
   // Referenced rows take unread state from here: every unread channel while
   // the sections on show list each one, otherwise the newest page, which
-  // section counts read. Rows on screen also carry it in their own records.
+  // section counts read. It reads further pages only while one of those
+  // sections is on screen. Rows on screen also carry it in their own records.
   const unreadChannels = useCollapsedUnreadChannels(
     () => builtInSectionCollapsed() || hasReferences(),
-    () =>
-      sectionsShown() &&
-      (builtInSectionCollapsed() || referencesListEveryUnread())
+    () => sectionsShown() && sectionsListingEveryUnread().length > 0,
+    () => sectionsListingEveryUnread().some(isSectionOnScreen)
   );
   const collapsedUnread = () =>
     builtInSectionCollapsed() ? unreadChannels() : [];
@@ -1657,6 +1683,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     retryReferencedChannels: referenceWindow.retry,
     discoverMoreReferencedChannels,
     reportSectionRange,
+    reportSectionOnScreen,
     isLabelOpen,
     toggleLabel: (labelId) => setLabelOpen(labelId, !isLabelOpen(labelId)),
     channelSectionRows,

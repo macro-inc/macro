@@ -74,6 +74,29 @@ describe('useCollapsedUnreadChannels', () => {
     }
   });
 
+  it('reads the next page only while the view reads more, keeping its pages', () => {
+    const resetToInitialPage = vi.fn();
+    const fetchNextPage = firstPageWithMore(resetToInitialPage);
+    const [readsMore, setReadsMore] = createSignal(false);
+    const dispose = createRoot((dispose) => {
+      useCollapsedUnreadChannels(
+        () => true,
+        () => true,
+        readsMore
+      );
+      return dispose;
+    });
+    try {
+      expect(fetchNextPage).not.toHaveBeenCalled();
+      setReadsMore(true);
+      expect(fetchNextPage).toHaveBeenCalledOnce();
+      setReadsMore(false);
+      expect(resetToInitialPage).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+
   it('follows every page by default while enabled', () => {
     const fetchNextPage = firstPageWithMore();
     const dispose = createRoot((dispose) => {

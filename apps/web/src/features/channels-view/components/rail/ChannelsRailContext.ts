@@ -184,6 +184,12 @@ export type ChannelsRailContext = {
     section: ChannelSectionKey,
     range: ChannelSectionRange | undefined
   ) => void;
+  /**
+   * Whether any of a section, open or collapsed, is on screen. The unread
+   * projection reads its later pages only for sections on screen that list
+   * every unread member.
+   */
+  reportSectionOnScreen: (section: ChannelSectionKey, onScreen: boolean) => void;
   isLabelOpen: (labelId: string) => boolean;
   toggleLabel: (labelId: string) => void;
   /** The Channels section's rendered rows: label headings and channels. */
