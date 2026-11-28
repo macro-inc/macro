@@ -307,8 +307,9 @@ export function useRemoveInboxMutation(callbacks?: RemoveInboxCallbacks) {
           return { previousLinks };
         },
 
-        onSuccess: async (_data, _linkId, _result, context) => {
-          if (!isCurrentQueryAccount(mutationQueryAccount(context))) return;
+        onSuccess: async (_data, linkId, result, context) => {
+          const owner = mutationQueryAccount(context);
+          if (!isCurrentQueryAccount(owner)) return;
           // Owned inboxes are torn down asynchronously, so the row still appears
           // in GET /email/links for a short window after the 204. Refetching links
           // here would resurrect the optimistically-removed row; instead leave the
@@ -320,7 +321,14 @@ export function useRemoveInboxMutation(callbacks?: RemoveInboxCallbacks) {
           // so its threads are dropped when the `refresh_email` `link_removed`
           // event arrives after teardown — refetching now would race that.
           invalidateAllSoup();
-          fireAndForget(revalidateMailFolderLists(), 'email-link-remove');
+          // The same holds for the Spam and Trash server pages: read them now only
+          // for an inbox that is not known to be the viewer's own.
+          const removed = result?.previousLinks?.links.find(
+            (link) => link.id === linkId
+          );
+          if (removed?.macro_id !== owner.userId) {
+            fireAndForget(revalidateMailFolderLists(), 'email-link-remove');
+          }
           await invalidateUserInfo();
         },
 
