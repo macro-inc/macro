@@ -20,6 +20,9 @@ import {
   untrack,
 } from 'solid-js';
 
+/** Rows rendered past each edge of the viewport. */
+export const CHANNEL_RAIL_OVERSCAN = 6;
+
 export type ChannelRailVirtualizerHandle = ListScrollHandle & {
   visibleRange: () => { startIndex: number; endIndex: number } | undefined;
   scrollMetrics: () => { size: number; offset: number; viewport: number };
@@ -123,7 +126,7 @@ function VirtualRows<K extends string>(
       return scrollPadding();
     },
     get overscan() {
-      return props.overscan ?? 6;
+      return props.overscan ?? CHANNEL_RAIL_OVERSCAN;
     },
     get rangeExtractor() {
       const retained = props.keepMounted ?? [];

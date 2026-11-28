@@ -8,7 +8,10 @@ import {
   type SectionChange,
 } from '@notifications/core/channel-notification-settings';
 import { formatSnoozeDeadline } from '@notifications/core/snooze';
-import type { ChannelNotificationSettingsState } from '@notifications/primitives/create-channel-notification-settings';
+import type {
+  ChannelNotificationSettingsState,
+  SectionConflict,
+} from '@notifications/primitives/create-channel-notification-settings';
 import { openSectionConflict } from '@notifications/SectionConflictDialog';
 import { openSectionSnooze } from '@notifications/SnoozeNotificationsDialog';
 import type { Owner } from 'solid-js';
@@ -51,27 +54,21 @@ export function sectionNotificationMenus(
       ? settings.setOverridesSectionMute(channelId, false)
       : settings.followSectionSettings(channelId);
 
-  const changeSection = (
-    section: NotificationSectionKey,
+  /** Ask whether the conflicting channels follow the change, then save it. */
+  const askAboutConflicts = (
     name: string,
     change: SectionChange,
+    conflicts: readonly SectionConflict[],
     write: () => Promise<unknown>
   ) => {
-    const conflicts = settings.sectionConflicts(section, change);
-    if (conflicts.length === 0) {
-      run(write());
-      return;
-    }
     openingDialog();
     openSectionConflict(
       {
         sectionName: name,
         change: change.kind,
-        channels: conflicts.map((id) => ({
-          id,
-          name:
-            settings.conflictChannelName(id) ||
-            t('channelSections.unnamedChannel'),
+        channels: conflicts.map((conflict) => ({
+          id: conflict.id,
+          name: conflict.name || t('channelSections.unnamedChannel'),
         })),
         onConfirm: (overrideIds) =>
           run(
@@ -83,6 +80,22 @@ export function sectionNotificationMenus(
       },
       dialogOptions
     );
+  };
+
+  // A failed check is reported where it ran, and saves nothing.
+  const changeSection = async (
+    section: NotificationSectionKey,
+    name: string,
+    change: SectionChange,
+    write: () => Promise<unknown>
+  ) => {
+    const conflicts = await settings.sectionConflicts(section, change);
+    if (!conflicts) return;
+    if (conflicts.length === 0) {
+      await write();
+      return;
+    }
+    askAboutConflicts(name, change, conflicts, write);
   };
 
   return (
@@ -114,7 +127,7 @@ export function sectionNotificationMenus(
               state: muted ? 'muted' : 'unmuted',
             });
           // Unmuting can't leave a channel behind: its own mute still wins.
-          if (muted) changeSection(section, name, { kind: 'mute' }, write);
+          if (muted) run(changeSection(section, name, { kind: 'mute' }, write));
           else run(write());
         },
         onSnooze: (until) => {
@@ -124,21 +137,25 @@ export function sectionNotificationMenus(
               until: deadline,
             });
           if (until) {
-            changeSection(
-              section,
-              name,
-              { kind: 'mute' },
-              snooze(until.toISOString())
+            run(
+              changeSection(
+                section,
+                name,
+                { kind: 'mute' },
+                snooze(until.toISOString())
+              )
             );
             return;
           }
           openingDialog();
-          openSectionSnooze((deadline) => {
-            if (settings.sectionConflicts(section, { kind: 'mute' }).length) {
-              changeSection(section, name, { kind: 'mute' }, snooze(deadline));
-              return Promise.resolve(true);
-            }
-            return snooze(deadline)();
+          // A failed check keeps the picker open to try again.
+          openSectionSnooze(async (deadline) => {
+            const change: SectionChange = { kind: 'mute' };
+            const conflicts = await settings.sectionConflicts(section, change);
+            if (!conflicts) return false;
+            if (conflicts.length === 0) return snooze(deadline)();
+            askAboutConflicts(name, change, conflicts, snooze(deadline));
+            return true;
           }, dialogOptions);
         },
       },
@@ -148,15 +165,19 @@ export function sectionNotificationMenus(
         targetName: name,
         disabled: settings.pending(),
         onPreset: (preset) =>
-          changeSection(
-            section,
-            name,
-            { kind: 'kinds', kinds: new Set(PRESET_KINDS[preset]) },
-            () => settings.setSectionPreset(section, preset)
+          run(
+            changeSection(
+              section,
+              name,
+              { kind: 'kinds', kinds: new Set(PRESET_KINDS[preset]) },
+              () => settings.setSectionPreset(section, preset)
+            )
           ),
         onSetKinds: (kinds) =>
-          changeSection(section, name, { kind: 'kinds', kinds }, () =>
-            settings.setSectionKinds(section, kinds)
+          run(
+            changeSection(section, name, { kind: 'kinds', kinds }, () =>
+              settings.setSectionKinds(section, kinds)
+            )
           ),
         // The phone page saves once on leaving, so the check runs once.
         saveCustomOnLeave: true,

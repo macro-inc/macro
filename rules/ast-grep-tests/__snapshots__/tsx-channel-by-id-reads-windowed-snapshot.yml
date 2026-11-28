@@ -1,0 +1,192 @@
+id: tsx-channel-by-id-reads-windowed
+snapshots:
+  "const byIds = await import(`${QUERIES}/channel/by-ids.ts`);\n":
+    labels:
+    - source: import(`${QUERIES}/channel/by-ids.ts`)
+      style: primary
+      start: 20
+      end: 58
+    - source: import
+      style: secondary
+      start: 20
+      end: 26
+    - source: "`${QUERIES}/channel/by-ids.ts`"
+      style: secondary
+      start: 27
+      end: 57
+    - source: "`${QUERIES}/channel/by-ids.ts`"
+      style: secondary
+      start: 27
+      end: 57
+  "const { useChannelsByIdsQuery } = await import('@queries/channel/by-ids');\n":
+    labels:
+    - source: import('@queries/channel/by-ids')
+      style: primary
+      start: 40
+      end: 73
+    - source: import
+      style: secondary
+      start: 40
+      end: 46
+    - source: "'@queries/channel/by-ids'"
+      style: secondary
+      start: 47
+      end: 72
+    - source: "'@queries/channel/by-ids'"
+      style: secondary
+      start: 47
+      end: 72
+  "const { useChannelsByIdsQuery } = await import(`@queries/channel/by-ids`);\n":
+    labels:
+    - source: import(`@queries/channel/by-ids`)
+      style: primary
+      start: 40
+      end: 73
+    - source: import
+      style: secondary
+      start: 40
+      end: 46
+    - source: "`@queries/channel/by-ids`"
+      style: secondary
+      start: 47
+      end: 72
+    - source: "`@queries/channel/by-ids`"
+      style: secondary
+      start: 47
+      end: 72
+  "export * from '@queries/channel/by-ids';\n":
+    labels:
+    - source: export * from '@queries/channel/by-ids';
+      style: primary
+      start: 0
+      end: 40
+    - source: "'@queries/channel/by-ids'"
+      style: secondary
+      start: 14
+      end: 39
+  "export { channelsByIdsQueryArgs as args } from '../channel/by-ids';\n":
+    labels:
+    - source: channelsByIdsQueryArgs as args
+      style: primary
+      start: 9
+      end: 39
+    - source: "'../channel/by-ids'"
+      style: secondary
+      start: 47
+      end: 66
+    - source: export { channelsByIdsQueryArgs as args } from '../channel/by-ids';
+      style: secondary
+      start: 0
+      end: 67
+    - source: channelsByIdsQueryArgs
+      style: secondary
+      start: 9
+      end: 31
+  "export { useChannelsByIdsQuery } from '@queries/channel/by-ids';\n":
+    labels:
+    - source: useChannelsByIdsQuery
+      style: primary
+      start: 9
+      end: 30
+    - source: "'@queries/channel/by-ids'"
+      style: secondary
+      start: 38
+      end: 63
+    - source: export { useChannelsByIdsQuery } from '@queries/channel/by-ids';
+      style: secondary
+      start: 0
+      end: 64
+    - source: useChannelsByIdsQuery
+      style: secondary
+      start: 9
+      end: 30
+  "import * as byIds from '@queries/channel/by-ids';\n":
+    labels:
+    - source: "* as byIds"
+      style: primary
+      start: 7
+      end: 17
+    - source: "'@queries/channel/by-ids'"
+      style: secondary
+      start: 23
+      end: 48
+    - source: import * as byIds from '@queries/channel/by-ids';
+      style: secondary
+      start: 0
+      end: 49
+  "import { channelsByIdsQueryArgs, registerChannelListNotificationRefresh } from '@queries/channel/by-ids';\n":
+    labels:
+    - source: channelsByIdsQueryArgs
+      style: primary
+      start: 9
+      end: 31
+    - source: "'@queries/channel/by-ids'"
+      style: secondary
+      start: 79
+      end: 104
+    - source: >-
+        import { channelsByIdsQueryArgs, registerChannelListNotificationRefresh } from
+        '@queries/channel/by-ids';
+      style: secondary
+      start: 0
+      end: 105
+    - source: channelsByIdsQueryArgs
+      style: secondary
+      start: 9
+      end: 31
+  "import { useChannelsByIdsQuery as resolve } from '../../lib/queries/channel/by-ids';\n":
+    labels:
+    - source: useChannelsByIdsQuery as resolve
+      style: primary
+      start: 9
+      end: 41
+    - source: "'../../lib/queries/channel/by-ids'"
+      style: secondary
+      start: 49
+      end: 83
+    - source: >-
+        import { useChannelsByIdsQuery as resolve } from
+        '../../lib/queries/channel/by-ids';
+      style: secondary
+      start: 0
+      end: 84
+    - source: useChannelsByIdsQuery
+      style: secondary
+      start: 9
+      end: 30
+  "import { useChannelsByIdsQuery } from '@app/lib/queries/channel/by-ids';\n":
+    labels:
+    - source: useChannelsByIdsQuery
+      style: primary
+      start: 9
+      end: 30
+    - source: "'@app/lib/queries/channel/by-ids'"
+      style: secondary
+      start: 38
+      end: 71
+    - source: import { useChannelsByIdsQuery } from '@app/lib/queries/channel/by-ids';
+      style: secondary
+      start: 0
+      end: 72
+    - source: useChannelsByIdsQuery
+      style: secondary
+      start: 9
+      end: 30
+  "import { useChannelsByIdsQuery } from '@queries/channel/by-ids';\n":
+    labels:
+    - source: useChannelsByIdsQuery
+      style: primary
+      start: 9
+      end: 30
+    - source: "'@queries/channel/by-ids'"
+      style: secondary
+      start: 38
+      end: 63
+    - source: import { useChannelsByIdsQuery } from '@queries/channel/by-ids';
+      style: secondary
+      start: 0
+      end: 64
+    - source: useChannelsByIdsQuery
+      style: secondary
+      start: 9
+      end: 30

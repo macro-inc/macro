@@ -20,13 +20,6 @@ import {
   useChannelsByIdsQuery,
 } from '@queries/channel/by-ids';
 import type { DirectoryChannel } from '@queries/channel/directory-core';
-
-export {
-  channelsByIdsQueryArgs,
-  useChannelsByIdsQuery,
-} from '@queries/channel/by-ids';
-
-import { queryReadyGate } from '@queries/gate';
 import {
   type SoupAstItemsQueryArgs,
   type SoupAstParams,
@@ -174,29 +167,6 @@ export function channelGroupIds(
   });
 
   return [...new Set(members.map((channel) => channel.id))];
-}
-
-/**
- * The channels a by-id lookup has resolved.
- *
- * A settled lookup answers for every id it asked about — its data covers the
- * pages fetched so far — so it replaces the previous answer and a channel it
- * stops returning reads as unresolved. A pending or failed lookup keeps the
- * last answer instead, so a failed page does not empty the rows built from it.
- */
-export function resolveReferencedChannels(
-  previous: ChannelEntity[],
-  lookup: {
-    isEnabled: boolean;
-    isPending: boolean;
-    error: unknown;
-    data: { entities: readonly EntityData[] } | undefined;
-  }
-): ChannelEntity[] {
-  if (!lookup.isEnabled || lookup.error || !queryReadyGate(lookup))
-    return previous;
-
-  return lookup.data.entities.filter(isChannelEntity);
 }
 
 export function deduplicateChannels(

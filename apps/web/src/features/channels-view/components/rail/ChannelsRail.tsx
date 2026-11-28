@@ -19,7 +19,7 @@ import {
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
-import { usePending } from '@app/observability/flow';
+import { useFlow, usePending } from '@app/observability/flow';
 import { favoriteSplitContent } from '@app/util/favorites';
 import { prefetchLatestChannelMessages } from '@channel/queries/prefetch-channel-target';
 import {
@@ -33,6 +33,7 @@ import {
 } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { enableChannelTags } from '@core/constant/featureFlags';
+import { useChannelDirectory } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
@@ -40,36 +41,49 @@ import { isModality } from '@core/mobile/inputModality';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import type { ChannelEntity, WithNotification } from '@entity';
 import { createChannelNotificationSettings } from '@notifications/primitives/create-channel-notification-settings';
-import { useCachedChannelsByIds } from '@queries/channel/by-ids';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import { fetchChannelSelectionById } from '@queries/channel/selection-by-id';
+import {
+  type ChannelWindowSlice,
+  channelIdWindow,
+  useChannelWindow,
+} from '@queries/channel/window';
 import { useChannelLabelsQuery } from '@queries/channel-labels/channel-labels';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import { debounce } from '@solid-primitives/scheduled';
 import { useDragDropContext } from '@thisbeyond/solid-dnd';
 import {
+  type Accessor,
   createEffect,
   createMemo,
   createSignal,
   createUniqueId,
   getOwner,
+  on,
   onCleanup,
   Show,
   startTransition,
 } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { useChannelsView } from '../../channels-view-context';
 import {
   canAssignChannel,
   filterChannelLabelMembers,
 } from '../../core/channel-label-eligibility';
+import {
+  advanceMemberDiscovery,
+  keepDiscoveredRecords,
+  type MemberDiscovery,
+  type MemberDiscoverySources,
+  memberDiscoveryBudget,
+  memberDiscoveryStatus,
+} from '../../core/member-discovery';
 import { resolveChannelLabelMemberships } from '../../core/smart-tags';
 import {
   type ChannelsSourceScope,
   type ChannelsSources,
   deduplicateChannels,
-  resolveReferencedChannels,
-  useChannelsByIdsQuery,
 } from '../../queries';
 import type {
   ChannelSectionKey,
@@ -88,6 +102,8 @@ import {
   type ChannelLabelDropTarget,
   type ChannelRailActivationMetadata,
   type ChannelRailRow,
+  type ChannelReferenceStatus,
+  type ChannelSectionRange,
   type ChannelsRailContext,
   ChannelsRailProvider,
   domIdForRow,
@@ -101,6 +117,7 @@ import {
   buildChannelRailRows,
   buildChannelSectionRows,
   getChannelRailPaginationScope,
+  groupChannelRailSections,
 } from './next/build-channel-rail-rows';
 import { useCollapsedUnreadChannels } from './next/collapsed-unread-channels';
 import { ExpandedChannelsRail as NextChannelsRail } from './next/ExpandedChannelsRail';
@@ -121,8 +138,19 @@ const BROWSE_QUERY_SCOPES = [
 ] as const;
 const DM_LOADING_PREVIEW_OFFSET = 80;
 
+/** The channel a section row shows, or an empty ID for a row that shows none. */
+const sectionRowChannelId = (row: ChannelRailRow) => {
+  if (row.kind === 'conversation') return row.channel.id;
+  if (row.kind === 'favorite' && row.favorite.entityType === 'channel') {
+    return row.favorite.entityId;
+  }
+  return '';
+};
+
 export type ChannelsRailProps = {
   sources: ChannelsSources;
+  /** Every joined channel, from the directory: stands in for rows not fetched. */
+  localChannels: Accessor<ChannelEntity[]>;
   searchOpen: boolean;
   searchQuery: string;
   onSearchQueryChange: (query: string) => void;
@@ -418,63 +446,256 @@ export function ChannelsRail(props: ChannelsRailProps) {
       .map((favorite) => favorite.entityId)
   );
 
-  // Sections and favorites can reference channels outside the loaded pages.
-  // Resolve their records independently without exhausting the main lists.
-  const referencedChannelIds = createMemo(() => [
-    ...new Set([
-      ...labels().flatMap((label) => label.channelIds),
-      ...favoriteChannelIds(),
-    ]),
-  ]);
-  const missingChannelIds = createMemo(() => {
-    const loaded = new Set(channels().map((channel) => channel.id));
-    return referencedChannelIds().filter((id) => !loaded.has(id));
+  // Sections and favorites can reference a whole team's channels. Joined ones
+  // come from the directory pool and unread ones from the unread projection;
+  // only the rows on screen that no loaded list holds are fetched by ID, in
+  // one bounded window, so collapsed and scrolled-away sections fetch nothing.
+  const hasReferences = () =>
+    favoriteChannelIds().length > 0 ||
+    labels().some((label) => label.channelIds.length > 0);
+  const directory = useChannelDirectory();
+  // Until the directory settles, its pool may still bring a section's members.
+  const directorySettled = () => directory.complete() || directory.failed();
+  const poolById = createMemo(
+    () => new Map(props.localChannels().map((channel) => [channel.id, channel]))
+  );
+  // Sections with any part on screen, open or collapsed; the section stack
+  // mounts only those near the screen.
+  const [sectionsOnScreen, setSectionsOnScreen] = createStore<
+    Partial<Record<ChannelSectionKey, boolean>>
+  >({});
+  const reportSectionOnScreen = (
+    section: ChannelSectionKey,
+    onScreen: boolean
+  ) => {
+    if ((sectionsOnScreen[section] ?? false) === onScreen) return;
+    setSectionsOnScreen(section, onScreen);
+  };
+  const isSectionOnScreen = (section: ChannelSectionKey) =>
+    sectionsOnScreen[section] === true;
+  const collapsedBuiltInSections = () =>
+    (['team_channels', 'channels', 'direct_messages'] as const).filter(
+      (section) =>
+        !state.expandedGroups[section] &&
+        state.sectionPreferences[section]?.unreadWhenCollapsed !== false
+    );
+  const builtInSectionCollapsed = () =>
+    sectionsEnabled() && collapsedBuiltInSections().length > 0;
+  // A favorites or custom section lists every unread member while it is
+  // collapsed (unless it hides them) or filtered to Unread only, and the pool
+  // carries no unread state.
+  const listsEveryUnreadMember = (key: ChannelSectionKey, open: boolean) => {
+    const preferences = state.sectionPreferences[key];
+    return open
+      ? preferences?.unreadOnly === true
+      : preferences?.unreadWhenCollapsed !== false;
+  };
+  // Every section that lists each unread member: a collapsed built-in
+  // section showing its unread rows, and a favorites or custom section
+  // collapsed or filtered to Unread only.
+  const sectionsListingEveryUnread = createMemo((): ChannelSectionKey[] => {
+    if (!sectionsEnabled()) return [];
+    const keys: ChannelSectionKey[] = [...collapsedBuiltInSections()];
+    if (
+      favoriteChannelIds().length > 0 &&
+      listsEveryUnreadMember('favorites', state.expandedGroups.favorites)
+    ) {
+      keys.push('favorites');
+    }
+    for (const label of labels()) {
+      const key: ChannelSectionKey = `label:${label.id}`;
+      if (
+        label.channelIds.length > 0 &&
+        listsEveryUnreadMember(key, !state.collapsedLabels.includes(label.id))
+      ) {
+        keys.push(key);
+      }
+    }
+    return keys;
   });
-  const referencedChannelsQuery = useChannelsByIdsQuery(() =>
-    sectionsEnabled() ? [] : missingChannelIds()
+  // Search results and the other tabs show no section.
+  const sectionsShown = () => !props.searchOpen && tab() === 'browse';
+  // Referenced rows take unread state from here: every unread channel while
+  // the sections on show list each one, otherwise the newest page, which
+  // section counts read. It reads further pages only while one of those
+  // sections is on screen. Rows on screen also carry it in their own records.
+  const unreadChannels = useCollapsedUnreadChannels(
+    () => builtInSectionCollapsed() || hasReferences(),
+    () => sectionsShown() && sectionsListingEveryUnread().length > 0,
+    () => sectionsListingEveryUnread().some(isSectionOnScreen)
   );
-  const nextReferencedChannels = useCachedChannelsByIds(
-    missingChannelIds,
-    sectionsEnabled
+  const collapsedUnread = () =>
+    builtInSectionCollapsed() ? unreadChannels() : [];
+  const loadedChannelIds = createMemo(
+    () =>
+      new Set([...channels(), ...unreadChannels()].map((channel) => channel.id))
   );
-  usePending(
-    'channels.sidebar.references',
-    () => sectionsEnabled() && nextReferencedChannels.isLoading()
+
+  const [sectionRanges, setSectionRanges] = createStore<
+    Partial<Record<ChannelSectionKey, ChannelSectionRange>>
+  >({});
+  const reportSectionRange = (
+    section: ChannelSectionKey,
+    range: ChannelSectionRange | undefined
+  ) => {
+    const current = sectionRanges[section];
+    if (current?.start === range?.start && current?.end === range?.end) return;
+    setSectionRanges(section, range);
+  };
+
+  // The window reads rows built from its own records. Its slices are function
+  // declarations below, so it can be built here, and they read those rows only
+  // once a section has reported what it shows, after the first layout.
+  const referenceIds = createMemo(() =>
+    sectionsEnabled()
+      ? channelIdWindow(onScreenReferenceSlices())
+      : channelIdWindow(legacyReferenceSlices())
   );
-  const referencedChannels = createMemo<ChannelEntity[]>(
-    (previous) =>
-      sectionsEnabled()
-        ? nextReferencedChannels.channels()
-        : resolveReferencedChannels(previous, referencedChannelsQuery),
-    []
+  const referenceWindow = useChannelWindow(referenceIds, () => true);
+  usePending('channels.sidebar.references', () => referenceWindow.isLoading());
+  const flow = useFlow();
+  createEffect(
+    on(referenceIds, (window) => {
+      flow.span.setAttr('channels.sidebar.references.ids', window.size);
+      flow.span.setAttr('channels.sidebar.references.dropped', window.dropped);
+    })
   );
+  // Rows that scrolled away keep their last record unless the pool has a
+  // live one; the pool and unread projection keep joined channels current.
+  const isLabelOpen = (labelId: string) =>
+    !state.collapsedLabels.includes(labelId);
+  const discoversMembers = (label: ChannelLabel) =>
+    sectionsEnabled() &&
+    isLabelOpen(label.id) &&
+    state.sectionPreferences[`label:${label.id}`]?.unreadOnly !== true;
+  // What discovery found stays while its section is open, past the window's
+  // retention; the pool keeps joined channels itself.
+  const discoveredChannels = createMemo<ReadonlyMap<string, ChannelEntity>>(
+    (previous) => {
+      const pool = poolById();
+      return keepDiscoveredRecords(
+        previous,
+        new Set(
+          labels()
+            .filter(discoversMembers)
+            .flatMap((label) => label.channelIds)
+        ),
+        referenceWindow.channels().filter((channel) => !pool.has(channel.id)),
+        referenceWindow.unavailableIds()
+      );
+    },
+    new Map()
+  );
+  const retainedChannels = createMemo(() => {
+    const pool = poolById();
+    return referenceWindow
+      .retained()
+      .filter((channel) => !pool.has(channel.id));
+  });
   // Only a label puts a fetched channel in the channel-section lists.
   const labelledChannels = createMemo<ChannelEntity[]>(() => {
     if (!channelTagsEnabled()) return [];
     const labelled = new Set(labels().flatMap((label) => label.channelIds));
-    return referencedChannels().filter((channel) => labelled.has(channel.id));
+    return deduplicateChannels([
+      referenceWindow.channels(),
+      unreadChannels(),
+    ]).filter((channel) => labelled.has(channel.id));
   });
 
-  const collapsedUnreadSource = useCollapsedUnreadChannels(
-    () =>
-      sectionsEnabled() &&
-      (['team_channels', 'channels', 'direct_messages'] as const).some(
-        (section) =>
-          !state.expandedGroups[section] &&
-          state.sectionPreferences[section]?.unreadWhenCollapsed !== false
-      )
-  );
-  const collapsedUnread = () =>
-    sectionsEnabled() ? collapsedUnreadSource() : [];
   const allChannels = createMemo(() =>
     deduplicateChannels([channels(), labelledChannels(), collapsedUnread()])
   );
-  const channelsById = createMemo(
-    () => new Map(allChannels().map((channel) => [channel.id, channel]))
-  );
-  const channelById = (channelId: string) =>
-    channelsById().get(channelId) ??
-    referencedChannels().find((channel) => channel.id === channelId);
+  // Every channel a row can show: loaded records first, then pool stand-ins.
+  const membersById = createMemo(() => {
+    const members = new Map<string, ChannelEntity>();
+    for (const channel of [
+      ...allChannels(),
+      ...referenceWindow.channels(),
+      ...unreadChannels(),
+    ]) {
+      if (!members.has(channel.id)) members.set(channel.id, channel);
+    }
+    for (const [id, channel] of poolById()) {
+      if (!members.has(id)) members.set(id, channel);
+    }
+    for (const [id, channel] of discoveredChannels()) {
+      if (!members.has(id)) members.set(id, channel);
+    }
+    for (const channel of retainedChannels()) {
+      if (!members.has(channel.id)) members.set(channel.id, channel);
+    }
+    return members;
+  });
+  const channelById = (channelId: string) => membersById().get(channelId);
+
+  /**
+   * The next batch of an open section's unknown members while its loading row
+   * is on screen, once the directory has settled, then each section on
+   * screen. Discovery comes first: its members have no row at all, while a
+   * section's rows already show a record and only wait for a fresher one.
+   */
+  function onScreenReferenceSlices(): ChannelWindowSlice[] {
+    if (!Object.values(sectionRanges).some(Boolean)) return [];
+    const loaded = loadedChannelIds();
+    const isLoaded = (id: string) => id === '' || loaded.has(id);
+    const sections = groupChannelRailSections(visibleRows());
+    const slices: ChannelWindowSlice[] = [];
+    for (const label of labels()) {
+      const key: ChannelSectionKey = `label:${label.id}`;
+      const range = sectionRanges[key];
+      const rows = sections.get(key)?.rows;
+      const status = rows?.findIndex((row) => row.kind === 'reference-status');
+      if (!range || status === undefined || status < range.start) continue;
+      if (status >= range.end || !directorySettled()) continue;
+      const next = labelDiscoveryStatus(label);
+      if (next?.kind !== 'next') continue;
+      slices.push({ key: `unknown:${label.id}`, ids: next.ids });
+    }
+    for (const [key, section] of sections) {
+      const range = sectionRanges[key];
+      if (!range) continue;
+      slices.push({
+        key: `section:${key}`,
+        ids: section.rows.map(sectionRowChannelId),
+        range,
+        isLoaded,
+      });
+    }
+    return slices;
+  }
+  // The original rail lists every favorite and label member, which are joined
+  // channels; the pool holds them once the directory fills. A member no list
+  // holds has no row until it is looked up, so the rail looks up, up to the
+  // window's caps, the open favorites (rendered whole) and the members of
+  // each open label with a row on screen in an open Team channels section; a
+  // collapsed section shows only its heading and looks up nothing.
+  function legacyReferenceSlices(): ChannelWindowSlice[] {
+    const loaded = loadedChannelIds();
+    const pool = poolById();
+    const isLoaded = (id: string) => loaded.has(id) || pool.has(id);
+    const slices: ChannelWindowSlice[] = [];
+    if (state.expandedGroups.favorites) {
+      slices.push({ key: 'favorites', ids: favoriteChannelIds(), isLoaded });
+    }
+    // The section reports its rows once laid out, after the rows are built.
+    const range = sectionRanges.team_channels;
+    if (!state.expandedGroups.team_channels || !range) return slices;
+    const onScreen = new Set(
+      channelSectionRows()
+        .slice(range.start, range.end)
+        .map((row) => (row.kind === 'label' ? row.label.id : row.labelId))
+    );
+    for (const label of labels()) {
+      if (state.collapsedLabels.includes(label.id)) continue;
+      if (!onScreen.has(label.id)) continue;
+      slices.push({
+        key: `label:${label.id}`,
+        ids: label.channelIds,
+        isLoaded,
+      });
+    }
+    return slices;
+  }
 
   const favoriteChannels = createMemo(() =>
     favoriteChannelIds().flatMap((id) => channelById(id) ?? [])
@@ -489,8 +710,60 @@ export function ChannelsRail(props: ChannelsRailProps) {
     favoriteChannels
   );
 
-  const isLabelOpen = (labelId: string) =>
-    !state.collapsedLabels.includes(labelId);
+  // Each open section walks its unknown members once, from a cursor that
+  // only moves forward, and waits for Load more after a run of misses; a
+  // closed section starts again when it opens. An Unread only section lists
+  // what the unread projection holds, so it discovers nothing.
+  const [discoveryExtensions, setDiscoveryExtensions] = createStore<
+    Record<string, number>
+  >({});
+  const discoveryBudget = (labelId: string) =>
+    memberDiscoveryBudget(discoveryExtensions[labelId] ?? 0);
+  const discoverySources = createMemo((): MemberDiscoverySources => {
+    const members = membersById();
+    const unavailable = referenceWindow.unavailableIds();
+    return {
+      isKnown: (id) => members.has(id),
+      isUnavailable: (id) => unavailable.has(id),
+    };
+  });
+  const memberDiscoveries = createMemo<Record<string, MemberDiscovery>>(
+    (previous) => {
+      const sources = discoverySources();
+      const next: Record<string, MemberDiscovery> = {};
+      let changed = false;
+      for (const label of labels()) {
+        if (!discoversMembers(label)) continue;
+        const before = previous[label.id];
+        const after = advanceMemberDiscovery(
+          before,
+          label.channelIds,
+          sources,
+          discoveryBudget(label.id)
+        );
+        next[label.id] = after;
+        if (after !== before) changed = true;
+      }
+      const same =
+        !changed && Object.keys(next).length === Object.keys(previous).length;
+      return same ? previous : next;
+    },
+    {}
+  );
+  const labelDiscoveryStatus = (label: ChannelLabel) => {
+    const discovery = memberDiscoveries()[label.id];
+    if (!discovery) return;
+    return memberDiscoveryStatus(
+      discovery,
+      discoverySources(),
+      discoveryBudget(label.id)
+    );
+  };
+  const discoverMoreReferencedChannels = (section: ChannelSectionKey) => {
+    if (!section.startsWith(LABEL_KEY_PREFIX)) return;
+    const labelId = section.slice(LABEL_KEY_PREFIX.length);
+    setDiscoveryExtensions(labelId, (extensions) => (extensions ?? 0) + 1);
+  };
 
   const channelSectionRows = createMemo(() => {
     const build = sectionsEnabled()
@@ -502,27 +775,30 @@ export function ChannelsRail(props: ChannelsRailProps) {
         props.sources.team_channels.items(),
         labelledChannels(),
       ]),
-      channelsById: channelsById(),
+      channelsById: membersById(),
       isLabelOpen: sectionsEnabled() ? () => true : isLabelOpen,
     });
   });
 
   const labelUnreadCount = (label: ChannelLabel) => {
     const unread = channelActivity.unreadChannelIds();
-    return filterChannelLabelMembers(label.channelIds, channelsById()).filter(
+    return filterChannelLabelMembers(label.channelIds, membersById()).filter(
       (id) => unread.has(id)
     ).length;
   };
 
   const referenceStatuses = createMemo(() => {
-    const statuses: Partial<Record<ChannelSectionKey, 'loading' | 'error'>> =
+    const statuses: Partial<Record<ChannelSectionKey, ChannelReferenceStatus>> =
       {};
     if (!sectionsEnabled()) return statuses;
-    const pending = nextReferencedChannels.pendingIds();
-    const failed = nextReferencedChannels.failedIds();
+    const pending = referenceWindow.pendingIds();
+    const failed = referenceWindow.failedIds();
+    const unavailable = referenceWindow.unavailableIds();
+    const members = membersById();
     const statusFor = (ids: readonly string[]) => {
-      if (ids.some((id) => failed.has(id) && !channelById(id))) return 'error';
-      if (ids.some((id) => pending.has(id) && !channelById(id)))
+      const missing = ids.filter((id) => !members.has(id));
+      if (missing.some((id) => failed.has(id))) return 'error';
+      if (missing.some((id) => pending.has(id) || !unavailable.has(id)))
         return 'loading';
     };
     if (state.expandedGroups.favorites) {
@@ -531,10 +807,15 @@ export function ChannelsRail(props: ChannelsRailProps) {
       const status = statusFor(favoriteChannelIds());
       if (status === 'error') statuses.favorites = status;
     }
+    // An open section with members nobody has looked up yet ends in a loading
+    // row; while that row is on screen, the window looks up the next ones.
+    // After a run of misses it ends in Load more instead.
     for (const label of labels()) {
-      if (isLabelOpen(label.id)) {
-        statuses[`label:${label.id}`] = statusFor(label.channelIds);
-      }
+      const next = labelDiscoveryStatus(label);
+      if (!next || next.kind === 'done') continue;
+      const key: ChannelSectionKey = `label:${label.id}`;
+      if (next.kind === 'paused') statuses[key] = 'more';
+      else statuses[key] = statusFor(next.ids);
     }
     return statuses;
   });
@@ -570,7 +851,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
         (favorite) =>
           !sectionsEnabled() ||
           favorite.entityType !== 'channel' ||
-          !nextReferencedChannels.unavailableIds().has(favorite.entityId)
+          !referenceWindow.unavailableIds().has(favorite.entityId)
       ),
       team_channels: deduplicateChannels([
         props.sources.team_channels.items(),
@@ -1164,7 +1445,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
         ? (labelsQuery.data?.teamId ?? undefined)
         : undefined,
     labels,
-    channelsById,
+    channelsById: membersById,
     searchResults,
     labelDialogOwner,
     setGroupOpen,
@@ -1201,6 +1482,13 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const channelNotifications = createChannelNotificationSettings({
     labels,
     resolveConflictChannels: true,
+    channelById,
+    // A complete directory holds every joined channel; a filling one reads
+    // them whole.
+    readJoinedChannels: async (signal) =>
+      directory.complete()
+        ? directory.channels()
+        : directory.readComplete(signal),
     favoriteChannelIds: () =>
       new Set(
         favorites()
@@ -1394,7 +1682,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
         ...(sectionsEnabled() ? [personalLabelsQuery.refetch()] : []),
       ]);
     },
-    retryReferencedChannels: nextReferencedChannels.retry,
+    retryReferencedChannels: referenceWindow.retry,
+    discoverMoreReferencedChannels,
+    reportSectionRange,
+    reportSectionOnScreen,
     isLabelOpen,
     toggleLabel: (labelId) => setLabelOpen(labelId, !isLabelOpen(labelId)),
     channelSectionRows,

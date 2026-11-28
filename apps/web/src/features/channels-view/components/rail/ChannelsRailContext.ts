@@ -43,11 +43,12 @@ export type ChannelRailRow =
       group: ChannelsGroup;
     }
   | {
-      /** Loading or retry feedback after an open section's available channels. */
+      /** Loading, retry or Load more after an open section's available channels. */
       kind: 'reference-status';
       id: `reference-status:${ChannelSectionKey}`;
+      section: ChannelSectionKey;
       group: 'favorites' | 'team_channels';
-      state: 'loading' | 'error';
+      state: ChannelReferenceStatus;
     }
   | {
       kind: 'favorite';
@@ -129,6 +130,15 @@ export const rowKeyForLabel = (labelId: string) => `label:${labelId}` as const;
 export const domIdForRow = (railId: string, rowId: string) =>
   `${railId}-${rowId}`;
 
+/** Indexes `[start, end)` of a section's rows. */
+export type ChannelSectionRange = { start: number; end: number };
+
+/**
+ * What an open section's members still need: a lookup in progress, a failed
+ * one to retry, or Load more after a run of members no lookup found.
+ */
+export type ChannelReferenceStatus = 'loading' | 'error' | 'more';
+
 export type ChannelRailActivationMetadata = {
   event?: MouseEvent;
   newSplit?: boolean;
@@ -163,6 +173,26 @@ export type ChannelsRailContext = {
   retryLabels: () => Promise<void>;
   /** Retry unresolved channels referenced by section membership or favorites. */
   retryReferencedChannels: () => Promise<void>;
+  /** Look up more of a section's members after a run of misses paused it. */
+  discoverMoreReferencedChannels: (section: ChannelSectionKey) => void;
+  /**
+   * The rows of a section on screen, as indexes `[start, end)` of its rows
+   * including overscan, or `undefined` while it is collapsed or off screen.
+   * Only these rows' channels are fetched by ID.
+   */
+  reportSectionRange: (
+    section: ChannelSectionKey,
+    range: ChannelSectionRange | undefined
+  ) => void;
+  /**
+   * Whether any of a section, open or collapsed, is on screen. The unread
+   * projection reads its later pages only for sections on screen that list
+   * every unread member.
+   */
+  reportSectionOnScreen: (
+    section: ChannelSectionKey,
+    onScreen: boolean
+  ) => void;
   isLabelOpen: (labelId: string) => boolean;
   toggleLabel: (labelId: string) => void;
   /** The Channels section's rendered rows: label headings and channels. */

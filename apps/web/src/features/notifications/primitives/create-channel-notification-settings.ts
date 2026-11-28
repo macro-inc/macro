@@ -6,9 +6,15 @@ import {
   enableChatSidebarSections,
 } from '@core/constant/featureFlags';
 import { catchToResult } from '@core/util/result';
+import type { ChannelEntity } from '@entity';
 import { isMentionsOnlyItem } from '@entity/utils/notification';
 import { Telemetry } from '@macro-inc/observability';
-import { useCachedChannelsByIds } from '@queries/channel/by-ids';
+import { queryAccountSession } from '@queries/auth/account-scope';
+import {
+  channelIdWindow,
+  EMPTY_CHANNEL_WINDOW,
+  useChannelWindow,
+} from '@queries/channel/window';
 import { useChannelLabelsQuery } from '@queries/channel-labels/channel-labels';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import { queryReadyGate } from '@queries/gate';
@@ -21,7 +27,14 @@ import {
 import { useMutedEntitiesQuery } from '@queries/notification/unsubscribes';
 import type { ChannelNotificationKind } from '@service-notification/generated/schemas/channelNotificationKind';
 import type { SectionMute } from '@service-notification/generated/schemas/sectionMute';
-import { type Accessor, createMemo } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  onCleanup,
+} from 'solid-js';
 import { match } from 'ts-pattern';
 import {
   CHANNEL_NOTIFICATION_KINDS,
@@ -32,6 +45,7 @@ import {
   effectiveChannelNotifications,
   type NotificationPreset,
   type NotificationSectionKey,
+  ownSettingsResist,
   PRESET_KINDS,
   presetFor,
   type SectionChange,
@@ -59,6 +73,32 @@ type Sources = {
    * conflict checks need for their names and built-in sections.
    */
   resolveConflictChannels?: boolean;
+  /** Records the host already holds; only the other channels are looked up. */
+  channelById?: (channelId: string) => ChannelEntity | undefined;
+  /**
+   * Every joined channel, read when a Direct messages or team section's
+   * conflict check meets channels with their own settings whose records
+   * nothing here holds: those sections hold channels by type, and the lookup
+   * above stops at a window's worth.
+   */
+  readJoinedChannels?: (
+    signal: AbortSignal
+  ) => Promise<readonly JoinedChannel[]>;
+};
+
+type JoinedChannel = {
+  id: string;
+  name: string | null;
+  channelType: string;
+};
+
+/** A channel a section change would not reach, named once its record is known. */
+export type SectionConflict = { id: string; name: string | undefined };
+
+type ConflictCandidate = {
+  channelId: string;
+  channelType: string | undefined;
+  name: string | undefined;
 };
 
 export type ChannelNotificationView = EffectiveChannelNotifications & {
@@ -131,13 +171,26 @@ export function createChannelNotificationSettings(sources: Sources) {
   const ownSettingsIds = createMemo(() => [
     ...new Set([...channelSettings().keys(), ...legacyMentionsOnlyIds()]),
   ]);
-  // The rail's loaded pages may not hold these, so resolve them by id.
-  const conflictChannels = useCachedChannelsByIds(
-    ownSettingsIds,
+  // The host holds joined channels; look up the rest by id, a window's worth.
+  const conflictIds = createMemo(() =>
+    enabled() && sources.resolveConflictChannels === true
+      ? channelIdWindow([
+          {
+            key: 'own-settings',
+            ids: ownSettingsIds(),
+            isLoaded: (id) => sources.channelById?.(id) !== undefined,
+          },
+        ])
+      : EMPTY_CHANNEL_WINDOW
+  );
+  const conflictChannels = useChannelWindow(
+    conflictIds,
     () => enabled() && sources.resolveConflictChannels === true
   );
   const conflictChannel = (channelId: string) =>
-    conflictChannels.channels().find((channel) => channel.id === channelId);
+    sources.channelById?.(channelId) ??
+    conflictChannels.channels().find((channel) => channel.id === channelId) ??
+    conflictChannels.retained().find((channel) => channel.id === channelId);
 
   const sectionName = (key: NotificationSectionKey) =>
     match(key)
@@ -163,6 +216,9 @@ export function createChannelNotificationSettings(sources: Sources) {
   const listFormat = () =>
     new Intl.ListFormat(formatLocale(), { type: 'conjunction' });
 
+  const failed = () =>
+    toast.failure(t('channelSections.notificationSettingsFailed'));
+
   const channel = (
     channelId: string,
     channelType: string | undefined
@@ -187,19 +243,124 @@ export function createChannelNotificationSettings(sources: Sources) {
     };
   };
 
-  /** The section's channels a change to it would not reach. */
-  const conflictsFor = (key: NotificationSectionKey, change: SectionChange) =>
-    sectionConflicts({
+  const conflictsAmong = (
+    key: NotificationSectionKey,
+    change: SectionChange,
+    candidates: readonly ConflictCandidate[]
+  ): SectionConflict[] => {
+    const names = new Map(
+      candidates.map((candidate) => [candidate.channelId, candidate.name])
+    );
+    return sectionConflicts({
       section: key,
       change,
-      channels: ownSettingsIds().map((channelId) => ({
-        channelId,
-        channelType: conflictChannel(channelId)?.channelType,
-        own: ownSettings(channelId),
+      channels: candidates.map((candidate) => ({
+        channelId: candidate.channelId,
+        channelType: candidate.channelType,
+        own: ownSettings(candidate.channelId),
       })),
       labels: sources.labels(),
       favoriteChannelIds: sources.favoriteChannelIds(),
+    }).map((id) => ({ id, name: names.get(id) }));
+  };
+
+  // Each conflict check's read of the joined channels, ended when the host
+  // goes or the viewer signs in again: a full read pages every joined channel.
+  const reads = new Set<AbortController>();
+  const [checking, setChecking] = createSignal(0);
+  const endReads = () => {
+    for (const read of reads) read.abort();
+  };
+  onCleanup(endReads);
+  createEffect(on(queryAccountSession, endReads, { defer: true }));
+
+  /** Fill in the types and names of candidates no record here describes. */
+  const readConflicts = (
+    key: NotificationSectionKey,
+    change: SectionChange,
+    candidates: readonly ConflictCandidate[],
+    readJoined: NonNullable<Sources['readJoinedChannels']>
+  ) =>
+    Telemetry.span(
+      'notifications.settings.section_conflicts',
+      async (span): Promise<SectionConflict[] | undefined> => {
+        span.setAttr('notification.section', key);
+        span.setAttr('notification.own_settings_count', candidates.length);
+        const read = new AbortController();
+        reads.add(read);
+        setChecking((count) => count + 1);
+        const result = await catchToResult(() => readJoined(read.signal));
+        reads.delete(read);
+        setChecking((count) => count - 1);
+        // The host went, or the viewer signed in again: nothing is left to ask.
+        if (read.signal.aborted) return undefined;
+        if (result.isErr()) {
+          span.error(result.error);
+          failed();
+          return undefined;
+        }
+        const joined = new Map(
+          result.value.map((channel) => [channel.id, channel])
+        );
+        const conflicts = conflictsAmong(
+          key,
+          change,
+          candidates.map((candidate) => {
+            const channel = joined.get(candidate.channelId);
+            if (candidate.channelType !== undefined || !channel)
+              return candidate;
+            return {
+              channelId: candidate.channelId,
+              channelType: channel.channelType,
+              name: channel.name ?? undefined,
+            };
+          })
+        );
+        span.setAttr('notification.conflict_count', conflicts.length);
+        return conflicts;
+      }
+    );
+
+  /**
+   * The section's channels a change to it would not reach, or nothing when
+   * the check failed (reported here) or its host went. A Direct messages or
+   * team section first reads its joined channels whole when a channel whose
+   * own settings resist the change has no record here.
+   */
+  const conflictsFor = async (
+    key: NotificationSectionKey,
+    change: SectionChange
+  ): Promise<SectionConflict[] | undefined> => {
+    const resisting = ownSettingsIds().filter((channelId) =>
+      ownSettingsResist(ownSettings(channelId), change)
+    );
+    const candidates = resisting.map((channelId): ConflictCandidate => {
+      const channel = conflictChannel(channelId);
+      return {
+        channelId,
+        channelType: channel?.channelType,
+        name: channel?.name ?? undefined,
+      };
     });
+    const readJoined = sources.readJoinedChannels;
+    const byType = key === 'team_channels' || key === 'direct_messages';
+    // A channel in a custom section is in no built-in one, whatever its type.
+    const labelled = new Set(
+      byType ? sources.labels().flatMap((label) => label.channelIds) : []
+    );
+    if (
+      !readJoined ||
+      !byType ||
+      candidates.every(
+        (candidate) =>
+          candidate.channelType !== undefined ||
+          labelled.has(candidate.channelId)
+      )
+    ) {
+      return conflictsAmong(key, change, candidates);
+    }
+    return readConflicts(key, change, candidates, readJoined);
+  };
 
   const section = (key: NotificationSectionKey): SectionNotificationView => {
     const settings = sectionSettings().get(key) ?? UNSET_SECTION_SETTINGS;
@@ -212,10 +373,8 @@ export function createChannelNotificationSettings(sources: Sources) {
     };
   };
 
-  const pending = () => channelMutation.isPending || sectionMutation.isPending;
-
-  const failed = () =>
-    toast.failure(t('channelSections.notificationSettingsFailed'));
+  const pending = () =>
+    channelMutation.isPending || sectionMutation.isPending || checking() > 0;
 
   /**
    * Run a settings write in its own span, keyed by what it changes, and
@@ -287,9 +446,6 @@ export function createChannelNotificationSettings(sources: Sources) {
     channel,
     section,
     sectionConflicts: conflictsFor,
-    /** A conflicting channel's name, once its record resolves. */
-    conflictChannelName: (channelId: string) =>
-      conflictChannel(channelId)?.name,
     setChannelKinds,
     setChannelPreset: (
       channelId: string,

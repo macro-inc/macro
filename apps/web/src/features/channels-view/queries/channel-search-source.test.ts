@@ -4,6 +4,7 @@ import {
   directoryChannel,
   directoryParticipant,
 } from '@queries/channel/tests/directory-channel';
+import type { ChannelIdWindow } from '@queries/channel/window';
 import type { useSearchSoupQuery } from '@queries/soup/search';
 import { type Accessor, createRoot, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
@@ -17,9 +18,14 @@ const queryMock = vi.hoisted(() => vi.fn());
 const astQueryMock = vi.hoisted(() => vi.fn());
 const hydratedSearch = vi.hoisted(() => ({
   channels: (): ChannelEntity[] => [],
+  window: undefined as (() => ChannelIdWindow) | undefined,
 }));
-vi.mock('@queries/channel/by-ids', () => ({
-  useCachedChannelsByIds: () => ({ channels: () => hydratedSearch.channels() }),
+vi.mock('@queries/channel/window', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@queries/channel/window')>()),
+  useChannelWindow: (window: () => ChannelIdWindow) => {
+    hydratedSearch.window = window;
+    return { channels: () => hydratedSearch.channels() };
+  },
 }));
 const channelList = vi.hoisted(() => ({
   channels: (): DirectoryChannel[] => [],
@@ -527,5 +533,35 @@ describe('shared channel search source', () => {
       isParticipant: false,
       teamId: 'team',
     });
+  });
+
+  it('looks up membership for at most the first 200 unknown search results', async () => {
+    astQueryMock.mockReturnValue({
+      isEnabled: true,
+      isPending: false,
+      isLoading: false,
+      isFetching: false,
+      isFetchingNextPage: false,
+      error: undefined,
+      fetchError: undefined,
+      hasNextPage: false,
+      data: { entities: [] },
+      fetchNextPage: vi.fn(async () => {}),
+      refresh: vi.fn(async () => {}),
+    });
+    hydratedSearch.channels = () => [];
+    const s = setup('release', 'search', undefined, true);
+    const unknown = Array.from({ length: 300 }, (_, index) => ({
+      ...channel(`unknown-${index}`, `Release ${index}`),
+      isParticipant: undefined,
+    }));
+    s.setRemote('data', [channel('joined', 'Release joined'), ...unknown]);
+    await vi.advanceTimersByTimeAsync(300);
+    const window = hydratedSearch.window?.();
+    expect(window?.size).toBe(200);
+    expect(window?.dropped).toBe(100);
+    expect(window?.chunks.flatMap((chunk) => chunk.ids)).toEqual(
+      unknown.slice(0, 200).map((row) => row.id)
+    );
   });
 });

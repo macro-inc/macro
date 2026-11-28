@@ -1,0 +1,75 @@
+id: ts-channel-by-id-reads-windowed
+language: typescript
+# Twin of tsx-channel-by-id-reads-windowed — ast-grep rules are
+# single-language, and `tsx` only scans .tsx files.
+severity: error
+message: Look up channels by ID through useChannelWindow (lib/queries/channel/window), never the exact-set hooks in lib/queries/channel/by-ids.
+note: |-
+  A by-ID list read resolves every ID it is given, so one fed a section's or a
+  search's whole membership fetches thousands of records in a large team.
+  `useChannelWindow` takes a `ChannelIdWindow`, which only `channelIdWindow`
+  builds: at most 200 IDs, in chunks of 25. Give it the rows on screen (a
+  slice with a `range`), or the first rows of a list, and show the rest from
+  the channel directory's records.
+  Namespace imports, `export *` and dynamic imports of by-ids hand the hooks
+  on, so they are refused too: import its other names by name.
+  The exact-set hooks stay for the Threads tab, whose IDs are the channels
+  of the thread pages it has loaded: 100 threads a page, five pages on
+  their own and more only as the list scrolls.
+files:
+  - apps/web/src/**
+ignores:
+  - apps/web/src/lib/queries/channel/**
+  - apps/web/src/features/channels-view/queries.ts
+  - '**/*.test.ts'
+  - '**/*.test.tsx'
+utils:
+  by-ids-source:
+    kind: string
+    regex: ^['"](@queries/channel|@app/lib/queries/channel|(\.{1,2}/)+(.+/)?channel)/by-ids(\.ts)?['"]$
+  # A template literal can build the path, so one ending in /by-ids counts
+  # whatever comes before it.
+  by-ids-template:
+    kind: template_string
+    regex: /by-ids(\.ts)?`$
+  from-by-ids:
+    any:
+      - kind: import_statement
+      - kind: export_statement
+    has:
+      field: source
+      matches: by-ids-source
+rule:
+  any:
+    # import { useChannelsByIdsQuery } from, export { … } from
+    - any:
+        - kind: import_specifier
+        - kind: export_specifier
+      has:
+        field: name
+        regex: ^(useChannelsByIdsQuery|channelsByIdsQueryArgs)$
+      inside:
+        stopBy: end
+        matches: from-by-ids
+    # import * as byIds from, and export * from: each hands on the hooks
+    - kind: namespace_import
+      inside:
+        stopBy: end
+        matches: from-by-ids
+    - kind: export_statement
+      matches: from-by-ids
+      not:
+        has:
+          kind: export_clause
+    # import('…/by-ids'), import(`…/by-ids`)
+    - kind: call_expression
+      all:
+        - has:
+            field: function
+            kind: import
+        - has:
+            field: arguments
+            has:
+              any:
+                - matches: by-ids-source
+                - matches: by-ids-template

@@ -5,7 +5,7 @@ import {
 } from '@app/features/next-soup/filters/filter-store';
 import { usePending } from '@app/observability/flow';
 import { type ChannelEntity, isChannelEntity } from '@entity';
-import { useCachedChannelsByIds } from '@queries/channel/by-ids';
+import { channelIdWindow, useChannelWindow } from '@queries/channel/window';
 import { queryReadyGate } from '@queries/gate';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { type Accessor, createMemo } from 'solid-js';
@@ -71,14 +71,20 @@ export function createSectionSearchSource(options: {
     additionalLocalChannels: () =>
       deduplicateChannels([options.localChannels(), discovered()]),
   });
-  const hydration = useCachedChannelsByIds(
-    () =>
-      search
-        .items()
-        .filter((channel) => channel.isParticipant === undefined)
-        .map((channel) => channel.id),
-    options.enabled
+  // Search rows from the server don't say whether the viewer joined; look up
+  // the first results' records, which hold it, so they group correctly.
+  const unknownMembership = createMemo(() =>
+    channelIdWindow([
+      {
+        key: 'search',
+        ids: search
+          .items()
+          .filter((channel) => channel.isParticipant === undefined)
+          .map((channel) => channel.id),
+      },
+    ])
   );
+  const hydration = useChannelWindow(unknownMembership, options.enabled);
   const results = createMemo(() => {
     const byId = new Map(
       hydration.channels().map((channel) => [channel.id, channel])

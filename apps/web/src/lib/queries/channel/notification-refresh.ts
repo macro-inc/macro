@@ -1,9 +1,14 @@
+import {
+  firstRequestIn,
+  TRACE_PARENT_CONTEXT_KEY,
+} from '@app/lib/urql-solid/trace-parent-exchange';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   isGraphqlServerFault,
   isTransientRequestError,
 } from '@core/util/request-error';
 import type { QueryRevalidation } from '@graphql-cache/exchange/optimistic';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import type { GraphqlNotificationPatch } from '@service-storage/graphql-soup-websocket';
 import { type Client, createRequest } from '@urql/core';
 
@@ -28,7 +33,16 @@ type Waiter = {
   generation: number;
   resolve: () => void;
   reject: (error: unknown) => void;
+  /** Waits its turn as live updates do, not as an explicit refresh. */
+  background?: boolean;
+  /**
+   * A read again's: when it was asked for, since when its page missed updates,
+   * and how many attempts it has waited on.
+   */
+  readAgain?: { queuedAt: number; missedSince: number; attempts: number };
 };
+/** How one attempt for a read again ended, for its span. */
+type ReadAgainOutcome = 'landed' | 'retrying' | 'failed' | 'dropped';
 type Job = {
   query: QueryRevalidation;
   readers: Set<ChannelNotificationReader>;
@@ -53,6 +67,24 @@ const coordinators = new WeakMap<QueryClient, ChannelNotificationRefresh>();
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+/**
+ * The span for one attempt at a job a read again waits on: how long that read
+ * has waited in the queue, how long its page has missed updates, and which of
+ * its attempts this is (the job's failures before it was asked for are not
+ * its own). Undefined for a job no read again waits on.
+ */
+function startReadAgainAttempt(job: Job): Span | undefined {
+  const readAgain = job.waiters.find((waiter) => waiter.readAgain)?.readAgain;
+  if (!readAgain) return undefined;
+  readAgain.attempts += 1;
+  const now = Date.now();
+  const span = Telemetry.span('channel_list.read_again');
+  span.setAttr('channel_list.queued_ms', now - readAgain.queuedAt);
+  span.setAttr('channel_list.missed_ms', now - readAgain.missedSince);
+  span.setAttr('channel_list.read_attempt', readAgain.attempts);
+  return span;
 }
 
 /** Continuation pages cannot show a new channel; only the first page waits. */
@@ -169,6 +201,35 @@ export class ChannelNotificationRefresh {
     this.invalidate(job);
     this.schedule();
     return true;
+  }
+
+  /**
+   * Reads a registered query again as a live update would, in its turn and
+   * under its backoff, and answers whether that read landed. It waits through
+   * the retries of a failure that can recover, and answers false when the
+   * query cannot run, fails for good, or its readers close first. Each
+   * attempt is its own `channel_list.read_again` span, which records how long
+   * the read waited and how long its page has missed updates (since
+   * `missedSince`).
+   */
+  readAgain(query: QueryRevalidation, missedSince: number): Promise<boolean> {
+    const job = this.jobs.get(
+      createRequest(query.document, query.variables).key
+    );
+    if (!job || !this.enabled(job) || job.blocked)
+      return Promise.resolve(false);
+    this.invalidate(job);
+    const landed = new Promise<boolean>((resolve) => {
+      job.waiters.push({
+        generation: job.generation,
+        resolve: () => resolve(true),
+        reject: () => resolve(false),
+        background: true,
+        readAgain: { queuedAt: Date.now(), missedSince, attempts: 0 },
+      });
+    });
+    this.schedule();
+    return landed;
   }
 
   /** Explicit refreshes await one attempt. Background recovery never fails a mutation. */
@@ -342,7 +403,7 @@ export class ChannelNotificationRefresh {
       job.generation > job.completed &&
       ![...job.readers].some((reader) => reader.enabled && reader.fetching) &&
       // Explicit user refreshes may run in hidden tabs. Background work waits.
-      (job.waiters.length > 0 ||
+      (this.awaitedExplicitly(job) ||
         (!document.hidden && navigator.onLine !== false))
     );
   }
@@ -380,14 +441,23 @@ export class ChannelNotificationRefresh {
     const epoch = this.epoch;
     job.running = true;
     this.active += 1;
+    // A live update's read belongs to no flow; each attempt for a read again
+    // is its own span, opened as it sends, so a read that waits on a hidden
+    // or offline tab holds no span open.
+    const attempt = startReadAgainAttempt(job);
+    let outcome: ReadAgainOutcome = 'dropped';
     try {
       const result = await this.client
         .query(job.query.document, job.query.variables, {
           requestPolicy: 'network-only',
+          ...(attempt && {
+            [TRACE_PARENT_CONTEXT_KEY]: firstRequestIn(attempt),
+          }),
         })
         .toPromise();
       if (this.disposed || epoch !== this.epoch || !job.readers.size) return;
       if (result.error) throw result.error;
+      outcome = 'landed';
       job.completed = generation;
       job.failures = 0;
       job.retryAt = 0;
@@ -402,17 +472,25 @@ export class ChannelNotificationRefresh {
         error instanceof Error &&
         (isTransientRequestError(error) || isGraphqlServerFault(error))
       ) {
-        this.settle(job, generation, error);
+        outcome = 'retrying';
+        // Reads again wait for the retry; explicit refreshes report the failure.
+        this.settle(job, generation, error, true);
         job.retryAt =
           Date.now() +
           Math.min(30_000, 1000 * 2 ** Math.min(job.failures - 1, 5));
       } else {
+        outcome = 'failed';
         job.blocked = true;
         // Later generations cannot run while blocked; reject their callers too.
         this.settle(job, Infinity, error);
       }
+      // A fixed message: an error's own text can carry the request's URL. The
+      // outcome says whether it retries.
+      attempt?.error('Channel list read again failed');
       console.warn('Failed to refresh channel notifications', error);
     } finally {
+      attempt?.setAttr('channel_list.read_outcome', outcome);
+      attempt?.end();
       job.running = false;
       this.active -= 1;
       if (!job.readers.size) this.jobs.delete(key);
@@ -439,16 +517,23 @@ export class ChannelNotificationRefresh {
     if (nextRead === undefined) return;
     this.invalidate(job);
     // An explicit refresh waiting on this job reads at once, not after the backoff.
-    if (job.waiters.length === 0) job.retryAt = nextRead;
+    if (!this.awaitedExplicitly(job)) job.retryAt = nextRead;
   }
 
-  private settle(job: Job, generation: number, error?: unknown) {
-    const settled = job.waiters.filter(
-      (waiter) => waiter.generation <= generation
-    );
-    job.waiters = job.waiters.filter(
-      (waiter) => waiter.generation > generation
-    );
+  private awaitedExplicitly(job: Job) {
+    return job.waiters.some((waiter) => !waiter.background);
+  }
+
+  private settle(
+    job: Job,
+    generation: number,
+    error?: unknown,
+    retrying = false
+  ) {
+    const settles = (waiter: Waiter) =>
+      waiter.generation <= generation && !(retrying && waiter.background);
+    const settled = job.waiters.filter(settles);
+    job.waiters = job.waiters.filter((waiter) => !settles(waiter));
     for (const waiter of settled) {
       if (error !== undefined) waiter.reject(error);
       else waiter.resolve();

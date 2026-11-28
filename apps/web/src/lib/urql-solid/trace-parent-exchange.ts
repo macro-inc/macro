@@ -19,8 +19,10 @@ export function mutationTraceParentOf(
 /**
  * The caller's context for the operation's first request only: a re-sent
  * operation (cache revalidation, refetch) must not join a trace that ended.
+ * Give one to an operation that names a span which ends before the operation
+ * does, such as a page that stays subscribed after the span that read it.
  */
-function firstRequestIn(parent: TraceContext): TraceContext {
+export function firstRequestIn(parent: TraceContext): TraceContext {
   let used = false;
   return {
     run(work) {

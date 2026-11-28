@@ -107,6 +107,11 @@ export type SoupLiveQueryOptions = {
    * mounted within it reads the cached page and does not fetch it again.
    */
   staleTime?: number;
+  /**
+   * Read a later page again from the cursor the page before it now ends at,
+   * once a read moves that page's last row (`repairContinuations`).
+   */
+  repairContinuations?: boolean;
 };
 
 /** Whether a list may take its cached first page, for one input and client. */
@@ -521,6 +526,7 @@ export function createSoupLiveQuery(
           ? 'cache-first'
           : 'cache-and-network',
       keepPreviousData: queryOptions.keepPreviousData ?? false,
+      repairContinuations: queryOptions.repairContinuations ?? false,
       onResult: (result, page) => {
         const metadata = normalizedCacheResultMetadata(result);
         if (result.data) {

@@ -54,6 +54,7 @@ import {
 import { ChannelFavoriteRow } from './ChannelFavoriteRow';
 import { ChannelLabelEmptyState, ChannelLabelRow } from './ChannelLabelRows';
 import {
+  CHANNEL_RAIL_OVERSCAN,
   ChannelRailVirtualizer,
   type ChannelRailVirtualizerHandle,
   scrollChannelRailTargetIntoView,
@@ -277,14 +278,25 @@ function BrowseRow(props: {
           when={props.row.kind === 'reference-status' ? props.row : undefined}
         >
           {(row) => (
-            <Show
-              when={row().state === 'loading'}
-              fallback={
+            <Switch>
+              <Match when={row().state === 'loading'}>
+                <RailListLoadingMore variant="channel" />
+              </Match>
+              <Match when={row().state === 'error'}>
                 <RailListError retry={rail.retryReferencedChannels} compact />
-              }
-            >
-              <RailListLoadingMore variant="channel" />
-            </Show>
+              </Match>
+              <Match when={row().state === 'more'}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    rail.discoverMoreReferencedChannels(row().section)
+                  }
+                >
+                  {t('channelSections.loadMore')}
+                </Button>
+              </Match>
+            </Switch>
           )}
         </Match>
         <Match when={props.row.kind === 'label' ? props.row : undefined}>
@@ -327,6 +339,8 @@ function BrowseSection(props: {
   maxHeight: number;
   resizingEnabled: boolean;
   outerScrollRoot: HTMLDivElement | undefined;
+  /** The outer scroll viewport's height, which moves its bottom edge. */
+  viewportHeight: number;
   layoutVersion: number;
   sectionStart: number;
   sectionOrder: readonly ChannelSectionKey[];
@@ -463,21 +477,38 @@ function BrowseSection(props: {
       return [];
     });
   });
-  const loadVisibleSections = () => {
+  // Only the rows on screen have their channels fetched by ID.
+  onCleanup(() => {
+    rail.reportSectionRange(props.sectionKey, undefined);
+    rail.reportSectionOnScreen(props.sectionKey, false);
+  });
+  const sectionOnScreen = () => {
+    const root = handle.root;
+    const outer = props.outerScrollRoot;
+    if (!root || !outer) return false;
+    const bounds = root.getBoundingClientRect();
+    const visible = outer.getBoundingClientRect();
+    return bounds.bottom > visible.top && bounds.top < visible.bottom;
+  };
+  const onScreenRange = () => {
     const current = virtualizer();
-
-    if (!open() || !current) {
-      return;
-    }
-
     const viewport = scrollRoot();
     const outer = props.outerScrollRoot;
-    if (!viewport || !outer) return;
+    if (!open() || !current || !viewport || !outer) return;
     const bounds = viewport.getBoundingClientRect();
     const visible = outer.getBoundingClientRect();
     if (bounds.bottom <= visible.top || bounds.top >= visible.bottom) return;
-
-    const range = current.visibleRange();
+    return current.visibleRange();
+  };
+  const loadVisibleSections = () => {
+    const range = onScreenRange();
+    rail.reportSectionRange(
+      props.sectionKey,
+      range && {
+        start: Math.max(0, range.startIndex - CHANNEL_RAIL_OVERSCAN),
+        end: range.endIndex + 1 + CHANNEL_RAIL_OVERSCAN,
+      }
+    );
     if (!range) return;
 
     const first = Math.max(0, range.startIndex - 3);
@@ -503,13 +534,19 @@ function BrowseSection(props: {
         virtualizer,
         () => size.height,
         () => props.scrollVersion,
+        // Sections above growing move this one on or off screen unscrolled.
+        () => props.sectionStart,
+        () => props.layoutVersion,
+        // A taller rail shows sections below its old bottom unscrolled.
+        () => props.viewportHeight,
       ],
       () => {
-        if (!open()) {
-          return;
-        }
+        if (!open()) rail.reportSectionRange(props.sectionKey, undefined);
 
-        const frame = requestAnimationFrame(loadVisibleSections);
+        const frame = requestAnimationFrame(() => {
+          rail.reportSectionOnScreen(props.sectionKey, sectionOnScreen());
+          if (open()) loadVisibleSections();
+        });
         onCleanup(() => cancelAnimationFrame(frame));
       }
     )
@@ -877,6 +914,7 @@ function ExpandedBrowse() {
                     maxHeight={maximumHeight(key)}
                     resizingEnabled={resizeFlag().enabled}
                     outerScrollRoot={scrollRoot()}
+                    viewportHeight={scrollSize.height ?? 0}
                     layoutVersion={stackSize.height ?? 0}
                     sectionStart={start()}
                     sectionOrder={keys()}

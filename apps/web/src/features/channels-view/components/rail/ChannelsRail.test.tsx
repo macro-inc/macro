@@ -2,6 +2,7 @@ import type { ListScrollHandle } from '@app/components/list';
 import type { ChannelPreviewSelection } from '@app/features/next-soup/utils';
 import type { ChannelEntity } from '@entity/types/entity';
 import type { WithNotification } from '@entity/types/notification';
+import type { ChannelIdWindow } from '@queries/channel/window';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import {
@@ -15,7 +16,10 @@ import { createSignal, getOwner, type JSX, onCleanup } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChannelsSources } from '../../queries';
 import type { ChannelSectionKey, ChannelSectionPreferences } from '../../types';
-import type { ChannelRailRow } from './ChannelsRailContext';
+import type {
+  ChannelRailRow,
+  ChannelsRailContext,
+} from './ChannelsRailContext';
 
 // Tracked by the mocked `queryAccountSession`, so a sign-in reaches what
 // follows the session.
@@ -61,12 +65,22 @@ const mocks = vi.hoisted(() => ({
   favoriteId: undefined as string | undefined,
   favorites: [] as Favorite[],
   referencedChannels: [] as ChannelEntity[],
+  setReferencedChannels: (_channels: ChannelEntity[]) => {},
+  referenceWindow: undefined as (() => ChannelIdWindow) | undefined,
+  rail: undefined as ChannelsRailContext | undefined,
+  pool: [] as ChannelEntity[],
+  labels: [] as ChannelLabel[],
+  flags: [] as string[],
   pendingReferenceIds: [] as string[],
   failedReferenceIds: [] as string[],
   unavailableReferenceIds: [] as string[],
+  setUnavailableReferenceIds: (_ids: string[]) => {},
   sectionsEnabled: true,
   unreadRows: [] as ChannelEntity[],
+  unreadListsEvery: undefined as (() => boolean) | undefined,
+  unreadReadsMore: undefined as (() => boolean) | undefined,
   closedGroups: [] as string[],
+  collapsedLabels: [] as string[],
   sectionPreferences: {} as Partial<
     Record<ChannelSectionKey, ChannelSectionPreferences>
   >,
@@ -237,7 +251,9 @@ vi.mock('@app/features/soup/entity-notifications', () => ({
   withEntityNotifications: (channel: ChannelEntity) => channel,
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: false }),
+  useFeatureFlag: (flag: { key: string }) => () => ({
+    enabled: mocks.flags.includes(flag.key),
+  }),
 }));
 vi.mock('@app/util/favorites', () => ({ favoriteSplitContent: vi.fn() }));
 vi.mock('@components/app/GlobalAppState', () => ({
@@ -256,7 +272,7 @@ vi.mock('@core/component/Toast/Toast', () => ({
 }));
 vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
-  enableChannelTags: {},
+  enableChannelTags: { key: 'enable-channel-tags' },
 }));
 vi.mock('@channel/queries/prefetch-channel-target', () => ({
   prefetchLatestChannelMessages: mocks.prefetch,
@@ -302,7 +318,11 @@ vi.mock('@queries/notification/unsubscribes', () => ({
   }),
 }));
 vi.mock('@queries/channel-labels/channel-labels', () => ({
-  useChannelLabelsQuery: () => ({ isSuccess: false }),
+  useChannelLabelsQuery: (scope?: string) => {
+    if (mocks.labels.length === 0) return { isSuccess: false };
+    const labels = scope === 'personal' ? [] : mocks.labels;
+    return { isPending: false, data: { teamId: 'team', labels } };
+  },
   useCreateChannelLabelMutation: () => ({ mutateAsync: mocks.createSection }),
   useDeleteChannelLabelMutation: () => ({}),
   useRenameChannelLabelMutation: () => ({ mutateAsync: mocks.updateSection }),
@@ -321,6 +341,7 @@ vi.mock('@thisbeyond/solid-dnd', () => ({
 }));
 vi.mock('@ui', async () => ({
   cn: (await import('@ui/utils/classname')).cn,
+  Button: (await import('@ui/components/Button')).Button,
   confirmDialog: mocks.confirmDialog,
   Tabs: () => null,
   Hotkey: () => null,
@@ -354,7 +375,9 @@ vi.mock('../../channels-view-context', () => ({
           return !mocks.closedGroups.includes('direct_messages');
         },
       },
-      collapsedLabels: [],
+      get collapsedLabels() {
+        return mocks.collapsedLabels;
+      },
       sectionPreferences: mocks.sectionPreferences,
       sortBy: {
         channels: 'viewed_at',
@@ -384,20 +407,35 @@ vi.mock('../../queries', () => ({
       collections.flat().map((channel) => [channel.id, channel])
     ).values(),
   ],
-  useChannelsByIdsQuery: () => ({ isEnabled: false }),
-  resolveReferencedChannels: () => mocks.referencedChannels,
 }));
+// The real window builder, over a lookup that returns what a test resolved.
+vi.mock('@queries/channel/window', async (importOriginal) => {
+  const { createSignal } = await import('solid-js');
+  return {
+    ...(await importOriginal<typeof import('@queries/channel/window')>()),
+    useChannelWindow: (window: () => ChannelIdWindow) => {
+      const [channels, setChannels] = createSignal(mocks.referencedChannels);
+      mocks.setReferencedChannels = setChannels;
+      const [unavailable, setUnavailable] = createSignal(
+        mocks.unavailableReferenceIds
+      );
+      mocks.setUnavailableReferenceIds = setUnavailable;
+      mocks.referenceWindow = window;
+      return {
+        channels,
+        retained: () => [],
+        pendingIds: () => new Set(mocks.pendingReferenceIds),
+        failedIds: () => new Set(mocks.failedReferenceIds),
+        unavailableIds: () => new Set(unavailable()),
+        error: () => undefined,
+        isLoading: () => false,
+        retry: async () => {},
+      };
+    },
+  };
+});
 vi.mock('@queries/channel/by-ids', () => ({
   useChannelsByIdsQuery: () => ({ isEnabled: false }),
-  useCachedChannelsByIds: () => ({
-    channels: () => mocks.referencedChannels,
-    pendingIds: () => new Set(mocks.pendingReferenceIds),
-    failedIds: () => new Set(mocks.failedReferenceIds),
-    unavailableIds: () => new Set(mocks.unavailableReferenceIds),
-    error: () => undefined,
-    isLoading: () => false,
-    retry: async () => {},
-  }),
 }));
 vi.mock('./next/SectionDialog', () => ({ promptSection: mocks.promptSection }));
 vi.mock('./ChannelLabelNameDialog', () => ({
@@ -407,9 +445,12 @@ vi.mock('./SmartTagDialog', () => ({ promptSmartTag: vi.fn() }));
 vi.mock('./ExpandedChannelsRail', async (importOriginal) => {
   const { ExpandedChannelsRail: RealRenderer } =
     await importOriginal<typeof import('./ExpandedChannelsRail')>();
+  const { useChannelsRail } = await import('./ChannelsRailContext');
   return {
-    ExpandedChannelsRail: (props: Parameters<typeof RealRenderer>[0]) =>
-      mocks.realRenderer ? <RealRenderer {...props} /> : null,
+    ExpandedChannelsRail: (props: Parameters<typeof RealRenderer>[0]) => {
+      mocks.rail = useChannelsRail();
+      return mocks.realRenderer ? <RealRenderer {...props} /> : null;
+    },
   };
 });
 vi.mock('./hooks/useChannelCalls', () => ({ useChannelCalls: () => ({}) }));
@@ -450,8 +491,15 @@ vi.mock('./hooks/useChannelRailActivity', () => ({
   },
 }));
 vi.mock('./next/collapsed-unread-channels', () => ({
-  useCollapsedUnreadChannels: (enabled: () => boolean) => () =>
-    enabled() ? mocks.unreadRows : [],
+  useCollapsedUnreadChannels: (
+    enabled: () => boolean,
+    listsEvery: () => boolean,
+    readsMore: () => boolean
+  ) => {
+    mocks.unreadListsEvery = listsEvery;
+    mocks.unreadReadsMore = readsMore;
+    return () => (enabled() ? mocks.unreadRows : []);
+  },
 }));
 vi.mock('./next/ExpandedChannelsRail', async (importOriginal) => {
   const { ExpandedChannelsRail: RealRenderer } =
@@ -463,6 +511,7 @@ vi.mock('./next/ExpandedChannelsRail', async (importOriginal) => {
         return <RealRenderer {...props} />;
       }
       const rail = useChannelsRail();
+      mocks.rail = rail;
       onCleanup(
         rail.registerBrowseScrollHandle({ scrollToIndex: mocks.scrollBrowse })
       );
@@ -612,6 +661,7 @@ const sources: ChannelsSources = {
 const mount = () =>
   render(() => (
     <ChannelsRail
+      localChannels={() => mocks.pool}
       sources={sources}
       searchQuery=""
       onSearchQueryChange={() => {}}
@@ -626,12 +676,18 @@ beforeEach(() => {
   mocks.focusedRow = undefined;
   mocks.favorites = [];
   mocks.referencedChannels = [];
+  mocks.referenceWindow = undefined;
+  mocks.rail = undefined;
+  mocks.pool = [];
+  mocks.labels = [];
+  mocks.flags = [];
   mocks.pendingReferenceIds = [];
   mocks.failedReferenceIds = [];
   mocks.unavailableReferenceIds = [];
   mocks.sectionsEnabled = true;
   mocks.unreadRows = [];
   mocks.closedGroups = [];
+  mocks.collapsedLabels = [];
   mocks.sectionPreferences = {};
   mocks.listRows = undefined;
   mocks.hotkeys.clear();
@@ -752,6 +808,410 @@ describe('favorite metadata hydration', () => {
       ).toBe(state === 'failed');
     }
   );
+});
+
+describe('bounded reference window', () => {
+  const windowIds = () =>
+    (mocks.referenceWindow?.().chunks ?? []).flatMap((chunk) => chunk.ids);
+  const numbered = (prefix: string, count: number) =>
+    Array.from(
+      { length: count },
+      (_, index) => `${prefix}-${String(index).padStart(3, '0')}`
+    );
+  const favoritesOf = (ids: readonly string[]): Favorite[] =>
+    ids.map((entityId, sortOrder) => ({
+      entityId,
+      entityType: 'channel',
+      createdAt: '2026-01-01',
+      sortOrder,
+    }));
+  const joined = (id: string): ChannelEntity => ({
+    ...channel,
+    id,
+    name: id,
+    unreadNotifications: [],
+  });
+
+  it('fetches only the blocks of favorites on screen, and nothing once they leave', () => {
+    const ids = numbered('fav', 60);
+    mocks.favorites = favoritesOf(ids);
+    mount();
+    expect(windowIds()).toEqual([]);
+
+    mocks.rail!.reportSectionRange('favorites', { start: 0, end: 10 });
+    expect(windowIds()).toEqual(ids.slice(0, 25));
+
+    mocks.rail!.reportSectionRange('favorites', { start: 30, end: 40 });
+    expect(windowIds()).toEqual(ids.slice(25, 50));
+
+    mocks.rail!.reportSectionRange('favorites', undefined);
+    expect(windowIds()).toEqual([]);
+  });
+
+  it('skips rows a loaded list already holds', () => {
+    const ids = numbered('fav', 10);
+    mocks.favorites = favoritesOf(['one', ...ids]);
+    mount();
+    mocks.rail!.reportSectionRange('favorites', { start: 0, end: 11 });
+    expect(windowIds()).toEqual(ids);
+  });
+
+  it('discovers an open section’s unknown members while its loading row is on screen', () => {
+    const ids = numbered('member', 60);
+    mocks.flags = ['enable-channel-tags'];
+    mocks.labels = [
+      {
+        id: 'section',
+        teamId: 'team',
+        name: 'Section',
+        channelIds: ids,
+        channelCount: ids.length,
+        sortOrder: 0,
+        createdAt: '2026-01-01',
+        updatedAt: '2026-01-01',
+      },
+    ];
+    mount();
+    expect(windowIds()).toEqual([]);
+
+    mocks.rail!.reportSectionRange('label:section', { start: 0, end: 10 });
+    expect(windowIds()).toEqual(ids.slice(0, 25));
+
+    // Found members push the loading row below what the section shows.
+    mocks.setReferencedChannels(
+      ids.slice(0, 25).map((id) => ({ ...joined(id), channelType: 'team' }))
+    );
+    const keys = () =>
+      (mocks.referenceWindow?.().chunks ?? []).map((chunk) => chunk.key);
+    expect(keys().some((key) => key.startsWith('unknown:'))).toBe(false);
+    expect(new Set(windowIds())).toEqual(new Set(ids.slice(0, 25)));
+
+    // Scrolled down to the loading row, the next members are looked up.
+    mocks.rail!.reportSectionRange('label:section', { start: 20, end: 30 });
+    const unknown = mocks
+      .referenceWindow?.()
+      .chunks.find((chunk) => chunk.key.startsWith('unknown:'));
+    expect(unknown?.ids).toEqual(ids.slice(25, 50));
+  });
+
+  it('looks up a loading row’s members before rows that already show a record', () => {
+    const favorites = numbered('fav', 300);
+    const members = numbered('member', 60);
+    mocks.flags = ['enable-channel-tags'];
+    mocks.favorites = favoritesOf(favorites);
+    mocks.labels = [
+      {
+        id: 'section',
+        teamId: 'team',
+        name: 'Section',
+        channelIds: members,
+        channelCount: members.length,
+        sortOrder: 0,
+        createdAt: '2026-01-01',
+        updatedAt: '2026-01-01',
+      },
+    ];
+    mount();
+    mocks.rail!.reportSectionRange('favorites', { start: 0, end: 300 });
+    mocks.rail!.reportSectionRange('label:section', { start: 0, end: 10 });
+
+    const window = mocks.referenceWindow!();
+    expect(window.chunks[0]).toEqual({
+      key: 'unknown:section:0',
+      ids: members.slice(0, 25),
+    });
+    expect(window.size).toBe(200);
+  });
+
+  it('keeps the rows discovery found after the window forgets their records', () => {
+    const ids = numbered('member', 60);
+    const team = (id: string): ChannelEntity => ({
+      ...joined(id),
+      channelType: 'team',
+    });
+    mocks.flags = ['enable-channel-tags'];
+    mocks.labels = [
+      {
+        id: 'section',
+        teamId: 'team',
+        name: 'Section',
+        channelIds: ids,
+        channelCount: ids.length,
+        sortOrder: 0,
+        createdAt: '2026-01-01',
+        updatedAt: '2026-01-01',
+      },
+    ];
+    mount();
+    const rowIds = () =>
+      mocks
+        .actualRows()
+        .flatMap((row) =>
+          row.kind === 'conversation' && ids.includes(row.channel.id)
+            ? [row.channel.id]
+            : []
+        );
+    mocks.rail!.reportSectionRange('label:section', { start: 0, end: 10 });
+    mocks.setReferencedChannels(ids.slice(0, 25).map(team));
+    mocks.rail!.reportSectionRange('label:section', { start: 20, end: 30 });
+    // The window now holds only the next batch, and retains nothing.
+    mocks.setReferencedChannels(ids.slice(25, 50).map(team));
+    expect(rowIds()).toEqual(ids.slice(0, 50));
+  });
+
+  it('walks past members no lookup found, never asks for them again, and waits for Load more', () => {
+    const ids = numbered('gone', 300);
+    mocks.flags = ['enable-channel-tags'];
+    mocks.labels = [
+      {
+        id: 'section',
+        teamId: 'team',
+        name: 'Section',
+        channelIds: ids,
+        channelCount: ids.length,
+        sortOrder: 0,
+        createdAt: '2026-01-01',
+        updatedAt: '2026-01-01',
+      },
+    ];
+    mount();
+    mocks.rail!.reportSectionRange('label:section', { start: 0, end: 10 });
+    const asked: string[][] = [];
+    const discovered = () =>
+      mocks
+        .referenceWindow?.()
+        .chunks.filter((chunk) => chunk.key.startsWith('unknown:'))
+        .flatMap((chunk) => chunk.ids) ?? [];
+    const status = () =>
+      mocks.actualRows().find((row) => row.kind === 'reference-status')?.state;
+    // Each lookup answers without its members; the window then forgets all
+    // but the last 25 misses, as its bounded retention would.
+    for (let step = 0; step < 20 && discovered().length > 0; step += 1) {
+      const batch = discovered();
+      asked.push(batch);
+      mocks.setUnavailableReferenceIds(batch);
+    }
+    expect(asked).toHaveLength(4);
+    expect(new Set(asked.flat()).size).toBe(100);
+    expect(asked.flat()).toEqual(ids.slice(0, 100));
+    expect(status()).toBe('more');
+
+    mocks.rail!.discoverMoreReferencedChannels('label:section');
+    expect(status()).toBe('loading');
+    expect(discovered()).toEqual(ids.slice(100, 125));
+  });
+
+  it('discovers nothing in an Unread only section', () => {
+    const ids = numbered('member', 60);
+    mocks.flags = ['enable-channel-tags'];
+    mocks.sectionPreferences = { 'label:section': { unreadOnly: true } };
+    mocks.labels = [
+      {
+        id: 'section',
+        teamId: 'team',
+        name: 'Section',
+        channelIds: ids,
+        channelCount: ids.length,
+        sortOrder: 0,
+        createdAt: '2026-01-01',
+        updatedAt: '2026-01-01',
+      },
+    ];
+    mount();
+    mocks.rail!.reportSectionRange('label:section', { start: 0, end: 10 });
+    expect(windowIds()).toEqual([]);
+    expect(
+      mocks.actualRows().some((row) => row.kind === 'reference-status')
+    ).toBe(false);
+  });
+
+  it('bounds the original rail to the references the directory lacks', () => {
+    mocks.sectionsEnabled = false;
+    const ids = numbered('fav', 250);
+    mocks.favorites = favoritesOf(ids);
+    mocks.pool = ids.slice(0, 30).map(joined);
+    mount();
+    const window = mocks.referenceWindow!();
+    expect(windowIds()).toEqual(ids.slice(30, 230));
+    expect(window.dropped).toBe(20);
+  });
+
+  it("looks up nothing for the original rail's collapsed favorites and labels", () => {
+    mocks.sectionsEnabled = false;
+    mocks.flags = ['enable-channel-tags'];
+    mocks.favorites = favoritesOf(numbered('fav', 30));
+    const members = numbered('member', 40);
+    mocks.labels = [
+      {
+        id: 'section',
+        teamId: 'team',
+        name: 'Section',
+        channelIds: members,
+        channelCount: members.length,
+        sortOrder: 0,
+        createdAt: '2026-01-01',
+        updatedAt: '2026-01-01',
+      },
+    ];
+    mocks.closedGroups = ['favorites'];
+    mocks.collapsedLabels = ['section'];
+    mount();
+    expect(windowIds()).toEqual([]);
+  });
+
+  it("looks up an open original-rail label's members while favorites stay collapsed", () => {
+    mocks.sectionsEnabled = false;
+    mocks.flags = ['enable-channel-tags'];
+    mocks.favorites = favoritesOf(numbered('fav', 30));
+    const members = numbered('member', 40);
+    mocks.labels = [
+      {
+        id: 'section',
+        teamId: 'team',
+        name: 'Section',
+        channelIds: members,
+        channelCount: members.length,
+        sortOrder: 0,
+        createdAt: '2026-01-01',
+        updatedAt: '2026-01-01',
+      },
+    ];
+    mocks.closedGroups = ['favorites'];
+    mount();
+    expect(windowIds()).toEqual([]);
+    // The label's heading is on screen.
+    mocks.rail!.reportSectionRange('team_channels', { start: 0, end: 1 });
+    expect(windowIds()).toEqual(members);
+  });
+
+  it('looks up only the original-rail labels with a row on screen', () => {
+    mocks.sectionsEnabled = false;
+    mocks.flags = ['enable-channel-tags'];
+    const first = numbered('first', 30);
+    const second = numbered('second', 30);
+    mocks.labels = [first, second].map((channelIds, sortOrder) => ({
+      id: `label-${sortOrder}`,
+      teamId: 'team',
+      name: `Label ${sortOrder}`,
+      channelIds,
+      channelCount: channelIds.length,
+      sortOrder,
+      createdAt: '2026-01-01',
+      updatedAt: '2026-01-01',
+    }));
+    mount();
+    // Neither label's members have rows yet: the rows are the two headings.
+    mocks.rail!.reportSectionRange('team_channels', { start: 1, end: 2 });
+    expect(windowIds()).toEqual(second);
+    mocks.rail!.reportSectionRange('team_channels', { start: 0, end: 1 });
+    expect(windowIds()).toEqual(first);
+  });
+
+  it('looks up no original-rail label members while Team channels is collapsed', () => {
+    mocks.sectionsEnabled = false;
+    mocks.flags = ['enable-channel-tags'];
+    const members = numbered('member', 40);
+    mocks.labels = [
+      {
+        id: 'section',
+        teamId: 'team',
+        name: 'Section',
+        channelIds: members,
+        channelCount: members.length,
+        sortOrder: 0,
+        createdAt: '2026-01-01',
+        updatedAt: '2026-01-01',
+      },
+    ];
+    mocks.closedGroups = ['favorites', 'team_channels'];
+    mount();
+    mocks.rail!.reportSectionRange('team_channels', { start: 0, end: 1 });
+    expect(windowIds()).toEqual([]);
+  });
+});
+
+describe('unread pages', () => {
+  const section = (channelIds: string[]): ChannelLabel => ({
+    id: 'section',
+    teamId: 'team',
+    name: 'Section',
+    channelIds,
+    channelCount: channelIds.length,
+    sortOrder: 0,
+    createdAt: '2026-01-01',
+    updatedAt: '2026-01-01',
+  });
+
+  afterEach(() => {
+    mocks.tab = 'browse';
+  });
+
+  it('reads every unread page while a custom section lists its unread collapsed', () => {
+    mocks.flags = ['enable-channel-tags'];
+    mocks.labels = [section(['member-0'])];
+    mocks.collapsedLabels = ['section'];
+    mount();
+    expect(mocks.unreadListsEvery!()).toBe(true);
+  });
+
+  it('reads later unread pages only while a section listing them is on screen', () => {
+    mocks.flags = ['enable-channel-tags'];
+    mocks.labels = [section(['member-0'])];
+    mocks.collapsedLabels = ['section'];
+    mount();
+    expect(mocks.unreadReadsMore!()).toBe(false);
+    mocks.rail!.reportSectionOnScreen('label:section', true);
+    expect(mocks.unreadReadsMore!()).toBe(true);
+    mocks.rail!.reportSectionOnScreen('label:section', false);
+    expect(mocks.unreadReadsMore!()).toBe(false);
+    expect(mocks.unreadListsEvery!()).toBe(true);
+  });
+
+  it('reads later unread pages for a collapsed built-in section only on screen', () => {
+    mocks.closedGroups = ['channels'];
+    mount();
+    expect(mocks.unreadListsEvery!()).toBe(true);
+    mocks.rail!.reportSectionOnScreen('direct_messages', true);
+    expect(mocks.unreadReadsMore!()).toBe(false);
+    mocks.rail!.reportSectionOnScreen('channels', true);
+    expect(mocks.unreadReadsMore!()).toBe(true);
+  });
+
+  it('reads the first unread page for collapsed sections that hide their unread', () => {
+    mocks.flags = ['enable-channel-tags'];
+    mocks.labels = [section(['member-0'])];
+    mocks.collapsedLabels = ['section'];
+    mocks.sectionPreferences = {
+      'label:section': { unreadWhenCollapsed: false },
+    };
+    mount();
+    expect(mocks.unreadListsEvery!()).toBe(false);
+  });
+
+  it('reads the first unread page while another tab shows', () => {
+    mocks.closedGroups = ['channels'];
+    mocks.tab = 'threads';
+    mount();
+    expect(mocks.unreadListsEvery!()).toBe(false);
+  });
+
+  it('reads the first unread page while search results show', () => {
+    mocks.closedGroups = ['channels'];
+    const [searchOpen, setSearchOpen] = createSignal(false);
+    render(() => (
+      <ChannelsRail
+        localChannels={() => mocks.pool}
+        sources={sources}
+        searchQuery=""
+        onSearchQueryChange={() => {}}
+        searchOpen={searchOpen()}
+        onSearchOpenChange={() => {}}
+      />
+    ));
+    expect(mocks.unreadListsEvery!()).toBe(true);
+    setSearchOpen(true);
+    expect(mocks.unreadListsEvery!()).toBe(false);
+  });
 });
 
 it.each([false, true])(
@@ -931,6 +1391,7 @@ it.each(['team_channels', 'channels'] as const)(
     };
     const { container } = render(() => (
       <ChannelsRail
+        localChannels={() => mocks.pool}
         sources={liveSources}
         searchQuery=""
         onSearchQueryChange={() => {}}
@@ -1003,6 +1464,7 @@ it('opens search over mounted section rows', async () => {
   const [searchOpen, setSearchOpen] = createSignal(false);
   render(() => (
     <ChannelsRail
+      localChannels={() => mocks.pool}
       sources={{
         ...sources,
         team_channels: { ...source, items: () => [] },
@@ -1027,6 +1489,69 @@ it('opens search over mounted section rows', async () => {
 
   expect(screen.getByRole('button', { name: 'Found' })).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'One' })).toBeNull();
+});
+
+it('offers Load more in a section whose lookups found nothing, and looks up the next members on a click', async () => {
+  mocks.realRenderer = true;
+  vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(
+    function (this: HTMLElement) {
+      return this.parentElement;
+    }
+  );
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
+    function (this: HTMLElement) {
+      return this.hasAttribute('data-index') ? 34 : 200;
+    }
+  );
+  vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(300);
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+  // Every section is on screen.
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(
+    DOMRect.fromRect({ x: 0, y: 0, width: 300, height: 600 })
+  );
+  const frame = () =>
+    new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  const ids = Array.from({ length: 200 }, (_, index) => `gone-${index}`);
+  mocks.flags = ['enable-channel-tags'];
+  mocks.closedGroups = ['team_channels', 'channels', 'direct_messages'];
+  mocks.labels = [
+    {
+      id: 'section',
+      teamId: 'team',
+      name: 'Section',
+      channelIds: ids,
+      channelCount: ids.length,
+      sortOrder: 0,
+      createdAt: '2026-01-01',
+      updatedAt: '2026-01-01',
+    },
+  ];
+  mount();
+  await frame();
+  const discovered = () =>
+    mocks
+      .referenceWindow?.()
+      .chunks.filter((chunk) => chunk.key.startsWith('unknown:'))
+      .flatMap((chunk) => chunk.ids) ?? [];
+  const missed: string[] = [];
+  for (let step = 0; step < 10 && discovered().length > 0; step += 1) {
+    missed.push(...discovered());
+    mocks.setUnavailableReferenceIds([...missed]);
+    await frame();
+  }
+  expect(missed).toEqual(ids.slice(0, 100));
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Load more' }));
+  await frame();
+  expect(discovered()).toEqual(ids.slice(100, 125));
+  expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
 });
 
 describe('section heading navigation', () => {

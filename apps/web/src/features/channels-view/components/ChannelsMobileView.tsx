@@ -3,6 +3,7 @@ import { toEntityActionListState } from '@app/features/next-soup/actions';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { SoupEntityContextMenu } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
+import { t } from '@app/lib/i18n';
 import { CHANNEL_ACTION_VIEW_CONTEXT } from '@channel/Channel/channel-actions';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
@@ -44,6 +45,13 @@ const MOBILE_CHANNEL_ROW_HEIGHT = 72;
 const MOBILE_CHANNEL_BUFFER_SIZE = MOBILE_CHANNEL_ROW_HEIGHT * 6;
 const LOAD_MORE_THRESHOLD = 300;
 
+/** The list's rows in display order and the indexes `[start, end]` on screen. */
+export type MobileRowsOnScreen = {
+  ids: readonly string[];
+  start: number;
+  end: number;
+};
+
 export function ChannelsMobileView(props: {
   source: ChannelsDataSource;
   /** Favorited conversations pinned above the list in display order. */
@@ -58,6 +66,13 @@ export function ChannelsMobileView(props: {
   includePinnedInList?: boolean;
   /** Controls between the favorites and the list, included in its measured offset. */
   children?: JSX.Element;
+  /** Told which rows are on screen whenever they or the scroll change. */
+  onRowsOnScreen?: (rows: MobileRowsOnScreen) => void;
+  /**
+   * Ends the list, even an empty one, in a Load more button that calls this,
+   * for a source that looks up more only when asked.
+   */
+  onLoadMore?: () => void;
 }) {
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
@@ -102,6 +117,30 @@ export function ChannelsMobileView(props: {
       );
     return sortChannels(channels, sort);
   });
+  const visibleIds = createMemo(() =>
+    visibleChannels().map((channel) => channel.id)
+  );
+  const viewportSize = createElementSize(viewport);
+  const reportRowsOnScreen = () => {
+    if (!props.onRowsOnScreen) return;
+    const ids = visibleIds();
+    // An empty list mounts no rows to measure, and its end is on screen.
+    if (ids.length === 0) {
+      props.onRowsOnScreen({ ids, start: 0, end: 0 });
+      return;
+    }
+    const handle = virtualizer();
+    if (!handle) return;
+    const last = ids.length - 1;
+    props.onRowsOnScreen({
+      ids,
+      start: Math.min(last, handle.findItemIndex(handle.scrollOffset)),
+      end: Math.min(
+        last,
+        handle.findItemIndex(handle.scrollOffset + handle.viewportSize)
+      ),
+    });
+  };
   const isUnread = (channel: ChannelEntity) =>
     channelActivity.unreadChannelIds().has(channel.id);
   const actionController = createListController({
@@ -122,6 +161,14 @@ export function ChannelsMobileView(props: {
   );
 
   const topInset = () => listHeaderSize.height ?? 0;
+
+  // Rows move on screen without a scroll when the list or viewport changes.
+  createEffect(
+    on([virtualizer, visibleIds, () => viewportSize.height, topInset], () => {
+      const frame = requestAnimationFrame(reportRowsOnScreen);
+      onCleanup(() => cancelAnimationFrame(frame));
+    })
+  );
 
   function loadNextPage() {
     if (
@@ -227,7 +274,9 @@ export function ChannelsMobileView(props: {
       <Match
         when={
           forceEmptyState() ||
-          (visibleChannels().length === 0 && pinned().length === 0)
+          (visibleChannels().length === 0 &&
+            pinned().length === 0 &&
+            !props.onLoadMore)
         }
       >
         <Show
@@ -263,7 +312,10 @@ export function ChannelsMobileView(props: {
           startMargin={topInset()}
           itemSize={MOBILE_CHANNEL_ROW_HEIGHT}
           bufferSize={MOBILE_CHANNEL_BUFFER_SIZE}
-          onScroll={checkNearEnd}
+          onScroll={(offset) => {
+            checkNearEnd(offset);
+            reportRowsOnScreen();
+          }}
         >
           {(channel, index) => (
             <SoupEntityContextMenu
@@ -294,6 +346,15 @@ export function ChannelsMobileView(props: {
             </SoupEntityContextMenu>
           )}
         </Virtualizer>
+        <Show when={props.onLoadMore}>
+          {(loadMore) => (
+            <div class="flex h-12 items-center justify-center">
+              <Button variant="ghost" size="sm" onClick={() => loadMore()()}>
+                {t('channelSections.loadMore')}
+              </Button>
+            </div>
+          )}
+        </Show>
         <Show when={props.source.isLoadingMore()}>
           <div class="flex h-12 items-center justify-center text-ink-muted">
             <SpinnerIcon
