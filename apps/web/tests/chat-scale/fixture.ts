@@ -56,8 +56,8 @@ export const FIRST_PAGE_CHANNELS = MAX_LIMIT;
  * before a run measures them (`sectionCoverage`). */
 export const MIN_SECTION_COVERAGE = 0.9;
 /** The least share of the channels sections and favorites name that must be
- * outside the account's newest 500, which no single page of the largest size
- * Soup serves reaches past, so the rail has channels to resolve by ID. */
+ * outside the account's newest 500, so the rail has channels to resolve by
+ * ID. */
 export const MIN_OUTSIDE_FIRST_PAGES = 0.5;
 const U16_MAX = 65_535;
 /** The channel literals the fixture matches; any other is a fault. */
@@ -891,17 +891,23 @@ export function createChatFixture(
     channelPreviews: (channelIds) => {
       reads.rowsRequested += channelIds.length;
       reads.idsRequested += channelIds.length;
-      // One answer per channel, however often the batch names it.
-      return [...new Set(channelIds)].map((id): ChannelPreview => {
+      // As the server answers: one answer per channel found, however often
+      // the batch names it, and a marker for each ID it names that is not.
+      const answered = new Set<string>();
+      return channelIds.flatMap((id): ChannelPreview[] => {
         const channel = byId.get(id);
-        if (!channel) return { type: 'does_not_exist', channel_id: id };
+        if (!channel) return [{ type: 'does_not_exist', channel_id: id }];
+        if (answered.has(id)) return [];
+        answered.add(id);
         reads.rowsReturned += 1;
-        return {
-          type: 'access',
-          channel_id: id,
-          channel_name: channel.name,
-          channel_type: channel.channelType,
-        };
+        return [
+          {
+            type: 'access',
+            channel_id: id,
+            channel_name: channel.name,
+            channel_type: channel.channelType,
+          },
+        ];
       });
     },
     reads: snapshot,

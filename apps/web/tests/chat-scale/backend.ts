@@ -87,7 +87,7 @@ const VIEWER_TEAM: TeamWithMembers = {
     },
     { user_id: VIEWER_ID, team_id: TEAM_ID, role: 'member', plan: 'premium' },
   ],
-  crm_member_access: { [TEAM_OWNER_ID]: false, [VIEWER_ID]: false },
+  crm_member_access: { [TEAM_OWNER_ID]: true, [VIEWER_ID]: false },
 };
 
 const REST_ANSWERS: Record<string, unknown> = {

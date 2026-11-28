@@ -42,8 +42,8 @@ sections' coverage.
   and three personal ones hold about 92% of the channels that can be in a
   section (every channel but direct messages), from every era, and a fourth
   personal section is a name rule over the private channels. The guard
-  below counts against the account's newest 500 channels, which no single
-  page of Soup's largest size reaches past. Six of the 12 favorites are old. `savedView` is the viewer's saved rail: Favorites,
+  below counts against the account's newest 500 channels. Six of the 12
+  favorites are old. `savedView` is the viewer's saved rail: Favorites,
   Direct messages and one team section open, everything else collapsed.
 - `backend.ts`: every request the page makes, answered in the test process:
   Soup GraphQL (HTTP and `graphql-transport-ws`) from the fixture's

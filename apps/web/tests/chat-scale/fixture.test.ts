@@ -170,14 +170,15 @@ describe('the Chat scale fixture, filtering', () => {
     const fixture = createChatFixture(700);
     const [channel] = fixture.channels;
     const id = channel?.id ?? '';
-    const previews = fixture.channelPreviews([id, 'missing', id]);
+    const previews = fixture.channelPreviews([id, 'missing', id, 'missing']);
     expect(previews.map((preview) => preview.type)).toEqual([
       'access',
       'does_not_exist',
+      'does_not_exist',
     ]);
     expect(fixture.reads()).toMatchObject({
-      rowsRequested: 3,
-      idsRequested: 3,
+      rowsRequested: 4,
+      idsRequested: 4,
       rowsReturned: 1,
     });
   });
