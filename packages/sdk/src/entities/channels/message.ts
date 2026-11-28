@@ -110,14 +110,16 @@ export class Message extends FavoritableEntity<MessageRecord> {
   /**
    * A handle to a channel message search hit, seeded with the creation time
    * and sender the hit carries. The search index keeps the creation time to
-   * the millisecond.
+   * the millisecond, so `createdAt()` gains microseconds once the message
+   * loads.
    */
   static fromSearchHit(
     client: MacroClient,
     hit: ChannelMessageSearchResponseItem,
   ): Message {
     return new Message(client, hit.channel_id, hit.message_id).withListed({
-      created_at: hit.created_at,
+      // An index entry missing its time comes back as the epoch; load the real one.
+      created_at: Date.parse(hit.created_at) > 0 ? hit.created_at : undefined,
       sender_id: hit.sender_id,
     });
   }

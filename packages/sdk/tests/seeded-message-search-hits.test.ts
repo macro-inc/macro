@@ -100,3 +100,44 @@ test('a channel message search hit still reads the message for its content', asy
     '/messages/channel/channel-1/items/message-1',
   ]);
 });
+
+test('a channel message search hit without its time loads the message for createdAt', async () => {
+  globalThis.fetch = (async (input) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    if (url.pathname === '/search')
+      return Response.json({
+        results: [
+          {
+            type: 'channelMessage',
+            id: 'channel-1',
+            channel_id: 'channel-1',
+            channel_type: 'private',
+            message_id: 'message-1',
+            sender_id: 'macro|sender-1',
+            created_at: '1970-01-01T00:00:00Z',
+            updated_at: '1970-01-01T00:00:00Z',
+            highlight: { content: ['a match'] },
+          },
+        ],
+        next_cursor: null,
+      });
+    if (url.pathname === '/messages/channel/channel-1/items/message-1')
+      return Response.json({
+        id: 'message-1',
+        content: 'the full body',
+        sender_id: 'macro|sender-1',
+        created_at: '2026-11-27T22:20:35.582123Z',
+        updated_at: '2026-11-27T22:20:35.582123Z',
+        thread_id: null,
+        mentions: [],
+      });
+    return new Response('unexpected request', { status: 500 });
+  }) as typeof fetch;
+
+  const page = await macro().search.page('match', { types: ['channel'] });
+  const [first] = page.results;
+  if (first?.type !== 'channel_message')
+    throw new Error('expected a channel message');
+
+  expect(await first.entity.createdAt()).toBe('2026-11-27T22:20:35.582123Z');
+});
