@@ -200,10 +200,12 @@ shows sampled traces by machine.
 
 A Rust service's JSON log line carries Datadog's half of its trace ID
 (`dd.trace_id`, which can't find the trace in Tempo) and the W3C IDs
-(`otel.trace_id`, `otel.span_id`, from `macro_entrypoint`). ECS's FireLens, a
-Firecracker host's journal and CloudWatch pass the line on as the record's
-body, so `nixos/ingest.alloy` (`log_traces`) sets the record's trace and span
-from those fields, and Grafana's Loki links the line to its trace.
+(`otel.trace_id`, `otel.span_id`, from `macro_entrypoint`). ECS's FireLens
+parses the line, so those arrive as the record's attributes; a Firecracker
+host's journal and CloudWatch send the line itself as the body.
+`nixos/ingest.alloy` (`log_traces`) sets the record's trace and span from
+either, unless the record already has a trace, and Grafana's Loki links the
+line to its trace.
 
 ### What ingest removes
 

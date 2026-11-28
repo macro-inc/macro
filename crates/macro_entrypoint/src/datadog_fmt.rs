@@ -130,6 +130,18 @@ mod tests {
         );
         assert_eq!(obj["otel.trace_id"], "4bf92f3577b34da6a3ce929d0e0e4736");
         assert_eq!(obj["otel.span_id"], "00f067aa0ba902b7");
+
+        // The observability ingest finds the IDs in the compact line by these
+        // exact strings.
+        let line = serde_json::to_string(&obj).unwrap();
+        assert!(
+            line.contains(r#""otel.trace_id":"4bf92f3577b34da6a3ce929d0e0e4736""#),
+            "{line}"
+        );
+        assert!(
+            line.contains(r#""otel.span_id":"00f067aa0ba902b7""#),
+            "{line}"
+        );
     }
 
     #[test]
