@@ -18,7 +18,8 @@ import type { ChannelLabelsList } from '@service-storage/generated/schemas/chann
 import { match } from 'ts-pattern';
 
 export const VIEWER_ID = 'user-1';
-const TEAM_ID = 'team-1';
+/** The viewer's team, which owns the team channels and team sections. */
+export const TEAM_ID = '0190b6a0-0000-7000-8000-000000000001';
 const ORGANIZATION_ID = '1';
 const PEOPLE = 400;
 const PARTICIPANTS_PER_CHANNEL = 75;
@@ -137,6 +138,16 @@ export type SavedChatView = {
   collapsedLabels: string[];
 };
 
+/** One channel of `/dss/channels/preview`'s answer. */
+export type ChannelPreview =
+  | {
+      type: 'access';
+      channel_id: string;
+      channel_name: string;
+      channel_type: FixtureChannelType;
+    }
+  | { type: 'does_not_exist'; channel_id: string };
+
 export type ChatFixture = {
   channels: readonly FixtureChannel[];
   favoriteChannelIds: readonly string[];
@@ -150,6 +161,10 @@ export type ChatFixture = {
   /** Reads served so far; `readsSince` subtracts a snapshot. */
   reads(): FixtureReads;
   readsSince(mark: FixtureReads): FixtureReads;
+  /** `/dss/channels/preview`'s answer for these channels, counted with the
+   * Soup reads: each ID is a row asked for, and each channel found a row
+   * returned. */
+  channelPreviews(channelIds: readonly string[]): ChannelPreview[];
   /** A new top-level message from another member: the channel's latest
    * message, update time and an unseen notification change, as the server's
    * record would after the send. Returns the frames the server pushes to the
@@ -245,7 +260,9 @@ function createChannel(random: () => number, index: number): FixtureChannel {
       createdAt: iso(lastActivity),
       senderId: latestMessage?.senderId ?? VIEWER_ID,
       messageId: latestMessage?.messageId ?? uuidFor(2, index),
-      topLevel: eventType === 'channel_message_send',
+      // The latest message is top level, so every notification of it is,
+      // mentions included, as the server's `topLevelMessagesOnly` reads it.
+      topLevel: true,
     });
   };
   if (latestMessage) {
@@ -626,7 +643,8 @@ export function createChatFixture(
       if (!key.endsWith('Filter')) unsupported(`filter ${key}`);
     reads.idsRequested += literalIds(channelFilter);
     if (channelFilter !== undefined) checkExpr(channelFilter);
-    const method = initial.sortMethod ?? 'UPDATED_AT';
+    // Soup's own default when a query names no sort.
+    const method = initial.sortMethod ?? 'VIEWED_AT';
     const direction = initial.sortDirection === 'ASC' ? 1 : -1;
     // Soup reads an absent type filter as every item of that type.
     const matched = channels.filter(
@@ -866,6 +884,21 @@ export function createChatFixture(
       };
     },
     rootValue: () => ({ user }),
+    channelPreviews: (channelIds) => {
+      reads.rowsRequested += channelIds.length;
+      reads.idsRequested += channelIds.length;
+      return channelIds.map((id): ChannelPreview => {
+        const channel = byId.get(id);
+        if (!channel) return { type: 'does_not_exist', channel_id: id };
+        reads.rowsReturned += 1;
+        return {
+          type: 'access',
+          channel_id: id,
+          channel_name: channel.name,
+          channel_type: channel.channelType,
+        };
+      });
+    },
     reads: snapshot,
     readsSince: (mark) => {
       const now = snapshot();

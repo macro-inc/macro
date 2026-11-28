@@ -4,6 +4,7 @@ import {
   MIN_OUTSIDE_FIRST_PAGES,
   MIN_SECTION_COVERAGE,
   sectionCoverage,
+  TEAM_ID,
 } from './fixture';
 
 type Page = { items: unknown[]; nextCursor: string | null };
@@ -141,6 +142,45 @@ describe('the Chat scale fixture, filtering', () => {
     );
   });
 
+  it('serves mentions of a top-level message to a top-level read', () => {
+    const fixture = createChatFixture(700);
+    const root = fixture.rootValue() as {
+      user: {
+        soup(args: { input: unknown }): {
+          items: Array<{
+            notifications(args: {
+              filter: { eventTypes: string[]; topLevelMessagesOnly: boolean };
+            }): unknown[];
+          }>;
+        };
+      };
+    };
+    const { items } = root.user.soup({ input: { initial: { limit: 500 } } });
+    const mentions = (topLevelMessagesOnly: boolean) =>
+      items.flatMap((item) =>
+        item.notifications({
+          filter: { eventTypes: ['channel_mention'], topLevelMessagesOnly },
+        })
+      ).length;
+    expect(mentions(false)).toBeGreaterThan(0);
+    expect(mentions(true)).toBe(mentions(false));
+  });
+
+  it('counts channel previews with the server reads', () => {
+    const fixture = createChatFixture(700);
+    const [channel] = fixture.channels;
+    const previews = fixture.channelPreviews([channel?.id ?? '', 'missing']);
+    expect(previews.map((preview) => preview.type)).toEqual([
+      'access',
+      'does_not_exist',
+    ]);
+    expect(fixture.reads()).toMatchObject({
+      rowsRequested: 2,
+      idsRequested: 2,
+      rowsReturned: 1,
+    });
+  });
+
   it('gives two messages in one channel their own ids', () => {
     const fixture = createChatFixture(700);
     const [channel] = fixture.channels;
@@ -248,7 +288,7 @@ describe('the Chat scale fixture, sections', () => {
     const open = labels.filter(
       (label) => !atN.savedView.collapsedLabels.includes(label.id)
     );
-    expect(open.map((label) => label.teamId)).toEqual(['team-1']);
+    expect(open.map((label) => label.teamId)).toEqual([TEAM_ID]);
     expect(atN.savedView.expandedGroups).toEqual({
       favorites: true,
       team_channels: false,

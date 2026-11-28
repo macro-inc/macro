@@ -2,7 +2,7 @@
  * Everything the Chat scale tier's page talks to, answered in the test
  * process: the built app's files, the fixture (`fixture.ts`) over Soup GraphQL,
  * its websocket, the section lists and channel previews, a signed-in viewer
- * with no team, and an empty account's answer, in each response type, to the
+ * alone in its team, and an empty account's answer, in each response type, to the
  * other services the app asks at startup.
  *
  * The page's own requests are routed here (`routePage`); a worker's go to
@@ -21,6 +21,7 @@ import {
 } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { Page, WebSocketRoute } from '@playwright/test';
+import type { TeamWithMembers } from '@service-auth/generated/schemas/teamWithMembers';
 import {
   buildSchema,
   type DocumentNode,
@@ -40,7 +41,7 @@ import {
 } from 'graphql';
 import { match } from 'ts-pattern';
 import { bundleFile } from '../email-e2e/harness/front';
-import { type ChatFixture, FIXTURE_NOW, VIEWER_ID } from './fixture';
+import { type ChatFixture, FIXTURE_NOW, TEAM_ID, VIEWER_ID } from './fixture';
 
 const SCHEMA = buildSchema(
   [
@@ -51,15 +52,34 @@ const SCHEMA = buildSchema(
     .join('\n')
 );
 
-/** The access hint every document storage answer carries: a viewer with no
- * team has no CRM access to prove (`crm-access-cache.ts`). */
+/** The access hint every document storage answer carries: the viewer's team
+ * gives it no CRM access to prove (`crm-access-cache.ts`). */
 const DSS_HEADERS = { 'x-macro-crm-access': 'none' };
 
 /** An empty account's answers to what the app shell asks at startup, by
  * method and path, in each service's response type. A service request that is
  * not here, in `NOT_FOUND` or in `NO_CONTENT` fails the run: add its answer
  * here. */
+/** The viewer's team, which owns the team channels and sections: the viewer
+ * alone, as its owner, without CRM access. */
+const VIEWER_TEAM: TeamWithMembers = {
+  team: {
+    id: TEAM_ID,
+    name: 'Scale Team',
+    slug: 'scale-team',
+    owner_id: VIEWER_ID,
+    allow_non_admin_invites: true,
+    crm_enabled: true,
+    enterprise: false,
+  },
+  members: [
+    { user_id: VIEWER_ID, team_id: TEAM_ID, role: 'owner', plan: 'premium' },
+  ],
+  crm_member_access: { [VIEWER_ID]: false },
+};
+
 const REST_ANSWERS: Record<string, unknown> = {
+  'GET /auth/team': VIEWER_TEAM,
   // Cookie sessions refresh with this; the app reads only the status.
   'POST /auth/jwt/refresh': {
     access_token: 'fixture',
@@ -79,7 +99,7 @@ const REST_ANSWERS: Record<string, unknown> = {
   },
   'POST /email/email/links/health-check': {},
   'GET /scheduled-action/scheduled-actions/draft-jobs': [],
-  'GET /dss/crm/member-access': { team_id: null, allowed: false },
+  'GET /dss/crm/member-access': { team_id: TEAM_ID, allowed: false },
   'GET /auth/user/me': {
     user_id: VIEWER_ID,
     permissions: [],
@@ -114,8 +134,8 @@ const REST_ANSWERS: Record<string, unknown> = {
   'GET /dss/call/meetings/active': { meetings: [] },
 };
 
-/** A viewer with no team or GitHub link gets these as not found. */
-const NOT_FOUND = new Set(['GET /auth/team', 'GET /auth/link/github/status']);
+/** A viewer with no GitHub link gets this as not found. */
+const NOT_FOUND = new Set(['GET /auth/link/github/status']);
 
 /** Writes their services answer with 204 and no body. */
 const NO_CONTENT = new Set(['POST /scheduled-action/suggestions/seen']);
@@ -275,9 +295,6 @@ export function createBackend(dist: string, fixture: ChatFixture): Backend {
     resolve: () => void;
     reject: (error: Error) => void;
   }> = [];
-  const channelsById = new Map(
-    fixture.channels.map((channel) => [channel.id, channel])
-  );
   let inFlight = 0;
   let lastActivity = Date.now();
   const touch = () => {
@@ -298,17 +315,7 @@ export function createBackend(dist: string, fixture: ChatFixture): Backend {
   /** `POST /dss/channels/preview`: each fixture channel, by id. */
   const channelPreviews = (body: string) => {
     const { channel_ids } = JSON.parse(body) as { channel_ids: string[] };
-    return channel_ids.map((id) => {
-      const channel = channelsById.get(id);
-      return channel
-        ? {
-            type: 'access',
-            channel_id: id,
-            channel_name: channel.name,
-            channel_type: channel.channelType,
-          }
-        : { type: 'does_not_exist', channel_id: id };
-    });
+    return fixture.channelPreviews(channel_ids);
   };
 
   const parsed = (query: string, name: string): DocumentNode => {
