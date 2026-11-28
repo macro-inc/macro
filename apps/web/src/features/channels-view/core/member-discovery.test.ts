@@ -177,6 +177,19 @@ describe('keepDiscoveredRecords', () => {
     expect(keepDiscoveredRecords(second, new Set(), []).size).toBe(0);
   });
 
+  it('forgets a record once a settled lookup no longer returns its channel', () => {
+    const members = new Set(ids(2));
+    const first = keepDiscoveredRecords(new Map(), members, [
+      record('ch-0'),
+      record('ch-1'),
+    ]);
+    const next = keepDiscoveredRecords(first, members, [], new Set(['ch-0']));
+    expect([...next.keys()]).toEqual(['ch-1']);
+    expect(keepDiscoveredRecords(next, members, [], new Set(['ch-0']))).toBe(
+      next
+    );
+  });
+
   it('takes the newest record and keeps its identity while nothing changes', () => {
     const members = new Set(ids(2));
     const found = [record('ch-0')];

@@ -107,18 +107,20 @@ export function memberDiscoveryStatus(
  * The records discovery found for the members of open sections, kept while
  * those sections stay open. The cursor has passed them, so a record the
  * window's bounded retention dropped would never be asked for again and its
- * row would go. Holds at most one record per member, the latest found;
- * returns `previous` itself when nothing changed.
+ * row would go. A record goes once a settled lookup no longer returns its
+ * channel (`unavailable`). Holds at most one record per member, the latest
+ * found; returns `previous` itself when nothing changed.
  */
 export function keepDiscoveredRecords<T extends { readonly id: string }>(
   previous: ReadonlyMap<string, T>,
   members: ReadonlySet<string>,
-  found: readonly T[]
+  found: readonly T[],
+  unavailable: ReadonlySet<string> = new Set()
 ): ReadonlyMap<string, T> {
   let changed = false;
   const next = new Map<string, T>();
   for (const [id, record] of previous) {
-    if (members.has(id)) next.set(id, record);
+    if (members.has(id) && !unavailable.has(id)) next.set(id, record);
     else changed = true;
   }
   for (const record of found) {

@@ -297,7 +297,8 @@ export function useChannelWindow(
       ? chunk.unresolved()
       : [];
 
-  // Keep what leaving IDs showed: their last record, or that they are gone.
+  // Keep what leaving IDs showed: their last record, or that they are gone,
+  // whichever is newer.
   const retain = (
     rows: readonly ChannelEntity[],
     missing: readonly string[]
@@ -310,6 +311,11 @@ export function useChannelWindow(
           RETAINED_CHANNELS
         )
       );
+      setRetainedMissing((previous) =>
+        previous.some((id) => ids.has(id))
+          ? previous.filter((id) => !ids.has(id))
+          : previous
+      );
     }
     if (missing.length > 0) {
       const ids = new Set(missing);
@@ -318,6 +324,11 @@ export function useChannelWindow(
           0,
           RETAINED_CHANNELS
         )
+      );
+      setRetainedRows((previous) =>
+        previous.some((row) => ids.has(row.id))
+          ? previous.filter((row) => !ids.has(row.id))
+          : previous
       );
     }
   };
@@ -404,9 +415,13 @@ export function useChannelWindow(
   });
   return {
     channels,
+    // A record goes once a settled lookup no longer returns its channel.
     retained: createMemo(() => {
       const returned = new Set(channels().map((channel) => channel.id));
-      return retainedRows().filter((row) => !returned.has(row.id));
+      const unavailable = unavailableIds();
+      return retainedRows().filter(
+        (row) => !returned.has(row.id) && !unavailable.has(row.id)
+      );
     }),
     pendingIds,
     failedIds,

@@ -333,6 +333,40 @@ describe('useChannelWindow', () => {
     }
   });
 
+  it('forgets a kept record once a settled lookup no longer returns its channel', () => {
+    const missing = new Set<string>();
+    fakeLookups(missing);
+    const { dispose, result, setKey } = createRoot((dispose) => {
+      const [key, setKey] = createSignal('first');
+      const result = useChannelWindow(
+        () =>
+          channelIdWindow(
+            key() === 'away' ? [] : [{ key: key(), ids: ['ch-0001'] }]
+          ),
+        () => true
+      );
+      return { dispose, result, setKey };
+    });
+    try {
+      setKey('away');
+      expect(result.retained().map(({ id }) => id)).toEqual(['ch-0001']);
+      missing.add('ch-0001');
+      setKey('second');
+      expect([...result.unavailableIds()]).toEqual(['ch-0001']);
+      expect(result.retained()).toEqual([]);
+      setKey('away');
+      expect(result.retained()).toEqual([]);
+      expect([...result.unavailableIds()]).toEqual(['ch-0001']);
+      missing.delete('ch-0001');
+      setKey('third');
+      setKey('away');
+      expect(result.retained().map(({ id }) => id)).toEqual(['ch-0001']);
+      expect([...result.unavailableIds()]).toEqual([]);
+    } finally {
+      dispose();
+    }
+  });
+
   it('builds and requests nothing while disabled, and drops everything when disabled', () => {
     const { requested, disposed } = fakeLookups();
     let built = 0;

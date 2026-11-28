@@ -143,7 +143,8 @@ export function MobileSectionsView(props: {
       return keepDiscoveredRecords(
         previous,
         new Set(discoveringLabel()?.channelIds),
-        members.channels().filter((channel) => !local.has(channel.id))
+        members.channels().filter((channel) => !local.has(channel.id)),
+        members.unavailableIds()
       );
     },
     new Map()

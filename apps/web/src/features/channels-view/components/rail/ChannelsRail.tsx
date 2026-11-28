@@ -580,7 +580,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
             .filter(discoversMembers)
             .flatMap((label) => label.channelIds)
         ),
-        referenceWindow.channels().filter((channel) => !pool.has(channel.id))
+        referenceWindow.channels().filter((channel) => !pool.has(channel.id)),
+        referenceWindow.unavailableIds()
       );
     },
     new Map()
