@@ -1,8 +1,9 @@
 //! Attachment facts of Mail threads (`mail-attachment`). The Mail projection
 //! writes them from a thread's attachment records; a cache written before they
-//! existed gets them here, once, from the records it already holds, so the
-//! Mail lists an attachment kind filters answer locally with its other facts
-//! and its records and queued mutations stay.
+//! existed gets them here, from the records it already holds, so the Mail lists
+//! an attachment kind filters answer locally with its other facts and its
+//! records and queued mutations stay. `derived_sorts` decides when: its
+//! versioned list names these facts, and a build without them drops the entry.
 //!
 //! The rule is the projection's (`soup_filter_cache_adapter`'s Mail module): a
 //! thread's `attachments` field names its attachment records, and each record's
@@ -14,50 +15,38 @@ use cache_core::value::CacheValue;
 use derived_sorts::{AUTHORITATIVE, OPTIMISTIC, Tables};
 use item_filter_index::mail;
 
-const VERSION_KEY: &str = "mail_attachment_facts";
-const VERSION: &str = "1";
-const META_SELECT: &str = "SELECT value FROM meta WHERE key = ?1";
-const META_UPSERT: &str = "INSERT INTO meta (key, value) VALUES (?1, ?2) ON CONFLICT (key) DO UPDATE SET value = excluded.value";
 /// Threads read per statement.
 const BATCH_SIZE: usize = 256;
+/// Attachment records decoded at a time; only their types are kept.
+const ATTACHMENT_BATCH_SIZE: usize = 512;
+/// Facts written per statement.
+const INSERT_BATCH_SIZE: usize = 128;
 
-pub(super) fn save_version(connection: &Db) -> Result<(), TursoStorageError> {
-    driver::execute(
-        connection,
-        META_UPSERT,
-        vec![text(VERSION_KEY), text(VERSION)],
-    )?;
+/// Writes the attachment facts of every complete Mail document, from the
+/// thread and attachment records the cache holds, inside the caller's write
+/// transaction. An optimistic document takes them from the authoritative
+/// thread record: no queued Mail write changes a thread's attachments, and its
+/// reply re-projects the thread.
+pub(super) fn backfill(connection: &Db) -> Result<(), TursoStorageError> {
+    for tables in [AUTHORITATIVE, OPTIMISTIC] {
+        for profile in mail::DOCUMENT_PROFILES {
+            backfill_profile(connection, &tables, profile)?;
+        }
+        derived_sorts::mark_over_limit_incomplete(
+            connection,
+            &tables,
+            tables.exact,
+            mail::ATTACHMENT_ATTRIBUTE,
+        )?;
+    }
     Ok(())
 }
 
-/// Writes the attachment facts of every complete Mail document once, from
-/// the thread and attachment records the cache holds. An optimistic document
-/// takes them from the authoritative thread record: no queued Mail write
-/// changes a thread's attachments, and its reply re-projects the thread.
-pub(super) fn ensure_version(connection: &Db) -> Result<(), TursoStorageError> {
-    let versions = driver::query(connection, META_SELECT, vec![text(VERSION_KEY)])?;
-    if let [row] = versions.as_slice()
-        && required_text(row, 0)? == VERSION
-    {
-        return Ok(());
-    }
-    driver::write_transaction(connection, || {
-        for tables in [AUTHORITATIVE, OPTIMISTIC] {
-            for profile in mail::DOCUMENT_PROFILES {
-                backfill(connection, &tables, profile)?;
-            }
-            derived_sorts::mark_over_limit_incomplete(
-                connection,
-                &tables,
-                tables.exact,
-                mail::ATTACHMENT_ATTRIBUTE,
-            )?;
-        }
-        save_version(connection)
-    })
-}
-
-fn backfill(connection: &Db, tables: &Tables, profile: &str) -> Result<(), TursoStorageError> {
+fn backfill_profile(
+    connection: &Db,
+    tables: &Tables,
+    profile: &str,
+) -> Result<(), TursoStorageError> {
     let Tables {
         documents, exact, ..
     } = tables;
@@ -67,9 +56,6 @@ fn backfill(connection: &Db, tables: &Tables, profile: &str) -> Result<(), Turso
     // each batch.
     let documents = format!(
         "SELECT id, record_key FROM {documents} WHERE profile = ?1 AND partition = ?2 AND state = 0 AND id > ?3 ORDER BY id LIMIT ?4"
-    );
-    let insert = format!(
-        "INSERT INTO {exact} (document_id, attribute, value) VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING"
     );
     let batch_size = i64::try_from(BATCH_SIZE).map_err(|_| invariant())?;
     let mut after = 0;
@@ -95,45 +81,83 @@ fn backfill(connection: &Db, tables: &Tables, profile: &str) -> Result<(), Turso
             .iter()
             .zip(record_batch::read(connection, &thread_keys)?)
             .filter_map(|(document_id, record)| Some((*document_id, attachment_keys(&record?))))
+            .filter(|(_, keys)| !keys.is_empty())
             .collect::<Vec<_>>();
-        let keys = threads
-            .iter()
-            .flat_map(|(_, keys)| keys.iter().cloned())
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .collect::<Vec<_>>();
-        let record_keys = keys
-            .iter()
-            .map(RecordKey::from_entity)
-            .collect::<Result<Vec<_>, _>>()?;
-        let attachments = record_batch::read(connection, &record_keys)?;
-        let mime_types = keys
-            .into_iter()
-            .zip(attachments)
-            .filter_map(|(key, record)| Some((key, mime_type(&record?)?)))
-            .collect::<BTreeMap<_, _>>();
+        let mime_types = mime_types(
+            connection,
+            threads
+                .iter()
+                .flat_map(|(_, keys)| keys.iter().cloned())
+                .collect::<BTreeSet<_>>(),
+        )?;
+        let mut facts = Vec::new();
         for (document_id, keys) in &threads {
             let kinds = mail::attachment_kinds(
                 keys.iter()
                     .filter_map(|key| mime_types.get(key).map(String::as_str)),
             );
-            for kind in kinds {
-                driver::execute(
-                    connection,
-                    &insert,
-                    vec![
-                        Value::from_i64(*document_id),
-                        text(mail::ATTACHMENT_ATTRIBUTE),
-                        Value::from_blob(mail::attachment_value(kind).as_bytes().to_vec()),
-                    ],
-                )?;
-            }
+            facts.extend(kinds.into_iter().map(|kind| (*document_id, kind)));
         }
+        insert(connection, exact, &facts)?;
         match document_ids.last() {
             Some(last) if rows.len() == BATCH_SIZE => after = *last,
             _ => return Ok(()),
         }
     }
+}
+
+/// The type of each of these attachment records the cache holds with one.
+fn mime_types(
+    connection: &Db,
+    keys: BTreeSet<EntityKey<'static>>,
+) -> Result<BTreeMap<EntityKey<'static>, String>, TursoStorageError> {
+    let keys = keys.into_iter().collect::<Vec<_>>();
+    let mut mime_types = BTreeMap::new();
+    for chunk in keys.chunks(ATTACHMENT_BATCH_SIZE) {
+        let record_keys = chunk
+            .iter()
+            .map(RecordKey::from_entity)
+            .collect::<Result<Vec<_>, _>>()?;
+        for (key, record) in chunk
+            .iter()
+            .zip(record_batch::read(connection, &record_keys)?)
+        {
+            if let Some(mime_type) = record.as_ref().and_then(mime_type) {
+                mime_types.insert(key.clone(), mime_type);
+            }
+        }
+    }
+    Ok(mime_types)
+}
+
+/// Writes `facts`, a statement per [`INSERT_BATCH_SIZE`] of them.
+fn insert(
+    connection: &Db,
+    exact: &str,
+    facts: &[(i64, mail::AttachmentKind)],
+) -> Result<(), TursoStorageError> {
+    for chunk in facts.chunks(INSERT_BATCH_SIZE) {
+        let rows = (0..chunk.len())
+            .map(|index| format!("(?{}, ?1, ?{})", index * 2 + 2, index * 2 + 3))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let mut parameters = Vec::with_capacity(chunk.len() * 2 + 1);
+        parameters.push(text(mail::ATTACHMENT_ATTRIBUTE));
+        for (document_id, kind) in chunk {
+            parameters.push(Value::from_i64(*document_id));
+            parameters.push(Value::from_blob(
+                mail::attachment_value(*kind).as_bytes().to_vec(),
+            ));
+        }
+        driver::execute(
+            connection,
+            &format!(
+                "INSERT INTO {exact} (document_id, attribute, value) VALUES {rows} ON CONFLICT DO NOTHING"
+            ),
+            parameters,
+        )?;
+    }
+    Ok(())
 }
 
 /// The records a thread's `attachments` field names.

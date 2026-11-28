@@ -3833,7 +3833,6 @@ fn initialize(
             calendar::save_projection_version(connection)?;
             page_retention::save_version(connection)?;
             derived_sorts::save_version(connection)?;
-            mail_attachments::save_version(connection)?;
             Ok(())
         })
         .map_err(TursoStorageError::initialization)?;
@@ -3915,7 +3914,6 @@ fn initialize(
     validate_optimistic_shadow_consistency(connection)?;
     page_retention::compact_legacy_pages(connection)?;
     derived_sorts::ensure_version(connection)?;
-    mail_attachments::ensure_version(connection)?;
     ensure_search_projection_version(connection)?;
     calendar::ensure_projection_version(connection)?;
     people_sql::open(connection)?;

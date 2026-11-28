@@ -189,16 +189,30 @@ fn expected(shapes: &[Shape]) -> Vec<(i64, Vec<u8>)> {
     expected
 }
 
+/// What an open by a build without the attachment facts leaves: the sort rule
+/// list it writes, which lacks their entry.
 fn forget_version(storage: &TursoStorage) {
+    let list = driver::query(
+        &storage.connection(),
+        "SELECT value FROM meta WHERE key = 'sort_fact_derivations'",
+        vec![],
+    )
+    .unwrap();
+    let older = required_text(&list[0], 0)
+        .unwrap()
+        .split(';')
+        .filter(|entry| !entry.starts_with("mail-attachment-facts"))
+        .collect::<Vec<_>>()
+        .join(";");
     raw_execute(
         storage,
-        "DELETE FROM meta WHERE key = 'mail_attachment_facts'",
-        vec![],
+        "UPDATE meta SET value = ?1 WHERE key = 'sort_fact_derivations'",
+        vec![text(&older)],
     );
 }
 
 fn ensure(storage: &TursoStorage) {
-    crate::storage::mail_attachments::ensure_version(&storage.connection()).unwrap();
+    crate::storage::derived_sorts::ensure_version(&storage.connection()).unwrap();
 }
 
 proptest! {
@@ -291,10 +305,38 @@ fn a_new_cache_records_that_it_needs_no_attachment_facts() {
     assert_eq!(
         raw_scalar(
             &storage,
-            "SELECT COUNT(*) FROM meta WHERE key = 'mail_attachment_facts' AND value = '1'"
+            "SELECT COUNT(*) FROM meta WHERE key = 'sort_fact_derivations' AND value LIKE '%;mail-attachment-facts:1'"
         ),
         1
     );
+}
+
+/// A build without the facts rewrites the sort rule list when it opens the
+/// cache, and its Mail writes replace documents without them; the next open
+/// of this build writes them again.
+#[test]
+fn an_open_by_a_build_without_the_facts_makes_the_next_open_write_them_again() {
+    let shapes = [Shape {
+        profile: DOCUMENT_PROFILES[0],
+        complete: true,
+        record: true,
+        attachments: vec![Some(Some("application/pdf"))],
+    }];
+    block_on(async {
+        let storage = TursoStorage::open_in_memory("mail-attachments-older-writer").unwrap();
+        store(&storage, &shapes, None);
+        forget_version(&storage);
+        ensure(&storage);
+        assert_eq!(facts(&storage, "exact_facts"), expected(&shapes));
+        forget_version(&storage);
+        raw_execute(
+            &storage,
+            "DELETE FROM exact_facts WHERE attribute = ?1",
+            vec![text(ATTACHMENT_ATTRIBUTE)],
+        );
+        ensure(&storage);
+        assert_eq!(facts(&storage, "exact_facts"), expected(&shapes));
+    });
 }
 
 /// A document already holding the most distinct attributes a document may
@@ -422,4 +464,57 @@ fn open_cost_at_n_and_2n() {
             again.as_secs_f64() * 1000.0
         );
     }
+}
+
+/// The step on a retained cache-bench database (`MAIL_ATTACHMENT_DB`, a
+/// storage-13 file such as the bench p90 cache), on disk: the first open of a
+/// copy runs it, the next open does not, and an open after the version is
+/// forgotten runs it again with the file warm. Not a regular test: run in
+/// release with `--ignored --nocapture`.
+#[test]
+#[ignore = "needs MAIL_ATTACHMENT_DB=<a cache-bench database>; run in release with --ignored --nocapture"]
+fn open_cost_on_a_retained_cache() {
+    let Some(source) = std::env::var_os("MAIL_ATTACHMENT_DB").map(std::path::PathBuf::from) else {
+        return;
+    };
+    let directory = tempfile::tempdir_in(source.parent().unwrap()).unwrap();
+    let copy = directory.path().join("copy.turso");
+    for suffix in COMPANION_SUFFIXES {
+        let from = companion_path(&source, suffix);
+        if from.exists() {
+            std::fs::copy(from, companion_path(&copy, suffix)).unwrap();
+        }
+    }
+    let open = || {
+        let started = std::time::Instant::now();
+        let storage = TursoFileDatabase::new(&copy)
+            .unwrap()
+            .open("cache-bench")
+            .unwrap();
+        (storage, started.elapsed().as_secs_f64() * 1000.0)
+    };
+    let (storage, first) = open();
+    let count = |sql: &str| {
+        required_i64(
+            &driver::query(&storage.connection(), sql, vec![]).unwrap()[0],
+            0,
+        )
+        .unwrap()
+    };
+    let threads =
+        count("SELECT count(*) FROM index_documents WHERE partition = 'email' AND state = 0");
+    let attachments =
+        count("SELECT count(*) FROM records WHERE __typename = 'GraphqlSoupEmailAttachment'");
+    let facts = facts(&storage, "exact_facts").len();
+    storage.try_close().unwrap();
+    let (storage, plain) = open();
+    forget_version(&storage);
+    storage.try_close().unwrap();
+    let (storage, warm) = open();
+    storage.try_close().unwrap();
+    let (storage, plain_again) = open();
+    storage.try_close().unwrap();
+    println!(
+        "documents={threads} attachment_records={attachments} facts={facts} first_open_ms={first:.1} open_ms={plain:.1} warm_open_with_step_ms={warm:.1} open_again_ms={plain_again:.1}"
+    );
 }

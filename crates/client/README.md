@@ -558,9 +558,12 @@ projection version do not scan the corpus.
 Mail attachment kind facts (`mail-attachment`, one exact value per kind) come from
 a thread's `attachments` and each attachment record's `mimeType`, by the MIME
 prefixes the server's thread attachment flags use (`AttachmentKind::mime_prefixes`).
-A cache written before the projection carried them gets them once on open
-(`storage/mail_attachments.rs`, meta `mail_attachment_facts`) from the records it
-holds, a batch of 256 Mail documents at a time; documents past the attribute limit
+A cache written before the projection carried them gets them on open
+(`storage/mail_attachments.rs`) from the records it holds, a batch of 256 Mail
+documents at a time. The derived sort list (meta `sort_fact_derivations`) records
+them as `mail-attachment-facts:1`: every storage-13 build rewrites that list with
+its own entries on open, so after an older build had the cache (a rollback) the
+next open writes them again. Documents past the attribute limit
 are marked incomplete, as the derived sort backfill does. Records, queued mutations,
 storage generation and the storage version stay. An attachment record the cache
 does not hold gives no kind until a response names it with its type.

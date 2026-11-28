@@ -8,6 +8,12 @@ use item_filter_index::SORT_FACT_DERIVATIONS;
 use predicate_index::SortFactDerivation;
 
 const VERSION_KEY: &str = "sort_fact_derivations";
+/// The Mail attachment facts (`mail_attachments`), listed beside the rules
+/// though they are not a sort. Every storage-13 build rewrites this key with
+/// its own list when it opens a cache that lists anything else, so a build
+/// without the attachment facts, which may then write Mail documents without
+/// them, drops the entry, and this build backfills again on its next open.
+const MAIL_ATTACHMENT_FACTS: &str = "mail-attachment-facts:1";
 const META_SELECT: &str = "SELECT value FROM meta WHERE key = ?1";
 const META_UPSERT: &str = "INSERT INTO meta (key, value) VALUES (?1, ?2) ON CONFLICT (key) DO UPDATE SET value = excluded.value";
 
@@ -40,6 +46,7 @@ fn fingerprint(derivations: &[SortFactDerivation]) -> String {
     derivations
         .iter()
         .map(SortFactDerivation::fingerprint)
+        .chain([MAIL_ATTACHMENT_FACTS.to_owned()])
         .collect::<Vec<_>>()
         .join(";")
 }
@@ -54,8 +61,9 @@ pub(super) fn save_version(connection: &Db) -> Result<(), TursoStorageError> {
 }
 
 /// Applies each current rule the cache was not last written with to every
-/// stored document once. A rule already applied is left alone, so adding one
-/// does not rewrite what the others derived.
+/// stored document once, and the Mail attachment facts when the list lacks
+/// them. A rule already applied is left alone, so adding one does not rewrite
+/// what the others derived.
 pub(super) fn ensure_version(connection: &Db) -> Result<(), TursoStorageError> {
     let versions = driver::query(connection, META_SELECT, vec![text(VERSION_KEY)])?;
     let applied = match versions.as_slice() {
@@ -71,6 +79,9 @@ pub(super) fn ensure_version(connection: &Db) -> Result<(), TursoStorageError> {
             if !applied.contains(derivation.fingerprint().as_str()) {
                 derive(connection, derivation)?;
             }
+        }
+        if !applied.contains(MAIL_ATTACHMENT_FACTS) {
+            mail_attachments::backfill(connection)?;
         }
         save_version(connection)
     })
@@ -188,9 +199,9 @@ fn derive_uncertainty(
 /// `MAX_ATTRIBUTES_PER_DOCUMENT` distinct attributes becomes incomplete, as
 /// composition makes it, so its queries fall back and loads do not refuse it:
 /// an authority `Missing`, which keeps retained server rows, a shadow `Dirty`.
-/// Row counts bound distinct attributes from above, so SQL selects the few
-/// documents holding the fact with that many rows and Rust counts their
-/// distinct attributes.
+/// Each table's distinct attributes, summed, bound the document's from above,
+/// so SQL selects the few documents holding the fact with that many and Rust
+/// counts the attributes the three tables share once.
 pub(super) fn mark_over_limit_incomplete(
     connection: &Db,
     tables: &Tables,
@@ -208,7 +219,7 @@ pub(super) fn mark_over_limit_incomplete(
     let candidates = driver::query(
         connection,
         &format!(
-            "SELECT DISTINCT s.document_id FROM {facts} AS s WHERE s.attribute = ?1 AND (SELECT COUNT(*) FROM {exact} AS c WHERE c.document_id = s.document_id) + (SELECT COUNT(*) FROM {integers} AS c WHERE c.document_id = s.document_id) + (SELECT COUNT(*) FROM {sorts} AS c WHERE c.document_id = s.document_id) > {limit}"
+            "SELECT DISTINCT s.document_id FROM {facts} AS s WHERE s.attribute = ?1 AND (SELECT COUNT(DISTINCT c.attribute) FROM {exact} AS c WHERE c.document_id = s.document_id) + (SELECT COUNT(DISTINCT c.attribute) FROM {integers} AS c WHERE c.document_id = s.document_id) + (SELECT COUNT(DISTINCT c.attribute) FROM {sorts} AS c WHERE c.document_id = s.document_id) > {limit}"
         ),
         vec![text(attribute)],
     )?;
