@@ -454,11 +454,32 @@ describe('cache telemetry sampling and failure isolation', () => {
       ...slow,
       queryTemplate: engineExcerpt.template.slice(64),
     });
+    // The right halves around a length the engine would not have shortened.
+    recorder.record({
+      ...slow,
+      queryTemplate: engineExcerpt.template.replace(
+        ' /* 12050 bytes */ ',
+        ' /* 8192 bytes */ '
+      ),
+    });
+    // The engine writes no leading zeros.
+    recorder.record({
+      ...slow,
+      queryTemplate: engineExcerpt.template.replace('12050', '012050'),
+    });
+    // Marker-like comments in the template before the engine's own marker,
+    // sharing a space: one names a short length, one a long one.
+    const comments = 'S /* 100 bytes */ /* 9999 bytes */ ';
+    const commented = `${comments}${engineExcerpt.template.slice(comments.length)}`;
+    recorder.record({ ...slow, queryTemplate: commented });
     recorder.flush();
     expect(events.map((event) => event.queryTemplate)).toEqual([
       engineExcerpt.template,
       undefined,
       undefined,
+      undefined,
+      undefined,
+      commented,
     ]);
   });
 

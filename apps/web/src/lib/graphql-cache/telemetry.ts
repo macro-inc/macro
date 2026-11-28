@@ -403,7 +403,9 @@ function fnv1a64Hex(bytes: Uint8Array): string {
   return hash.toString(16).padStart(16, '0');
 }
 
-const EXCERPT_MARKER = / \/\* (\d+) bytes \*\/ /;
+// Every place a marker starts, overlapping ones included; the engine writes the
+// length in canonical decimal.
+const EXCERPT_MARKERS = /(?= \/\* ([1-9]\d*) bytes \*\/ )/g;
 
 /**
  * Whether `bytes` has the engine's excerpt form for a template longer than the
@@ -413,16 +415,19 @@ const EXCERPT_MARKER = / \/\* (\d+) bytes \*\/ /;
  * fingerprint, so its form is what is checked.
  */
 function isEngineExcerpt(value: string, bytes: Uint8Array): boolean {
-  const marker = EXCERPT_MARKER.exec(value);
-  if (!marker) return false;
-  const length = Number(marker[1]);
-  if (!Number.isSafeInteger(length) || length <= SLOW_QUERY_TEMPLATE_BYTES)
-    return false;
-  const markerBytes = marker[0].length;
-  const half = Math.floor((SLOW_QUERY_TEMPLATE_BYTES - markerBytes) / 2);
-  const head = UTF8_ENCODER.encode(value.slice(0, marker.index)).length;
-  const tail = bytes.length - head - markerBytes;
-  return head <= half && head >= half - 3 && tail <= half && tail >= half - 3;
+  // The template can hold marker-like comments of its own: try each one.
+  for (const marker of value.matchAll(EXCERPT_MARKERS)) {
+    const length = Number(marker[1]);
+    if (!Number.isSafeInteger(length) || length <= SLOW_QUERY_TEMPLATE_BYTES)
+      continue;
+    const markerBytes = ` /* ${marker[1]} bytes */ `.length;
+    const half = Math.floor((SLOW_QUERY_TEMPLATE_BYTES - markerBytes) / 2);
+    const head = UTF8_ENCODER.encode(value.slice(0, marker.index)).length;
+    const tail = bytes.length - head - markerBytes;
+    if (head <= half && head >= half - 3 && tail <= half && tail >= half - 3)
+      return true;
+  }
+  return false;
 }
 
 /**
