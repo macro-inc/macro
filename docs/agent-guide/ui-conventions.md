@@ -61,7 +61,9 @@ shared mechanisms, `createLabelCollapse` (`@core/signal/create-label-collapse`;
 Reviews' list header, Email's list header, which hides its view options
 and then its inbox tabs' labels before Search would leave the pane, Tasks' list
 header, which hides its layout group and then its view options, Drive's list
-header, which hides Sort and then Filter, Calendar's
+header, which hides Sort and then Filter, CRM's list header, which hides its
+view options, Visibility's label, Visibility, its filters and then its title
+before New or Search would leave the pane, Calendar's
 period controls, which show Today as its icon first, Email's phone reply buttons) or the split header's
 `PriorityCollapse`, never a new measurement. Preserve specialized editor toolbars. A touch header
 belongs to its view's mobile view, which lists every island it shows. A new one
