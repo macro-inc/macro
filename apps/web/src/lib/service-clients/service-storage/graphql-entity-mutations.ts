@@ -11,7 +11,6 @@ import {
 import type { CacheHost } from '@graphql-cache/host/types';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { type Span, Telemetry } from '@macro-inc/observability';
-import { buildGraphqlEntitySoupInput } from '@queries/soup/graphql/entity-input';
 import type { AnyVariables, OperationContext } from '@urql/core';
 import type { GraphQLError } from 'graphql';
 import { createEffect, createRoot, onCleanup } from 'solid-js';
@@ -21,9 +20,9 @@ import {
   type DuplicateEntityInput,
   type EntityMutationPayloadFieldsFragment,
   type EntityRefInput,
-  ItemPreviewDocument,
   MoveEntitiesDocument,
   type MoveEntityInput,
+  ReadEntityAppearanceDocument,
   RestoreEntitiesDocument,
   SetEntityAppearanceDocument,
   type SetEntityAppearanceInput,
@@ -162,9 +161,11 @@ function observeAppearanceSettlement(host: CacheHost, uuid: string) {
         if (change.queue === 'reset') finish(undefined);
       })
     );
-    // A retired host drops its subscribers while preserving its durable queue.
+    // A paused host still owns its queue. Only replacement or retirement
+    // drops the listeners without settling the pending write.
     createEffect(() => {
-      if (getGraphqlCacheHost() !== host) finish(undefined);
+      const current = getGraphqlCacheHost();
+      if (current ? current !== host : !host.paused) finish(undefined);
     });
     return () => finish(undefined);
   });
@@ -209,23 +210,20 @@ export const setGraphqlEntityAppearance = (
         isCurrent() &&
         (type === 'DOCUMENT' || type === 'INITIATIVE')
       ) {
-        const lookup = buildGraphqlEntitySoupInput(type, String(id));
-        if (lookup) {
-          const rereadAppearance = async () => {
-            const { error } = await client
-              .query(
-                ItemPreviewDocument,
-                { input: lookup },
-                {
-                  requestPolicy: 'network-only',
-                  [TRACE_PARENT_CONTEXT_KEY]: span,
-                }
-              )
-              .toPromise();
-            if (error) throw error;
-          };
-          fireAndForget(rereadAppearance(), 'appearance row recovery');
-        }
+        const rereadAppearance = async () => {
+          const { error } = await client
+            .query(
+              ReadEntityAppearanceDocument,
+              { input: { entityType: type, entityId: id } },
+              {
+                requestPolicy: 'network-only',
+                [TRACE_PARENT_CONTEXT_KEY]: span,
+              }
+            )
+            .toPromise();
+          if (error) throw error;
+        };
+        fireAndForget(rereadAppearance(), 'appearance row recovery');
       }
       return { queued, listsReadAgain: networkRevalidated(result) };
     } finally {

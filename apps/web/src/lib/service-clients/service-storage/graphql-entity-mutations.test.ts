@@ -31,7 +31,10 @@ vi.mock(
   })
 );
 vi.mock('./graphql-soup', () => ({
-  getGraphqlCacheHost: () => cacheHost(),
+  getGraphqlCacheHost: () => {
+    const host = cacheHost();
+    return host?.disabled ? undefined : host;
+  },
   getEntityGraphqlClient: () => {
     if (!graphql) throw new Error('The test must inject a client');
     return graphql;
@@ -99,7 +102,7 @@ describe('entity appearance transport', () => {
         data:
           operation.kind === 'mutation'
             ? { setEntityAppearance: { effects: [] } }
-            : { user: { id: 'viewer', soup: { items: [] } } },
+            : { user: { id: 'viewer', soupEntity: null } },
       })
     );
     replyWith(reply);
@@ -107,16 +110,13 @@ describe('entity appearance transport', () => {
       setGraphqlEntityAppearance(input, [], () => true)
     ).resolves.toMatchObject({ queued: false });
     expect(reply).toHaveBeenCalledTimes(2);
-    expect(reply.mock.calls[1]?.[0]).toMatchObject({
+    const lookup = reply.mock.calls[1][0];
+    expect(stringifyDocument(lookup.query)).toContain('soupEntity(input:');
+    expect(lookup).toMatchObject({
       kind: 'query',
       context: { requestPolicy: 'network-only' },
       variables: {
-        input: {
-          initial: {
-            limit: 1,
-            filters: { documentFilter: { literal: { id: 'document' } } },
-          },
-        },
+        input: { entityType: 'DOCUMENT', entityId: 'document' },
       },
     });
   });
@@ -141,6 +141,46 @@ describe('entity appearance transport', () => {
     await expect(receipt.settlement).resolves.toBeUndefined();
     expect(stopSettlements).toHaveBeenCalledOnce();
     expect(stopGeneration).toHaveBeenCalledOnce();
+  });
+
+  it('keeps a queued save observable when the same host pauses and resumes', async () => {
+    const [paused, setPaused] = createSignal(false);
+    const stopSettlements = vi.fn();
+    const subscribe = vi.fn<CacheHost['onMutationSettled']>(
+      () => stopSettlements
+    );
+    setCacheHost({
+      get paused() {
+        return paused();
+      },
+      get disabled() {
+        return paused();
+      },
+      onMutationSettled: subscribe,
+      onCacheGenerationChanged: () => () => {},
+    } as unknown as CacheHost);
+    const reply = vi.fn((operation: Operation) =>
+      withOptimisticMutationDisposition(
+        { operation, stale: false, hasNext: false },
+        { kind: 'queued', transactionId: 'queued-appearance' }
+      )
+    );
+    replyWith(reply);
+    const receipt = await setGraphqlEntityAppearance(input, [], () => true);
+    expect(receipt.queued).toBe(true);
+    setPaused(true);
+    expect(stopSettlements).not.toHaveBeenCalled();
+    setPaused(false);
+    const { uuid } = reply.mock.calls[0][0].context.optimisticMutation as {
+      uuid: string;
+    };
+    subscribe.mock.calls[0][0]({
+      mutationUuid: uuid,
+      transactionId: 'queued-appearance',
+      status: 'committed',
+    });
+    await expect(receipt.settlement).resolves.toBe('committed');
+    expect(stopSettlements).toHaveBeenCalledOnce();
   });
 });
 

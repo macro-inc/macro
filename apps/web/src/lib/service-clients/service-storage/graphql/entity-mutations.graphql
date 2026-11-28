@@ -17,6 +17,13 @@ fragment EntityMutationPayloadFields on EntityMutationPayload {
   }
 }
 
+fragment EntityAppearanceFields on GraphqlSoupEntity {
+  __typename
+  id
+  ... on GraphqlSoupDocument { appearance }
+  ... on GraphqlSoupInitiative { appearance }
+}
+
 mutation SetEntityAppearance($input: SetEntityAppearanceInput!) {
   setEntityAppearance(input: $input) {
     __typename
@@ -24,12 +31,18 @@ mutation SetEntityAppearance($input: SetEntityAppearanceInput!) {
       __typename
       ... on SoupUpdated {
         item {
-          __typename
-          id
-          ... on GraphqlSoupDocument { appearance }
-          ... on GraphqlSoupInitiative { appearance }
+          ...EntityAppearanceFields
         }
       }
+    }
+  }
+}
+
+query ReadEntityAppearance($input: SoupEntityInput!) {
+  user {
+    id
+    soupEntity(input: $input) {
+      ...EntityAppearanceFields
     }
   }
 }
