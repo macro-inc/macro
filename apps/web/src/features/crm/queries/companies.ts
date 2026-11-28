@@ -29,7 +29,10 @@ import type { CompanyImporter } from '../context/crm-sources';
 import type { CompanyDomainChange } from '../core/company';
 import { contactCompanySummary } from '../core/contact';
 import { refreshCrmCreateLists } from './create-refresh';
-import type { CrmRecordDependencies } from './dependencies';
+import type {
+  CrmCreateDependencies,
+  CrmRecordDependencies,
+} from './dependencies';
 import { crmKeys } from './keys';
 import { listCanIncludeCrm, listReadsCrmEmail } from './list-refresh';
 import {
@@ -187,7 +190,7 @@ function wipeCompanyEmailCache(
 
 /** Creates a company and hands its Soup effects to the GraphQL cache. */
 export function useCreateCompanyMutation(
-  deps: CrmRecordDependencies,
+  deps: CrmCreateDependencies,
   allowQueue = true
 ) {
   return useMutation(
@@ -202,7 +205,7 @@ export function useCreateCompanyMutation(
         if (!canCache?.()) return;
         return Promise.all([
           deps.client.invalidateQueries({ queryKey: soupKeys._def }),
-          refreshCrmCreateLists(record),
+          refreshCrmCreateLists(deps.hasLiveCache(), record),
         ]);
       },
     }),
@@ -212,7 +215,7 @@ export function useCreateCompanyMutation(
 
 /** Companies in one import share a single list refresh. */
 export function createCompanyImporter(
-  deps: CrmRecordDependencies
+  deps: CrmCreateDependencies
 ): CompanyImporter {
   return {
     async create(input) {
@@ -227,7 +230,7 @@ export function createCompanyImporter(
     async refresh() {
       await Promise.all([
         deps.client.invalidateQueries({ queryKey: soupKeys._def }),
-        refreshCrmCreateLists(),
+        refreshCrmCreateLists(deps.hasLiveCache()),
       ]);
     },
   };
@@ -235,7 +238,7 @@ export function createCompanyImporter(
 
 /** Creates a team contact or a contact linked to an existing company. */
 export function useCreateContactMutation(
-  deps: CrmRecordDependencies,
+  deps: CrmCreateDependencies,
   allowQueue = true
 ) {
   return useMutation(
@@ -260,7 +263,7 @@ export function useCreateContactMutation(
               queryKey: crmKeys.companyContacts(companyId).queryKey,
             }),
           deps.client.invalidateQueries({ queryKey: soupKeys._def }),
-          refreshCrmCreateLists(contact, !!companyId),
+          refreshCrmCreateLists(deps.hasLiveCache(), contact, !!companyId),
         ]);
       },
     }),
