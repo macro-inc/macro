@@ -377,7 +377,7 @@ const mocks = vi.hoisted(() => {
     dispose: vi.fn(() => cleanupOrder.push('host')),
     enqueueOptimisticMutation: vi.fn(async () => {
       queuedMutationCount += 1;
-      return { transactionId: 'tx-1' };
+      return { transactionId: 'tx-1', initialClaim: { kind: 'not-runnable' } };
     }),
     commitOptimisticWrite: vi.fn(async () => {
       queuedMutationCount -= 1;
