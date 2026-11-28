@@ -674,8 +674,10 @@ export async function main() {
   // list is by when runs were created, so a run started again by hand is read
   // only while a page listed holds it. One past the first page has 100 pushes
   // after it, more than three hours of them (at most 73 in any three hours of
-  // three weeks in November), so Dev deployed from it fails anyway: the push
-  // after it is three hours undeployed.
+  // three weeks in November). A check that reads it finds those pushes three
+  // hours undeployed, so it posts no recovery from that run; a check that does
+  // not judges Dev by the runs listed, so Dev deployed from such a run by hand,
+  // or a failed run of it, goes unseen.
   const byId = new Map<number, Run>();
   for (let page = 1; page <= PAGES; page++) {
     const listed = await runsOf({ per_page: `${LISTED}`, page: `${page}` });
