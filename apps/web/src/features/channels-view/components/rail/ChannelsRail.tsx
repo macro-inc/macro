@@ -629,9 +629,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const channelById = (channelId: string) => membersById().get(channelId);
 
   /**
-   * Each section on screen, and the next batch of an open section's unknown
-   * members while its loading row is on screen, once the directory has
-   * settled.
+   * The next batch of an open section's unknown members while its loading row
+   * is on screen, once the directory has settled, then each section on
+   * screen. Discovery comes first: its members have no row at all, while a
+   * section's rows already show a record and only wait for a fresher one.
    */
   function onScreenReferenceSlices(): ChannelWindowSlice[] {
     if (!Object.values(sectionRanges).some(Boolean)) return [];
@@ -639,16 +640,6 @@ export function ChannelsRail(props: ChannelsRailProps) {
     const isLoaded = (id: string) => id === '' || loaded.has(id);
     const sections = groupChannelRailSections(visibleRows());
     const slices: ChannelWindowSlice[] = [];
-    for (const [key, section] of sections) {
-      const range = sectionRanges[key];
-      if (!range) continue;
-      slices.push({
-        key: `section:${key}`,
-        ids: section.rows.map(sectionRowChannelId),
-        range,
-        isLoaded,
-      });
-    }
     for (const label of labels()) {
       const key: ChannelSectionKey = `label:${label.id}`;
       const range = sectionRanges[key];
@@ -659,6 +650,16 @@ export function ChannelsRail(props: ChannelsRailProps) {
       const next = labelDiscoveryStatus(label);
       if (next?.kind !== 'next') continue;
       slices.push({ key: `unknown:${label.id}`, ids: next.ids });
+    }
+    for (const [key, section] of sections) {
+      const range = sectionRanges[key];
+      if (!range) continue;
+      slices.push({
+        key: `section:${key}`,
+        ids: section.rows.map(sectionRowChannelId),
+        range,
+        isLoaded,
+      });
     }
     return slices;
   }

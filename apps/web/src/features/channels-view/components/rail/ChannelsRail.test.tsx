@@ -894,6 +894,35 @@ describe('bounded reference window', () => {
     expect(unknown?.ids).toEqual(ids.slice(25, 50));
   });
 
+  it('looks up a loading row’s members before rows that already show a record', () => {
+    const favorites = numbered('fav', 300);
+    const members = numbered('member', 60);
+    mocks.flags = ['enable-channel-tags'];
+    mocks.favorites = favoritesOf(favorites);
+    mocks.labels = [
+      {
+        id: 'section',
+        teamId: 'team',
+        name: 'Section',
+        channelIds: members,
+        channelCount: members.length,
+        sortOrder: 0,
+        createdAt: '2026-01-01',
+        updatedAt: '2026-01-01',
+      },
+    ];
+    mount();
+    mocks.rail!.reportSectionRange('favorites', { start: 0, end: 300 });
+    mocks.rail!.reportSectionRange('label:section', { start: 0, end: 10 });
+
+    const window = mocks.referenceWindow!();
+    expect(window.chunks[0]).toEqual({
+      key: 'unknown:section:0',
+      ids: members.slice(0, 25),
+    });
+    expect(window.size).toBe(200);
+  });
+
   it('keeps the rows discovery found after the window forgets their records', () => {
     const ids = numbered('member', 60);
     const team = (id: string): ChannelEntity => ({
