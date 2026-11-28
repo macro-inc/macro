@@ -353,26 +353,42 @@ describe('cache telemetry sampling and failure isolation', () => {
     // 13 bytes before the placeholders, 11 UTF-16 code units: the euro sign is
     // one code unit and three bytes.
     const atBound = `SELECT '\u20ac' ${'?'.repeat(SLOW_QUERY_TEMPLATE_BYTES - 13)}`;
+    // Fingerprints are FNV-1a 64 of each text, computed outside the app.
     const slow = {
       name: 'graphql_cache.slow_query',
       operationCategory: 'storage',
       durationMs: 201,
-      queryFingerprint: 'a430d84680aabd0b',
+      queryFingerprint: '9cd1640cd0470612',
       outcome: 'success',
     } as const;
     recorder.record({ ...slow, queryTemplate: template });
     recorder.record({
       ...slow,
+      queryFingerprint: 'b3bc1686d062852e',
       queryTemplate: '?'.repeat(SLOW_QUERY_TEMPLATE_BYTES + 1),
     });
-    recorder.record({ ...slow, queryTemplate: atBound });
-    // Within the bound in UTF-16 code units, over it in UTF-8.
-    recorder.record({ ...slow, queryTemplate: `${atBound}?` });
     recorder.record({
       ...slow,
+      queryFingerprint: 'd57c0b70dcf2fe56',
+      queryTemplate: atBound,
+    });
+    // Within the bound in UTF-16 code units, over it in UTF-8.
+    recorder.record({
+      ...slow,
+      queryFingerprint: 'b4c5d9c770e64c6b',
+      queryTemplate: `${atBound}?`,
+    });
+    recorder.record({
+      ...slow,
+      queryFingerprint: '8351823baa0f2325',
       queryTemplate: '\u20ac'.repeat(SLOW_QUERY_TEMPLATE_BYTES / 2),
     });
     recorder.record({ ...slow, queryTemplate: '' });
+    // Text that is not what the fingerprint was taken from: expanded SQL.
+    recorder.record({
+      ...slow,
+      queryTemplate: 'SELECT value FROM records WHERE id IN (1, 2)',
+    });
     recorder.record({
       ...slow,
       queryFingerprint: 'not-a-fingerprint',
@@ -388,6 +404,7 @@ describe('cache telemetry sampling and failure isolation', () => {
       template,
       undefined,
       atBound,
+      undefined,
       undefined,
       undefined,
       undefined,

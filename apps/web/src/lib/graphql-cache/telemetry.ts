@@ -390,9 +390,28 @@ export interface CacheTelemetryRecorderLike {
 /** Longest slow-query template accepted, in UTF-8 bytes, as the engine caps it. */
 export const SLOW_QUERY_TEMPLATE_BYTES = 8 * 1024;
 
-const utf8 = new TextEncoder();
+const UTF8_ENCODER = new TextEncoder();
+const FNV_OFFSET_BASIS = 0xcbf29ce484222325n;
+const FNV_PRIME = 0x100000001b3n;
 
-function slowQueryTemplate(value: unknown): string | undefined {
+/** The engine's statement fingerprint: FNV-1a 64 of the template's UTF-8. */
+function fnv1a64Hex(bytes: Uint8Array): string {
+  let hash = FNV_OFFSET_BASIS;
+  for (const byte of bytes) {
+    hash = BigInt.asUintN(64, (hash ^ BigInt(byte)) * FNV_PRIME);
+  }
+  return hash.toString(16).padStart(16, '0');
+}
+
+/**
+ * The template, only when it is the text its fingerprint was taken from.
+ * The engine fingerprints the unexpanded template, so expanded SQL or other
+ * text posted beside a real fingerprint does not match and is dropped.
+ */
+function slowQueryTemplate(
+  value: unknown,
+  fingerprint: string
+): string | undefined {
   // A code unit is at least one byte, so a longer string is never encoded.
   if (
     typeof value !== 'string' ||
@@ -400,7 +419,9 @@ function slowQueryTemplate(value: unknown): string | undefined {
     value.length > SLOW_QUERY_TEMPLATE_BYTES
   )
     return undefined;
-  return utf8.encode(value).length <= SLOW_QUERY_TEMPLATE_BYTES
+  const bytes = UTF8_ENCODER.encode(value);
+  return bytes.length <= SLOW_QUERY_TEMPLATE_BYTES &&
+    fnv1a64Hex(bytes) === fingerprint
     ? value
     : undefined;
 }
@@ -415,7 +436,10 @@ function slowQueryFields(
     !/^[0-9a-f]{16}$/.test(input.queryFingerprint)
   )
     return {};
-  const queryTemplate = slowQueryTemplate(input.queryTemplate);
+  const queryTemplate = slowQueryTemplate(
+    input.queryTemplate,
+    input.queryFingerprint
+  );
   return queryTemplate === undefined
     ? { queryFingerprint: input.queryFingerprint }
     : { queryFingerprint: input.queryFingerprint, queryTemplate };

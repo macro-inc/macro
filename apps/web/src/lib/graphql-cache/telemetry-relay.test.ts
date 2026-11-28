@@ -130,16 +130,26 @@ describe('cache telemetry worker relay', () => {
       outcome: 'success',
       queryTemplate: 'SELECT value FROM records WHERE id IN (?, ?)',
     };
-    channel.receive({ ...slow, queryFingerprint: '92389d1ea869911c' });
+    // FNV-1a 64 of the template, computed outside the app.
+    channel.receive({ ...slow, queryFingerprint: '9cd1640cd0470612' });
     channel.receive({ ...slow, queryFingerprint: 'not-a-fingerprint' });
-
-    expect(events).toHaveLength(2);
-    expect(events[0]).toMatchObject({
+    // A real fingerprint beside text it was not taken from: another
+    // statement's, or a plain value posted by another same-origin script.
+    channel.receive({
+      ...slow,
       queryFingerprint: '92389d1ea869911c',
+      queryTemplate: 'customer-record-value',
+    });
+
+    expect(events).toHaveLength(3);
+    expect(events[0]).toMatchObject({
+      queryFingerprint: '9cd1640cd0470612',
       queryTemplate: slow.queryTemplate,
     });
     expect(events[1]).not.toHaveProperty('queryFingerprint');
     expect(events[1]).not.toHaveProperty('queryTemplate');
+    expect(events[2]).toMatchObject({ queryFingerprint: '92389d1ea869911c' });
+    expect(events[2]).not.toHaveProperty('queryTemplate');
     relay.dispose();
     await leadership;
   });
