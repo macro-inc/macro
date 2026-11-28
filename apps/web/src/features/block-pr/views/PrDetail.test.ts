@@ -1,4 +1,4 @@
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -122,7 +122,7 @@ describe('PR scroll chrome', () => {
 
   it('ignores programmatic clamping and keeps separate position baselines', () => {
     createRoot((dispose) => {
-      const scroll = createScrollHideReveal();
+      const scroll = createScrollHideReveal(() => 'overview');
       scroll.onScroll('overview', 160);
       expect(scroll.scrolled()).toBe(false);
       scroll.intent('overview').markUserIntent('down');
@@ -142,9 +142,32 @@ describe('PR scroll chrome', () => {
     });
   });
 
+  it('restores each pane at its own scroll state without animating the pane switch', () => {
+    createRoot((dispose) => {
+      const [pane, setPane] = createSignal<'overview' | 'changes'>('overview');
+      const scroll = createScrollHideReveal(pane);
+      scroll.intent('overview').markUserIntent('down');
+      scroll.onScroll('overview', 160);
+      expect(scroll.scrolled()).toBe(true);
+      expect(scroll.animate()).toBe(true);
+      setPane('changes');
+      expect(scroll.scrolled()).toBe(false);
+      expect(scroll.topBarVisible()).toBe(true);
+      expect(scroll.animate()).toBe(false);
+      scroll.intent('changes').markUserIntent('down');
+      scroll.onScroll('changes', 200);
+      expect(scroll.scrolled()).toBe(true);
+      expect(scroll.animate()).toBe(true);
+      setPane('overview');
+      expect(scroll.scrolled()).toBe(true);
+      expect(scroll.animate()).toBe(false);
+      dispose();
+    });
+  });
+
   it('restores the full header on upward intent when a short pane is already at zero', () => {
     createRoot((dispose) => {
-      const scroll = createScrollHideReveal();
+      const scroll = createScrollHideReveal(() => 'changes');
       scroll.intent('changes').markUserIntent('down');
       scroll.onScroll('changes', 160);
       scroll.onScroll('changes', 0);
@@ -158,7 +181,7 @@ describe('PR scroll chrome', () => {
 
   it('uses scrollbar movement rather than the preceding wheel direction', () => {
     createRoot((dispose) => {
-      const scroll = createScrollHideReveal();
+      const scroll = createScrollHideReveal(() => 'changes');
       scroll.onScroll('changes', 160);
       scroll.intent('changes').markUserIntent('down');
       scroll.onScroll('changes', 168);

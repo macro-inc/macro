@@ -33,6 +33,7 @@ import mobile from './en/mobile';
 import nav from './en/nav';
 import notificationsInbox from './en/notifications-inbox';
 import passwords from './en/passwords';
+import prPage from './en/pr-page';
 import routineDrafts from './en/routine-drafts';
 import routineFilters from './en/routine-filters';
 import routineMenu from './en/routine-menu';
@@ -98,6 +99,7 @@ export default {
   nav,
   notificationsInbox,
   passwords,
+  prPage,
   routineDrafts,
   routineFilters,
   routineMenu,

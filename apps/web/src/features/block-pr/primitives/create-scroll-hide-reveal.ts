@@ -1,8 +1,14 @@
 import { isEditableInput } from '@core/util/isEditableInput';
 import { createScrollIntentTracker } from '@core/util/scroll-intent';
+import { createMemo } from 'solid-js';
 import { createStore } from 'solid-js/store';
 
 type ScrollPane = 'overview' | 'changes';
+type ChromeState = {
+  scrolled: boolean;
+  topBarVisible: boolean;
+  revision: number;
+};
 
 export function scrollChromeCompensation(
   expanded: number,
@@ -17,27 +23,55 @@ export function scrollChromeCompensation(
   );
 }
 
-/** Chrome follows actual user movement, not anchoring or nested editor scrolling. */
-export function createScrollHideReveal() {
+/** Each pane retains its own chrome; only user movement animates a height change. */
+export function createScrollHideReveal(activePane: () => ScrollPane) {
   const awaitingInput: Record<ScrollPane, boolean> = {
     overview: false,
     changes: false,
   };
   const previousTop: Record<ScrollPane, number> = { overview: 0, changes: 0 };
-  const [state, setState] = createStore({
-    scrolled: false,
-    topBarVisible: true,
+  const distance: Record<ScrollPane, number> = { overview: 0, changes: 0 };
+  const direction: Record<ScrollPane, 'up' | 'down' | undefined> = {
+    overview: undefined,
+    changes: undefined,
+  };
+  const [state, setState] = createStore<Record<ScrollPane, ChromeState>>({
+    overview: { scrolled: false, topBarVisible: true, revision: 0 },
+    changes: { scrolled: false, topBarVisible: true, revision: 0 },
   });
-  let distance = 0;
-  let direction: 'up' | 'down' | undefined;
+  const updateChrome = (
+    pane: ScrollPane,
+    patch: Partial<Omit<ChromeState, 'revision'>>
+  ) => {
+    const current = state[pane];
+    const scrolled = patch.scrolled ?? current.scrolled;
+    const topBarVisible = patch.topBarVisible ?? current.topBarVisible;
+    if (
+      scrolled === current.scrolled &&
+      topBarVisible === current.topBarVisible
+    )
+      return;
+    setState(pane, { scrolled, topBarVisible, revision: current.revision + 1 });
+  };
+  const motion = createMemo<{
+    pane: ScrollPane;
+    revision: number;
+    animate: boolean;
+  }>((previous) => {
+    const pane = activePane();
+    const revision = state[pane].revision;
+    if (previous?.pane !== pane) return { pane, revision, animate: false };
+    if (previous.revision === revision) return previous;
+    return { pane, revision, animate: true };
+  });
   const track = (pane: ScrollPane) =>
     createScrollIntentTracker(() => {
       awaitingInput[pane] = false;
       // A pane that fits after collapse cannot emit another scroll event at zero.
       if (previousTop[pane] === 0 && intents[pane].lastDirection() === 'up') {
-        setState({ scrolled: false, topBarVisible: true });
-        distance = 0;
-        direction = undefined;
+        updateChrome(pane, { scrolled: false, topBarVisible: true });
+        distance[pane] = 0;
+        direction[pane] = undefined;
         awaitingInput[pane] = true;
       }
     });
@@ -64,32 +98,34 @@ export function createScrollHideReveal() {
       return;
     intent.observeScroll();
     const scrolled = top >= 146;
-    if (state.scrolled !== scrolled) {
-      setState('scrolled', scrolled);
+    if (state[pane].scrolled !== scrolled) {
+      updateChrome(pane, { scrolled });
       awaitingInput[pane] = true;
     }
     if (!scrolled) {
-      distance = 0;
-      direction = undefined;
-      setState('topBarVisible', true);
+      distance[pane] = 0;
+      direction[pane] = undefined;
+      updateChrome(pane, { topBarVisible: true });
       return;
     }
     const nextDirection = delta > 0 ? 'down' : 'up';
-    distance =
-      direction === nextDirection
-        ? distance + Math.abs(delta)
+    distance[pane] =
+      direction[pane] === nextDirection
+        ? distance[pane] + Math.abs(delta)
         : Math.abs(delta);
-    direction = nextDirection;
-    if (distance < 8) return;
-    if (state.topBarVisible !== (direction === 'up')) {
-      setState('topBarVisible', direction === 'up');
+    direction[pane] = nextDirection;
+    if (distance[pane] < 8) return;
+    if (state[pane].topBarVisible !== (nextDirection === 'up')) {
+      updateChrome(pane, { topBarVisible: nextDirection === 'up' });
       awaitingInput[pane] = true;
     }
-    distance = 0;
+    distance[pane] = 0;
   };
   return {
-    scrolled: () => state.scrolled,
-    topBarVisible: () => state.topBarVisible,
+    scrolled: (pane: ScrollPane = activePane()) => state[pane].scrolled,
+    topBarVisible: (pane: ScrollPane = activePane()) =>
+      state[pane].topBarVisible,
+    animate: () => motion().animate,
     onScroll,
     handlers,
     intent: (pane: ScrollPane) => intents[pane],

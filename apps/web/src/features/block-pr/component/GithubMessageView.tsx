@@ -22,7 +22,7 @@ function GithubAvatarFallback() {
   );
 }
 
-function GithubAvatar(props: { login: string }) {
+export function GithubAvatar(props: { login: string }) {
   const [failed, setFailed] = createSignal(false);
 
   return (

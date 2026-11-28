@@ -46,6 +46,7 @@ ignores:
   - apps/web/src/features/block-pdf/component/Block.tsx
   - apps/web/src/features/block-pptx/pptx-block.tsx
   - apps/web/src/features/block-project/component/Block.tsx
+  - apps/web/src/features/block-pr/pr-page.tsx
   - apps/web/src/features/block-psd/psd-block.tsx
   - apps/web/src/features/block-spreadsheet/SpreadsheetBlock.tsx
   - apps/web/src/features/block-unknown/component/Block.tsx
