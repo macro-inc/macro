@@ -588,3 +588,76 @@ async fn a_stored_render_keeps_the_png_as_the_callers_file_and_drops_inline_medi
     assert_eq!(saved[0].1, format!("canvas-{DOCUMENT}.png"));
     assert_eq!(saved[0].2, b"\x89PNG\r\n\x1a\n");
 }
+
+async fn apply_snippets(snippets: std::collections::BTreeMap<String, String>) -> CanvasError {
+    let service = CanvasService::new(
+        Arc::new(MockCanvasDocumentLookup::new()),
+        Arc::new(MockEditingWorkerService::new()),
+        SECRET.into(),
+        Arc::new(Admission(Ok(()))),
+        Arc::new(Recorder::default()),
+    );
+    service
+        .apply(
+            receipt(AccessLevel::Edit),
+            &user(),
+            Some("macro|ai@macro.com"),
+            CanvasRequest::Apply {
+                expected_revision: "a".repeat(64),
+                code: "editor.text('a', snippets.body)".into(),
+                snippets: Some(snippets),
+                editor_name: None,
+            },
+        )
+        .await
+        .unwrap_err()
+}
+
+#[tokio::test]
+async fn a_snippet_over_its_limit_is_named_with_its_size_and_the_limit() {
+    let error = apply_snippets([("body".to_owned(), "x".repeat(20_001))].into()).await;
+    let CanvasError::Invalid(message) = error else {
+        panic!("expected Invalid, got {error:?}");
+    };
+    assert_eq!(
+        message,
+        "Canvas snippet `body` is 20001 bytes; one snippet takes at most 20000. \
+         Split long text across snippets or batches."
+    );
+}
+
+#[tokio::test]
+async fn snippets_over_the_batch_total_say_the_total_and_the_limit() {
+    let snippets = (0..3)
+        .map(|i| (format!("part{i}"), "x".repeat(20_000)))
+        .collect();
+    let CanvasError::Invalid(message) = apply_snippets(snippets).await else {
+        panic!("expected Invalid");
+    };
+    assert_eq!(
+        message,
+        "Canvas snippets total 60000 bytes; one batch takes at most 50000. \
+         Split the edits across batches."
+    );
+}
+
+#[tokio::test]
+async fn too_many_snippets_or_a_long_key_say_which_limit() {
+    let many = (0..101).map(|i| (format!("s{i}"), String::new())).collect();
+    let CanvasError::Invalid(message) = apply_snippets(many).await else {
+        panic!("expected Invalid");
+    };
+    assert_eq!(
+        message,
+        "Canvas batch has 101 snippets; one batch takes at most 100. \
+         Split the edits across batches."
+    );
+    let long_key = [("k".repeat(201), String::new())].into();
+    let CanvasError::Invalid(message) = apply_snippets(long_key).await else {
+        panic!("expected Invalid");
+    };
+    assert_eq!(
+        message,
+        "A canvas snippet key is 201 bytes; keys take at most 200."
+    );
+}
