@@ -76,6 +76,7 @@ export function handleRefreshEmail(payload: unknown): void {
   if (event.event === 'link_removed') {
     clearBackfillProgress(event.link_id);
     invalidateAllSoup();
+    fireAndForget(revalidateMailFolderLists(), 'email-folders');
     invalidateEmailLinks();
     return;
   }
@@ -106,6 +107,7 @@ export function handleRefreshEmail(payload: unknown): void {
   // `SYNCING` with a toast.
   if (event.event === RefreshEmailEventOneOfOnethreeEvent.backfill_progress) {
     throttledBackfillSoupRefresh();
+    throttledFolderRefresh();
 
     if (event.status === BackfillStatus.complete) {
       clearBackfillProgress(event.link_id);

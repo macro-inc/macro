@@ -1061,11 +1061,12 @@ not to account-wide paired machine count; a user can pair several computers.
   an excluded preview or timestamp, including synced Macro drafts; Drafts and
   Sent retain their own canonical membership.
 - Spam and Trash are GraphQL server pages (`emailView: SPAM | TRASH`) with no
-  local predicate or service search, and their rows show the server's folder
-  `sortTs`; restore through the provider-neutral thread-state mutation. The
-  cache cannot keep their membership current, so read-state writes pass them as
-  unmaintained revalidations, and provider sync events and settled Outlook
-  operations call `revalidateMailFolderLists`. Preserve newer selections when a
+  local predicate or service search. Their rows show the folder date, selected
+  as `sortTs(view: $view)` so it never overwrites the plain `sortTs` Home reads;
+  restore through the provider-neutral thread-state mutation. The cache cannot
+  keep their membership current, so read-state writes pass them as unmaintained
+  revalidations, and provider sync events, settled Outlook operations, inbox
+  backfill and inbox removal call `revalidateMailFolderLists`. Preserve newer selections when a
   pending folder restore finishes.
 
 Agent split headers show live viewers through `BlockLiveIndicators` with the

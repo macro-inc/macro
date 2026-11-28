@@ -5,6 +5,7 @@ import { Telemetry } from '@macro-inc/observability';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { invalidateCalendarViews } from '@queries/calendar/sync';
 import { queryClient } from '@queries/client';
+import { revalidateMailFolderLists } from '@queries/soup/graphql/mail-list-revalidation';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { emailClient } from '@service-email/client';
 import type { ListLinksResponse } from '@service-email/generated/schemas';
@@ -319,6 +320,7 @@ export function useRemoveInboxMutation(callbacks?: RemoveInboxCallbacks) {
           // so its threads are dropped when the `refresh_email` `link_removed`
           // event arrives after teardown — refetching now would race that.
           invalidateAllSoup();
+          fireAndForget(revalidateMailFolderLists(), 'email-link-remove');
           await invalidateUserInfo();
         },
 

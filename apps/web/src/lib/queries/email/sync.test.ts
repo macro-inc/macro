@@ -48,3 +48,17 @@ it('reads the folder lists again on provider changes, coalescing bursts', async 
   await vi.advanceTimersByTimeAsync(5000);
   expect(revalidateMailFolderLists).toHaveBeenCalledTimes(2);
 });
+
+it('reads the folder lists again when an inbox is removed or backfills', async () => {
+  handleRefreshEmail({ event: 'link_removed', link_id: 'inbox' });
+  expect(revalidateMailFolderLists).toHaveBeenCalledTimes(1);
+
+  handleRefreshEmail({
+    event: 'backfill_progress',
+    link_id: 'inbox',
+    status: 'progress',
+    completed_threads: 1,
+    total_threads: 2,
+  });
+  expect(revalidateMailFolderLists).toHaveBeenCalledTimes(2);
+});
