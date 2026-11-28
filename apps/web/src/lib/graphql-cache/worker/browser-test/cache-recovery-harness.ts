@@ -110,7 +110,7 @@ class ProductionSession {
   private readonly tabChannel: BroadcastChannel;
   private readonly runtimeChannel: BroadcastChannel;
   private readonly cacheTelemetryChannel = new BroadcastChannel(
-    'macro:graphql-cache-telemetry:v4'
+    'macro:graphql-cache-telemetry:v5'
   );
 
   constructor(readonly scope: string) {

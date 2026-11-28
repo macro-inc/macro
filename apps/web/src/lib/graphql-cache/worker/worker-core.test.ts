@@ -3816,6 +3816,10 @@ describe('CacheWorkerCore', () => {
         order.push(`read:${opId}`);
         return { kind: 'miss' };
       },
+      currentStorageGeneration: async () => {
+        order.push('generation');
+        return '00000000-0000-4000-8000-000000000001';
+      },
       writeQuery: async () => {
         order.push('write');
         return {
@@ -3842,6 +3846,11 @@ describe('CacheWorkerCore', () => {
           kind: 'read',
           opId,
           query: 'query Read { read }',
+        }),
+      generation: () =>
+        core.handleRequest(port, {
+          id: id++,
+          kind: 'current-storage-generation',
         }),
       write: () =>
         core.handleRequest(port, {
@@ -4052,6 +4061,35 @@ describe('CacheWorkerCore', () => {
     expect(flushWal).toHaveBeenCalledOnce();
   });
 
+  it('flushes the WAL before it reads the storage generation back', async () => {
+    const order: string[] = [];
+    const flushWal = vi.fn(async () => {
+      order.push('flush');
+      return true;
+    });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue(walFlushEngine(order, flushWal)),
+    });
+    const delay = delayTimer();
+    const core = new CacheWorkerCore({
+      afterArrivedMessages: (resume) => queueMicrotask(resume),
+      afterDelay: delay.afterDelay,
+    });
+    const requests = walFlushRequests(core);
+    await openAndFlush(requests, delay, flushWal, order);
+
+    // Nothing to flush: the generation answers at once.
+    await requests.generation();
+    await requests.write();
+    await settle();
+    expect(delay.armed()).toEqual([250]);
+    // A hydration checkpoint saved after this read must not outlive the write.
+    await requests.generation();
+    await settle();
+    expect(order).toEqual(['generation', 'write', 'flush', 'generation']);
+    expect(delay.armed()).toEqual([]);
+  });
+
   it('arms no WAL flush when the engine flushes in every COMMIT', async () => {
     const order: string[] = [];
     loadCacheWasmMock.mockResolvedValue({
@@ -4104,6 +4142,53 @@ describe('CacheWorkerCore', () => {
       )
     );
     expect(onStorageResetRequired).toHaveBeenCalledExactlyOnceWith(flushError);
+  });
+
+  it('reports a WAL flush of 200 ms or more, and no faster one', async () => {
+    const order: string[] = [];
+    let now = 0;
+    let flushTakes = 0;
+    const flushWal = vi.fn(async () => {
+      now += flushTakes;
+      return true;
+    });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue(walFlushEngine(order, flushWal)),
+    });
+    const record = vi.fn();
+    const delay = delayTimer();
+    const core = new CacheWorkerCore({
+      monotonicNow: () => now,
+      telemetry: { record, flush: vi.fn() },
+      afterArrivedMessages: (resume) => queueMicrotask(resume),
+      afterDelay: delay.afterDelay,
+    });
+    const requests = walFlushRequests(core);
+    await openAndFlush(requests, delay, flushWal, order);
+    const flushes = () =>
+      record.mock.calls.filter(
+        ([observation]) => observation.name === 'graphql_cache.wal_flush'
+      );
+
+    flushTakes = 199;
+    await requests.write();
+    await settle();
+    delay.elapse();
+    await vi.waitFor(() => expect(flushWal).toHaveBeenCalledTimes(1));
+    await settle();
+    expect(flushes()).toEqual([]);
+
+    flushTakes = 200;
+    await requests.write();
+    await settle();
+    delay.elapse();
+    await vi.waitFor(() => expect(flushes()).toHaveLength(1));
+    expect(flushes()[0]?.[0]).toEqual({
+      name: 'graphql_cache.wal_flush',
+      operationCategory: 'storage',
+      outcome: 'success',
+      durationMs: 200,
+    });
   });
 
   it('runs an idle WAL copy that fell due during a WAL flush once the flush ends', async () => {

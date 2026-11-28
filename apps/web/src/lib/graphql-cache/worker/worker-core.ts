@@ -164,14 +164,13 @@ function afterArrivedMessages(resume: () => void): void {
  */
 const IDLE_CHECKPOINT_QUIET_MS = 100;
 
-function afterQuiet(run: () => void): () => void {
-  const timer = setTimeout(run, IDLE_CHECKPOINT_QUIET_MS);
-  return () => clearTimeout(timer);
-}
-
 function afterDelay(run: () => void, ms: number): () => void {
   const timer = setTimeout(run, ms);
   return () => clearTimeout(timer);
+}
+
+function afterQuiet(run: () => void): () => void {
+  return afterDelay(run, IDLE_CHECKPOINT_QUIET_MS);
 }
 
 /**
@@ -185,6 +184,9 @@ const WAL_FLUSH_QUIET_MS = 250;
  * cache writes can be lost to an OS crash or power loss, never to a closed
  * tab or a killed browser. */
 const WAL_FLUSH_MAX_DELAY_MS = 2_000;
+/** A deferred flush this slow is reported, like a slow statement; the
+ * flushes' totals ride on `graphql_cache.storage_io`. */
+const WAL_FLUSH_SLOW_MS = 200;
 
 // Backfill hydration is cache warming, so foreground reads may overtake it.
 // Hydration and authoritative writes still retain arrival order so stale
@@ -613,7 +615,11 @@ export class CacheWorkerCore {
    */
   private drainQueue(): void {
     if (this.running || this.yielding) return;
-    if (this.walFlushDue || this.walFlushOverdue()) {
+    if (
+      this.walFlushDue ||
+      this.walFlushOverdue() ||
+      this.flushesBeforeGeneration()
+    ) {
       this.startWalFlush();
       return;
     }
@@ -780,6 +786,20 @@ export class CacheWorkerCore {
     );
   }
 
+  /**
+   * Hydration checkpoints kept outside the cache are keyed by the storage
+   * generation, and saved once it is read back after a page. The writes
+   * before that read reach disk first, so a saved cursor never runs ahead of
+   * the pages a power loss keeps.
+   */
+  private flushesBeforeGeneration(): boolean {
+    return (
+      this.unflushedSince !== undefined &&
+      this.engine?.flushWal !== undefined &&
+      this.queue[0]?.request.kind === 'current-storage-generation'
+    );
+  }
+
   /** Runs the due WAL flush in the request queue's place. */
   private startWalFlush(): void {
     this.cancelWalFlush?.();
@@ -800,6 +820,15 @@ export class CacheWorkerCore {
     const startedAt = this.now();
     try {
       await flushWal();
+      const durationMs = this.now() - startedAt;
+      if (durationMs >= WAL_FLUSH_SLOW_MS) {
+        this.telemetry.record({
+          name: 'graphql_cache.wal_flush',
+          operationCategory: 'storage',
+          outcome: 'success',
+          durationMs,
+        });
+      }
     } catch (error) {
       // A failed flush latches a reset in the engine, reported here.
       this.telemetry.record({

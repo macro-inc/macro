@@ -720,7 +720,8 @@ COMMIT, which opens whole.
 
 - Queue writes flush before they answer: an enqueue (one transaction with its
   first claim), claim, defer, complete and discard, a rewrite of queued
-  layers, the queue reset and the salvage import. So do the records the engine
+  layers, a schema adoption (it can retire queued layers), the queue reset
+  and the salvage import. So do the records the engine
   trusts after a crash (`Storage::put_batch_durable`): the permission marker
   and the storage generation. A failed flush leaves the write's outcome
   unknown, and the cache needs a physical reset
@@ -729,7 +730,10 @@ COMMIT, which opens whole.
   write, the engine worker calls `flushWal` once nothing has run for 250 ms
   (a request that starts restarts the wait), or before the next request once
   the first unflushed write is 2 s old. A power loss can take the cache
-  writes of the last 2 s, and more while one long request runs. A drain
+  writes of the last 2 s, and more while one long request runs. A read of
+  the storage generation flushes first: the hydration checkpoints kept
+  outside the cache are saved after it, so a cursor never outlives the pages
+  it counts. A drain
   cancels a flush not yet started: closing the engine on release, handoff or
   close tries to flush and copy the WAL itself, and goes on if either fails,
   since what is unflushed then is cache data. A wipe deletes the file.
