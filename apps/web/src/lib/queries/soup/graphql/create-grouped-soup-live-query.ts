@@ -519,9 +519,12 @@ export function createGroupedSoupLiveQuery(
       const error = refreshErrors().values().next().value;
       if (error) throw error;
     },
-    data: createMemo((): GroupSoupQuery | undefined => {
+    data: createMemo((previous: GroupSoupQuery | undefined) => {
       const initial = currentInitial();
-      if (!initial) return query.data && serverSnapshot(query.data.data);
+      if (!initial) {
+        const data = query.data && serverSnapshot(query.data.data);
+        return data && shareServerRows(data, previous);
+      }
       return {
         ...initial,
         user: {

@@ -777,8 +777,15 @@ export function createSoupLiveQuery(
     undefined,
     { equals: arrayEquals }
   );
+  // A patched row is a new record object: keep the set while its keys hold.
   const maintainedDisplayedKeys = createMemo(
-    () => new Set(liveRecords().map(soupItemKey))
+    () => new Set(liveRecords().map(soupItemKey)),
+    undefined,
+    {
+      equals: (previous, next) =>
+        previous.size === next.size &&
+        [...next].every((key) => previous.has(key)),
+    }
   );
   maintainedProjection = createMemo<LocalProjection | undefined>((previous) => {
     const snapshot = live.data();

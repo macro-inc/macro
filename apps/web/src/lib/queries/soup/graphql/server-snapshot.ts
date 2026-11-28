@@ -29,7 +29,10 @@ export function serverSnapshot<T>(value: T): T {
   return copy(value) as T;
 }
 
-/** `next`, keeping each row of `previous` whose content is unchanged. */
+/**
+ * `next`, keeping each row of `previous` whose content is unchanged. `previous`
+ * is its own source: a row `next` already shares is taken without a walk.
+ */
 export function shareServerRows<T>(next: T, previous: T | undefined): T {
-  return shareQueryValue(next, previous) as T;
+  return shareQueryValue(next, previous, undefined, previous) as T;
 }

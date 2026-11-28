@@ -3,7 +3,7 @@ import {
   channelListRow,
   isChannelListRow,
 } from './channel-list-row';
-import { plainSoupRecord } from './plain-record';
+import { isStoreProxy, plainSoupRecord } from './plain-record';
 
 /**
  * Shapes server (urql) records of a channel-list view as the engine shapes its
@@ -19,7 +19,8 @@ export function createServerRowShaper() {
     if (cached) return cached;
     const row = channelListRow(record as T & { __typename: string });
     if (!isChannelListRow(row)) return record;
-    rows.set(record, row);
+    // A store proxy changes in place, so its object is no key for its content.
+    if (!isStoreProxy(record)) rows.set(record, row);
     return row;
   };
 }

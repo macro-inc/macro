@@ -1,3 +1,4 @@
+import { equalQueryValue } from '../../../graphql-cache/exchange/query-shape';
 import type { LiveQueryUpdate } from '../../../graphql-cache/protocol';
 import type { LiveQueryRow } from './create-predicate-query';
 
@@ -35,7 +36,7 @@ export function withPath(
 export class ImmutableLiveRows<T> {
   private readonly rows = new Map<
     string,
-    { sent: unknown; row: LiveQueryRow<T> }
+    { sent: unknown; shaped: boolean; row: LiveQueryRow<T> }
   >();
   private ordered: readonly LiveQueryRow<T>[] = [];
   private keys: readonly string[] = [];
@@ -50,12 +51,26 @@ export class ImmutableLiveRows<T> {
   apply(update: LiveQueryUpdate, shaped: boolean): readonly LiveQueryRow<T>[] {
     let changed =
       update.reset || update.keys !== undefined || update.removed.length > 0;
+    // A reset or a repeated upsert often resends a row unchanged: keep its
+    // object so readers map it once.
+    const before = update.reset ? new Map(this.rows) : this.rows;
     if (update.reset) this.rows.clear();
     for (const key of update.removed) this.rows.delete(key);
     for (const upsert of update.upserts) {
       changed = true;
+      const old = before.get(upsert.recordKey);
+      if (
+        old &&
+        old.shaped === shaped &&
+        equalQueryValue(old.row.identity, upsert.identity) &&
+        equalQueryValue(old.sent, upsert.record)
+      ) {
+        this.rows.set(upsert.recordKey, old);
+        continue;
+      }
       this.rows.set(upsert.recordKey, {
         sent: upsert.record,
+        shaped,
         row: {
           recordKey: upsert.recordKey,
           record: this.toRow(upsert.record as object, shaped),
@@ -84,6 +99,7 @@ export class ImmutableLiveRows<T> {
       sent = withPath(sent, field.path, field.value);
     this.rows.set(patch.recordKey, {
       sent,
+      shaped,
       row: {
         recordKey: patch.recordKey,
         record: this.toRow(sent as object, shaped),

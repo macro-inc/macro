@@ -155,6 +155,38 @@ describe('ImmutableLiveRows', () => {
       )
     ).toThrow('live query patch has no base row');
   });
+
+  it('keeps each row a reset resends unchanged', () => {
+    const live = rows();
+    const reset = (name: string) =>
+      live.apply(
+        update({
+          reset: true,
+          keys: ['a', 'b'],
+          upserts: [
+            { recordKey: 'a', record: { id: 'a', name: 'A', tags: ['x'] } },
+            { recordKey: 'b', record: { id: 'b', name } },
+          ],
+        }),
+        true
+      );
+    const first = reset('B');
+    const second = reset('B2');
+    expect(second[0]).toBe(first[0]);
+    expect(second[1]).not.toBe(first[1]);
+    expect(second[1].record.name).toBe('B2');
+    // A row shaped differently is rebuilt even when its record is unchanged.
+    const unshaped = live.apply(
+      update({
+        upserts: [
+          { recordKey: 'a', record: { id: 'a', name: 'A', tags: ['x'] } },
+        ],
+      }),
+      false
+    );
+    expect(unshaped[0]).not.toBe(second[0]);
+    expect(unshaped[0].record.shaped).toBe(false);
+  });
 });
 
 describe('withPath', () => {
