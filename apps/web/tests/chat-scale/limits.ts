@@ -54,13 +54,16 @@ export const LOADS: readonly StepName[] = ['seed', 'coldOpen'];
  * Ceilings, the same at both sizes unless a size is named. Two local runs
  * (2026-11-28, on a shared 96-CPU machine at a load average of 110 to 130,
  * which lengthens long tasks) measured, at 3,500 / 7,000 channels: heap after
- * collection 449 / 865 MB at most (the seed; 241 / 430 MB after the next
- * load), 1,674 DOM nodes at most, rows on screen 1.4–2.8 s after navigation,
+ * collection 449 / 865 MB in the seed, which writes the whole cache, and
+ * 259 / 449 MB at most in the steps after it, 1,674 DOM nodes at most, rows on screen 1.4–2.8 s after navigation,
  * a load's longest task 0.87 s and its tasks 23 / 105 s in all, and an
  * interaction's longest task 0.68 s and its tasks 2.6 / 7.5 s in all.
  */
 export const CEILINGS = {
-  heapMb: { 3500: 900, 7000: 1_750 } as Readonly<Record<number, number>>,
+  heapMb: {
+    seed: { 3500: 900, 7000: 1_750 } as Readonly<Record<number, number>>,
+    afterSeed: { 3500: 550, 7000: 950 } as Readonly<Record<number, number>>,
+  },
   domNodes: 4_000,
   rowsMs: 8_000,
   load: { longestTaskMs: 2_000, longTasksMs: 210_000 },
@@ -72,7 +75,7 @@ export const CEILINGS = {
  * screen, so its DOM should not grow with the account (1.05 times, measured).
  * Its heap and long tasks do today, because the sidebar's work follows every
  * channel its sections and favorites name: in the runs above the heap grew
- * 1.7–1.9 times, a load's long tasks 4–7.5 times, and an interaction's up to
+ * 1.7–1.9 times, a load's long tasks 3.7–7.5 times, and an interaction's up to
  * 4 times. These limits catch growth past that; lower them as that work is
  * bounded by the screen. Under `LONG_TASK_FLOOR_MS` at N, long tasks compare
  * as that floor, since a few long tasks' jitter is not growth.
@@ -134,8 +137,10 @@ function floorFailures(run: ChatScaleRun): string[] {
 }
 
 function ceilingChecks(run: ChatScaleRun): Check[] {
-  const heapLimit = CEILINGS.heapMb[run.channels];
   return STEP_NAMES.flatMap((name) => {
+    const heapLimit = (
+      name === 'seed' ? CEILINGS.heapMb.seed : CEILINGS.heapMb.afterSeed
+    )[run.channels];
     const step = run.steps[name];
     const tasks = LOADS.includes(name) ? CEILINGS.load : CEILINGS.interaction;
     const at = `${run.channels} channels, ${name}`;
@@ -247,7 +252,11 @@ export function limitFailures(runs: readonly ChatScaleRun[]): string[] {
   if (runs.length === 0) return ['no size was measured'];
   const bySize = [...runs].sort((a, b) => a.channels - b.channels);
   const unknown = bySize
-    .filter((run) => CEILINGS.heapMb[run.channels] === undefined)
+    .filter(
+      (run) =>
+        CEILINGS.heapMb.seed[run.channels] === undefined ||
+        CEILINGS.heapMb.afterSeed[run.channels] === undefined
+    )
     .map((run) => `${run.channels} channels has no heap ceiling`);
   const pairs = bySize.flatMap((small) => {
     const large = bySize.find((run) => run.channels === small.channels * 2);

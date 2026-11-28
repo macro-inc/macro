@@ -71,9 +71,19 @@ describe('limitFailures', () => {
   it('fails a heap over its ceiling at that size', () => {
     expect(
       limitFailures([
-        run(3_500, (name) => (name === 'scroll' ? { heapMb: 910 } : {})),
+        run(3_500, (name) => (name === 'seed' ? { heapMb: 910 } : {})),
       ])
-    ).toEqual(['3500 channels, scroll: heap (MB): 910, limit 900']);
+    ).toEqual(['3500 channels, seed: heap (MB): 910, limit 900']);
+  });
+
+  it('holds the steps after the seed to a lower heap ceiling', () => {
+    expect(
+      limitFailures([
+        run(3_500, (name) =>
+          name === 'seed' || name === 'scroll' ? { heapMb: 560 } : {}
+        ),
+      ])
+    ).toEqual(['3500 channels, scroll: heap (MB): 560, limit 550']);
   });
 
   it('holds loads and interactions to their own long task ceilings', () => {
