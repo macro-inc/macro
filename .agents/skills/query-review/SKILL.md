@@ -1,6 +1,6 @@
 ---
 name: query-review
-description: Review a finished diff's new or changed SQL for what it costs on the production database, with evidence. The review skill runs it before a push; use it directly when asked to review a diff that adds or changes a sqlx query, assembled or QueryBuilder SQL, a Soup or GraphQL filter that becomes SQL, a SQL function, view, or trigger, or a caller that runs an existing query more often or over a wider scope. While writing the query, use query-writing instead.
+description: Review a finished diff's new or changed service SQL for what it costs on the production database, with evidence. The review skill runs it before a push; use it directly when asked to review a diff that adds or changes a sqlx query, assembled or QueryBuilder SQL, a Soup or GraphQL filter that becomes SQL, a SQL function, view, or trigger, or a caller that runs an existing query more often or over a wider scope. While writing the query, use query-writing instead; queries against the on-device cache engine are cache-query-review.
 ---
 
 # Query review

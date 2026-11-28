@@ -107,15 +107,22 @@ GitHub Actions workflows are generated from Rust: edit
 
 Run the [`review`](../review/SKILL.md) skill on every PR pass, before the first
 push and again after changes that add or alter what it covers. It picks the
-reviews that apply to the diff; at least one always does. A diff that touches
-SQL, a query builder, a SQL function, or a migration always gets the database
+reviews that apply to the diff; at least one always does, and a diff can
+need several. A diff that touches SQL that runs in a service (its queries,
+query builders or SQL functions) or a migration always gets the database
 reviews (`query-review`, `migration-review`), and so does one that calls an
-existing query more often or over a wider scope. Fix every `block` finding
-before pushing; fix or justify the rest in the PR body.
+existing service query more often or over a wider scope. A diff that changes
+a query against the on-device cache engine (cache-turso SQL or the code that
+builds it, a web live query or keyed read, or a caller that widens one) gets
+[`cache-query-review`](../cache-query-review/SKILL.md); widening a
+cache-first read can also widen the service query for the rows the cache
+lacks, which needs both. Fix every `block` finding before pushing; fix or
+justify the rest in the PR body.
 
 `query-review` checks the plan that the
 [`query-writing`](../query-writing/SKILL.md) skill had you record for each
-query before committing it. A changed query without one is not ready to push.
+service query before committing it. A changed service query without one is
+not ready to push.
 
 Run the `audit` skill before handing off; it covers tests and area checks.
 
@@ -148,6 +155,11 @@ widens a query): the `review` skill's table. One row per changed query or
 migration statement, with the rows it touches at production size, the index
 or lock it relies on, and the measured plan from `query-writing`. Justify any
 finding left open.
+
+## Cache query review
+
+Whenever the change touches a query against the on-device cache: the
+`cache-query-review` skill's table, each query at N and 2N.
 
 ## Follow-ups
 

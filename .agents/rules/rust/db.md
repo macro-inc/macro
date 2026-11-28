@@ -14,9 +14,12 @@ alwaysApply: false
 
 Rust database rules: ids, keys, migrations, and SQLx.
 
-Before writing or changing a query, load the `query-writing` skill: it says how
-to keep a query bounded and index-backed, and requires its plan to be measured
-on a production-size local database before the commit.
+Before writing or changing a query that runs in a service, load the
+`query-writing` skill: it says how to keep a query bounded and index-backed,
+and requires its plan to be measured on a production-size local database
+before the commit. SQL in the on-device cache engine (`crates/client/`, such
+as cache-turso's `.sql` files) has no Postgres plan; the `cache-query-review`
+skill measures it instead.
 
 - **CS-01** Generate ids as UUIDv7 in application code — never
   `gen_random_uuid()` (UUIDv4); v7 ids sort by creation time.
@@ -44,6 +47,7 @@ on a production-size local database before the commit.
   default, and changes to large tables set `lock_timeout` and use `NOT VALID` +
   `VALIDATE` or `CREATE INDEX CONCURRENTLY` instead of a full rewrite.
 
-Check: each changed query has a measured plan from `query-writing`, and the
-`review` skill ran on the change: `query-review` for changed queries
-and SQL functions, `migration-review` for migrations, with no open `block`.
+Check: each changed service query has a measured plan from `query-writing`,
+and the `review` skill ran on the change: `query-review` for changed service
+queries and SQL functions, `migration-review` for migrations, and
+`cache-query-review` for on-device cache SQL, with no open `block`.
