@@ -15,7 +15,7 @@ export function materializeMailView(
   record: MailItemFieldsFragment,
   view: CachedMailView,
   timestamp: string
-): GraphqlSoupItem | undefined {
+): GraphqlSoupItem | null | undefined {
   if (record.__typename !== 'GraphqlSoupEmailThread') return undefined;
   const preview =
     view === 'DRAFTS'
@@ -23,7 +23,7 @@ export function materializeMailView(
       : view === 'SENT'
         ? record.mailSentPreview
         : record.mailAllPreview;
-  if (!preview) return undefined;
+  if (!preview) return preview;
   return {
     ...record,
     createdAt: timestamp,

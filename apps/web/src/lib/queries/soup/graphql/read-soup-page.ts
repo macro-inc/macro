@@ -42,15 +42,26 @@ export async function readSoupPage(
   const snapshots = new Map(
     baseline.map((record) => [soupItemKey(record), record])
   );
+  const retainedKeys =
+    page.kind === 'mail-page' && page.retainedKeys !== undefined
+      ? new Set(page.retainedKeys)
+      : undefined;
   const fallbackKeys =
     page.kind === 'mail-page'
       ? page.keys.filter((key) => {
           if (!snapshots.has(key)) return false;
           const record = selectedByKey.get(key);
+          const canonical =
+            record && mailView
+              ? materializeMailView(
+                  record as MailItemFieldsFragment,
+                  mailView,
+                  ''
+                )
+              : undefined;
           return (
-            !record ||
-            !mailView ||
-            !materializeMailView(record as MailItemFieldsFragment, mailView, '')
+            canonical === undefined ||
+            (canonical === null && (!retainedKeys || retainedKeys.has(key)))
           );
         })
       : [];
@@ -83,6 +94,10 @@ export async function readSoupPage(
           timestamp
         );
       if (canonical) return [canonical];
+      // A complete local row with no canonical message is absent from this
+      // view. Retained server rows can still be missing projection metadata.
+      if (canonical === null && retainedKeys && !retainedKeys.has(key))
+        return [];
       const snapshot = snapshots.get(key);
       if (snapshot?.__typename !== 'GraphqlSoupEmailThread') return [];
       // Only preview fields are query-dependent. Shared fields remain live,
