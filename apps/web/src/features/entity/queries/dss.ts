@@ -57,6 +57,7 @@ import { getEntityGraphqlClient } from '@service-storage/graphql-soup';
 import {
   type MutationFunctionContext,
   useMutation,
+  useQueryClient,
 } from '@tanstack/solid-query';
 import { batch } from 'solid-js';
 import { type EntityData, getEntityProjectId } from '../types/entity';
@@ -221,6 +222,7 @@ function removeDssEntityCaches(entities: EntityData[]) {
 }
 
 export function createBulkDeleteDssItemsMutation() {
+  const mutationClient = useQueryClient();
   const isDeletable = (entity: EntityData) => {
     const type = entity.type;
     return (
@@ -236,7 +238,7 @@ export function createBulkDeleteDssItemsMutation() {
   };
   const isCurrentContext = (context: { accountSession: number }) =>
     context.accountSession === queryAccountSession() &&
-    queryClient
+    mutationClient
       .getMutationCache()
       .getAll()
       .some((mutation) => mutation.state.context === context);
@@ -309,7 +311,10 @@ export function createBulkDeleteDssItemsMutation() {
         throw new QueryAccountChangedError();
       const deletable = entities.filter(isDeletable);
       const { keys, ...snapshots } = removeDssEntityCaches(deletable);
-      const graphqlDeletion = createGraphqlSoupDeletion([...keys]);
+      const graphqlDeletion = createGraphqlSoupDeletion(
+        [...keys],
+        mutationClient
+      );
       overlays.set(context, graphqlDeletion);
       return {
         ...snapshots,

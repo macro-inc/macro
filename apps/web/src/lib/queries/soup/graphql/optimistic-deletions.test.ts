@@ -1,6 +1,6 @@
 import type { ChannelEntity } from '@entity/types/entity';
-import { QueryClient } from '@tanstack/solid-query';
-import { createRoot, createSignal } from 'solid-js';
+import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import { createComponent, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { authKeys } from '../../auth/keys';
 import type { SoupAstItemsData } from '../items';
@@ -71,6 +71,38 @@ function data(): SoupAstItemsData {
 }
 
 describe('GraphQL Soup deletion lifecycle', () => {
+  it('awaits only readers that belong to the deletion’s query client', async () => {
+    const key = 'GraphqlSoupDocument:deleted';
+    const otherClient = new QueryClient();
+    const other = createGraphqlSoupDeletion([key], otherClient);
+    const deletion = createGraphqlSoupDeletion([key]);
+    const [stale, setStale] = createSignal(true);
+    const disposeOther = createRoot((dispose) => {
+      createComponent(QueryClientProvider, {
+        client: otherClient,
+        get children() {
+          observeGraphqlSoupDeletions(() => (stale() ? [key] : []));
+          return null;
+        },
+      });
+      return dispose;
+    });
+    try {
+      const receipts = new Map([[key, Promise.resolve(true)]]);
+      other.settle([key], receipts);
+      deletion.settle([key], receipts);
+      await vi.waitFor(() => expect(deletion.keys()).toEqual([]));
+      expect(other.keys()).toEqual([key]);
+      setStale(false);
+      await vi.waitFor(() => expect(other.keys()).toEqual([]));
+    } finally {
+      deletion.release();
+      other.release();
+      disposeOther();
+      otherClient.clear();
+    }
+  });
+
   it('does not resurrect restored ids when an earlier deletion settles late', async () => {
     const deletion = createGraphqlSoupDeletion([
       'GraphqlSoupDocument:restored',

@@ -1,5 +1,11 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import { skipToken, useMutationState, useQuery } from '@tanstack/solid-query';
+import {
+  type QueryClient,
+  QueryClientContext,
+  skipToken,
+  useMutationState,
+  useQuery,
+} from '@tanstack/solid-query';
 import {
   type Accessor,
   batch,
@@ -8,6 +14,7 @@ import {
   createRoot,
   createSignal,
   onCleanup,
+  useContext,
 } from 'solid-js';
 import { z } from 'zod';
 import {
@@ -31,16 +38,20 @@ const EMPTY_DELETE_KEYS: readonly string[] = [];
 type RetainedDeletions = GraphqlSoupDeletion[];
 type DeletionReader = (keys: ReadonlySet<string>) => Iterable<string>;
 const readerRegistries = new WeakMap<
-  typeof queryClient,
+  QueryClient,
   ReturnType<typeof createSignal<readonly DeletionReader[]>>
 >();
 
-function deletionReaderRegistry() {
-  const existing = readerRegistries.get(queryClient);
+function deletionReaderRegistry(client: QueryClient) {
+  const existing = readerRegistries.get(client);
   if (existing) return existing;
   const registry = createSignal<readonly DeletionReader[]>([]);
-  readerRegistries.set(queryClient, registry);
+  readerRegistries.set(client, registry);
   return registry;
+}
+
+function useDeletionQueryClient() {
+  return useContext(QueryClientContext)?.() ?? queryClient;
 }
 
 const restoreReceipt = z.object({
@@ -63,7 +74,9 @@ export const soupOperationTime = () =>
 
 /** A live list may still show its previous snapshot after the cache confirms a tombstone. */
 export function observeGraphqlSoupDeletions(reader: DeletionReader) {
-  const [, setDeletionReaders] = deletionReaderRegistry();
+  const [, setDeletionReaders] = deletionReaderRegistry(
+    useDeletionQueryClient()
+  );
   setDeletionReaders((readers) => [...readers, reader]);
   onCleanup(() =>
     setDeletionReaders((readers) => readers.filter((entry) => entry !== reader))
@@ -86,7 +99,8 @@ export type GraphqlSoupDeletion = {
 
 /** Retain normalized `typename:id` keys through the list's acknowledgement. */
 export function createGraphqlSoupDeletion(
-  keys: readonly string[]
+  keys: readonly string[],
+  client = queryClient
 ): GraphqlSoupDeletion {
   const session = queryAccountSession();
   const account = currentQueryAccount();
@@ -108,9 +122,8 @@ export function createGraphqlSoupDeletion(
     detachReaders?.();
     unsubscribeRestores?.();
     setDeletedKeys([]);
-    queryClient.setQueryData<RetainedDeletions>(
-      RETAINED_DELETIONS_KEY,
-      (retained) => retained?.filter((entry) => entry.keys !== deletedKeys)
+    client.setQueryData<RetainedDeletions>(RETAINED_DELETIONS_KEY, (retained) =>
+      retained?.filter((entry) => entry.keys !== deletedKeys)
     );
   };
   const restore = (keys: readonly string[]) => {
@@ -146,7 +159,7 @@ export function createGraphqlSoupDeletion(
       }
       // A mutation observer can detach before the API finishes, starting its
       // GC clock early. Keep confirmed keys outside that mutation's lifetime.
-      queryClient.setQueryData<RetainedDeletions>(
+      client.setQueryData<RetainedDeletions>(
         RETAINED_DELETIONS_KEY,
         (retained) => [...(retained ?? []), deletion]
       );
@@ -158,7 +171,7 @@ export function createGraphqlSoupDeletion(
         GRAPHQL_SOUP_DELETE_RETENTION_MS
       );
       const acknowledged = new Set<string>();
-      const [deletionReaders] = deletionReaderRegistry();
+      const [deletionReaders] = deletionReaderRegistry(client);
       const [acknowledgementCount, setAcknowledgementCount] = createSignal(0);
       let notifyScheduled = false;
       createRoot((dispose) => {
@@ -274,6 +287,7 @@ export type GraphqlSoupDeleteContext = {
  * a restore supersedes them, or the retention deadline passes with no stale reader.
  */
 export function usePendingGraphqlSoupDeleteKeys() {
+  const client = useDeletionQueryClient();
   const retained = useQuery(
     () => ({
       queryKey: RETAINED_DELETIONS_KEY,
@@ -283,7 +297,7 @@ export function usePendingGraphqlSoupDeleteKeys() {
       // are collected even when no view is mounted to observe this query.
       gcTime: Infinity,
     }),
-    () => queryClient
+    () => client
   );
   const deletions = useMutationState(
     () => ({
@@ -295,7 +309,7 @@ export function usePendingGraphqlSoupDeleteKeys() {
         (mutation.state.context as GraphqlSoupDeleteContext | undefined)
           ?.graphqlDeletion?.keys,
     }),
-    () => queryClient
+    () => client
   );
   return createMemo<ReadonlySet<string>>(
     () =>
