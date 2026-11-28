@@ -66,16 +66,14 @@ pub fn attachment_value(kind: AttachmentKind) -> ExactValue {
 /// [`AttachmentKind::ALL`] order: what the server's thread attachment flags
 /// hold for a thread whose messages carry them.
 pub fn attachment_kinds<'a>(mime_types: impl IntoIterator<Item = &'a str>) -> Vec<AttachmentKind> {
-    let mut found = [false; AttachmentKind::ALL.len()];
-    for mime_type in mime_types {
-        for (index, kind) in AttachmentKind::ALL.into_iter().enumerate() {
-            found[index] |= kind.matches_mime_type(mime_type);
-        }
-    }
+    let mime_types = mime_types.into_iter().collect::<Vec<_>>();
     AttachmentKind::ALL
         .into_iter()
-        .zip(found)
-        .filter_map(|(kind, found)| found.then_some(kind))
+        .filter(|kind| {
+            mime_types
+                .iter()
+                .any(|mime_type| kind.matches_mime_type(mime_type))
+        })
         .collect()
 }
 
