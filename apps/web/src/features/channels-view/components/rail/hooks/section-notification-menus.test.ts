@@ -174,6 +174,19 @@ describe('section notification conflicts', () => {
     expect(mocks.sectionWrites).toHaveLength(1);
   });
 
+  it('reads nothing when every unknown resisting channel is in a custom section', async () => {
+    const read = vi.fn(async () => joined);
+    const { menus } = setup(read, [
+      { id: 'section', name: 'Section', channelIds: ids },
+    ]);
+    menus('team_channels', 'Team')!.settings.onPreset('all');
+    await settle();
+
+    expect(read).not.toHaveBeenCalled();
+    expect(mocks.conflictDialogs).toEqual([]);
+    expect(mocks.sectionWrites).toHaveLength(1);
+  });
+
   it('reads nothing for a section that holds its channels by id', async () => {
     const read = vi.fn(async () => joined);
     const { menus } = setup(read, [

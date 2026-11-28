@@ -344,10 +344,18 @@ export function createChannelNotificationSettings(sources: Sources) {
     });
     const readJoined = sources.readJoinedChannels;
     const byType = key === 'team_channels' || key === 'direct_messages';
+    // A channel in a custom section is in no built-in one, whatever its type.
+    const labelled = new Set(
+      byType ? sources.labels().flatMap((label) => label.channelIds) : []
+    );
     if (
       !readJoined ||
       !byType ||
-      candidates.every((candidate) => candidate.channelType !== undefined)
+      candidates.every(
+        (candidate) =>
+          candidate.channelType !== undefined ||
+          labelled.has(candidate.channelId)
+      )
     ) {
       return conflictsAmong(key, change, candidates);
     }
