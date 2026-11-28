@@ -4,6 +4,10 @@ import {
   setEmailRowStyle,
 } from '@app/features/email-view/primitives/email-row-style';
 import { t } from '@app/lib/i18n';
+import {
+  markEmailReadOnOpen,
+  setMarkEmailReadOnOpen,
+} from '@app/preferences/email-read-on-open';
 import { toast } from '@core/component/Toast/Toast';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
@@ -58,6 +62,13 @@ export function EmailSettings(props: { displayOptions: boolean }) {
           <EmailDisplayOptions />
         </SettingsSection>
       </Show>
+      <SettingsSection
+        title={t('settingsEmail.reading')}
+        target="Reading"
+        description={t('settingsEmail.readingDescription')}
+      >
+        <EmailReadingOptions />
+      </SettingsSection>
       <SettingsSection
         title="Signatures"
         description="Create a signature for each email account and preview it before sending."
@@ -151,6 +162,25 @@ export function EmailDisplayOptions() {
         />
         <p class="sr-only">{t('settingsEmail.rowStyleDescription')}</p>
       </div>
+    </SettingsCard>
+  );
+}
+
+function EmailReadingOptions() {
+  return (
+    <SettingsCard>
+      <SettingsRow
+        label={t('settingsEmail.markReadOnOpen')}
+        description={t('settingsEmail.markReadOnOpenDescription')}
+      >
+        <ToggleSwitch
+          size="md"
+          label={t('settingsEmail.markReadOnOpen')}
+          labelClass="sr-only"
+          checked={markEmailReadOnOpen()}
+          onChange={setMarkEmailReadOnOpen}
+        />
+      </SettingsRow>
     </SettingsCard>
   );
 }

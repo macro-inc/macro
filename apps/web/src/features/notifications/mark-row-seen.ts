@@ -2,6 +2,7 @@ import {
   type EntityWithRawNotifications,
   getEntityNotifications,
 } from '@app/features/soup/entity-notifications';
+import { markEmailReadOnOpen } from '@app/preferences/email-read-on-open';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { type EntityData, isGithubPrEntity } from '@entity/types/entity';
 import {
@@ -39,7 +40,7 @@ export function markRowNotificationsSeenOnOpen(
   if (!READ_ON_OPEN_TYPES.has(entity.type)) return;
   if (entity.type === 'foreign' && !isGithubPrEntity(entity)) return;
 
-  if (entity.type === 'email' && !entity.isRead) {
+  if (entity.type === 'email' && !entity.isRead && markEmailReadOnOpen()) {
     fireAndForget(markEmailThreadSeen({ threadId: entity.id }), 'email-read');
   }
 

@@ -18,8 +18,12 @@ const mocks = vi.hoisted(() => ({
   entitySeen: vi.fn(),
   feed: vi.fn<() => UnifiedNotification[]>(() => []),
   started: false,
+  markReadOnOpen: true,
 }));
 
+vi.mock('@app/preferences/email-read-on-open', () => ({
+  markEmailReadOnOpen: () => mocks.markReadOnOpen,
+}));
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_DOCUMENT_MENTION_NOTIFICATIONS: true,
 }));
@@ -101,6 +105,7 @@ afterEach(() => {
   mocks.emailSeen.mockReset();
   mocks.entitySeen.mockClear();
   mocks.started = false;
+  mocks.markReadOnOpen = true;
   mocks.feed.mockReturnValue([]);
 });
 
@@ -280,6 +285,30 @@ it('marks an unread email with a draft reply in its owning inbox without waiting
       threadId: 'unread-thread',
     });
     expect(mocks.seen).not.toHaveBeenCalled();
+  } finally {
+    dispose();
+  }
+});
+
+it('leaves an opened email unread when marking read on open is off', () => {
+  mocks.markReadOnOpen = false;
+  const { source, dispose } = createSource();
+  try {
+    markRowNotificationsSeenOnOpen(
+      {
+        type: 'email',
+        id: 'unread-thread',
+        ownerId: 'owner',
+        name: 'Email',
+        isRead: false,
+        isDraft: false,
+        isImportant: false,
+        done: false,
+        notifications: [],
+      },
+      source
+    );
+    expect(mocks.emailSeen).not.toHaveBeenCalled();
   } finally {
     dispose();
   }
