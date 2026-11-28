@@ -35,16 +35,22 @@ export function channelsByIdsQueryArgs(
 /**
  * Keep each channel list's bounded unread and mention projections current,
  * including cached rows. A list given `channelTypes` also waits for a new
- * channel of those types to reach its first page.
+ * channel of those types to reach its first page. While `laterPages` is
+ * false, only the first page is read again.
  */
 export function registerChannelListNotificationRefresh(
   query: SoupAstItemsQuery,
   channelTypes?: readonly string[],
-  channelIds?: Accessor<ReadonlySet<string>>
+  channelIds?: Accessor<ReadonlySet<string>>,
+  laterPages: Accessor<boolean> = () => true
 ) {
   return registerChannelNotificationRefresh(() => ({
     client: getGraphqlSoupClient(),
-    queries: query.revalidationQueries ?? [],
+    // The first page comes first (its cursor is null).
+    queries: (query.revalidationQueries ?? []).slice(
+      0,
+      laterPages() ? undefined : 1
+    ),
     reader: {
       enabled: query.transport === 'graphql' && query.isEnabled,
       fetching: query.isFetching,

@@ -16,13 +16,21 @@ const UNREAD_CHANNEL_FILTERS = defineQueryFilters({
 });
 
 /**
+ * Pages kept while their view is off screen are read again when it returns
+ * after this long, the time the query counts them fresh.
+ */
+const UNREAD_PAGES_FRESH_MS = 30_000;
+
+/**
  * Read unread membership directly instead of exhausting every collapsed
  * channel list. It reads the 100 most recently updated unread channels, and
  * every page only while `listsEvery` holds: a view that lists each unread
  * channel, such as a collapsed section or an Unread only filter. It reads the
- * next page only while `readsMore` holds too, such as while that view is on
- * screen, and keeps the pages it has. When the view goes, the later pages are
- * dropped, so live updates revalidate the first page alone.
+ * next page, and live updates read the later pages again, only while
+ * `readsMore` holds too, such as while that view is on screen; it keeps the
+ * pages it has meanwhile, and reads them again on return once they have gone
+ * stale. When the view goes, the later pages are dropped, so live updates
+ * revalidate the first page alone.
  */
 export function useCollapsedUnreadChannels(
   enabled: Accessor<boolean>,
@@ -36,18 +44,20 @@ export function useCollapsedUnreadChannels(
     }),
     () => ({
       enabled: enabled(),
-      staleTime: 30_000,
+      staleTime: UNREAD_PAGES_FRESH_MS,
       graphqlProjection: 'channel-list',
     })
   );
+  const reading = () => listsEvery() && readsMore();
   registerChannelListNotificationRefresh(
     query,
-    channelTypesShownBy(UNREAD_CHANNEL_FILTERS)
+    channelTypesShownBy(UNREAD_CHANNEL_FILTERS),
+    undefined,
+    reading
   );
   createEffect(() => {
     if (
-      !listsEvery() ||
-      !readsMore() ||
+      !reading() ||
       !query.isEnabled ||
       query.isPending ||
       query.isFetching ||
@@ -58,6 +68,28 @@ export function useCollapsedUnreadChannels(
       return;
     fireAndForget(query.fetchNextPage(), 'channels-collapsed-unread');
   });
+  let pausedAt: number | undefined;
+  createEffect(
+    on(
+      reading,
+      (now) => {
+        if (!now) {
+          pausedAt ??= Date.now();
+          return;
+        }
+        const since = pausedAt;
+        pausedAt = undefined;
+        if (
+          since === undefined ||
+          Date.now() - since < UNREAD_PAGES_FRESH_MS ||
+          (query.revalidationQueries?.length ?? 0) < 2
+        )
+          return;
+        fireAndForget(query.refresh(), 'channels-collapsed-unread');
+      },
+      { defer: true }
+    )
+  );
   createEffect(
     on(
       listsEvery,
