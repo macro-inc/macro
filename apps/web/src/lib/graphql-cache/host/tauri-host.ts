@@ -267,7 +267,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   // registered view when the binary still holds it.
   const readEntityFilter = async (
     args: EntityFilterCacheArgs,
-    command: string
+    command: 'graphql_cache_entity_filter' | 'graphql_cache_entity_filter_rows'
   ): Promise<EntityFilterCacheResult> => {
     const live = args.liveQuery;
     if (live?.release) liveQueries.delete(live.id);
