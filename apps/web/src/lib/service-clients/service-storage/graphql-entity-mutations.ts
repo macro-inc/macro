@@ -1,5 +1,6 @@
 import { TRACE_PARENT_CONTEXT_KEY } from '@app/lib/urql-solid/trace-parent-exchange';
 import { ThrownResultError } from '@core/util/result';
+import { networkRevalidated } from '@graphql-cache/exchange/network-revalidation-exchange';
 import type { QueryRevalidation } from '@graphql-cache/exchange/optimistic';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { type Span, Telemetry } from '@macro-inc/observability';
@@ -27,7 +28,9 @@ const isEffectsError = (error: GraphQLError) =>
 /** Moves resolve with their cache prediction once durably queued; the other
  * operations have no resolver and wait for the server's result. A result whose
  * effects failed to resolve says so (`effectsResolved: false`): the write
- * committed, but its rows never reached the cache.
+ * committed, but its rows never reached the cache. `listsReadAgain` says the
+ * client's exchange read every mounted list again, each successfully, before
+ * the write settled (no live cache).
  * Never retry a failed/ambiguous GraphQL write through the REST transport. */
 async function mutateEntity<Data, Variables extends AnyVariables>(
   operation: string,
@@ -94,9 +97,18 @@ async function sendEntityMutation<Data, Variables extends AnyVariables>(
   if (effectErrors.length > 0) {
     // The caller reads its lists again for what the patches would carry.
     span.setAttr('entity.effects_error', effectErrors[0]?.message ?? '');
-    return { ...outcome, effects: [], effectsResolved: false };
+    return {
+      ...outcome,
+      effects: [],
+      effectsResolved: false,
+      listsReadAgain: networkRevalidated(result),
+    };
   }
-  return { ...outcome, effectsResolved: true };
+  return {
+    ...outcome,
+    effectsResolved: true,
+    listsReadAgain: networkRevalidated(result),
+  };
 }
 
 /** A move the cache predicts is queued, so the lists it cannot keep current are

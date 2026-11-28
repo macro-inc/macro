@@ -6,6 +6,10 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   host: vi.fn(),
   unmaintained: vi.fn(),
+  readAgain: vi.fn(),
+}));
+vi.mock('@graphql-cache/exchange/network-revalidation-exchange', () => ({
+  networkRevalidated: mocks.readAgain,
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
   getEntityGraphqlClient: () => ({ mutation: mocks.mutation }),
@@ -40,6 +44,7 @@ beforeEach(() => {
   mocks.refresh.mockResolvedValue(undefined);
   mocks.host.mockReturnValue({ disabled: false });
   mocks.unmaintained.mockReturnValue(UNMAINTAINED);
+  mocks.readAgain.mockReturnValue(false);
   mocks.mutation.mockReturnValue({
     toPromise: async () => ({
       data: {
@@ -87,9 +92,11 @@ it('reads only the lists the cache cannot keep current after a write', async () 
   });
 });
 
-it('leaves the lists to the client without a live cache', async () => {
-  // Its exchange read every mounted list before the write settled.
+it('leaves the lists to the client when its exchange read them all', async () => {
+  // Without a live cache the exchange read every mounted list, each
+  // successfully, before the write settled.
   mocks.host.mockReturnValue(undefined);
+  mocks.readAgain.mockReturnValue(true);
   mocks.mutation.mockReturnValue(trashed([]));
   await trashEntity({ type: 'DOCUMENT', id: 'entity' });
   expect(mocks.refresh).not.toHaveBeenCalled();
@@ -366,3 +373,35 @@ it('never mistakes a source or parent patch for the duplicated entity', async ()
   ).rejects.toThrow('no copy identity');
   expect(mocks.mutation).toHaveBeenCalledOnce();
 });
+
+it.each([
+  [
+    'trash',
+    () => trashEntity({ type: 'DOCUMENT', id: 'entity' }),
+    'trashEntities',
+  ],
+  [
+    'move',
+    () => moveEntity({ type: 'DOCUMENT', id: 'entity' }, 'project'),
+    'moveEntities',
+  ],
+])(
+  'reads every list in its own order when the exchange could not, after a %s without a live cache',
+  async (_, write, field) => {
+    mocks.host.mockReturnValue(undefined);
+    mocks.readAgain.mockReturnValue(false);
+    mocks.mutation.mockReturnValue({
+      toPromise: async () => ({
+        data: {
+          [field]: {
+            results: [{ __typename: 'GraphqlMutationSuccess', effects: [] }],
+          },
+        },
+      }),
+    });
+    await write();
+    expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith({
+      unmaintainedOnly: false,
+    });
+  }
+);
