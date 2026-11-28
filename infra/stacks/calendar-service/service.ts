@@ -414,7 +414,10 @@ export class CalendarService extends pulumi.ComponentResource {
         scalableDimension: serviceScalableTarget.scalableDimension,
         serviceNamespace: serviceScalableTarget.serviceNamespace,
         targetTrackingScalingPolicyConfiguration: {
-          targetValue: 70.0,
+          // A share of task memory: half of 70% in dev's 2 GB task keeps
+          // scaling out at the 717 MiB it did at 1 GB, before the service's
+          // 512 MiB limit there.
+          targetValue: stack === 'prod' ? 70.0 : 35.0,
           predefinedMetricSpecification: {
             predefinedMetricType: 'ECSServiceAverageMemoryUtilization',
           },
