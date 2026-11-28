@@ -25,6 +25,12 @@ type LambdaArgs<T extends Record<string, any>> = {
   ephemeralStorageSize?: number;
   reservedConcurrentExecutions?: number;
   layers?: pulumi.Input<pulumi.Input<string>[]>;
+  /**
+   * Resources the function itself waits for on create and update, such as the
+   * policies its extensions need at init. A `dependsOn` in the component's
+   * options doesn't reach the function.
+   */
+  dependsOn?: pulumi.Resource[];
   tags: { [key: string]: string };
 };
 
@@ -48,6 +54,7 @@ export class Lambda<
       ephemeralStorageSize,
       reservedConcurrentExecutions,
       layers,
+      dependsOn,
       tags,
     }: LambdaArgs<T>,
     opts?: pulumi.ComponentResourceOptions
@@ -163,7 +170,8 @@ export class Lambda<
       },
       {
         parent: this,
-        dependsOn: [hashResource], // this ensures the zip is updated with the new source code after a build
+        // The hash ensures the zip is updated with the new source code after a build.
+        dependsOn: [hashResource, ...(dependsOn ?? [])],
       }
     );
   }

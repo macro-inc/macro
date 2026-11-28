@@ -6,6 +6,8 @@ import {
   getKafkaClusterPolicy,
   getMacroApiToken,
   getServiceUrl,
+  grafanaIngestSecretArn,
+  grafanaTelemetryEnabled,
   ServiceUrl,
   stack,
 } from '../../packages/shared';
@@ -75,6 +77,10 @@ new NotificationRetention('notification-retention', {
   dryRun: config.getBoolean('notification_retention_dry_run') ?? true,
   vpc: coparse_api_vpc,
   tags,
+  // Its spans go to Grafana where the ECS services' do.
+  grafanaIngestSecretArn: grafanaTelemetryEnabled
+    ? grafanaIngestSecretArn
+    : undefined,
 });
 
 const cloudStorageStack = new pulumi.StackReference('cloud-storage-stack', {

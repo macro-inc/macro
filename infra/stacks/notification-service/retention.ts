@@ -2,13 +2,57 @@ import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { Lambda } from '../../packages/lambda';
 import { DATADOG_API_KEY_SECRET_ARN } from '../../packages/resources';
-import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '../../packages/shared';
+import {
+  CLOUD_TRAIL_SNS_TOPIC_ARN,
+  GRAFANA_OTLP_INGEST_URL,
+  stack,
+} from '../../packages/shared';
 
 const BASE_NAME = 'notification_retention_handler';
 const REPO_ROOT = '../../..';
 // Pinned public x86_64 layer, verified in us-east-1. Supports OTLP gRPC.
 const DATADOG_EXTENSION_ARN =
   'arn:aws:lambda:us-east-1:464622532012:layer:Datadog-Extension:101';
+// Pinned public x86_64 OpenTelemetry Collector layer (release 0.24.0, collector
+// v0.163.0), verified in us-east-1. It sends a copy of the spans to Grafana.
+const GRAFANA_COLLECTOR_ARN =
+  'arn:aws:lambda:us-east-1:184161586896:layer:opentelemetry-collector-amd64-0_24_0:1';
+// The collector's receiver: the same local address the ECS services' Alloy
+// sidecar listens on.
+const GRAFANA_COLLECTOR_ADDRESS = '127.0.0.1:14317';
+
+/**
+ * The Grafana collector's whole config, as JSON (which is YAML). The collector
+ * reads the ingest token from Secrets Manager when it starts; it never sits in
+ * the environment. Each export has a 1.5-second limit, below the entrypoint's
+ * two-second Grafana timeout, and no queue or retries: a Grafana outage costs
+ * failed copies, not a late or failed sweep. Not reading the token does fail
+ * the function's init (see the runbook).
+ */
+function grafanaCollectorConfig(secretArn: pulumi.Output<string>) {
+  return pulumi.jsonStringify({
+    receivers: {
+      otlp: { protocols: { grpc: { endpoint: GRAFANA_COLLECTOR_ADDRESS } } },
+    },
+    exporters: {
+      'otlphttp/grafana': {
+        endpoint: GRAFANA_OTLP_INGEST_URL,
+        headers: {
+          Authorization: pulumi.interpolate`Bearer \${secretsmanager:${secretArn}}`,
+        },
+        timeout: '1500ms',
+        sending_queue: { enabled: false },
+        retry_on_failure: { enabled: false },
+      },
+    },
+    service: {
+      pipelines: {
+        traces: { receivers: ['otlp'], exporters: ['otlphttp/grafana'] },
+      },
+      telemetry: { logs: { level: 'warn' }, metrics: { level: 'none' } },
+    },
+  });
+}
 
 type RetentionEnvVars = {
   DATABASE_URL: pulumi.Output<string> | string;
@@ -20,6 +64,10 @@ type RetentionEnvVars = {
   DD_API_KEY_SECRET_ARN: pulumi.Output<string>;
   DD_OTLP_CONFIG_RECEIVER_PROTOCOLS_GRPC_ENDPOINT: string;
   DD_SERVERLESS_LOGS_ENABLED: string;
+  GRAFANA_OTLP_ENDPOINT?: string;
+  GRAFANA_COLLECTOR_CONFIG?: pulumi.Output<string>;
+  OPENTELEMETRY_COLLECTOR_CONFIG_URI?: string;
+  OPENTELEMETRY_EXTENSION_LOG_LEVEL?: string;
 };
 
 type Args = {
@@ -32,6 +80,11 @@ type Args = {
     privateSubnetIds: pulumi.Output<string[]> | string[];
   };
   tags: Record<string, string>;
+  /**
+   * The Grafana ingest token's secret, in stacks whose ECS services send to
+   * Grafana: the function then also sends Grafana a copy of its spans.
+   */
+  grafanaIngestSecretArn?: pulumi.Output<string>;
 };
 
 /** Isolated maintenance worker with explicit scheduling and dry-run controls. */
@@ -44,7 +97,8 @@ export class NotificationRetention extends pulumi.ComponentResource {
     opts?: pulumi.ComponentResourceOptions
   ) {
     super('macro:notifications:Retention', name, {}, opts);
-    const { databaseUrl, enabled, dryRun, vpc, tags } = args;
+    const { databaseUrl, enabled, dryRun, vpc, tags, grafanaIngestSecretArn } =
+      args;
     const role = new aws.iam.Role(
       `${BASE_NAME}-role`,
       {
@@ -83,6 +137,30 @@ export class NotificationRetention extends pulumi.ComponentResource {
       },
       { parent: this }
     );
+    // The collector carries only spans; the logs go through the Lambda
+    // component's CloudWatch log subscriptions.
+    const grafana = grafanaIngestSecretArn
+      ? {
+          secretArn: grafanaIngestSecretArn,
+          policy: new aws.iam.RolePolicy(
+            `${BASE_NAME}-grafana-key`,
+            {
+              role: role.id,
+              policy: pulumi.jsonStringify({
+                Version: '2012-10-17',
+                Statement: [
+                  {
+                    Effect: 'Allow',
+                    Action: 'secretsmanager:GetSecretValue',
+                    Resource: grafanaIngestSecretArn,
+                  },
+                ],
+              }),
+            },
+            { parent: this }
+          ),
+        }
+      : undefined;
     this.lambda = new Lambda<RetentionEnvVars>(
       `${BASE_NAME}-lambda`,
       {
@@ -100,19 +178,34 @@ export class NotificationRetention extends pulumi.ComponentResource {
           DD_OTLP_CONFIG_RECEIVER_PROTOCOLS_GRPC_ENDPOINT: '127.0.0.1:4317',
           // Keep the existing CloudWatch → Firehose log path; avoid duplicates.
           DD_SERVERLESS_LOGS_ENABLED: 'false',
+          ...(grafana && {
+            GRAFANA_OTLP_ENDPOINT: `http://${GRAFANA_COLLECTOR_ADDRESS}`,
+            GRAFANA_COLLECTOR_CONFIG: grafanaCollectorConfig(grafana.secretArn),
+            OPENTELEMETRY_COLLECTOR_CONFIG_URI: 'env:GRAFANA_COLLECTOR_CONFIG',
+            OPENTELEMETRY_EXTENSION_LOG_LEVEL: 'warn',
+          }),
         },
         role,
         vpc,
-        layers: [DATADOG_EXTENSION_ARN],
+        layers: grafana
+          ? [DATADOG_EXTENSION_ARN, GRAFANA_COLLECTOR_ARN]
+          : [DATADOG_EXTENSION_ARN],
         memorySize: 256,
         timeout: 120,
         reservedConcurrentExecutions: 1,
+        // The extensions fetch their keys at init, and the function fails
+        // without them. Creating or updating the function waits for its
+        // role's policies, and the schedule's target waits for the function.
+        // IAM can still take a few seconds to apply a new policy: a run in
+        // that window fails, and the next hour's runs again.
+        dependsOn: grafana
+          ? [datadogSecretPolicy, grafana.policy]
+          : [datadogSecretPolicy],
         tags,
       },
       { parent: this }
     ).lambda;
 
-    // Ensure the extension can fetch its key before EventBridge can invoke it.
     const rule = new aws.cloudwatch.EventRule(
       `${BASE_NAME}-schedule`,
       {
@@ -120,7 +213,7 @@ export class NotificationRetention extends pulumi.ComponentResource {
         state: enabled ? 'ENABLED' : 'DISABLED',
         tags,
       },
-      { parent: this, dependsOn: [datadogSecretPolicy] }
+      { parent: this }
     );
     new aws.cloudwatch.EventTarget(
       `${BASE_NAME}-target`,
