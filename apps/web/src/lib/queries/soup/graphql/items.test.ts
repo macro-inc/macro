@@ -2674,10 +2674,13 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       await more;
       for (const entry of getActiveGraphqlSoupRevalidations()) {
         expect(print(entry.document)).toContain('query MailFolderSoup');
+        expect(entry.variables).toMatchObject({ view: 'SPAM' });
       }
       for (const execution of fake.executions) {
         expect(print(execution.document)).toContain('query MailFolderSoup');
-        expect(print(execution.document)).toContain('sortTs');
+        // The folder date is keyed by the page's view, apart from Home's.
+        expect(print(execution.document)).toContain('sortTs(view: $view)');
+        expect(execution.variables).toMatchObject({ view: 'SPAM' });
       }
     } finally {
       dispose();

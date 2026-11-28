@@ -11,26 +11,23 @@ query Soup($input: SoupInput!) {
 	}
 }
 
-# Spam and Trash pages: the list rows plus the folder date, which no cached
-# list selects. A shared fragment must not carry it: a cached row without it
-# would miss, and it is the fetching view's sort key, not a thread fact.
-query MailFolderSoup($input: SoupInput!) {
+# Spam and Trash pages: the list rows plus the folder date. The date is the
+# fetching view's sort key, not a thread fact, so it is keyed by `$view`
+# (the input's `emailView`): Home's unread presence reads the plain
+# `sortTs`, and a shared fragment would make every cached row without it miss.
+query MailFolderSoup($input: SoupInput!, $view: GraphqlEmailView!) {
 	user {
 		id
 		emailLinks @cacheOnly { ...MailAccountFields }
 		soup(input: $input) {
 			items {
-				...MailFolderItemFields
+				...SoupItemFields
+				... on GraphqlSoupEmailThread {
+					sortTs(view: $view)
+				}
 			}
 			nextCursor
 		}
-	}
-}
-
-fragment MailFolderItemFields on GraphqlSoupEntity {
-	...SoupItemFields
-	... on GraphqlSoupEmailThread {
-		sortTs
 	}
 }
 

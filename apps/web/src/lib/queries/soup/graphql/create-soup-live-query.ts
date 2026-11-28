@@ -34,9 +34,9 @@ import {
   ChannelListItemFieldsFragmentDoc,
   ChannelListSoupDocument,
   type ChannelListSoupQuery,
-  MailFolderItemFieldsFragmentDoc,
   MailFolderSoupDocument,
   type MailFolderSoupQuery,
+  type MailFolderSoupQueryVariables,
   MailItemFieldsFragmentDoc,
   SoupDocument,
   type SoupInitialInput,
@@ -124,6 +124,20 @@ const SOUP_DOCUMENTS = {
 
 const soupDocumentFor = (projection: SoupProjection | undefined) =>
   projection ? SOUP_DOCUMENTS[projection] : SoupDocument;
+
+// A folder page keys its folder date by the page's view (`MailFolderSoup`).
+const soupVariables = (
+  projection: SoupProjection | undefined,
+  input: GraphqlSoupInput
+): SoupQueryVariables | MailFolderSoupQueryVariables => {
+  if (projection !== 'mail-folder') return { input };
+  const view =
+    'initial' in input
+      ? input.initial?.emailView
+      : input.continuation?.emailView;
+  if (!view) throw new Error('a mail folder page needs an email view');
+  return { input, view };
+};
 
 // A page result can carry the viewer without its `soup` field. Selection runs
 // over every loaded page, so such a page reads as unloaded instead of failing
@@ -279,7 +293,8 @@ export function createSoupLiveQuery(
   const projectionSelections = {
     'channel-list': channelListItemSelection,
     preview: previewItemSelection,
-    'mail-folder': selectRecords(MailFolderItemFieldsFragmentDoc),
+    // Folder pages never read locally; their rows select like any list's.
+    'mail-folder': soupItemSelection,
   } satisfies Record<SoupProjection, unknown>;
   const mailItemSelection = selectRecords(MailItemFieldsFragmentDoc);
   let localRequest = 0;
@@ -501,7 +516,7 @@ export function createSoupLiveQuery(
     | ChannelListSoupQuery
     | SoupPreviewPageQuery
     | MailFolderSoupQuery,
-    SoupQueryVariables,
+    SoupQueryVariables | MailFolderSoupQueryVariables,
     string | null,
     ServerProjection
   >(() => {
@@ -524,7 +539,7 @@ export function createSoupLiveQuery(
         if (!input) {
           throw new Error('GraphQL Soup input became unsupported');
         }
-        return { input };
+        return soupVariables(queryOptions.projection, input);
       },
       getNextPageParam: (lastPage) =>
         hasSoupPage(lastPage)
@@ -647,12 +662,26 @@ export function createSoupLiveQuery(
     if (!isEnabled()) return [];
     if (cacheFirstEntities()) {
       const input = firstPageInput();
-      return input ? [{ document: queryDocument(), variables: { input } }] : [];
+      return input
+        ? [
+            {
+              document: queryDocument(),
+              variables: soupVariables(options().projection, input),
+            },
+          ]
+        : [];
     }
     const cursors = new Set([null, ...(query.data?.pageParams ?? [])]);
     return [...cursors].flatMap((cursor) => {
       const input = inputForCursor(cursor);
-      return input ? [{ document: queryDocument(), variables: { input } }] : [];
+      return input
+        ? [
+            {
+              document: queryDocument(),
+              variables: soupVariables(options().projection, input),
+            },
+          ]
+        : [];
     });
   };
   onCleanup(

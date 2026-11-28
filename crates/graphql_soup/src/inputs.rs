@@ -448,7 +448,7 @@ fn email_preview_view(
 
 /// GraphQL input representing the email view.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
-enum GraphqlEmailView {
+pub(crate) enum GraphqlEmailView {
     /// The inbox option.
     Inbox,
     /// The drafts option.

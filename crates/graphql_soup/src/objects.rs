@@ -39,6 +39,7 @@ use soup::domain::models::{EnrichedSoupItem, SoupProjectionHydration, grouping::
 use soup_filter_projection::{encode_cache_projection_supplement, project_soup_cache_supplement};
 use uuid::Uuid;
 
+use crate::inputs::GraphqlEmailView;
 use crate::loaders::SoupItemDataLoader;
 
 /// Opaque, version-framed server-fact supplement selected only by cache-aware
@@ -1900,8 +1901,13 @@ where
         self.0.thread.project_id.as_ref().map(|id| ID(id.clone()))
     }
 
-    /// Timestamp used for email thread sorting, in RFC 3339 format.
-    async fn sort_ts(&self) -> String {
+    /// Timestamp the page that returned this thread sorts by, in RFC 3339
+    /// format. It follows the page's `emailView` (Spam and Trash sort by the
+    /// newest message in the folder), so a client that caches it per thread
+    /// passes the page's own `emailView` as `view` to keep each view's value
+    /// apart. `view` only keys the cache: it never changes the value, so a
+    /// `view` other than the page's files this page's date under that key.
+    async fn sort_ts(&self, #[graphql(name = "view")] _view: Option<GraphqlEmailView>) -> String {
         self.0.thread.sort_ts.to_rfc3339()
     }
 

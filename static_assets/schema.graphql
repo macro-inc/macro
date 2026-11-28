@@ -10472,9 +10472,14 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	"""
 	projectId: ID
 	"""
-	Timestamp used for email thread sorting, in RFC 3339 format.
+	Timestamp the page that returned this thread sorts by, in RFC 3339
+	format. It follows the page's `emailView` (Spam and Trash sort by the
+	newest message in the folder), so a client that caches it per thread
+	passes the page's own `emailView` as `view` to keep each view's value
+	apart. `view` only keys the cache: it never changes the value, so a
+	`view` other than the page's files this page's date under that key.
 	"""
-	sortTs: String!
+	sortTs(view: GraphqlEmailView): String!
 	"""
 	The created timestamp in RFC 3339 format.
 	"""
