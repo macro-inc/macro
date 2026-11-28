@@ -856,6 +856,73 @@ describe('createUrqlInfiniteQuery', () => {
     expect(query.error).toBeNull();
   });
 
+  it('starts no repair from the notification that a pass has ended', async () => {
+    const fake = makeFakeClient();
+    const options = {
+      query: DOCUMENT,
+      initialPageParam: null,
+      variables: (cursor: string | null) => ({ cursor }),
+      getNextPageParam: (lastPage: Page) => lastPage.nextCursor,
+      select: ({ pages }: { pages: Page[] }) =>
+        pages.flatMap((page) => page.values),
+      repairContinuations: true,
+    };
+    const observer = new InfiniteQueryObserver<
+      Page,
+      Variables,
+      string | null,
+      string[]
+    >(fake.client, options);
+    // A listener that applies its options again on every notification, as
+    // a reactive host can; once per notification, not from its own.
+    let applying = false;
+    const unsubscribe = observer.subscribe(() => {
+      if (applying) return;
+      applying = true;
+      try {
+        observer.setOptions(options, fake.client);
+      } finally {
+        applying = false;
+      }
+    });
+    disposals.push(() => {
+      unsubscribe();
+      observer.destroy();
+    });
+    fake.executions[0]?.next({
+      values: ['b', 'member'],
+      nextCursor: 'after-member',
+    });
+    const nextPage = observer.fetchNextPage();
+    fake.executions[1]?.next({ values: ['c'], nextCursor: null });
+    await nextPage;
+
+    // A failed read waits for the next page update.
+    pushMemberAcross(fake);
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(3));
+    const offline = new CombinedError({ networkError: new Error('offline') });
+    fake.executions[2]?.fail(offline);
+    await vi.waitFor(() =>
+      expect(observer.getCurrentResult().error).toBe(offline)
+    );
+    expect(fake.executions).toHaveLength(3);
+
+    // A pass a moving page cuts short rests first.
+    pushMemberAcross(fake);
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(4));
+    fake.executions[0]?.next({
+      values: ['newer', 'new'],
+      nextCursor: 'after-new',
+    });
+    fake.executions[3]?.next({ values: ['member', 'c'], nextCursor: null });
+    await vi.waitFor(() =>
+      expect(observer.getCurrentResult().isFetching).toBe(false)
+    );
+    expect(fake.executions).toHaveLength(4);
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(5));
+    expect(fake.executions[4]?.variables).toEqual({ cursor: 'after-new' });
+  });
+
   it('stops a repair when the list goes back to its first page', async () => {
     const { fake, query } = await twoPagesRepairedWhile(() => true);
 

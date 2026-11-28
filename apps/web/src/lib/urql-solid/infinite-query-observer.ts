@@ -86,8 +86,11 @@ type ReplacementCheck = {
   current?: () => boolean;
 };
 
-/** How a repair pass ended: the chain checked, a page behind it moved, or it stopped. */
-type RepairPassEnd = 'done' | 'moved' | 'stopped';
+/**
+ * How a repair pass ended: the chain checked, a page behind it moved, a read
+ * failed, or it was stopped.
+ */
+type RepairPassEnd = 'done' | 'moved' | 'failed' | 'stopped';
 
 /**
  * A pass that a moving page cut short waits before the next one, longer each
@@ -205,6 +208,8 @@ export class InfiniteQueryObserver<
   private repairPromise: Promise<void> | undefined;
   private repairPause: ReturnType<typeof setTimeout> | undefined;
   private repairPauseMs = 0;
+  /** A repair read failed; the next page update tries again. */
+  private repairWaitsForPage = false;
 
   constructor(
     client: Client,
@@ -589,6 +594,7 @@ export class InfiniteQueryObserver<
       this.failedNextPage = undefined;
     }
 
+    this.repairWaitsForPage = false;
     this.emit();
     this.repairContinuations();
   }
@@ -614,6 +620,7 @@ export class InfiniteQueryObserver<
     clearTimeout(this.repairPause);
     this.repairPause = undefined;
     this.repairPauseMs = 0;
+    this.repairWaitsForPage = false;
     this.setState({ repairing: false, repairError: undefined });
   }
 
@@ -633,6 +640,7 @@ export class InfiniteQueryObserver<
       this.destroyed ||
       this.state.repairing ||
       this.repairPause !== undefined ||
+      this.repairWaitsForPage ||
       this.state.refetching ||
       this.state.fetchingNextPage ||
       this.fetchNextPromise ||
@@ -705,25 +713,31 @@ export class InfiniteQueryObserver<
     try {
       end = await this.repairPass(signal);
     } catch (cause) {
-      if (!signal.aborted)
+      if (!signal.aborted) {
+        end = 'failed';
         this.setState({ repairError: toCombinedError(cause) });
+      }
     } finally {
       if (!signal.aborted) {
         this.repairPromise = undefined;
         this.setState({ repairing: false });
+        // Decided before anyone hears the query went idle, so a listener
+        // that applies options again meanwhile starts no pass.
+        this.holdRepair(end);
         this.emit();
-        this.pauseRepair(end);
       }
     }
   }
 
   /**
-   * Repairs a page that moved under a pass after a pause, which doubles
-   * while each pass is cut short. Page updates during the pause start no
-   * pass: the one at its end covers them, and meanwhile the query is idle,
-   * so the refresh queue and a queued next page or refetch get their turn.
+   * After a failed read, waits for a page update before trying again. After
+   * a pass a moving page cut short, repairs after a pause, which doubles while
+   * each pass is cut short. Page updates during the pause start no pass: the
+   * one at its end covers them, and meanwhile the query is idle, so the
+   * refresh queue and a queued next page or refetch get their turn.
    */
-  private pauseRepair(end: RepairPassEnd): void {
+  private holdRepair(end: RepairPassEnd): void {
+    if (end === 'failed') this.repairWaitsForPage = true;
     if (end !== 'moved') {
       this.repairPauseMs = 0;
       return;
@@ -777,10 +791,11 @@ export class InfiniteQueryObserver<
               Object.is(this.continuationAt(pageIndex), pageParam),
           }
         );
-        if (outcome.kind === 'failed')
+        if (outcome.kind === 'failed') {
           this.setState({ repairError: outcome.error });
-        if (outcome.kind === 'failed' || outcome.kind === 'cancelled')
-          return 'stopped';
+          return 'failed';
+        }
+        if (outcome.kind === 'cancelled') return 'stopped';
       }
       chain = this.checkContinuations();
     }
