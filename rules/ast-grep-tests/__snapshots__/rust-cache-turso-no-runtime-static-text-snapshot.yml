@@ -8,6 +8,17 @@ snapshots:
       start: 0
       end: 25
   ? |
+    fn f(input: String) -> Sql { sql!("SELECT {part}", part = { static PART: OnceLock<String> = OnceLock::new(); PART.get_or_init(|| input).as_str() }) }
+  : labels:
+    - source: '{ static PART: OnceLock<String> = OnceLock::new(); PART.get_or_init(|| input).as_str() }'
+      style: primary
+      start: 58
+      end: 146
+    - source: static
+      style: secondary
+      start: 60
+      end: 66
+  ? |
     fn f(text: String) -> &'static str { Box::leak(text.into_boxed_str()) }
   : labels:
     - source: leak
@@ -45,10 +56,14 @@ snapshots:
   ? |
     macro_rules! text { () => { static SQL: OnceLock<String> = OnceLock::new(); }; }
   : labels:
-    - source: 'macro_rules! text { () => { static SQL: OnceLock<String> = OnceLock::new(); }; }'
+    - source: '{ static SQL: OnceLock<String> = OnceLock::new(); }'
       style: primary
-      start: 0
-      end: 80
+      start: 26
+      end: 77
+    - source: static
+      style: secondary
+      start: 28
+      end: 34
   ? |
     mod std { pub struct Text; }
   : labels:
