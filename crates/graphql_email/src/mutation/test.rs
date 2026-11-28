@@ -72,6 +72,7 @@ struct CapturingEmailMutationService {
     attachment_load_fails: bool,
     thread_load_fails: bool,
     thread_load_missing: bool,
+    reject_folder_thread: Option<Uuid>,
     attachments: Vec<MessageAttachment>,
     attachments_draft: Vec<AttachmentDraft>,
     attachments_forwarded: Vec<AttachmentForwarded>,
@@ -100,6 +101,9 @@ impl EmailMutationService for CapturingEmailMutationService {
             thread_id,
             action,
         });
+        if self.reject_folder_thread == Some(thread_id) {
+            return Err(EmailErr::Unauthorized);
+        }
         Ok(())
     }
     async fn send_email_message(
@@ -385,6 +389,70 @@ fn scheduled_draft_conflict_is_a_deterministic_invalid_save() {
 struct TestEmailThread {
     id: ID,
     is_read: bool,
+}
+
+#[tokio::test]
+async fn folder_write_acknowledges_a_commit_when_the_mail_row_cannot_load() {
+    let rejected_thread_id = Uuid::from_u128(0xdead);
+    let service = Arc::new(CapturingEmailMutationService {
+        thread_load_fails: true,
+        reject_folder_thread: Some(rejected_thread_id),
+        ..Default::default()
+    });
+
+    let response = schema(service.clone())
+        .execute(format!(
+            r#"mutation {{
+                setEmailThreadFolderStates(input: {{
+                    threadIds: ["{TEST_THREAD_ID}", "{rejected_thread_id}"],
+                    field: TRASHED,
+                    value: true
+                }}) {{ threadId error effect {{ id }} }}
+            }}"#
+        ))
+        .await;
+
+    assert_eq!(service.calls.lock().unwrap().len(), 2);
+    assert_eq!(response.errors.len(), 1, "{response:?}");
+    assert_eq!(
+        response.errors[0].path,
+        [
+            async_graphql::PathSegment::Field("setEmailThreadFolderStates".into()),
+            async_graphql::PathSegment::Index(0),
+            async_graphql::PathSegment::Field("effect".into()),
+        ]
+    );
+    assert_eq!(
+        response.data.into_json().unwrap(),
+        serde_json::json!({
+            "setEmailThreadFolderStates": [
+                { "threadId": TEST_THREAD_ID.to_string(), "error": null, "effect": null },
+                { "threadId": rejected_thread_id.to_string(),
+                  "error": "not authorized to update email thread", "effect": null },
+            ]
+        })
+    );
+}
+
+#[tokio::test]
+async fn folder_write_rejects_oversized_batches_before_any_provider_call() {
+    let service = Arc::new(CapturingEmailMutationService::default());
+    let ids = vec![format!(r#""{TEST_THREAD_ID}""#); 33].join(", ");
+    let response = schema(service.clone())
+        .execute(format!(
+            r#"mutation {{
+                setEmailThreadFolderStates(input: {{
+                    threadIds: [{ids}], field: TRASHED, value: true
+                }}) {{ threadId }}
+            }}"#
+        ))
+        .await;
+
+    assert!(service.calls.lock().unwrap().is_empty());
+    assert_eq!(
+        response.errors[0].message,
+        "expected between 1 and 32 email threads"
+    );
 }
 
 impl EmailThreadMutationOutput for TestEmailThreadOutput {
