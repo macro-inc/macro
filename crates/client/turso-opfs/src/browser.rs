@@ -776,7 +776,8 @@ impl ConnectedOpfsSession {
             .clone()
     }
 
-    /// Flushes the WAL when a COMMIT appended to it since its last flush, so
+    /// Flushes the WAL when a COMMIT appended to it since its last flush, or
+    /// when the session opened a non-empty WAL it cannot know was flushed, so
     /// every commit made so far survives an OS crash or power loss. Returns
     /// whether it flushed. A failed flush leaves the WAL due, and the next
     /// call flushes it again.

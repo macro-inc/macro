@@ -1458,8 +1458,9 @@ async fn a_session_flushes_the_wal_it_inherits_unflushed() {
         .execute("CREATE TABLE pages (id INTEGER PRIMARY KEY, body TEXT NOT NULL)")
         .expect("create table");
     drop(connection);
-    // The session ends with its commits appended to the WAL but never
-    // flushed, as when its tab is killed.
+    // The session leaves a non-empty WAL. A killed tab would leave it
+    // unflushed; the next session cannot tell, so it treats any inherited
+    // frames as unflushed (this clean close happens to have synced them).
     let owner = connected
         .try_close()
         .expect("close session")
