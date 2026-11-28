@@ -103,6 +103,17 @@ describe('entity appearance transport', () => {
           operation.kind === 'mutation'
             ? { setEntityAppearance: { effects: [] } }
             : { user: { id: 'viewer', soupEntity: null } },
+        error:
+          operation.kind === 'mutation'
+            ? new CombinedError({
+                graphQLErrors: [
+                  {
+                    message: 'A changed item could not be read back',
+                    path: ['setEntityAppearance', 'effects'],
+                  },
+                ],
+              })
+            : undefined,
       })
     );
     replyWith(reply);
@@ -119,6 +130,25 @@ describe('entity appearance transport', () => {
         input: { entityType: 'DOCUMENT', entityId: 'document' },
       },
     });
+  });
+
+  it('uses the queue recovery when a durable write commits without effects', async () => {
+    const reply = vi.fn((operation: Operation) =>
+      withOptimisticMutationDisposition(
+        {
+          operation,
+          stale: false,
+          hasNext: false,
+          data: { setEntityAppearance: { effects: [] } },
+        },
+        { kind: 'committed', transactionId: 'queued-appearance' }
+      )
+    );
+    replyWith(reply);
+    await expect(
+      setGraphqlEntityAppearance(input, [], () => true)
+    ).resolves.toMatchObject({ queued: false });
+    expect(reply).toHaveBeenCalledOnce();
   });
 
   it('acknowledges a durable queue without response data and releases its retired host', async () => {
