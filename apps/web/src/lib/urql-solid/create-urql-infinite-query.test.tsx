@@ -923,6 +923,30 @@ describe('createUrqlInfiniteQuery', () => {
     expect(fake.executions[4]?.variables).toEqual({ cursor: 'after-new' });
   });
 
+  it('tries a failed repair again when repairs turn back on', async () => {
+    const [repairs, setRepairs] = createSignal(true);
+    const { fake, query } = await twoPagesRepairedWhile(repairs);
+
+    pushMemberAcross(fake);
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(3));
+    const offline = new CombinedError({ networkError: new Error('offline') });
+    fake.executions[2]?.fail(offline);
+    await vi.waitFor(() => expect(query.error).toBe(offline));
+
+    // The section leaves the screen and comes back.
+    setRepairs(false);
+    await Promise.resolve();
+    expect(fake.executions).toHaveLength(3);
+    setRepairs(true);
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(4));
+    expect(fake.executions[3]?.variables).toEqual({ cursor: 'after-b' });
+    fake.executions[3]?.next({ values: ['member', 'c'], nextCursor: null });
+    await vi.waitFor(() =>
+      expect(query.data).toEqual(['new', 'b', 'member', 'c'])
+    );
+    expect(query.error).toBeNull();
+  });
+
   it('stops a repair when the list goes back to its first page', async () => {
     const { fake, query } = await twoPagesRepairedWhile(() => true);
 

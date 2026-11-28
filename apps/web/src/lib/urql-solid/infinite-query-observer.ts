@@ -208,7 +208,10 @@ export class InfiniteQueryObserver<
   private repairPromise: Promise<void> | undefined;
   private repairPause: ReturnType<typeof setTimeout> | undefined;
   private repairPauseMs = 0;
-  /** A repair read failed; the next page update tries again. */
+  /**
+   * A repair read failed; the next page update, or turning repairs on again,
+   * tries again.
+   */
   private repairWaitsForPage = false;
 
   constructor(
@@ -459,6 +462,10 @@ export class InfiniteQueryObserver<
     this.batchEmissions(() => {
       const wasEnabled = this.state.enabled;
       const previousResult = this.getCurrentResult();
+      // Turning repairs on again tries a failed one again; applying the same
+      // options does not.
+      if (options.repairContinuations && !this.options.repairContinuations)
+        this.repairWaitsForPage = false;
       this.options = options;
       this.client = client;
 
