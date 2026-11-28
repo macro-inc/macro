@@ -21,6 +21,12 @@ import { ChannelLabelsNamespace } from './labels';
 const CHANNEL_PAGE_SIZE = 100;
 
 /**
+ * How far before a post's own time its channel's `updated_at` may read: the
+ * server stamps it after the post, from another clock.
+ */
+const UPDATED_AT_SKEW_MS = 60_000;
+
+/**
  * @routing Use when reading or sending channel and direct messages, posting a poll, reacting or managing members; not email, or WhatsApp and other external chats (`macro.externalChats`).
  *
  * @agent
@@ -112,7 +118,8 @@ export class ChannelNamespace {
    * The channels the authenticated user is a member of whose latest message
    * or reply is at or after `after`: the ones worth reading after a gap,
    * the most recently active first; `maxItems` caps how many. Pages through
-   * every channel before yielding; reads no messages.
+   * the channels updated since then, newest first, before yielding; reads no
+   * messages.
    *
    * @readonly
    */
@@ -134,6 +141,10 @@ export class ChannelNamespace {
       readonly record: ApiChannelWithLatest;
     }[] = [];
     for await (const record of this.records(CHANNEL_PAGE_SIZE)) {
+      // The listing is newest `updated_at` first, and a post moves its
+      // channel's `updated_at` to at least the post's time, so no later
+      // channel can be active. The skew allows for the two clocks.
+      if (Date.parse(record.updated_at) < since - UPDATED_AT_SKEW_MS) break;
       const latest = record.latest_message?.created_at;
       if (latest !== undefined && Date.parse(latest) >= since)
         active.push({ latest: Date.parse(latest), record });

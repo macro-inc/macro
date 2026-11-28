@@ -77,23 +77,31 @@ describe('ChannelNamespace', () => {
       mentions: [],
       sender_id: 'macro|user@example.com',
     });
-    const quiet = channel('quiet', 'Quiet');
+    // The listing sorts by `updated_at`, newest first; a post moves it to at
+    // least the post's time, so a later rename can put a quiet channel first.
+    const quiet = {
+      ...channel('quiet', 'Quiet'),
+      updated_at: '2026-11-19T12:00:00Z',
+    };
+    const newest = {
+      ...channel('newest', 'Newest'),
+      updated_at: '2026-11-19T11:00:00Z',
+      latest_message: latest('2026-11-19T11:00:00Z'),
+    };
     const replied = {
       ...channel('replied', 'Replied'),
+      updated_at: '2026-11-19T10:05:00Z',
       latest_message: latest('2026-11-19T10:05:00Z'),
     };
     const old = {
       ...channel('old', 'Old'),
+      updated_at: '2026-11-19T09:00:00Z',
       latest_message: latest('2026-11-19T09:00:00Z'),
-    };
-    const newest = {
-      ...channel('newest', 'Newest'),
-      latest_message: latest('2026-11-19T11:00:00Z'),
     };
     const client = {
       storage: {
         getChannels: async () => ({
-          data: { items: [quiet, replied, old, newest], next_cursor: null },
+          data: { items: [quiet, newest, replied, old], next_cursor: null },
         }),
       },
     } as unknown as MacroClient;
@@ -111,6 +119,68 @@ describe('ChannelNamespace', () => {
       }),
     );
     expect(first.map(({ id }) => id)).toEqual(['newest']);
+  });
+
+  test('activeSince stops paging at the first channel updated before then', async () => {
+    const latest = (created_at: string) => ({
+      message_id: 'm',
+      content: '',
+      created_at,
+      mentions: [],
+      sender_id: 'macro|user@example.com',
+      updated_at: created_at,
+    });
+    const at = (id: string, time: string) => ({
+      ...channel(id, id),
+      updated_at: time,
+      latest_message: latest(time),
+    });
+    const listing: Record<string, ApiChannelListPage> = {
+      first: {
+        items: [
+          at('a', '2026-11-19T11:00:00Z'),
+          // Updated within the minute before `after`, its post can still
+          // count: the server stamps `updated_at` after the post's own time.
+          at('b', '2026-11-19T09:59:30Z'),
+        ],
+        next_cursor: 'cursor-2',
+      },
+      'cursor-2': {
+        items: [
+          {
+            ...at('c', '2026-11-19T09:59:20Z'),
+            latest_message: latest('2026-11-19T10:00:00Z'),
+          },
+          at('d', '2026-11-19T09:00:00Z'),
+        ],
+        next_cursor: 'cursor-3',
+      },
+      'cursor-3': {
+        items: [at('e', '2026-11-19T08:00:00Z')],
+        next_cursor: null,
+      },
+    };
+    const requests: GetChannelsData['query'][] = [];
+    const client = {
+      storage: {
+        getChannels: async (options?: { query?: GetChannelsData['query'] }) => {
+          requests.push(options?.query);
+          return { data: listing[options?.query?.cursor ?? 'first'] };
+        },
+      },
+    } as unknown as MacroClient;
+
+    const ids = [];
+    for await (const active of new ChannelNamespace(client).activeSince(
+      '2026-11-19T10:00:00Z',
+    ))
+      ids.push(active.id);
+
+    expect(ids).toEqual(['a', 'c']);
+    expect(requests).toEqual([
+      { limit: 100 },
+      { limit: 100, cursor: 'cursor-2' },
+    ]);
   });
 
   test('activeSince refuses a value that is not an instant', async () => {
