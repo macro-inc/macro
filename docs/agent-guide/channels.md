@@ -1445,8 +1445,9 @@ lower bound. Further unread pages load only while a section on screen lists
 every unread member (a collapsed section showing its unread rows, or a
 favorites or custom section filtered to Unread only); the pages read stay while
 a section on show lists them and are dropped once none does. While none is on
-screen, notifications refresh only the first page, and the kept pages are read
-again 30 s after they began to miss updates, once one is back on screen.
+screen, notifications refresh only the first page; once one is back on screen,
+each kept page that has missed updates for 30 s is read again, and a page that
+read did not reach before the section left is read on its next return.
 Members no record holds are looked up 25 at a time as an open section's
 loading row comes on screen, ahead of the rows on screen, and after 100 that
 turn out unavailable the section shows **Load more** in place of further
