@@ -2,8 +2,9 @@
 
 use xtask_paths::RepoGlob;
 
-/// Shared by web checks and preview builds so a cache-WASM, fold-WASM,
-/// SQL-WASM, natural-time-WASM, or shared-package change cannot be tested
+/// Shared by web checks and preview builds so a change to a WASM package the
+/// app ships (cache, fold, SQL, natural time, password import, and the Office,
+/// Figma, Photoshop and AI engines) or to a shared package cannot be tested
 /// without being built (or built without being tested). The push-to-main dev
 /// deploy is not path-gated at all — see [`crate::workflows::deploy_on_push`]
 /// for why.
@@ -26,8 +27,13 @@ pub const WEB_ARTIFACT_PATHS: &[RepoGlob<'static>] = &[
     RepoGlob::new("crates/natural_time/**"),
     RepoGlob::new("crates/password_import/**"),
     RepoGlob::new("crates/password_import_wasm/**"),
-    // The local crates the ones above compile, which
-    // `paths_cover_every_local_crate_the_listed_crates_build` keeps complete.
+    RepoGlob::new("crates/ai_engine/**"),
+    RepoGlob::new("crates/docx_engine/**"),
+    RepoGlob::new("crates/fig_engine/**"),
+    RepoGlob::new("crates/pptx_engine/**"),
+    RepoGlob::new("crates/psd_engine/**"),
+    // The other workspace crates those packages compile, which
+    // `paths_cover_every_crate_a_web_wasm_package_compiles` keeps complete.
     RepoGlob::new("crates/bot_id/**"),
     RepoGlob::new("crates/cowlike/**"),
     RepoGlob::new("crates/document_sub_type/**"),
@@ -52,6 +58,10 @@ pub const WEB_ARTIFACT_PATHS: &[RepoGlob<'static>] = &[
     RepoGlob::new("rust-toolchain.toml"),
     // The WASM builds' target flags.
     RepoGlob::new(".cargo/config.toml"),
+    // The flake and dev shell that choose wasm-pack, wasm-bindgen and binaryen.
+    RepoGlob::new("flake.lock"),
+    RepoGlob::new("flake.nix"),
+    RepoGlob::new("nix/cloud-storage.nix"),
 ];
 
 /// Render the shared paths as a YAML sequence at the requested indentation.
