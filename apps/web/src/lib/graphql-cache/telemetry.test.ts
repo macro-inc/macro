@@ -472,6 +472,12 @@ describe('cache telemetry sampling and failure isolation', () => {
     const comments = 'S /* 100 bytes */ /* 9999 bytes */ ';
     const commented = `${comments}${engineExcerpt.template.slice(comments.length)}`;
     recorder.record({ ...slow, queryTemplate: commented });
+    // A comment ending the head, whose closing space is the marker's opening
+    // one: a search that does not overlap matches would never see the marker.
+    const decoy = ' /* 9999 bytes */';
+    const marker = engineExcerpt.template.indexOf(' /* 12050 bytes */ ');
+    const adjacent = `${engineExcerpt.template.slice(0, marker - decoy.length)}${decoy}${engineExcerpt.template.slice(marker)}`;
+    recorder.record({ ...slow, queryTemplate: adjacent });
     recorder.flush();
     expect(events.map((event) => event.queryTemplate)).toEqual([
       engineExcerpt.template,
@@ -480,6 +486,7 @@ describe('cache telemetry sampling and failure isolation', () => {
       undefined,
       undefined,
       commented,
+      adjacent,
     ]);
   });
 
