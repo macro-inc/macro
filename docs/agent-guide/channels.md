@@ -1436,15 +1436,22 @@ Section membership comes from the server's complete visible channel-ID lists.
 The sidebar shows available channel rows immediately, from the channel
 directory's records. Only the rows on screen in open sections (on a phone, the
 selected section tab), with a few beyond each end, are looked up by ID, at most
-200 at a time: one shared by-ID query per batch of up to 25 supplies cached
-channel data and fetches only missing records using Soup's generic
-explicit-entity hydration. A collapsed or scrolled-away section looks up
-nothing; its count comes from the 100 newest unread channels, so beyond 100
-unread a count is a lower bound. Members no record holds are looked up 25 at a
-time as an open section's loading row comes on screen, and after 100 that turn
-out unavailable the section shows **Load more** in place of further loading
-(the phone list too, under its rows or in place of its empty state). Unread
-only sections look up no such members. Channel batching and unread refreshes
+200 at a time in at most 16 lookups: one shared by-ID query per batch of up to
+25 (a sparse list's neighbouring IDs sharing one) supplies cached channel data
+and fetches only missing records using Soup's generic explicit-entity
+hydration. A collapsed or scrolled-away section looks up nothing; its count
+comes from the 100 newest unread channels, so beyond 100 unread a count is a
+lower bound. Further unread pages load only while a section on show lists every
+unread member (a collapsed section showing its unread rows, or a favorites or
+custom section filtered to Unread only), and are dropped once none does.
+Members no record holds are looked up 25 at a time as an open section's
+loading row comes on screen, and after 100 that turn out unavailable the
+section shows **Load more** in place of further loading (the phone list too,
+under its rows or in place of its empty state); the members found stay listed
+while the section is open. Unread only sections look up no such members. With
+sidebar sections off, the original rail renders open favorites whole and looks
+them up within the same caps, and looks up the members of open labels only while a row of theirs is
+on screen in an open team section. Channel batching and unread refreshes
 stay in the channel query layer; the sidebar does not coordinate separate cache
 and network queries. Reading a channel notification retains already-resolved
 section members while their unread state refreshes. Only unresolved members show
@@ -1453,8 +1460,8 @@ Each expanded section appends skeleton rows while its remaining channels load,
 using the same row indentation and icon/text columns as loaded channels.
 A failed fetch keeps available rows and replaces that section's loading feedback
 with Retry. Loading sections must not briefly show an empty-state hint.
-Collapsing a section hides its loading feedback without changing membership or
-stopping shared channel hydration.
+Collapsing a section hides its loading feedback and stops looking up its
+members by ID, without changing membership.
 The header does not show a Loading sections/Retry strip during normal loading.
 Section reads use the shared bounded retry policy, retry on focus, and preserve
 cached sections during a refetch. A failed initial load retains a compact error
