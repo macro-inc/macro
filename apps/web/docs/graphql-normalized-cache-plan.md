@@ -1023,9 +1023,16 @@ shows as `other`); the reason holds fixed text only: no filter value and no unre
 `transport: 'rest'` is a choice, not a fallback, and is not recorded.
 
 Without the cache, a committed GraphQL mutation reads every mounted query
-again before it settles (`networkRevalidationExchange`), so its caller adds no
-refresh of its own; writes that are not GraphQL mutations read mounted Soup
-lists again (`refreshActiveGraphqlSoupQueries`), and so do agent-session metadata events
+again before it settles (`networkRevalidationExchange`). A flat Soup list
+or a project list reads its loaded pages again in cursor order, through the
+`networkRevalidation` its pages carry (`createPagedNetworkRevalidation`), so a
+moved page boundary neither repeats nor drops a row; a refetch already running
+when the write commits is followed by another. The owner reads only while its
+list reads the network (enabled, not paused) and only for its current chain: a
+page key the list has left is sent again for any reader still holding it. Other paged queries, grouped Soup
+lists included, are sent again page by page. Mail
+archive and read-state writes therefore add no refresh of their own; other
+writes read mounted Soup lists again (`refreshActiveGraphqlSoupQueries`), and so do agent-session metadata events
 (`agent-session/list-sync.ts`), which otherwise only read the session's row
 into the cache. A row read while the engine is still opening is written only
 once it opens, in line with lists that loaded meanwhile, so list-sync reads the

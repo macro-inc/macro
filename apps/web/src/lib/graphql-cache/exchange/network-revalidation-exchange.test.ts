@@ -281,4 +281,98 @@ describe('networkRevalidationExchange', () => {
     ).toHaveLength(1);
     list.unsubscribe();
   });
+
+  it('lets a paged reader read its own pages again, once per write', async () => {
+    const { client, requests, respond, flush } = setup();
+    const owner = vi.fn(async () => {});
+    const context = {
+      networkRevalidation: { revalidate: owner, active: () => true },
+    };
+    const first = client.query(LIST, { page: 1 }, context).subscribe(() => {});
+    const second = client.query(LIST, { page: 2 }, context).subscribe(() => {});
+    respond(0);
+    respond(1);
+    const saved = client.mutation(SAVE, {}).toPromise();
+    respond(2);
+    await saved;
+    await flush();
+    expect(owner).toHaveBeenCalledOnce();
+    // The owner reads its pages in order itself; nothing re-sends them.
+    expect(requests).toHaveLength(3);
+    first.unsubscribe();
+    second.unsubscribe();
+  });
+
+  it('settles the write when a paged reader fails or stalls its read', async () => {
+    vi.useFakeTimers();
+    const { client, respond } = setup();
+    const failing = client
+      .query(
+        LIST,
+        { page: 1 },
+        {
+          networkRevalidation: {
+            revalidate: async () => {
+              throw new Error('offline');
+            },
+            active: () => true,
+          },
+        }
+      )
+      .subscribe(() => {});
+    const stalled = client
+      .query(
+        DETAIL,
+        {},
+        {
+          networkRevalidation: {
+            revalidate: () => new Promise(() => {}),
+            active: () => true,
+          },
+        }
+      )
+      .subscribe(() => {});
+    respond(0);
+    respond(1);
+    let settled = false;
+    const saved = client.mutation(SAVE, {}).toPromise();
+    const done = (async () => {
+      await saved;
+      settled = true;
+    })();
+    respond(2);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(15_000);
+    await done;
+    expect((await saved).error).toBeUndefined();
+    failing.unsubscribe();
+    stalled.unsubscribe();
+  });
+
+  it('re-sends a query whose paged reader is gone', async () => {
+    const { client, requests, respond, flush } = setup();
+    let mounted = true;
+    const owner = vi.fn(async () => {});
+    const list = client
+      .query(
+        LIST,
+        { page: 1 },
+        { networkRevalidation: { revalidate: owner, active: () => mounted } }
+      )
+      .subscribe(() => {});
+    respond(0);
+    // The list is gone while another reader keeps the same page mounted.
+    mounted = false;
+    const saved = client.mutation(SAVE, {}).toPromise();
+    respond(1);
+    await flush();
+    respond(2);
+    await saved;
+    expect(owner).not.toHaveBeenCalled();
+    expect(
+      requests.filter(({ operation }) => operation.kind === 'query')
+    ).toHaveLength(2);
+    list.unsubscribe();
+  });
 });

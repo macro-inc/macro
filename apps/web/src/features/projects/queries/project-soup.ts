@@ -1,5 +1,6 @@
 import { usePendingEntityAppearance } from '@app/features/entity-appearance/queries/pending-appearance';
 import { createUrqlInfiniteQuery } from '@app/lib/urql-solid';
+import { createPagedNetworkRevalidation } from '@app/lib/urql-solid/paged-network-revalidation';
 import { isResponseFreeNetworkError } from '@core/util/request-error';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { registerActivityRevalidator } from '@queries/activity/push-registry';
@@ -127,6 +128,11 @@ export function createProjectSoupSource(
   const pendingAppearance = usePendingEntityAppearance();
   const input = createMemo(() => projectSoupInput(filters()));
   const client = createMemo(soupClient);
+  // Without the cache, a committed write reads the list again in cursor order.
+  const networkRevalidation = createPagedNetworkRevalidation(() => query, {
+    chain: () => JSON.stringify(input()),
+    reads: enabled,
+  });
   const query = createUrqlInfiniteQuery<
     ProjectSoupQuery,
     ProjectSoupQueryVariables,
@@ -136,6 +142,7 @@ export function createProjectSoupSource(
     return {
       query: ProjectSoupDocument,
       client: client(),
+      context: { networkRevalidation: networkRevalidation() },
       enabled: enabled(),
       initialPageParam: null,
       requestPolicy: 'cache-and-network',
