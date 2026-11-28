@@ -877,6 +877,15 @@ describe('in-memory channel directory', () => {
     expect(directory.lookup(channelUuid('zzz')).status).toBe('missing');
   });
 
+  it('never vouches that a channel it lists was not removed since', async () => {
+    // No removal reaches it after its pages were read.
+    const network = fakeNetwork([channelRecord('a')]);
+    const directory = mountMemoryDirectory(network);
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    expect(directory.viewsCurrent()).toBe(true);
+    expect(directory.removalsCurrent()).toBe(false);
+  });
+
   it('marks a channel the server does not return as missing before the pages land', async () => {
     const network = fakeNetwork([channelRecord('a')], { holdPages: true });
     const directory = mountMemoryDirectory(network);
@@ -1064,6 +1073,8 @@ type CachedDirectoryOptions = {
   subscribeMembership?: (
     listener: (patch: ChannelMembershipPatch) => void
   ) => () => void;
+  /** Since when soup updates have reached the cache without a break. */
+  updatesLiveSince?: () => number | undefined;
 };
 
 const CACHE_SESSION = 'session-1';
@@ -1182,6 +1193,7 @@ function mountCachedDirectory(
       sessionStartedAt: options.sessionStartedAt,
       departureRechecksMs: options.departureRechecksMs,
       subscribeMembership: options.subscribeMembership,
+      updatesLiveSince: options.updatesLiveSince,
     });
   });
   return {
@@ -1396,6 +1408,133 @@ describe('cached channel directory', () => {
 
       lanePass('g1', '2026-11-21T08:00:01.000Z', 'finished');
       await vi.waitFor(() => expect(directory.viewsCurrent()).toBe(true));
+    });
+
+    it('shows removals as current only after a pass that started while soup updates reached the cache without a break', async () => {
+      let liveSince: number | undefined;
+      const { cache, directory } = mountCachedDirectory([], {
+        sessionStartedAt: Date.parse(LOADED_AT),
+        updatesLiveSince: () => liveSince,
+      });
+      cache.put(channelRecord('a'));
+      // The socket has not connected: no removal is known to reach the cache.
+      lanePass('g1', '2026-11-21T08:00:02.000Z', 'finished');
+      await vi.waitFor(() => expect(directory.viewsCurrent()).toBe(true));
+      expect(directory.removalsCurrent()).toBe(false);
+
+      liveSince = Date.parse('2026-11-21T08:00:01.000Z');
+      expect(directory.removalsCurrent()).toBe(true);
+      // Live only from the moment the pass started: a removal of a record
+      // it read before then may have been missed.
+      liveSince = Date.parse('2026-11-21T08:00:02.000Z');
+      expect(directory.removalsCurrent()).toBe(false);
+      // The socket closed, or a subscription that writes the cache ended.
+      liveSince = undefined;
+      expect(directory.removalsCurrent()).toBe(false);
+
+      // Back, and a pass that started since then finishes.
+      liveSince = Date.parse('2026-11-21T08:05:00.000Z');
+      expect(directory.removalsCurrent()).toBe(false);
+      lanePass('g1', '2026-11-21T08:05:01.000Z', 'finished');
+      await vi.waitFor(() => expect(directory.removalsCurrent()).toBe(true));
+    });
+
+    it('shows no newer pass as current from a by-id read after the full read that would have shown it failed', async () => {
+      let release!: () => void;
+      const byIdGate = new Promise<void>((done) => {
+        release = done;
+      });
+      const { cache, directory, host, hydrate } = mountCachedDirectory(
+        [channelRecord('thin')],
+        {
+          sessionStartedAt: Date.parse(LOADED_AT),
+          updatesLiveSince: () => Date.parse(LOADED_AT),
+          byIdGate,
+        }
+      );
+      cache.put(channelRecord('a'));
+      cache.put(channelRecord('thin'), { incomplete: true });
+      // Read under the last session's pass, which queues the by-id read.
+      lanePass('g1', '2026-11-20T08:00:00.000Z', 'finished');
+      await vi.waitFor(() => expect(hydrate).toHaveBeenCalled());
+      expect(directory.viewsCurrent()).toBe(false);
+
+      // This page's pass finishes, but the full read it starts fails: its
+      // records were never listed.
+      const listings = host.search.mock.calls.length;
+      host.search.mockRejectedValue(new Error('storage busy'));
+      lanePass('g1', '2026-11-21T08:00:01.000Z', 'finished');
+      await vi.waitFor(() => {
+        expect(host.search.mock.calls.length).toBeGreaterThan(listings);
+        expect(host.search.mock.settledResults.at(-1)?.type).toBe('rejected');
+      });
+
+      // The by-id read lands and publishes only the records it reread.
+      release();
+      await vi.waitFor(() =>
+        expect(ids(directory.channels()).sort()).toEqual(['a', 'thin'])
+      );
+      expect(directory.viewsCurrent()).toBe(false);
+      expect(directory.removalsCurrent()).toBe(false);
+    });
+
+    it('stays partial when a by-id read lands after the full read under the first finished pass failed', async () => {
+      let release!: () => void;
+      const byIdGate = new Promise<void>((done) => {
+        release = done;
+      });
+      const { cache, directory, host } = mountCachedDirectory(
+        [channelRecord('b')],
+        { byIdGate }
+      );
+      cache.put(channelRecord('a'));
+      await vi.waitFor(() => expect(ids(directory.channels())).toEqual(['a']));
+      expect(directory.complete()).toBe(false);
+      // A lookup reads the channel by id.
+      expect(directory.lookup(channelUuid('b')).status).toBe('pending');
+
+      const listings = host.search.mock.calls.length;
+      host.search.mockRejectedValue(new Error('storage busy'));
+      completeLane('g1');
+      await vi.waitFor(() => {
+        expect(host.search.mock.calls.length).toBeGreaterThan(listings);
+        expect(host.search.mock.settledResults.at(-1)?.type).toBe('rejected');
+      });
+
+      release();
+      await vi.waitFor(() =>
+        expect(ids(directory.channels()).sort()).toEqual(['a', 'b'])
+      );
+      // Nothing listed the cache under the finished pass.
+      expect(directory.complete()).toBe(false);
+    });
+
+    it('shows no pass of the old storage as current from a by-id read after a reset', async () => {
+      const { cache, directory, host, resetStorage } = mountCachedDirectory(
+        [channelRecord('b')],
+        {
+          sessionStartedAt: Date.parse(LOADED_AT),
+          updatesLiveSince: () => Date.parse(LOADED_AT),
+        }
+      );
+      cache.put(channelRecord('a'));
+      lanePass('g1', '2026-11-21T08:00:01.000Z', 'finished');
+      await vi.waitFor(() => expect(directory.removalsCurrent()).toBe(true));
+
+      // The new storage's first full read fails before it lists anything.
+      const listings = host.search.mock.calls.length;
+      host.search.mockRejectedValue(new Error('storage busy'));
+      resetStorage('g2');
+      await vi.waitFor(() => {
+        expect(host.search.mock.calls.length).toBeGreaterThan(listings);
+        expect(host.search.mock.settledResults.at(-1)?.type).toBe('rejected');
+      });
+
+      // A lookup's by-id read lands in the new storage.
+      directory.lookup(channelUuid('b'));
+      await vi.waitFor(() => expect(ids(directory.channels())).toContain('b'));
+      expect(directory.viewsCurrent()).toBe(false);
+      expect(directory.removalsCurrent()).toBe(false);
     });
 
     it('is not current again once the storage resets', async () => {

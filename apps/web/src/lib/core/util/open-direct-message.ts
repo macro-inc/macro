@@ -45,7 +45,10 @@ export function openDirectMessage(
   viewerId: string | undefined,
   recipientId: string,
   open: OpenDirectMessageChannel,
-  directory?: Pick<ChannelDirectory, 'channels' | 'complete' | 'viewsCurrent'>
+  directory?: Pick<
+    ChannelDirectory,
+    'channels' | 'complete' | 'removalsCurrent'
+  >
 ) {
   return Telemetry.span('channels.open_direct_message', async (span) => {
     // There is no DM with yourself; the server refuses to make one.

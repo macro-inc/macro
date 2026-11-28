@@ -41,6 +41,7 @@ function coldDirectory(channels: readonly DirectoryChannel[]) {
     retry: () => {},
     recordView: () => {},
     viewsCurrent: () => true,
+    removalsCurrent: () => true,
   };
   return { directory, setListed };
 }

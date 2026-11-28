@@ -1,5 +1,6 @@
 import { err, ok } from 'neverthrow';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { make, type Source, subscribe } from 'wonka';
 
 const telemetryError = vi.hoisted(() => vi.fn());
 vi.mock('@macro-inc/observability', () => ({
@@ -30,6 +31,23 @@ function setVisibility(state: DocumentVisibilityState) {
   document.dispatchEvent(new Event('visibilitychange'));
 }
 
+/** A subscription's results, as urql's client hands them out (a source with
+ * a `subscribe` method): `start` gets each subscriber's callbacks and says
+ * how to stop. */
+function resultSource<T>(
+  start: (
+    next: (result: T) => void,
+    end: () => void
+  ) => { unsubscribe: () => void }
+) {
+  const source: Source<T> = make(
+    (observer) => start(observer.next, observer.complete).unsubscribe
+  );
+  return Object.assign(source, {
+    subscribe: (next: (result: T) => void) => subscribe(next)(source),
+  });
+}
+
 afterEach(() => {
   vi.useRealTimers();
   setVisibility('visible');
@@ -49,6 +67,7 @@ import {
   GraphqlSoupWebSocketAuthUnavailableError,
   publishNotificationPatch,
   SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS,
+  SUBSCRIBE_REGISTRATION_MS,
   shouldRetryGraphqlSoupWebSocket,
   subscribeToGraphqlNotificationPatches,
   waitToRetryGraphqlSoupWebSocket,
@@ -218,14 +237,14 @@ describe('GraphQL Soup subscription lifecycle', () => {
     const receive = new Map<unknown, (result: { data?: unknown }) => void>();
     const client = {
       query: vi.fn(),
-      subscription: vi.fn((document) => ({
-        subscribe: (next: (result: { data?: unknown }) => void) => {
+      subscription: vi.fn((document) =>
+        resultSource((next: (result: { data?: unknown }) => void) => {
           receive.set(document, next);
           const unsubscribe = vi.fn();
           unsubscribes.push(unsubscribe);
           return { unsubscribe };
-        },
-      })),
+        })
+      ),
     };
     const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
     const listener = vi.fn();
@@ -264,12 +283,12 @@ describe('GraphQL Soup subscription lifecycle', () => {
     const receive = new Map<unknown, (result: { data?: unknown }) => void>();
     const client = {
       query: vi.fn(),
-      subscription: vi.fn((document) => ({
-        subscribe: (next: (result: { data?: unknown }) => void) => {
+      subscription: vi.fn((document) =>
+        resultSource((next: (result: { data?: unknown }) => void) => {
           receive.set(document, next);
           return { unsubscribe: vi.fn() };
-        },
-      })),
+        })
+      ),
     };
     const refresh = vi.fn(async () => {});
     const unregister = registerActiveGraphqlSoupQuery({
@@ -302,9 +321,7 @@ describe('GraphQL Soup subscription lifecycle', () => {
   it('refetches mounted attachment-filtered Mail lists after a reconnect, not on the first connection', async () => {
     const client = {
       query: vi.fn(),
-      subscription: vi.fn(() => ({
-        subscribe: () => ({ unsubscribe: vi.fn() }),
-      })),
+      subscription: vi.fn(() => resultSource(() => ({ unsubscribe: vi.fn() }))),
     };
     const attachmentList = vi.fn(async () => {});
     const otherList = vi.fn(async () => {});
@@ -341,13 +358,15 @@ describe('GraphQL Soup subscription lifecycle', () => {
     const unsubscribes: Array<ReturnType<typeof vi.fn>> = [];
     const client = {
       query: vi.fn(),
-      subscription: vi.fn(() => ({
-        subscribe: vi.fn(() => {
-          const unsubscribe = vi.fn();
-          unsubscribes.push(unsubscribe);
-          return { unsubscribe };
-        }),
-      })),
+      subscription: vi.fn(() =>
+        resultSource(
+          vi.fn(() => {
+            const unsubscribe = vi.fn();
+            unsubscribes.push(unsubscribe);
+            return { unsubscribe };
+          })
+        )
+      ),
     };
     const lifecycle = createGraphqlSoupSubscriptionsLifecycle({
       suspendOnPagehide: true,
@@ -381,7 +400,7 @@ describe('GraphQL Soup subscription lifecycle', () => {
   it('does not attach browser lifecycle behavior to the native client', () => {
     const unsubscribe = vi.fn();
     const client = {
-      subscription: vi.fn(() => ({ subscribe: () => ({ unsubscribe }) })),
+      subscription: vi.fn(() => resultSource(() => ({ unsubscribe }))),
     };
     const lifecycle = createGraphqlSoupSubscriptionsLifecycle({
       suspendOnPagehide: false,
@@ -398,12 +417,14 @@ describe('GraphQL Soup subscription lifecycle', () => {
     telemetryError.mockClear();
     const receive: Array<(result: { error?: unknown }) => void> = [];
     const client = {
-      subscription: vi.fn(() => ({
-        subscribe: vi.fn((next) => {
-          receive.push(next);
-          return { unsubscribe: vi.fn() };
-        }),
-      })),
+      subscription: vi.fn(() =>
+        resultSource(
+          vi.fn((next) => {
+            receive.push(next);
+            return { unsubscribe: vi.fn() };
+          })
+        )
+      ),
     };
     const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
     lifecycle.replace(
@@ -432,14 +453,16 @@ describe('GraphQL Soup subscription lifecycle', () => {
     > = [];
     const unsubscribes: Array<ReturnType<typeof vi.fn>> = [];
     const client = {
-      subscription: vi.fn(() => ({
-        subscribe: vi.fn((next) => {
-          receive.push(next);
-          const unsubscribe = vi.fn();
-          unsubscribes.push(unsubscribe);
-          return { unsubscribe };
-        }),
-      })),
+      subscription: vi.fn(() =>
+        resultSource(
+          vi.fn((next) => {
+            receive.push(next);
+            const unsubscribe = vi.fn();
+            unsubscribes.push(unsubscribe);
+            return { unsubscribe };
+          })
+        )
+      ),
     };
     const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
     lifecycle.replace(client as never);
@@ -475,12 +498,228 @@ describe('GraphQL Soup subscription lifecycle', () => {
     expect(client.subscription).toHaveBeenCalledTimes(4);
   });
 
+  it('says since when updates reached the cache host without a break', () => {
+    vi.useFakeTimers();
+    const receive: Array<
+      (result: { error?: unknown; hasNext?: boolean }) => void
+    > = [];
+    const client = {
+      query: vi.fn(),
+      subscription: vi.fn(() =>
+        resultSource(
+          vi.fn((next) => {
+            receive.push(next);
+            return { unsubscribe: vi.fn() };
+          })
+        )
+      ),
+    };
+    const host = {
+      disabled: false,
+      onCacheGenerationChanged: () => () => {},
+    };
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle({
+      suspendOnPagehide: true,
+    });
+    try {
+      vi.setSystemTime(1_000);
+      lifecycle.replace(client as never, host as never);
+      // Subscribed, but nothing reaches the server before the socket opens.
+      expect(lifecycle.updatesLiveSince()).toBeUndefined();
+      vi.setSystemTime(2_000);
+      lifecycle.socketConnected();
+      expect(lifecycle.updatesLiveSince()).toBe(
+        2_000 + SUBSCRIBE_REGISTRATION_MS
+      );
+
+      vi.setSystemTime(3_000);
+      lifecycle.socketClosed();
+      expect(lifecycle.updatesLiveSince()).toBeUndefined();
+      // A refresh after the socket closed does not make it live again.
+      lifecycle.connected();
+      expect(lifecycle.updatesLiveSince()).toBeUndefined();
+      vi.setSystemTime(4_000);
+      lifecycle.socketConnected();
+      expect(lifecycle.updatesLiveSince()).toBe(
+        4_000 + SUBSCRIBE_REGISTRATION_MS
+      );
+
+      // A subscription that ended or failed misses what follows.
+      receive.at(-1)?.({ hasNext: true });
+      expect(lifecycle.updatesLiveSince()).toBe(
+        4_000 + SUBSCRIBE_REGISTRATION_MS
+      );
+      receive.at(-1)?.({ error: new Error('lagging'), hasNext: false });
+      expect(lifecycle.updatesLiveSince()).toBeUndefined();
+      // Attached again on the open socket.
+      vi.setSystemTime(5_000);
+      lifecycle.replace(client as never, host as never);
+      expect(lifecycle.updatesLiveSince()).toBe(
+        5_000 + SUBSCRIBE_REGISTRATION_MS
+      );
+
+      // Paused for navigation.
+      dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+      expect(lifecycle.updatesLiveSince()).toBeUndefined();
+      vi.setSystemTime(6_000);
+      dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+      expect(lifecycle.updatesLiveSince()).toBe(
+        6_000 + SUBSCRIBE_REGISTRATION_MS
+      );
+
+      // A cache that takes no updates.
+      host.disabled = true;
+      expect(lifecycle.updatesLiveSince()).toBeUndefined();
+      host.disabled = false;
+      expect(lifecycle.updatesLiveSince()).toBe(
+        6_000 + SUBSCRIBE_REGISTRATION_MS
+      );
+      // Subscriptions without the cache host write no cache.
+      lifecycle.replace(client as never);
+      lifecycle.connected();
+      expect(lifecycle.updatesLiveSince()).toBeUndefined();
+
+      lifecycle.replace(client as never, host as never);
+      expect(lifecycle.updatesLiveSince()).toBe(
+        6_000 + SUBSCRIBE_REGISTRATION_MS
+      );
+      lifecycle.dispose();
+      expect(lifecycle.updatesLiveSince()).toBeUndefined();
+    } finally {
+      lifecycle.dispose();
+      vi.useRealTimers();
+    }
+  });
+
+  it('stops saying updates reach the cache once a subscription ends without a result, until it is attached again', () => {
+    const ends: Array<() => void> = [];
+    const client = {
+      query: vi.fn(),
+      subscription: vi.fn(() =>
+        resultSource((_next, end) => {
+          ends.push(end);
+          return { unsubscribe: vi.fn() };
+        })
+      ),
+    };
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
+    try {
+      lifecycle.replace(
+        client as never,
+        {
+          disabled: false,
+          onCacheGenerationChanged: () => () => {},
+        } as never
+      );
+      lifecycle.socketConnected();
+      expect(lifecycle.updatesLiveSince()).toBeDefined();
+
+      // The server dropped a subscriber that fell behind, before it ever
+      // sent it a result.
+      ends.at(-1)?.();
+      expect(lifecycle.updatesLiveSince()).toBeUndefined();
+      // The socket reconnecting does not attach the ended set again.
+      lifecycle.socketClosed();
+      lifecycle.socketConnected();
+      expect(lifecycle.updatesLiveSince()).toBeUndefined();
+
+      // The next foreground signal attaches a new set.
+      setVisibility('visible');
+      expect(client.subscription).toHaveBeenCalledTimes(6);
+      expect(lifecycle.updatesLiveSince()).toBeDefined();
+    } finally {
+      lifecycle.dispose();
+    }
+  });
+
+  it('stops saying updates reach the cache after a failed result, even while the socket reconnects', () => {
+    vi.useFakeTimers();
+    const receive: Array<(result: { error?: unknown }) => void> = [];
+    const client = {
+      query: vi.fn(),
+      subscription: vi.fn(() =>
+        resultSource((next: (result: { error?: unknown }) => void) => {
+          receive.push(next);
+          return { unsubscribe: vi.fn() };
+        })
+      ),
+    };
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
+    try {
+      lifecycle.replace(
+        client as never,
+        {
+          disabled: false,
+          onCacheGenerationChanged: () => () => {},
+        } as never
+      );
+      lifecycle.socketConnected();
+      expect(lifecycle.updatesLiveSince()).toBeDefined();
+
+      // urql gives no end after GraphQL errors: the subscription may be
+      // gone, and what the failed result carried never reached the cache.
+      receive.at(-1)?.({ error: new Error('subscription failed') });
+      expect(lifecycle.updatesLiveSince()).toBeUndefined();
+      lifecycle.connected();
+      lifecycle.socketClosed();
+      lifecycle.socketConnected();
+      expect(lifecycle.updatesLiveSince()).toBeUndefined();
+
+      // The next foreground signal attaches a new set.
+      vi.setSystemTime(10_000);
+      setVisibility('visible');
+      expect(client.subscription).toHaveBeenCalledTimes(6);
+      expect(lifecycle.updatesLiveSince()).toBe(
+        10_000 + SUBSCRIBE_REGISTRATION_MS
+      );
+
+      // An update the cache failed to take is missed: updates reach it
+      // again only from then, without a new set.
+      vi.setSystemTime(20_000);
+      receive.at(-1)?.({
+        extensions: {
+          __macroNormalizedCache: {
+            source: 'live-network',
+            cacheEffectsApplied: false,
+          },
+        },
+      } as { error?: unknown });
+      expect(lifecycle.updatesLiveSince()).toBe(
+        20_000 + SUBSCRIBE_REGISTRATION_MS
+      );
+      setVisibility('visible');
+      expect(client.subscription).toHaveBeenCalledTimes(6);
+    } finally {
+      lifecycle.dispose();
+    }
+  });
+
+  it('says nothing reaches the cache from a set attached without the cache host, once the host is enabled', () => {
+    const client = {
+      query: vi.fn(),
+      subscription: vi.fn(() => resultSource(() => ({ unsubscribe: vi.fn() }))),
+    };
+    const host = { disabled: true, onCacheGenerationChanged: () => () => {} };
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
+    try {
+      lifecycle.replace(client as never, host as never);
+      lifecycle.socketConnected();
+      // The set holds no SoupUpdates subscription.
+      host.disabled = false;
+      lifecycle.socketClosed();
+      lifecycle.socketConnected();
+      expect(lifecycle.updatesLiveSince()).toBeUndefined();
+    } finally {
+      lifecycle.dispose();
+    }
+  });
+
   it('refreshes activity when it subscribes the same client again', async () => {
     vi.useFakeTimers();
     const client = {
-      subscription: vi.fn(() => ({
-        subscribe: vi.fn(() => ({ unsubscribe: vi.fn() })),
-      })),
+      subscription: vi.fn(() =>
+        resultSource(vi.fn(() => ({ unsubscribe: vi.fn() })))
+      ),
     };
     const refresh = vi.fn();
     const unregister = registerActivityRevalidator({
@@ -504,12 +743,14 @@ describe('GraphQL Soup subscription lifecycle', () => {
     telemetryError.mockClear();
     const receive: Array<(result: { error?: unknown }) => void> = [];
     const client = {
-      subscription: vi.fn(() => ({
-        subscribe: vi.fn((next) => {
-          receive.push(next);
-          return { unsubscribe: vi.fn() };
-        }),
-      })),
+      subscription: vi.fn(() =>
+        resultSource(
+          vi.fn((next) => {
+            receive.push(next);
+            return { unsubscribe: vi.fn() };
+          })
+        )
+      ),
     };
     const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
     lifecycle.replace(client as never);

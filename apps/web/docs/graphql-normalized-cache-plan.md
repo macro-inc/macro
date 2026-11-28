@@ -1820,6 +1820,18 @@ record's on no answer within five seconds); a tab that does not run the
 backfill stays not current until a pass starts after it loaded. A channel
 mention in rendered Markdown waits up to five seconds for a pending lookup.
 
+Opening a person's DM answers from the directory only while it is
+`removalsCurrent()`: no channel removed since the page loaded can still be
+listed. A removal published while no soup update reached the cache (the socket
+not yet connected or closed, the server not yet listening in the first seconds
+after it acknowledged the socket, a subscription that ended or failed, an update
+the cache failed to take, the cache unavailable) never reaches it, so the cached directory is removal-current once a pass has finished
+that started after the page loaded and after updates last began reaching the
+cache without a break (`graphqlSoupCacheUpdatesLiveSince`, kept by the
+subscription lifecycle). The in-memory directory hears of no removal after its
+pages were read and never is. Otherwise the DM lookup asks the server; nothing
+starts a pass when updates resume, so it does until the next pass finishes.
+
 A by-id batch is a `channel_directory.by_id` span in the trace of the view
 whose lookup asked for its first id (`useChannelLookup` passes
 `useFlowTrace()`), so a channel opened on a cold cache shows its read under

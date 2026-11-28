@@ -526,9 +526,12 @@ export function directMessageWithPerson(
   viewerId: string,
   personId: string
 ): string | undefined {
+  // There is no DM with yourself; the server refuses to make one.
+  if (viewerId === personId) return undefined;
   let best: { id: string; at: number } | undefined;
   for (const channel of channels) {
     if (channel.channelType !== 'direct_message') continue;
+    if (!channel.isParticipant) continue;
     if (channel.botParticipants.some(({ leftAt }) => leftAt === null)) continue;
     const members = channel.participants.filter(
       ({ leftAt }) => leftAt === null

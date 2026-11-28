@@ -97,3 +97,13 @@ it('leaves the order to the server when a creation time does not parse', () => {
   ];
   expect(directMessageWithPerson(channels, VIEWER, PERSON)).toBeUndefined();
 });
+
+it('answers no DM with the viewer themselves', () => {
+  const channels = [dm('dm-1', [VIEWER, PERSON])];
+  expect(directMessageWithPerson(channels, VIEWER, VIEWER)).toBeUndefined();
+});
+
+it('passes over a DM the viewer is no longer a participant of', () => {
+  const channels = [dm('dm-1', [VIEWER, PERSON], { isParticipant: false })];
+  expect(directMessageWithPerson(channels, VIEWER, PERSON)).toBeUndefined();
+});

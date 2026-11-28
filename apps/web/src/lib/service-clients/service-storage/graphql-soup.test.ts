@@ -400,6 +400,14 @@ const mocks = vi.hoisted(() => {
   const realtimeClient = { kind: 'realtime' };
   const replaceSubscriptions = vi.fn();
   const subscriptionsConnected = vi.fn();
+  const socketConnected = vi.fn();
+  const socketClosed = vi.fn();
+  const updatesLiveSince = vi.fn((): number | undefined => undefined);
+  // The `on` handlers of each graphql-ws client the page created.
+  const websocketHandlers: Array<{
+    connected?: (socket: unknown) => void;
+    closed?: (event: unknown) => void;
+  }> = [];
   const platformFetch = vi.fn();
   const toastFailure = vi.fn();
   return {
@@ -426,6 +434,7 @@ const mocks = vi.hoisted(() => {
     apiStarted,
     releaseApi: () => releaseApi?.(),
     resetQueue: () => {
+      websocketHandlers.length = 0;
       queuedMutationCount = 0;
       cleanupOrder.length = 0;
       initializationErrorHandler = undefined;
@@ -447,6 +456,10 @@ const mocks = vi.hoisted(() => {
     realtimeClient,
     replaceSubscriptions,
     subscriptionsConnected,
+    socketConnected,
+    socketClosed,
+    updatesLiveSince,
+    websocketHandlers,
     initializeCrmCacheOwner: vi.fn(async () => {}),
     cachedQuery: vi.fn(),
     platformFetch,
@@ -619,7 +632,12 @@ vi.mock('@macro-inc/observability', async (importOriginal) => {
 });
 vi.mock('@service-auth/fetch', () => ({ getMacroApiToken: vi.fn() }));
 vi.mock('graphql-ws', () => ({
-  createClient: () => ({ subscribe: vi.fn(), dispose: vi.fn() }),
+  createClient: (options: {
+    on?: (typeof mocks.websocketHandlers)[number];
+  }) => {
+    mocks.websocketHandlers.push(options.on ?? {});
+    return { subscribe: vi.fn(), dispose: vi.fn() };
+  },
 }));
 vi.mock('../../queries/optimistic-resolvers', () => ({
   soupOptimisticResolvers: [],
@@ -648,6 +666,9 @@ vi.mock('./graphql-soup-websocket', () => ({
   createGraphqlSoupSubscriptionsLifecycle: () => ({
     replace: mocks.replaceSubscriptions,
     connected: mocks.subscriptionsConnected,
+    socketConnected: mocks.socketConnected,
+    socketClosed: mocks.socketClosed,
+    updatesLiveSince: mocks.updatesLiveSince,
     dispose: vi.fn(() => mocks.recordSubscriptionDisposal()),
   }),
 }));
@@ -2487,6 +2508,21 @@ describe('GraphQL Soup browser cache session gate', () => {
       dispose();
       vi.useRealTimers();
     }
+  });
+
+  it('says since when updates reached the cache, as its subscriptions hear the socket', async () => {
+    const soup = await import('./graphql-soup');
+    expect(soup.graphqlSoupCacheUpdatesLiveSince()).toBeUndefined();
+    soup.getGraphqlSoupClient();
+    const socket = mocks.websocketHandlers.at(-1);
+    socket?.connected?.({});
+    expect(mocks.socketConnected).toHaveBeenCalledOnce();
+    socket?.closed?.({});
+    expect(mocks.socketClosed).toHaveBeenCalledOnce();
+
+    mocks.updatesLiveSince.mockReturnValue(1_000);
+    expect(soup.graphqlSoupCacheUpdatesLiveSince()).toBe(1_000);
+    mocks.updatesLiveSince.mockReset();
   });
 
   it('records a cache that stays off, once, and goes on trying', async () => {
