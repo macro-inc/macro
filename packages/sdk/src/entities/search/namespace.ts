@@ -298,7 +298,7 @@ function searchResult(
     }))
     .with({ type: 'channelMessage' }, (hit) => ({
       type: 'channel_message',
-      entity: Message.byId(client, hit.channel_id, hit.message_id),
+      entity: Message.fromSearchHit(client, hit),
       channel: Channel.byId(client, hit.channel_id),
       hit,
       tags,

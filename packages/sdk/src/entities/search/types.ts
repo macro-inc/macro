@@ -96,7 +96,11 @@ type Entry<Kind extends Hit['type'], Type extends string, Entity> = {
   tags: WorkspaceTag[];
 };
 
-/** One match, discriminated by `type`. */
+/**
+ * One match, discriminated by `type`: `channel_message`, `calendar_event`
+ * and `agent_session` are snake_case, while `hit.type` keeps the search
+ * service's camelCase names (`channelMessage`).
+ */
 export type SearchResult =
   | Entry<'document', 'document', Document>
   | Entry<'email', 'email', EmailThread>
