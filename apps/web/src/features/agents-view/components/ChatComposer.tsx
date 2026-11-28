@@ -228,12 +228,17 @@ export function ChatComposer(props: {
     });
   };
 
+  // Sending clears the editor itself, often inside Lexical's Enter command.
+  // Replacing the contents there would commit that update early and freeze
+  // the selection the caret update then moves.
+  let sending = false;
+
   // Only host draft changes should replace the editor contents.
   createEffect(
     on(
       () => props.draft,
       (draft) => {
-        if (draft === editor.controls.getMarkdown()) return;
+        if (sending || draft === editor.controls.getMarkdown()) return;
         editor.controls.setMarkdown(draft);
         hostMarkdown = editor.controls.getMarkdown();
         placeCaretAfterDraft();
@@ -273,7 +278,9 @@ export function ChatComposer(props: {
     )
       return;
     const attached = attachments();
+    sending = true;
     props.onDraftChange('');
+    sending = false;
     editor.controls.clear();
     props.onSend(prompt, attached);
   };
