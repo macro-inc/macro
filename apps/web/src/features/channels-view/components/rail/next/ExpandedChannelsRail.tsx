@@ -278,14 +278,25 @@ function BrowseRow(props: {
           when={props.row.kind === 'reference-status' ? props.row : undefined}
         >
           {(row) => (
-            <Show
-              when={row().state === 'loading'}
-              fallback={
+            <Switch>
+              <Match when={row().state === 'loading'}>
+                <RailListLoadingMore variant="channel" />
+              </Match>
+              <Match when={row().state === 'error'}>
                 <RailListError retry={rail.retryReferencedChannels} compact />
-              }
-            >
-              <RailListLoadingMore variant="channel" />
-            </Show>
+              </Match>
+              <Match when={row().state === 'more'}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    rail.discoverMoreReferencedChannels(row().section)
+                  }
+                >
+                  {t('channelSections.loadMore')}
+                </Button>
+              </Match>
+            </Switch>
           )}
         </Match>
         <Match when={props.row.kind === 'label' ? props.row : undefined}>

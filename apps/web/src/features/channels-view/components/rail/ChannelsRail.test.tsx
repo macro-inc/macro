@@ -74,6 +74,7 @@ const mocks = vi.hoisted(() => ({
   pendingReferenceIds: [] as string[],
   failedReferenceIds: [] as string[],
   unavailableReferenceIds: [] as string[],
+  setUnavailableReferenceIds: (_ids: string[]) => {},
   sectionsEnabled: true,
   unreadRows: [] as ChannelEntity[],
   closedGroups: [] as string[],
@@ -337,6 +338,7 @@ vi.mock('@thisbeyond/solid-dnd', () => ({
 }));
 vi.mock('@ui', async () => ({
   cn: (await import('@ui/utils/classname')).cn,
+  Button: (await import('@ui/components/Button')).Button,
   confirmDialog: mocks.confirmDialog,
   Tabs: () => null,
   Hotkey: () => null,
@@ -409,13 +411,17 @@ vi.mock('@queries/channel/window', async (importOriginal) => {
     useChannelWindow: (window: () => ChannelIdWindow) => {
       const [channels, setChannels] = createSignal(mocks.referencedChannels);
       mocks.setReferencedChannels = setChannels;
+      const [unavailable, setUnavailable] = createSignal(
+        mocks.unavailableReferenceIds
+      );
+      mocks.setUnavailableReferenceIds = setUnavailable;
       mocks.referenceWindow = window;
       return {
         channels,
         retained: () => [],
         pendingIds: () => new Set(mocks.pendingReferenceIds),
         failedIds: () => new Set(mocks.failedReferenceIds),
-        unavailableIds: () => new Set(mocks.unavailableReferenceIds),
+        unavailableIds: () => new Set(unavailable()),
         error: () => undefined,
         isLoading: () => false,
         retry: async () => {},
@@ -872,6 +878,72 @@ describe('bounded reference window', () => {
     expect(unknown?.ids).toEqual(ids.slice(25, 50));
   });
 
+  it('walks past members no lookup found, never asks for them again, and waits for Show more', () => {
+    const ids = numbered('gone', 300);
+    mocks.flags = ['enable-channel-tags'];
+    mocks.labels = [
+      {
+        id: 'section',
+        teamId: 'team',
+        name: 'Section',
+        channelIds: ids,
+        channelCount: ids.length,
+        sortOrder: 0,
+        createdAt: '2026-01-01',
+        updatedAt: '2026-01-01',
+      },
+    ];
+    mount();
+    mocks.rail!.reportSectionRange('label:section', { start: 0, end: 10 });
+    const asked: string[][] = [];
+    const discovered = () =>
+      mocks
+        .referenceWindow?.()
+        .chunks.filter((chunk) => chunk.key.startsWith('unknown:'))
+        .flatMap((chunk) => chunk.ids) ?? [];
+    const status = () =>
+      mocks.actualRows().find((row) => row.kind === 'reference-status')?.state;
+    // Each lookup answers without its members; the window then forgets all
+    // but the last 25 misses, as its bounded retention would.
+    for (let step = 0; step < 20 && discovered().length > 0; step += 1) {
+      const batch = discovered();
+      asked.push(batch);
+      mocks.setUnavailableReferenceIds(batch);
+    }
+    expect(asked).toHaveLength(4);
+    expect(new Set(asked.flat()).size).toBe(100);
+    expect(asked.flat()).toEqual(ids.slice(0, 100));
+    expect(status()).toBe('more');
+
+    mocks.rail!.discoverMoreReferencedChannels('label:section');
+    expect(status()).toBe('loading');
+    expect(discovered()).toEqual(ids.slice(100, 125));
+  });
+
+  it('discovers nothing in an Unread only section', () => {
+    const ids = numbered('member', 60);
+    mocks.flags = ['enable-channel-tags'];
+    mocks.sectionPreferences = { 'label:section': { unreadOnly: true } };
+    mocks.labels = [
+      {
+        id: 'section',
+        teamId: 'team',
+        name: 'Section',
+        channelIds: ids,
+        channelCount: ids.length,
+        sortOrder: 0,
+        createdAt: '2026-01-01',
+        updatedAt: '2026-01-01',
+      },
+    ];
+    mount();
+    mocks.rail!.reportSectionRange('label:section', { start: 0, end: 10 });
+    expect(windowIds()).toEqual([]);
+    expect(
+      mocks.actualRows().some((row) => row.kind === 'reference-status')
+    ).toBe(false);
+  });
+
   it('bounds the original rail to the references the directory lacks', () => {
     mocks.sectionsEnabled = false;
     const ids = numbered('fav', 250);
@@ -1159,6 +1231,69 @@ it('opens search over mounted section rows', async () => {
 
   expect(screen.getByRole('button', { name: 'Found' })).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'One' })).toBeNull();
+});
+
+it('offers Load more in a section whose lookups found nothing, and looks up the next members on a click', async () => {
+  mocks.realRenderer = true;
+  vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(
+    function (this: HTMLElement) {
+      return this.parentElement;
+    }
+  );
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
+    function (this: HTMLElement) {
+      return this.hasAttribute('data-index') ? 34 : 200;
+    }
+  );
+  vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(300);
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+  // Every section is on screen.
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(
+    DOMRect.fromRect({ x: 0, y: 0, width: 300, height: 600 })
+  );
+  const frame = () =>
+    new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  const ids = Array.from({ length: 200 }, (_, index) => `gone-${index}`);
+  mocks.flags = ['enable-channel-tags'];
+  mocks.closedGroups = ['team_channels', 'channels', 'direct_messages'];
+  mocks.labels = [
+    {
+      id: 'section',
+      teamId: 'team',
+      name: 'Section',
+      channelIds: ids,
+      channelCount: ids.length,
+      sortOrder: 0,
+      createdAt: '2026-01-01',
+      updatedAt: '2026-01-01',
+    },
+  ];
+  mount();
+  await frame();
+  const discovered = () =>
+    mocks
+      .referenceWindow?.()
+      .chunks.filter((chunk) => chunk.key.startsWith('unknown:'))
+      .flatMap((chunk) => chunk.ids) ?? [];
+  const missed: string[] = [];
+  for (let step = 0; step < 10 && discovered().length > 0; step += 1) {
+    missed.push(...discovered());
+    mocks.setUnavailableReferenceIds([...missed]);
+    await frame();
+  }
+  expect(missed).toEqual(ids.slice(0, 100));
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Load more' }));
+  await frame();
+  expect(discovered()).toEqual(ids.slice(100, 125));
+  expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
 });
 
 describe('section heading navigation', () => {

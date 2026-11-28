@@ -14,6 +14,7 @@ import type {
 import {
   ALL_THREADS_ROW_ID,
   type ChannelRailRow,
+  type ChannelReferenceStatus,
   type ChannelSectionRow,
   rowKeyForChannel,
   rowKeyForFavorite,
@@ -86,7 +87,9 @@ type SectionOptions = {
   unreadChannelIds: ReadonlySet<string>;
   isLabelOpen?: (labelId: string) => boolean;
   /** Referenced-channel feedback; include custom sections only while expanded. */
-  referenceStatuses?: Partial<Record<ChannelSectionKey, 'loading' | 'error'>>;
+  referenceStatuses?: Partial<
+    Record<ChannelSectionKey, ChannelReferenceStatus>
+  >;
 };
 
 /** Filter after assigning membership so hidden channels never leak into another section. */
@@ -236,6 +239,7 @@ export function buildChannelRailRows(
       rows.push({
         kind: 'reference-status',
         id: `reference-status:${section}`,
+        section,
         group,
         state,
       });

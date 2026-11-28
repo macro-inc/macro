@@ -71,6 +71,13 @@ import {
   canAssignChannel,
   filterChannelLabelMembers,
 } from '../../core/channel-label-eligibility';
+import {
+  advanceMemberDiscovery,
+  type MemberDiscovery,
+  type MemberDiscoverySources,
+  memberDiscoveryBudget,
+  memberDiscoveryStatus,
+} from '../../core/member-discovery';
 import { resolveChannelLabelMemberships } from '../../core/smart-tags';
 import {
   type ChannelsSourceScope,
@@ -94,6 +101,7 @@ import {
   type ChannelLabelDropTarget,
   type ChannelRailActivationMetadata,
   type ChannelRailRow,
+  type ChannelReferenceStatus,
   type ChannelSectionRange,
   type ChannelsRailContext,
   ChannelsRailProvider,
@@ -553,8 +561,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const channelById = (channelId: string) => membersById().get(channelId);
 
   /**
-   * Each section on screen, and the next unknown members below an open one
-   * once the directory has settled.
+   * Each section on screen, and the next batch of an open section's unknown
+   * members while its loading row is on screen, once the directory has
+   * settled.
    */
   function onScreenReferenceSlices(): ChannelWindowSlice[] {
     if (!Object.values(sectionRanges).some(Boolean)) return [];
@@ -579,15 +588,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
       const status = rows?.findIndex((row) => row.kind === 'reference-status');
       if (!range || status === undefined || status < range.start) continue;
       if (status >= range.end || !directorySettled()) continue;
-      const unknown = unknownMembers(label);
-      const unavailable = referenceWindow.unavailableIds();
-      const next = unknown.findIndex((id) => !unavailable.has(id));
-      if (next < 0) continue;
-      slices.push({
-        key: `unknown:${label.id}`,
-        ids: unknown,
-        range: { start: next, end: next + 1 },
-      });
+      const next = labelDiscoveryStatus(label);
+      if (next?.kind !== 'next') continue;
+      slices.push({ key: `unknown:${label.id}`, ids: next.ids });
     }
     return slices;
   }
@@ -606,11 +609,6 @@ export function ChannelsRail(props: ChannelsRailProps) {
       })),
     ];
   }
-  /** Members no list, record or pool holds: rows the rail cannot show yet. */
-  function unknownMembers(label: ChannelLabel) {
-    const members = membersById();
-    return label.channelIds.filter((id) => !members.has(id));
-  }
 
   const favoriteChannels = createMemo(() =>
     favoriteChannelIds().flatMap((id) => channelById(id) ?? [])
@@ -627,6 +625,65 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const isLabelOpen = (labelId: string) =>
     !state.collapsedLabels.includes(labelId);
+
+  // Each open section walks its unknown members once, from a cursor that
+  // only moves forward, and waits for Show more after a run of misses; a
+  // closed section starts again when it opens. An Unread only section lists
+  // what the unread projection holds, so it discovers nothing.
+  const [discoveryExtensions, setDiscoveryExtensions] = createStore<
+    Record<string, number>
+  >({});
+  const discoveryBudget = (labelId: string) =>
+    memberDiscoveryBudget(discoveryExtensions[labelId] ?? 0);
+  const discoversMembers = (label: ChannelLabel) =>
+    sectionsEnabled() &&
+    isLabelOpen(label.id) &&
+    state.sectionPreferences[`label:${label.id}`]?.unreadOnly !== true;
+  const discoverySources = createMemo((): MemberDiscoverySources => {
+    const members = membersById();
+    const unavailable = referenceWindow.unavailableIds();
+    return {
+      isKnown: (id) => members.has(id),
+      isUnavailable: (id) => unavailable.has(id),
+    };
+  });
+  const memberDiscoveries = createMemo<Record<string, MemberDiscovery>>(
+    (previous) => {
+      const sources = discoverySources();
+      const next: Record<string, MemberDiscovery> = {};
+      let changed = false;
+      for (const label of labels()) {
+        if (!discoversMembers(label)) continue;
+        const before = previous[label.id];
+        const after = advanceMemberDiscovery(
+          before,
+          label.channelIds,
+          sources,
+          discoveryBudget(label.id)
+        );
+        next[label.id] = after;
+        if (after !== before) changed = true;
+      }
+      const same =
+        !changed && Object.keys(next).length === Object.keys(previous).length;
+      return same ? previous : next;
+    },
+    {}
+  );
+  const labelDiscoveryStatus = (label: ChannelLabel) => {
+    const discovery = memberDiscoveries()[label.id];
+    if (!discovery) return;
+    return memberDiscoveryStatus(
+      discovery,
+      discoverySources(),
+      discoveryBudget(label.id)
+    );
+  };
+  const discoverMoreReferencedChannels = (section: ChannelSectionKey) => {
+    if (!section.startsWith(LABEL_KEY_PREFIX)) return;
+    const labelId = section.slice(LABEL_KEY_PREFIX.length);
+    setDiscoveryExtensions(labelId, (extensions) => (extensions ?? 0) + 1);
+  };
 
   const channelSectionRows = createMemo(() => {
     const build = sectionsEnabled()
@@ -651,7 +708,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
   };
 
   const referenceStatuses = createMemo(() => {
-    const statuses: Partial<Record<ChannelSectionKey, 'loading' | 'error'>> =
+    const statuses: Partial<Record<ChannelSectionKey, ChannelReferenceStatus>> =
       {};
     if (!sectionsEnabled()) return statuses;
     const pending = referenceWindow.pendingIds();
@@ -672,10 +729,13 @@ export function ChannelsRail(props: ChannelsRailProps) {
     }
     // An open section with members nobody has looked up yet ends in a loading
     // row; while that row is on screen, the window looks up the next ones.
+    // After a run of misses it ends in Show more instead.
     for (const label of labels()) {
-      if (isLabelOpen(label.id)) {
-        statuses[`label:${label.id}`] = statusFor(label.channelIds);
-      }
+      const next = labelDiscoveryStatus(label);
+      if (!next || next.kind === 'done') continue;
+      const key: ChannelSectionKey = `label:${label.id}`;
+      if (next.kind === 'paused') statuses[key] = 'more';
+      else statuses[key] = statusFor(next.ids);
     }
     return statuses;
   });
@@ -1537,6 +1597,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
       ]);
     },
     retryReferencedChannels: referenceWindow.retry,
+    discoverMoreReferencedChannels,
     reportSectionRange,
     isLabelOpen,
     toggleLabel: (labelId) => setLabelOpen(labelId, !isLabelOpen(labelId)),
