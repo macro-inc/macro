@@ -19,12 +19,7 @@ import {
   mapSoupPageToEntityList,
 } from '../transform-utils';
 import { makeGraphqlSoupInput } from './ast';
-import {
-  type ChannelListRow,
-  channelListRow,
-  finishChannelListRow,
-  isChannelListRow,
-} from './channel-list-row';
+import { finishChannelListRow, isChannelListRow } from './channel-list-row';
 import type { GroupedSoupPaging } from './create-grouped-soup-live-query';
 import type { PredicateQueryStatus } from './create-predicate-query';
 import type { SoupLiveRecord } from './create-soup-live-query';
@@ -36,6 +31,7 @@ import { createGraphqlSoupDoneProjection } from './done-projection';
 import { usePendingGraphqlSoupDeleteKeys } from './optimistic-deletions';
 import { usePendingGraphqlSoupDone } from './optimistic-done';
 import { soupItemKey } from './reconciliation';
+import { createServerRowShaper } from './server-row-shaper';
 
 export type GraphqlSoupAstItemsQueryArgs = {
   params: SoupAstParams;
@@ -107,27 +103,13 @@ export function createGraphqlSoupAstItemsQuery(
     key: string;
     record: SoupLiveRecord;
     fetched?: GraphqlSoupItem;
+    /** `fetched` shaped, on a channel-list view. */
+    fetchedRow?: SoupLiveRecord;
   };
   // A channel-list view shows server rows (before the cache serves it, or
-  // while the network is authoritative) as the rows the engine shapes, so a
-  // row keeps one path whichever source holds it. Server rows are versioned
-  // in place: reading one subscribes to its version, and an unchanged shape
-  // keeps the row it had.
-  const serverRows = new WeakMap<
-    object,
-    { json: string; row: ChannelListRow }
-  >();
-  const shapeServerRow = (record: SoupLiveRecord): SoupLiveRecord => {
-    if (isChannelListRow(record)) return record;
-    const raw = readRowSnapshot(record);
-    const row = channelListRow(raw);
-    if (!isChannelListRow(row)) return record;
-    const json = JSON.stringify(row);
-    const cached = serverRows.get(raw);
-    if (cached?.json === json) return cached.row;
-    serverRows.set(raw, { json, row });
-    return row;
-  };
+  // while the network is authoritative) as the rows the engine shapes.
+  const shapeServerRow: (record: SoupLiveRecord) => SoupLiveRecord =
+    createServerRowShaper();
   const shapesRows = createMemo(() => options().projection === 'channel-list');
   const records = createMemo((previous: ProjectionRow[]) => {
     const fetched = new Map<string, GraphqlSoupItem>(
@@ -142,9 +124,13 @@ export function createGraphqlSoupAstItemsQuery(
       const record = shapes ? shapeServerRow(visibleRecord) : visibleRecord;
       const row = old.get(key);
       const baseline = fetched.get(key);
-      return row?.record === record && row.fetched === baseline
+      const fetchedRow =
+        shapes && baseline ? shapeServerRow(baseline) : undefined;
+      return row?.record === record &&
+        row.fetched === baseline &&
+        row.fetchedRow === fetchedRow
         ? row
-        : { key, record, fetched: baseline };
+        : { key, record, fetched: baseline, fetchedRow };
     });
   }, []);
   // Retain raw SoupApiItems only for Mail views (consumed by `itemsById` when
@@ -225,7 +211,7 @@ export function createGraphqlSoupAstItemsQuery(
       const entity = finishChannelListRow(row.record);
       // Sort by the fetched version, as the keyed path does: a local edit
       // must not move page coverage.
-      const fetched = row.fetched ? shapeServerRow(row.fetched) : undefined;
+      const fetched = row.fetchedRow;
       const previous = channelItems.get(row);
       if (
         previous &&
