@@ -2,7 +2,6 @@ import type { ChannelEntity } from '@entity';
 import type { CombinedError } from '@urql/core';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { arrayEquals } from '../../../core/util/compareUtils';
-import { readRowSnapshot } from '../../../graphql-cache/exchange/live-query';
 import type { QueryRevalidation } from '../../../graphql-cache/exchange/optimistic';
 import type { CacheRevision } from '../../../graphql-cache/protocol';
 import type { SoupApiItem } from '../../../service-clients/service-storage/generated/schemas';
@@ -30,6 +29,7 @@ import {
 import { createGraphqlSoupDoneProjection } from './done-projection';
 import { usePendingGraphqlSoupDeleteKeys } from './optimistic-deletions';
 import { usePendingGraphqlSoupDone } from './optimistic-done';
+import { plainSoupRecord } from './plain-record';
 import { soupItemKey } from './reconciliation';
 import { createServerRowShaper } from './server-row-shaper';
 
@@ -159,12 +159,12 @@ export function createGraphqlSoupAstItemsQuery(
       const sort = sortMethod();
       const showSupportedForeignEntities = showForeign();
       const view = { emailView: input()?.emailView };
-      const rawRecord = readRowSnapshot(record as GraphqlSoupItem);
+      const rawRecord = plainSoupRecord(record as GraphqlSoupItem);
       const rawFetched =
         fetched === record
           ? rawRecord
           : fetched
-            ? readRowSnapshot(fetched)
+            ? plainSoupRecord(fetched)
             : undefined;
       const item = mapGraphqlSoupItem(rawRecord, view);
       const fetchedItem =

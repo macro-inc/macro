@@ -1787,8 +1787,10 @@ describe('createGraphqlSoupAstItemsQuery', () => {
         await vi.waitFor(() =>
           expect(query.data()?.[0]).toMatchObject({ documentName: 'After' })
         );
-        expect(query.data()?.[0]).toBe(row);
-        expect(query.data()).toBe(rows);
+        // The changed row is a new object; the one it replaced is unchanged.
+        expect(query.data()?.[0]).not.toBe(row);
+        expect(row).toMatchObject({ documentName: 'Before' });
+        expect(query.data()).not.toBe(rows);
         expect(readRecordsByKeysMock).not.toHaveBeenCalled();
         expect(fake.executions).toHaveLength(1);
       } finally {

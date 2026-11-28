@@ -74,6 +74,9 @@ export function isIdentityPath(
 }
 
 /** Clone selected data for store ownership and attach alias-aware entity keys. */
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
 function entityKey(source: Record<string, unknown>, shape?: QueryShape) {
   const selected = (name: string): unknown => {
     if (!shape) return source[name];
@@ -133,8 +136,7 @@ export function storeValue(
   value: unknown,
   shape?: QueryShape,
   previous?: unknown,
-  previousSnapshot?: unknown,
-  unchanged?: WeakSet<object>
+  previousSnapshot?: unknown
 ): unknown {
   // Untouched, untyped entities must not receive fresh identity symbols on
   // structural reads. Reuse only when their entire selected value is unchanged.
@@ -145,7 +147,6 @@ export function storeValue(
     typeof previous === 'object' &&
     equalQueryValue(value, previousSnapshot)
   ) {
-    unchanged?.add(previous);
     return Reflect.get(previous, $PROXY) ?? previous;
   }
   if (Array.isArray(value)) {
@@ -184,8 +185,7 @@ export function storeValue(
         item,
         shape,
         matched?.value ?? (usePosition ? positional : undefined),
-        matched?.snapshot ?? (usePosition ? snapshot[index] : undefined),
-        unchanged
+        matched?.snapshot ?? (usePosition ? snapshot[index] : undefined)
       );
     });
   }
@@ -206,8 +206,7 @@ export function storeValue(
         before?.[key],
         previousSnapshot !== null && typeof previousSnapshot === 'object'
           ? Reflect.get(previousSnapshot, key)
-          : undefined,
-        unchanged
+          : undefined
       ),
     ])
   );
@@ -220,4 +219,190 @@ export function storeValue(
   if (typeof key === 'string' && before?.[RECONCILE_KEY] === key)
     return reconcile(copy, { key: RECONCILE_KEY, merge: false })(before);
   return copy;
+}
+
+/**
+ * `next`, taking from `previous` every subtree whose selected content is
+ * unchanged, so a reader can compare rows by identity across results. Keyed
+ * list items match by entity key (an insert, removal or reorder keeps every
+ * other row), others by position. `previousSource` is the result `previous`
+ * was shared from: it mirrors `previous` exactly, so a subtree `next` reuses
+ * from it (a patched result keeps every path it did not touch) takes its
+ * shared value without a walk. It allocates only along changes.
+ */
+// A shared row stays the previous value of the next result, so its key is read
+// once per object rather than once per result.
+const sharedKeys = new WeakMap<object, string>();
+function listItemKey(item: unknown, shape?: QueryShape): string | undefined {
+  if (!isObject(item)) return undefined;
+  const known = sharedKeys.get(item);
+  if (known !== undefined) return known;
+  const key = entityKey(item, shape);
+  if (typeof key !== 'string') return undefined;
+  sharedKeys.set(item, key);
+  return key;
+}
+
+export function shareQueryValue(
+  next: unknown,
+  previous: unknown,
+  shape?: QueryShape,
+  previousSource?: unknown
+): unknown {
+  if (Object.is(next, previous) || Object.is(next, previousSource))
+    return previous;
+  if (
+    next === null ||
+    typeof next !== 'object' ||
+    previous === null ||
+    typeof previous !== 'object' ||
+    Array.isArray(next) !== Array.isArray(previous)
+  )
+    return next;
+  if (Array.isArray(next)) {
+    const before = previous as unknown[];
+    const sources = Array.isArray(previousSource)
+      ? (previousSource as unknown[])
+      : undefined;
+    // A patched list keeps most items in place: match those by position and
+    // key the rest only when one is not.
+    let byKey: Map<string, number[]> | undefined;
+    const keyed = () => {
+      if (byKey) return byKey;
+      byKey = new Map();
+      for (const [index, item] of before.entries()) {
+        const key = listItemKey(item, shape);
+        if (key === undefined) continue;
+        const matches = byKey.get(key);
+        if (matches) matches.push(index);
+        else byKey.set(key, [index]);
+      }
+      return byKey;
+    };
+    const taken = new Uint8Array(before.length);
+    let same = next.length === before.length;
+    const shared = next.map((item, index) => {
+      if (
+        sources &&
+        index < sources.length &&
+        Object.is(item, sources[index])
+      ) {
+        taken[index] = 1;
+        return before[index];
+      }
+      const key = listItemKey(item, shape);
+      let match: number | undefined = index;
+      if (key !== undefined) {
+        const matches = keyed().get(key);
+        while (matches?.length && taken[matches[0]]) matches.shift();
+        match = matches?.shift();
+      }
+      if (match !== undefined && match < before.length) taken[match] = 1;
+      const value =
+        match === undefined
+          ? item
+          : shareQueryValue(item, before[match], shape, sources?.[match]);
+      if (value !== before[index]) same = false;
+      return value;
+    });
+    return same ? before : shared;
+  }
+  const source = next as Record<string, unknown>;
+  const base = previous as Record<string, unknown>;
+  const baseSource = isObject(previousSource)
+    ? (previousSource as Record<string, unknown>)
+    : undefined;
+  const keys = Object.keys(source);
+  let same = keys.length === Object.keys(base).length;
+  const shared: Record<string, unknown> = {};
+  for (const key of keys) {
+    const had = Object.hasOwn(base, key);
+    const value = shareQueryValue(
+      source[key],
+      had ? base[key] : undefined,
+      shape?.get(key)?.shape,
+      had ? baseSource?.[key] : undefined
+    );
+    if (!had || value !== base[key]) same = false;
+    shared[key] = value;
+  }
+  return same ? base : shared;
+}
+
+/**
+ * `previous` with each patch shared in at its path: only the containers along
+ * a patch path are copied, so a patch costs its path, not the result.
+ * `previousSource` is the result `previous` mirrors; it speeds up a subtree
+ * only where no earlier patch in the list has changed `previous`. Returns
+ * undefined when a path leaves `previous`, for a full share instead.
+ */
+export function shareQueryPatches(
+  previous: unknown,
+  previousSource: unknown,
+  patches: readonly {
+    path: readonly (string | number)[];
+    value: unknown;
+  }[],
+  shape?: QueryShape
+): unknown {
+  let shared = previous;
+  for (const { path, value } of patches) {
+    const next = shareAtPath(
+      shared,
+      previous,
+      previousSource,
+      path,
+      0,
+      value,
+      shape
+    );
+    if (next === undefined) return undefined;
+    shared = next.value;
+  }
+  return shared;
+}
+
+function shareAtPath(
+  shared: unknown,
+  original: unknown,
+  source: unknown,
+  path: readonly (string | number)[],
+  index: number,
+  value: unknown,
+  shape: QueryShape | undefined
+): { value: unknown } | undefined {
+  if (index === path.length)
+    return {
+      value: shareQueryValue(
+        value,
+        shared,
+        shape,
+        shared === original ? source : undefined
+      ),
+    };
+  if (shared === null || typeof shared !== 'object') return undefined;
+  const part = path[index];
+  const container = shared as Record<string | number, unknown>;
+  if (!Object.hasOwn(container, part)) return undefined;
+  const child = shareAtPath(
+    container[part],
+    shared === original && original !== null && typeof original === 'object'
+      ? (original as Record<string | number, unknown>)[part]
+      : undefined,
+    source !== null && typeof source === 'object'
+      ? (source as Record<string | number, unknown>)[part]
+      : undefined,
+    path,
+    index + 1,
+    value,
+    typeof part === 'string' ? shape?.get(part)?.shape : shape
+  );
+  if (child === undefined) return undefined;
+  if (Object.is(child.value, container[part])) return { value: shared };
+  if (Array.isArray(shared)) {
+    const copy = shared.slice();
+    copy[part as number] = child.value;
+    return { value: copy };
+  }
+  return { value: { ...container, [part]: child.value } };
 }

@@ -82,6 +82,7 @@ import {
   soupReconciliationBaseline,
   unreconciledServerRecords,
 } from './reconciliation';
+import { serverSnapshot, shareServerRows } from './server-snapshot';
 
 /** A Soup query declaration. The source owns page cursors and cache baselines. */
 export type SoupLiveQueryInput = Omit<SoupInitialInput, 'expand'>;
@@ -461,10 +462,13 @@ export function createSoupLiveQuery(
     const soupPages = pages.filter(hasSoupPage);
     return {
       pageParams,
-      // Accessors keep raw payloads outside deep store reconciliation. Rows from
-      // live urql pages retain their field subscriptions; baselines are snapshots.
+      // Read when called, not here: the observer caches this selection by page,
+      // and a page keeps its object through in-place updates. Snapshots are
+      // immutable and keep each unchanged row's object across results.
       records: () =>
-        soupPages.flatMap<GraphqlSoupItem>((page) => page.user.soup.items),
+        soupPages.flatMap<GraphqlSoupItem>(
+          (page) => serverSnapshot(page).user.soup.items
+        ),
       baseline: () =>
         soupPages.flatMap<GraphqlSoupItem>(
           (page) => querySnapshot(page).user.soup.items
@@ -1127,9 +1131,9 @@ export function createSoupLiveQuery(
   const networkIsAuthoritative = (): boolean =>
     !displayLocalProjection()?.mail?.optimistic &&
     (hasUnpersistedPages(firstPageInput()) ||
-      // Once the maintained view has caught up, keep its row stores visible.
-      // Switching from network objects on the first edit would strand readers
-      // holding the original row and replace identities during the interaction.
+      // Once the maintained view has caught up, keep its rows visible: switching
+      // back to network rows on the first edit would replace every row's object
+      // during the interaction.
       ((!maintainedQueryAvailable() ||
         live.data()?.revision !== currentCacheRevision()) &&
         !offline() &&
@@ -1138,6 +1142,11 @@ export function createSoupLiveQuery(
         networkAuthorityRevision() !== undefined &&
         networkAuthorityRevision() === currentCacheRevision()));
 
+  // Server rows as immutable values, each keeping its object while unchanged.
+  const fetchedRows = createMemo((previous: GraphqlSoupItem[] | undefined) => {
+    const records = query.data?.records();
+    return records && shareServerRows(records, previous);
+  });
   // An overlay covers only the server rows that existed when it was evaluated.
   // New server pages must render immediately, even if the next evaluation stalls
   // or fails. Preserve covered decisions and local additions, then append new
@@ -1145,7 +1154,7 @@ export function createSoupLiveQuery(
   const displayData = createMemo((): SoupLiveRecord[] | undefined => {
     const local = displayLocalProjection();
     if (networkIsAuthoritative()) {
-      const fetched = query.data?.records();
+      const fetched = fetchedRows();
       if (!cacheFirstEntities() || !local) return fetched;
       return [
         ...new Map(
@@ -1156,7 +1165,7 @@ export function createSoupLiveQuery(
         ).values(),
       ];
     }
-    if (!local) return query.data?.records();
+    if (!local) return fetchedRows();
     // Mail merges new server evidence in its ordered through-read. Appending
     // it here would bypass membership decisions and the local cursor order.
     if (local.mail) return local.records;
@@ -1189,7 +1198,7 @@ export function createSoupLiveQuery(
             catchUp.generation === pagingGeneration &&
             query.hasNextPage &&
             !offline() &&
-            (query.data?.records().length ?? 0) < catchUp.rows
+            (fetchedRows()?.length ?? 0) < catchUp.rows
           ) {
             const pages = query.data?.pageParams.length ?? 0;
             inStepPageIndex = pages;
@@ -1247,6 +1256,12 @@ export function createSoupLiveQuery(
     return local.records.length === 0 && !offline() && !options().networkPaused;
   };
   usePending('soup.network', isLoading);
+  // One overlaid row per record and pending appearance, so an update keeps the
+  // object of every row it left alone.
+  const appearanceRows = new WeakMap<
+    object,
+    { appearance: string; row: SoupLiveRecord }
+  >();
   return {
     cacheMaintained,
     revalidationQueries,
@@ -1273,14 +1288,20 @@ export function createSoupLiveQuery(
             const appearance =
               type &&
               pendingAppearance(type, record.id, Boolean(activeQueryError()));
-            return appearance ? { ...record, appearance } : record;
+            if (!appearance) return record;
+            const key = JSON.stringify(appearance);
+            const cached = appearanceRows.get(record);
+            if (cached?.appearance === key) return cached.row;
+            const row = { ...record, appearance };
+            appearanceRows.set(record, { appearance: key, row });
+            return row;
           }),
           pendingDeleteKeys(),
           soupItemKey
         )
       );
     }),
-    fetchedRecords: () => query.data?.records() ?? [],
+    fetchedRecords: () => fetchedRows() ?? [],
     cachedMail,
     error,
     fetchError: () => activeQueryError(),

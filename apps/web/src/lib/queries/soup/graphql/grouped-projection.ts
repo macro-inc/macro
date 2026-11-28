@@ -1,6 +1,5 @@
 import { type Accessor, createMemo } from 'solid-js';
 import { arrayEquals } from '../../../core/util/compareUtils';
-import { readRowSnapshot } from '../../../graphql-cache/exchange/live-query';
 import type { GroupSoupQuery } from '../../../service-clients/service-storage/graphql/generated/graphql';
 import {
   type GraphqlSoupItem,
@@ -11,6 +10,7 @@ import { makeGroupComparator, resolveGroupMetaForKey } from '../grouped/api';
 import type { GroupByField, GroupMeta } from '../grouped/types';
 import type { SoupAstItemsData } from '../items';
 import { mapSoupPageToEntityList } from '../transform-utils';
+import { plainSoupRecord } from './plain-record';
 import { soupItemKey } from './reconciliation';
 
 /** Project each loaded row once; nested edits retain the other rows and bins. */
@@ -31,7 +31,7 @@ export function createGraphqlGroupedSoupProjection(
     { equals: arrayEquals }
   );
   const rows = createKeyedProjection(records, soupItemKey, (record) => {
-    const rawRecord = readRowSnapshot(record);
+    const rawRecord = plainSoupRecord(record);
     const item = mapGraphqlSoupItem(rawRecord);
     return {
       id: rawRecord.id,
@@ -90,8 +90,10 @@ export function createGraphqlGroupedSoupProjection(
     undefined,
     { equals: arrayEquals }
   );
+  // Each result is a new snapshot: depend on whether there is one, not on it.
+  const hasSource = createMemo(() => source() !== undefined);
   return createMemo(() =>
-    source()
+    hasSource()
       ? { entities: entities(), groups: groups(), itemsById: itemsById() }
       : undefined
   );

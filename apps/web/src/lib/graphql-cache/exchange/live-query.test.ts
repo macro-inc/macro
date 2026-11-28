@@ -2,12 +2,12 @@ import v8 from 'node:v8';
 import vm from 'node:vm';
 import { gql } from '@urql/core';
 import fc from 'fast-check';
-import { createComputed, createRoot } from 'solid-js';
+import { $PROXY, createComputed, createRoot } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import { describe, expect, it } from 'vitest';
 import { createKeyedProjection } from '../../queries/soup/create-keyed-projection';
 import { supportsStoreReconciliation } from '../../urql-solid/reactive-selection';
-import { LiveQuery, querySnapshot, readRowSnapshot } from './live-query';
+import { LiveQuery, querySnapshot } from './live-query';
 import { applyQueryPatches } from './query-patches';
 import { queryShape } from './query-shape';
 
@@ -355,7 +355,113 @@ describe('live query field propagation', () => {
     });
   });
 
-  it('tracks per-row patches through readRowSnapshot without attaching Solid store nodes to nested arrays', () => {
+  it('publishes a snapshot equal to every result, sharing only unchanged rows', () => {
+    type Item = {
+      __typename: 'Item';
+      id: string;
+      name: string;
+      tags: string[];
+    };
+    const item = (id: number, name = `n${id}`): Item => ({
+      __typename: 'Item',
+      id: String(id),
+      name,
+      tags: [name],
+    });
+    const step = fc.oneof(
+      // Several patches in one result, the last possibly restoring an
+      // object an earlier result held.
+      fc.record({
+        kind: fc.constant('patch' as const),
+        edits: fc.array(
+          fc.record({
+            at: fc.nat(),
+            name: fc.string({ maxLength: 2 }),
+            restore: fc.boolean(),
+          }),
+          { minLength: 1, maxLength: 3 }
+        ),
+      }),
+      fc.record({
+        kind: fc.constant('full' as const),
+        at: fc.nat(),
+        rename: fc.boolean(),
+      }),
+      fc.record({
+        kind: fc.constant('list' as const),
+        at: fc.nat(),
+        insert: fc.boolean(),
+      })
+    );
+    fc.assert(
+      fc.property(fc.array(step, { maxLength: 25 }), (steps) =>
+        createRoot((dispose) => {
+          try {
+            let data: { rows: Item[] } = {
+              rows: Array.from({ length: 6 }, (_, id) => item(id)),
+            };
+            const history = [...data.rows];
+            const view = new LiveQuery(data);
+            let shown = querySnapshot(view.data) as typeof data;
+            for (const [index, change] of steps.entries()) {
+              const count = data.rows.length;
+              if (change.kind === 'patch' && count) {
+                data = applyQueryPatches(
+                  data,
+                  // One edit per row: patches in one result never overlap.
+                  [
+                    ...new Map(
+                      change.edits.map((edit) => [edit.at % count, edit])
+                    ),
+                  ].map(([row, { at, name, restore }]) => {
+                    // A rollback restores an earlier object of the same row.
+                    const earlier = history.filter(
+                      (candidate) => candidate.id === data.rows[row].id
+                    );
+                    return restore
+                      ? {
+                          path: ['rows', row],
+                          value: earlier[at % earlier.length],
+                        }
+                      : { path: ['rows', row, 'name'], value: name };
+                  })
+                ) as typeof data;
+              } else if (change.kind === 'full') {
+                data = structuredClone(data);
+                if (change.rename && count)
+                  data.rows[change.at % count].name = `r${index}`;
+              } else if (change.kind === 'list') {
+                const rows = [...data.rows];
+                if (change.insert)
+                  rows.splice(change.at % (count + 1), 0, item(100 + index));
+                else if (count) rows.splice(change.at % count, 1);
+                data = applyQueryPatches(data, [
+                  { path: ['rows'], value: rows },
+                ]) as typeof data;
+              }
+              history.push(...data.rows);
+              const before = shown;
+              view.replace(data);
+              shown = querySnapshot(view.data) as typeof data;
+              expect(shown).toEqual(data);
+              for (const row of shown.rows) {
+                const old = before.rows.find(
+                  (candidate) => candidate.id === row.id
+                );
+                if (old && JSON.stringify(old) === JSON.stringify(row))
+                  expect(row).toBe(old);
+              }
+            }
+          } finally {
+            dispose();
+          }
+        })
+      ),
+      { seed: 12_400, numRuns: 400 }
+    );
+  });
+
+  it("keeps every unchanged row's snapshot object, whatever replaced the list", () => {
     type NestedRow = {
       __typename: string;
       id: string;
@@ -373,27 +479,27 @@ describe('live query field propagation', () => {
         })),
       }));
       const view = new LiveQuery({ rows });
-      const live = view.data as { rows: NestedRow[] };
+      const snapshotRows = () =>
+        (querySnapshot(view.data) as { rows: NestedRow[] }).rows;
       let maps = 0;
       const projected = createKeyedProjection(
-        () => live.rows,
+        snapshotRows,
         (row) => row.id,
         (row) => {
           maps += 1;
-          const raw = readRowSnapshot(row);
+          expect(Reflect.get(row, $PROXY)).toBeUndefined();
           return {
-            id: raw.id,
-            read: raw.isRead,
-            members: raw.participants.map((p) => `${p.userId}:${p.role}`),
+            id: row.id,
+            read: row.isRead,
+            members: row.participants.map((p) => `${p.userId}:${p.role}`),
           };
         }
       );
 
       expect(projected()).toHaveLength(20);
       expect(maps).toBe(20);
-      const rawParticipant = unwrap(live.rows[0]).participants[0];
-      expect(Object.getOwnPropertySymbols(rawParticipant)).toEqual([]);
 
+      // A field patch remaps its row.
       view.replace(
         applyQueryPatches(view.snapshot, [
           { path: ['rows', 5, 'isRead'], value: true },
@@ -403,13 +509,40 @@ describe('live query field propagation', () => {
       expect(projected()[5].read).toBe(true);
       expect(projected()[4].read).toBe(false);
 
-      // A full snapshot replacement must also remap only the row that changed.
+      // A full result remaps only the row that changed.
       const fullNext = structuredClone(view.snapshot as { rows: NestedRow[] });
       fullNext.rows[7].isRead = true;
       view.replace(fullNext);
       expect(maps).toBe(22);
       expect(projected()[7].read).toBe(true);
-      expect(projected()[4].read).toBe(false);
+
+      // A patch that replaces the list (a reorder) remaps nothing.
+      const before = snapshotRows();
+      const reordered = [...(view.snapshot as { rows: NestedRow[] }).rows];
+      reordered.unshift(...reordered.splice(9, 1));
+      view.replace(
+        applyQueryPatches(view.snapshot, [
+          { path: ['rows'], value: structuredClone(reordered) },
+        ])
+      );
+      expect(maps).toBe(22);
+      expect(snapshotRows()[0]).toBe(before[9]);
+      expect(projected().map((row) => row.id)[0]).toBe('9');
+
+      // An insert maps the new row only.
+      const kept = snapshotRows();
+      view.replace({
+        rows: [
+          ...structuredClone((view.snapshot as { rows: NestedRow[] }).rows),
+          { ...structuredClone(rows[0]), id: 'new' },
+        ],
+      });
+      expect(maps).toBe(23);
+      expect(
+        snapshotRows()
+          .slice(0, 20)
+          .every((row, index) => row === kept[index])
+      ).toBe(true);
       dispose();
     });
   });
@@ -446,9 +579,11 @@ describe('live query field propagation', () => {
       ).user.soup.items;
       const keptRow = unwrap(items[0]);
       const siblingRow = unwrap(items[1]);
-      // Exercise readRowSnapshot inside a disposed computation too.
+      // Read the snapshot inside a disposed computation too.
       createRoot((dispose) => {
-        expect(readRowSnapshot(items[0]).name).toBe('General');
+        expect(querySnapshot(view!.data)).toMatchObject({
+          user: { soup: { items: [{ name: 'General' }, { name: 'Random' }] } },
+        });
         dispose();
       });
       const viewRef = new WeakRef(view);

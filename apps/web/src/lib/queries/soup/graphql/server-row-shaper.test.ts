@@ -1,10 +1,6 @@
 import { createRoot } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, expect, it, vi } from 'vitest';
-import {
-  bumpRowVersion,
-  markRowVersioned,
-} from '../../../graphql-cache/exchange/live-query';
 import { createServerRowShaper } from './server-row-shaper';
 
 const shaped = vi.hoisted(() => ({ calls: 0 }));
@@ -42,50 +38,23 @@ const channel = (id: string) => ({
   latestNonThreadMessage: null,
 });
 
-it('shapes a versioned record again only when its version moves', () => {
-  createRoot((dispose) => {
-    const shape = createServerRowShaper();
-    const record = channel('a');
-    markRowVersioned(record);
-    const first = shape(record);
-    expect(shape(record)).toBe(first);
-    expect(shaped.calls).toBe(1);
-
-    // A version bump that changes nothing the row shows keeps the row.
-    bumpRowVersion(record);
-    expect(shape(record)).toBe(first);
-    expect(shaped.calls).toBe(2);
-    expect(shape(record)).toBe(first);
-    expect(shaped.calls).toBe(2);
-
-    // An in-place change the row shows gives a new row.
-    record.channelName = 'renamed';
-    bumpRowVersion(record);
-    const renamed = shape(record);
-    expect(renamed).not.toBe(first);
-    expect(renamed).toMatchObject({ name: 'renamed' });
-    dispose();
-  });
-});
-
-it('shapes an immutable record once', () => {
+it('shapes a new record object, and only a new one', () => {
   const shape = createServerRowShaper();
   const record = channel('b');
   const first = shape(record);
   expect(shape(record)).toBe(first);
   expect(shaped.calls).toBe(1);
+  const renamed = shape({ ...record, channelName: 'renamed' });
+  expect(renamed).not.toBe(first);
+  expect(renamed).toMatchObject({ name: 'renamed' });
+  expect(shaped.calls).toBe(2);
 });
 
-it('shapes an unversioned store each time, so it sees field changes', () => {
+it('refuses a store proxy in development', () => {
   createRoot((dispose) => {
     const shape = createServerRowShaper();
-    const [record, setRecord] = createStore(channel('c'));
-    const first = shape(record);
-    setRecord('channelName', 'renamed');
-    const second = shape(record);
-    expect(shaped.calls).toBe(2);
-    expect(second).not.toBe(first);
-    expect(second).toMatchObject({ name: 'renamed' });
+    const [record] = createStore(channel('c'));
+    expect(() => shape(record)).toThrow('store proxy');
     dispose();
   });
 });
