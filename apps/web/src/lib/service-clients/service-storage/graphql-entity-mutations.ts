@@ -201,7 +201,8 @@ export const setGraphqlEntityAppearance = (
       if (queued)
         return { queued, listsReadAgain: false, settlement: observed?.promise };
       if (disposition?.kind === 'permanently-failed') throw disposition.error;
-      if (result.error && !committedWithMissingRows(result)) throw result.error;
+      const missingRows = committedWithMissingRows(result);
+      if (result.error && !missingRows) throw result.error;
       const effects = result.data?.setEntityAppearance?.effects;
       if (!effects)
         throw (
@@ -209,10 +210,13 @@ export const setGraphqlEntityAppearance = (
         );
       const { type, id } = input.entity;
       const listsReadAgain = networkRevalidated(result);
-      // The queue and uncached exchange already recover mounted lists.
+      // The queue clears the effects error when it owns recovery. A direct
+      // write can have a committed disposition and still need the row.
+      const needsPointLookup =
+        missingRows ||
+        (effects.length === 0 && disposition?.kind !== 'committed');
       if (
-        effects.length === 0 &&
-        disposition?.kind !== 'committed' &&
+        needsPointLookup &&
         !listsReadAgain &&
         isCurrent() &&
         (type === 'DOCUMENT' || type === 'INITIATIVE')

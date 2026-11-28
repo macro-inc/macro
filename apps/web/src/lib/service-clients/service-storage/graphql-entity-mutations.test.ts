@@ -1,10 +1,12 @@
 import { networkRevalidationExchange } from '@graphql-cache/exchange/network-revalidation-exchange';
+import { normalizedCacheExchange } from '@graphql-cache/exchange/normalized-cache-exchange';
 import {
   optimisticContextOf,
   withOptimisticMutationDisposition,
 } from '@graphql-cache/exchange/optimistic';
 import { optimisticResolversExchange } from '@graphql-cache/exchange/optimistic-resolvers';
 import type { CacheHost } from '@graphql-cache/host/types';
+import { INITIAL_CACHE_REVISION } from '@graphql-cache/protocol';
 import { entityOptimisticResolvers } from '@queries/entity-optimistic-resolvers';
 import {
   type Client,
@@ -197,6 +199,69 @@ describe('entity appearance transport', () => {
       setGraphqlEntityAppearance(input, [], () => true)
     ).resolves.toMatchObject({ queued: false });
     expect(reply).toHaveBeenCalledOnce();
+  });
+
+  it('recovers a direct effects error after a healthy cache rejects enqueue', async () => {
+    const rejection = new Error('cache rejected the enqueue');
+    const enqueueOptimisticMutation = vi.fn().mockRejectedValue(rejection);
+    const onCacheError = vi.fn();
+    const host = {
+      clientId: 'appearance-test',
+      disabled: false,
+      enqueueOptimisticMutation,
+      currentRevision: async () => INITIAL_CACHE_REVISION,
+      claimNextMutation: async () => undefined,
+      readQuery: async () => ({ kind: 'miss' }),
+      writeQuery: async () => ({
+        revision: INITIAL_CACHE_REVISION,
+        affectedOps: [],
+      }),
+      teardown: async () => {},
+      onOpsAffected: () => () => {},
+      onMutationSettled: () => () => {},
+      onCacheGenerationChanged: () => () => {},
+    } as unknown as CacheHost;
+    const reply = vi.fn((operation: Operation): OperationResult => {
+      const result = { operation, stale: false, hasNext: false };
+      if (operation.kind === 'mutation') {
+        return {
+          ...result,
+          data: { setEntityAppearance: { effects: [] } },
+          error: new CombinedError({
+            graphQLErrors: [
+              {
+                message: 'A changed item could not be read back',
+                path: ['setEntityAppearance', 'effects'],
+              },
+            ],
+          }),
+        };
+      }
+      return { ...result, data: { user: { id: 'viewer', soupEntity: null } } };
+    });
+    const lifetime = new AbortController();
+    setCacheHost(host);
+    replyWith(reply, [
+      networkRevalidationExchange(() => host.disabled === true),
+      optimisticResolversExchange(entityOptimisticResolvers),
+      normalizedCacheExchange(host, { onCacheError, signal: lifetime.signal }),
+    ]);
+    try {
+      await expect(
+        setGraphqlEntityAppearance(input, [], () => true)
+      ).resolves.toMatchObject({ queued: false, listsReadAgain: false });
+      expect(enqueueOptimisticMutation).toHaveBeenCalledOnce();
+      expect(onCacheError).toHaveBeenCalledWith(rejection, expect.anything());
+      await vi.waitFor(() =>
+        expect(
+          reply.mock.calls.map(([operation]) =>
+            getOperationName(operation.query)
+          )
+        ).toEqual(['SetEntityAppearance', 'ReadEntityAppearance'])
+      );
+    } finally {
+      lifetime.abort();
+    }
   });
 
   it('acknowledges a durable queue without response data and releases its retired host', async () => {
