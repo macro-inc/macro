@@ -1,4 +1,5 @@
 use crate::domain::{
+    models::email_filter::EmailFilterChange,
     models::{
         Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, DraftDeletion,
         EmailErr, EmailFilter, EmailInboxDetails, EmailThreadMailProjection, EmailThreadMetadata,
@@ -685,10 +686,10 @@ impl EmailRepo for EmailPgRepo {
         &self,
         link_id: Uuid,
         input: UpsertEmailFilterInput,
-    ) -> Result<EmailFilter, Self::Err> {
+    ) -> Result<EmailFilterChange<EmailFilter>, Self::Err> {
         // One transaction: the override and the is_signal resync it feeds
         // must land together, or a resync failure leaves stale flags.
-        let mut tx = self.pool.begin().await?;
+        let mut tx = email_filter::begin_change(&self.pool).await?;
 
         let filter = if let Some(address) = &input.email_address {
             email_filter::upsert_email_filter_by_address(
@@ -712,7 +713,7 @@ impl EmailRepo for EmailPgRepo {
             )
         };
 
-        email_filter::resync_signal_flags_for_sender(
+        let changed_thread_ids = email_filter::resync_signal_flags_for_sender(
             &mut tx,
             link_id,
             filter.email_address.as_deref(),
@@ -721,26 +722,35 @@ impl EmailRepo for EmailPgRepo {
         .await?;
 
         tx.commit().await?;
-        Ok(filter)
+        Ok(EmailFilterChange::new(filter, changed_thread_ids))
     }
 
-    async fn delete_email_filter(&self, filter_id: Uuid, link_id: Uuid) -> Result<bool, Self::Err> {
-        let mut tx = self.pool.begin().await?;
+    async fn delete_email_filter(
+        &self,
+        filter_id: Uuid,
+        link_id: Uuid,
+    ) -> Result<EmailFilterChange<bool>, Self::Err> {
+        let mut tx = email_filter::begin_change(&self.pool).await?;
 
         let deleted = email_filter::delete_email_filter(&mut tx, filter_id, link_id).await?;
 
-        if let Some(target) = &deleted {
+        let changed_thread_ids = if let Some(target) = &deleted {
             email_filter::resync_signal_flags_for_sender(
                 &mut tx,
                 link_id,
                 target.email_address.as_deref(),
                 target.email_domain.as_deref(),
             )
-            .await?;
-        }
+            .await?
+        } else {
+            Vec::new()
+        };
 
         tx.commit().await?;
-        Ok(deleted.is_some())
+        Ok(EmailFilterChange::new(
+            deleted.is_some(),
+            changed_thread_ids,
+        ))
     }
 
     async fn list_email_filters(&self, link_id: Uuid) -> Result<Vec<EmailFilter>, Self::Err> {

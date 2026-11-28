@@ -1,8 +1,17 @@
+use crate::domain::models::{EmailFilter, email_filter::MAX_SENDER_FILTER_THREAD_UPDATES};
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::domain::models::EmailFilter;
+pub(super) async fn begin_change(
+    pool: &PgPool,
+) -> Result<sqlx::Transaction<'static, sqlx::Postgres>, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    sqlx::query!("SET LOCAL statement_timeout = '15s'")
+        .execute(&mut *tx)
+        .await?;
+    Ok(tx)
+}
 
 #[derive(sqlx::FromRow)]
 struct EmailFilterRow {
@@ -115,21 +124,21 @@ pub async fn delete_email_filter(
 /// The recompute mirrors sync_thread_signal_flag (thread.rs) / the
 /// Importance(true) predicate in the dynamic query builder, including the
 /// unconditional exclusion of Macro's own notification sender (`$4` domain).
-#[tracing::instrument(skip(conn, email_address), err)]
+#[tracing::instrument(skip_all, err)]
 pub async fn resync_signal_flags_for_sender(
     conn: &mut sqlx::PgConnection,
     link_id: Uuid,
     email_address: Option<&str>,
     email_domain: Option<&str>,
-) -> Result<u64, sqlx::Error> {
-    // The scope filter below ANDs both targets, so passing both would only
-    // match contacts satisfying address AND domain at once.
+) -> Result<Vec<Uuid>, sqlx::Error> {
     debug_assert!(
         email_address.is_some() ^ email_domain.is_some(),
         "expected exactly one filter target"
     );
 
-    let result = sqlx::query!(
+    // Limit the IDs returned to the publisher. The UPDATE still applies the
+    // override to every affected thread in the filter transaction.
+    sqlx::query_scalar!(
         r#"
         WITH affected AS MATERIALIZED (
             -- Contact-first candidate scan, MATERIALIZED so the planner can't
@@ -223,23 +232,28 @@ pub async fn resync_signal_flags_for_sender(
                       )
                 ) AS sig
             FROM affected a
+        ),
+        changed AS (
+            UPDATE email_threads t
+            SET is_signal = calc.sig
+            FROM calc
+            WHERE t.id = calc.thread_id
+              AND t.link_id = $1
+              AND t.is_signal IS DISTINCT FROM calc.sig
+            RETURNING t.id
         )
-        UPDATE email_threads t
-        SET is_signal = calc.sig
-        FROM calc
-        WHERE t.id = calc.thread_id
-          AND t.link_id = $1
-          AND t.is_signal IS DISTINCT FROM calc.sig
+        SELECT id AS "id!" FROM changed
+        LIMIT $5
         "#,
         link_id,
         email_address,
         email_domain,
         email_utils::MACRO_NOTIFICATION_SENDER_DOMAIN,
+        i64::try_from(MAX_SENDER_FILTER_THREAD_UPDATES + 1)
+            .expect("sender filter realtime limit fits in a Postgres bigint"),
     )
-    .execute(conn)
-    .await?;
-
-    Ok(result.rows_affected())
+    .fetch_all(conn)
+    .await
 }
 
 /// List all email filters for a link.

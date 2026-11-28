@@ -5,12 +5,12 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use axum::http::{Request as HttpRequest, header};
 use email::domain::models::{
     AttachmentDraft, AttachmentForwarded, CreateDraftInput, CreatedDraft, EmailErr, EmailFilter,
-    EmailSyncStatus, EmailThreadMailCacheFacts, EmailThreadMailPreviews, EmailThreadMailProjection,
-    EmailThreadMetadata, EnrichedEmailThreadPreview, GetEmailsRequest, LabelListVisibility,
-    LabelType, Link, LinkLabel, Message, MessageAttachment, MessageListVisibility, ParsedMessage,
-    ParsedThread, ResolvedSendingInbox, SenderPolicy, SendingInboxRequest,
-    SetThreadsArchivedResult, Thread, UpdateThreadLabelsResult, UpsertEmailFilterInput,
-    UserEmailLink, UserEmailLinkSettings, UserProvider,
+    EmailFilterWrite, EmailSyncStatus, EmailThreadMailCacheFacts, EmailThreadMailPreviews,
+    EmailThreadMailProjection, EmailThreadMetadata, EnrichedEmailThreadPreview, GetEmailsRequest,
+    LabelListVisibility, LabelType, Link, LinkLabel, Message, MessageAttachment,
+    MessageListVisibility, ParsedMessage, ParsedThread, ResolvedSendingInbox, SenderPolicy,
+    SendingInboxRequest, SetThreadsArchivedResult, Thread, UpdateThreadLabelsResult,
+    UpsertEmailFilterInput, UserEmailLink, UserEmailLinkSettings, UserProvider,
 };
 use entity_access::domain::models::{
     AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EditAccessLevel,
@@ -828,7 +828,7 @@ impl EmailService for CountingEmailService {
         &self,
         _link: &Link,
         _input: UpsertEmailFilterInput,
-    ) -> Result<EmailFilter, EmailErr> {
+    ) -> Result<EmailFilterWrite<EmailFilter>, EmailErr> {
         Err(test_email_err())
     }
 
@@ -842,7 +842,11 @@ impl EmailService for CountingEmailService {
         Err(test_email_err())
     }
 
-    async fn delete_email_filter(&self, _link: &Link, _filter_id: Uuid) -> Result<bool, EmailErr> {
+    async fn delete_email_filter(
+        &self,
+        _link: &Link,
+        _filter_id: Uuid,
+    ) -> Result<EmailFilterWrite<bool>, EmailErr> {
         Err(test_email_err())
     }
 

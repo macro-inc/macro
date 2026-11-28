@@ -1,6 +1,6 @@
 use axum::{
     Json, Router,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{delete, get, put},
@@ -58,6 +58,23 @@ impl From<EmailFilter> for ApiEmailFilter {
 #[derive(serde::Serialize, serde::Deserialize, Debug, utoipa::ToSchema)]
 pub struct UpsertEmailFilterResponse {
     pub filter: ApiEmailFilter,
+    /// Whether some changed threads were omitted from the realtime publish.
+    pub push_was_capped: bool,
+}
+
+/// Request publication coverage while preserving the empty DELETE reply for older clients.
+#[derive(serde::Deserialize, Debug, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct DeleteEmailFilterQuery {
+    /// Return the realtime publication status in the response body.
+    pub include_push_status: Option<bool>,
+}
+
+/// Publication coverage for an opted-in delete.
+#[derive(serde::Serialize, serde::Deserialize, Debug, utoipa::ToSchema)]
+pub struct EmailFilterDeletePushStatus {
+    /// Whether some changed threads were omitted from the realtime publish.
+    pub push_was_capped: bool,
 }
 
 /// Response body for listing email filters.
@@ -162,7 +179,8 @@ pub async fn upsert_email_filter_handler<T: EmailService, Auth: MacroAuthorizati
     let filter = state.inner.upsert_email_filter(&link, input).await?;
 
     Ok(Json(UpsertEmailFilterResponse {
-        filter: filter.into(),
+        filter: filter.result.into(),
+        push_was_capped: filter.push_was_capped,
     }))
 }
 
@@ -174,8 +192,10 @@ pub async fn upsert_email_filter_handler<T: EmailService, Auth: MacroAuthorizati
     operation_id = "delete_email_filter",
     params(
         ("id" = Uuid, Path, description = "Filter ID."),
+        DeleteEmailFilterQuery,
     ),
     responses(
+        (status = 200, body = EmailFilterDeletePushStatus, description = "Deleted with publication status requested"),
         (status = 204),
         (status = 401, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
@@ -187,16 +207,24 @@ pub async fn delete_email_filter_handler<T: EmailService, Auth: MacroAuthorizati
     State(state): State<EmailRouterState<T>>,
     Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<T, Auth>>,
     Path(filter_id): Path<Uuid>,
+    Query(query): Query<DeleteEmailFilterQuery>,
 ) -> Result<impl IntoResponse, EmailFilterError> {
     let deleted = state.inner.delete_email_filter(&link, filter_id).await?;
 
-    if !deleted {
+    if !deleted.result {
         return Err(EmailFilterError::NotFound(format!(
             "Email filter with id {filter_id} not found"
         )));
     }
 
-    Ok(StatusCode::NO_CONTENT)
+    if query.include_push_status == Some(true) {
+        return Ok(Json(EmailFilterDeletePushStatus {
+            push_was_capped: deleted.push_was_capped,
+        })
+        .into_response());
+    }
+
+    Ok(StatusCode::NO_CONTENT.into_response())
 }
 
 /// List all email filters for the current user.

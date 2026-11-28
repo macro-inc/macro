@@ -439,7 +439,8 @@ impl EmailService for MockEmail {
         &self,
         _link: &email::domain::models::Link,
         _input: email::domain::models::UpsertEmailFilterInput,
-    ) -> Result<email::domain::models::EmailFilter, EmailErr> {
+    ) -> Result<email::domain::models::EmailFilterWrite<email::domain::models::EmailFilter>, EmailErr>
+    {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 
@@ -457,7 +458,7 @@ impl EmailService for MockEmail {
         &self,
         _link: &email::domain::models::Link,
         _filter_id: Uuid,
-    ) -> Result<bool, EmailErr> {
+    ) -> Result<email::domain::models::EmailFilterWrite<bool>, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 
@@ -942,7 +943,8 @@ impl EmailService for MockEmailLinkResult {
         &self,
         _link: &email::domain::models::Link,
         _input: email::domain::models::UpsertEmailFilterInput,
-    ) -> Result<email::domain::models::EmailFilter, EmailErr> {
+    ) -> Result<email::domain::models::EmailFilterWrite<email::domain::models::EmailFilter>, EmailErr>
+    {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 
@@ -960,7 +962,7 @@ impl EmailService for MockEmailLinkResult {
         &self,
         _link: &email::domain::models::Link,
         _filter_id: Uuid,
-    ) -> Result<bool, EmailErr> {
+    ) -> Result<email::domain::models::EmailFilterWrite<bool>, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 

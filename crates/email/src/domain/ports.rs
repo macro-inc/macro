@@ -1,12 +1,12 @@
 use crate::domain::models::{
     Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, CreateDraftInput,
-    CreatedDraft, DeletedUserDraft, DraftDeletion, EmailErr, EmailFilter, EmailInboxDetails,
-    EmailThreadMailProjection, EmailThreadMetadata, EmailThreadPreview, EnrichedEmailThreadPreview,
-    GetEmailsRequest, Label, Link, LinkLabel, Message, MessageAttachment, MessageLabel, MessageRow,
-    MessageTimestamps, ParsedAddresses, ParsedMessage, ParsedThread, PreviewCursorQuery,
-    RecipientType, ResolvedDraftInput, ResolvedSendingInbox, SavedUserDraft, SenderPolicy,
-    SendingInboxRequest, SetThreadsArchivedResult, SettledDraftIds, SimpleMessage,
-    SimpleMessageInfo, SourcedAttachment, StagedLabelChange, Thread, ThreadRow,
+    CreatedDraft, DeletedUserDraft, DraftDeletion, EmailErr, EmailFilter, EmailFilterWrite,
+    EmailInboxDetails, EmailThreadMailProjection, EmailThreadMetadata, EmailThreadPreview,
+    EnrichedEmailThreadPreview, GetEmailsRequest, Label, Link, LinkLabel, Message,
+    MessageAttachment, MessageLabel, MessageRow, MessageTimestamps, ParsedAddresses, ParsedMessage,
+    ParsedThread, PreviewCursorQuery, RecipientType, ResolvedDraftInput, ResolvedSendingInbox,
+    SavedUserDraft, SenderPolicy, SendingInboxRequest, SetThreadsArchivedResult, SettledDraftIds,
+    SimpleMessage, SimpleMessageInfo, SourcedAttachment, StagedLabelChange, Thread, ThreadRow,
     UpdateThreadLabelsResult, UpsertEmailFilterInput, UpsertedContacts, UserEmailLink,
     UserProvider,
 };
@@ -560,19 +560,23 @@ pub trait EmailRepo: Send + Sync + 'static {
         project_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Upsert an email filter (by address or domain) for a link.
+    /// Upsert an email filter and report changed thread IDs after committing.
     fn upsert_email_filter(
         &self,
         link_id: Uuid,
         input: UpsertEmailFilterInput,
-    ) -> impl Future<Output = Result<EmailFilter, Self::Err>> + Send;
+    ) -> impl Future<
+        Output = Result<super::models::email_filter::EmailFilterChange<EmailFilter>, Self::Err>,
+    > + Send;
 
-    /// Delete an email filter by its ID, scoped to a link.
+    /// Delete a link's filter and report changed thread IDs after committing.
     fn delete_email_filter(
         &self,
         filter_id: Uuid,
         link_id: Uuid,
-    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+    ) -> impl Future<
+        Output = Result<super::models::email_filter::EmailFilterChange<bool>, Self::Err>,
+    > + Send;
 
     /// List all email filters for a link.
     fn list_email_filters(
@@ -991,7 +995,7 @@ pub trait EmailService: Send + Sync + 'static {
         &self,
         link: &Link,
         input: UpsertEmailFilterInput,
-    ) -> impl Future<Output = Result<EmailFilter, EmailErr>> + Send;
+    ) -> impl Future<Output = Result<EmailFilterWrite<EmailFilter>, EmailErr>> + Send;
 
     /// Set where future mail from a sender lands for the given inbox.
     ///
@@ -1010,7 +1014,7 @@ pub trait EmailService: Send + Sync + 'static {
         &self,
         link: &Link,
         filter_id: Uuid,
-    ) -> impl Future<Output = Result<bool, EmailErr>> + Send;
+    ) -> impl Future<Output = Result<EmailFilterWrite<bool>, EmailErr>> + Send;
 
     /// List all email filters for the given link.
     fn list_email_filters(
@@ -1504,7 +1508,7 @@ impl EmailService for NoOpEmailService {
         &self,
         _link: &Link,
         _input: UpsertEmailFilterInput,
-    ) -> Result<EmailFilter, EmailErr> {
+    ) -> Result<EmailFilterWrite<EmailFilter>, EmailErr> {
         Err(no_op_email_err())
     }
 
@@ -1518,7 +1522,11 @@ impl EmailService for NoOpEmailService {
         Err(no_op_email_err())
     }
 
-    async fn delete_email_filter(&self, _link: &Link, _filter_id: Uuid) -> Result<bool, EmailErr> {
+    async fn delete_email_filter(
+        &self,
+        _link: &Link,
+        _filter_id: Uuid,
+    ) -> Result<EmailFilterWrite<bool>, EmailErr> {
         Err(no_op_email_err())
     }
 

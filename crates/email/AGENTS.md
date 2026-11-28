@@ -133,6 +133,12 @@ tools — hexagonal, heavily feature-gated.
 
 ## Gotchas
 
+- Sender filter upsert and delete commit their rule and recomputed
+  `email_threads.is_signal` together. The service publishes changed thread IDs
+  after commit in batches of 50, up to 250 IDs per write. Both replies report
+  overflow. Request `include_push_status=true` on DELETE for the JSON reply.
+  The sender filter update touches only `is_signal`, so an updated-time
+  watermark cannot replay omitted changes.
 - Personal data stays off spans and logs (`.agents/rules/observability.md`);
   here that also means a `MacroUserIdStr` parse error, which quotes the
   address. `draft_save_and_delete_spans_record_no_personal_data` reads the

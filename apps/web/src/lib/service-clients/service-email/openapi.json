@@ -1788,9 +1788,28 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "include_push_status",
+            "in": "query",
+            "description": "Return the realtime publication status in the response body.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
+          "200": {
+            "description": "Deleted with publication status requested",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailFilterDeletePushStatus"
+                }
+              }
+            }
+          },
           "204": {
             "description": ""
           },
@@ -5898,6 +5917,17 @@
           }
         }
       },
+      "EmailFilterDeletePushStatus": {
+        "type": "object",
+        "description": "Publication coverage for an opted-in delete.",
+        "required": ["push_was_capped"],
+        "properties": {
+          "push_was_capped": {
+            "type": "boolean",
+            "description": "Whether some changed threads were omitted from the realtime publish."
+          }
+        }
+      },
       "EmlFile": {
         "type": "string",
         "format": "binary"
@@ -7901,10 +7931,14 @@
       "UpsertEmailFilterResponse": {
         "type": "object",
         "description": "Response body for upsert email filter.",
-        "required": ["filter"],
+        "required": ["filter", "push_was_capped"],
         "properties": {
           "filter": {
             "$ref": "#/components/schemas/ApiEmailFilter"
+          },
+          "push_was_capped": {
+            "type": "boolean",
+            "description": "Whether some changed threads were omitted from the realtime publish."
           }
         }
       },

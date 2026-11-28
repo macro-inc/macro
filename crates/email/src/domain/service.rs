@@ -18,12 +18,17 @@ mod test;
 mod entity_mutation;
 
 use crate::domain::{
-    events::{EmailMacroEvent, ThreadProjectChangedMetadata},
+    events::{
+        EmailMacroEvent, ThreadProjectChangedMetadata, ThreadsReindexReason,
+        ThreadsReindexRequestedMetadata,
+    },
+    models::email_filter::EmailFilterChange,
     models::{
-        CreateDraftInput, CreatedDraft, EmailErr, EmailFilter, EmailThreadMailProjection,
-        EmailThreadMetadata, EnrichedEmailThreadPreview, GetEmailsRequest, Link, LinkLabel,
-        ParsedMessage, ParsedThread, ResolvedSendingInbox, SenderPolicy, SendingInboxRequest,
-        Thread, UpdateThreadLabelsResult, UpsertEmailFilterInput,
+        CreateDraftInput, CreatedDraft, EmailErr, EmailFilter, EmailFilterWrite,
+        EmailThreadMailProjection, EmailThreadMetadata, EnrichedEmailThreadPreview,
+        GetEmailsRequest, Link, LinkLabel, ParsedMessage, ParsedThread, ResolvedSendingInbox,
+        SenderPolicy, SendingInboxRequest, Thread, UpdateThreadLabelsResult,
+        UpsertEmailFilterInput,
     },
     ports::{
         EmailContentService, EmailMessageEnqueuer, EmailRepo, EmailService,
@@ -155,6 +160,33 @@ impl<T, U, E, CS, Eam, B> EmailServiceImpl<T, U, E, CS, Eam, B> {
             .macro_event_broker
             .send_event(event)
             .inspect_err(|e| tracing::error!(error=?e, "failed to publish email macro event"));
+    }
+
+    #[tracing::instrument(
+        name = "email.sender_filter.publish_thread_updates",
+        skip_all,
+        fields(thread_count = change.changed_thread_ids.len(), truncated = change.truncated)
+    )]
+    fn publish_sender_filter_changes<F>(&self, link: &Link, change: &EmailFilterChange<F>)
+    where
+        B: MacroEventBroker,
+    {
+        const REINDEX_BATCH_SIZE: usize = 50;
+
+        if change.truncated {
+            tracing::warn!("sender filter changed more threads than the realtime limit");
+        }
+
+        for thread_ids in change.changed_thread_ids.chunks(REINDEX_BATCH_SIZE) {
+            self.publish_email_event(&EmailMacroEvent::threads_reindex_requested(
+                ThreadsReindexRequestedMetadata {
+                    link_id: link.id,
+                    owner: link.macro_id.clone(),
+                    thread_ids: thread_ids.to_vec(),
+                    reason: ThreadsReindexReason::ProviderChanged,
+                },
+            ));
+        }
     }
 }
 
@@ -600,13 +632,20 @@ where
         &self,
         link: &Link,
         input: UpsertEmailFilterInput,
-    ) -> Result<EmailFilter, EmailErr> {
+    ) -> Result<EmailFilterWrite<EmailFilter>, EmailErr> {
         let validated = Self::validate_email_filter_input(input)?;
 
-        self.email_repo
+        let change = self
+            .email_repo
             .upsert_email_filter(link.id, validated)
             .await
-            .map_err(|e| EmailErr::RepoErr(e.into()))
+            .map_err(|e| EmailErr::RepoErr(e.into()))?;
+
+        self.publish_sender_filter_changes(link, &change);
+        Ok(EmailFilterWrite {
+            result: change.result,
+            push_was_capped: change.truncated,
+        })
     }
 
     #[tracing::instrument(skip(self, link, actor, sender_email), fields(link_id = %link.id), err)]
@@ -629,11 +668,22 @@ where
             .await
     }
 
-    async fn delete_email_filter(&self, link: &Link, filter_id: Uuid) -> Result<bool, EmailErr> {
-        self.email_repo
+    async fn delete_email_filter(
+        &self,
+        link: &Link,
+        filter_id: Uuid,
+    ) -> Result<EmailFilterWrite<bool>, EmailErr> {
+        let change = self
+            .email_repo
             .delete_email_filter(filter_id, link.id)
             .await
-            .map_err(|e| EmailErr::RepoErr(e.into()))
+            .map_err(|e| EmailErr::RepoErr(e.into()))?;
+
+        self.publish_sender_filter_changes(link, &change);
+        Ok(EmailFilterWrite {
+            result: change.result,
+            push_was_capped: change.truncated,
+        })
     }
 
     async fn list_email_filters(&self, link: &Link) -> Result<Vec<EmailFilter>, EmailErr> {

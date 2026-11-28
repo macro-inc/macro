@@ -1059,6 +1059,16 @@ export type CreateLabelResponse = {
     label: Label;
 };
 
+/**
+ * Publication coverage for an opted-in delete.
+ */
+export type EmailFilterDeletePushStatus = {
+    /**
+     * Whether some changed threads were omitted from the realtime publish.
+     */
+    push_was_capped: boolean;
+};
+
 export type EmlFile = Blob | File;
 
 /**
@@ -2044,6 +2054,10 @@ export type UpsertEmailFilterRequest = {
  */
 export type UpsertEmailFilterResponse = {
     filter: ApiEmailFilter;
+    /**
+     * Whether some changed threads were omitted from the realtime publish.
+     */
+    push_was_capped: boolean;
 };
 
 export type UpsertScheduledRequest = {
@@ -2834,7 +2848,12 @@ export type DeleteEmailFilterData = {
          */
         id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Return the realtime publication status in the response body.
+         */
+        include_push_status?: boolean;
+    };
     url: '/email/filters/{id}';
 };
 
@@ -2847,6 +2866,10 @@ export type DeleteEmailFilterErrors = {
 export type DeleteEmailFilterError = DeleteEmailFilterErrors[keyof DeleteEmailFilterErrors];
 
 export type DeleteEmailFilterResponses = {
+    /**
+     * Deleted with publication status requested
+     */
+    200: EmailFilterDeletePushStatus;
     204: void;
 };
 
