@@ -612,14 +612,19 @@ draining it, answers:
   queue head a page claimed is on its way to the server, and only this build
   can settle it, or a page of the newer build sends it again. So the
   coordinator answers `yield` but keeps an engine serving this build until
-  every claimed head is settled (a written commit, rollback or deferral under
-  its lease, or a `clear`), no claim or enqueue is still on its way to the
-  engine, and no claiming page is left; or until `SETTLEMENT_WAIT_MS` (70 s,
-  past the runner's 60 s request timeout) has passed, from the takeover and
-  again from each claim the wait sees, up to `SETTLEMENT_WAIT_LIMIT_MS`
-  (140 s). It claims no new head meanwhile. An owner that drains or leaves
+  every claimed head is settled (an answered commit, rollback or deferral
+  under its lease, a `clear` or `reset` queue, or the claim's lease ended), no
+  claim or enqueue is still on its way to the engine, and no claiming page is
+  left; or until `SETTLEMENT_WAIT_MS` (70 s, past the runner's 60 s request
+  timeout) has passed, from the takeover and again from each claim the wait
+  sees, up to `SETTLEMENT_WAIT_LIMIT_MS` (140 s). It holds
+  `claim-next-mutation` meanwhile, and enqueues too once a claim could no
+  longer get its full wait before the limit. An owner that drains or leaves
   during the wait is replaced as usual, unless the replacement would wipe the
-  database. On the page, a head claimed before retirement settles through the
+  database, and a settlement the lost owner was writing goes to the next
+  engine. With every tab hidden, the wait starts an engine in a hidden tab
+  rather than parking, so a settlement still has somewhere to land. On the
+  page, a head claimed before retirement settles through the
   host that claimed it (`createRetirableCacheHost` pins it until the head
   settles or its lease ends), and a retired host refuses any other settlement
   (`CacheSettlementUnwrittenError`) rather than acknowledging one it did not
