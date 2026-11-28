@@ -322,8 +322,9 @@ Catch-up writes keep their individual transactions and replies, but the
 coordinator coalesces broad `cache-changed` and `cache-hydrated` hints across its
 accepted in-flight backlog. The engine's local queue is insufficient: separate
 MessagePort deliveries can make it look idle between queued commits. Each channel
-keeps its latest revision and the union of search buckets; an unscoped hint stays
-unscoped, and hydration never becomes an authoritative invalidation. Publish when
+keeps its latest revision and the union of search buckets, and its authority
+generation only when every hint it replaced shares one (otherwise none, so
+subscribers refresh broadly); an unscoped hint stays unscoped, and hydration never becomes an authoritative invalidation. Publish when
 the last outstanding commit sends its hint or the remaining replies drain,
 including failed/no-op tails. A batch also flushes after 64 completed requests so
 continuous traffic cannot starve subscribers. Single-request updates, reset fences,
@@ -1511,10 +1512,12 @@ selected and baseline keys, and a proven full-window sort cutoff. A matching
 entrant, selected dependency change, uncertain facts, optimistic composition,
 journal barrier/gap, or evicted token prevents a proof. Observations are bounded
 to 64 snapshots. Proof failure preserves the committed hydration or write and
-broadcasts broadly. A foreground write records the proof's time on its span
-(`graphql_cache.write.proof_ms` and the proven count on the native
-`graphql_cache.native.write`; `proofMs` on a browser write's
-`graphql_cache.slow_request`), and the native engine warns when it fails. Older native engines omit tokens and continue conservative refreshes;
+broadcasts broadly. A foreground write records the proof's time and outcome. Native:
+`graphql_cache.write.proof_ms`, `graphql_cache.write.unchanged_views` and
+`graphql_cache.write.proof_failed` on `graphql_cache.native.write`, plus a
+warning; native spans stay on the device. Browser: `cache.proof_ms` on a slow
+write's `graphql_cache.slow_request`, and `cache.proof_failed` on one recorded
+for any write whose proof failed, however fast. Older native engines omit tokens and continue conservative refreshes;
 no new request arguments are sent across that deployed boundary.
 
 Mail cutoffs additionally require a known matching lookahead row, tracked as a
@@ -1524,7 +1527,7 @@ continuation; deleting the last lookahead also invalidates the proof.
 
 The subscriber skips only its exact accepted observation. Pagination clears its
 proof until a through-read observes the combined window. Batched hydration
-notifications intersect proofs across all writes. Calendar coverage commits
+and write notifications intersect proofs across all writes. Calendar coverage commits
 record their complete normalized deletion set in the same journal and carry the
 same proof metadata, without changing calendar range invalidation. Quick Access search bucket
 hints remain insufficient for Soup property/membership invalidation. Filtering,
