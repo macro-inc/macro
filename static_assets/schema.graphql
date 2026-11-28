@@ -852,6 +852,9 @@ input CreateCrmContactInput {
 	companyId: ID
 }
 
+"""
+The persisted record identity and its normalized Soup effects.
+"""
 type CreateCrmRecordPayload {
 	"""
 	ID of the created record.
