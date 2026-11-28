@@ -216,17 +216,6 @@ export function participantRow(page: Page, name: string): Locator {
     .last();
 }
 
-/** Removes a person with the button beside their row in the Participants tab. */
-export async function removeParticipantInApp(
-  page: Page,
-  name: string
-): Promise<void> {
-  await participantRow(page, name)
-    .getByRole('button', { name: 'Remove participant', exact: true })
-    .click();
-  await expect(participant(page, name)).toHaveCount(0);
-}
-
 /** The panel a person sees in place of a channel they are not in. */
 export function noAccess(page: Page): Locator {
   return page

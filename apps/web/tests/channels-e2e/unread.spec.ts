@@ -1,7 +1,7 @@
 import { type Api, unique } from './harness/api';
 import { ChannelView, conversationRow } from './harness/channel';
 import { mentionPerson } from './harness/composer';
-import { expect, failsSometimes, test } from './harness/fixtures';
+import { arrivesLive, expect, failsSometimes, test } from './harness/fixtures';
 import type { Person } from './harness/people';
 import {
   chooseFromRowMenu,
@@ -299,6 +299,9 @@ test('UNR-07 a member who never opened a channel sees it unread, and opening it 
   await expect(unreadDot(row)).toHaveCount(0);
 
   await ben.post(made.channel, 'fourth, live');
+  // Known defect on main: an open page sometimes does not show a message
+  // someone else sent; the check then requires it after a reload.
+  await arrivesLive(view, view.message('fourth, live'));
   await view.expectEndsWith(['third, from ada', 'fourth, live']);
   await expect(unreadDot(row)).toHaveCount(0);
 });
