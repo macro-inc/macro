@@ -1,3 +1,4 @@
+import { networkRevalidationExchange } from '@graphql-cache/exchange/network-revalidation-exchange';
 import {
   optimisticContextOf,
   withOptimisticMutationDisposition,
@@ -10,6 +11,8 @@ import {
   CombinedError,
   createClient,
   type Exchange,
+  getOperationName,
+  gql,
   type Operation,
   type OperationResult,
   stringifyDocument,
@@ -50,7 +53,10 @@ afterEach(() => {
   setCacheHost(undefined);
 });
 
-function replyWith(reply: (operation: Operation) => OperationResult) {
+function replyWith(
+  reply: (operation: Operation) => OperationResult,
+  exchanges: Exchange[] = []
+) {
   const exchange: Exchange = () => (operations) =>
     pipe(
       operations,
@@ -59,8 +65,9 @@ function replyWith(reply: (operation: Operation) => OperationResult) {
     );
   graphql = createClient({
     url: 'https://example.test/graphql',
-    exchanges: [exchange],
+    exchanges: [...exchanges, exchange],
   });
+  return graphql;
 }
 
 describe('entity appearance transport', () => {
@@ -130,6 +137,47 @@ describe('entity appearance transport', () => {
         input: { entityType: 'DOCUMENT', entityId: 'document' },
       },
     });
+  });
+
+  it('rereads a mounted uncached list when the write commits without effects', async () => {
+    const list = gql`query AppearanceList { items { id appearance } }`;
+    let appearance = 'GRAY';
+    const reply = vi.fn((operation: Operation): OperationResult => {
+      const result = { operation, stale: false, hasNext: false };
+      if (operation.kind === 'mutation') {
+        appearance = 'GREEN';
+        return {
+          ...result,
+          data: { setEntityAppearance: { effects: [] } },
+          error: new CombinedError({
+            graphQLErrors: [
+              {
+                message: 'A changed item could not be read back',
+                path: ['setEntityAppearance', 'effects'],
+              },
+            ],
+          }),
+        };
+      }
+      return { ...result, data: { items: [{ id: 'document', appearance }] } };
+    });
+    const client = replyWith(reply, [networkRevalidationExchange(() => true)]);
+    const received: Array<string | undefined> = [];
+    const mounted = client
+      .query<{ items: Array<{ appearance: string }> }>(list, {})
+      .subscribe(({ data }) => received.push(data?.items[0]?.appearance));
+    try {
+      expect(received).toEqual(['GRAY']);
+      await expect(
+        setGraphqlEntityAppearance(input, [], () => true)
+      ).resolves.toMatchObject({ queued: false, listsReadAgain: true });
+      expect(received).toEqual(['GRAY', 'GREEN']);
+      expect(
+        reply.mock.calls.map(([operation]) => getOperationName(operation.query))
+      ).toEqual(['AppearanceList', 'SetEntityAppearance', 'AppearanceList']);
+    } finally {
+      mounted.unsubscribe();
+    }
   });
 
   it('uses the queue recovery when a durable write commits without effects', async () => {

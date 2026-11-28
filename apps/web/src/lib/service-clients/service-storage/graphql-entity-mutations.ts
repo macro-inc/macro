@@ -217,10 +217,12 @@ export const setGraphqlEntityAppearance = (
           result.error ?? new Error('Appearance mutation returned no result')
         );
       const { type, id } = input.entity;
-      // The queue already recovers mounted lists after an effects failure.
+      const listsReadAgain = networkRevalidated(result);
+      // The queue and uncached exchange already recover mounted lists.
       if (
         effects.length === 0 &&
         disposition?.kind !== 'committed' &&
+        !listsReadAgain &&
         isCurrent() &&
         (type === 'DOCUMENT' || type === 'INITIATIVE')
       ) {
@@ -239,7 +241,7 @@ export const setGraphqlEntityAppearance = (
         };
         fireAndForget(rereadAppearance(), 'appearance row recovery');
       }
-      return { queued, listsReadAgain: networkRevalidated(result) };
+      return { queued, listsReadAgain };
     } finally {
       if (!queued) observed?.stop();
     }
