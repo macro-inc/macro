@@ -99,10 +99,7 @@ coalesces realtime patches by entity type and ID (last operation wins), preservi
 last-occurrence order. Mutation adapters map their own domain effects directly;
 they must not depend on realtime patch types. Poll hydration futures concurrently
 so the DataLoader can batch them. Missing items are logged and omitted, never inferred
-to be deleted. Hydration service errors remain GraphQL errors. An entity mutation
-keeps its committed outcome when its effects fail: it reports a hydration error,
-or a changed Soup item that no longer loads, as an error at the `effects` path and
-returns the effects it could render, so the client reads its lists again. Do not reintroduce
+to be deleted. Hydration service errors remain GraphQL errors. Do not reintroduce
 lazy nullable item lookup inside the update.
 
 ## Regenerating the SDL

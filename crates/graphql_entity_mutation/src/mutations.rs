@@ -12,7 +12,7 @@ use entity_mutation::{
 };
 use graphql_common::GraphqlEntityType;
 use graphql_permission::GraphqlEntityAccessLevel;
-use graphql_soup::{GraphqlSoupEntityType, PrimarySoupItemLoader, SoupEntityEdges, SoupPatch};
+use graphql_soup::{PrimarySoupItemLoader, SoupEntityEdges, SoupPatch};
 use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::{
     LinkShare, UpdateSharePermissionRequestV2,
@@ -420,20 +420,7 @@ impl<E: SoupEntityEdges> GraphqlMutationSuccess<E> {
                     async move {
                         match effect {
                             EntityMutationEffect::Updated(entity) => {
-                                let patch =
-                                    SoupPatch::hydrate_updated(user_id, entity.clone(), loader)
-                                        .await?;
-                                // A Soup row the write changed that no longer loads:
-                                // the caller cannot tell where it went, so report it
-                                // and let the client read its lists again.
-                                if patch.is_none()
-                                    && GraphqlSoupEntityType::try_new(entity.entity_type).is_some()
-                                {
-                                    return Err(async_graphql::Error::new(
-                                        "A changed item could not be read back",
-                                    ));
-                                }
-                                Ok(patch)
+                                SoupPatch::hydrate_updated(user_id, entity.clone(), loader).await
                             }
                             EntityMutationEffect::Deleted(entity) => {
                                 SoupPatch::deleted(entity.clone()).map(Some)

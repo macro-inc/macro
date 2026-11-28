@@ -369,10 +369,8 @@ impl MutationEffectsQuery {
     }
 }
 
-/// A changed row that no longer loads is reported under `effects`, keeping the
-/// committed outcome, so the client reads its lists again.
 #[tokio::test]
-async fn mutation_effects_share_non_nullable_hydration_and_report_misses() {
+async fn mutation_effects_share_non_nullable_hydration_and_omit_misses() {
     let soup = CountingSoupService::default();
     soup.set_raw_response(vec![soup_document(Uuid::from_u128(1))]);
     let loader = graphql_soup::PrimarySoupItemLoader::new(
@@ -403,11 +401,7 @@ async fn mutation_effects_share_non_nullable_hydration_and_report_misses() {
     );
     soup.set_raw_response(Vec::new());
     let response = schema.execute(&query).await;
-    assert_eq!(response.errors.len(), 1, "{:?}", response.errors);
-    assert_eq!(
-        response.errors[0].path.last(),
-        Some(&async_graphql::PathSegment::Field("effects".into()))
-    );
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
     assert!(data["result"]["effects"].as_array().unwrap().is_empty());
 }
