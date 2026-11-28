@@ -1,0 +1,21 @@
+docs/agent-guide/ui-conventions.md
+  s_59175937622ed6::t_57dcf607ba34bb 63-65
+docs/agent-guide/crm.md
+  s_59175937622ed6::t_57dcf607ba34bb 122-126
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "a2c1d2fcced48d72f9a9ff3e4807aef5b9efcb5f",
+  "prompts": {},
+  "sessions": {
+    "s_59175937622ed6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4c7a1c0d-6543-4a23-adb2-86a9b1b6a34e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
