@@ -94,10 +94,12 @@ tasks itself.
 - Every `macro.time_entries` event refreshes its task's document row, which
   carries the new Time logged property; the event itself is not a property
   event, so this is the only way a total reaches other viewers live.
-- Only `call.record_imported` patches calls; native call lifecycle events on
-  `macro.calls` are ignored. The web cache has no local call projection, so a
-  call patch makes mounted lists that can contain calls refetch
-  (`apps/web/src/lib/queries/soup/graphql/call-list-revalidation.ts`).
+- Call starts, archives, record edits and imports patch the
+  viewer's current row. Attendance patches go only to the viewer whose
+  attendance changed. Edits revisit prior viewers when a grant may have
+  changed, and deletion goes to prior viewers because current grants are gone.
+  Summary and recording-ready events leave list membership alone. Unmaintained
+  call lists still reconcile when a call patch arrives.
 
 ## Related
 

@@ -19,6 +19,7 @@ mod test;
 #[must_use]
 pub fn projection_inputs() -> ProjectionInputs {
     let mut inputs = ProjectionInputs::none()
+        .own(crate::calls::TYPE, crate::calls::INPUTS)
         .own("GraphqlSoupChannel", crate::channels::INPUTS)
         .own("GraphqlSoupDatabaseRow", crate::database_rows::INPUTS)
         .own(crate::mail::TYPE, crate::mail::FIELDS)

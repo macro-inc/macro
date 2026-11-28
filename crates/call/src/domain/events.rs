@@ -96,6 +96,27 @@ pub struct CallRecordDeletedMetadata {
     pub actor_user_id: Option<MacroUserIdStr<'static>>,
 }
 
+/// The list operation an explicitly addressed call viewer should apply.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CallListChange {
+    /// Hydrate the viewer's current row, or remove it if access ended.
+    Updated,
+    /// Remove the deleted call.
+    Deleted,
+}
+
+/// One bounded audience batch whose call membership may have changed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CallListViewersUpdatedMetadata {
+    /// Identifier of the changed call.
+    pub call_id: Uuid,
+    /// What happened to the call.
+    pub change: CallListChange,
+    /// Viewers affected by an attendance, access, or deletion change.
+    pub viewers: Vec<MacroUserIdStr<'static>>,
+}
+
 /// Metadata for [`CallTopicEvent::RecordSummarized`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CallRecordSummarizedMetadata {
@@ -141,6 +162,9 @@ pub enum CallTopicEvent {
     /// A call record was deleted.
     #[serde(rename = "call.record_deleted")]
     RecordDeleted(CallRecordDeletedMetadata),
+    /// The call list of each named viewer may have changed.
+    #[serde(rename = "call.list_viewers_updated")]
+    ListViewersUpdated(CallListViewersUpdatedMetadata),
     /// A summary was persisted for a call record.
     #[serde(rename = "call.record_summarized")]
     RecordSummarized(CallRecordSummarizedMetadata),
@@ -187,6 +211,12 @@ impl CallMacroEvent {
     pub fn record_deleted(metadata: CallRecordDeletedMetadata) -> Self {
         let key = metadata.call_id.to_string();
         Self::new(key, CallTopicEvent::RecordDeleted(metadata))
+    }
+
+    /// Build a viewer-scoped call list event keyed by the call id.
+    pub fn list_viewers_updated(metadata: CallListViewersUpdatedMetadata) -> Self {
+        let key = metadata.call_id.to_string();
+        Self::new(key, CallTopicEvent::ListViewersUpdated(metadata))
     }
 
     /// Build a record-summarized event keyed by the call id.

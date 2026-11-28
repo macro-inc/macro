@@ -168,6 +168,7 @@ impl ActivitySource for CallTopicEvent {
             }
             // Archival/processing pipeline and integration sync, not user activity.
             CallTopicEvent::RecordUpdated(_)
+            | CallTopicEvent::ListViewersUpdated(_)
             | CallTopicEvent::RecordSummarized(_)
             | CallTopicEvent::RecordingReady(_)
             | CallTopicEvent::RecordImported(_) => Ingest::Ignore,

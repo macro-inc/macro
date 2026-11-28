@@ -17,13 +17,14 @@ function updated(typename: string): SoupPatch {
   } as unknown as SoupPatch;
 }
 
-function registerList(body: unknown) {
+function registerList(body: unknown, maintained = false) {
   const refresh = vi.fn(async () => {});
   onTestFinished(
     registerActiveGraphqlSoupQuery({
       isEnabled: () => true,
       refresh,
       body: () => body,
+      cacheMaintained: () => maintained,
     })
   );
   return refresh;
@@ -72,11 +73,13 @@ describe('revalidateCallListsForSoupUpdates', () => {
   it('refreshes only mounted lists that can contain a newly updated call', async () => {
     const callsList = registerList({ df: { l: { id: NIL_UUID } } });
     const documentsList = registerList({ callf: { l: { CallId: NIL_UUID } } });
+    const maintainedCalls = registerList({}, true);
 
     await revalidateCallListsForSoupUpdates([updated('GraphqlSoupCall')]);
 
     expect(callsList).toHaveBeenCalledTimes(1);
     expect(documentsList).not.toHaveBeenCalled();
+    expect(maintainedCalls).not.toHaveBeenCalled();
   });
 
   it('ignores patches that carry no call update', async () => {
@@ -86,11 +89,25 @@ describe('revalidateCallListsForSoupUpdates', () => {
       updated('GraphqlSoupDocument'),
       {
         __typename: 'GraphqlCacheDeletion',
-        graphqlTypeName: 'GraphqlSoupCall',
+        graphqlTypeName: 'GraphqlSoupDocument',
         entityId: crypto.randomUUID(),
       },
     ]);
 
     expect(callsList).not.toHaveBeenCalled();
+  });
+
+  it('reconciles call removals in unmaintained lists', async () => {
+    const callsList = registerList({});
+
+    await revalidateCallListsForSoupUpdates([
+      {
+        __typename: 'GraphqlCacheDeletion',
+        graphqlTypeName: 'GraphqlSoupCall',
+        entityId: crypto.randomUUID(),
+      },
+    ]);
+
+    expect(callsList).toHaveBeenCalledOnce();
   });
 });

@@ -903,6 +903,31 @@ where
     }
 
     #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
+    async fn get_call_list_viewers(
+        &self,
+        call_id: &Uuid,
+        channel_id: Option<Uuid>,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        if channel_id.is_none() {
+            return self
+                .repo
+                .get_direct_entity_users(call_id, EntityType::Call)
+                .await;
+        }
+
+        // A share edit or deletion needs current grants, including team and
+        // direct viewers who need not belong to the call's channel.
+        let audiences = self
+            .repo
+            .get_entity_grant_audiences(std::slice::from_ref(call_id), EntityType::Call)
+            .await?;
+        Ok(audiences
+            .into_iter()
+            .flat_map(|audience| audience.users)
+            .collect())
+    }
+
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self))]
     async fn get_call_channel(
         &self,
         call_id: &Uuid,
@@ -1005,6 +1030,25 @@ impl<R: AccessRepository> EntityAudienceLookup for EntityAccessServiceImpl<R> {
         entity_type: EntityType,
         entity_ids: &[&str],
     ) -> Result<Vec<EntityAudience>, AccessError> {
+        if entity_type == EntityType::Call {
+            let mut audiences = Vec::with_capacity(entity_ids.len());
+            for entity_id in entity_ids {
+                let Ok(call_id) = Uuid::parse_str(entity_id) else {
+                    continue;
+                };
+                let Some(call) = self.repo.get_call_channel(&call_id).await? else {
+                    continue;
+                };
+                let users = self
+                    .get_call_list_viewers(&call_id, call.channel_id)
+                    .await?;
+                audiences.push(EntityAudience {
+                    entity_ids: vec![entity_id.to_string()],
+                    users,
+                });
+            }
+            return Ok(audiences);
+        }
         if !GRANT_AUDIENCE_KINDS.contains(&entity_type) {
             let mut audiences = Vec::with_capacity(entity_ids.len());
             for entity_id in entity_ids {

@@ -24,6 +24,7 @@ use soup_filter_projection::{
 };
 use std::collections::HashSet;
 
+mod calls;
 mod channels;
 mod database_rows;
 mod direct_patch;
@@ -69,6 +70,9 @@ pub fn compile_filter_request(
 }
 
 /// Compile the property-aware profile used by current browser and native hosts.
+/// Call lists still require server reconciliation for missed attendance and
+/// access changes. Their separate compiler only repairs positive index facts
+/// contradicted by an authoritative first page.
 pub fn compile_current_filter_request(
     filters: serde_json::Value,
     sort_method: &str,
@@ -219,7 +223,15 @@ fn walk_authoritative_object(
     let mut fields = Vec::new();
     collect_applicable_fields(schema, selections, concrete_type, &mut fields);
 
-    if let Some(partition) = projection_partition(concrete_type) {
+    if concrete_type == calls::TYPE {
+        if let Some(mutation) = calls::project(object, &fields) {
+            insert_authoritative_mutation(
+                mutations,
+                mutation.record_key().as_str().to_owned(),
+                mutation,
+            );
+        }
+    } else if let Some(partition) = projection_partition(concrete_type) {
         let (mut projection_object, valid_selection) = if partition
             == vocabulary::channel_partition()
             || partition == vocabulary::database_row_partition()
@@ -951,6 +963,7 @@ fn projection_partition(typename: &str) -> Option<Token> {
         "GraphqlSoupChat" => Some(vocabulary::chat_partition()),
         "GraphqlSoupChannel" => Some(vocabulary::channel_partition()),
         "GraphqlSoupDatabaseRow" => Some(vocabulary::database_row_partition()),
+        calls::TYPE => Some(item_filter_index::calls::partition()),
         _ => None,
     }
 }

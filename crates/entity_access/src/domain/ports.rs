@@ -794,6 +794,20 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
         entity_type: EntityType,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
 
+    /// Users eligible to see a call in Soup lists before a write changes access.
+    /// Standalone calls require a direct grant. Channel calls also admit their
+    /// team and channel grants. Alternate services may use their entity audience.
+    fn get_call_list_viewers(
+        &self,
+        call_id: &Uuid,
+        _channel_id: Option<Uuid>,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send {
+        async move {
+            self.get_users_by_entity(&call_id.to_string(), EntityType::Call)
+                .await
+        }
+    }
+
     /// Resolve a call ID to its channel ID and share permission ID.
     ///
     /// Resolves the durable identity for native and imported calls.

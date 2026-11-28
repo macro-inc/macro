@@ -435,7 +435,7 @@ impl<
             .add_meeting_participant(&call.id, actor.copied())
             .await
         {
-            Ok(_) => {}
+            Ok(_) => self.publish_call_attendance(call.id, actor.copied()),
             Err(AddParticipantError::UserAlreadyActive) => {
                 return Err(CallError::InOtherCall);
             }

@@ -62,3 +62,5 @@ viewer pattern), which apply to every type defined here.
   cursors carry their own sort tag and string identifiers, separate from timestamp and selected-property cursors.
 - External chats are intentionally excluded from Soup hydration; use the `/external-chats` API.
 - `SoupPatch::hydrate_updated` omits kinds without a `GraphqlSoupEntityType` (databases, forms, external chats), so a committed mutation on them returns empty effects, not a GraphQL error.
+- On `soupUpdates`, a successful primary lookup with no visible call produces
+  a tombstone. A share edit can reach an old viewer whose access just ended.

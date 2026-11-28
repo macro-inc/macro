@@ -168,6 +168,45 @@ async fn grouped_audiences_match_each_entitys_own_users(pool: PgPool) {
             GUEST.to_string()
         ])
     );
+
+    let call_id = Uuid::now_v7();
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'call', $2, 'user', 'view'),
+               ($1, 'call', $3, 'team', 'view'),
+               ($1, 'call', $4, 'channel', 'view')
+        "#,
+        call_id,
+        OWNER,
+        team_id.to_string(),
+        channel_id.to_string(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    use crate::domain::{ports::EntityAccessService, service::EntityAccessServiceImpl};
+    use crate::outbound::pg_access_repo::PgAccessRepository;
+    let access = EntityAccessServiceImpl::new(PgAccessRepository::new(pool));
+    let channel_call = access
+        .get_call_list_viewers(&call_id, Some(channel_id))
+        .await
+        .unwrap();
+    assert_eq!(
+        channel_call
+            .iter()
+            .map(|viewer| viewer.as_ref())
+            .collect::<BTreeSet<_>>(),
+        BTreeSet::from([OWNER, TEAM_MEMBER, PARTICIPANT]),
+    );
+    let standalone = access.get_call_list_viewers(&call_id, None).await.unwrap();
+    assert_eq!(
+        standalone
+            .iter()
+            .map(|viewer| viewer.as_ref())
+            .collect::<Vec<_>>(),
+        vec![OWNER]
+    );
 }
 
 const FOLDER_GUEST: &str = "macro|folder-guest@corp.test";

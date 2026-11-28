@@ -40,9 +40,9 @@ use subtle::ConstantTimeEq;
 use uuid::Uuid;
 
 use crate::domain::events::{
-    CallArchiveReason, CallMacroEvent, CallRecordArchivedMetadata, CallRecordDeletedMetadata,
-    CallRecordSummarizedMetadata, CallRecordUpdatedMetadata, CallRecordingReadyMetadata,
-    CallStartedMetadata,
+    CallArchiveReason, CallListChange, CallListViewersUpdatedMetadata, CallMacroEvent,
+    CallRecordArchivedMetadata, CallRecordDeletedMetadata, CallRecordSummarizedMetadata,
+    CallRecordUpdatedMetadata, CallRecordingReadyMetadata, CallStartedMetadata,
 };
 use crate::domain::models::{
     CallRecordPage, EditCallRecordRepoArgs, EditCallRecordRequest, EditCallTranscriptRequest,
@@ -287,6 +287,45 @@ impl<
 
     fn publish_call_event(&self, event: &CallMacroEvent) {
         publish_call_event(&self.event_broker, event);
+    }
+
+    fn publish_call_attendance(&self, call_id: Uuid, viewer: MacroUserIdStr<'_>) {
+        self.publish_call_list_changes(call_id, CallListChange::Updated, &[viewer.into_owned()]);
+    }
+
+    #[tracing::instrument(skip(self, viewers), fields(viewer_count = viewers.len()))]
+    fn publish_call_list_changes(
+        &self,
+        call_id: Uuid,
+        change: CallListChange,
+        viewers: &[MacroUserIdStr<'static>],
+    ) {
+        // Match Soup's delivery batch size and avoid putting the entire team
+        // roster into one Kafka message.
+        const VIEWERS_PER_EVENT: usize = 500;
+        for viewers in viewers.chunks(VIEWERS_PER_EVENT) {
+            self.publish_call_event(&CallMacroEvent::list_viewers_updated(
+                CallListViewersUpdatedMetadata {
+                    call_id,
+                    change,
+                    viewers: viewers.to_vec(),
+                },
+            ));
+        }
+    }
+
+    async fn call_list_viewers_before_write(
+        &self,
+        call_id: &Uuid,
+        channel_id: Option<Uuid>,
+    ) -> Vec<MacroUserIdStr<'static>> {
+        self.entity_access_service
+            .get_call_list_viewers(call_id, channel_id)
+            .await
+            .inspect_err(|_| {
+                tracing::warn!(%call_id, "could not capture call list viewers before a write");
+            })
+            .unwrap_or_default()
     }
 
     fn publish_call_notification(&self, event: CallNotificationEvent) {
@@ -1075,7 +1114,7 @@ impl<
         // returns AddParticipantError::UserAlreadyActive, which we translate
         // to a typed CallError::AlreadyInCall.
         match self.repo.add_participant(&call.id, user_id.copied()).await {
-            Ok(_) => {}
+            Ok(_) => self.publish_call_attendance(call.id, user_id.copied()),
             Err(AddParticipantError::UserAlreadyActive) => {
                 let channel = self
                     .repo
@@ -1298,7 +1337,7 @@ impl<
                 .await
         };
         match add {
-            Ok(_) => {}
+            Ok(_) => self.publish_call_attendance(*call_id, user_id.copied()),
             Err(AddParticipantError::UserAlreadyActive) => return Err(CallError::InOtherCall),
             Err(AddParticipantError::Repository(error)) => return Err(CallError::Internal(error)),
         }
@@ -1780,6 +1819,7 @@ impl<
                     .await
                 {
                     Ok(_) => {
+                        self.publish_call_attendance(call.id, participant_identity.copied());
                         tracing::info!(
                             call_id = %call.id,
                             participant = participant_identity.as_ref(),
@@ -2030,6 +2070,14 @@ impl<
             .map_err(|e| CallError::Internal(e.into()))?
             .map(|r| r.channel_id);
 
+        let former_viewers = match channel_id {
+            Some(channel_id) => {
+                self.call_list_viewers_before_write(&call_id, channel_id)
+                    .await
+            }
+            None => Vec::new(),
+        };
+
         let storage_keys = self
             .repo
             .delete_call_record(&call_id)
@@ -2044,6 +2092,7 @@ impl<
                 channel_id,
                 actor_user_id,
             }));
+            self.publish_call_list_changes(call_id, CallListChange::Deleted, &former_viewers);
         }
 
         if let Some(storage_keys) = storage_keys {
@@ -2209,6 +2258,14 @@ impl<
                 .as_ref()
                 .map(|command| command.target().is_some())
         });
+        let previous_viewers = if let Some(record) = &record
+            && (team_share.is_some() || share_permission.is_some())
+        {
+            self.call_list_viewers_before_write(&call_id, record.channel_id)
+                .await
+        } else {
+            Vec::new()
+        };
 
         self.repo
             .patch_call_record(
@@ -2233,6 +2290,7 @@ impl<
             custom_name,
             share_with_team,
         }));
+        self.publish_call_list_changes(call_id, CallListChange::Updated, &previous_viewers);
 
         // Participants of an in-progress call mirror the pending toggle in
         // their call UI; tell them when it changed.

@@ -21,6 +21,12 @@ enum GrantSource {
     Channel(Uuid),
 }
 
+struct GrantRow {
+    entity_id: Uuid,
+    source_type: EntityAccessSourceType,
+    source_id: String,
+}
+
 /// Gets the users each entity's `entity_access` grants reach, as `get_entity_users`
 /// does for one entity: direct users, team members, and active channel participants.
 ///
@@ -50,17 +56,42 @@ pub async fn get_entity_audiences(
         .execute(&mut *tx)
         .await?;
 
-    let grants = sqlx::query!(
-        r#"
+    let grants = if entity_type == EntityType::Call {
+        // Plan an indexed lookup per named call even when statistics still
+        // reflect an empty grant table. A custom ANY plan can scan that table.
+        sqlx::query_as!(
+            GrantRow,
+            r#"
+            SELECT grant_row.entity_id AS "entity_id!",
+                   grant_row.source_type AS "source_type!: EntityAccessSourceType",
+                   grant_row.source_id AS "source_id!"
+            FROM unnest($1::uuid[]) AS requested(id)
+            CROSS JOIN LATERAL (
+                SELECT entity_id, source_type, source_id
+                FROM entity_access
+                WHERE entity_id = requested.id AND entity_type = $2
+                OFFSET 0
+            ) grant_row
+            "#,
+            entity_ids,
+            entity_type.as_ref(),
+        )
+        .fetch_all(&mut *tx)
+        .await?
+    } else {
+        sqlx::query_as!(
+            GrantRow,
+            r#"
         SELECT entity_id, source_type AS "source_type!: EntityAccessSourceType", source_id
         FROM entity_access
         WHERE entity_id = ANY($1) AND entity_type = $2
         "#,
-        entity_ids,
-        entity_type.as_ref(),
-    )
-    .fetch_all(&mut *tx)
-    .await?;
+            entity_ids,
+            entity_type.as_ref(),
+        )
+        .fetch_all(&mut *tx)
+        .await?
+    };
 
     // Group entities by the exact set of sources their grants name. A team or
     // channel id that is not a UUID cannot match a member row, so it reaches no one.
