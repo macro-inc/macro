@@ -655,6 +655,17 @@ Parameters, results, raw SQL, and user identity are not exported. Logging uses
 an anonymous span context. A throwing JS telemetry callback cannot change query
 results. Native hosts are unchanged unless they install their own telemetry sink.
 
+## SQL work counters
+
+The synchronous driver also counts, on every target and always, each statement
+execution (transaction control and reused prepared statements included) and
+each row it steps, whether or not the caller keeps it: two thread-local integer
+increments per event (`query_telemetry::sql_counts`). Nothing about the SQL is
+kept. The browser shell exposes the running totals as `sqlCounters()`
+(`{ statements, rows }`); hosts diff two readings to see what an engine call
+cost. The web app's headless cache harness gates on them
+(`apps/web/src/lib/graphql-cache/headless/AGENTS.md`).
+
 ## WAL checkpoints
 
 Every checkpoint changes the WAL's state, and Turso then drops the
