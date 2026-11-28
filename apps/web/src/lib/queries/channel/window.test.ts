@@ -45,12 +45,15 @@ function fakeLookups(
 ) {
   const requested: string[][] = [];
   const disposed: string[][] = [];
+  /** What each lookup asks for now. */
+  const asking: Array<() => string[]> = [];
   useSoupAstItemsQuery.mockImplementation((args) => {
     const requestedIds = (): string[] =>
       JSON.stringify(args().body).match(/ch-\d{4}|fav-\d{4}/g) ?? [];
     const initial = requestedIds();
     const pending = initial.some((id) => slow.has(id));
     requested.push(initial);
+    asking.push(requestedIds);
     onCleanup(() => disposed.push(initial));
     return {
       isEnabled: true,
@@ -70,7 +73,7 @@ function fakeLookups(
       },
     };
   });
-  return { requested, disposed };
+  return { requested, disposed, asking };
 }
 
 afterEach(() => {
@@ -167,6 +170,53 @@ describe('useChannelWindow', () => {
       dispose();
     }
     expect(disposed).toHaveLength(4);
+  });
+
+  it('keeps a lookup while its chunk only loses IDs, and asks again for a new one', () => {
+    const { requested, asking } = fakeLookups();
+    const list = ids(10);
+    const { dispose, result, setLoaded } = createRoot((dispose) => {
+      const [loaded, setLoaded] = createSignal<readonly string[]>([]);
+      const result = useChannelWindow(
+        () =>
+          channelIdWindow([
+            {
+              key: 's',
+              ids: list,
+              isLoaded: (id) => loaded().includes(id),
+            },
+          ]),
+        () => true
+      );
+      return { dispose, result, setLoaded };
+    });
+    try {
+      setLoaded(list.slice(0, 4));
+      expect(requested).toHaveLength(1);
+      expect(asking[0]?.()).toEqual(list);
+      expect(result.channels().map(({ id }) => id)).toEqual(list.slice(4));
+      setLoaded(list.slice(0, 2));
+      expect(asking[0]?.()).toEqual(list);
+      setLoaded([]);
+      expect(asking[0]?.()).toEqual(list);
+      expect(result.channels().map(({ id }) => id)).toEqual(list);
+    } finally {
+      dispose();
+    }
+    const grown = createRoot((dispose) => {
+      const [count, setCount] = createSignal(3);
+      useChannelWindow(
+        () => channelIdWindow([{ key: 's', ids: list.slice(0, count()) }]),
+        () => true
+      );
+      return { dispose, setCount };
+    });
+    try {
+      grown.setCount(4);
+      expect(asking.at(-1)?.()).toEqual(list.slice(0, 4));
+    } finally {
+      grown.dispose();
+    }
   });
 
   it('keeps a record while its ID moves to a chunk that is still loading', () => {

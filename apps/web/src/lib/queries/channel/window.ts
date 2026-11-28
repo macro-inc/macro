@@ -141,8 +141,9 @@ export type ChannelWindowResult = {
 
 /**
  * Resolve a bounded window of channel IDs, one cached by-ID lookup per chunk.
- * Chunks that stay in the window keep their lookup; IDs that leave it stop
- * being fetched or kept current.
+ * Chunks that stay in the window keep their lookup, which asks again only
+ * when a chunk gains an ID; a chunk that leaves stops being fetched or kept
+ * current, so each lookup holds at most `CHANNEL_WINDOW_CHUNK_SIZE` IDs.
  */
 export function useChannelWindow(
   window: Accessor<ChannelIdWindow>,
@@ -162,11 +163,24 @@ export function useChannelWindow(
 
   const createChunk = (key: string, initial: readonly string[]) =>
     createRoot((dispose): WindowChunk => {
-      const [ids, setIds] = createSignal<readonly string[]>(initial, {
+      const [ids, setWanted] = createSignal<readonly string[]>(initial, {
         equals: arrayEquals,
       });
+      // The IDs the lookup asked for: a chunk whose IDs only shrink (another
+      // source loaded some) keeps its lookup instead of asking again.
+      const [lookupIds, setLookupIds] = createSignal<readonly string[]>(
+        initial,
+        { equals: arrayEquals }
+      );
+      const setIds = (next: readonly string[]) => {
+        setWanted(next);
+        const asked = new Set(untrack(lookupIds));
+        if (!next.every((id) => asked.has(id))) setLookupIds(next);
+      };
       const idSet = createMemo(() => new Set(ids()));
-      const query = useChannelsByIdsQuery(ids, () => ({ cacheFirst: true }));
+      const query = useChannelsByIdsQuery(lookupIds, () => ({
+        cacheFirst: true,
+      }));
       const error = () => query.fetchError ?? query.error;
       const loading = () =>
         !error() &&
