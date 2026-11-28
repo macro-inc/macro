@@ -159,6 +159,7 @@ async fn updates_hydrate_from_the_primary_before_the_replica_replays_them() {
     assert_eq!(replica_calls.load(Ordering::SeqCst), 0);
 }
 
+#[tokio::test]
 async fn later_batches_can_update_the_same_entity_again() {
     let soup = CountingSoupService::default();
     soup.set_raw_response(vec![soup_document(Uuid::from_u128(1))]);
