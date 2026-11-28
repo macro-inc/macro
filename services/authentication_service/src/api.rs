@@ -181,6 +181,7 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
                 },
             ),
         )
+        .merge(hosted_runtimes::inbound::public_catalog::router())
         .merge(hosted_runtimes::inbound::axum_router::team_router(
             computer_router_state(&state),
         ))

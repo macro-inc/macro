@@ -164,6 +164,7 @@ export const authBacklog = [
   'setTeamAgentVoice', // An agent teammate's call voice is an admin app setting for now.
   'cancelTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'completeTeamComputerSetup', // The guided computer setup is an app flow.
+  'listPublicComputerCatalog', // The app reads public specs through generated Auth.
   'listTeamComputerUsage', // Computer usage graphs belong to the app.
   'listTeamComputerOffers', // Computer checkout offers belong to the app.
   'listTeamComputerPurchaseOffers', // The buy dialog's offers belong to the app.

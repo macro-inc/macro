@@ -86,6 +86,8 @@ read it before changing behaviour.
 - Not here: harness rows and pairing → `crates/harnesses`; the subscription's
   seat logic → `crates/teams`; macrod enrollment → `crates/coding_agent_worker`.
 - Sizes are this crate's own; do not reuse `agent_harness`'s `SandboxSize`.
+- The anonymous catalog publishes `current_catalog()` resource specs and
+  `ComputerSize::label()` through `inbound/public_catalog.rs`.
 
 ## Boundaries
 

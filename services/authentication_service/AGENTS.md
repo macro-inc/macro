@@ -61,6 +61,10 @@ key issuance, and account merge/link flows.
 
 ## Macro computers billing
 
+The anonymous `GET /computers/catalog` route serves the compiled computer
+catalog with `Cache-Control: no-store`. Public pricing is unavailable. Signed
+team offers supply account-specific prices and purchase terms.
+
 Team computer purchase and offers use the shared fail-closed
 `enable-macro-computers` rollout via `ComputerService::with_rollout`; compose
 it from the existing PostHog provider. Existing management keeps its authorization

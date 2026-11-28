@@ -1049,6 +1049,12 @@ offers and purchases answer 503 with `computers are not available in
 this environment`; partial price configuration prevents the authentication
 service from starting.
 
+For anonymous computer selection, `GET /auth/computers/catalog` serves current
+versioned size IDs, labels, and CPU, memory, and total disk specs. Public
+pricing is unavailable. Use a fresh successful response to identify a size
+that has left the catalog. A failed or invalid response means the catalog is
+unavailable. Signed team offers govern purchase terms.
+
 **Macro computers** lists every team computer once; its runtime is not listed
 again under **Your machines**. Each row uses the same layout as a Your machines
 row: status dot, name, one muted line, at most one action, and **⋯** (a sheet
