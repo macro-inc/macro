@@ -463,9 +463,11 @@ enum GraphqlEmailView {
     Important,
     /// The other option.
     Other,
-    /// Threads in the spam folder, sorted by their newest folder message.
+    /// Threads with a message in the spam folder. Date sorts use their newest
+    /// spam message.
     Spam,
-    /// Threads in the trash folder, sorted by their newest folder message.
+    /// Threads with a message in the trash folder. Date sorts use their newest
+    /// trashed message.
     Trash,
 }
 
