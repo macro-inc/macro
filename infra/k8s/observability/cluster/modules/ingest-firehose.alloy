@@ -91,9 +91,9 @@ otelcol.processor.transform "cloudwatch" {
       // The trace: the first traceparent of the request's headers, lower-cased
       // as Datadog's WAF pipeline takes it. It is the caller's trace, a
       // browser's or another service's, so the event shows in it. A header
-      // that can't name one gives no IDs: version ff, an all-zero ID, or
-      // anything after the flags in version 00. A later traceparent is not
-      // read.
+      // that can't name one gives no IDs: a value that isn't a string,
+      // version ff, an all-zero ID, or anything after the flags in version 00.
+      // A later traceparent is not read.
       //
       // No client address: clientIp and a rate-based rule's limitValue are
       // redacted, and so is every value of a header, a custom key or a rule
@@ -105,13 +105,16 @@ otelcol.processor.transform "cloudwatch" {
       // sec-ch-ua-*. Custom keys of other types (IP, FORWARDED_IP, QUERY_ARG,
       // ...) and matches outside the headers are redacted whatever their
       // name. Last, anything shaped like an IPv4 or IPv6 address on its own
-      // (not part of a longer word or number) is redacted, a run of them as
+      // (not part of a longer word or number; an IPv6 one with an IPv4 tail
+      // as a whole) is redacted, a run of them as
       // one, and so is a run of digits, dots and colons that ends the body, so
       // a record the patterns can't read (cut off mid-value) loses its
       // addresses too. A version after a name (Chrome/131.0.0.0), a five-part
-      // version, a time, WAF's own ARNs and account IDs stay. WAF itself already
-      // redacts credentials, the path and the query string.
-      `merge_maps(cache, ExtractPatterns(body, "\"headers\"\\s*:\\s*\\[(?:\\s*\\{(?:\"(?:[^\"\\\\]|\\\\.)*\"|[^{}\"])*\\}\\s*,)*?\\s*\\{(?:\"(?:[^\"\\\\]|\\\\.)*\"|[^{}\"])*?(?:\"name\"\\s*:\\s*\"(?i:traceparent)\"(?:\"(?:[^\"\\\\]|\\\\.)*\"|[^{}\"])*?\"value\"\\s*:\\s*\"(?P<tp1>(?:[^\"\\\\]|\\\\.)*)\"|\"value\"\\s*:\\s*\"(?P<tp2>(?:[^\"\\\\]|\\\\.)*)\"(?:\"(?:[^\"\\\\]|\\\\.)*\"|[^{}\"])*\"name\"\\s*:\\s*\"(?i:traceparent)\")"), "upsert") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
+      // version, a time, WAF's own ARNs and account IDs stay. WAF's logging
+      // config redacts credential headers, and the path and query string only
+      // where AWS applies that to the event (see the cloud-storage-service WAF
+      // runbook), so uri and args can still show them.
+      `merge_maps(cache, ExtractPatterns(body, "\"headers\"\\s*:\\s*\\[(?:\\s*\\{(?:\"(?:[^\"\\\\]|\\\\.)*\"|[^{}\"])*\\}\\s*,)*?\\s*\\{(?:\"(?:[^\"\\\\]|\\\\.)*\"|[^{}\"])*?(?:\"name\"\\s*:\\s*\"(?i:traceparent)\"(?:\"(?:[^\"\\\\]|\\\\.)*\"|[^{}\"])*?\"value\"\\s*:\\s*(?:\"(?P<tp1>(?:[^\"\\\\]|\\\\.)*)\"|[-+.0-9A-Za-z]+)|\"value\"\\s*:\\s*(?:\"(?P<tp2>(?:[^\"\\\\]|\\\\.)*)\"|[-+.0-9A-Za-z]+)(?:\"(?:[^\"\\\\]|\\\\.)*\"|[^{}\"])*\"name\"\\s*:\\s*\"(?i:traceparent)\")"), "upsert") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
       `set(cache["tp"], cache["tp1"]) where cache["tp1"] != nil and cache["tp1"] != ""`,
       `set(cache["tp"], cache["tp2"]) where cache["tp2"] != nil and cache["tp2"] != ""`,
       `merge_maps(cache, ExtractPatterns(cache["tp"], "^\\s*(?P<version>(?i:[0-9a-e][0-9a-f]|f[0-9a-e]))-(?P<trace_id>[0-9a-fA-F]{32})-(?P<span_id>[0-9a-fA-F]{16})-[0-9a-fA-F]{2}(?P<rest>-[^\"]*)?\\s*$"), "upsert") where cache["tp"] != nil`,
@@ -120,17 +123,17 @@ otelcol.processor.transform "cloudwatch" {
       `set(trace_id.string, ConvertCase(cache["trace_id"], "lower")) where cache["trace_id"] != nil`,
       `set(span_id.string, ConvertCase(cache["span_id"], "lower")) where cache["span_id"] != nil`,
       `replace_pattern(body, "\"(clientIp|limitValue)\"\\s*:\\s*\"(?:[^\"\\\\]|\\\\.)*\"", "\"${1}\":\"redacted\"") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
-      `replace_pattern(body, "(\"name\"\\s*:\\s*\"(?i:host|user-agent|accept(?:-[a-z]+)?|content-type|content-length|origin|x-forwarded-proto|x-forwarded-host|x-forwarded-port|traceparent|tracestate|x-amzn-trace-id|x-request-id|cache-control|pragma|connection|upgrade|x-requested-with|sec-fetch-[a-z]+|sec-ch-ua(?:-[a-z0-9]+)*)\"(?:\"(?:[^\"\\\\]|\\\\.)*\"|[^{}\"])*?)\"value\"(\\s*:)", "${1}\"waf_kept_value\"${2}") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
-      `replace_pattern(body, "\"value\"(\\s*:\\s*\"(?:[^\"\\\\]|\\\\.)*\"(?:\"(?:[^\"\\\\]|\\\\.)*\"|[^{}\"])*\"name\"\\s*:\\s*\"(?i:host|user-agent|accept(?:-[a-z]+)?|content-type|content-length|origin|x-forwarded-proto|x-forwarded-host|x-forwarded-port|traceparent|tracestate|x-amzn-trace-id|x-request-id|cache-control|pragma|connection|upgrade|x-requested-with|sec-fetch-[a-z]+|sec-ch-ua(?:-[a-z0-9]+)*)\")", "\"waf_kept_value\"${1}") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
-      `replace_pattern(body, "(\"matchedFieldName\"\\s*:\\s*\"(?i:host|user-agent|accept(?:-[a-z]+)?|content-type|content-length|origin|x-forwarded-proto|x-forwarded-host|x-forwarded-port|traceparent|tracestate|x-amzn-trace-id|x-request-id|cache-control|pragma|connection|upgrade|x-requested-with|sec-fetch-[a-z]+|sec-ch-ua(?:-[a-z0-9]+)*)\"(?:\"(?:[^\"\\\\]|\\\\.)*\"|[^{}\"])*?)\"matchedData\"(\\s*:)", "${1}\"waf_kept_matchedData\"${2}") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
-      `replace_pattern(body, "\"matchedData\"(\\s*:\\s*\\[(?:\\s*\"(?:[^\"\\\\]|\\\\.)*\"\\s*,?)*\\s*\\](?:\"(?:[^\"\\\\]|\\\\.)*\"|[^{}\"])*\"matchedFieldName\"\\s*:\\s*\"(?i:host|user-agent|accept(?:-[a-z]+)?|content-type|content-length|origin|x-forwarded-proto|x-forwarded-host|x-forwarded-port|traceparent|tracestate|x-amzn-trace-id|x-request-id|cache-control|pragma|connection|upgrade|x-requested-with|sec-fetch-[a-z]+|sec-ch-ua(?:-[a-z0-9]+)*)\")", "\"waf_kept_matchedData\"${1}") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
+      `replace_pattern(body, "(\"name\"\\s*:\\s*\"(?i:host|user-agent|accept(?:-[a-z]+)*|content-type|content-length|origin|x-forwarded-proto|x-forwarded-host|x-forwarded-port|traceparent|tracestate|x-amzn-trace-id|x-request-id|cache-control|pragma|connection|upgrade|x-requested-with|sec-fetch-[a-z]+(?:-[a-z]+)*|sec-ch-ua(?:-[a-z0-9]+)*)\"(?:\"(?:[^\"\\\\]|\\\\.)*\"|[^{}\"])*?)\"value\"(\\s*:)", "${1}\"waf_kept_value\"${2}") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
+      `replace_pattern(body, "\"value\"(\\s*:\\s*\"(?:[^\"\\\\]|\\\\.)*\"(?:\"(?:[^\"\\\\]|\\\\.)*\"|[^{}\"])*\"name\"\\s*:\\s*\"(?i:host|user-agent|accept(?:-[a-z]+)*|content-type|content-length|origin|x-forwarded-proto|x-forwarded-host|x-forwarded-port|traceparent|tracestate|x-amzn-trace-id|x-request-id|cache-control|pragma|connection|upgrade|x-requested-with|sec-fetch-[a-z]+(?:-[a-z]+)*|sec-ch-ua(?:-[a-z0-9]+)*)\")", "\"waf_kept_value\"${1}") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
+      `replace_pattern(body, "(\"matchedFieldName\"\\s*:\\s*\"(?i:host|user-agent|accept(?:-[a-z]+)*|content-type|content-length|origin|x-forwarded-proto|x-forwarded-host|x-forwarded-port|traceparent|tracestate|x-amzn-trace-id|x-request-id|cache-control|pragma|connection|upgrade|x-requested-with|sec-fetch-[a-z]+(?:-[a-z]+)*|sec-ch-ua(?:-[a-z0-9]+)*)\"(?:\"(?:[^\"\\\\]|\\\\.)*\"|[^{}\"])*?)\"matchedData\"(\\s*:)", "${1}\"waf_kept_matchedData\"${2}") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
+      `replace_pattern(body, "\"matchedData\"(\\s*:\\s*\\[(?:\\s*\"(?:[^\"\\\\]|\\\\.)*\"\\s*,?)*\\s*\\](?:\"(?:[^\"\\\\]|\\\\.)*\"|[^{}\"])*\"matchedFieldName\"\\s*:\\s*\"(?i:host|user-agent|accept(?:-[a-z]+)*|content-type|content-length|origin|x-forwarded-proto|x-forwarded-host|x-forwarded-port|traceparent|tracestate|x-amzn-trace-id|x-request-id|cache-control|pragma|connection|upgrade|x-requested-with|sec-fetch-[a-z]+(?:-[a-z]+)*|sec-ch-ua(?:-[a-z0-9]+)*)\")", "\"waf_kept_matchedData\"${1}") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
       `replace_pattern(body, "(\"(?:key|location)\"\\s*:\\s*\"(?:|[^H\"\\\\][^\"\\\\]*|H(?:|[^E\"\\\\][^\"\\\\]*|E(?:|[^A\"\\\\][^\"\\\\]*|A(?:|[^D\"\\\\][^\"\\\\]*|D(?:|[^E\"\\\\][^\"\\\\]*|E(?:|[^R\"\\\\][^\"\\\\]*|R[^\"\\\\]+))))))\"(?:\"(?:[^\"\\\\]|\\\\.)*\"|[^{}\"])*?)\"waf_kept_(value|matchedData)\"", "${1}\"${2}\"") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
       `replace_pattern(body, "\"waf_kept_(value|matchedData)\"(\\s*:\\s*(?:\"(?:[^\"\\\\]|\\\\.)*\"|\\[(?:\\s*\"(?:[^\"\\\\]|\\\\.)*\"\\s*,?)*\\s*\\])(?:\"(?:[^\"\\\\]|\\\\.)*\"|[^{}\"])*\"(?:key|location)\"\\s*:\\s*\"(?:|[^H\"\\\\][^\"\\\\]*|H(?:|[^E\"\\\\][^\"\\\\]*|E(?:|[^A\"\\\\][^\"\\\\]*|A(?:|[^D\"\\\\][^\"\\\\]*|D(?:|[^E\"\\\\][^\"\\\\]*|E(?:|[^R\"\\\\][^\"\\\\]*|R[^\"\\\\]+))))))\")", "\"${1}\"${2}") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
       `replace_pattern(body, "(\"value\"\\s*:\\s*)\"(?:[^\"\\\\]|\\\\.)*\"", "${1}\"redacted\"") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
       `replace_pattern(body, "(\"matchedData\"\\s*:\\s*)\\[(?:\\s*\"(?:[^\"\\\\]|\\\\.)*\"\\s*,?)+\\s*\\]", "${1}[\"redacted\"]") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
       `replace_pattern(body, "\"waf_kept_(value|matchedData)\"", "\"${1}\"") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
+      `replace_pattern(body, "(^|[^0-9A-Za-z\\\\]|\\\\[a-tv-z/\\\\\\\\]|\\\\u[0-9A-Fa-f]{4})(?:(?:(?:[0-9A-Fa-f]{1,4}:){6}|(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4})*)?::(?:[0-9A-Fa-f]{1,4}:)*)(?:[0-9]{1,3}\\.){3}[0-9]{1,3}|(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){7}|(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4})*)?::(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4})*)?))(?:(?:[^0-9A-Za-z\\\\\"]|\\\\[a-tv-z/\\\\\\\\]|\\\\u[0-9A-Fa-f]{4})*(?:(?:(?:[0-9A-Fa-f]{1,4}:){6}|(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4})*)?::(?:[0-9A-Fa-f]{1,4}:)*)(?:[0-9]{1,3}\\.){3}[0-9]{1,3}|(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){7}|(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4})*)?::(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4})*)?)))*([^0-9A-Za-z:]|$)", "${1}redacted${2}") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
       `replace_pattern(body, "(^|[^0-9A-Za-z./\\\\]|[^A-Za-z\\\\]/|\\\\[a-tv-z/\\\\\\\\]|\\\\u[0-9A-Fa-f]{4})(?:[0-9]{1,3}\\.){3}[0-9]{1,3}(?:(?:[^0-9A-Za-z\\\\\"]|\\\\[a-tv-z/\\\\\\\\]|\\\\u[0-9A-Fa-f]{4})*(?:[0-9]{1,3}\\.){3}[0-9]{1,3})*([^0-9A-Za-z.]|\\.[^0-9]|$)", "${1}redacted${2}") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
-      `replace_pattern(body, "(^|[^0-9A-Za-z\\\\]|\\\\[a-tv-z/\\\\\\\\]|\\\\u[0-9A-Fa-f]{4})(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){7}|(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4})*)?::(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4})*)?)(?:(?:[^0-9A-Za-z\\\\\"]|\\\\[a-tv-z/\\\\\\\\]|\\\\u[0-9A-Fa-f]{4})*(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){7}|(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4})*)?::(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4})*)?))*([^0-9A-Za-z:]|$)", "${1}redacted${2}") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
       `replace_pattern(body, "[0-9A-Fa-f.:]*[0-9][0-9A-Fa-f.:]*$", "redacted") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
       `delete_matching_keys(attributes, "^(log_group|log_stream|msg_type|region|loki\\.attribute\\.labels)$")`,
     ]
