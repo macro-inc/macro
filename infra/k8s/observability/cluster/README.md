@@ -247,18 +247,34 @@ its group (`service.name` is the group's name without `/aws/lambda/`,
 `-prod` or `-dev` suffix, which becomes `deployment.environment`) and hands it
 to the OTLP log path, so emails are hashed as in every other log. The group,
 stream and function name are structured metadata (`aws_log_group_names`,
-`aws_log_stream_names`, `faas_name`). An AWS WAF event (`aws-waf-logs-*`) also
-gets the trace and span ID of its `traceparent` header, as Datadog's WAF
-pipeline does, and loses its client address: `clientIp`, a rate-based rule's
-`limitValue` and its `IP` or `FORWARDED_IP` custom key's value, and every
-header or `HEADER` custom key named for forwarding or a client address
-(`x-forwarded-for`, `forwarded`, `cf-connecting-ip`, ...) read `redacted`.
-Firehose has its answer once the events
-are handed on: a batch the memory limiter then refuses is lost, not retried
-(the limiter's `otelcol_processor_incoming_items_total` minus
-`outgoing_items_total`, and the error "failed to consume log entries"). Events
-from Firehose's own log groups are dropped, so its delivery errors can't loop
-back through it.
+`aws_log_stream_names`, `faas_name`). An AWS WAF event (`aws-waf-logs-*`, the
+requests WAF blocked or challenged) also gets the trace and span ID of its first
+`traceparent` header, lower-cased as Datadog's WAF pipeline does: the caller's
+trace, so the block shows in the browser's or the calling service's trace. A
+first header that can't name a trace (a value that isn't a string, version
+`ff`, an all-zero ID, anything after the flags in version `00`) gives none; a
+later one isn't read. The event loses its client address:
+`clientIp` and a rate-based rule's `limitValue` read `redacted`, and so does
+every value of a header, custom key or rule match (`matchedData`) unless it is
+a header kept as is (`host`, `user-agent`, `accept-*`, `content-type`,
+`origin`, `x-forwarded-proto`, `x-forwarded-host`, `x-forwarded-port`, the
+trace headers, `sec-fetch-*`, `sec-ch-ua-*`, ...; the full list is in the
+module). Then any IPv4 or IPv6 address standing on its own is redacted (an IPv6 one
+with an IPv4 tail as a whole), and so
+is a run of digits, dots and colons that ends the body, so a record cut off
+mid-value loses its addresses too; a version such as `Chrome/131.0.0.0` or
+`312.1.0.34.111`, a time, WAF's own ARNs and account IDs stay. WAF's
+logging config redacts credential headers, and the path and query string only
+where AWS applies that to the event (see the cloud-storage-service
+`WAF_RUNBOOK.md`), so `uri` and `args` can still show them. The patterns are
+regular expressions over WAF's JSON, whose entries are flat: they allow whitespace, either field order and
+other fields within an entry.
+
+Firehose has its answer once the events are handed on: a batch the memory
+limiter then refuses is lost, not retried (the limiter's
+`otelcol_processor_incoming_items_total` minus `outgoing_items_total`, and the
+error "failed to consume log entries"). Events from Firehose's own log groups
+are dropped, so its delivery errors can't loop back through it.
 
 ### Trace sampling
 
