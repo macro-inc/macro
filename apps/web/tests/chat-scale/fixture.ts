@@ -525,9 +525,8 @@ export function createChatFixture(
     channel: FixtureChannel,
     literal: ChannelLiteral
   ): Truth => {
-    const [key, ...rest] = Object.keys(literal);
-    if (rest.length > 0)
-      unsupported(`literal with keys ${Object.keys(literal)}`);
+    // `checkExpr` faults a literal with other than one key.
+    const [key] = Object.keys(literal);
     return (
       match(key)
         .with('channelId', () => channel.id === literal.channelId)
@@ -595,9 +594,12 @@ export function createChatFixture(
       expr.not,
     ].filter((branch): branch is ChannelExpr => Boolean(branch));
     for (const branch of branches) checkExpr(branch);
-    if (expr.literal)
-      for (const key of Object.keys(expr.literal))
+    if (expr.literal) {
+      const keys = Object.keys(expr.literal);
+      if (keys.length !== 1) unsupported(`literal with keys ${keys}`);
+      for (const key of keys)
         if (!LITERAL_KEYS.has(key)) unsupported(`channel literal ${key}`);
+    }
     if (branches.length === 0 && !expr.literal)
       unsupported('empty channel expression');
   };

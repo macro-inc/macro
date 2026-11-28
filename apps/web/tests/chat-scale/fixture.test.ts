@@ -73,8 +73,8 @@ type FilteredRoot = {
   };
 };
 
-function channelsMatching(channelFilter: unknown) {
-  const fixture = createChatFixture(700);
+function channelsMatching(channelFilter: unknown, channelCount = 700) {
+  const fixture = createChatFixture(channelCount);
   const root = fixture.rootValue() as FilteredRoot;
   const page = root.user.soup({
     input: { initial: { limit: 500, filters: { channelFilter } } },
@@ -90,8 +90,10 @@ describe('the Chat scale fixture, filtering', () => {
     const teamIds = fixture.channels
       .filter((channel) => channel.channelType === 'team')
       .map((channel) => channel.id);
-    expect(ids.length).toBeGreaterThan(0);
-    expect(teamIds).toEqual(expect.arrayContaining(ids));
+    // Fewer team channels than a page holds, so the page has every one.
+    expect(teamIds.length).toBeGreaterThan(0);
+    expect(teamIds.length).toBeLessThan(500);
+    expect([...ids].sort()).toEqual([...teamIds].sort());
     expect(channelsMatching({ literal: { organizationId: 2 } }).ids).toEqual(
       []
     );
@@ -118,14 +120,27 @@ describe('the Chat scale fixture, filtering', () => {
     expect(fixture.reads().unsupported).toEqual([]);
   });
 
-  it('faults a literal it cannot read on a branch matching never visits', () => {
-    const { fixture } = channelsMatching({
-      or: {
-        left: { literal: { isParticipant: true } },
-        right: { literal: { archived: true } },
+  it('faults a literal it cannot read with no row to match it against', () => {
+    const { fixture } = channelsMatching(
+      {
+        or: {
+          left: { literal: { isParticipant: true } },
+          right: { literal: { archived: true } },
+        },
       },
-    });
+      0
+    );
     expect(fixture.reads().unsupported).toEqual(['channel literal archived']);
+  });
+
+  it('faults a literal with two keys with no row to match it against', () => {
+    const { fixture } = channelsMatching(
+      { literal: { channelType: 'TEAM', isParticipant: true } },
+      0
+    );
+    expect(fixture.reads().unsupported).toEqual([
+      'literal with keys channelType,isParticipant',
+    ]);
   });
 
   it('returns only the favorites asked for by ID', () => {
