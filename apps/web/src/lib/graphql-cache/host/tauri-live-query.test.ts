@@ -212,7 +212,10 @@ describe('native retained view transport', () => {
     it('asks a binary that has the rows command for shaped rows', async () => {
       const host = createTauriCacheHost({ scope: 'scope-1' });
       expect(host.liveQueryRows).toBe(true);
-      await expect(host.entityFilter(shaped)).resolves.toEqual(update);
+      await expect(host.entityFilter(shaped)).resolves.toEqual({
+        ...update,
+        row: 'channel-list',
+      });
       expect(invoke).toHaveBeenLastCalledWith(
         'graphql_cache_entity_filter_rows',
         { request: shaped }

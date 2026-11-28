@@ -467,7 +467,8 @@ it('waits for the tab to show before reading again after a failed read', async (
 
 it('reads a shaped view afresh when the host stops shaping its rows', async () => {
   // A native binary without the rows command turns `liveQueryRows` off once;
-  // its next reply is a delta against selected records, not shaped rows.
+  // its next reply is a delta against selected records, not shaped rows. A
+  // reply says whether it is shaped, whatever the host says by then.
   let shapes = true;
   const listeners = new Set<CacheChangeListener>();
   const requests: Array<{
@@ -511,9 +512,12 @@ it('reads a shaped view afresh when the host stops shaping its rows', async () =
         (row) => (row.record as unknown as { shaped: boolean }).shaped
       );
   expect(requests[0].args.liveQuery?.row).toBe('channel-list');
-  requests[0].resolve(snapshot());
+  // The host turns off while the shaped read is in flight.
+  shapes = false;
+  requests[0].resolve({ ...snapshot(), row: 'channel-list' });
   await flush();
   expect(shapedOf()).toEqual([true, true]);
+  shapes = true;
 
   listeners.forEach((cb) => cb(revision('2')));
   await flush();

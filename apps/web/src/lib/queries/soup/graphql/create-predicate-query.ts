@@ -35,8 +35,9 @@ export type PredicateQueryRequest<T> = {
   select: RecordSelection<T>;
   /**
    * Rows the view shows instead of the selected record. A host that shapes
-   * them (`liveQueryRows`) sends `name`'s row, which `toRow` adopts
-   * (`shaped`); otherwise it sends the selected record, which `toRow` shapes.
+   * them (`liveQueryRows`) sends `name`'s row and marks the reply (`row`), and
+   * `toRow` adopts it (`shaped`); otherwise it sends the selected record, which
+   * `toRow` shapes.
    * Rows are then immutable values rather than a store.
    */
   row?: {
@@ -299,9 +300,11 @@ export function createPredicateQuery<T extends object>(options: {
                 )
                   throw new Error('live query patch has no base row');
               }
-              const shaped = host.liveQueryRows === true;
-              // A host that stops shaping rows serves its next view afresh; a
-              // delta against rows of the other shape cannot apply.
+              // The reply says whether the engine shaped it: a host can stop
+              // shaping, or be swapped, while a read is in flight.
+              const shaped = result.row !== undefined;
+              // A reply of the other shape than the rows held is a delta that
+              // cannot apply: read the view afresh.
               if (
                 immutable &&
                 lastShaped !== undefined &&

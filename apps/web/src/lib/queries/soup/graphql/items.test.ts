@@ -5822,6 +5822,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
             removed: [],
             retainedKeys: [],
             optimistic: false,
+            ...(args.liveQuery?.row ? { row: args.liveQuery.row } : {}),
           };
         }
         return {
@@ -5841,6 +5842,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
           removed: [],
           retainedKeys: [],
           optimistic: false,
+          ...(args.liveQuery?.row ? { row: args.liveQuery.row } : {}),
         };
       });
       getGraphqlSoupCacheHostMock.mockReturnValue({

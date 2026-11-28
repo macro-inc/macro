@@ -56,6 +56,7 @@ import {
   parseStorageGeneration,
   validateCacheSearchArgs,
   validateRecordSelectionKeys,
+  withLiveRowShape,
 } from '../protocol';
 import { emitNativeSchemaInit, type NativeSchemaInit } from '../telemetry-otel';
 import { CacheWriteSupersededError, isNativeWriteSuperseded } from './errors';
@@ -298,7 +299,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
             since: live.since,
           }
         );
-        if (update !== null) return update;
+        if (update !== null) return withLiveRowShape(update, live.row);
       }
     }
     const result = await request<EntityFilterCacheResult>(command, {
@@ -313,7 +314,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     ) {
       registration.registrationId = result.registrationId;
     }
-    return result;
+    return withLiveRowShape(result, live?.row);
   };
 
   // Revisions are monotonic for the native engine's lifetime. This also gates

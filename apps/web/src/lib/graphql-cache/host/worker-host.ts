@@ -58,6 +58,7 @@ import {
   validateCacheSearchArgs,
   validateRecordSelectionKeys,
   type WriteResult,
+  withLiveRowShape,
 } from '../protocol';
 import {
   type CacheRolloutCohort,
@@ -1863,6 +1864,11 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       },
     },
     liveQueries: true,
+    // No capability request: the coordinator SharedWorker is loaded from this
+    // page's own build (its URL and name carry the build), and a newer build
+    // takes the database over (`coordinator-takeover.ts`), so this page only
+    // ever talks to its own engine. Serving the worker from another build
+    // would need a capability round-trip here.
     liveQueryRows: true,
     people: createPeopleCache({
       snapshot: (request, traceparent) =>
@@ -1964,10 +1970,13 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     async entityFilter(
       args: EntityFilterCacheArgs
     ): Promise<EntityFilterCacheResult> {
-      return (await initializedRequest({
-        kind: 'entity-filter',
-        request: args,
-      })) as EntityFilterCacheResult;
+      return withLiveRowShape(
+        (await initializedRequest({
+          kind: 'entity-filter',
+          request: args,
+        })) as EntityFilterCacheResult,
+        args.liveQuery?.row
+      );
     },
 
     async calendarRange(

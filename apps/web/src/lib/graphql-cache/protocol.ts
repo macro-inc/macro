@@ -248,7 +248,22 @@ export type LiveQueryUpdate = {
   removed: string[];
   retainedKeys: string[];
   optimistic: boolean;
+  /**
+   * The row shape the records are in, when the engine shaped them. The page's
+   * host sets it from the request it sent; no engine sends it.
+   */
+  row?: typeof CHANNEL_LIST_ROW_NAME;
 };
+
+/** Marks a live-view reply to a request that named a row shape as shaped. */
+export function withLiveRowShape<T extends EntityFilterCacheResult>(
+  result: T,
+  row: typeof CHANNEL_LIST_ROW_NAME | undefined
+): T {
+  return row !== undefined && result.kind === 'live-query'
+    ? { ...result, row }
+    : result;
+}
 
 /** Unit of a calendar span: UTC milliseconds, or local days since 1970-01-01. */
 export type CalendarSpanKind = 'timed' | 'allDay';
