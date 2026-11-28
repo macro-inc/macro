@@ -2196,7 +2196,8 @@ selections fetch only the current revision, with no unused fragment.
 A live view can name a row shape (`row: 'channel-list'`): the engine then
 retains, diffs and sends that row instead of the selected record, so a patch
 names a row field. The page keeps every live view's rows as immutable values:
-an update replaces the rows it changes and keeps every other row's object. The page asks for a row only while the host says it shapes rows
+an update replaces the rows it changes and keeps every other row's object.
+The page asks for a row only while the host says it shapes rows
 (`liveQueryRows`), and the host marks each reply to such a request (`row`),
 which is what the reader trusts. Native hosts send these requests through
 `graphql_cache_entity_filter_rows`; on a binary without that command the host
