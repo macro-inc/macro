@@ -20,6 +20,7 @@ import {
   channelNotificationRefresh,
   disposeChannelNotificationRefresh,
 } from '../../queries/channel/notification-refresh';
+import { registerNotificationReader } from '../../queries/notification/revalidation';
 import {
   registerActiveGraphqlSoupQuery,
   registerGraphqlSoupRevalidations,
@@ -443,12 +444,22 @@ describe('new channel pushes', () => {
 });
 
 /** A client whose exchange reads mounted queries again after each write, and
- * whose one mounted list read succeeds or fails. */
-function revalidatingClient(listRead: () => Promise<void>) {
+ * whose one mounted list read succeeds or fails. Its server answers each
+ * other query, or none with `stallQueries`. */
+function revalidatingClient(
+  listRead: () => Promise<void>,
+  { stallQueries = false } = {}
+) {
+  const queryReads = vi.fn();
   const server: Exchange = () => (operations$) =>
     pipe(
       operations$,
       filter((operation) => operation.kind !== 'teardown'),
+      filter((operation) => {
+        if (operation.kind !== 'query') return true;
+        queryReads();
+        return !stallQueries;
+      }),
       map((operation): OperationResult => {
         if (operation.kind === 'query')
           return { operation, data: {}, stale: false, hasNext: false };
@@ -481,7 +492,7 @@ function revalidatingClient(listRead: () => Promise<void>) {
       refresh: listRefresh,
     })
   );
-  return { client, listRefresh };
+  return { client, listRefresh, queryReads };
 }
 
 describe('a notification write whose exchange read failed', () => {
@@ -527,4 +538,56 @@ it('settles a notification write without waiting for the lists it reads again', 
   });
   expect(result.data).toBeDefined();
   expect(listRefresh).toHaveBeenCalledOnce();
+});
+
+it('settles a notification write without waiting for a channel-list read that stalls', async () => {
+  cleanup.push(
+    registerGraphqlSoupRevalidations(() => [
+      {
+        document: ChannelListSoupDocument,
+        variables: { input: { initial: { limit: 100 } } },
+      },
+    ])
+  );
+  const { client, queryReads } = revalidatingClient(
+    () => Promise.reject(new Error('offline')),
+    { stallQueries: true }
+  );
+  const result = await executeGraphqlUpdateNotifications(client, {
+    notificationIds: ['one'],
+    operation: 'MARK_DONE',
+  });
+  expect(result.data).toBeDefined();
+  // The channel list was sent again; its answer never came.
+  expect(queryReads).toHaveBeenCalledOnce();
+});
+
+it('settles an entity notification write without waiting for a feed that stalls', async () => {
+  const { client, listRefresh, queryReads } = revalidatingClient(() =>
+    Promise.reject(new Error('offline'))
+  );
+  // A Soup page the list's own refresh reads again in cursor order.
+  cleanup.push(
+    registerGraphqlSoupRevalidations(
+      () => [{ document: SoupDocument, variables: {} }],
+      () => client
+    )
+  );
+  const feedRefresh = vi.fn(() => new Promise<void>(() => {}));
+  cleanup.push(
+    registerNotificationReader({
+      client: () => client,
+      isEnabled: () => true,
+      refresh: feedRefresh,
+    })
+  );
+  const result = await executeGraphqlUpdateNotificationsForEntities(client, {
+    entities: [{ entityId: 'doc', entityType: 'DOCUMENT' }],
+    operation: 'MARK_DONE',
+  });
+  expect(result.data).toBeDefined();
+  expect(listRefresh).toHaveBeenCalledOnce();
+  expect(feedRefresh).toHaveBeenCalledOnce();
+  // Not re-sent with its saved cursor as well.
+  expect(queryReads).not.toHaveBeenCalled();
 });

@@ -53,15 +53,17 @@ function missedExpectedSeen(
 }
 
 /**
- * When a list read the exchange started after this write failed or timed out,
- * every mounted Soup list reads again through its own refresh, in cursor
- * order: a saved page request cannot follow a cursor the write moved. The
- * write does not wait for them: a read that stalled the exchange would stall
- * its caller again.
+ * A list read the exchange started after this write failed or timed out: every
+ * mounted Soup list reads again through its own refresh, in cursor order (a
+ * saved page request cannot follow a cursor the write moved), with the
+ * caller's other readers. The write does not wait for them: a read that
+ * stalled the exchange would stall its caller again.
  */
-function refreshListsTheExchangeMissed(result: OperationResult): void {
-  if (networkRevalidationIncomplete(result))
-    fireAndForget(refreshActiveGraphqlSoupQueries(), 'notification-write');
+function readAgainAfterFailedReread(reads: Promise<unknown>[]): void {
+  fireAndForget(
+    Promise.allSettled([refreshActiveGraphqlSoupQueries(), ...reads]),
+    'notification-write'
+  );
 }
 
 /** Authoritative rows returned after an entity-scoped notification write. */
@@ -106,15 +108,15 @@ export async function executeGraphqlUpdateNotifications(
   // the client's own exchange may already have read the lists again. With a
   // disabled host the queue commits the write but leaves the reads to that
   // exchange, so a read it could not finish is done here.
-  if (
+  if (!result.error && networkRevalidationIncomplete(result)) {
+    readAgainAfterFailedReread([revalidateChannelLists(client)]);
+  } else if (
     !result.error &&
     !networkRevalidated(result) &&
-    (optimisticMutationDispositionOf(result) === undefined ||
-      networkRevalidationIncomplete(result))
+    optimisticMutationDispositionOf(result) === undefined
   ) {
     await revalidateChannelLists(client);
   }
-  refreshListsTheExchangeMissed(result);
   return result;
 }
 
@@ -146,7 +148,11 @@ export async function executeGraphqlUpdateNotificationsForEntities(
     .toPromise();
   // Without the cache the client's exchange already read every mounted
   // query again before the write settled.
-  if (!result.error && result.data && !networkRevalidated(result)) {
+  if (!result.error && networkRevalidationIncomplete(result)) {
+    readAgainAfterFailedReread([
+      revalidateNotificationReaders(client, { feedsOnly: true }),
+    ]);
+  } else if (!result.error && result.data && !networkRevalidated(result)) {
     // The changed rows update every reader the cache maintains; the others
     // are read again. A stale mark seen reads every reader again: the rows
     // it left out are seen or done, and only the server knows which.
@@ -157,6 +163,5 @@ export async function executeGraphqlUpdateNotificationsForEntities(
       ),
     });
   }
-  refreshListsTheExchangeMissed(result);
   return result;
 }

@@ -54,15 +54,18 @@ async function refreshSafely(refresh: () => Promise<unknown>): Promise<void> {
  * work-feed Done and Undo, which return no notification rows). Without the
  * cache no reader is maintained. Reuses loaded page variables instead of
  * resetting pagination or reading all cached history. Disabled/unstarted
- * feeds remain dormant.
+ * feeds remain dormant. `feedsOnly` reads only the registered feeds, for a
+ * caller that reads the Soup lists through their own refreshes.
  */
 export async function revalidateNotificationReaders(
   client: Client,
-  options: { unmaintainedOnly?: boolean } = {}
+  options: { unmaintainedOnly?: boolean; feedsOnly?: boolean } = {}
 ): Promise<void> {
-  const pages = getActiveGraphqlSoupRevalidations(client, options).filter(
-    ({ document }) => notificationDocuments.has(document)
-  );
+  const pages = options.feedsOnly
+    ? []
+    : getActiveGraphqlSoupRevalidations(client, options).filter(
+        ({ document }) => notificationDocuments.has(document)
+      );
   await Promise.all([
     ...pages.map(({ document, variables }) =>
       refreshSafely(async () => {
