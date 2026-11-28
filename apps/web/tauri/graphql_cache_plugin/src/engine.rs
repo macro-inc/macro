@@ -839,6 +839,7 @@ impl EngineHandle {
             graphql_cache.write.background = false,
             graphql_cache.write.proof_ms = tracing::field::Empty,
             graphql_cache.write.unchanged_views = tracing::field::Empty,
+            graphql_cache.write.proof_failed = tracing::field::Empty,
         ),
         err
     )]
@@ -941,6 +942,7 @@ impl EngineHandle {
                     wire.unchanged_views = Some(views);
                 }
                 Err(error) => {
+                    span.record("graphql_cache.write.proof_failed", true);
                     tracing::warn!(%error, "write proof failed; every live view reads again");
                 }
             }
