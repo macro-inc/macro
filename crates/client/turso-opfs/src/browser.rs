@@ -410,13 +410,20 @@ impl OpfsOwner {
                     return Err(open_failure_after_cleanup(adapter_error, self));
                 }
             };
+            // A WAL left by a session that ended without flushing (a killed
+            // tab, a lost lock) may hold commits only the OS has. They count as
+            // unflushed, so the first flush makes them durable before anything
+            // read from them, such as a saved hydration cursor, outlives them.
+            let unflushed = role == FileRole::Wal
+                && !was_created
+                && handle.get_size().map_or(true, |size| size > 0.0);
             REGISTRY.with(|registry| {
                 registry.borrow_mut().handles.insert(
                     handle_id,
                     RegisteredHandle {
                         role,
                         handle,
-                        unflushed: false,
+                        unflushed,
                     },
                 );
             });

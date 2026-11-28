@@ -42,7 +42,8 @@ again from OPFS.
 it (Turso still syncs a new WAL header after a checkpoint restarts the log). A killed tab or browser keeps what was appended; an OS crash or power loss
 can drop the newest COMMITs and leaves the file as of an earlier one.
 `ConnectedOpfsSession::flush_wal()` flushes the WAL when a write reached it
-since the last flush and says whether it did; `wal_flusher()` is the same call
+since the last flush, or the session opened a non-empty WAL that an earlier
+session may have left unflushed, and says whether it did; `wal_flusher()` is the same call
 as a handle the storage keeps, which fails once the session closes.
 Setting the constant to `false` restores a flush in every COMMIT.
 

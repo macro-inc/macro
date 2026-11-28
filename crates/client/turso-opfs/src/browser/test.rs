@@ -1443,3 +1443,39 @@ async fn a_commit_appends_without_flushing_and_flush_wal_flushes_once() {
     owner.release().await.expect("release owner lock");
     clean_pair(&database_name).await;
 }
+
+#[wasm_bindgen_test]
+async fn a_session_flushes_the_wal_it_inherits_unflushed() {
+    let nonce = js_sys::Date::now() as u64;
+    let database_name = format!("inherited-wal-{nonce}.db");
+    clean_pair(&database_name).await;
+    let owner = OpfsOwner::acquire(&database_name)
+        .await
+        .expect("identity-bound owner");
+    let connected = connect_ready(open_ready(owner).await);
+    let connection = connected.connection();
+    connection
+        .execute("CREATE TABLE pages (id INTEGER PRIMARY KEY, body TEXT NOT NULL)")
+        .expect("create table");
+    drop(connection);
+    // The session ends with its commits appended to the WAL but never
+    // flushed, as when its tab is killed.
+    let owner = connected
+        .try_close()
+        .expect("close session")
+        .preserve()
+        .expect("preserve pair");
+
+    let connected = connect_ready(open_ready(owner).await);
+    let before = io_totals();
+    assert!(connected.flush_wal().expect("flush the inherited WAL"));
+    assert_eq!(io_totals().flushes - before.flushes, 1);
+    assert!(!connected.flush_wal().expect("flush a flushed WAL"));
+    let owner = connected
+        .try_close()
+        .expect("close session")
+        .preserve()
+        .expect("preserve pair");
+    owner.release().await.expect("release owner lock");
+    clean_pair(&database_name).await;
+}
