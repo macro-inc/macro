@@ -149,11 +149,12 @@ describe('channels resolved by id', () => {
     try {
       const [args] = useSoupAstItemsQuery.mock.calls[0];
       const initial = args();
+      expect(initial.params.limit).toBe(500);
       for (let read = 0; read < 20; read += 1) args();
       expect(reads).toHaveBeenCalledTimes(1);
       setIds(['replacement']);
       expect(args()).not.toBe(initial);
-      expect(args().params.limit).toBe(1);
+      expect(args().params.limit).toBe(2);
       expect(reads).toHaveBeenCalledTimes(2);
     } finally {
       dispose();

@@ -41,7 +41,10 @@ export function channelsByIdsQueryArgs(
 ): SoupAstItemsQueryArgs {
   return {
     params: {
-      limit: Math.min(BATCH_SIZE, Math.max(1, channelIds.length)),
+      // One more than the IDs asked: Soup ends a page that holds every ID
+      // without a next cursor, so a full answer is not followed by a read of
+      // an empty page.
+      limit: Math.min(BATCH_SIZE, channelIds.length + 1),
       sort_method: 'created_at',
     },
     body: compileToAst(
