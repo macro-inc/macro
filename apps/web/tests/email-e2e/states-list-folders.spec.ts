@@ -141,9 +141,11 @@ test('settles each thread of a partially rejected offline trash independently', 
   });
   const accepted = (await mailbox.synced('Agenda')).id;
   const rejected = (await mailbox.synced('Minutes')).id;
-  const alreadyTrashed = (
-    await syncedInView(mailbox, 'trash', 'Discarded notes')
-  ).id;
+  const alreadyTrashed = await syncedInView(
+    mailbox,
+    'trash',
+    'Discarded notes'
+  );
   const missing = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
   await mailbox.open();
   await sidebarTab(page, 'All mail');
@@ -158,11 +160,12 @@ test('settles each thread of a partially rejected offline trash independently', 
   let replay = false;
   await page.route(/\/graphql(\?|$)/, async (route) => {
     const request = route.request();
-    if (!replay || graphqlOperation(request) !== 'SetEmailThreadFolderStates')
+    if (graphqlOperation(request) !== 'SetEmailThreadFolderStates')
       return route.fallback();
     const requestBody = request.postDataJSON();
     const input = requestBody.variables.input;
     if (input.field !== 'TRASHED' || !input.value) return route.fallback();
+    if (!replay) return route.abort('internetdisconnected');
     expect(input.threadIds).toEqual(
       expect.arrayContaining([accepted, rejected])
     );
@@ -185,10 +188,19 @@ test('settles each thread of a partially rejected offline trash independently', 
   );
   const sent = sentOperations(page);
   await page.context().setOffline(true);
+  let beforeReplay = 0;
   try {
+    const interrupted = page.waitForEvent(
+      'requestfailed',
+      (request) => graphqlOperation(request) === 'SetEmailThreadFolderStates'
+    );
     await page.keyboard.press('Shift+Digit3');
     await listShows(page, []);
+    // Wait for the first send to fail offline. The optimistic row removal can
+    // happen before admission, while the live caller could still compensate.
+    await interrupted;
     expect((await held(mailbox, 'Agenda'))?.labels).not.toContain('TRASH');
+    beforeReplay = sent.length;
     replay = true;
   } finally {
     await page.context().setOffline(false);
@@ -221,7 +233,9 @@ test('settles each thread of a partially rejected offline trash independently', 
     .toContain('TRASH');
   expect((await held(mailbox, 'Discarded notes'))?.labels).toContain('TRASH');
   expect(
-    sent.filter(({ name }) => name === 'SetEmailThreadFolderStates')
+    sent
+      .slice(beforeReplay)
+      .filter(({ name }) => name === 'SetEmailThreadFolderStates')
   ).toHaveLength(1);
   expect(sent.filter(({ name }) => name === 'Soup')).toEqual([]);
 });

@@ -9,14 +9,65 @@ import {
 import type { CacheHost } from '@graphql-cache/host/types';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry } from '@macro-inc/observability';
-import type { Exchange, OperationResult } from '@urql/core';
-import { filter, fromPromise, fromValue, mergeMap, pipe } from 'wonka';
+import {
+  CombinedError,
+  type Exchange,
+  makeOperation,
+  type Operation,
+  type OperationResult,
+} from '@urql/core';
+import { filter, fromPromise, fromValue, map, mergeMap, pipe } from 'wonka';
 import {
   RecoverEmailThreadFolderRowDocument,
   type SetEmailThreadFolderStatesMutation,
 } from './graphql/generated/graphql';
 
 const FOLDER_RECOVERY_TIMEOUT_MS = 2_500;
+
+function mailboxOperationKind(operation: Operation) {
+  if (operation.kind === 'query' && operation.context.emailMailboxRecovery)
+    return 'query';
+  if (
+    operation.kind === 'mutation' &&
+    documentOperationName(operation.query) === 'SetEmailThreadFolderStates'
+  )
+    return 'mutation';
+}
+
+type MailboxTransport = { response?: Response };
+
+/** urql drops the HTTP response from error-free GraphQL payloads. */
+function trackMailboxResponse(operation: Operation): Operation {
+  if (!mailboxOperationKind(operation) || queueAttemptOf(operation))
+    return operation;
+  const transport: MailboxTransport = {};
+  const fetch = operation.context.fetch ?? globalThis.fetch;
+  return makeOperation(operation.kind, operation, {
+    ...operation.context,
+    emailMailboxTransport: transport,
+    fetch: async (input, init) => {
+      const response = await fetch(input, init);
+      transport.response = response;
+      return response;
+    },
+  });
+}
+
+function mailboxServerFailure(result: OperationResult) {
+  const attempt = queueAttemptOf(result.operation);
+  const transport: MailboxTransport | undefined =
+    result.operation.context.emailMailboxTransport;
+  const response =
+    result.error?.response ?? attempt?.response ?? transport?.response;
+  if (!response || response.status < 500) return;
+  return (
+    result.error ??
+    new CombinedError({
+      networkError: new Error(`HTTP ${response.status}`),
+      response,
+    })
+  );
+}
 
 /** Recover acknowledged Mail rows within a fixed budget. A durable write can
  * settle without its row and retry only that read after local settlement. */
@@ -28,10 +79,7 @@ export function createEmailMailboxEffectsExchange(
       result: OperationResult<SetEmailThreadFolderStatesMutation>
     ) {
       const rows = result.data?.setEmailThreadFolderStates;
-      const attempt = queueAttemptOf(result.operation);
-      const response = result.error?.response ?? attempt?.response;
-      if (!rows || result.error?.networkError || (response?.status ?? 0) >= 500)
-        return result;
+      if (!rows || result.error?.networkError) return result;
 
       const missing = new Set<number>();
       for (const { path } of result.error?.graphQLErrors ?? []) {
@@ -76,6 +124,7 @@ export function createEmailMailboxEffectsExchange(
                           { threadId: row.threadId },
                           {
                             requestPolicy: 'network-only',
+                            emailMailboxRecovery: true,
                             [TRACE_PARENT_CONTEXT_KEY]: span,
                           }
                         ),
@@ -109,6 +158,7 @@ export function createEmailMailboxEffectsExchange(
       const indices = [...missing];
       await repair(indices);
       const unrepaired = indices.filter((index) => !recovered[index].effect);
+      const attempt = queueAttemptOf(result.operation);
       if (host && attempt && unrepaired.length && isCurrent()) {
         const stop = host.onMutationSettled((settlement) => {
           if (settlement.transactionId !== attempt.transactionId) return;
@@ -128,14 +178,16 @@ export function createEmailMailboxEffectsExchange(
 
     return (operations$) =>
       pipe(
-        forward(operations$),
-        mergeMap((result) =>
-          result.operation.kind === 'mutation' &&
-          documentOperationName(result.operation.query) ===
-            'SetEmailThreadFolderStates'
+        forward(pipe(operations$, map(trackMailboxResponse))),
+        mergeMap((result) => {
+          const kind = mailboxOperationKind(result.operation);
+          if (!kind) return fromValue(result);
+          const error = mailboxServerFailure(result);
+          if (error) return fromValue({ ...result, data: undefined, error });
+          return kind === 'mutation'
             ? fromPromise(recover(result))
-            : fromValue(result)
-        )
+            : fromValue(result);
+        })
       );
   };
 }

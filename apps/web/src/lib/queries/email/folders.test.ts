@@ -238,24 +238,64 @@ describe('restore provider folders', () => {
     }
   );
 
-  it('preserves an HTTP server failure even when it carries an effect error', async () => {
+  it.each([true, false])(
+    'preserves a mutation HTTP server failure (with GraphQL errors=%s)',
+    async (withErrors) => {
+      const fetch = vi.fn(async () =>
+        Response.json(
+          {
+            data: {
+              setEmailThreadFolderStates: [
+                { threadId: 'one', error: null, effect: null },
+              ],
+            },
+            errors: withErrors
+              ? [
+                  {
+                    message: 'Upstream unavailable',
+                    path: ['setEmailThreadFolderStates', 0, 'effect'],
+                  },
+                ]
+              : undefined,
+          },
+          { status: 503 }
+        )
+      );
+      mocks.client = createClient({
+        url: 'http://localhost/graphql',
+        exchanges: [emailMailboxEffectsExchange, fetchExchange],
+        fetch,
+      });
+
+      await expect(
+        restoreEmailFolderThreads({ folder: 'trash', threadIds: ['one'] })
+      ).resolves.toEqual({ restoredIds: [], failedIds: ['one'] });
+      expect(fetch).toHaveBeenCalledOnce();
+    }
+  );
+
+  it('keeps a committed receipt without accepting recovery data over HTTP 503', async () => {
     const fetch = vi.fn(async () =>
       Response.json(
         {
           data: {
-            setEmailThreadFolderStates: [
-              { threadId: 'one', error: null, effect: null },
-            ],
-          },
-          errors: [
-            {
-              message: 'Upstream unavailable',
-              path: ['setEmailThreadFolderStates', 0, 'effect'],
+            user: {
+              id: 'viewer',
+              soupEntity: { __typename: 'GraphqlSoupEmailThread', id: 'one' },
             },
-          ],
+          },
         },
         { status: 503 }
       )
+    );
+    fetch.mockResolvedValueOnce(
+      Response.json({
+        data: {
+          setEmailThreadFolderStates: [
+            { threadId: 'one', error: null, effect: null },
+          ],
+        },
+      })
     );
     mocks.client = createClient({
       url: 'http://localhost/graphql',
@@ -263,10 +303,16 @@ describe('restore provider folders', () => {
       fetch,
     });
 
-    await expect(
-      restoreEmailFolderThreads({ folder: 'trash', threadIds: ['one'] })
-    ).resolves.toEqual({ restoredIds: [], failedIds: ['one'] });
-    expect(fetch).toHaveBeenCalledOnce();
+    const result = await mocks.client
+      .mutation(SetEmailThreadFolderStatesDocument, {
+        input: { threadIds: ['one'], field: 'TRASHED', value: false },
+      })
+      .toPromise();
+    expect(result.error).toBeUndefined();
+    expect(result.data?.setEmailThreadFolderStates).toEqual([
+      { threadId: 'one', error: null, effect: null },
+    ]);
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it('settles the acknowledgement when a primary row read stalls', async () => {
