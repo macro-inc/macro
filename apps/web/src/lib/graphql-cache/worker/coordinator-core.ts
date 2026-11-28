@@ -339,6 +339,8 @@ export class CoordinatorCore {
   private claimsClosed = false;
   /** A hidden owner kept its engine for a claimed head; it drains once settled. */
   private hiddenDrainDeferred = false;
+  /** The epoch elected in a hidden tab because no tab was visible. */
+  private hiddenElectionEpoch: OwnerEpoch | undefined;
   private readonly queuedRequests: QueuedRequest[] = [];
   private readonly inFlight = new Map<RouteId, InFlightRequest>();
   private readonly cacheChanges = new CacheChangeBatch();
@@ -372,6 +374,19 @@ export class CoordinatorCore {
   /** Visibility of eligible consumers, not merely the page owning an engine. */
   get hasVisibleTab(): boolean {
     return this.eligibleTabs().some((tabId) => this.visibleTabs.has(tabId));
+  }
+
+  /** A hidden tab starts an engine only so that a head still out has one to
+   * settle in, and it has not reached storage yet. Nobody waits to see it,
+   * so a startup that stalls, as in a frozen tab, is given up sooner. */
+  get startsForSettlement(): boolean {
+    const state = this.stateValue;
+    return (
+      state.kind === 'activating' &&
+      !this.hasVisibleTab &&
+      !startupPhaseMayTouchStorage(state.phase) &&
+      this.unsettled()
+    );
   }
 
   /** Whether a newer app build took the database over. */
@@ -411,6 +426,19 @@ export class CoordinatorCore {
     const state = this.stateValue;
     if (state.kind === 'parked' || state.kind === 'waiting-for-tab')
       return this.activateNext(state.nextDatabaseAction);
+    // An engine started in a hidden tab for a head out may never open, as in
+    // a frozen tab. Before it reaches storage, a shown tab starts its own.
+    if (
+      shown &&
+      state.kind === 'activating' &&
+      state.ownerEpoch === this.hiddenElectionEpoch &&
+      !this.visibleTabs.has(state.tabId) &&
+      !startupPhaseMayTouchStorage(state.phase)
+    )
+      return [
+        ...this.releaseStartingOwner('a shown tab starts the engine instead'),
+        ...this.activateNext(state.databaseAction),
+      ];
     if (shown && state.kind === 'resetting-after-loss' && this.outage)
       return this.resumeAfterLoss();
     return this.handoffIfNeeded();
@@ -1220,6 +1248,7 @@ export class CoordinatorCore {
       return [];
     }
     this.currentEpoch = state.nextEpoch;
+    this.noteElection(candidate, state.nextEpoch);
     this.stateValue = {
       kind: 'activating',
       tabId: candidate,
@@ -1334,6 +1363,7 @@ export class CoordinatorCore {
       return [];
     }
     this.currentEpoch += 1;
+    this.noteElection(candidate, this.currentEpoch);
     this.stateValue = {
       kind: 'activating',
       tabId: candidate,
@@ -1418,6 +1448,12 @@ export class CoordinatorCore {
           )
         : visible;
     return candidates.find((tabId) => tabId !== avoid) ?? candidates[0];
+  }
+
+  private noteElection(tabId: string, ownerEpoch: OwnerEpoch): void {
+    this.hiddenElectionEpoch = this.visibleTabs.has(tabId)
+      ? undefined
+      : ownerEpoch;
   }
 
   /** The tab claimed a head still out, or handed over its settlement. */

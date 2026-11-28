@@ -10,6 +10,10 @@ export const COORDINATOR_RECONNECT_TIMEOUT_MS = 10_000;
 export const COORDINATOR_WATCH_INTERVAL_MS = 1_000;
 export const LOCK_QUERY_TIMEOUT_MS = 5_000;
 export const ENGINE_ASSET_LOAD_TIMEOUT_MS = 5 * 60_000;
+/** A hidden tab starting an engine for a queue head still out, before it
+ * reaches storage. The page already loaded the app, so this is far past a
+ * normal start; one that takes longer is likely frozen, and another tab tries. */
+export const HIDDEN_SETTLEMENT_STARTUP_TIMEOUT_MS = 10_000;
 export const ENGINE_DATABASE_OPEN_TIMEOUT_MS = 20_000;
 /** Delays between attempts to take a busy database owner lock. The engine
  * never queues for it: a handoff between owners of one build frees it within

@@ -600,6 +600,31 @@ describe('CoordinatorCore', () => {
       );
     });
 
+    it('lets a shown tab start the engine a hidden tab was starting for a head', () => {
+      const core = new CoordinatorCore('scope');
+      for (const tab of ['tab-a', 'tab-b', 'tab-c']) core.registerTab(tab);
+      ready(core, 'tab-a', 1, 'opened-existing');
+      const claim = action(
+        core.request('tab-c', claimNext(1)),
+        'route-request'
+      );
+      core.engineResponse(1, claim.routeId, ok({ transactionId: '7' }));
+      core.setTabVisibility('tab-b', false);
+      core.setTabVisibility('tab-c', false);
+      core.tabLost('tab-a');
+      expect(core.state).toMatchObject({ kind: 'activating', tabId: 'tab-c' });
+      expect(core.startsForSettlement).toBe(true);
+      // tab-c may be frozen and never open it; tab-b is shown before it does.
+      const shown = core.setTabVisibility('tab-b', true);
+      expect(shown).toContainEqual(
+        expect.objectContaining({ kind: 'release-owner', tabId: 'tab-c' })
+      );
+      expect(shown).toContainEqual(
+        expect.objectContaining({ kind: 'elect-owner', tabId: 'tab-b' })
+      );
+      expect(core.startsForSettlement).toBe(false);
+    });
+
     it('starts an engine for a settlement whose page went during a drain', () => {
       const core = new CoordinatorCore('scope');
       for (const tab of ['tab-a', 'tab-b', 'tab-c']) core.registerTab(tab);

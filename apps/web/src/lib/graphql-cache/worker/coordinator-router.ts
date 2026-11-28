@@ -57,6 +57,7 @@ import {
 import {
   ENGINE_ASSET_LOAD_TIMEOUT_MS,
   ENGINE_DATABASE_OPEN_TIMEOUT_MS,
+  HIDDEN_SETTLEMENT_STARTUP_TIMEOUT_MS,
   LOCK_QUERY_TIMEOUT_MS,
   OWNER_LOCK_WAIT_TIMEOUT_MS,
   TAKEOVER_REPLY_TIMEOUT_MS,
@@ -1441,7 +1442,8 @@ export class CoordinatorRouter {
         this.handoff.park(core.snapshot().ownerEpoch)
       )
       .with({ kind: 'activating' }, ({ tabId, ownerEpoch }) => {
-        if (!core.hasVisibleTab) this.clearActivationTimer();
+        if (!core.hasVisibleTab && !core.startsForSettlement)
+          this.clearActivationTimer();
         else if (this.activationTimer === undefined)
           this.armStartupWatchdog(tabId, ownerEpoch);
         // Arming can end this owner, whose successor then synced for itself.
@@ -1499,9 +1501,16 @@ export class CoordinatorRouter {
     // It can also drop another tab, which arms this owner's on the way.
     this.clearActivationTimer();
     // A hidden startup may be suspended by the browser while we wait to park
-    // it. Resume the phase budget when there is a visible consumer again.
-    if (!this.coreValue?.hasVisibleTab) return;
-    const { phase, timeoutMs } = progress;
+    // it. Resume the phase budget when there is a visible consumer again,
+    // unless the engine is wanted for a head out: then a newer build would
+    // open the free database under it, so another tab tries soon.
+    const hidden = !this.coreValue?.hasVisibleTab;
+    if (hidden && !this.coreValue?.startsForSettlement) return;
+    const { phase } = progress;
+    const timeoutMs =
+      hidden && phase === 'loading-assets'
+        ? Math.min(progress.timeoutMs, HIDDEN_SETTLEMENT_STARTUP_TIMEOUT_MS)
+        : progress.timeoutMs;
     const reason = match(phase)
       .with('loading-assets', () => 'engine asset loading watchdog timed out')
       .with('awaiting-owner-lock', () => 'engine owner lock watchdog timed out')
