@@ -650,6 +650,23 @@ fn string_value(
             prose(rng, size)
         }
         "snippet" => prose(rng, 160),
+        // Each attachment kind's types, one with parameters, and ones that
+        // match no kind (another type, one whose case the server's `LIKE`
+        // would not match, none), so Mail attachment facts get written.
+        "mimeType" => {
+            const TYPES: [&str; 9] = [
+                "application/pdf",
+                "application/pdf; name=report.pdf",
+                "image/png",
+                "image/jpeg",
+                "text/csv",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "application/zip",
+                "APPLICATION/PDF",
+                "",
+            ];
+            TYPES[rng.below(TYPES.len() as u64) as usize].to_owned()
+        }
         "content" => {
             let size = rng.range(20, 400) as usize;
             prose(rng, size)
