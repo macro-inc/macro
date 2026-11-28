@@ -54,6 +54,7 @@ export default defineConfig({
         '@service-storage/crm-contacts',
         '@service-storage/crm-visibility',
         '@service-storage/crm-contact-edit',
+        '@service-storage/graphql-crm-edits',
         '@app/lib/analytics',
         '@app/lib/analytics/posthog',
         '@app/features/next-soup/filters/filter-store',

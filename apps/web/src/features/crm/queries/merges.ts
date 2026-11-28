@@ -1,4 +1,5 @@
-import type { ResultError } from '@core/util/result';
+import { captureQueryAuthorization } from '@app/lib/urql-solid/authorization';
+import { type ResultError, ThrownResultError } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { soupKeys } from '@queries/soup/keys';
@@ -12,15 +13,21 @@ import {
   type MergedCrmRecords,
 } from '@service-storage/crm-record-merge';
 import type { MergeBlock as WireMergeBlock } from '@service-storage/generated/schemas/mergeBlock';
+import {
+  CrmGraphqlWriteError,
+  commitGraphqlCrmMerge,
+} from '@service-storage/graphql-crm-edits';
 import type { QueryClient } from '@tanstack/solid-query';
 import { match } from 'ts-pattern';
+import { z } from 'zod';
 import type {
   MergeBlock,
   MergeCommands,
   MergeRecordType,
   MergeRefusal,
 } from '../core/merge';
-import type { CrmRecordDependencies } from './dependencies';
+import { refreshCrmCreateLists } from './create-refresh';
+import type { CrmCreateDependencies } from './dependencies';
 import { crmKeys } from './keys';
 
 /**
@@ -51,6 +58,51 @@ function refusalOf(errors: ResultError<string>[]): MergeRefusal {
   };
 }
 
+const blockedMerge = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('same_address_people'),
+    people: z.array(
+      z.object({
+        address: z.string(),
+        contactId: z.string(),
+        name: z.string().nullish(),
+        recordId: z.string(),
+        archived: z.boolean(),
+      })
+    ),
+  }),
+  z.object({
+    kind: z.literal('different_companies'),
+    people: z.array(
+      z.object({
+        contactId: z.string(),
+        name: z.string().nullish(),
+        companyId: z.string(),
+        companyName: z.string(),
+      })
+    ),
+  }),
+]);
+
+function commitRefusal(error: unknown): MergeRefusal {
+  const code =
+    error instanceof ThrownResultError ? error.errors[0]?.code : undefined;
+  const extensions =
+    error instanceof CrmGraphqlWriteError ? error.extensions : undefined;
+  const blocked = blockedMerge.safeParse(extensions?.blocked);
+  return {
+    code:
+      code && CRM_MERGE_ERROR_CODES.includes(code) ? code : 'merge_unconfirmed',
+    blocked: blocked.success
+      ? blocked.data
+      : extensions?.blocked
+        ? { kind: 'unknown' }
+        : null,
+    currentId:
+      typeof extensions?.currentId === 'string' ? extensions.currentId : null,
+  };
+}
+
 /**
  * Everything a merge moved is read again: CRM lists, records and pipelines,
  * Soup lists, and contacts' company summaries. The merged records' cached
@@ -61,7 +113,14 @@ function refusalOf(errors: ResultError<string>[]): MergeRefusal {
  */
 export async function refreshAfterMerge(
   client: QueryClient,
-  merged: MergedCrmRecords
+  merged: MergedCrmRecords,
+  graphql?: {
+    hasLiveCache: boolean;
+    effectsResolved: boolean;
+    cacheRevalidates: boolean;
+    listsReadAgain: boolean;
+    contactsOnly: boolean;
+  }
 ) {
   const ids = (list: readonly string[]) => [
     ...new Set(list.flatMap((id) => [id, id.toLowerCase()])),
@@ -84,21 +143,29 @@ export async function refreshAfterMerge(
       type: 'inactive',
     });
   }
-  await forgetMergedCrmRecords({
-    companies: merged.companies.map((id) => id.toLowerCase()),
-    contacts: merged.contacts.map((id) => id.toLowerCase()),
-  });
+  if (!graphql?.effectsResolved) {
+    await forgetMergedCrmRecords({
+      companies: merged.companies.map((id) => id.toLowerCase()),
+      contacts: merged.contacts.map((id) => id.toLowerCase()),
+    });
+  }
   await invalidateCachedCrmContacts();
   await Promise.all([
     client.invalidateQueries({ queryKey: crmKeys._def }),
     client.invalidateQueries({ queryKey: soupKeys._def }),
   ]);
-  await refreshActiveGraphqlSoupQueries();
+  if (graphql)
+    await refreshCrmCreateLists(
+      graphql.hasLiveCache,
+      graphql,
+      graphql.contactsOnly
+    );
+  else await refreshActiveGraphqlSoupQueries();
 }
 
-/** Review and commit merges of `recordType` through `POST /crm/merges`. */
+/** Review and commit merges of one CRM record type. */
 export function createMergeCommands(
-  deps: CrmRecordDependencies,
+  deps: CrmCreateDependencies,
   recordType: MergeRecordType
 ): MergeCommands {
   return {
@@ -131,27 +198,47 @@ export function createMergeCommands(
         span.setAttr('crm.record_id', input.survivorId);
         span.setAttr('crm.merge.source_count', input.sourceIds.length);
         span.setAttr('crm.merge.sharing_rules', input.sharingRules);
-        const result = await span.span('crm.merge.commit.save', async () =>
-          deps.storage.commitCrmMerge({ recordType, ...input })
-        );
-        if (result.isErr()) {
-          const refusal = refusalOf(result.error);
+        const canCache = captureQueryAuthorization();
+        const outcome = await span
+          .span('crm.merge.commit.save', (save) =>
+            commitGraphqlCrmMerge(
+              {
+                ...input,
+                recordType: recordType === 'company' ? 'COMPANY' : 'CONTACT',
+                sharingRules: input.sharingRules === 'keep' ? 'KEEP' : 'STOP',
+              },
+              save
+            )
+          )
+          .catch((error: unknown) => ({ refusal: commitRefusal(error) }));
+        if ('refusal' in outcome) {
+          const { refusal } = outcome;
           span.setAttr('crm.merge.refusal', refusal.code);
           return { ok: false, refusal };
         }
-        span.setAttr('crm.merge.id', result.value.mergeId);
-        await span.span('crm.merge.commit.refresh', () =>
-          refreshAfterMerge(deps.client, {
-            companies: recordType === 'company' ? result.value.mergedIds : [],
-            contacts: recordType === 'contact' ? result.value.mergedIds : [],
-          })
-        );
+        if (outcome.payload)
+          span.setAttr('crm.merge.id', outcome.payload.mergeId);
+        const survivorId = outcome.payload?.survivorId ?? input.survivorId;
+        const mergedIds = outcome.payload?.mergedIds ?? input.sourceIds;
+        if (canCache()) {
+          await span.span('crm.merge.commit.refresh', () =>
+            refreshAfterMerge(
+              deps.client,
+              {
+                companies: recordType === 'company' ? mergedIds : [],
+                contacts: recordType === 'contact' ? mergedIds : [],
+              },
+              {
+                ...outcome,
+                hasLiveCache: deps.hasLiveCache(),
+                contactsOnly: recordType === 'contact',
+              }
+            )
+          );
+        }
         return {
           ok: true,
-          value: {
-            survivorId: result.value.survivorId,
-            mergedIds: result.value.mergedIds,
-          },
+          value: { survivorId, mergedIds },
         };
       });
     },

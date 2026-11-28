@@ -1,3 +1,4 @@
+import { ThrownResultError } from '@core/util/result';
 import { QueryClient, QueryObserver } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import { beforeEach, expect, it, vi } from 'vitest';
@@ -6,9 +7,16 @@ import { crmKeys } from './keys';
 import { createMergeCommands } from './merges';
 
 const effects = vi.hoisted(() => ({
+  commit: vi.fn(),
   forget: vi.fn(async () => {}),
   contacts: vi.fn(async () => {}),
   refresh: vi.fn(async () => {}),
+}));
+vi.mock('@service-storage/graphql-crm-edits', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@service-storage/graphql-crm-edits')
+  >()),
+  commitGraphqlCrmMerge: effects.commit,
 }));
 vi.mock('@service-storage/crm-record-merge', () => ({
   forgetMergedCrmRecords: effects.forget,
@@ -23,6 +31,7 @@ vi.mock('@queries/soup/graphql/active-queries', () => ({
 let client: QueryClient;
 beforeEach(() => {
   vi.clearAllMocks();
+  effects.commit.mockReset();
   client = new QueryClient();
 });
 
@@ -34,9 +43,23 @@ function commandsWith(
     {
       client,
       storage: storage as never,
+      hasLiveCache: () => false,
     },
     recordType
   );
+}
+
+function committed(
+  survivorId: string,
+  mergedIds: string[],
+  effectsResolved = false
+) {
+  return {
+    payload: { survivorId, mergedIds, mergeId: 'm' },
+    effectsResolved,
+    cacheRevalidates: false,
+    listsReadAgain: false,
+  };
 }
 
 it('reviews a company merge and reads a refusal by its code', async () => {
@@ -138,10 +161,8 @@ it('after a merge of people, forgets them and drops their unopened reads', async
   const kept = crmKeys.contact('pat').queryKey;
   client.setQueryData(merged, { id: 'pat-l', name: 'Pat L.' });
   client.setQueryData(kept, { id: 'pat', name: 'Pat Lee' });
-  const commitCrmMerge = vi.fn(async () =>
-    ok({ survivorId: 'pat', mergedIds: ['PAT-L'], mergeId: 'm' })
-  );
-  const commands = commandsWith({ commitCrmMerge }, 'contact');
+  effects.commit.mockResolvedValue(committed('pat', ['PAT-L']));
+  const commands = commandsWith({}, 'contact');
 
   await commands.commit({
     survivorId: 'pat',
@@ -151,8 +172,9 @@ it('after a merge of people, forgets them and drops their unopened reads', async
     sharingRules: 'keep',
   });
 
-  expect(commitCrmMerge).toHaveBeenCalledWith(
-    expect.objectContaining({ recordType: 'contact', survivorId: 'pat' })
+  expect(effects.commit).toHaveBeenCalledWith(
+    expect.objectContaining({ recordType: 'CONTACT', survivorId: 'pat' }),
+    expect.anything()
   );
   expect(effects.forget).toHaveBeenCalledWith({
     companies: [],
@@ -163,12 +185,13 @@ it('after a merge of people, forgets them and drops their unopened reads', async
   expect(effects.refresh).toHaveBeenCalled();
 });
 
-it('after a commit, forgets the merged companies and reads everything again', async () => {
-  const commitCrmMerge = vi.fn(async () =>
-    ok({ survivorId: 'kept', mergedIds: ['OLD-1'], mergeId: 'm' })
-  );
+it('uses committed tombstones and skips an already revalidated list', async () => {
+  effects.commit.mockResolvedValue({
+    ...committed('kept', ['OLD-1'], true),
+    listsReadAgain: true,
+  });
   const invalidate = vi.spyOn(client, 'invalidateQueries');
-  const commands = commandsWith({ commitCrmMerge });
+  const commands = commandsWith({});
 
   const answer = await commands.commit({
     survivorId: 'kept',
@@ -182,29 +205,28 @@ it('after a commit, forgets the merged companies and reads everything again', as
     ok: true,
     value: { survivorId: 'kept', mergedIds: ['OLD-1'] },
   });
-  expect(commitCrmMerge).toHaveBeenCalledWith({
-    recordType: 'company',
-    survivorId: 'kept',
-    sourceIds: ['OLD-1'],
-    revision: 'r',
-    requestKey: 'key',
-    sharingRules: 'stop',
-  });
-  expect(effects.forget).toHaveBeenCalledWith({
-    companies: ['old-1'],
-    contacts: [],
-  });
+  expect(effects.commit).toHaveBeenCalledWith(
+    {
+      recordType: 'COMPANY',
+      survivorId: 'kept',
+      sourceIds: ['OLD-1'],
+      revision: 'r',
+      requestKey: 'key',
+      sharingRules: 'STOP',
+    },
+    expect.anything()
+  );
+  expect(effects.forget).not.toHaveBeenCalled();
   expect(effects.contacts).toHaveBeenCalled();
   expect(invalidate).toHaveBeenCalledWith({ queryKey: crmKeys._def });
-  expect(effects.refresh).toHaveBeenCalled();
+  expect(effects.refresh).not.toHaveBeenCalled();
 });
 
 it('changes nothing locally when a commit is refused', async () => {
-  const commands = commandsWith({
-    commitCrmMerge: vi.fn(async () =>
-      err([{ code: 'merge_preview_stale', message: 'stale' }])
-    ),
-  });
+  effects.commit.mockRejectedValue(
+    new ThrownResultError([{ code: 'merge_preview_stale', message: 'stale' }])
+  );
+  const commands = commandsWith({});
 
   const answer = await commands.commit({
     survivorId: 'kept',
@@ -238,11 +260,8 @@ it('drops the merged company’s unopened reads, so its next open fetches and mo
   });
   const unsubscribe = observer.subscribe(() => {});
   await vi.waitFor(() => expect(fetchOpen).toHaveBeenCalledTimes(1));
-  const commands = commandsWith({
-    commitCrmMerge: vi.fn(async () =>
-      ok({ survivorId: 'kept', mergedIds: ['old-1', 'old-2'], mergeId: 'm' })
-    ),
-  });
+  effects.commit.mockResolvedValue(committed('kept', ['old-1', 'old-2'], true));
+  const commands = commandsWith({});
 
   await commands.commit({
     survivorId: 'kept',
@@ -260,11 +279,8 @@ it('drops the merged company’s unopened reads, so its next open fetches and mo
 });
 
 it('reads a commit with no merge code as unconfirmed, since it may have gone through', async () => {
-  const commands = commandsWith({
-    commitCrmMerge: vi.fn(async () =>
-      err([{ code: 'HTTP_ERROR', message: 'HTTP error! status: 502' }])
-    ),
-  });
+  effects.commit.mockRejectedValue(new Error('unavailable'));
+  const commands = commandsWith({});
 
   const answer = await commands.commit({
     survivorId: 'kept',

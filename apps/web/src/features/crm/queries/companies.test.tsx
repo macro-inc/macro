@@ -4,7 +4,7 @@ import {
   QueryClientProvider,
   QueryObserver,
 } from '@tanstack/solid-query';
-import { err, ok } from 'neverthrow';
+import { ok } from 'neverthrow';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { CrmCreateDependencies } from './dependencies';
 
@@ -15,6 +15,11 @@ vi.mock('@service-storage/crm-contacts', () => ({
 }));
 const refreshGraphqlLists = vi.hoisted(() => vi.fn(async () => undefined));
 const creates = vi.hoisted(() => ({ company: vi.fn(), contact: vi.fn() }));
+const edits = vi.hoisted(() => ({ rename: vi.fn(), domain: vi.fn() }));
+vi.mock('@service-storage/graphql-crm-edits', () => ({
+  renameGraphqlCrmCompany: edits.rename,
+  editGraphqlCrmCompanyDomain: edits.domain,
+}));
 const cacheHost = vi.hoisted(() => vi.fn());
 vi.mock('@service-storage/graphql-crm-create', () => ({
   createGraphqlCrmCompany: creates.company,
@@ -35,9 +40,6 @@ import {
 import { crmKeys } from './keys';
 
 const storage = {
-  setCompanyName: vi.fn(),
-  addCompanyDomain: vi.fn(),
-  removeCompanyDomain: vi.fn(),
   setEmailSync: vi.fn(),
 };
 let client: QueryClient;
@@ -48,9 +50,8 @@ beforeEach(() => {
   creates.company.mockReset();
   creates.contact.mockReset();
   cacheHost.mockReset();
-  storage.setCompanyName.mockReset();
-  storage.addCompanyDomain.mockReset();
-  storage.removeCompanyDomain.mockReset();
+  edits.rename.mockReset();
+  edits.domain.mockReset();
   storage.setEmailSync.mockReset();
   client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
 });
@@ -206,23 +207,36 @@ it('refreshes company lists once after a batch of GraphQL creates', async () => 
 });
 
 it('reads GraphQL lists that can show the company again after a rename', async () => {
-  storage.setCompanyName.mockResolvedValue(ok({}));
+  edits.rename.mockResolvedValue(confirmed('company-1'));
   const mutations = mount();
 
   await mutations.rename.mutateAsync({ companyId: 'company-1', name: 'Acme' });
 
-  const where = refreshedLists();
+  const where = refreshedLists(false);
   expect(where(COMPANIES)).toBe(true);
   expect(where(CONTACTS)).toBe(true);
   expect(where(NO_CRM)).toBe(false);
 });
 
+it('skips a duplicate company list read after the network exchange revalidates', async () => {
+  edits.rename.mockResolvedValue({
+    ...confirmed('company-1'),
+    listsReadAgain: true,
+  });
+  await mount().rename.mutateAsync({ companyId: 'company-1', name: 'Acme' });
+  expect(refreshGraphqlLists).not.toHaveBeenCalled();
+});
+
 it.each(['add', 'remove'] as const)(
   'reads GraphQL lists that can show the company again after a domain %s',
   async (change) => {
-    const answer = ok({ id: 'company-1', domains: [{ domain: 'acme.com' }] });
-    storage.addCompanyDomain.mockResolvedValue(answer);
-    storage.removeCompanyDomain.mockResolvedValue(answer);
+    const key = crmKeys.company('company-1').queryKey;
+    client.setQueryData(key, { id: 'company-1', name: 'Acme', domains: [] });
+    edits.domain.mockResolvedValue({
+      ...confirmed('company-1'),
+      payload: { companyId: 'company-1', domains: [{ domain: 'acme.com' }] },
+    });
+    cacheHost.mockReturnValue({});
     const mutations = mount();
 
     await mutations.domain.mutateAsync({
@@ -231,9 +245,14 @@ it.each(['add', 'remove'] as const)(
       change,
     });
 
-    const where = refreshedLists();
+    const where = refreshedLists(true);
     expect(where(COMPANIES)).toBe(true);
     expect(where(NO_CRM)).toBe(false);
+    expect(client.getQueryData(key)).toEqual({
+      id: 'company-1',
+      name: 'Acme',
+      domains: [{ companyId: 'company-1', domain: 'acme.com' }],
+    });
   }
 );
 
@@ -281,7 +300,7 @@ it('reports nothing when creation fails', async () => {
 });
 
 it("refreshes the details of the renamed company's contacts only", async () => {
-  storage.setCompanyName.mockResolvedValue(ok({}));
+  edits.rename.mockResolvedValue(confirmed('company-1'));
   const own = crmKeys.contact('contact-1').queryKey;
   const other = crmKeys.contact('contact-2').queryKey;
   client.setQueryData(own, { id: 'contact-1', companyId: 'company-1' });
@@ -295,7 +314,7 @@ it("refreshes the details of the renamed company's contacts only", async () => {
 });
 
 it('reads a contact detail again when it was loading during a rename', async () => {
-  storage.setCompanyName.mockResolvedValue(ok({}));
+  edits.rename.mockResolvedValue(confirmed('company-1'));
   const key = crmKeys.contact('contact-3').queryKey;
   const answers: Array<(value: unknown) => void> = [];
   const observer = new QueryObserver(client, {
@@ -332,7 +351,7 @@ const summary = (id: string, name: string) => ({
 
 it("renames the company in its contacts' details before the server answers", async () => {
   let answer!: (value: unknown) => void;
-  storage.setCompanyName.mockReturnValue(
+  edits.rename.mockReturnValue(
     new Promise((resolve) => {
       answer = resolve;
     })
@@ -363,12 +382,12 @@ it("renames the company in its contacts' details before the server answers", asy
   expect(client.getQueryData(other)).toMatchObject({
     company: { name: 'Other' },
   });
-  answer(ok({}));
+  answer(confirmed('company-1'));
   await rename;
 });
 
 it('restores the name and reads no detail again when a rename fails', async () => {
-  storage.setCompanyName.mockResolvedValue(err([{ message: 'Refused' }]));
+  edits.rename.mockRejectedValue(new Error('Refused'));
   const own = crmKeys.contact('contact-1').queryKey;
   client.setQueryData(own, {
     id: 'contact-1',

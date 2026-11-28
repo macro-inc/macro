@@ -67,8 +67,6 @@ import {
   CloudStorageItemType as CloudStorageItemTypeMap,
 } from './generated/schemas/cloudStorageItemType';
 import type { CompanyContactsPageResponse } from './generated/schemas/companyContactsPageResponse';
-import type { CompanyDomainRequest } from './generated/schemas/companyDomainRequest';
-import type { CompanyDomainTakenResponse } from './generated/schemas/companyDomainTakenResponse';
 import type { ContactEmailRequest } from './generated/schemas/contactEmailRequest';
 import type { CreateAgentRequest } from './generated/schemas/createAgentRequest';
 import type { CreateCanvasDocumentRequest } from './generated/schemas/createCanvasDocumentRequest';
@@ -150,9 +148,7 @@ import type { ListSlackImportsParams } from './generated/schemas/listSlackImport
 import type { ListTeamOutOfOfficeParams } from './generated/schemas/listTeamOutOfOfficeParams';
 import type { LocationResponseV3 } from './generated/schemas/locationResponseV3';
 import type { MergeBlock } from './generated/schemas/mergeBlock';
-import type { MergeCommitRequest } from './generated/schemas/mergeCommitRequest';
 import type { MergeErrorResponse } from './generated/schemas/mergeErrorResponse';
-import type { MergeOutcome } from './generated/schemas/mergeOutcome';
 import type { MergePreview } from './generated/schemas/mergePreview';
 import type { MergePreviewRequest } from './generated/schemas/mergePreviewRequest';
 import type { PairingDetails } from './generated/schemas/pairingDetails';
@@ -172,7 +168,6 @@ import type { SaveDocumentResponseData } from './generated/schemas/saveDocumentR
 import type { SearchContactsParams } from './generated/schemas/searchContactsParams';
 import type { SearchContactsResponse } from './generated/schemas/searchContactsResponse';
 import type { SetChannelPictureRequest } from './generated/schemas/setChannelPictureRequest';
-import type { SetCompanyNameRequest } from './generated/schemas/setCompanyNameRequest';
 import type { SetContactCompanyRequest } from './generated/schemas/setContactCompanyRequest';
 import type { SetContactEmailRequest } from './generated/schemas/setContactEmailRequest';
 import type { SetContactNameRequest } from './generated/schemas/setContactNameRequest';
@@ -333,24 +328,6 @@ async function calendarJoinRequestErrorHandler(response: Response) {
     code: 'HTTP_ERROR' as const,
     message: `HTTP error! status: ${response.status}`,
   };
-}
-
-/**
- * A refused company domain edit. A 409 carries, as its message, the name of
- * the company that already has the domain, empty when the caller cannot see
- * it (an archived company, for a member).
- */
-async function companyDomainErrorHandler(response: Response) {
-  if (response.status === 400) {
-    return { code: 'BAD_REQUEST' as const, message: 'Domain change refused' };
-  }
-  if (response.status === 409) {
-    const body = (await response
-      .json()
-      .catch(() => null)) as CompanyDomainTakenResponse | null;
-    return { code: 'CONFLICT' as const, message: body?.companyName ?? '' };
-  }
-  return statusError(response.status);
 }
 
 async function contactEditErrorHandler(response: Response) {
@@ -2872,17 +2849,6 @@ export const storageServiceClient = {
       }
     );
   },
-  /** Commit a reviewed merge; a retry with the same request key returns its result. */
-  async commitCrmMerge(body: MergeCommitRequest) {
-    return await fetchWithToken<MergeOutcome, CrmMergeErrorCode>(
-      `${dssHost}/crm/merges`,
-      {
-        method: 'POST',
-        body: JSON.stringify(body),
-        errorResponseHandler: crmMergeErrorHandler,
-      }
-    );
-  },
   /** Titles of many company and contact chips; records the caller can't open are left out. */
   async previewCrmRecords(body: CrmPreviewsRequest) {
     return await dssFetch<CrmPreviews>('/crm/previews', {
@@ -3025,41 +2991,6 @@ export const storageServiceClient = {
       method: 'PUT',
       body: JSON.stringify({ hidden }),
     });
-  },
-  async setCompanyName({
-    companyId,
-    ...body
-  }: { companyId: string } & SetCompanyNameRequest) {
-    return await dssFetch(`/crm/companies/${companyId}/name`, {
-      method: 'PUT',
-      body: JSON.stringify(body),
-    });
-  },
-  async addCompanyDomain({
-    companyId,
-    ...body
-  }: { companyId: string } & CompanyDomainRequest) {
-    return await fetchWithToken<CrmCompanyResponse, 'BAD_REQUEST'>(
-      `${dssHost}/crm/companies/${companyId}/domains`,
-      {
-        method: 'PUT',
-        body: JSON.stringify(body),
-        errorResponseHandler: companyDomainErrorHandler,
-      }
-    );
-  },
-  async removeCompanyDomain({
-    companyId,
-    ...body
-  }: { companyId: string } & CompanyDomainRequest) {
-    return await fetchWithToken<CrmCompanyResponse, 'BAD_REQUEST'>(
-      `${dssHost}/crm/companies/${companyId}/domains`,
-      {
-        method: 'DELETE',
-        body: JSON.stringify(body),
-        errorResponseHandler: companyDomainErrorHandler,
-      }
-    );
   },
   async setCompanyHidden({
     companyId,

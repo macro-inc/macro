@@ -1,0 +1,23 @@
+mutation RenameCrmCompany($input: RenameCrmCompanyInput!) {
+  renameCrmCompany(input: $input) {
+    companyId
+    result { ...EntityMutationResultFields }
+  }
+}
+
+mutation EditCrmCompanyDomain($input: EditCrmCompanyDomainInput!) {
+  editCrmCompanyDomain(input: $input) {
+    companyId
+    domains { id domain createdAt }
+    result { ...EntityMutationResultFields }
+  }
+}
+
+mutation CommitCrmMerge($input: CommitCrmMergeInput!) {
+  commitCrmMerge(input: $input) {
+    mergeId
+    survivorId
+    mergedIds
+    result { ...EntityMutationResultFields }
+  }
+}

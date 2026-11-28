@@ -17,6 +17,10 @@ import {
   createGraphqlCrmContact,
 } from '@service-storage/graphql-crm-create';
 import {
+  editGraphqlCrmCompanyDomain,
+  renameGraphqlCrmCompany,
+} from '@service-storage/graphql-crm-edits';
+import {
   type Query,
   type QueryClient,
   type QueryKey,
@@ -272,7 +276,7 @@ export function useCreateContactMutation(
 }
 
 /**
- * Renames a company via `PUT /crm/companies/{id}/name`. The name is a
+ * Renames a company and applies the returned Soup row. The name is a
  * team-scoped override (`crm_companies.custom_name`) that read paths resolve
  * over the global directory name — the shared directory is never touched.
  * Optimistically updates the company detail and the summaries of loaded
@@ -280,11 +284,12 @@ export function useCreateContactMutation(
  * then invalidates them plus soup so the Customers listings pick up the new
  * name.
  */
-export function useSetCompanyNameMutation(deps: CrmRecordDependencies) {
+export function useSetCompanyNameMutation(deps: CrmCreateDependencies) {
   return useMutation(
     () => ({
-      mutationFn: ({ companyId, name }: { companyId: string; name: string }) =>
-        throwOnErr(() => deps.storage.setCompanyName({ companyId, name })),
+      networkMode: 'always',
+      mutationFn: (input: { companyId: string; name: string }) =>
+        renameGraphqlCrmCompany(input),
       onMutate: async ({ companyId, name }) => {
         const canCache = captureQueryAuthorization();
         const queryKey = crmKeys.company(companyId).queryKey;
@@ -337,15 +342,15 @@ export function useSetCompanyNameMutation(deps: CrmRecordDependencies) {
       },
       onSuccess: (_data, { companyId }) =>
         refreshContactDetailsOfCompany(deps.client, companyId),
-      onSettled: async (_data, _err, { companyId }) => {
+      onSettled: async (outcome, _err, { companyId }, context) => {
+        if (!context?.canCache()) return;
         await invalidateCachedCrmContacts();
         return Promise.all([
           deps.client.invalidateQueries({
             queryKey: crmKeys.company(companyId).queryKey,
           }),
           deps.client.invalidateQueries({ queryKey: soupKeys._def }),
-          // The rename writes no Soup row, so the cache keeps the old name.
-          refreshActiveGraphqlSoupQueries({ where: listCanIncludeCrm }),
+          outcome && refreshCrmCreateLists(deps.hasLiveCache(), outcome),
         ]);
       },
     }),
@@ -354,8 +359,7 @@ export function useSetCompanyNameMutation(deps: CrmRecordDependencies) {
 }
 
 /**
- * Adds or removes a company domain via `PUT`/`DELETE
- * /crm/companies/{id}/domains`. The server never changes the company's name
+ * Adds or removes a company domain and applies the returned Soup row. The server never changes the company's name
  * or primary domain, so the answer replaces only the domain list of the
  * cached company. Which of the company's contacts are on its domains changes
  * with it, so their details and the company's Team list refresh, and soup
@@ -364,12 +368,13 @@ export function useSetCompanyNameMutation(deps: CrmRecordDependencies) {
  * 400 for a personal provider or the domain the company is named after, 403
  * for a member removing a domain from a company whose email sync is off.
  */
-export function useEditCompanyDomainMutation(deps: CrmRecordDependencies) {
+export function useEditCompanyDomainMutation(deps: CrmCreateDependencies) {
   return useMutation(
     () => ({
       // The header and Record details each edit through their own instance;
       // one edit at a time keeps a slower response from replacing a newer list.
       scope: { id: 'crm-company-domain-edits' },
+      networkMode: 'always',
       mutationFn: ({
         companyId,
         domain,
@@ -385,34 +390,43 @@ export function useEditCompanyDomainMutation(deps: CrmRecordDependencies) {
 }
 
 async function editCompanyDomain(
-  deps: CrmRecordDependencies,
+  deps: CrmCreateDependencies,
   companyId: string,
   domain: string,
   change: CompanyDomainChange
-): Promise<CrmCompanyResponse> {
+) {
   return Telemetry.span('crm.company_domain_edit', async (span) => {
     span.setAttr('crm.record_id', companyId);
     span.setAttr('crm.change', change);
     const canCache = captureQueryAuthorization();
-    const write =
-      change === 'add'
-        ? deps.storage.addCompanyDomain
-        : deps.storage.removeCompanyDomain;
-    const company = await span.span('crm.company_domain_edit.save', () =>
-      throwOnErr(() => write({ companyId, domain }))
+    const outcome = await span.span('crm.company_domain_edit.save', (save) =>
+      editGraphqlCrmCompanyDomain(
+        { companyId, domain, change: change === 'add' ? 'ADD' : 'REMOVE' },
+        save
+      )
     );
-    if (!canCache()) return company;
+    if (!canCache()) return;
 
     // A read already in flight would answer with the domains before the
     // write and replace these.
-    await deps.client.cancelQueries({
-      queryKey: crmKeys.company(companyId).queryKey,
-    });
-    if (!canCache()) return company;
-    deps.client.setQueryData<CrmCompanyResponse>(
-      crmKeys.company(companyId).queryKey,
-      (current) => current && { ...current, domains: company.domains }
-    );
+    const queryKey = crmKeys.company(companyId).queryKey;
+    await deps.client.cancelQueries({ queryKey });
+    if (!canCache()) return;
+    const company = outcome.payload;
+    if (company?.domains) {
+      const domains = company.domains.map((entry) => ({
+        ...entry,
+        companyId: company.companyId,
+      }));
+      deps.client.setQueryData<CrmCompanyResponse>(
+        queryKey,
+        (current) => current && { ...current, domains }
+      );
+    } else {
+      // Replay publishes the Soup row. Mark the legacy detail stale so its
+      // next ordinary read can pick up the full domain records.
+      await deps.client.invalidateQueries({ queryKey, refetchType: 'none' });
+    }
     await span.span('crm.company_domain_edit.refresh', () =>
       Promise.all([
         refreshContactDetailsOfCompany(deps.client, companyId),
@@ -420,10 +434,9 @@ async function editCompanyDomain(
           queryKey: crmKeys.companyContacts(companyId).queryKey,
         }),
         deps.client.invalidateQueries({ queryKey: soupKeys._def }),
-        refreshActiveGraphqlSoupQueries({ where: listCanIncludeCrm }),
+        refreshCrmCreateLists(deps.hasLiveCache(), outcome),
       ])
     );
-    return company;
   });
 }
 
