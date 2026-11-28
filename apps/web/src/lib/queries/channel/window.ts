@@ -188,16 +188,27 @@ export function useChannelWindow(
           query.isFetching ||
           query.hasNextPage ||
           query.cacheStatus === 'loading');
-      // A refetch keeps the rows it already had for IDs still in the chunk.
+      // A refetch keeps the rows it already had for IDs still in the chunk,
+      // and so does a new lookup the cache answers in part: an ID the cache
+      // lacks keeps its last record until a network page or an error settles
+      // it (the cache answers before the network lookup starts).
       const channels = createMemo<ChannelEntity[]>((previous) => {
         const activeIds = idSet();
         if (!queryReadyGate(query)) {
           return previous.filter((channel) => activeIds.has(channel.id));
         }
-        return query.data.entities.filter(
+        const rows = query.data.entities.filter(
           (entity): entity is ChannelEntity =>
             isChannelEntity(entity) && activeIds.has(entity.id)
         );
+        if (error() || (!loading() && query.hasPageData)) return rows;
+        const returned = new Set(rows.map((row) => row.id));
+        return [
+          ...rows,
+          ...previous.filter(
+            (channel) => activeIds.has(channel.id) && !returned.has(channel.id)
+          ),
+        ];
       }, []);
       const unresolved = createMemo(() => {
         const loaded = new Set(channels().map((channel) => channel.id));

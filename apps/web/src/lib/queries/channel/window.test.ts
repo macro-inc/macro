@@ -1,5 +1,5 @@
 import type { ChannelEntity } from '@entity/types/entity';
-import { createRoot, createSignal, onCleanup } from 'solid-js';
+import { batch, createRoot, createSignal, onCleanup } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const useSoupAstItemsQuery = vi.hoisted(() => vi.fn());
@@ -9,8 +9,11 @@ vi.mock('../soup/items', () => ({ useSoupAstItemsQuery }));
 vi.mock('@entity', () => ({
   isChannelEntity: (entity: { type: string }) => entity.type === 'channel',
 }));
+const userIdMock = vi.hoisted(() => ({
+  get: (): string => 'user-1',
+}));
 vi.mock('@core/context/user', () => ({
-  useUserId: () => () => 'user-1',
+  useUserId: () => () => userIdMock.get(),
   useIsAuthenticated: () => () => true,
 }));
 vi.mock('@queries/client', async () => {
@@ -22,6 +25,7 @@ import {
   CHANNEL_WINDOW_CHUNK_SIZE,
   type ChannelIdWindow,
   channelIdWindow,
+  EMPTY_CHANNEL_WINDOW,
   MAX_CHANNEL_WINDOW_IDS,
   useChannelWindow,
 } from './window';
@@ -286,6 +290,248 @@ describe('useChannelWindow', () => {
       expect(result.retained()).toEqual([]);
     } finally {
       dispose();
+    }
+  });
+
+  it('keeps rows through a refresh without reading pending data', () => {
+    const resolved = [channelEntity('ch-0000'), channelEntity('ch-0001')];
+    const { dispose, result, setPending, setEntities, setWindow } = createRoot(
+      (dispose) => {
+        const [pending, setPending] = createSignal(false);
+        const [entities, setEntities] = createSignal(resolved);
+        const [window, setWindow] = createSignal(
+          channelIdWindow([{ key: 's', ids: ids(2) }])
+        );
+        useSoupAstItemsQuery.mockImplementation(() => ({
+          isEnabled: true,
+          isLoading: false,
+          isFetching: false,
+          hasNextPage: false,
+          get isPending() {
+            return pending();
+          },
+          get hasPageData() {
+            return !pending();
+          },
+          get data() {
+            if (pending()) throw new Error('A pending query resource was read');
+            return { entities: entities() };
+          },
+        }));
+        return {
+          dispose,
+          result: useChannelWindow(window, () => true),
+          setPending,
+          setEntities,
+          setWindow,
+        };
+      }
+    );
+    try {
+      expect(result.channels()).toEqual(resolved);
+      setPending(true);
+      expect(result.channels()).toEqual(resolved);
+      expect([...result.pendingIds()]).toEqual([]);
+      setEntities([channelEntity('ch-0001')]);
+      setPending(false);
+      expect(result.channels()).toEqual([channelEntity('ch-0001')]);
+      setPending(true);
+      setWindow(channelIdWindow([{ key: 's', ids: ['ch-0099'] }]));
+      expect(result.channels()).toEqual([]);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('tells pending, failed and unavailable IDs apart, and retries failed chunks', async () => {
+    const refresh = vi.fn(async () => {});
+    const { result, dispose, setPending, setError } = createRoot((dispose) => {
+      const [pending, setPending] = createSignal(true);
+      const [error, setError] = createSignal<Error>();
+      useSoupAstItemsQuery.mockImplementation(() => ({
+        isEnabled: true,
+        get isPending() {
+          return pending();
+        },
+        get isLoading() {
+          return pending();
+        },
+        get isFetching() {
+          return pending();
+        },
+        get hasPageData() {
+          return !pending();
+        },
+        get fetchError() {
+          return error();
+        },
+        hasNextPage: false,
+        refresh,
+        get data() {
+          if (pending()) throw new Error('A pending query resource was read');
+          return { entities: [channelEntity('ch-0000')] };
+        },
+      }));
+      return {
+        result: useChannelWindow(
+          () => channelIdWindow([{ key: 's', ids: ids(2) }]),
+          () => true
+        ),
+        dispose,
+        setPending,
+        setError,
+      };
+    });
+    try {
+      expect([...result.pendingIds()].sort()).toEqual(['ch-0000', 'ch-0001']);
+      expect([...result.unavailableIds()]).toEqual([]);
+      setPending(false);
+      expect(result.channels().map(({ id }) => id)).toEqual(['ch-0000']);
+      expect([...result.unavailableIds()]).toEqual(['ch-0001']);
+      setError(new Error('offline'));
+      expect([...result.unavailableIds()]).toEqual([]);
+      expect([...result.failedIds()]).toEqual(['ch-0001']);
+      expect(result.error()).toBeInstanceOf(Error);
+      await result.retry();
+      expect(refresh).toHaveBeenCalledOnce();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('keeps the last record of an ID until the network settles a new lookup the cache answered without it', () => {
+    const [missing, setMissing] = createSignal(false);
+    const [fetching, setFetching] = createSignal(false);
+    const [page, setPage] = createSignal(true);
+    useSoupAstItemsQuery.mockImplementation((args) => {
+      const asked = (): string[] =>
+        JSON.stringify(args().body).match(/ch-\d{4}/g) ?? [];
+      return {
+        isEnabled: true,
+        isPending: false,
+        isLoading: false,
+        get isFetching() {
+          return fetching();
+        },
+        get hasPageData() {
+          return page();
+        },
+        hasNextPage: false,
+        get data() {
+          return {
+            entities: asked()
+              .filter((id) => !(missing() && id === 'ch-0000'))
+              .map(channelEntity),
+          };
+        },
+      };
+    });
+    const { dispose, result, setWindow } = createRoot((dispose) => {
+      const [window, setWindow] = createSignal(
+        channelIdWindow([{ key: 's', ids: ids(3) }])
+      );
+      return {
+        dispose,
+        result: useChannelWindow(window, () => true),
+        setWindow,
+      };
+    });
+    const shown = () =>
+      result
+        .channels()
+        .map(({ id }) => id)
+        .sort();
+    try {
+      expect(shown()).toEqual(['ch-0000', 'ch-0001', 'ch-0002']);
+      // The cache answers the new IDs without ch-0000 before the network
+      // lookup for it starts.
+      batch(() => {
+        setMissing(true);
+        setPage(false);
+        setWindow(channelIdWindow([{ key: 's', ids: ['ch-0000', 'ch-0005'] }]));
+      });
+      expect(shown()).toEqual(['ch-0000', 'ch-0005']);
+      setFetching(true);
+      expect(shown()).toEqual(['ch-0000', 'ch-0005']);
+      expect([...result.pendingIds()]).toEqual([]);
+      // The network page confirms it is gone.
+      batch(() => {
+        setFetching(false);
+        setPage(true);
+      });
+      expect(shown()).toEqual(['ch-0005']);
+      expect([...result.unavailableIds()]).toEqual(['ch-0000']);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('keeps an ID pending while the cache is still reading it', () => {
+    const { dispose, result, setCacheStatus } = createRoot((dispose) => {
+      const [cacheStatus, setCacheStatus] = createSignal<'loading' | 'ready'>(
+        'loading'
+      );
+      useSoupAstItemsQuery.mockImplementation(() => ({
+        isEnabled: true,
+        isPending: false,
+        isLoading: false,
+        isFetching: false,
+        hasPageData: false,
+        hasNextPage: false,
+        get cacheStatus() {
+          return cacheStatus();
+        },
+        data: { entities: [channelEntity('ch-0000')] },
+      }));
+      return {
+        dispose,
+        setCacheStatus,
+        result: useChannelWindow(
+          () => channelIdWindow([{ key: 's', ids: ids(2) }]),
+          () => true
+        ),
+      };
+    });
+    try {
+      expect(result.isLoading()).toBe(true);
+      expect([...result.pendingIds()]).toEqual(['ch-0001']);
+      setCacheStatus('ready');
+      expect(result.isLoading()).toBe(false);
+      expect([...result.pendingIds()]).toEqual([]);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('drops every record on an account switch, even to an empty window', () => {
+    const [userId, setUserId] = createSignal('user-1');
+    userIdMock.get = userId;
+    const { disposed } = fakeLookups();
+    const { dispose, result, setWindow } = createRoot((dispose) => {
+      const [window, setWindow] = createSignal(
+        channelIdWindow([{ key: 's', ids: ids(3) }])
+      );
+      return {
+        dispose,
+        result: useChannelWindow(window, () => true),
+        setWindow,
+      };
+    });
+    try {
+      expect(result.channels()).toHaveLength(3);
+      setWindow(channelIdWindow([{ key: 's', ids: ids(2) }]));
+      // Switch account and empty the window in one flush, so the reset runs
+      // with no chunks wanted while an account is still signed in.
+      batch(() => {
+        setUserId('user-2');
+        setWindow(EMPTY_CHANNEL_WINDOW);
+      });
+      expect(disposed).toHaveLength(1);
+      expect(result.channels()).toEqual([]);
+      expect(result.retained()).toEqual([]);
+    } finally {
+      dispose();
+      userIdMock.get = () => 'user-1';
     }
   });
 });
