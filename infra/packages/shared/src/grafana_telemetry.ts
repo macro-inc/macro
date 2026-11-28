@@ -18,6 +18,7 @@ const PROD_GRAFANA_PROJECTS: Record<string, boolean> = {
   'image-proxy-service': true,
   'lexical-service': true,
   'notification-service': true,
+  'search-processing-service': true,
   'static-file-service': true,
   'unfurl-service': true,
   'whatsapp-session-service': true,
