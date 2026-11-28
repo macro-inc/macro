@@ -1,0 +1,25 @@
+apps/web/src/features/crm/views/crm-workspace.tsx
+  s_59175937622ed6::t_bf7f527a2164ca 89-91,97
+apps/web/tests/native/runner.ts
+  s_59175937622ed6::t_b58798cdc2f5f7 370-372
+docs/agent-guide/crm.md
+  s_59175937622ed6::t_64b5da98a62708 124
+docs/agent-guide/ui-conventions.md
+  s_59175937622ed6::t_d2d1fae046eb0c 64-65
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "765bfef183f6febaaad388ac8e4bd149b9a69da2",
+  "prompts": {},
+  "sessions": {
+    "s_59175937622ed6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4c7a1c0d-6543-4a23-adb2-86a9b1b6a34e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
