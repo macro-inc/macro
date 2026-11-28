@@ -1301,7 +1301,9 @@ export type GraphqlGroupedSoupPage = {
 
 export type GraphqlSoupItem =
   | SoupQuery['user']['soup']['items'][number]
-  | MailFolderSoupQuery['user']['soup']['items'][number]
+  | (MailFolderSoupQuery['user']['soup']['items'][number] & {
+      notifications?: never;
+    })
   | (ChannelListItemFieldsFragment & { notifications?: never })
   | (SoupItemPreviewFieldsFragment & { notifications?: never });
 type GraphqlSoupEntity = GraphqlSoupItem;

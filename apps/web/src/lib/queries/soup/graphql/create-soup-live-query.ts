@@ -99,7 +99,8 @@ export type SoupLiveQueryOptions = {
   /**
    * `channel-list` selects bounded unread evidence for channel navigation;
    * `preview` selects rows without notifications, for lists that show none;
-   * `mail-folder` adds the folder date to Spam and Trash server pages.
+   * `mail-folder` selects Spam and Trash server pages like `preview`, plus
+   * the row each page shows.
    */
   projection?: SoupProjection;
   /** Select known entities locally, then fetch only missing records. */
@@ -313,8 +314,8 @@ export function createSoupLiveQuery(
   const projectionSelections = {
     'channel-list': channelListItemSelection,
     preview: previewItemSelection,
-    // Folder pages never read locally; their rows select like any list's.
-    'mail-folder': soupItemSelection,
+    // Folder pages never read locally; their rows select like previews.
+    'mail-folder': previewItemSelection,
   } satisfies Record<SoupProjection, unknown>;
   const mailItemSelection = selectRecords(MailItemFieldsFragmentDoc);
   let localRequest = 0;
