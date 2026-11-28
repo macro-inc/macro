@@ -18,6 +18,7 @@ import { match } from 'ts-pattern';
 import { queryClient } from '../../client';
 import { soupQueryExcludesDone } from '../excludes-done';
 import { refreshActiveGraphqlSoupQueries } from '../graphql/active-queries';
+import { admitsCreatedEntity } from '../graphql/mail-list-revalidation';
 import type { SoupAstItemsPage } from '../items';
 import { soupKeys } from '../keys';
 import {
@@ -748,7 +749,10 @@ export async function refetchSoupEntity(
   if (entityType === 'team') return;
 
   if (options?.refreshGraphql) {
-    fireAndForget(refreshActiveGraphqlSoupQueries(), 'soup-normalized-cache');
+    fireAndForget(
+      refreshActiveGraphqlSoupQueries({ where: admitsCreatedEntity }),
+      'soup-normalized-cache'
+    );
   }
 
   // GraphQL lists never read this cache, so a miss means no REST list shows

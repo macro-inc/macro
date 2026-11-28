@@ -298,6 +298,10 @@ describe('refetchSoupEntity', () => {
     await refetchSoupEntity('task-1', 'document', { refreshGraphql: true });
 
     expect(refreshActiveGraphqlSoupQueriesMock).toHaveBeenCalledOnce();
+    // A created document joins no provider folder, so Spam and Trash stay put.
+    const [{ where }] = refreshActiveGraphqlSoupQueriesMock.mock.calls[0];
+    expect(where({ emailView: 'trash' })).toBe(false);
+    expect(where({ emailView: 'inbox' })).toBe(true);
     expect(getSoupItemsMock).not.toHaveBeenCalled();
   });
 

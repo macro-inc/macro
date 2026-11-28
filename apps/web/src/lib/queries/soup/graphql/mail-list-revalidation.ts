@@ -75,6 +75,10 @@ export async function revalidateMailAttachmentListsForSoupUpdates(
 const listsMailFolder = (body: unknown) =>
   isRecord(body) && (body.emailView === 'spam' || body.emailView === 'trash');
 
+/** Lists a newly created entity can join: every list but Spam and Trash, which
+ * only provider changes fill (see `revalidateMailFolderLists`). */
+export const admitsCreatedEntity = (body: unknown) => !listsMailFolder(body);
+
 /**
  * Spam and Trash are server pages: the cache has no folder membership, so a
  * provider change that moves a thread in or out of a folder reaches them only
