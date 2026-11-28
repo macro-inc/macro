@@ -30,9 +30,30 @@ use crate::workflows::{cancel_stuck_cloud_storage_deploys, deploy_on_push, runne
 #[cfg(test)]
 mod test;
 
-/// The steps that record what the channel shows once the job is done, by name.
-const SHOWS_FAILING: &str = "Macro Alerts shows Dev failing";
-const SHOWS_DEPLOYING: &str = "Macro Alerts shows Dev deploying";
+/// What the channel shows once the job is done.
+#[derive(Clone, Copy)]
+enum Shows {
+    Failing,
+    Deploying,
+}
+
+impl Shows {
+    /// The decide step's `shows` output for it.
+    const fn value(self) -> &'static str {
+        match self {
+            Self::Failing => "failing",
+            Self::Deploying => "deploying",
+        }
+    }
+
+    /// The step that records it, by name, which the next run reads.
+    const fn step(self) -> &'static str {
+        match self {
+            Self::Failing => "Macro Alerts shows Dev failing",
+            Self::Deploying => "Macro Alerts shows Dev deploying",
+        }
+    }
+}
 
 /// When the job runs between deploys: a quarter past, and so on, off the hour
 /// GitHub's scheduler is busiest at.
@@ -77,8 +98,8 @@ fn job() -> Job {
         .runs_on(runners::GITHUB_LINUX)
         .add_step(decide())
         .add_step(post())
-        .add_step(record(SHOWS_FAILING, "failing"))
-        .add_step(record(SHOWS_DEPLOYING, "deploying"))
+        .add_step(record(Shows::Failing))
+        .add_step(record(Shows::Deploying))
 }
 
 /// Where the script leaves the message.
@@ -89,7 +110,7 @@ fn message() -> String {
 struct DecideOutputs {
     /// Whether there is a message to post.
     post: StepOutput<Flag>,
-    /// What the channel shows once the job is done: `failing` or `deploying`.
+    /// What the channel shows once the job is done: a [`Shows::value`].
     shows: StepOutput<Str>,
 }
 
@@ -117,8 +138,8 @@ fn decide() -> Step<Run> {
         ))
         .add_env(("DEV_DEPLOY_ALERT_MESSAGE", message()))
         .add_env(("DEV_DEPLOY_ALERT_JOB", MACRO_ALERTS.job))
-        .add_env(("DEV_DEPLOY_ALERT_FAILING_STEP", SHOWS_FAILING))
-        .add_env(("DEV_DEPLOY_ALERT_DEPLOYING_STEP", SHOWS_DEPLOYING))
+        .add_env(("DEV_DEPLOY_ALERT_FAILING_STEP", Shows::Failing.step()))
+        .add_env(("DEV_DEPLOY_ALERT_DEPLOYING_STEP", Shows::Deploying.step()))
 }
 
 /// When the post step runs.
@@ -135,15 +156,18 @@ fn post() -> Step<Run> {
     .if_condition(posts_when_decided())
 }
 
-/// When the step recording that the channel shows Dev `shows` runs.
-fn records_when(shows: &str) -> Expr<Bool> {
-    DECIDE.outputs.shows.read().eq(shows)
+/// When the step recording that the channel shows `shows` runs.
+fn records_when(shows: Shows) -> Expr<Bool> {
+    DECIDE.outputs.shows.read().eq(shows.value())
 }
 
 /// A step the next run's job reads through the jobs API: it runs only once
 /// the post succeeded or none was needed, so a failed post records nothing.
-fn record(name: &str, shows: &str) -> Step<Run> {
-    Step::new(name)
-        .run(format!("echo 'Macro Alerts now shows Dev {shows}.'"))
+fn record(shows: Shows) -> Step<Run> {
+    Step::new(shows.step())
+        .run(format!(
+            "echo 'Macro Alerts now shows Dev {}.'",
+            shows.value()
+        ))
         .if_condition(records_when(shows))
 }

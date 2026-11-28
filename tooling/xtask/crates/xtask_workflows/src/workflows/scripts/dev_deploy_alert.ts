@@ -361,8 +361,8 @@ export function records(jobs: Job[], names: Names): { failing: boolean; at: stri
 
 /**
  * What the channel shows, from the newest record among the alert workflow's
- * `runs`, read a few at a time with `jobsOf`, the one that ran last first,
- * until one holds a record; with none, Dev deploying.
+ * `runs`, read a few at a time with `jobsOf`, the one that ended last first,
+ * until no run left can hold a newer record; with none, Dev deploying.
  */
 export async function readShown(
   runs: Run[],
@@ -370,16 +370,21 @@ export async function readShown(
   jobsOf: (run: Run) => Promise<Job[]>,
 ): Promise<Shown> {
   const sorted = [...runs].sort(newestFirst).slice(0, LOOK_BACK);
+  let newest: Shown = { failing: false, at: null };
   for (let start = 0; start < sorted.length; start += BATCH) {
+    // A run holds records only from before it ended, and a run started again
+    // by hand can end after newer ones and hold only older records.
+    if (newest.at !== null && time(newest.at) >= endOf(sorted[start])) {
+      break;
+    }
     const batch = sorted.slice(start, start + BATCH);
-    const found = (await Promise.all(batch.map(jobsOf)))
-      .flatMap((jobs) => records(jobs, names))
-      .sort((a, b) => b.at.localeCompare(a.at));
-    if (found.length > 0) {
-      return found[0];
+    for (const record of (await Promise.all(batch.map(jobsOf))).flatMap((jobs) => records(jobs, names))) {
+      if (newest.at === null || time(record.at) > time(newest.at)) {
+        newest = record;
+      }
     }
   }
-  return { failing: false, at: null };
+  return newest;
 }
 
 /** Whether the job posts, from Dev's health and what the channel shows. */
@@ -556,7 +561,7 @@ export function recoveryMessage(deployed: Run, previous: Run | null, context: Co
  */
 async function github(path: string): Promise<any> {
   for (let attempt = 1; ; attempt++) {
-    const { response, body } = await fetch(`${process.env.GITHUB_API_URL ?? 'https://api.github.com'}${path}`, {
+    const { response, body } = await fetch(`${env('GITHUB_API_URL')}${path}`, {
       headers: {
         accept: 'application/vnd.github+json',
         authorization: `Bearer ${env('GH_TOKEN')}`,

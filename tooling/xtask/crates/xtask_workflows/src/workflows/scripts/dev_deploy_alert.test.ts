@@ -428,6 +428,28 @@ describe('readShown', () => {
     assert.deepEqual(await readShown(runs, NAMES, jobsFrom(jobs).jobsOf), { failing: true, at: '2026-11-25T23:30:00Z' });
   });
 
+  test('reads on while a run left ended after the newest record, as runs started again by hand do', async () => {
+    const again = Array.from({ length: 5 }, (_, index) => ({
+      ...alertRun(index + 1),
+      run_attempt: 2,
+      conclusion: 'failure',
+      updated_at: `2026-11-26T00:3${index}:00Z`,
+    }));
+    const told = { ...alertRun(9), updated_at: '2026-11-26T00:21:00Z' };
+    const jobs = new Map<number, Job[]>([
+      ...again.map((run): [number, Job[]] => [run.id, [alertJob('deploying', '2026-11-25T22:01:00Z')]]),
+      [told.id, [alertJob('failing', '2026-11-26T00:20:00Z', true)]],
+    ]);
+    const { asked, jobsOf } = jobsFrom(jobs);
+    const older = Array.from({ length: 8 }, (_, index) => alertRun(index + 10));
+    assert.deepEqual(await readShown([...again, told, ...older], NAMES, jobsOf), {
+      failing: true,
+      at: '2026-11-26T00:20:00Z',
+    });
+    // The batch after the newest record's stops: those runs ended before it.
+    assert.deepEqual(asked.sort((a, b) => a - b), [1, 2, 3, 4, 5, 9, 14, 15, 16, 17]);
+  });
+
   test('reads past runs that hold no record', async () => {
     const jobs = new Map([
       [alertRun(9).id, [alertJob(null, '2026-11-26T00:02:40Z')]],

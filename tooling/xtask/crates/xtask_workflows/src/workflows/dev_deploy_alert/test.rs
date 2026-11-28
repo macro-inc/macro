@@ -105,8 +105,8 @@ fn the_names_the_script_reads_are_the_jobs_and_steps() {
         Some(posts_when_decided().condition().0.as_str())
     );
     for (env, shows) in [
-        ("DEV_DEPLOY_ALERT_FAILING_STEP", "failing"),
-        ("DEV_DEPLOY_ALERT_DEPLOYING_STEP", "deploying"),
+        ("DEV_DEPLOY_ALERT_FAILING_STEP", Shows::Failing),
+        ("DEV_DEPLOY_ALERT_DEPLOYING_STEP", Shows::Deploying),
     ] {
         assert_eq!(
             step(&workflow, decide_env(&workflow, env))["if"].as_str(),
