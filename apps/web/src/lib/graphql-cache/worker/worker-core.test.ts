@@ -4090,6 +4090,49 @@ describe('CacheWorkerCore', () => {
     expect(delay.armed()).toEqual([]);
   });
 
+  it('flushes the WAL before a generation read that is still queued when the worker drains', async () => {
+    const order: string[] = [];
+    let releaseWrite: (() => void) | undefined;
+    let holdWrite = false;
+    const flushWal = vi.fn(async () => {
+      order.push('flush');
+      return true;
+    });
+    const engine = walFlushEngine(order, flushWal);
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        ...engine,
+        writeQuery: async () => {
+          if (holdWrite) {
+            await new Promise<void>((resolve) => {
+              releaseWrite = resolve;
+            });
+          }
+          return engine.writeQuery();
+        },
+        close: async () => {
+          order.push('close');
+        },
+      }),
+    });
+    const delay = delayTimer();
+    const core = new CacheWorkerCore({
+      afterArrivedMessages: (resume) => queueMicrotask(resume),
+      afterDelay: delay.afterDelay,
+    });
+    const requests = walFlushRequests(core);
+    await openAndFlush(requests, delay, flushWal, order);
+
+    holdWrite = true;
+    const write = requests.write();
+    await vi.waitFor(() => expect(releaseWrite).toBeDefined());
+    const generation = requests.generation();
+    const drained = core.drain();
+    releaseWrite?.();
+    await Promise.all([write, generation, drained]);
+    expect(order).toEqual(['write', 'flush', 'generation', 'close']);
+  });
+
   it('runs a typed search queued behind a generation read before the flush that read waits for', async () => {
     const order: string[] = [];
     const resumes: (() => void)[] = [];

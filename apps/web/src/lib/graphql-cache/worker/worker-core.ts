@@ -808,7 +808,9 @@ export class CacheWorkerCore {
     this.unflushedSince = undefined;
     const engine = this.engine;
     const flushWal = engine?.flushWal?.bind(engine);
-    if (!flushWal || !this.acceptingRequests) {
+    // It runs during a drain too: a storage-generation read still queued
+    // then must not answer before the writes ahead of it reach disk.
+    if (!flushWal) {
       this.drainQueue();
       return;
     }
