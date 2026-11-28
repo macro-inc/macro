@@ -615,11 +615,7 @@ export class CacheWorkerCore {
    */
   private drainQueue(): void {
     if (this.running || this.yielding) return;
-    if (
-      this.walFlushDue ||
-      this.walFlushOverdue() ||
-      this.flushesBeforeGeneration()
-    ) {
+    if (this.walFlushDue || this.walFlushOverdue()) {
       this.startWalFlush();
       return;
     }
@@ -664,6 +660,10 @@ export class CacheWorkerCore {
     let index = pick(segmentEnd, this.runnablePriority(segmentEnd, false));
     const search = this.typedSearchBeforeTeardown(segmentEnd, pick);
     if (search !== undefined) index = search;
+    if (this.flushesBefore(this.queue[index])) {
+      this.startWalFlush();
+      return;
+    }
 
     const queued = this.dequeue(index);
     if (!queued) return;
@@ -792,11 +792,11 @@ export class CacheWorkerCore {
    * before that read reach disk first, so a saved cursor never runs ahead of
    * the pages a power loss keeps.
    */
-  private flushesBeforeGeneration(): boolean {
+  private flushesBefore(next: QueuedEngineRequest | undefined): boolean {
     return (
       this.unflushedSince !== undefined &&
       this.engine?.flushWal !== undefined &&
-      this.queue[0]?.request.kind === 'current-storage-generation'
+      next?.request.kind === 'current-storage-generation'
     );
   }
 
@@ -819,9 +819,10 @@ export class CacheWorkerCore {
   private async runWalFlush(flushWal: () => Promise<boolean>): Promise<void> {
     const startedAt = this.now();
     try {
-      await flushWal();
+      const flushed = await flushWal();
       const durationMs = this.now() - startedAt;
-      if (durationMs >= WAL_FLUSH_SLOW_MS) {
+      // A flush with nothing to write may still wait for the engine.
+      if (flushed && durationMs >= WAL_FLUSH_SLOW_MS) {
         this.telemetry.record({
           name: 'graphql_cache.wal_flush',
           operationCategory: 'storage',

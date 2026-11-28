@@ -4090,6 +4090,58 @@ describe('CacheWorkerCore', () => {
     expect(delay.armed()).toEqual([]);
   });
 
+  it('runs a typed search queued behind a generation read before the flush that read waits for', async () => {
+    const order: string[] = [];
+    const resumes: (() => void)[] = [];
+    let holdArrivals = false;
+    const flushWal = vi.fn(async () => {
+      order.push('flush');
+      return true;
+    });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        ...walFlushEngine(order, flushWal),
+        search: async (request: { query: string }) => {
+          order.push(`search:${request.query}`);
+          return { documents: [], nextCursor: null };
+        },
+      }),
+    });
+    const delay = delayTimer();
+    const core = new CacheWorkerCore({
+      afterArrivedMessages: (resume) => {
+        if (holdArrivals) resumes.push(resume);
+        else queueMicrotask(resume);
+      },
+      afterDelay: delay.afterDelay,
+    });
+    const requests = walFlushRequests(core);
+    await openAndFlush(requests, delay, flushWal, order);
+    await requests.write();
+    await settle();
+
+    holdArrivals = true;
+    const generation = requests.generation();
+    const search = core.handleRequest(
+      { postMessage: vi.fn() },
+      {
+        id: 100,
+        kind: 'search',
+        request: {
+          profile: 'quick-access-v1',
+          buckets: ['document'],
+          query: 'todo',
+          limit: 20,
+          nowMs: 1,
+        },
+      }
+    );
+    holdArrivals = false;
+    while (resumes.length > 0) resumes.shift()?.();
+    await Promise.all([generation, search]);
+    expect(order).toEqual(['write', 'search:todo', 'flush', 'generation']);
+  });
+
   it('arms no WAL flush when the engine flushes in every COMMIT', async () => {
     const order: string[] = [];
     loadCacheWasmMock.mockResolvedValue({
@@ -4148,9 +4200,10 @@ describe('CacheWorkerCore', () => {
     const order: string[] = [];
     let now = 0;
     let flushTakes = 0;
+    let flushed = true;
     const flushWal = vi.fn(async () => {
       now += flushTakes;
-      return true;
+      return flushed;
     });
     loadCacheWasmMock.mockResolvedValue({
       openCache: vi.fn().mockResolvedValue(walFlushEngine(order, flushWal)),
@@ -4189,6 +4242,16 @@ describe('CacheWorkerCore', () => {
       outcome: 'success',
       durationMs: 200,
     });
+
+    // A slow call that found nothing to flush is not a slow flush.
+    flushTakes = 300;
+    flushed = false;
+    await requests.write();
+    await settle();
+    delay.elapse();
+    await vi.waitFor(() => expect(flushWal).toHaveBeenCalledTimes(3));
+    await settle();
+    expect(flushes()).toHaveLength(1);
   });
 
   it('runs an idle WAL copy that fell due during a WAL flush once the flush ends', async () => {
