@@ -55,6 +55,7 @@ import { type DocumentNode, Kind, parse } from 'graphql';
 import { match } from 'ts-pattern';
 import { mutationTraceParentOf } from '../../urql-solid/trace-parent-exchange';
 import { UNKNOWN_CACHE_GENERATION } from '../generation-mirror';
+import { CacheSettlementUnwrittenError } from '../host/errors';
 import type { CacheHost } from '../host/types';
 import type {
   ClaimedMutation,
@@ -1361,7 +1362,14 @@ export function createMutationQueueRunner(
         // Preserve optimism and let a fresh durable claim decide.
         disposition = 'queued';
         outcome = 'ack-lost';
-        details = { ...details, retryDelayMs: QUEUE_LEASE_MS };
+        details = {
+          ...details,
+          retryDelayMs: QUEUE_LEASE_MS,
+          // A retired host refused it: no engine of this page can write it.
+          ...(error instanceof CacheSettlementUnwrittenError
+            ? { errorCode: 'LOCAL_SETTLEMENT_UNWRITTEN' }
+            : {}),
+        };
       }
     } finally {
       if (transition(attempt, release)) {

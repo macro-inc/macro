@@ -10,6 +10,7 @@ import {
 import { getOperationAST, parse } from 'graphql';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { filter, makeSubject, mergeMap, pipe } from 'wonka';
+import { CacheSettlementUnwrittenError } from '../host/errors';
 import type { CacheHost } from '../host/types';
 import {
   type ClaimedMutation,
@@ -482,6 +483,25 @@ it('records how long a commit that failed took', async () => {
     [
       'ack-lost',
       { commitMs: expect.any(Number), retryDelayMs: expect.any(Number) },
+    ],
+  ]);
+});
+
+it('tells a settlement a retired host refused from other lost answers', async () => {
+  const { telemetry, attempts } = recordingTelemetry();
+  const { runner, forwarded, commit } = fixture({
+    mutationQueueTelemetry: telemetry,
+  });
+  commit.mockRejectedValueOnce(new CacheSettlementUnwrittenError());
+  await runner.admit(operation(), enqueue(operation(), '1'), runner.epoch());
+  await runner.settle(
+    { operation: forwarded[0], data: savedDraft, stale: false, hasNext: false },
+    queueAttemptOf(forwarded[0])!
+  );
+  expect(attempts[0]?.finished).toEqual([
+    [
+      'ack-lost',
+      expect.objectContaining({ errorCode: 'LOCAL_SETTLEMENT_UNWRITTEN' }),
     ],
   ]);
 });
