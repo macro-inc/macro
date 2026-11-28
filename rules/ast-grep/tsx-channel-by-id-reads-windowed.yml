@@ -21,9 +21,6 @@ files:
 ignores:
   - apps/web/src/lib/queries/channel/**
   - apps/web/src/features/channels-view/queries.ts
-  # The Chat cache harness's mount models main's rail data path, exact-set
-  # reads included, until it moves to useChannelWindow.
-  - apps/web/src/features/channels-view/cache-harness/**
   - '**/*.test.ts'
   - '**/*.test.tsx'
 utils:
