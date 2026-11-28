@@ -143,6 +143,21 @@ fn topic_events() -> Vec<(CallTopicEvent, Value)> {
             }),
         ),
         (
+            CallTopicEvent::ListViewersUpdated(CallListViewersUpdatedMetadata {
+                call_id: uuid(CALL_ID),
+                change: CallListChange::Updated,
+                viewers: vec![user_id("macro|viewer@example.com")],
+            }),
+            json!({
+                "event_type": "call.list_viewers_updated",
+                "metadata": {
+                    "call_id": CALL_ID,
+                    "change": "updated",
+                    "viewers": ["macro|viewer@example.com"],
+                },
+            }),
+        ),
+        (
             CallTopicEvent::RecordImported(CallRecordImportedMetadata {
                 call_id: uuid(CALL_ID),
                 owner: user_id("macro|owner@example.com"),
@@ -166,6 +181,9 @@ fn macro_events() -> Vec<CallMacroEvent> {
             CallTopicEvent::RecordArchived(metadata) => CallMacroEvent::record_archived(metadata),
             CallTopicEvent::RecordUpdated(metadata) => CallMacroEvent::record_updated(metadata),
             CallTopicEvent::RecordDeleted(metadata) => CallMacroEvent::record_deleted(metadata),
+            CallTopicEvent::ListViewersUpdated(metadata) => {
+                CallMacroEvent::list_viewers_updated(metadata)
+            }
             CallTopicEvent::RecordSummarized(metadata) => {
                 CallMacroEvent::record_summarized(metadata)
             }

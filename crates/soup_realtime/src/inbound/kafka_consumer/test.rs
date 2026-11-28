@@ -6,7 +6,10 @@ use std::collections::HashSet;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use call::domain::events::{CallRecordImportedMetadata, CallRecordSummarizedMetadata};
+use call::domain::events::{
+    CallListViewersUpdatedMetadata, CallRecordImportedMetadata, CallRecordSummarizedMetadata,
+    CallRecordingReadyMetadata,
+};
 use channels::domain::broker_events::{
     ChannelDeletedMetadata, ChannelParticipantRemovedMetadata, ChannelUpdatedMetadata,
 };
@@ -1282,7 +1285,7 @@ impl PullRequestSessions for NoPullRequestSessions {
 }
 
 #[test]
-fn imported_call_records_update_soup_and_native_call_events_are_ignored() {
+fn call_records_update_soup_and_recording_ready_does_not() {
     let call_id = Uuid::now_v7();
     let imported = CallTopicEvent::RecordImported(CallRecordImportedMetadata {
         call_id,
@@ -1300,4 +1303,40 @@ fn imported_call_records_update_soup_and_native_call_events_are_ignored() {
         ai_name_generated: false,
     });
     assert!(patches_from_call_event(&summarized).is_empty());
+
+    let recording = CallTopicEvent::RecordingReady(CallRecordingReadyMetadata {
+        call_id,
+        channel_id: None,
+    });
+    assert!(patches_from_call_event(&recording).is_empty());
+}
+
+#[test]
+fn attendance_and_deletion_use_explicit_call_viewers() {
+    let call_id = Uuid::now_v7();
+    let attendance = CallTopicEvent::ListViewersUpdated(CallListViewersUpdatedMetadata {
+        call_id,
+        change: CallListChange::Updated,
+        viewers: vec![user()],
+    });
+    assert_eq!(
+        patches_from_call_event(&attendance),
+        vec![SoupRealtimePatch::only_for(
+            Patch::Updated(entity(EntityType::Call, call_id)),
+            vec![user()]
+        ),]
+    );
+
+    let deleted = CallTopicEvent::ListViewersUpdated(CallListViewersUpdatedMetadata {
+        call_id,
+        change: CallListChange::Deleted,
+        viewers: vec![user()],
+    });
+    assert_eq!(
+        patches_from_call_event(&deleted),
+        vec![SoupRealtimePatch::only_for(
+            Patch::Deleted(entity(EntityType::Call, call_id)),
+            vec![user()]
+        ),]
+    );
 }

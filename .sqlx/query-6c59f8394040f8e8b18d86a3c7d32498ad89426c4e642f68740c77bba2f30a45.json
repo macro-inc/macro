@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT grant_row.entity_id AS \"entity_id!\",\n                   grant_row.source_type AS \"source_type!: EntityAccessSourceType\",\n                   grant_row.source_id AS \"source_id!\"\n            FROM unnest($1::uuid[]) AS requested(id)\n            CROSS JOIN LATERAL (\n                SELECT entity_id, source_type, source_id\n                FROM entity_access\n                WHERE entity_id = requested.id AND entity_type = $2\n                OFFSET 0\n            ) grant_row\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "source_type!: EntityAccessSourceType",
+        "type_info": {
+          "Custom": {
+            "name": "entity_access_source_type",
+            "kind": {
+              "Enum": [
+                "channel",
+                "team",
+                "user",
+                "bot"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "source_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "6c59f8394040f8e8b18d86a3c7d32498ad89426c4e642f68740c77bba2f30a45"
+}

@@ -17,7 +17,7 @@ use crate::domain::{
     ports::{PullRequestSessions, SoupRealtimeService},
     service::SoupRealtimeServiceImpl,
 };
-use call::domain::events::{CallMacroEvent, CallTopicEvent};
+use call::domain::events::{CallListChange, CallMacroEvent, CallTopicEvent};
 use channels::domain::{
     broker_events::{ChannelMacroEvent, ChannelTopicEvent},
     models::{ChannelType, ReferencedShareItemType},
@@ -437,20 +437,38 @@ fn patches_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimePatc
     }
 }
 
-/// Imported records reach Soup as soon as they are stored. Native call
-/// lifecycle events don't patch Soup yet.
+/// Refresh call rows that can enter or leave a viewer's lists.
 fn patches_from_call_event(event: &CallTopicEvent) -> Vec<SoupRealtimePatch> {
-    match event {
-        CallTopicEvent::RecordImported(metadata) => {
-            vec![update(EntityType::Call, metadata.call_id)]
+    let call_id = match event {
+        CallTopicEvent::RecordImported(metadata) => metadata.call_id,
+        CallTopicEvent::Started(metadata) => metadata.call_id,
+        CallTopicEvent::RecordArchived(metadata) => metadata.call_id,
+        CallTopicEvent::RecordUpdated(metadata) => metadata.call_id,
+        CallTopicEvent::ListViewersUpdated(metadata) => {
+            // Updates still hydrate through the viewer-scoped Soup loader.
+            let entity = entity(EntityType::Call, metadata.call_id);
+            let patch = match metadata.change {
+                CallListChange::Updated => Patch::Updated(entity),
+                CallListChange::Deleted => Patch::Deleted(entity),
+            };
+            return vec![SoupRealtimePatch::only_for(patch, metadata.viewers.clone())];
         }
-        CallTopicEvent::Started(_)
-        | CallTopicEvent::RecordArchived(_)
-        | CallTopicEvent::RecordUpdated(_)
-        | CallTopicEvent::RecordDeleted(_)
-        | CallTopicEvent::RecordSummarized(_)
-        | CallTopicEvent::RecordingReady(_) => Vec::new(),
-    }
+        CallTopicEvent::RecordDeleted(metadata) => {
+            // Older producers name only the actor. The separate audience event
+            // reaches viewers whose grants were removed by this deletion.
+            let Some(actor) = &metadata.actor_user_id else {
+                return Vec::new();
+            };
+            return vec![SoupRealtimePatch::only_for(
+                Patch::Deleted(entity(EntityType::Call, metadata.call_id)),
+                vec![actor.clone()],
+            )];
+        }
+        CallTopicEvent::RecordSummarized(_) | CallTopicEvent::RecordingReady(_) => {
+            return Vec::new();
+        }
+    };
+    vec![update(EntityType::Call, call_id)]
 }
 
 /// Message facts carry their parent. Channel messages are Soup items, so a

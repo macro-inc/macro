@@ -57,6 +57,11 @@ pub(super) fn describe_call_event(event: &CallTopicEvent) -> CallEventDescriptio
             call_id: metadata.call_id,
             event_type: "call.record_deleted",
         },
+        CallTopicEvent::ListViewersUpdated(metadata) => CallEventDescription {
+            action: CallIndexAction::Ignore,
+            call_id: metadata.call_id,
+            event_type: "call.list_viewers_updated",
+        },
         CallTopicEvent::RecordSummarized(metadata) => CallEventDescription {
             action: CallIndexAction::Upsert {
                 call_id: metadata.call_id,

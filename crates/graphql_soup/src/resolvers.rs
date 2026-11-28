@@ -67,7 +67,16 @@ where
                 let loader = loader.as_ref();
                 async move {
                     match patch {
-                        Patch::Updated(entity) => SoupPatch::hydrate_updated(user_id, entity, loader).await,
+                        Patch::Updated(entity) => {
+                            // A share edit also reaches prior call viewers. A successful
+                            // primary read without a visible row retires their cached copy.
+                            let missing_call = (entity.entity_type == EntityType::Call).then(|| entity.clone());
+                            let updated = SoupPatch::hydrate_updated(user_id, entity, loader).await?;
+                            match (updated, missing_call) {
+                                (None, Some(call)) => SoupPatch::deleted(call).map(Some),
+                                (updated, _) => Ok(updated),
+                            }
+                        }
                         Patch::Deleted(entity) => SoupPatch::deleted(entity).map(Some),
                     }
                 }

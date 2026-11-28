@@ -85,6 +85,9 @@ the entity-access domain service.
   (`get_channel_users`); `get_current_channel_users` reads one now, for a
   caller reacting to a membership change (`soup_realtime`).
   `tests/current_channel_users.rs` runs with that cache on.
+- Resolve Soup call viewers with `get_call_list_viewers`: direct grants for
+  standalone calls and direct, channel, and team grants for channel calls.
+  Call share edits and deletions read this audience before changing grants.
 - `get_user_source_ids` is cached for 10 s per process and concurrent misses
   for one user share one query through `single_flight`. A failure then arrives
   as `Arc<sqlx::Error>`; `anyhow_access_error` classifies both forms, so route

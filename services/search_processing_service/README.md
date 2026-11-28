@@ -140,6 +140,8 @@ The `macro.calls` lifecycle events map to search actions as follows:
 | `call.record_deleted` | Remove the individual call by `call_id` |
 | `call.started` | Ignore after decoding |
 | `call.recording_ready` | Ignore after decoding |
+| `call.record_imported` | Ignore after decoding |
+| `call.list_viewers_updated` | Ignore after decoding |
 
 Upserts read the current call state from Postgres and overwrite the indexed representation, making repeated delivery safe. Kafka events do not carry an index override; reindexing and backfill-specific options belong to the SQS path.
 

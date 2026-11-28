@@ -25,6 +25,9 @@ export function listCanIncludeCalls(body: unknown): boolean {
 }
 
 function updatesCall(patch: SoupPatch): boolean {
+  if (patch.__typename === 'GraphqlCacheDeletion') {
+    return patch.graphqlTypeName === 'GraphqlSoupCall';
+  }
   return (
     patch.__typename === 'SoupUpdated' &&
     patch.item.__typename === 'GraphqlSoupCall'
@@ -32,14 +35,15 @@ function updatesCall(patch: SoupPatch): boolean {
 }
 
 /**
- * Calls have no local Soup projection, so the normalized cache stores a call
- * from `soupUpdates` but cannot place an unseen one in any list. Mounted lists
- * that can contain calls refetch instead; the only call patches today come
- * from imports, so this stays rare.
+ * Keep unmaintained call lists current with the server's viewer-scoped patch.
+ * This also covers engines that predate the call partition.
  */
 export async function revalidateCallListsForSoupUpdates(
   patches: readonly SoupPatch[]
 ): Promise<void> {
   if (!patches.some(updatesCall)) return;
-  await refreshActiveGraphqlSoupQueries({ where: listCanIncludeCalls });
+  await refreshActiveGraphqlSoupQueries({
+    where: listCanIncludeCalls,
+    unmaintainedOnly: true,
+  });
 }

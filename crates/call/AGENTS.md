@@ -72,6 +72,9 @@ in-call chat.
 - A call id lives in exactly one of `calls`, `call_records`, or an imported
   `call_entities` row: archiving moves it in one transaction. The call list
   takes the first match per granted id, so never let two of them hold the same id.
+- Publish viewer-scoped attendance after a successful participant write. Share
+  edits and deletions capture the list audience before altering the grants
+  and publish it in batches of at most 500 viewers.
 - Declining a call on one device must stop ringing on every other device — this
   regressed once (#7092); route the decline through the shared call state, not
   a per-device signal.

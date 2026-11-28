@@ -760,9 +760,22 @@ async fn get_or_create_call_publishes_started_event() {
 
     assert_eq!(response.call_id, STARTED_EVENT_CALL_ID);
     let events = broker.events();
-    let [published] = events.as_slice() else {
-        panic!("expected exactly one call event")
+    let [published, attendance] = events.as_slice() else {
+        panic!("expected a start and an attendance event")
     };
+    assert_eq!(attendance.key, STARTED_EVENT_CALL_ID.to_string());
+    assert_eq!(
+        attendance.envelope["event_type"],
+        "call.list_viewers_updated"
+    );
+    assert_eq!(
+        attendance.envelope["metadata"],
+        json!({
+            "call_id": STARTED_EVENT_CALL_ID,
+            "change": "updated",
+            "viewers": ["macro|requester@example.com"],
+        })
+    );
     assert_eq!(published.topic, "macro.calls");
     assert_eq!(published.key, STARTED_EVENT_CALL_ID.to_string());
     assert!(!published.key.starts_with("call|"));
@@ -791,7 +804,7 @@ async fn get_or_create_call_publishes_started_event() {
             },
         })
     );
-    // The joining creator also produces call.answered for their own devices.
+    // The requester also produces call.answered for their own devices.
     let notifications = broker.notifications();
     let started: Vec<_> = notifications
         .iter()
@@ -818,7 +831,14 @@ async fn get_or_create_call_race_loser_does_not_publish_started_event() {
     .expect("race loser joins the winning call");
 
     assert!(!response.started);
-    assert!(broker.events().is_empty());
+    let events = broker.events();
+    let [attendance] = events.as_slice() else {
+        panic!("expected only an attendance event")
+    };
+    assert_eq!(
+        attendance.envelope["event_type"],
+        "call.list_viewers_updated"
+    );
 }
 
 #[tokio::test]
@@ -835,7 +855,14 @@ async fn get_or_create_call_existing_call_does_not_publish_started_event() {
     .expect("existing call can be joined");
 
     assert!(!response.started);
-    assert!(broker.events().is_empty());
+    let events = broker.events();
+    let [attendance] = events.as_slice() else {
+        panic!("expected only an attendance event")
+    };
+    assert_eq!(
+        attendance.envelope["event_type"],
+        "call.list_viewers_updated"
+    );
 }
 
 #[tokio::test]
@@ -869,7 +896,14 @@ async fn malformed_stored_creator_skips_only_started_event() {
     .expect("malformed stored creator does not fail call creation");
 
     assert_eq!(response.call_id, STARTED_EVENT_CALL_ID);
-    assert!(broker.events().is_empty());
+    let events = broker.events();
+    let [attendance] = events.as_slice() else {
+        panic!("expected only an attendance event")
+    };
+    assert_eq!(
+        attendance.envelope["event_type"],
+        "call.list_viewers_updated"
+    );
 }
 
 #[tokio::test]
