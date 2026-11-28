@@ -28,7 +28,8 @@ The lifecycle icon shows open, draft, merged, or closed. The header's top fade
 also reflects requested changes and failing checks, without replacing the
 lifecycle icon. The title wraps rather than truncates. Its checks icon summarizes
 stored check runs; activating it opens a checks-only dialog with a wider surface,
-24px padding and section spacing, and larger padded rows. Phones retain a drawer.
+24px outer padding and section spacing, and 36px desktop rows (44px on touch).
+Its header stays fixed while only the list scrolls. Phones retain a drawer.
 
 The pills show the author, opened date when known, a GitHub link, branch names,
 linked tasks, and GitHub labels. The GitHub link retains its number and external
@@ -47,7 +48,10 @@ opens Details in a drawer. The drawer reuses the same checks, reviewer, stack,
 label, and linked-work lists with touch-size rows. Missing sections stay hidden.
 
 Above 1440px of PR-pane width, the header and content use a centered 1376px
-container with side hairlines beneath the band. All breakpoints use the PR pane,
+container with side hairlines beneath the band. The band's one fade spans the
+full PR pane behind the title, pills, and transparent tabs. The normal top bar
+never carries the tint. Only the scrolled status strip adds its own fill, fade,
+and bottom border. All breakpoints use the PR pane,
 not the browser window, so split panes and the app sidebar remain supported.
 
 ## Overview
@@ -102,7 +106,8 @@ It switches at the measured title/pill boundary (typically about 86px), not on
 scroll direction. Details and the file tree always start below the strip.
 Under the persistent top bar, the strip sticks at 0px, the Changes toolbar and
 tree header at 48px, and file headers at 96px. Narrow desktop panes retain the
-strip; at 400px, tabs and Merge use their existing icon variants. Phones keep
+strip; below 600px, tabs and Merge use their existing icon variants before
+labels can clip. At 400px the existing toolbar menu rules also apply. Phones keep
 their islands and pinned touch tabs without a status strip. Each tab restores
 its own page scroll position, and phone diff content clears the bottom island.
 

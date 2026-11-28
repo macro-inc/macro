@@ -45,8 +45,11 @@ export function PrListRow(props: {
 }) {
   return (
     <div
-      class={cn('flex min-w-0 items-center gap-2 text-sm', props.class)}
-      style={{ 'min-height': `${prRowHeight(props.density ?? 'compact')}px` }}
+      class={cn(
+        'flex min-w-0 items-center gap-2 text-sm',
+        props.density === 'touch' ? 'min-h-11' : 'min-h-[30px]',
+        props.class
+      )}
     >
       {props.children}
     </div>
@@ -126,7 +129,10 @@ export function PrChecksList(props: {
           return (
             <PrListRow
               density={props.density}
-              class={props.spacious ? 'gap-3 px-3 py-4 touch:py-2' : undefined}
+              class={cn(
+                'rounded-md not-touch:hover:bg-hover has-focus-visible:bg-hover focus-visible:bg-hover',
+                props.spacious && 'min-h-9 gap-3 px-3 touch:min-h-11'
+              )}
             >
               <CheckStateIcon state={state()} circle size="md" />
               <span class="min-w-0 flex-1 truncate">{check.name}</span>
@@ -197,16 +203,17 @@ export function PrChecksDialog(props: {
       open={props.open}
       onOpenChange={props.onOpenChange}
       position="center"
+      layout="flex"
       animate
-      class="w-160 max-h-[80dvh] overflow-y-auto rounded-xl"
+      class="flex w-160 max-h-[80dvh] min-h-0 flex-col overflow-hidden rounded-xl"
       onCloseAutoFocus={(event) => {
         if (!props.returnFocus?.isConnected) return;
         event.preventDefault();
         props.returnFocus.focus({ preventScroll: true });
       }}
     >
-      <div class="flex flex-col gap-6 p-6">
-        <div class="flex items-center justify-between gap-3">
+      <div class="flex min-h-0 flex-1 flex-col gap-6 overflow-hidden p-6">
+        <div class="flex shrink-0 items-center justify-between gap-3">
           <Dialog.Title class="text-base font-medium">
             {t('prPage.checks')}
           </Dialog.Title>
@@ -219,7 +226,9 @@ export function PrChecksDialog(props: {
             <X class="size-4" />
           </Dialog.CloseButton>
         </div>
-        <PrChecksList page={props.page} density="touch" spacious />
+        <div class="min-h-0 flex-1 overflow-y-auto">
+          <PrChecksList page={props.page} spacious />
+        </div>
       </div>
     </Dialog>
   );

@@ -44,7 +44,8 @@ for reference; the routed page uses the redesigned composition.
 - Keep the normal top bar visible; use option C's full-width status strip after the measured title/pill boundary, never directional hide/reveal.
 - Use one page scroller and background for Overview and Changes; keep toolbars, file headers, and the tree sticky against it.
 - Size title/actions with real DOM flex wrappers; desktop HeaderIsland returns a fragment and drops layout classes.
-- Keep the checks-only dialog spacious without changing compact Details list density.
+- Keep checks-dialog rows 36px on desktop and 44px on touch, with a pinned header and only the list scrolling.
+- Keep one full-width band fade behind transparent title/pills/tabs; give only the scrolled strip its own fill, fade, and border.
 - Preserve GitHub Markdown normalization, image handling, thread grouping,
   notification reads, sharing, and existing action confirmations.
 
