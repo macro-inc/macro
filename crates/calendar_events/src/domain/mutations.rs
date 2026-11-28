@@ -20,6 +20,7 @@ use chrono::Utc;
 use uuid::Uuid;
 
 use super::{
+    calendar_color::{CalendarColor, CalendarColorWrite},
     models::{
         ActorInboxes, AttendeeResponseStatus, CalendarAttendee, CalendarAttendeeInput,
         CalendarCreationTarget, CalendarEvent, CalendarEventDraft, CalendarEventMutationTarget,
@@ -578,6 +579,40 @@ where
             .list_visible_calendars(requester_id)
             .await
             .map_err(internal)
+    }
+
+    #[tracing::instrument(
+        name = "calendar.set_color",
+        skip(self, requester_id, color),
+        fields(cleared = color.is_none(), changed = tracing::field::Empty),
+        err
+    )]
+    async fn set_calendar_color(
+        &self,
+        requester_id: &str,
+        calendar_id: Uuid,
+        color: Option<CalendarColor>,
+    ) -> Result<(), CalendarMutationError> {
+        let write = self
+            .repository
+            .set_calendar_color(requester_id, calendar_id, color.as_ref())
+            .await
+            .map_err(internal)?;
+        let email_link_id = match write {
+            CalendarColorWrite::NotVisible => return Err(CalendarMutationError::NotFound),
+            CalendarColorWrite::Unchanged => {
+                tracing::Span::current().record("changed", false);
+                return Ok(());
+            }
+            CalendarColorWrite::Changed { email_link_id } => email_link_id,
+        };
+        tracing::Span::current().record("changed", true);
+        // Every viewer of the inbox rereads the calendar with their own
+        // color, so the nudge also reaches the requester's other devices.
+        self.refresh
+            .calendar_changed(requester_id, email_link_id, false)
+            .await;
+        Ok(())
     }
 
     #[tracing::instrument(skip(self, requester_id), err)]

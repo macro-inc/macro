@@ -23,6 +23,7 @@ import type {
 import type { AvailabilityCalendarBody } from '@service-calendar/generated/schemas/availabilityCalendarBody';
 import type { AvailabilityCalendarsResponse } from '@service-calendar/generated/schemas/availabilityCalendarsResponse';
 import { CalendarMutationErrorCode } from '@service-calendar/generated/schemas/calendarMutationErrorCode';
+import type { SetCalendarColorBody } from '@service-calendar/generated/schemas/setCalendarColorBody';
 import type { TeamCalendarSharingBody } from '@service-calendar/generated/schemas/teamCalendarSharingBody';
 import type { Result } from 'neverthrow';
 import type {
@@ -867,6 +868,17 @@ export const emailClient = {
     return fetchWithToken<ListCalendarsResponse>(`${calendarHost}/calendars`, {
       method: 'GET',
     });
+  },
+
+  async setCalendarColor(calendarId: string, body: SetCalendarColorBody) {
+    return fetchWithToken<EmptyResponse, CalendarMutationErrorCode>(
+      `${calendarHost}/calendars/${encodeURIComponent(calendarId)}/color`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(body),
+        errorResponseHandler: calendarMutationErrorHandler,
+      }
+    );
   },
 
   async getTeamCalendarSharing(signal?: AbortSignal) {

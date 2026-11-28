@@ -196,6 +196,7 @@ fn calendar(id: Uuid, link_id: Uuid) -> VisibleCalendar {
         email_address: "viewer@example.com".to_owned(),
         name: "Work".to_owned(),
         color: None,
+        custom_color: None,
         is_primary: true,
         is_writable: true,
         is_subscription: false,

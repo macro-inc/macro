@@ -257,10 +257,12 @@ export function Page(props: {
   const [dayDraft, setDayDraft] = createSignal<DayDraftRangeBinding>();
   let requestDayDraftClose: (() => void) | undefined;
   onCleanup(() => dayDraft()?.dispose());
-  const effectiveSelectionColor = () =>
-    selectionColor() ??
-    firstWritableCalendar()?.color ??
+  // The calendar's color as every surface shows it: the person's own first.
+  const calendarColor = (calendarId: string | undefined) =>
+    (calendarId && calendarView.sourceById().get(calendarId)?.color) ||
     DEFAULT_CALENDAR_SOURCE.color;
+  const effectiveSelectionColor = () =>
+    selectionColor() ?? calendarColor(firstWritableCalendar()?.id);
   const isActive = () => pager.isActive(props.id);
   const useNarrowWeekdayHeaders = () =>
     !isMobile() && props.useNarrowDayHeaders;
@@ -322,7 +324,7 @@ export function Page(props: {
             hours: Math.max(0, range.start.getHours() - 3),
           });
       });
-      setSelectionColor(calendar?.color ?? DEFAULT_CALENDAR_SOURCE.color);
+      setSelectionColor(calendarColor(calendar?.id));
       const handle = openEventComposer({
         initialDrawerHeight: 42,
         dayDraftRange: draft,
@@ -358,7 +360,7 @@ export function Page(props: {
     }
     const calendar = firstWritableCalendar();
     const gridElement = pager.activePage()?.element();
-    setSelectionColor(calendar?.color ?? DEFAULT_CALENDAR_SOURCE.color);
+    setSelectionColor(calendarColor(calendar?.id));
     openEventComposer({
       anchorRect: () => {
         if (!isActive() || !gridElement?.isConnected) return undefined;

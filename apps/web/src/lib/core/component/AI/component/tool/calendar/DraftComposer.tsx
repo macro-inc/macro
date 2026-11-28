@@ -16,6 +16,7 @@ import {
 import { eventGuestOptions } from '@app/features/calendar/components/composer/guest-options';
 import { ComposerRoot } from '@app/features/calendar/components/composer/parts/ComposerRoot';
 import type { ComposerMetadataChanges } from '@app/features/calendar/core/composer-metadata';
+import { useCalendarSources } from '@app/features/calendar/hooks/use-calendar-sources';
 import { useCalendarGuestInvitesFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { createAgentComposer } from '@app/features/calendar/primitives/create-agent-composer';
 import { DEFAULT_CALENDAR_SOURCE } from '@app/features/calendar/types';
@@ -112,6 +113,7 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
   const [preferences] = useCalendarPreferences();
   const resolveAppLink = useMacroMentionLinkResolver();
   const calendarsQuery = useVisibleCalendarsQuery();
+  const { sourceById } = useCalendarSources();
   const linksQuery = useEmailLinksQuery();
   const userId = useUserId();
   const startAddInbox = useAddInboxFlow();
@@ -169,7 +171,8 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
       provider: calendar.provider,
       capabilities: calendar.capabilities,
       label: calendarDisplayLabel(calendar, calendarsSpanInboxes()),
-      color: calendar.color ?? DEFAULT_CALENDAR_SOURCE.color,
+      color:
+        sourceById().get(calendar.id)?.color ?? DEFAULT_CALENDAR_SOURCE.color,
       defaultReminders: calendar.defaultReminders,
       isPrimary: calendar.isPrimary,
     }))

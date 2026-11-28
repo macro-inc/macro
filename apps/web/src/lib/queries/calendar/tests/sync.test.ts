@@ -1,6 +1,10 @@
 import { previewKeys } from '@queries/preview/keys';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { calendarKeys } from '../keys';
+import {
+  CALENDAR_COLOR_MUTATION_KEY,
+  calendarKeys,
+  RSVP_MUTATION_KEY,
+} from '../keys';
 import { handleRefreshCalendar } from '../sync';
 
 const invalidateQueriesMock = vi.hoisted(() => vi.fn());
@@ -73,7 +77,10 @@ describe('handleRefreshCalendar', () => {
   });
 
   it('defers the occurrence refetch while an RSVP is in flight', () => {
-    isMutatingMock.mockReturnValue(1);
+    isMutatingMock.mockImplementation(
+      ({ mutationKey }: { mutationKey: readonly string[] }) =>
+        mutationKey === RSVP_MUTATION_KEY ? 1 : 0
+    );
 
     handleRefreshCalendar({
       event: 'synced',
@@ -85,6 +92,23 @@ describe('handleRefreshCalendar', () => {
       queryKey: calendarKeys.invitations._def,
     });
     expect(invalidateQueriesMock).toHaveBeenCalledWith({
+      queryKey: calendarKeys.visibleCalendars._def,
+    });
+  });
+
+  it('leaves the calendar list to a color save in flight, which rereads it once it settles', () => {
+    isMutatingMock.mockImplementation(
+      ({ mutationKey }: { mutationKey: readonly string[] }) =>
+        mutationKey === CALENDAR_COLOR_MUTATION_KEY ? 1 : 0
+    );
+
+    handleRefreshCalendar({
+      event: 'synced',
+      link_id: '019fdd65-dcc1-74fb-a9c6-8162c11c5854',
+    });
+
+    expect(invalidateCalendarOccurrencesMock).toHaveBeenCalledTimes(1);
+    expect(invalidateQueriesMock).not.toHaveBeenCalledWith({
       queryKey: calendarKeys.visibleCalendars._def,
     });
   });

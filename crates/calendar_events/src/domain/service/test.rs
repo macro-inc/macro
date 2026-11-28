@@ -261,6 +261,15 @@ impl CalendarRepository for FakeRepo {
         Ok(Vec::new())
     }
 
+    async fn set_calendar_color(
+        &self,
+        _requester_id: &str,
+        _calendar_id: Uuid,
+        _color: Option<&crate::domain::calendar_color::CalendarColor>,
+    ) -> Result<crate::domain::calendar_color::CalendarColorWrite, rootcause::Report> {
+        unreachable!("calendar colors are not exercised here")
+    }
+
     async fn primary_time_zone(&self, _requester_id: &str) -> Result<Option<String>, Report> {
         Ok(None)
     }

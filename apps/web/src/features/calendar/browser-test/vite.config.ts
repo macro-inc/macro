@@ -53,9 +53,6 @@ const EMPTY_COMPONENTS: Record<string, string[]> = {
   [source('features/calendar/components/CalendarSettingsDropdown.tsx')]: [
     'CalendarSettingsDropdown',
   ],
-  [source('features/calendar/components/SourceControls.tsx')]: [
-    'SourceControls',
-  ],
   [source('features/routine-suggestions/routine-suggestions.tsx')]: [
     'SidebarRoutineSuggestions',
   ],
@@ -111,6 +108,7 @@ export default defineConfig({
       'composer.html',
       'grid.html',
       'tool-preview.html',
+      'colors.html',
     ],
     esbuildOptions: { target: 'esnext' },
   },

@@ -1,4 +1,5 @@
 //! PostgreSQL implementation of the calendar repository port.
+mod calendar_color;
 mod change_log;
 mod changes;
 mod details;
@@ -314,6 +315,7 @@ struct VisibleCalendarRow {
     email_address: String,
     name: String,
     color: Option<String>,
+    custom_color: Option<String>,
     is_primary: bool,
     access_role: Option<String>,
     provider_calendar_id: String,
@@ -349,6 +351,7 @@ fn visible_calendar(row: VisibleCalendarRow) -> VisibleCalendar {
         email_address: row.email_address,
         name: row.name,
         color: row.color,
+        custom_color: row.custom_color,
         is_primary: row.is_primary,
         is_writable: matches!(row.access_role.as_deref(), Some("owner" | "writer")),
         is_subscription: if outlook {
@@ -2694,6 +2697,7 @@ impl CalendarRepository for PgCalendarRepository {
                 link.email_address,
                 calendar.name,
                 calendar.color,
+                color_preference.color AS "custom_color?",
                 calendar.is_primary,
                 calendar.access_role,
                 calendar.provider_calendar_id,
@@ -2709,6 +2713,8 @@ impl CalendarRepository for PgCalendarRepository {
             JOIN calendars calendar ON calendar.account_id = account.id
             LEFT JOIN calendar_availability_preferences preference
                 ON preference.calendar_id = calendar.id AND preference.user_id = $1
+            LEFT JOIN calendar_color_preferences color_preference
+                ON color_preference.calendar_id = calendar.id AND color_preference.user_id = $1
             WHERE NOT calendar.is_deleted
               AND account.sync_status <> 'disabled'
               AND (
@@ -2734,6 +2740,17 @@ impl CalendarRepository for PgCalendarRepository {
         .await
         .map_err(report)?;
         Ok(rows.into_iter().map(visible_calendar).collect())
+    }
+
+    #[tracing::instrument(skip(self, requester_id, color), err)]
+    async fn set_calendar_color(
+        &self,
+        requester_id: &str,
+        calendar_id: Uuid,
+        color: Option<&crate::domain::calendar_color::CalendarColor>,
+    ) -> Result<crate::domain::calendar_color::CalendarColorWrite, Report> {
+        self.write_calendar_color(requester_id, calendar_id, color)
+            .await
     }
 
     #[tracing::instrument(skip(self, event_ids), fields(event_count = event_ids.len()), err)]

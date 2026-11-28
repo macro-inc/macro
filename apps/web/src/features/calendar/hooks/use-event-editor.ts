@@ -60,6 +60,7 @@ import {
   calendarMacroCallUrl,
   removeCalendarMacroCall,
 } from '../utils/macro-call-link';
+import { useCalendarSources } from './use-calendar-sources';
 
 const EDIT_DISABLED_FIELDS = {
   calendar: true,
@@ -193,6 +194,7 @@ export function useEventEditor(props: UseEventEditorProps) {
   // Event edits also need calendar metadata to resolve reminders that still
   // follow the calendar defaults.
   const calendarsQuery = useVisibleCalendarsQuery();
+  const { sourceById } = useCalendarSources();
   const guestOptions = createMemo(() =>
     eventGuestOptions(
       (props.event()?.attendees ?? []).map((guest) => ({
@@ -226,7 +228,9 @@ export function useEventEditor(props: UseEventEditorProps) {
           label: event.calendar.name || 'Calendar',
           name: event.calendar.name,
           accountLabel: calendar?.emailAddress,
-          color: event.calendar.color,
+          // The composer shows this swatch: use the color every other surface
+          // shows, whichever copy of the event was opened.
+          color: sourceById().get(calendarId)?.color ?? event.calendar.color,
           defaultReminders: reminderCalendar?.defaultReminders,
           isPrimary: calendar?.isPrimary ?? event.calendar.isPrimary,
         },
@@ -240,7 +244,8 @@ export function useEventEditor(props: UseEventEditorProps) {
       label: calendarDisplayLabel(calendar, spansInboxes()),
       name: calendar.name,
       accountLabel: calendar.emailAddress,
-      color: calendar.color ?? DEFAULT_CALENDAR_SOURCE.color,
+      color:
+        sourceById().get(calendar.id)?.color ?? DEFAULT_CALENDAR_SOURCE.color,
       defaultReminders: calendar.defaultReminders,
       isPrimary: calendar.isPrimary,
     }));

@@ -103,6 +103,7 @@ impl CalendarOccurrenceService for RecordingCalendarReads {
             email_address: "user@example.com".to_owned(),
             name: "Work".to_owned(),
             color: None,
+            custom_color: None,
             is_primary: true,
             is_writable: true,
             is_subscription: false,
@@ -175,6 +176,14 @@ impl CalendarChangeQueryService for RecordingCalendarReads {
         _event_id: Uuid,
     ) -> Result<Option<calendar_events::domain::changes::CalendarEventChange>, Report> {
         Ok(None)
+    }
+
+    async fn calendar(
+        &self,
+        _viewer: &str,
+        _calendar_id: Uuid,
+    ) -> Result<Option<VisibleCalendar>, Report> {
+        unreachable!("calendar colors are not exercised here")
     }
 }
 
@@ -264,6 +273,15 @@ impl calendar_events::domain::ports::CalendarMutationService for RecordingCalend
         _requester_id: &str,
     ) -> Result<Vec<VisibleCalendar>, calendar_events::domain::ports::CalendarMutationError> {
         unreachable!("only deletion is exercised")
+    }
+
+    async fn set_calendar_color(
+        &self,
+        _requester_id: &str,
+        _calendar_id: Uuid,
+        _color: Option<calendar_events::domain::calendar_color::CalendarColor>,
+    ) -> Result<(), calendar_events::domain::ports::CalendarMutationError> {
+        unreachable!("calendar colors are not exercised here")
     }
 
     async fn update_event(

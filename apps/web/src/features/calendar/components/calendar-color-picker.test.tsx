@@ -42,10 +42,13 @@ it('previews swatches, validates hex input, and preserves the selected hue throu
     fireEvent.keyDown(field, { key: 'ArrowUp', shiftKey: true });
     fireEvent.keyDown(field, { key: 'ArrowRight', shiftKey: true });
   }
+  expect(saved).toBe('#000000');
+  fireEvent.keyUp(field, { key: 'ArrowRight' });
   expect(saved).toBe('#0000ff');
   expect(input.getAttribute('aria-invalid')).toBe('false');
   const hue = screen.getByRole('slider', { name: 'Hue' });
   fireEvent.focus(hue);
   fireEvent.keyDown(hue, { key: 'Home' });
+  fireEvent.keyUp(hue, { key: 'Home' });
   expect(saved).toBe('#ff0000');
 });

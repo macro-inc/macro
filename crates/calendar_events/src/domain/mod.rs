@@ -4,6 +4,8 @@ pub mod invitations;
 
 /// The clicker's owned inboxes.
 pub mod acting;
+/// A person's own color for a calendar.
+pub mod calendar_color;
 /// What a viewer may do with an event, following Google's guest permissions.
 pub mod capabilities;
 /// The per-email-link calendar change log.

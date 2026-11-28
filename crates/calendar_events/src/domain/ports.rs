@@ -8,6 +8,7 @@ use futures::future::BoxFuture;
 use rootcause::Report;
 use uuid::Uuid;
 
+use super::calendar_color::{CalendarColor, CalendarColorWrite};
 use super::copies::{CopyChange, CopyRefusal};
 use super::ics::{
     CalendarEventExport, CalendarEventForward, CalendarEventIcs, EventSnapshot, ForwardedCopy,
@@ -954,6 +955,16 @@ pub trait CalendarRepository: Send + Sync + 'static {
         requester_id: &str,
     ) -> impl Future<Output = Result<Vec<VisibleCalendar>, Report>> + Send;
 
+    /// Store the requester's own color for a calendar they can see, or
+    /// clear it with `None`, and log the calendar's change for its inbox's
+    /// viewers in the same transaction.
+    fn set_calendar_color(
+        &self,
+        requester_id: &str,
+        calendar_id: Uuid,
+        color: Option<&CalendarColor>,
+    ) -> impl Future<Output = Result<CalendarColorWrite, Report>> + Send;
+
     /// The IANA time zone of the requester's primary calendar, resolved the
     /// same way [`get_creation_target`](Self::get_creation_target) picks its
     /// default target.
@@ -1103,6 +1114,17 @@ pub trait CalendarMutationService: Send + Sync + 'static {
         &self,
         requester_id: &str,
     ) -> impl Future<Output = Result<Vec<VisibleCalendar>, CalendarMutationError>> + Send;
+
+    /// Set the requester's own color for a calendar they can see, or go back
+    /// to the provider's with `None`. Macro keeps it; the provider never
+    /// sees it. [`CalendarMutationError::NotFound`] when the calendar is not
+    /// one of theirs.
+    fn set_calendar_color(
+        &self,
+        requester_id: &str,
+        calendar_id: Uuid,
+        color: Option<CalendarColor>,
+    ) -> impl Future<Output = Result<(), CalendarMutationError>> + Send;
 
     /// Patch an event at its provider — the whole event or series, or one
     /// occurrence of a recurring series — and persist the echo. `calendar_id`
@@ -1297,7 +1319,8 @@ impl MeetingLinkProvider for UnavailableMeetingLinks {
 /// Use-case failures surfaced by calendar mutations.
 #[derive(Debug, thiserror::Error)]
 pub enum CalendarMutationError {
-    /// The event does not exist or is not visible to the requester.
+    /// The event, or the calendar, does not exist or is not visible to the
+    /// requester.
     #[error("calendar event was not found")]
     NotFound,
     /// The targeted occurrence does not exist on the recurring event at the

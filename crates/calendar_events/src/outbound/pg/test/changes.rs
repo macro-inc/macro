@@ -50,7 +50,7 @@ pub(super) async fn counter(pool: &PgPool, link_id: Uuid) -> i64 {
     .unwrap_or(0)
 }
 
-fn primary_calendar(provider_calendar_id: &str, name: &str) -> ProviderCalendar {
+pub(super) fn primary_calendar(provider_calendar_id: &str, name: &str) -> ProviderCalendar {
     ProviderCalendar {
         provider_calendar_id: provider_calendar_id.to_string(),
         name: name.to_string(),
@@ -66,7 +66,7 @@ fn primary_calendar(provider_calendar_id: &str, name: &str) -> ProviderCalendar 
 
 /// A claimed Google job for `link_id`, the precondition for every fenced
 /// provider write.
-async fn claimed_job(
+pub(super) async fn claimed_job(
     repo: &PgCalendarRepository,
     link_id: Uuid,
 ) -> (CalendarBackfillJobKey, Uuid, Uuid) {

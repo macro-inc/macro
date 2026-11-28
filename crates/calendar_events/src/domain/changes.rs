@@ -251,6 +251,14 @@ pub trait CalendarChangeQueryService: Send + Sync + 'static {
         viewer: &str,
         event_id: Uuid,
     ) -> impl Future<Output = Result<Option<CalendarEventChange>, Report>> + Send;
+
+    /// The current state of one calendar, as the viewer sees it, or `None`
+    /// when it is not one of theirs.
+    fn calendar(
+        &self,
+        viewer: &str,
+        calendar_id: Uuid,
+    ) -> impl Future<Output = Result<Option<VisibleCalendar>, Report>> + Send;
 }
 
 /// Change-log reads with the delta policy applied.
@@ -379,6 +387,20 @@ impl<R: CalendarChangeRepository> CalendarChangeService<R> {
         }
         Ok(Some(change))
     }
+
+    /// The current state of one calendar, as the viewer sees it.
+    #[tracing::instrument(skip(self, viewer), err)]
+    pub async fn calendar(
+        &self,
+        viewer: &str,
+        calendar_id: Uuid,
+    ) -> Result<Option<VisibleCalendar>, Report> {
+        Ok(self
+            .repository
+            .list_calendars_by_ids(viewer, &[calendar_id])
+            .await?
+            .pop())
+    }
 }
 
 fn mark_viewer(viewer: &ActorInboxes, change: &mut CalendarEventChange) {
@@ -412,6 +434,14 @@ impl<R: CalendarChangeRepository> CalendarChangeQueryService for CalendarChangeS
         event_id: Uuid,
     ) -> impl Future<Output = Result<Option<CalendarEventChange>, Report>> + Send {
         CalendarChangeService::event_change(self, viewer, event_id)
+    }
+
+    fn calendar(
+        &self,
+        viewer: &str,
+        calendar_id: Uuid,
+    ) -> impl Future<Output = Result<Option<VisibleCalendar>, Report>> + Send {
+        CalendarChangeService::calendar(self, viewer, calendar_id)
     }
 }
 

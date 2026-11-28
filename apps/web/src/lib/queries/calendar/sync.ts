@@ -1,10 +1,27 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { queryClient } from '@queries/client';
 import { invalidateCalendarInvitations } from './invitations';
-import { calendarKeys, RSVP_MUTATION_KEY } from './keys';
+import {
+  CALENDAR_COLOR_MUTATION_KEY,
+  calendarKeys,
+  RSVP_MUTATION_KEY,
+} from './keys';
 import { invalidateCalendarEventPreviews } from './mention-preview';
 import { invalidateCalendarOccurrences } from './occurrences';
 import { refreshTeamCalendarQueries } from './team-cache';
+
+/**
+ * A color save's own nudge arrives while it settles, and the last save to
+ * settle rereads the list itself, so a refetch never brings the old color
+ * back meanwhile.
+ */
+function invalidateCalendarList(): void {
+  if (queryClient.isMutating({ mutationKey: CALENDAR_COLOR_MUTATION_KEY }) > 0)
+    return;
+  queryClient.invalidateQueries({
+    queryKey: calendarKeys.visibleCalendars._def,
+  });
+}
 
 /**
  * Refetches everything the calendar UI reads: every mounted occurrence
@@ -17,9 +34,7 @@ export function invalidateCalendarViews(): void {
   fireAndForget(invalidateCalendarInvitations(), 'calendar-sync');
   fireAndForget(invalidateCalendarOccurrences(), 'calendar-sync');
   invalidateCalendarEventPreviews();
-  queryClient.invalidateQueries({
-    queryKey: calendarKeys.visibleCalendars._def,
-  });
+  invalidateCalendarList();
   queryClient.invalidateQueries({ queryKey: calendarKeys.firstSync._def });
   queryClient.invalidateQueries({
     queryKey: calendarKeys.joinRequests._def,
@@ -79,9 +94,7 @@ export function handleRefreshCalendar(payload: unknown): void {
     fireAndForget(invalidateCalendarOccurrences(), 'calendar-sync');
   }
   invalidateCalendarEventPreviews();
-  queryClient.invalidateQueries({
-    queryKey: calendarKeys.visibleCalendars._def,
-  });
+  invalidateCalendarList();
   queryClient.invalidateQueries({ queryKey: calendarKeys.firstSync._def });
   queryClient.invalidateQueries({
     queryKey: calendarKeys.joinRequests._def,

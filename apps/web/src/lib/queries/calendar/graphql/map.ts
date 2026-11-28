@@ -199,6 +199,7 @@ export function mapVisibleCalendar(
     },
     name: calendar.name,
     color: calendar.color,
+    customColor: calendar.customColor,
     isPrimary: calendar.isPrimary,
     isWritable: calendar.isWritable,
     isSubscription: calendar.isSubscription,

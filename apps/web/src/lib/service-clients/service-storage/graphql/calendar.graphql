@@ -139,6 +139,7 @@ fragment CalendarFields on GraphqlCalendar {
 	}
 	name
 	color
+	customColor
 	isPrimary
 	isWritable
 	isSubscription
@@ -244,6 +245,12 @@ mutation DeleteCalendarEvent($input: DeleteCalendarEventInput!) {
 mutation RespondToCalendarEvent($input: RespondToCalendarEventInput!) {
 	respondToCalendarEvent(input: $input) {
 		...CalendarMutationPayloadFields
+	}
+}
+
+mutation SetCalendarColor($input: SetCalendarColorInput!) {
+	setCalendarColor(input: $input) {
+		...CalendarFields
 	}
 }
 

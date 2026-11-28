@@ -88,6 +88,7 @@ const calendar: CalendarFieldsFragment = {
   emailAddress: 'me@example.com',
   name: 'Work',
   color: '#ff0000',
+  customColor: null,
   isPrimary: true,
   isWritable: true,
   isSubscription: false,

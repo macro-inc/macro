@@ -19,6 +19,7 @@ fn calendar(id: Uuid, name: &str, on_schedule: bool) -> VisibleCalendar {
         email_address: INBOX.to_string(),
         name: name.to_string(),
         color: None,
+        custom_color: None,
         is_primary: id == OWN,
         is_writable: id != HOLIDAYS,
         is_subscription: false,

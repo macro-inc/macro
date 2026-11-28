@@ -29,6 +29,23 @@ export class Calendar extends MacroEntity<VisibleCalendar> {
     );
   }
 
+  /**
+   * Set the caller's own color for this calendar as `#rrggbb`, or pass
+   * `undefined` to show the provider's color again. Only Macro shows it; the
+   * provider keeps its own.
+   *
+   * @write
+   * @idempotent
+   */
+  async setColor(color: string | undefined): Promise<void> {
+    await this.mutate((c) =>
+      c.calendar.setCalendarColor({
+        path: { calendar_id: this.id },
+        body: { color: color ?? null },
+      }),
+    );
+  }
+
   protected async fetch(): Promise<VisibleCalendar> {
     const { calendars } = unwrap(await this.client.calendar.listCalendars());
     const found = calendars.find((calendar) => calendar.id === this.id);

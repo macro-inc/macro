@@ -50,6 +50,7 @@ enum Call {
         Vec<CalendarAttendeeInput>,
         CalendarUpdateScope,
     ),
+    SetColor(Uuid, Option<String>),
 }
 
 #[derive(Default)]
@@ -90,6 +91,18 @@ impl CalendarMutationService for FakeMutations {
         _requester_id: &str,
     ) -> Result<Vec<VisibleCalendar>, CalendarMutationError> {
         unreachable!("calendars are read through the query fields")
+    }
+
+    async fn set_calendar_color(
+        &self,
+        requester_id: &str,
+        calendar_id: Uuid,
+        color: Option<calendar_events::domain::calendar_color::CalendarColor>,
+    ) -> Result<(), CalendarMutationError> {
+        self.record(
+            requester_id,
+            Call::SetColor(calendar_id, color.map(|color| color.to_string())),
+        )
     }
 
     async fn update_event(
@@ -213,6 +226,8 @@ struct FakeCommitted {
     sequence: Mutex<std::collections::VecDeque<Option<CalendarEventChange>>>,
     fail: bool,
     reads: Mutex<Vec<(String, Uuid)>>,
+    /// The calendar a color write is answered with.
+    calendar: Option<VisibleCalendar>,
 }
 
 impl CalendarChangeQueryService for FakeCommitted {
@@ -246,6 +261,18 @@ impl CalendarChangeQueryService for FakeCommitted {
             .unwrap()
             .pop_front()
             .unwrap_or_else(|| self.change.clone()))
+    }
+
+    async fn calendar(
+        &self,
+        viewer: &str,
+        calendar_id: Uuid,
+    ) -> Result<Option<VisibleCalendar>, Report> {
+        self.reads
+            .lock()
+            .unwrap()
+            .push((viewer.to_owned(), calendar_id));
+        Ok(self.calendar.clone())
     }
 }
 
@@ -1006,4 +1033,84 @@ async fn deleting_returns_every_removed_occurrence_cancelled() {
         payload["occurrences"][0]["event"]["id"],
         EVENT_ID.to_string()
     );
+}
+
+#[tokio::test]
+async fn set_calendar_color_stores_it_and_answers_with_the_calendar_as_the_viewer_sees_it() {
+    let calendar_id = Uuid::from_u128(0xca);
+    let mutations = Arc::new(FakeMutations::default());
+    let committed = Arc::new(FakeCommitted {
+        calendar: Some(VisibleCalendar {
+            provider: calendar_events::domain::models::CalendarProvider::Google,
+            capabilities: calendar_events::domain::models::CalendarCapabilities::google(),
+            id: calendar_id,
+            email_link_id: LINK_ID,
+            email_address: "viewer@example.com".to_owned(),
+            name: "Work".to_owned(),
+            color: Some("#9fe1e7".to_owned()),
+            custom_color: Some("#5c8aee".to_owned()),
+            is_primary: true,
+            is_writable: true,
+            is_subscription: false,
+            contributes_to_availability: true,
+            sync_error: None,
+            default_reminders: Vec::new(),
+        }),
+        ..Default::default()
+    });
+
+    let response = execute(
+        Arc::clone(&mutations),
+        Arc::clone(&committed),
+        &format!(
+            r##"mutation {{ setCalendarColor(input: {{ calendarId: "{calendar_id}", color: "#5C8AEE" }}) {{
+                id color customColor
+            }} }}"##
+        ),
+        true,
+    )
+    .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    assert_eq!(
+        data["setCalendarColor"],
+        serde_json::json!({
+            "id": calendar_id.to_string(),
+            "color": "#9fe1e7",
+            "customColor": "#5c8aee",
+        })
+    );
+    assert_eq!(
+        *mutations.calls.lock().unwrap(),
+        vec![(
+            VIEWER.to_owned(),
+            Call::SetColor(calendar_id, Some("#5c8aee".to_owned()))
+        )]
+    );
+    assert_eq!(
+        *committed.reads.lock().unwrap(),
+        vec![(VIEWER.to_owned(), calendar_id)]
+    );
+}
+
+#[tokio::test]
+async fn set_calendar_color_refuses_anything_but_a_hex_color() {
+    let mutations = Arc::new(FakeMutations::default());
+
+    let response = execute(
+        Arc::clone(&mutations),
+        Arc::new(FakeCommitted::default()),
+        &format!(
+            r#"mutation {{ setCalendarColor(input: {{ calendarId: "{}", color: "blue" }}) {{ id }} }}"#,
+            Uuid::from_u128(0xca)
+        ),
+        true,
+    )
+    .await;
+
+    let (_, code, retryable) = error_extensions(&response);
+    assert_eq!(code, "invalid_input");
+    assert_eq!(retryable, false);
+    assert!(mutations.calls.lock().unwrap().is_empty());
 }

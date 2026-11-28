@@ -185,6 +185,8 @@ struct FakeRepo {
     retired_events: Vec<RetiredCalendarEvent>,
     disconnected: Option<DisconnectedCalendar>,
     disconnect_requests: Arc<Mutex<Vec<(String, Uuid)>>>,
+    /// What storing a calendar color reports.
+    calendar_color_write: crate::domain::calendar_color::CalendarColorWrite,
     visible_calendars: Vec<VisibleCalendar>,
     fail_list_visible: bool,
     fail_owned_inboxes: bool,
@@ -228,6 +230,7 @@ impl Default for FakeRepo {
             fail_list_visible: false,
             fail_owned_inboxes: false,
             fail_remove_source: false,
+            calendar_color_write: crate::domain::calendar_color::CalendarColorWrite::NotVisible,
             recorded_guest_policies: Default::default(),
             event_details: None,
             details_requests: Default::default(),
@@ -589,6 +592,15 @@ impl CalendarRepository for FakeRepo {
             return Err(rootcause::report!("visible calendars unavailable"));
         }
         Ok(self.visible_calendars.clone())
+    }
+
+    async fn set_calendar_color(
+        &self,
+        _requester_id: &str,
+        _calendar_id: Uuid,
+        _color: Option<&crate::domain::calendar_color::CalendarColor>,
+    ) -> Result<crate::domain::calendar_color::CalendarColorWrite, rootcause::Report> {
+        Ok(self.calendar_color_write)
     }
 
     async fn primary_time_zone(
@@ -3412,4 +3424,58 @@ fn a_refused_change_shows_its_message_without_the_request_prefix() {
         CalendarMutationError::ProviderRejected(m)
             if m == "Calendar provider request failed: Outlook refused the change"
     ));
+}
+
+#[tokio::test]
+async fn a_changed_calendar_color_nudges_its_inbox_viewers_and_an_unchanged_one_does_not() {
+    use crate::domain::calendar_color::{CalendarColor, CalendarColorWrite};
+
+    let link_id = Uuid::now_v7();
+    let calendar_id = Uuid::now_v7();
+    for (write, expected) in [
+        (
+            CalendarColorWrite::Changed {
+                email_link_id: link_id,
+            },
+            vec![("macro|user".to_string(), link_id, false)],
+        ),
+        (CalendarColorWrite::Unchanged, Vec::new()),
+    ] {
+        let refresh = RecordingRefreshNotifier::default();
+        service_with_refresh(
+            FakeRepo {
+                calendar_color_write: write,
+                ..FakeRepo::default()
+            },
+            FakeProvider::new(FakeProviderBehavior::Echo),
+            FakeTokens::ok(),
+            refresh.clone(),
+        )
+        .set_calendar_color(
+            "macro|user",
+            calendar_id,
+            Some(CalendarColor::parse("#5c8aee").unwrap()),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            *refresh.notified.lock().expect("notifier lock"),
+            expected,
+            "{write:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_calendar_the_requester_cannot_see_is_not_found() {
+    let result = service(
+        FakeRepo::default(),
+        FakeProvider::new(FakeProviderBehavior::Echo),
+        FakeTokens::ok(),
+    )
+    .set_calendar_color("macro|user", Uuid::now_v7(), None)
+    .await;
+
+    assert!(matches!(result, Err(CalendarMutationError::NotFound)));
 }

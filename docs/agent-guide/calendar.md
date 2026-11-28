@@ -30,8 +30,9 @@ calendar account metadata and other conferencing providers keep their original U
   and New. Search remains available when the header narrows.
 - Phone header islands open navigation, month selection, Today, and Search.
   The drawer lists views, account calendars, booking links, and Settings.
-- Account/calendar checkboxes control visibility, not availability. Swatches
-  change local colors. Settings and Busy calendars use separate pages.
+- Account/calendar checkboxes control visibility, not availability. A
+  calendar's swatch sets its color for the person's account. Settings and Busy
+  calendars use separate pages.
 - Desktop trackpads and phone swipes use the same native horizontal scroll track.
   Seven stable slots recycle during movement, and the month/year heading follows
   the page under the viewport centre each frame. Phone snap stops are one page.
@@ -436,9 +437,16 @@ mixed. Individual calendars can also be shown/hidden. The account color is the
 default for its calendars; a child color overrides it. Click a color dot to open
 the theme-matched picker: drag the color field and hue slider, choose a named
 swatch, or enter a three- or six-digit hex value. Arrow keys adjust the focused
-color field (Shift makes larger steps). **Reset to default** clears the override.
-Visibility and colors share the calendar sidebar's browser-local preferences,
-survive reload, and do not change the Google calendar or booking conflict checks.
+color field (Shift makes larger steps). A drag or key press saves once, on
+release. **Reset to default** clears the override. A calendar's own color is
+saved for the person's account (`calendar_color_preferences`, `PUT
+/calendar/calendars/{id}/color`, GraphQL `setCalendarColor`), so it follows them
+to every device, and each viewer of a delegated inbox picks their own; the calendar
+list returns it as `customColor` beside the provider's `color`, which sync keeps
+updating underneath. Colors this browser saved before are uploaded once and
+dropped locally only after the server confirms them. The account default color
+and visibility stay in the calendar's browser-local preferences. None of it
+changes the Google or Outlook calendar or booking conflict checks.
 
 Each calendar row also has a **Busy** switch (`<name> counts as busy`), right of
 its color dot: the saved, per-user `calendar_availability_preferences` choice
@@ -798,9 +806,17 @@ touch has no hover, so its calendar rows show the same warning icon with
 `Sync failed: <provider error>` written under the name (the row grows to fit). The
 account keeps syncing its other calendars and the badge clears on its own once that
 calendar syncs again.
+A calendar's color dot is its own button beside the checkbox and opens the same
+color picker as Settings → Calendar (`Color for <name> (<address>)`); the checkbox
+and the name still show or hide the calendar. The choice recolors the calendar's
+events on the grid, in Month, Agenda and Upcoming, in event details and search, in
+the event composer's calendar swatch and the agent's draft preview, all read through
+`useCalendarSources`.
 The phone navigation drawer uses plain account captions and calendar rows rather
-than the old header-gear settings sheet. Visibility and color still write the same
-browser-local calendar preferences. The separate Settings page contains display
+than the old header-gear settings sheet. Visibility still writes the same
+browser-local calendar preferences. A long press on a calendar row opens its
+options, whose Color row is the same picker and saves the same account color as
+the sidebar's dot (Reset is offered once the account holds a color for it). The separate Settings page contains display
 preferences, account consent actions, availability hours and busy calendars, next
 meeting countdown, and flag-gated team sharing. The Settings page places its cards
 at Layer depth 2 over the page surface in both themes, including the busy-calendar subpage.

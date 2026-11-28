@@ -1,4 +1,5 @@
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
+import { queryReadyGate } from '@queries/gate';
 import { createMemo } from 'solid-js';
 import type { CalendarSource } from '../types';
 import { DEFAULT_CALENDAR_SOURCE } from '../types';
@@ -9,31 +10,39 @@ export function useCalendarSources() {
   const [preferences] = useCalendarPreferences();
   const calendarsQuery = useVisibleCalendarsQuery();
   const sources = createMemo<CalendarSource[]>(() => {
-    const calendars = calendarsQuery.isSuccess
+    // A failed refetch keeps the cached calendars, and with them their colors.
+    const calendars = queryReadyGate(calendarsQuery)
       ? calendarsQuery.data
       : undefined;
     if (!calendars || calendars.length === 0) {
       return [DEFAULT_CALENDAR_SOURCE];
     }
 
-    return calendars.map((calendar) => ({
-      id: calendar.id,
-      provider: calendar.provider,
-      capabilities: calendar.capabilities,
-      name: calendar.name,
-      color:
-        preferences.sourceColors[calendar.id] ??
-        preferences.accountColors[
-          calendar.emailLinkId ?? calendar.emailAddress ?? calendar.id
-        ] ??
-        calendar.color ??
-        DEFAULT_CALENDAR_SOURCE.color,
-      emailAddress: calendar.emailAddress,
-      emailLinkId: calendar.emailLinkId,
-      isPrimary: calendar.isPrimary,
-      isSubscription: calendar.isSubscription,
-      syncError: calendar.syncError ?? undefined,
-    }));
+    return calendars.map((calendar) => {
+      // A color saved in this browser before colors moved to the account
+      // shows until its upload is confirmed (`useUploadBrowserCalendarColors`).
+      const ownColor =
+        calendar.customColor ?? preferences.sourceColors[calendar.id];
+      return {
+        id: calendar.id,
+        provider: calendar.provider,
+        capabilities: calendar.capabilities,
+        name: calendar.name,
+        color:
+          ownColor ??
+          preferences.accountColors[
+            calendar.emailLinkId ?? calendar.emailAddress ?? calendar.id
+          ] ??
+          calendar.color ??
+          DEFAULT_CALENDAR_SOURCE.color,
+        hasCustomColor: ownColor !== undefined && ownColor !== null,
+        emailAddress: calendar.emailAddress,
+        emailLinkId: calendar.emailLinkId,
+        isPrimary: calendar.isPrimary,
+        isSubscription: calendar.isSubscription,
+        syncError: calendar.syncError ?? undefined,
+      };
+    });
   });
   const sourceById = createMemo(
     () => new Map(sources().map((source) => [source.id, source]))

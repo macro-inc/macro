@@ -154,6 +154,14 @@ impl CalendarChangeQueryService for FakeReads {
     ) -> Result<Option<CalendarEventChange>, Report> {
         unreachable!("queries never read one event's committed state")
     }
+
+    async fn calendar(
+        &self,
+        _viewer: &str,
+        _calendar_id: uuid::Uuid,
+    ) -> Result<Option<VisibleCalendar>, Report> {
+        unreachable!("calendar colors are not exercised here")
+    }
 }
 
 const VIEWER: &str = "macro|viewer@example.com";
@@ -252,6 +260,7 @@ async fn calendars_are_listed_for_the_viewer() {
             email_address: "viewer@example.com".to_owned(),
             name: "Work".to_owned(),
             color: None,
+            custom_color: None,
             is_primary: true,
             is_writable: true,
             is_subscription: false,
@@ -318,6 +327,7 @@ async fn calendar_lists_and_deltas_preserve_actual_provider_capabilities() {
             email_address: "viewer@example.com".to_owned(),
             name: "Work".to_owned(),
             color: None,
+            custom_color: None,
             is_primary: true,
             is_writable: true,
             is_subscription: false,

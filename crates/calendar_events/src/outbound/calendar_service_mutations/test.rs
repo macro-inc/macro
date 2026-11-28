@@ -14,7 +14,7 @@ use crate::domain::models::{
 use crate::inbound::mutation_router::{
     CalendarMutationApiError, CalendarUpdateScopeParam, CreateCalendarEventRequest,
     DeleteCalendarEventQuery, InviteCalendarEventGuestsRequest, RsvpCalendarEventRequest,
-    UpdateCalendarEventRequest,
+    SetCalendarColorBody, UpdateCalendarEventRequest,
 };
 
 fn sample_draft() -> CalendarEventDraft {
@@ -343,4 +343,15 @@ fn macro_call_failures_round_trip_to_the_meeting_link_error() {
         parsed,
         MacroCallEventError::Calendar(CalendarMutationError::Retryable(_))
     ));
+}
+
+#[test]
+fn color_bodies_match_the_router_request() {
+    let set: SetCalendarColorBody =
+        serde_json::from_value(color_body(Some(&CalendarColor::parse("#5c8aee").unwrap())))
+            .unwrap();
+    let cleared: SetCalendarColorBody = serde_json::from_value(color_body(None)).unwrap();
+
+    assert_eq!(set.color.as_deref(), Some("#5c8aee"));
+    assert_eq!(cleared.color, None);
 }

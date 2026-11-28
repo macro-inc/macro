@@ -8,7 +8,7 @@ use graphql_common::require_authenticated_user;
 use uuid::Uuid;
 
 use crate::{
-    objects::GraphqlCalendarMutationPayload,
+    objects::{GraphqlCalendar, GraphqlCalendarMutationPayload},
     writes::{CalendarGraphqlMutationContext, CalendarGraphqlWrites},
 };
 
@@ -22,7 +22,8 @@ pub use inputs::{
     DeleteCalendarEventInput, GraphqlCalendarAttendeeInput, GraphqlCalendarConferenceChange,
     GraphqlCalendarDeletionScope, GraphqlCalendarOutOfOfficeAutoDeclineMode,
     GraphqlCalendarRsvpScope, GraphqlCalendarUpdateScope, InviteCalendarEventGuestsInput,
-    RespondToCalendarEventInput, TimedEventTimeInput, UpdateCalendarEventInput,
+    RespondToCalendarEventInput, SetCalendarColorInput, TimedEventTimeInput,
+    UpdateCalendarEventInput,
 };
 
 /// Calendar event mutations. Each answers with the event's committed state:
@@ -163,6 +164,32 @@ impl CalendarMutationRoot {
             .await
             .map_err(mutation_error)?;
         committed_state(writes.as_ref(), viewer, request.event_id, before).await
+    }
+
+    /// Set the viewer's own color for one of their calendars, or clear it to
+    /// show the provider's color again. Macro keeps it; the provider never
+    /// sees it. Answers with the calendar as the viewer now sees it.
+    #[tracing::instrument(skip_all, err(Debug))]
+    async fn set_calendar_color(
+        &self,
+        ctx: &Context<'_>,
+        input: SetCalendarColorInput,
+    ) -> async_graphql::Result<GraphqlCalendar> {
+        let viewer = require_authenticated_user(ctx)?.as_ref().to_owned();
+        let writes = &ctx.data::<CalendarGraphqlMutationContext>()?.writes;
+        let request = input.into_request().map_err(invalid_input)?;
+        writes
+            .set_calendar_color(viewer.clone(), request.calendar_id, request.color)
+            .await
+            .map_err(mutation_error)?;
+        let calendar = writes
+            .calendar(viewer, request.calendar_id)
+            .await
+            .map_err(|error| {
+                mutation_error(CalendarMutationError::PersistFailed(format!("{error:?}")))
+            })?
+            .ok_or_else(|| mutation_error(CalendarMutationError::NotFound))?;
+        Ok(calendar.into())
     }
 }
 

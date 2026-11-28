@@ -2,7 +2,13 @@
  * @vitest-environment jsdom
  */
 
-import { cleanup, fireEvent, render, within } from '@solidjs/testing-library';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CalendarSource } from '../types';
@@ -54,6 +60,8 @@ function renderControls(initialSources = SOURCES) {
   const onVisibilityChange = vi.fn<(id: string, visible: boolean) => void>();
   const onGroupVisibilityChange =
     vi.fn<(ids: string[], visible: boolean) => void>();
+  const onColorChange =
+    vi.fn<(id: string, color: string | undefined) => void>();
   const [hidden, setHidden] = createSignal<ReadonlySet<string>>(new Set());
   const [sources, setSources] = createSignal(initialSources);
   const changeVisibility = (ids: readonly string[], visible: boolean) =>
@@ -77,6 +85,7 @@ function renderControls(initialSources = SOURCES) {
         onGroupVisibilityChange(ids, visible);
         changeVisibility(ids, visible);
       }}
+      onColorChange={onColorChange}
     />
   ));
   const expandAccount = (email: string) => {
@@ -98,6 +107,7 @@ function renderControls(initialSources = SOURCES) {
     ...result,
     onVisibilityChange,
     onGroupVisibilityChange,
+    onColorChange,
     headerFor,
     expandAccount,
     setSources,
@@ -244,5 +254,30 @@ describe('SourceControls', () => {
       getByRole('button', { name: 'Collapse owner@example.com' })
     );
     expect(queryByText('Holidays')).toBeNull();
+  });
+
+  it("opens a calendar's color picker from its swatch, leaving its visibility to the checkbox and name", async () => {
+    const { getByRole, getByText, onColorChange, onVisibilityChange } =
+      renderControls();
+
+    fireEvent.click(
+      getByRole('button', {
+        name: 'Color for owner@example.com (owner@example.com)',
+      })
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Iris' }));
+
+    expect(onColorChange).toHaveBeenCalledExactlyOnceWith(
+      'gab-primary',
+      '#9382e8'
+    );
+    expect(onVisibilityChange).not.toHaveBeenCalled();
+
+    fireEvent.click(getByText('Holidays'));
+
+    expect(onVisibilityChange).toHaveBeenCalledExactlyOnceWith(
+      'gab-holidays',
+      false
+    );
   });
 });

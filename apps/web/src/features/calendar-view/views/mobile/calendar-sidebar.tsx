@@ -1,15 +1,16 @@
 import { useViewShell, ViewSidebar } from '@app/components/view-shell';
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { CopyAvailabilityButton } from '@app/features/calendar/availability/CopyAvailabilityButton';
+import { CalendarSwatch } from '@app/features/calendar/components/CalendarSwatch';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { CalendarColorPicker } from '@app/features/calendar/components/calendar-color-picker';
 import { CalendarSourceLabel } from '@app/features/calendar/components/SourceControls';
 import { useCalendarNavigation } from '@app/features/calendar/context/calendar-navigation-context';
+import { useSetCalendarColor } from '@app/features/calendar/hooks/use-calendar-color';
 import { useHasTeammates } from '@app/features/calendar/hooks/use-team-ooo';
 import { TEAM_OOO_SOURCE_ID } from '@app/features/calendar/types';
 import { calendarPeriodLabel } from '@app/features/calendar/utils/calendar-label';
 import { groupCalendarSourcesByAccount } from '@app/features/calendar/utils/calendar-source-groups';
-import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
 import { copyBookingLink } from '@app/features/scheduling/booking-link';
 import {
   bookingLinksSearch,
@@ -159,7 +160,7 @@ export function MobileCalendarSidebar() {
   const shell = useViewShell();
   const navigate = useNavigate();
   const connect = useAddInboxFlow();
-  const [preferences, setPreferences] = useCalendarPreferences();
+  const setCalendarColor = useSetCalendarColor();
   const [scroll, setScroll] = createSignal<HTMLDivElement>();
   const [selectedId, setSelectedId] = createSignal<string>();
   const selected = () =>
@@ -245,6 +246,7 @@ export function MobileCalendarSidebar() {
                               >
                                 <Checkbox.Control />
                                 <Checkbox.Label class="flex min-w-0 flex-1 items-center gap-3">
+                                  <CalendarSwatch color={source.color} />
                                   <CalendarSourceLabel source={source} />
                                 </Checkbox.Label>
                               </Checkbox>
@@ -300,12 +302,8 @@ export function MobileCalendarSidebar() {
                   <CalendarColorPicker
                     label={t('calendar.namedColor', { name: source().name })}
                     color={source().color}
-                    overridden={
-                      preferences.sourceColors[source().id] !== undefined
-                    }
-                    onChange={(color) =>
-                      setPreferences('sourceColors', source().id, color)
-                    }
+                    overridden={source().hasCustomColor === true}
+                    onChange={(color) => setCalendarColor(source().id, color)}
                   />
                 </div>
                 <ViewSidebar.Item

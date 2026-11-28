@@ -20,6 +20,7 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::domain::{
+    calendar_color::CalendarColor,
     meeting_links::{MacroCallEventError, MeetingLinkError},
     models::{
         AttendeeResponseStatus, CalendarAttendeeInput, CalendarEvent, CalendarEventDraft,
@@ -122,6 +123,11 @@ async fn parse_event(response: reqwest::Response) -> Result<CalendarEvent, Calen
             "calendar mutation succeeded but its echo could not be parsed: {error}"
         ))
     })
+}
+
+/// Body of a calendar color write; `null` clears it.
+fn color_body(color: Option<&CalendarColor>) -> serde_json::Value {
+    serde_json::json!({ "color": color.map(CalendarColor::as_str) })
 }
 
 /// Wire body for the calendars listing.
@@ -442,6 +448,25 @@ impl CalendarMutationService for CalendarServiceMutations {
                     "the calendars listing could not be parsed: {error}"
                 ))
             })
+    }
+
+    #[tracing::instrument(skip(self, requester_id, color), fields(cleared = color.is_none()), err)]
+    async fn set_calendar_color(
+        &self,
+        requester_id: &str,
+        calendar_id: Uuid,
+        color: Option<CalendarColor>,
+    ) -> Result<(), CalendarMutationError> {
+        self.send(
+            self.request(
+                reqwest::Method::PUT,
+                &format!("/calendars/{calendar_id}/color"),
+                requester_id,
+            )
+            .json(&color_body(color.as_ref())),
+        )
+        .await
+        .map(|_| ())
     }
 
     #[tracing::instrument(skip(self, requester_id, patch), err)]

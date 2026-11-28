@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO calendar_color_preferences (user_id, calendar_id, color)\n                VALUES ($1, $2, $3)\n                ON CONFLICT (user_id, calendar_id) DO UPDATE\n                SET color = EXCLUDED.color, updated_at = now()\n                WHERE calendar_color_preferences.color <> EXCLUDED.color\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "031e0a8290a79302a4b72b09f821d8e2b8abdbcf5cf1f3b304db58a74646d160"
+}

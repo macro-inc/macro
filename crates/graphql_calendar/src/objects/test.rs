@@ -99,6 +99,7 @@ fn visible_calendar_maps_its_link() {
         email_address: "owner@example.com".to_owned(),
         name: "Work".to_owned(),
         color: Some("#0b8043".to_owned()),
+        custom_color: None,
         is_primary: true,
         is_writable: true,
         is_subscription: false,

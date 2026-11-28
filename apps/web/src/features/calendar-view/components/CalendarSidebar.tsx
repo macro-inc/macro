@@ -10,6 +10,7 @@ import { MonthYearPickerPopover } from '@app/features/calendar/components/month-
 import { SourceControls } from '@app/features/calendar/components/SourceControls';
 import { useCalendarComposerHost } from '@app/features/calendar/context/calendar-composer-host-context';
 import { useCalendarNavigation } from '@app/features/calendar/context/calendar-navigation-context';
+import { useSetCalendarColor } from '@app/features/calendar/hooks/use-calendar-color';
 import { useCalendarOccurrenceData } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
 import {
   type TeamOooWindow,
@@ -156,6 +157,7 @@ function UpcomingEventsSection() {
 
 function CalendarSourcesSection() {
   const calendarView = useCalendarView();
+  const setCalendarColor = useSetCalendarColor();
   const [open, setOpen] = createSignal(true);
 
   return (
@@ -183,6 +185,7 @@ function CalendarSourcesSection() {
             isVisible={calendarView.isSourceVisible}
             onVisibilityChange={calendarView.setSourceVisibility}
             onGroupVisibilityChange={calendarView.setSourcesVisibility}
+            onColorChange={setCalendarColor}
           />
         </CollapsibleSection.Content>
       </CollapsibleSection.Root>

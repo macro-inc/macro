@@ -32,6 +32,10 @@ export const entityResolverSchema = {
       targets: ['GraphqlSoupEmailThread'],
       argumentPaths: [['input', 'messageId']],
     },
+    setCalendarColor: {
+      targets: ['GraphqlCalendar'],
+      argumentPaths: [['input', 'calendarId']],
+    },
     setEmailThreadArchived: {
       targets: ['GraphqlSoupEmailThread'],
       argumentPaths: [['input', 'threadId']],
@@ -122,6 +126,7 @@ export const entityResolverSchema = {
 
 export type GeneratedEntityResolverSchema = typeof entityResolverSchema;
 export type GeneratedEntityResolverTarget =
+  | 'GraphqlCalendar'
   | 'GraphqlChannelActivity'
   | 'GraphqlProperty'
   | 'GraphqlPropertyOption'
@@ -146,6 +151,7 @@ export type GeneratedEntityResolverTarget =
 export type GeneratedEntityResolverArgumentPath =
   | readonly ['id']
   | readonly ['initiativeId']
+  | readonly ['input', 'calendarId']
   | readonly ['input', 'channelId']
   | readonly ['input', 'entityId']
   | readonly ['input', 'id']
