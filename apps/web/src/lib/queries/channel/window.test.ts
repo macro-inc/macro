@@ -367,6 +367,58 @@ describe('useChannelWindow', () => {
     }
   });
 
+  it('keeps a channel a settled lookup did not return gone while that lookup refetches', () => {
+    const missing = new Set<string>();
+    const { dispose, result, setKey, setFetching } = createRoot((dispose) => {
+      const [key, setKey] = createSignal('first');
+      const [fetching, setFetching] = createSignal(false);
+      useSoupAstItemsQuery.mockImplementation((args) => {
+        const asked: string[] =
+          JSON.stringify(args().body).match(/ch-\d{4}/g) ?? [];
+        const entities = asked
+          .filter((id) => !missing.has(id))
+          .map(channelEntity);
+        return {
+          isEnabled: true,
+          isPending: false,
+          isLoading: false,
+          get isFetching() {
+            return fetching();
+          },
+          hasPageData: true,
+          hasNextPage: false,
+          refresh: async () => {},
+          data: { entities },
+        };
+      });
+      const result = useChannelWindow(
+        () =>
+          channelIdWindow(
+            key() === 'away' ? [] : [{ key: key(), ids: ['ch-0001'] }]
+          ),
+        () => true
+      );
+      return { dispose, result, setKey, setFetching };
+    });
+    try {
+      setKey('away');
+      expect(result.retained().map(({ id }) => id)).toEqual(['ch-0001']);
+      missing.add('ch-0001');
+      setKey('second');
+      expect(result.retained()).toEqual([]);
+      setFetching(true);
+      expect(result.retained()).toEqual([]);
+      expect([...result.unavailableIds()]).toEqual(['ch-0001']);
+      expect([...result.pendingIds()]).toEqual([]);
+      setKey('away');
+      setFetching(false);
+      expect(result.retained()).toEqual([]);
+      expect([...result.unavailableIds()]).toEqual(['ch-0001']);
+    } finally {
+      dispose();
+    }
+  });
+
   it('builds and requests nothing while disabled, and drops everything when disabled', () => {
     const { requested, disposed } = fakeLookups();
     let built = 0;

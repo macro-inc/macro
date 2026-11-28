@@ -180,6 +180,8 @@ type WindowChunk = {
   query: SoupAstItemsQuery;
   channels: Accessor<ChannelEntity[]>;
   unresolved: Accessor<string[]>;
+  missing: Accessor<readonly string[]>;
+  pending: Accessor<readonly string[]>;
   error: Accessor<Error | null | undefined>;
   loading: Accessor<boolean>;
   dispose: () => void;
@@ -279,6 +281,20 @@ export function useChannelWindow(
         const loaded = new Set(channels().map((channel) => channel.id));
         return ids().filter((id) => !loaded.has(id));
       });
+      // What the lookup last settled without, kept through a refetch until it
+      // returns the ID, so a refetch neither shows those IDs loading nor
+      // brings back a record kept from before they went.
+      const missing = createMemo<readonly string[]>((previous) => {
+        if (error()) return [];
+        if (query.hasPageData && !loading()) return unresolved();
+        const last = new Set(previous);
+        return unresolved().filter((id) => last.has(id));
+      }, []);
+      const pending = createMemo<readonly string[]>(() => {
+        if (!loading()) return [];
+        const gone = new Set(missing());
+        return unresolved().filter((id) => !gone.has(id));
+      });
       return {
         key,
         ids,
@@ -286,16 +302,13 @@ export function useChannelWindow(
         query,
         channels,
         unresolved,
+        missing,
+        pending,
         error,
         loading,
         dispose,
       };
     }, owner ?? undefined);
-
-  const settledMissing = (chunk: WindowChunk) =>
-    chunk.query.hasPageData && !chunk.loading() && !chunk.error()
-      ? chunk.unresolved()
-      : [];
 
   // Keep what leaving IDs showed: their last record, or that they are gone,
   // whichever is newer.
@@ -360,14 +373,14 @@ export function useChannelWindow(
         for (const [key, chunk] of active) {
           const keep = wanted.get(key);
           if (!keep) {
-            retain(chunk.channels(), settledMissing(chunk));
+            retain(chunk.channels(), chunk.missing());
             chunk.dispose();
             continue;
           }
           const keepIds = new Set(keep.ids);
           retain(
             chunk.channels().filter((row) => !keepIds.has(row.id)),
-            settledMissing(chunk).filter((id) => !keepIds.has(id))
+            chunk.missing().filter((id) => !keepIds.has(id))
           );
           chunk.setIds(keep.ids);
           nextActive.set(key, chunk);
@@ -395,10 +408,7 @@ export function useChannelWindow(
   );
   // Rows read these once each, so each set is built once per change.
   const pendingIds = createMemo<ReadonlySet<string>>(
-    () =>
-      new Set(
-        chunks().flatMap((chunk) => (chunk.loading() ? chunk.unresolved() : []))
-      )
+    () => new Set(chunks().flatMap((chunk) => chunk.pending()))
   );
   const failedIds = createMemo<ReadonlySet<string>>(
     () =>
@@ -409,7 +419,7 @@ export function useChannelWindow(
   const unavailableIds = createMemo<ReadonlySet<string>>(() => {
     const live = liveIds();
     return new Set([
-      ...chunks().flatMap(settledMissing),
+      ...chunks().flatMap((chunk) => chunk.missing()),
       ...retainedMissing().filter((id) => !live.has(id)),
     ]);
   });
@@ -426,10 +436,7 @@ export function useChannelWindow(
     pendingIds,
     failedIds,
     unavailableIds,
-    isLoading: () =>
-      chunks().some(
-        (chunk) => chunk.loading() && chunk.unresolved().length > 0
-      ),
+    isLoading: () => chunks().some((chunk) => chunk.pending().length > 0),
     error: () =>
       chunks()
         .find((chunk) => chunk.error() && chunk.unresolved().length > 0)
