@@ -11,9 +11,11 @@
 //! reads. A record the cache does not hold, or holds without a type, gives none.
 
 use super::*;
+use cache_core::queue::{decode_optimistic_source, encode_optimistic_source};
 use cache_core::value::CacheValue;
 use derived_sorts::{AUTHORITATIVE, OPTIMISTIC, Tables};
 use item_filter_index::mail;
+use predicate_index::{ExactFact, IndexDocument, OptimisticProjectionMutation};
 
 /// Threads read per statement.
 const BATCH_SIZE: usize = 256;
@@ -22,11 +24,11 @@ const ATTACHMENT_BATCH_SIZE: usize = 512;
 /// Facts written per statement.
 const INSERT_BATCH_SIZE: usize = 128;
 
-/// Writes the attachment facts of every complete Mail document, from the
-/// thread and attachment records the cache holds, inside the caller's write
-/// transaction. An optimistic document takes them from the authoritative
-/// thread record: no queued Mail write changes a thread's attachments, and its
-/// reply re-projects the thread.
+/// Writes the attachment facts of every complete Mail document, and of the
+/// Mail documents queued writes hold, from the thread and attachment records
+/// the cache holds, inside the caller's write transaction. An optimistic
+/// document takes them from the authoritative thread record: no queued Mail
+/// write changes a thread's attachments, and its reply re-projects the thread.
 pub(super) fn backfill(connection: &Db) -> Result<(), TursoStorageError> {
     for tables in [AUTHORITATIVE, OPTIMISTIC] {
         for profile in mail::DOCUMENT_PROFILES {
@@ -39,7 +41,98 @@ pub(super) fn backfill(connection: &Db) -> Result<(), TursoStorageError> {
             mail::ATTACHMENT_ATTRIBUTE,
         )?;
     }
+    conform_queue(connection)
+}
+
+/// Gives the Mail documents of queued writes their threads' attachment facts.
+/// Each later push for a thread composes its shadow from them again, and a
+/// write queued by a build without the facts holds none.
+fn conform_queue(connection: &Db) -> Result<(), TursoStorageError> {
+    let layer_update =
+        "UPDATE optimistic_layers SET optimistic_data_json = ?2 WHERE mutation_id = ?1";
+    for row in driver::query(connection, QUEUE_SELECT, Vec::new())? {
+        let row = parse_queue_row(&row)?;
+        let layer = row.optimistic.ok_or_else(invariant)?;
+        let mut source =
+            decode_optimistic_source(&layer.optimistic_data_json).map_err(|_| invariant())?;
+        let mut documents = source
+            .projection_mutations
+            .iter_mut()
+            .filter_map(|mutation| match mutation {
+                OptimisticProjectionMutation::Replace(document) if is_mail(document) => {
+                    Some(document)
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        if documents.is_empty() {
+            continue;
+        }
+        let threads = documents
+            .iter()
+            .map(|document| {
+                RecordKey::from_entity(&EntityKey(document.record_key.as_str().to_owned().into()))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let kinds = kinds_of(connection, &record_batch::read(connection, &threads)?)?;
+        let mut changed = false;
+        for (document, kinds) in documents.iter_mut().zip(kinds) {
+            let before = document.exact_facts.clone();
+            document
+                .exact_facts
+                .retain(|fact| fact.attribute.as_str() != mail::ATTACHMENT_ATTRIBUTE);
+            document
+                .exact_facts
+                .extend(kinds.into_iter().map(|kind| ExactFact {
+                    attribute: mail::token(mail::ATTACHMENT_ATTRIBUTE),
+                    value: mail::attachment_value(kind),
+                }));
+            document.canonicalize();
+            changed |= document.exact_facts != before;
+        }
+        if !changed {
+            continue;
+        }
+        require_changed(
+            driver::execute(
+                connection,
+                layer_update,
+                vec![
+                    Value::from_i64(mutation_id_to_sql(row.id)?),
+                    text(&encode_optimistic_source(&source)),
+                ],
+            )?,
+            1,
+        )?;
+    }
     Ok(())
+}
+
+fn is_mail(document: &IndexDocument) -> bool {
+    mail::DOCUMENT_PROFILES.contains(&document.profile.token().as_str())
+        && document.partition.as_str() == mail::PARTITION
+}
+
+/// The attachment kinds of each of `threads`: none for a thread the cache
+/// does not hold.
+fn kinds_of(
+    connection: &Db,
+    threads: &[Option<Record>],
+) -> Result<Vec<Vec<mail::AttachmentKind>>, TursoStorageError> {
+    let keys = threads
+        .iter()
+        .map(|thread| thread.as_ref().map(attachment_keys).unwrap_or_default())
+        .collect::<Vec<_>>();
+    let mime_types = mime_types(connection, keys.iter().flatten().cloned().collect())?;
+    Ok(keys
+        .iter()
+        .map(|keys| {
+            mail::attachment_kinds(
+                keys.iter()
+                    .filter_map(|key| mime_types.get(key).map(String::as_str)),
+            )
+        })
+        .collect())
 }
 
 fn backfill_profile(
@@ -77,27 +170,14 @@ fn backfill_profile(
             let key = EntityKey(required_text(row, 1)?.into());
             thread_keys.push(RecordKey::from_entity(&key)?);
         }
-        let threads = document_ids
+        let kinds = kinds_of(connection, &record_batch::read(connection, &thread_keys)?)?;
+        let facts = document_ids
             .iter()
-            .zip(record_batch::read(connection, &thread_keys)?)
-            .filter_map(|(document_id, record)| Some((*document_id, attachment_keys(&record?))))
-            .filter(|(_, keys)| !keys.is_empty())
+            .zip(kinds)
+            .flat_map(|(document_id, kinds)| {
+                kinds.into_iter().map(move |kind| (*document_id, kind))
+            })
             .collect::<Vec<_>>();
-        let mime_types = mime_types(
-            connection,
-            threads
-                .iter()
-                .flat_map(|(_, keys)| keys.iter().cloned())
-                .collect::<BTreeSet<_>>(),
-        )?;
-        let mut facts = Vec::new();
-        for (document_id, keys) in &threads {
-            let kinds = mail::attachment_kinds(
-                keys.iter()
-                    .filter_map(|key| mime_types.get(key).map(String::as_str)),
-            );
-            facts.extend(kinds.into_iter().map(|kind| (*document_id, kind)));
-        }
         insert(connection, exact, &facts)?;
         match document_ids.last() {
             Some(last) if rows.len() == BATCH_SIZE => after = *last,

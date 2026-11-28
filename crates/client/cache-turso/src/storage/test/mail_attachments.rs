@@ -518,3 +518,124 @@ fn open_cost_on_a_retained_cache() {
         "documents={threads} attachment_records={attachments} facts={facts} first_open_ms={first:.1} open_ms={plain:.1} warm_open_with_step_ms={warm:.1} open_again_ms={plain_again:.1}"
     );
 }
+
+/// A Mail document with `owner` as a fact of its own and these attachment kinds.
+fn mail_document(owner: &str, kinds: &[AttachmentKind]) -> predicate_index::IndexDocument {
+    let mut document = authoritative_projection(&format!("{THREAD}:t-0"), owner);
+    document.profile = Profile::new(Token::new(DOCUMENT_PROFILES[1]).unwrap());
+    document.partition = Token::new(item_filter_index::mail::PARTITION).unwrap();
+    document
+        .exact_facts
+        .extend(kinds.iter().map(|kind| predicate_index::ExactFact {
+            attribute: Token::new(ATTACHMENT_ATTRIBUTE).unwrap(),
+            value: attachment_value(*kind),
+        }));
+    document.canonicalize();
+    document
+}
+
+async fn shadow_state(
+    storage: &TursoStorage,
+    key: &predicate_index::RecordKey,
+) -> Option<OptimisticProjectionState> {
+    storage
+        .load_optimistic_projections(std::slice::from_ref(key))
+        .await
+        .unwrap()
+        .remove(0)
+        .map(|shadow| shadow.state)
+}
+
+/// The Mail documents the queued writes hold.
+fn queued_documents(storage: &TursoStorage) -> Vec<predicate_index::IndexDocument> {
+    driver::query(
+        &storage.connection(),
+        "SELECT optimistic_data_json FROM optimistic_layers ORDER BY mutation_id",
+        Vec::new(),
+    )
+    .unwrap()
+    .iter()
+    .flat_map(|row| {
+        cache_core::queue::decode_optimistic_source(&required_text(row, 0).unwrap())
+            .unwrap()
+            .projection_mutations
+    })
+    .filter_map(|mutation| match mutation {
+        predicate_index::OptimisticProjectionMutation::Replace(document) => Some(document),
+        _ => None,
+    })
+    .collect()
+}
+
+/// A write queued by a build without the facts holds a Mail document with
+/// none, and each push composes the thread's shadow from it again. The open
+/// gives it the thread's kinds, so the shadow keeps them through a push and
+/// over an incomplete server document.
+#[test]
+fn a_write_queued_before_the_facts_gets_them_on_open() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("mail-attachments-queued").unwrap();
+        let key = predicate_index::RecordKey::new(format!("{THREAD}:t-0")).unwrap();
+        store(
+            &storage,
+            &[Shape {
+                profile: DOCUMENT_PROFILES[1],
+                complete: true,
+                record: true,
+                attachments: vec![Some(Some("application/pdf"))],
+            }],
+            None,
+        );
+        let mut mutation = queued("Draft");
+        mutation.optimistic.optimistic_data_json =
+            cache_core::queue::encode_optimistic_source(&cache_core::queue::OptimisticSource {
+                client_metadata: None,
+                identity_bindings: Vec::new(),
+                mutation_data: serde_json::json!({}),
+                link_patches: Vec::new(),
+                revalidations: Vec::new(),
+                projection_mutations: vec![predicate_index::OptimisticProjectionMutation::Replace(
+                    mail_document("queued", &[]),
+                )],
+                uncertain_calendar_event_keys: Vec::new(),
+            });
+        storage.enqueue_mutation(mutation).await.unwrap();
+        forget_version(&storage);
+        ensure(&storage);
+        let queued = mail_document("queued", &[AttachmentKind::Pdf]);
+        assert_eq!(queued_documents(&storage), vec![queued.clone()]);
+
+        // A push composes the shadow from the queued document.
+        storage
+            .put_batch_with_projections(
+                Vec::new(),
+                vec![ProjectionMutation::Replace(mail_document(
+                    "server",
+                    &[AttachmentKind::Pdf],
+                ))],
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            shadow_state(&storage, &key).await,
+            Some(OptimisticProjectionState::Complete(queued.clone()))
+        );
+        // So does one that leaves the server document incomplete.
+        storage
+            .put_batch_with_projections(
+                Vec::new(),
+                vec![ProjectionMutation::MarkIncomplete {
+                    record_key: key.clone(),
+                    profile: queued.profile.clone(),
+                    partition: queued.partition.clone(),
+                    kind: ProjectionIncompleteKind::Dirty,
+                }],
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            shadow_state(&storage, &key).await,
+            Some(OptimisticProjectionState::Complete(queued))
+        );
+    });
+}

@@ -566,7 +566,10 @@ its own entries on open, so after an older build had the cache (a rollback) the
 next open writes them again. Documents past the attribute limit
 are marked incomplete, as the derived sort backfill does. Records, queued mutations,
 storage generation and the storage version stay. An attachment record the cache
-does not hold gives no kind until a response names it with its type.
+does not hold gives no kind until a response names it with its type. The same pass
+gives the Mail documents of queued writes their threads' kinds: a push composes a
+thread's shadow from its queued document again, and one queued by an older build
+holds none.
 
 ## Local filter execution
 
