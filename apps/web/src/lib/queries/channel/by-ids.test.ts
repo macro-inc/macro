@@ -188,6 +188,32 @@ describe('registerChannelListNotificationRefresh', () => {
     }
   });
 
+  it("leaves a failed page out of a later page's turn until reads resume again", async () => {
+    const { dispose, setPages, setRead } = list([FIRST, SECOND]);
+    try {
+      // The second page has missed updates 20 s longer than the third.
+      setRead(false);
+      vi.advanceTimersByTime(20_000);
+      setPages([FIRST, SECOND, THIRD]);
+      vi.advanceTimersByTime(20_000);
+      setRead(true);
+      vi.advanceTimersByTime(0);
+      expect(readPages()).toEqual([SECOND]);
+      await landAll(false);
+      // The third page's turn comes while reads still hold: the second, which
+      // failed in this cycle, waits for the next.
+      vi.advanceTimersByTime(10_000);
+      expect(readPages()).toEqual([THIRD]);
+      await landAll(true);
+      setRead(false);
+      setRead(true);
+      vi.advanceTimersByTime(0);
+      expect(readPages()).toEqual([SECOND]);
+    } finally {
+      dispose();
+    }
+  });
+
   it('counts a page that lands while reads are stopped from when it landed', () => {
     const { dispose, setPages, setRead } = list([FIRST]);
     try {

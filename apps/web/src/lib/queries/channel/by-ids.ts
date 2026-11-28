@@ -110,8 +110,12 @@ function catchUpLaterPages(
   // How many times reads have stopped, so a read can tell whether they
   // stopped and resumed while it waited in the queue.
   let stops = 0;
+  // Pages whose read failed while reads held, by the cycle it failed in.
+  const failed = new Map<number, number>();
   // The current read cycle's deadline, while reads hold.
   let rearm: (() => void) | undefined;
+  const readable = (key: number) =>
+    !queued.has(key) && failed.get(key) !== stops;
   const readAgain = async (key: number, page: MissedPage) => {
     queued.add(key);
     const cycle = stops;
@@ -120,10 +124,11 @@ function catchUpLaterPages(
     ).readAgain(page.query, page.since);
     queued.delete(key);
     if (landed && missed.get(key) === page) missed.delete(key);
+    // One that failed within its own cycle waits for the next, as a dropped
+    // one does, even when another page's turn comes first.
+    if (!landed && cycle === stops) failed.set(key, cycle);
     // A read the queue dropped because reads stopped, settling after they
-    // resumed, was skipped by the new cycle's deadline as still queued. One
-    // that failed within its own cycle waits for the next, as a dropped one
-    // does.
+    // resumed, was skipped by the new cycle's deadline as still queued.
     if (cycle !== stops) rearm?.();
   };
   createEffect(
@@ -137,7 +142,10 @@ function catchUpLaterPages(
           ])
       );
       for (const key of [...missed.keys()])
-        if (!later.has(key)) missed.delete(key);
+        if (!later.has(key)) {
+          missed.delete(key);
+          failed.delete(key);
+        }
       if (!reads) {
         stops += 1;
         const now = Date.now();
@@ -149,13 +157,13 @@ function catchUpLaterPages(
       let timer: ReturnType<typeof setTimeout> | undefined;
       const wait = () => {
         clearTimeout(timer);
-        const waiting = [...missed].filter(([key]) => !queued.has(key));
+        const waiting = [...missed].filter(([key]) => readable(key));
         if (waiting.length === 0) return;
         const due = Math.min(...waiting.map(([, page]) => page.since));
         timer = setTimeout(
           () => {
             for (const [key, page] of missed)
-              if (!queued.has(key) && page.since + freshMs <= Date.now())
+              if (readable(key) && page.since + freshMs <= Date.now())
                 fireAndForget(readAgain(key, page), 'channel-list-later-pages');
             wait();
           },
