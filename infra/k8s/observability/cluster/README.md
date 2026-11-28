@@ -250,7 +250,8 @@ stream and function name are structured metadata (`aws_log_group_names`,
 `aws_log_stream_names`, `faas_name`). An AWS WAF event (`aws-waf-logs-*`) also
 gets the trace and span ID of its `traceparent` header, as Datadog's WAF
 pipeline does, and loses its client address: `clientIp`, a rate-based rule's
-`limitValue`, and every header named for forwarding or a client address
+`limitValue` and its `IP` or `FORWARDED_IP` custom key's value, and every
+header or `HEADER` custom key named for forwarding or a client address
 (`x-forwarded-for`, `forwarded`, `cf-connecting-ip`, ...) read `redacted`.
 Firehose has its answer once the events
 are handed on: a batch the memory limiter then refuses is lost, not retried
