@@ -1,0 +1,30 @@
+apps/web/src/features/crm/views/crm-workspace.test.tsx
+  s_59175937622ed6::t_d68f31d3ac67ae 100-102
+  s_59175937622ed6::t_04d2f41b966a41 103
+apps/web/src/features/crm/components/record-visibility-filter.tsx
+  s_59175937622ed6::t_214403228b47e3 29
+  s_59175937622ed6::t_315ef4fb804230 4,12-13,15-18,24,26
+apps/web/src/features/crm/views/crm-workspace.tsx
+  s_59175937622ed6::t_799aafb8aef061 92-96,98,659-663,681,711
+  s_59175937622ed6::t_9d36e25a4e3605 28,39,87-88,99,657,667-680,682-686,688-695,697-710,713-723
+  s_59175937622ed6::t_bf7f527a2164ca 89-91,97
+  s_59175937622ed6::t_a1727c656edf2e 223-231
+apps/web/src/features/crm/components/people-display-menu.tsx
+  s_59175937622ed6::t_1e00db9c31cb20 4-8,15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "3ae64159a36935072692a5da200daa9b49cf9b88",
+  "prompts": {},
+  "sessions": {
+    "s_59175937622ed6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4c7a1c0d-6543-4a23-adb2-86a9b1b6a34e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
