@@ -629,9 +629,12 @@ draining it, answers:
   pages claimed is out or its settlement waits for an engine, a hidden owner
   with no visible tab to take over keeps its engine, and an owner that leaves
   with every other tab hidden is replaced by a hidden one (a tab sending the
-  answer first, since a frozen tab would never open it), until the head
-  settles or its lease ends: a parked build holds no lock, and a newer build
-  would open the database without asking. On the page, a head claimed before
+  answer first), until the head settles or its lease ends: a parked build
+  holds no lock, and a newer build would open the database without asking.
+  A hidden tab may be frozen and never open that engine, so one still loading
+  its assets after `HIDDEN_SETTLEMENT_STARTUP_TIMEOUT_MS` (10 s) is given up
+  for another tab, and a tab shown before then starts its own; a newer build
+  that opens within that window takes the free lock. On the page, a head claimed before
   retirement settles through the host that claimed it
   (`createRetirableCacheHost` pins it until the head settles or its lease
   ends), and a retired host refuses any other settlement
