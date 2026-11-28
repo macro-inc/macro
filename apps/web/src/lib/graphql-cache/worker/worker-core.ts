@@ -746,10 +746,16 @@ export class CacheWorkerCore {
     outcome: { result: unknown } | { error: unknown }
   ): void {
     const finishedAt = this.now();
-    if (finishedAt - queued.enqueuedAt < SLOW_REQUEST_MS) return;
+    const proof = 'result' in outcome ? writeProof(outcome.result) : undefined;
+    // A failed proof is reported however fast the write was: it costs every
+    // live view a read, which no other signal shows.
+    if (
+      finishedAt - queued.enqueuedAt < SLOW_REQUEST_MS &&
+      proof?.failed !== true
+    )
+      return;
     const failure = 'error' in outcome ? outcome : undefined;
-    const proofMs =
-      'result' in outcome ? writeProofMs(outcome.result) : undefined;
+    const proofMs = proof?.ms;
     this.telemetry.record({
       name: 'graphql_cache.slow_request',
       operationCategory: operationCategoryForRequest(queued.request),
@@ -760,6 +766,7 @@ export class CacheWorkerCore {
       durationMs: finishedAt - startedAt,
       queueDepth,
       ...(proofMs === undefined ? {} : { proofMs }),
+      ...(proof?.failed === true ? { proofFailed: true } : {}),
     });
   }
 
@@ -1909,18 +1916,21 @@ export class CacheWorkerCore {
   }
 }
 
-/** The view proof time a write result reports, inside its authority envelope. */
-function writeProofMs(dispatched: unknown): number | undefined {
+/** The view proof a write result reports, inside its authority envelope. */
+function writeProof(
+  dispatched: unknown
+): { ms: number | undefined; failed: boolean } | undefined {
   const result =
     typeof dispatched === 'object' &&
     dispatched !== null &&
     'result' in dispatched
       ? dispatched.result
       : dispatched;
-  return typeof result === 'object' &&
-    result !== null &&
-    'proofMs' in result &&
-    typeof result.proofMs === 'number'
-    ? result.proofMs
-    : undefined;
+  if (typeof result !== 'object' || result === null) return undefined;
+  const ms =
+    'proofMs' in result && typeof result.proofMs === 'number'
+      ? result.proofMs
+      : undefined;
+  const failed = 'proofFailed' in result && result.proofFailed === true;
+  return ms === undefined && !failed ? undefined : { ms, failed };
 }

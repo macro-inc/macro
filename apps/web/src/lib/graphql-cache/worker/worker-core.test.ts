@@ -2977,6 +2977,58 @@ describe('CacheWorkerCore', () => {
     ]);
   });
 
+  it('reports a failed view proof even on a fast write', async () => {
+    let monotonicNow = 0;
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        writeQuery: async () => {
+          monotonicNow += 5;
+          return {
+            revision: '2',
+            revisionAdvanced: true,
+            changed: [],
+            affectedOps: [],
+            reset: false,
+            revalidations: [],
+            proofMs: 3,
+            proofFailed: true,
+          };
+        },
+      }),
+    });
+    const observations: Array<Record<string, unknown>> = [];
+    const core = new CacheWorkerCore({
+      monotonicNow: () => monotonicNow,
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    const port = { postMessage: vi.fn() };
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+    await core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
+      id: 2,
+      kind: 'write',
+      query: 'query Read { value }',
+      data: { value: true },
+    });
+
+    expect(
+      observations.filter(
+        (observation) => observation.name === 'graphql_cache.slow_request'
+      )
+    ).toEqual([
+      expect.objectContaining({
+        requestKind: 'write',
+        outcome: 'success',
+        durationMs: 5,
+        proofMs: 3,
+        proofFailed: true,
+      }),
+    ]);
+  });
+
   it('reports a slow request that failed with its error class', async () => {
     let monotonicNow = 0;
     loadCacheWasmMock.mockResolvedValue({
