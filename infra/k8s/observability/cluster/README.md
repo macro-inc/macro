@@ -258,10 +258,10 @@ every value of a header, custom key or rule match (`matchedData`) unless it is
 a header kept as is (`host`, `user-agent`, `accept-*`, `content-type`,
 `origin`, `x-forwarded-proto`, `x-forwarded-host`, `x-forwarded-port`, the
 trace headers, `sec-fetch-*`, `sec-ch-ua-*`, ...; the full list is in the
-module). Then anything shaped like an IPv4 or IPv6 address is redacted, so a
+module). Then any IPv4 or IPv6 address standing on its own is redacted, so a
 record cut off mid-value loses its addresses too; a version such as
-`Chrome/131.0.0.0`, ARNs and account IDs stay. WAF already redacts credentials,
-the path and the query string. The patterns are regular expressions over WAF's
+`Chrome/131.0.0.0` or `312.1.0.34.111`, a time, ARNs and account IDs stay. WAF
+already redacts credentials, the path and the query string. The patterns are regular expressions over WAF's
 JSON, whose entries are flat: they allow whitespace, either field order and
 other fields within an entry.
 
