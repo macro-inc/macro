@@ -470,6 +470,46 @@ describe('createUrqlInfiniteQuery', () => {
     expect(query.data).toEqual(['first-refreshed', 'second-refreshed']);
   });
 
+  it('reports the error when a strict refetch loses a replacement page', async () => {
+    const fake = makeFakeClient();
+    let query!: ReturnType<
+      typeof createUrqlInfiniteQuery<Page, Variables, string | null, string[]>
+    >;
+    const dispose = createRoot((rootDispose) => {
+      query = createUrqlInfiniteQuery<Page, Variables, string | null, string[]>(
+        () => ({
+          query: DOCUMENT,
+          client: fake.client,
+          initialPageParam: null,
+          variables: (cursor) => ({ cursor }),
+          getNextPageParam: (lastPage) => lastPage.nextCursor,
+          select: ({ pages }) => pages.flatMap((page) => page.values),
+        })
+      );
+      return rootDispose;
+    });
+    disposals.push(dispose);
+
+    fake.executions[0]?.next({ values: ['first'], nextCursor: 'cursor-1' });
+    const nextPage = query.fetchNextPage();
+    fake.executions[1]?.next({ values: ['second'], nextCursor: null });
+    await nextPage;
+
+    const refetch = query.refetch({ throwOnError: true });
+    fake.executions[2]?.next({
+      values: ['first-refreshed'],
+      nextCursor: 'cursor-2',
+    });
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(4));
+    const offline = new CombinedError({ networkError: new Error('offline') });
+    fake.executions[3]?.fail(offline);
+
+    await expect(refetch).rejects.toBe(offline);
+    expect(query.data).toEqual(['first-refreshed', 'second']);
+    expect(query.error).toBe(offline);
+    expect(fake.executions[3]?.unsubscribed).toBe(true);
+  });
+
   it('releases a pending replacement page as soon as the refetch is cancelled', async () => {
     const fake = makeFakeClient();
     let query!: ReturnType<

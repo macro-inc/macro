@@ -806,7 +806,15 @@ export class InfiniteQueryObserver<
     signal.addEventListener('abort', abort, { once: true });
     let replaced = false;
     try {
-      await replacement.observer.refetch(refetchOptions);
+      try {
+        await replacement.observer.refetch(refetchOptions);
+      } catch (cause) {
+        // A strict refetch throws before the result below is read; the
+        // detached page is destroyed, so the list keeps its error here.
+        if (!signal.aborted && !this.destroyed)
+          this.setState({ refetchError: toCombinedError(cause) });
+        throw cause;
+      }
       if (signal.aborted || this.destroyed) return false;
       const result = replacement.observer.getCurrentResult();
       if (result.data === undefined) {
