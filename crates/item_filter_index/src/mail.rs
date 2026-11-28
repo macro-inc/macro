@@ -55,12 +55,11 @@ pub const ATTACHMENT_ATTRIBUTE: &str = "mail-attachment";
 
 /// The value of an [`ATTACHMENT_ATTRIBUTE`] fact for `kind`.
 pub fn attachment_value(kind: AttachmentKind) -> ExactValue {
-    let code: u8 = match kind {
+    ExactValue::byte(match kind {
         AttachmentKind::Pdf => 1,
         AttachmentKind::Image => 2,
         AttachmentKind::Document => 3,
-    };
-    ExactValue::new([code]).expect("bounded attachment kind")
+    })
 }
 
 /// The kinds of the attachments with these MIME types, each once, in

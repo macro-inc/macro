@@ -126,6 +126,12 @@ impl ExactValue {
         Ok(Self(bytes))
     }
 
+    /// A one-byte value, such as a small enumeration's code: always within
+    /// [`MAX_EXACT_VALUE_BYTES`].
+    pub fn byte(value: u8) -> Self {
+        Self(vec![value])
+    }
+
     /// Construct a canonical UTF-8 value.
     pub fn utf8(value: impl AsRef<str>) -> Result<Self, ValidationError> {
         Self::new(value.as_ref().as_bytes())
