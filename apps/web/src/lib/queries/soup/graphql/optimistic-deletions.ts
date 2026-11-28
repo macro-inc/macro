@@ -76,12 +76,12 @@ export type GraphqlSoupDeletion = {
   settle: (
     deletedKeys: readonly string[],
     acknowledgements?: ReadonlyMap<string, Promise<boolean>>,
-    historyOnlyKeys?: ReadonlySet<string>,
-    dispatchedAt?: ReadonlyMap<string, number>
+    historyOnlyKeys?: ReadonlySet<string>
   ) => void;
   release: () => void;
   /** Retire only keys confirmed restored after this deletion began. */
-  restore: (keys: readonly string[]) => void;
+  confirmRestore: (keys: readonly string[], startedAt: number) => void;
+  markDispatched: (key: string, dispatchedAt: number) => void;
 };
 
 /** Retain normalized `typename:id` keys through the list's acknowledgement. */
@@ -100,8 +100,7 @@ export function createGraphqlSoupDeletion(
   let detachReaders: (() => void) | undefined;
   let unsubscribeRestores: (() => void) | undefined;
   const restoredKeys = new Set<string>();
-  const peerRestores = new Map<string, number>();
-  let dispatches: ReadonlyMap<string, number> | undefined;
+  const dispatches = new Map<string, number>();
   const release = () => {
     if (released) return;
     released = true;
@@ -114,33 +113,30 @@ export function createGraphqlSoupDeletion(
       (retained) => retained?.filter((entry) => entry.keys !== deletedKeys)
     );
   };
+  const restore = (keys: readonly string[]) => {
+    if (released || session !== queryAccountSession()) return;
+    for (const key of keys) {
+      if (targetKeys.has(key)) restoredKeys.add(key);
+    }
+    setDeletedKeys((previous) =>
+      previous.filter((key) => !restoredKeys.has(key))
+    );
+    if (deletedKeys().length === 0) release();
+  };
   const deletion: GraphqlSoupDeletion = {
     keys: deletedKeys,
     release,
-    restore: (keys) => {
-      if (released) return;
-      for (const key of keys) {
-        if (targetKeys.has(key)) restoredKeys.add(key);
-      }
-      setDeletedKeys((previous) =>
-        previous.filter((key) => !restoredKeys.has(key))
+    markDispatched: (key, dispatchedAt) => dispatches.set(key, dispatchedAt),
+    confirmRestore: (keys, startedAt) => {
+      // A delete still waiting on access will dispatch after this restore.
+      const restored = keys.filter(
+        (key) => startedAt > (dispatches.get(key) ?? Infinity)
       );
-      if (deletedKeys().length === 0) release();
+      if (restored.length > 0) restore(restored);
     },
-    settle: (
-      successfulKeys,
-      acknowledgements,
-      historyOnlyKeys,
-      dispatchedAt
-    ) => {
+    settle: (successfulKeys, acknowledgements, historyOnlyKeys) => {
       if (settled || released) return;
       settled = true;
-      dispatches = dispatchedAt;
-      for (const [key, restoreStartedAt] of peerRestores) {
-        if (restoreStartedAt > (dispatches?.get(key) ?? Infinity))
-          restoredKeys.add(key);
-      }
-      peerRestores.clear();
       setDeletedKeys(
         [...new Set(successfulKeys)].filter((key) => !restoredKeys.has(key))
       );
@@ -190,7 +186,7 @@ export function createGraphqlSoupDeletion(
             if (ready.size === 0) return;
           }
           queueMicrotask(() => {
-            if (observed === version) deletion.restore([...ready]);
+            if (observed === version) restore([...ready]);
           });
         });
       }, null);
@@ -221,17 +217,7 @@ export function createGraphqlSoupDeletion(
         receipt?.viewerId === account.userId &&
         isCurrentQueryAccount(account)
       ) {
-        for (const key of receipt.keys) {
-          if (!targetKeys.has(key)) continue;
-          if (settled) {
-            if (receipt.startedAt > (dispatches?.get(key) ?? Infinity))
-              deletion.restore([key]);
-          } else if (receipt.startedAt > (peerRestores.get(key) ?? 0)) {
-            // The delete may still be waiting on access. Decide once its actual
-            // dispatch time is available.
-            peerRestores.set(key, receipt.startedAt);
-          }
-        }
+        deletion.confirmRestore(receipt.keys, receipt.startedAt);
       }
     };
     channel?.addEventListener('message', onRestore);
@@ -265,7 +251,8 @@ export function prepareGraphqlSoupRestore() {
   ]);
   return (restoredKeys: readonly string[]) => {
     batch(() => {
-      for (const deletion of deletions) deletion.restore(restoredKeys);
+      for (const deletion of deletions)
+        deletion.confirmRestore(restoredKeys, startedAt);
     });
     if (account && isCurrentQueryAccount(account) && restoredKeys.length > 0) {
       getRestoreChannel()?.postMessage({

@@ -22,6 +22,7 @@ import {
   GRAPHQL_SOUP_DELETE_RETENTION_MS,
   observeGraphqlSoupDeletions,
   prepareGraphqlSoupRestore,
+  soupOperationTime,
   usePendingGraphqlSoupDeleteKeys,
   withoutPendingGraphqlSoupDeletes,
   withoutPendingSoupEntities,
@@ -87,6 +88,10 @@ describe('GraphQL Soup deletion lifecycle', () => {
       mutationKey: GRAPHQL_SOUP_DELETE_MUTATION_KEY,
       onMutate: () => ({ graphqlDeletion: deletion }),
       mutationFn: async () => {
+        deletion.markDispatched(
+          'GraphqlSoupDocument:restored',
+          soupOperationTime()
+        );
         started();
         await network;
       },
@@ -101,6 +106,7 @@ describe('GraphQL Soup deletion lifecycle', () => {
     try {
       const confirmRestore = prepareGraphqlSoupRestore();
       confirmRestore(['GraphqlSoupDocument:restored']);
+      expect(deletion.keys()).toEqual(['GraphqlSoupDocument:sibling']);
       finish();
       await request;
       expect(deletion.keys()).toEqual(['GraphqlSoupDocument:sibling']);
@@ -245,18 +251,12 @@ describe('GraphQL Soup deletion lifecycle', () => {
     const older = createGraphqlSoupDeletion([key, otherKey]);
     const waitingForAccess = createGraphqlSoupDeletion([key]);
     const origin = performance.timeOrigin;
-    older.settle(
-      [key, otherKey],
-      undefined,
-      undefined,
-      new Map([
-        [key, origin + 1],
-        [otherKey, origin + 1],
-      ])
-    );
+    older.markDispatched(key, origin + 1);
+    older.markDispatched(otherKey, origin + 1);
     clock.mockReturnValue(3);
     const newer = createGraphqlSoupDeletion([key]);
-    newer.settle([key], undefined, undefined, new Map([[key, origin + 3]]));
+    newer.markDispatched(key, origin + 3);
+    newer.settle([key]);
     const peer = new BroadcastChannel('macro:soup-restore');
     try {
       const startedAt = performance.timeOrigin + 2;
@@ -265,12 +265,8 @@ describe('GraphQL Soup deletion lifecycle', () => {
       await vi.waitFor(() => expect(older.keys()).toEqual([otherKey]));
       expect(newer.keys()).toEqual([key]);
       expect(waitingForAccess.keys()).toEqual([key]);
-      waitingForAccess.settle(
-        [key],
-        undefined,
-        undefined,
-        new Map([[key, origin + 3]])
-      );
+      waitingForAccess.markDispatched(key, origin + 3);
+      waitingForAccess.settle([key]);
       expect(waitingForAccess.keys()).toEqual([key]);
     } finally {
       peer.close();

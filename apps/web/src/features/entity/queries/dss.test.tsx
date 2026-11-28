@@ -87,6 +87,8 @@ import {
   GRAPHQL_SOUP_DELETE_MUTATION_KEY,
   GRAPHQL_SOUP_DELETE_RETENTION_MS,
   type GraphqlSoupDeleteContext,
+  prepareGraphqlSoupRestore,
+  soupOperationTime,
   usePendingGraphqlSoupDeleteKeys,
 } from '@queries/soup/graphql/optimistic-deletions';
 import { databasesKeys, formsKeys } from '@queries/storage/keys';
@@ -357,7 +359,10 @@ describe('bulk delete GraphQL optimism', () => {
     ).rejects.toBeInstanceOf(BulkDeleteFailure);
     expect(mocks.deleteCallGraphql).toHaveBeenCalledWith(
       { type: 'CALL', id: 'deleted-call' },
-      expect.any(Function)
+      {
+        onDispatched: expect.any(Function),
+        onAcknowledged: expect.any(Function),
+      }
     );
     expect(invalidate).toHaveBeenCalledWith({ queryKey: callKeys._def });
     expect(invalidate).toHaveBeenCalledWith({
@@ -536,7 +541,7 @@ describe('bulk delete GraphQL optimism', () => {
   it('hands a confirmed GraphQL delete off to its write receipt without another list read', async () => {
     const receipt = deferred<boolean>();
     mocks.deleteItem.mockImplementation(async (_entity, acknowledge) => {
-      acknowledge?.(receipt.promise);
+      acknowledge?.onAcknowledged(receipt.promise);
       return true;
     });
     const { mutation, pendingKeys } = mount();
@@ -545,6 +550,44 @@ describe('bulk delete GraphQL optimism', () => {
     receipt.resolve(true);
     expect(mocks.refresh).not.toHaveBeenCalled();
     await vi.waitFor(() => expect(pendingKeys().size).toBe(0));
+  });
+
+  it('orders same-tab restores against each dispatch while other bulk deletes are pending', async () => {
+    const waitingForAccess = deferred<void>();
+    const sibling = deferred<void>();
+    mocks.deleteItem.mockImplementation(async ({ id }, acknowledge) => {
+      if (id === 'waiting') await waitingForAccess.promise;
+      acknowledge.onDispatched(soupOperationTime());
+      if (id === 'sibling') await sibling.promise;
+      acknowledge.onAcknowledged(Promise.resolve(false));
+      return true;
+    });
+    const { mutation, pendingKeys } = mount();
+    const request = mutation.mutateAsync([
+      entity('restored'),
+      entity('waiting'),
+      entity('sibling'),
+    ]);
+    await vi.waitFor(() => expect(mocks.deleteItem).toHaveBeenCalledTimes(3));
+    const confirmRestore = prepareGraphqlSoupRestore();
+    confirmRestore([
+      'GraphqlSoupDocument:restored',
+      'GraphqlSoupDocument:waiting',
+    ]);
+    try {
+      expect([...pendingKeys()]).toEqual([
+        'GraphqlSoupDocument:waiting',
+        'GraphqlSoupDocument:sibling',
+      ]);
+    } finally {
+      waitingForAccess.resolve();
+      sibling.resolve();
+      await request;
+    }
+    expect([...pendingKeys()]).toEqual([
+      'GraphqlSoupDocument:waiting',
+      'GraphqlSoupDocument:sibling',
+    ]);
   });
 
   it('revalidates partial boolean failures without treating every item as deleted', async () => {
@@ -825,7 +868,10 @@ describe('channel deletion', () => {
 
     expect(mocks.deleteCallGraphql).toHaveBeenCalledWith(
       { type: 'CHANNEL', id: 'channel-id' },
-      expect.any(Function)
+      {
+        onDispatched: expect.any(Function),
+        onAcknowledged: expect.any(Function),
+      }
     );
     expect(invalidate).toHaveBeenCalledWith(
       expect.objectContaining({ queryKey: channelKeys._def })

@@ -130,7 +130,10 @@ it('uses the accepted tombstone and reads only unmaintained lists', async () => 
     }),
   });
   const acknowledge = vi.fn<(ready: Promise<boolean>) => void>();
-  await trashEntity({ type: 'DOCUMENT', id: 'entity' }, acknowledge);
+  await trashEntity(
+    { type: 'DOCUMENT', id: 'entity' },
+    { onAcknowledged: acknowledge, onDispatched: vi.fn() }
+  );
   expect(acknowledge).toHaveBeenCalledOnce();
   await expect(acknowledge.mock.calls[0]?.[0]).resolves.toBe(true);
   expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith({
@@ -143,7 +146,10 @@ it('uses the completed uncached exchange read as the deletion acknowledgement', 
   mocks.readAgain.mockReturnValue(true);
   mocks.mutation.mockReturnValue(trashed([]));
   const acknowledge = vi.fn<(ready: Promise<boolean>) => void>();
-  await trashEntity({ type: 'DOCUMENT', id: 'entity' }, acknowledge);
+  await trashEntity(
+    { type: 'DOCUMENT', id: 'entity' },
+    { onAcknowledged: acknowledge, onDispatched: vi.fn() }
+  );
   expect(acknowledge).toHaveBeenCalledOnce();
   await expect(acknowledge.mock.calls[0]?.[0]).resolves.toBe(true);
   expect(mocks.refresh).not.toHaveBeenCalled();
@@ -153,7 +159,10 @@ it('keeps a deletion unacknowledged when both cache effects and recovery fail', 
   mocks.mutation.mockReturnValue(trashed([]));
   mocks.refresh.mockRejectedValue(new Error('list read failed'));
   const acknowledge = vi.fn<(ready: Promise<boolean>) => void>();
-  await trashEntity({ type: 'DOCUMENT', id: 'entity' }, acknowledge);
+  await trashEntity(
+    { type: 'DOCUMENT', id: 'entity' },
+    { onAcknowledged: acknowledge, onDispatched: vi.fn() }
+  );
   expect(acknowledge).toHaveBeenCalledOnce();
   await expect(acknowledge.mock.calls[0]?.[0]).resolves.toBe(false);
   expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith({
@@ -169,7 +178,10 @@ it('recovers a delete whose transport lost the server reply without retrying the
   mocks.mutation.mockReturnValue({ toPromise: async () => ({ error }) });
   const acknowledge = vi.fn();
   await expect(
-    trashEntity({ type: 'PROJECT', id: 'entity' }, acknowledge)
+    trashEntity(
+      { type: 'PROJECT', id: 'entity' },
+      { onAcknowledged: acknowledge, onDispatched: vi.fn() }
+    )
   ).rejects.toBe(error);
   expect(acknowledge).not.toHaveBeenCalled();
   expect(mocks.mutation).toHaveBeenCalledOnce();
@@ -185,7 +197,10 @@ it('leaves recovery to the uncached exchange when a delete reply is lost', async
   });
   mocks.mutation.mockReturnValue({ toPromise: async () => ({ error }) });
   await expect(
-    trashEntity({ type: 'PROJECT', id: 'entity' }, vi.fn())
+    trashEntity(
+      { type: 'PROJECT', id: 'entity' },
+      { onAcknowledged: vi.fn(), onDispatched: vi.fn() }
+    )
   ).rejects.toBe(error);
   expect(mocks.refresh).not.toHaveBeenCalled();
 });
@@ -269,6 +284,8 @@ it.each([
     const parent = createGraphqlSoupDeletion([parentKey]);
     const restored = createGraphqlSoupDeletion(restoredKeys);
     const dispatchedAt = soupOperationTime();
+    parent.markDispatched(parentKey, dispatchedAt);
+    for (const key of restoredKeys) restored.markDispatched(key, dispatchedAt);
     const peer = new BroadcastChannel('macro:soup-restore');
     const send = peer.postMessage.bind(peer);
     const broadcast = vi
@@ -296,18 +313,6 @@ it.each([
     });
     try {
       await restoreEntity(entity);
-      parent.settle(
-        [parentKey],
-        undefined,
-        undefined,
-        new Map([[parentKey, dispatchedAt]])
-      );
-      restored.settle(
-        restoredKeys,
-        undefined,
-        undefined,
-        new Map(restoredKeys.map((key) => [key, dispatchedAt]))
-      );
       await vi.waitFor(() => expect(restored.keys()).toEqual([]));
       expect(parent.keys()).toEqual([parentKey]);
     } finally {
@@ -326,6 +331,8 @@ it('shows a confirmed restore immediately while retaining unrelated and newer de
     'GraphqlSoupDocument:sibling',
     'GraphqlSoupChat:restored',
   ]);
+  for (const key of earlier.keys())
+    earlier.markDispatched(key, soupOperationTime());
   earlier.settle(earlier.keys());
   let finish!: () => void;
   const network = new Promise<void>((resolve) => {

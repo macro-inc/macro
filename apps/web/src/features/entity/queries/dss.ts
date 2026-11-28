@@ -54,7 +54,10 @@ import { scheduledActionClient } from '@service-scheduled-action/client';
 import type { ListedDatabase } from '@service-storage/generated/schemas/listedDatabase';
 import type { ListedForm } from '@service-storage/generated/schemas/listedForm';
 import { getEntityGraphqlClient } from '@service-storage/graphql-soup';
-import { useMutation } from '@tanstack/solid-query';
+import {
+  type MutationFunctionContext,
+  useMutation,
+} from '@tanstack/solid-query';
 import { batch } from 'solid-js';
 import { type EntityData, getEntityProjectId } from '../types/entity';
 import { BulkDeleteFailure } from './bulk-delete-result';
@@ -147,8 +150,7 @@ async function settleDssDeletes(
   entities: EntityData[],
   deletions: Promise<boolean>[],
   writer: QueryAccount | undefined,
-  acknowledgements: Map<string, Promise<boolean>>,
-  dispatches: ReadonlyMap<string, number>
+  acknowledgements: Map<string, Promise<boolean>>
 ) {
   const outcomes = await Promise.allSettled(deletions);
   const results = outcomes.map(
@@ -171,11 +173,10 @@ async function settleDssDeletes(
       entities,
       results,
       failure?.reason,
-      acknowledgements,
-      dispatches
+      acknowledgements
     );
   }
-  return { results, acknowledgements, dispatches };
+  return { results, acknowledgements };
 }
 
 function isHistoryList(body: object): boolean {
@@ -239,6 +240,11 @@ export function createBulkDeleteDssItemsMutation() {
       .getMutationCache()
       .getAll()
       .some((mutation) => mutation.state.context === context);
+  // TanStack passes the same function context to onMutate and mutationFn.
+  const overlays = new WeakMap<
+    MutationFunctionContext,
+    ReturnType<typeof createGraphqlSoupDeletion>
+  >();
   return useMutation(() => ({
     mutationKey: GRAPHQL_SOUP_DELETE_MUTATION_KEY,
     gcTime: GRAPHQL_SOUP_DELETE_RETENTION_MS,
@@ -251,13 +257,13 @@ export function createBulkDeleteDssItemsMutation() {
       const writer = currentQueryAccount();
       const deletable = entities.filter(isDeletable);
       const acknowledgements = new Map<string, Promise<boolean>>();
-      const dispatches = new Map<string, number>();
+      const overlay = overlays.get(context);
       const deletions = deletable.map(async (e) => {
         const key = soupEntityKey(e);
         const acknowledge: OnSoupDeletion | undefined = key
-          ? (ready, dispatchedAt) => {
-              acknowledgements.set(key, ready);
-              dispatches.set(key, dispatchedAt);
+          ? {
+              onDispatched: (at) => overlay?.markDispatched(key, at),
+              onAcknowledged: (ready) => acknowledgements.set(key, ready),
             }
           : undefined;
         if (e.type === 'agent_session') {
@@ -296,23 +302,19 @@ export function createBulkDeleteDssItemsMutation() {
         }
         return deleteItem({ id: e.id, itemType: e.type }, acknowledge);
       });
-      return settleDssDeletes(
-        deletable,
-        deletions,
-        writer,
-        acknowledgements,
-        dispatches
-      );
+      return settleDssDeletes(deletable, deletions, writer, acknowledgements);
     },
     onMutate: async (entities: EntityData[], context) => {
       if (context.meta?.accountSession !== queryAccountSession())
         throw new QueryAccountChangedError();
       const deletable = entities.filter(isDeletable);
       const { keys, ...snapshots } = removeDssEntityCaches(deletable);
+      const graphqlDeletion = createGraphqlSoupDeletion([...keys]);
+      overlays.set(context, graphqlDeletion);
       return {
         ...snapshots,
         accountSession: queryAccountSession(),
-        graphqlDeletion: createGraphqlSoupDeletion([...keys]),
+        graphqlDeletion,
       };
     },
     onSettled: (outcome, error, entities, context) => {
@@ -357,12 +359,7 @@ export function createBulkDeleteDssItemsMutation() {
         });
         for (const key of legacyKeys) acknowledgements.set(key, ready);
       }
-      deletion.settle(
-        deletedKeys,
-        acknowledgements,
-        historyOnlyKeys,
-        result?.dispatches
-      );
+      deletion.settle(deletedKeys, acknowledgements, historyOnlyKeys);
     },
     onError: (error, entities, context) => {
       if (context && !isCurrentContext(context)) {

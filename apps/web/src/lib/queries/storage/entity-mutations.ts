@@ -70,10 +70,10 @@ function refreshAfterWrite(result: EntityWriteResult, strict = false) {
   fireAndForget(refresh, 'entity-mutation');
 }
 
-export type OnSoupDeletion = (
-  acknowledgement: Promise<boolean>,
-  dispatchedAt: number
-) => void;
+export type OnSoupDeletion = {
+  onDispatched: (dispatchedAt: number) => void;
+  onAcknowledged: (acknowledgement: Promise<boolean>) => void;
+};
 
 async function deleteEntity(
   entity: EntityRefInput,
@@ -83,8 +83,8 @@ async function deleteEntity(
   const generation = cacheSessionGeneration.capture();
   const host = onDeletion ? getGraphqlCacheHost() : undefined;
   let result: Awaited<ReturnType<typeof write>>;
-  const dispatchedAt = soupOperationTime();
   try {
+    onDeletion?.onDispatched(soupOperationTime());
     result = await write(entity);
   } catch (error) {
     if (
@@ -101,7 +101,7 @@ async function deleteEntity(
     throw error;
   }
   if (!cacheSessionGeneration.isCurrent(generation)) {
-    onDeletion?.(Promise.resolve(false), dispatchedAt);
+    onDeletion?.onAcknowledged(Promise.resolve(false));
     return;
   }
   if (!onDeletion) {
@@ -120,12 +120,11 @@ async function deleteEntity(
     // Raw list snapshots gate release separately. A failed reread of an
     // unrelated unmaintained list must not veto this tombstone.
     refreshAfterWrite(result);
-    onDeletion(Promise.resolve(true), dispatchedAt);
+    onDeletion.onAcknowledged(Promise.resolve(true));
     return;
   }
-  onDeletion(
-    refreshAfterWrite({ ...result, effectsResolved: false }, true),
-    dispatchedAt
+  onDeletion.onAcknowledged(
+    refreshAfterWrite({ ...result, effectsResolved: false }, true)
   );
 }
 
