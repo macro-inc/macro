@@ -41,6 +41,8 @@ export type FrontOptions = {
   emailUrl: string;
   /** The stack's `document_storage_service`. */
   documentStorageUrl: string;
+  /** The DSS origin for upgrades, which the HTTP recording proxy cannot relay. */
+  documentStorageSocketOrigin?: string | null;
   internalApiKey: string;
   user: SignedInUser;
   /**
@@ -542,7 +544,14 @@ export async function startFront(options: FrontOptions): Promise<Front> {
           path: url.pathname,
           recorded: known?.path ?? url.pathname,
         }
-      : known && { ...known, recorded: known.path };
+      : known && {
+          ...known,
+          base:
+            known.service === 'dss'
+              ? (options.documentStorageSocketOrigin ?? known.base)
+              : known.base,
+          recorded: known.path,
+        };
     if (!target) {
       socket.destroy();
       return;

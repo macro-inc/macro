@@ -186,6 +186,7 @@ async fn start(
         "id": id,
         "emailUrl": stack.api_url(),
         "documentStorageUrl": graphql_url.trim_end_matches(crate::stack::GRAPHQL_PATH),
+        "documentStorageSocketOrigin": stack.graphql_socket_origin(),
         "gmailUrl": stack.gmail().base_url(),
         "outlookUrl": stack.outlook().base_url(),
         "internalApiKey": stack.internal_api_key(),

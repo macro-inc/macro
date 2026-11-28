@@ -163,6 +163,11 @@ the Soup-backed thread list, and saved email views.
   applies the same MIME prefixes as the flags. A list with that clause is server
   membership, so it refetches when a pushed thread carries attachments and
   after the Soup socket reconnects (`mail-list-revalidation.ts`).
+- Sender filter edits refresh mounted importance lists that read membership
+  from the server. A locally maintained list can rely on the push when the
+  reply confirms the publish fit under the cap and the same Soup subscription
+  stayed connected during the edit. Legacy Mail profiles, capped replies and
+  interrupted subscriptions still use the scoped refresh.
 - Build participant and subject ORs as balanced trees; a flat OR exceeds the
   ingress depth limit.
 - The data source keeps the previous rows while a search loads only when

@@ -180,6 +180,7 @@ pub struct Stack {
     /// The search cluster, on a stack that searches.
     opensearch_url: Option<String>,
     graphql_url: Option<String>,
+    graphql_socket_origin: Option<String>,
     calendar: Option<CalendarPart>,
     worker_env: BTreeMap<String, String>,
     api_url: String,
@@ -323,6 +324,7 @@ impl Stack {
             focus_stand_ins: None,
             opensearch_url: None,
             graphql_url: None,
+            graphql_socket_origin: None,
             calendar: None,
             worker_env: env,
             api_url,
@@ -423,6 +425,7 @@ impl Stack {
                         RecordingProxy::start(DOCUMENT_STORAGE, &url, self.recorder.clone())
                             .await?;
                     self.graphql_url = Some(format!("{}{GRAPHQL_PATH}", proxy.url()));
+                    self.graphql_socket_origin = Some(url);
                     self.graphql_proxy = Some(proxy);
                     self.document_storage = Some(service);
                     return Ok(());
@@ -571,6 +574,10 @@ impl Stack {
     /// Where the GraphQL API answers, when the stack serves it.
     pub(crate) fn graphql_url(&self) -> Option<String> {
         self.graphql_url.clone()
+    }
+
+    pub(crate) fn graphql_socket_origin(&self) -> Option<&str> {
+        self.graphql_socket_origin.as_deref()
     }
 
     /// Starts everything that talks to the scenario's database, Redis

@@ -179,6 +179,7 @@ export const test = base.extend<
         dist: DIST,
         emailUrl: stack.info.emailUrl,
         documentStorageUrl: stack.info.documentStorageUrl,
+        documentStorageSocketOrigin: stack.info.documentStorageSocketOrigin,
         internalApiKey: stack.info.internalApiKey,
         user,
         proxyUrl: local?.proxyUrl,

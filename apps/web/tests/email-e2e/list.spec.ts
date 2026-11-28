@@ -186,6 +186,104 @@ test.describe('what a row shows and opens', () => {
 });
 
 test.describe('mail that arrives while the list is open', () => {
+  for (const size of [8, 16]) {
+    test(`a remote sender filter write moves rows by push in a mailbox with ${size} threads`, async ({
+      page,
+      mailbox,
+    }, testInfo) => {
+      test.skip(
+        !process.env.EMAIL_E2E_LIVE_UPDATES,
+        'needs the Kafka broker to itself'
+      );
+      test.setTimeout(120_000);
+      const affected = new Set<string>();
+      for (let index = 0; index < size; index++) {
+        const subject = `Sender rule thread ${index}`;
+        await mailbox.deliver({
+          from: index % 2 === 0 ? from : 'Pat <pat@example.com>',
+          subject,
+          text: 'Sender rule fixture.',
+        });
+        if (index % 2 === 0) affected.add((await mailbox.synced(subject)).id);
+      }
+
+      const sent = sentOperations(page);
+      await mailbox.open();
+      await expect.poll(() => rowIds(page)).toHaveLength(size);
+      await expect
+        .poll(() => catchUpFinished(page), { timeout: 60_000 })
+        .toBe(true);
+
+      // This listener witnesses the same live delivery as the mounted list.
+      // Start with a push that leaves the current Signal membership alone.
+      const updates = await liveUpdates(page);
+      let promotions = 0;
+      await expect
+        .poll(
+          async () => {
+            const subject = `Noise probe ${++promotions}`;
+            await deliverLabelled(
+              mailbox,
+              {
+                from: 'Probe <probe@example.com>',
+                subject,
+                text: 'Noise fixture.',
+              },
+              ['INBOX', 'UNREAD', 'CATEGORY_PROMOTIONS']
+            );
+            await mailbox.synced(subject);
+            return updates();
+          },
+          { timeout: 45_000, intervals: [1_000] }
+        )
+        .toBeGreaterThan(0);
+      const before = await rowIds(page);
+      expect(before).toHaveLength(size);
+      const listReads = () =>
+        sent.filter(({ name }) =>
+          ['Soup', 'SoupPreviewPage', 'GroupSoup'].includes(name)
+        ).length;
+      const initialReads = listReads();
+      expect(initialReads).toBeGreaterThan(0);
+
+      // An independent HTTP writer never calls the browser's sender-filter
+      // revalidation. The mounted list can only learn of the write by push.
+      const upsert = await mailbox.api('/email/email/filters', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          email_address: 'grace@example.com',
+          is_important: false,
+        }),
+      });
+      expect(upsert.status).toBe(200);
+      const saved = (await upsert.json()) as {
+        filter: { id: string };
+        push_was_capped: boolean;
+      };
+      expect(saved.push_was_capped).toBe(false);
+      await expect
+        .poll(() => rowIds(page))
+        .toEqual(before.filter((id) => !affected.has(id)));
+      const remove = await mailbox.api(
+        `/email/email/filters/${saved.filter.id}?include_push_status=true`,
+        { method: 'DELETE' }
+      );
+      expect(remove.status).toBe(200);
+      expect(await remove.json()).toEqual({ push_was_capped: false });
+      await expect.poll(() => rowIds(page)).toEqual(before);
+      expect(listReads()).toBe(initialReads);
+      await testInfo.attach('sender-filter-push-counts', {
+        body: JSON.stringify({
+          size,
+          changedThreads: affected.size,
+          listRefetches: listReads() - initialReads,
+        }),
+        contentType: 'application/json',
+      });
+    });
+  }
+
   // Class web-new-mail-not-inserted: when this fails, a message delivered
   // while the inbox is open got no row until a reload, the row landed below
   // older mail, or the same thread was listed twice.

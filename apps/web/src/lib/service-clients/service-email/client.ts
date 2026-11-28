@@ -32,6 +32,7 @@ import type {
   ApiPaginatedThreadCursor,
   CreateDraftRequest,
   CreateDraftResponse,
+  EmailFilterDeletePushStatus,
   GetAttachmentDocumentIDResponse,
   GetAttachmentResponse,
   GetScheduledResponse,
@@ -803,10 +804,13 @@ export const emailClient = {
     ).map((result) => result);
   },
   async deleteEmailFilter(args: { id: string }, linkId?: string) {
-    return emailFetch(`/email/filters/${args.id}`, {
-      method: 'DELETE',
-      headers: emailLinkHeaders(linkId),
-    });
+    return emailFetch<EmailFilterDeletePushStatus>(
+      `/email/filters/${args.id}?include_push_status=true`,
+      {
+        method: 'DELETE',
+        headers: emailLinkHeaders(linkId),
+      }
+    );
   },
   async prepareCalendarReplacement(
     eventId: string,

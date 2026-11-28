@@ -648,6 +648,7 @@ vi.mock('./graphql-soup-websocket', () => ({
   createGraphqlSoupSubscriptionsLifecycle: () => ({
     replace: mocks.replaceSubscriptions,
     connected: mocks.subscriptionsConnected,
+    soupSubscription: () => undefined,
     dispose: vi.fn(() => mocks.recordSubscriptionDisposal()),
   }),
 }));

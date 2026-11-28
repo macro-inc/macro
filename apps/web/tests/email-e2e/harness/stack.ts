@@ -9,6 +9,7 @@ export type StackInfo = {
   id: string;
   emailUrl: string;
   documentStorageUrl: string;
+  documentStorageSocketOrigin?: string | null;
   gmailUrl: string;
   outlookUrl: string;
   internalApiKey: string;
