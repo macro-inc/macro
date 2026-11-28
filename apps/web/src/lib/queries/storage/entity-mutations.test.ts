@@ -1,3 +1,4 @@
+import { withOptimisticMutationDisposition } from '@graphql-cache/exchange/optimistic';
 import { CombinedError } from '@urql/core';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
@@ -63,6 +64,20 @@ beforeEach(() => {
 
 afterEach(() => queryClient.clear());
 
+/** A move the cache queued, answered with its prediction. */
+const queuedMove = () =>
+  withOptimisticMutationDisposition(
+    {
+      operation: { context: {} },
+      data: {
+        moveEntities: {
+          results: [{ __typename: 'GraphqlMutationSuccess', effects: [] }],
+        },
+      },
+    } as never,
+    { kind: 'queued', transactionId: 'move' }
+  );
+
 const trashed = (effects: unknown) => ({
   toPromise: async () => ({
     data: {
@@ -120,11 +135,7 @@ it.each([
 it('queues a move with the lists to read once it commits, and reads none itself', async () => {
   mocks.mutation.mockReturnValue({
     toPromise: async () => ({
-      data: {
-        moveEntities: {
-          results: [{ __typename: 'GraphqlMutationSuccess', effects: [] }],
-        },
-      },
+      ...queuedMove(),
     }),
   });
   await moveEntity({ type: 'DOCUMENT', id: 'entity' }, 'project');
@@ -405,3 +416,24 @@ it.each([
     });
   }
 );
+
+it('reads the lists itself after a move the queue refused and sent directly', async () => {
+  mocks.mutation.mockReturnValue({
+    toPromise: async () =>
+      withOptimisticMutationDisposition(
+        {
+          operation: { context: {} },
+          data: {
+            moveEntities: {
+              results: [{ __typename: 'GraphqlMutationSuccess', effects: [] }],
+            },
+          },
+        } as never,
+        { kind: 'committed' }
+      ),
+  });
+  await moveEntity({ type: 'DOCUMENT', id: 'entity' }, 'project');
+  expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith({
+    unmaintainedOnly: true,
+  });
+});
