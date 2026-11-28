@@ -1,7 +1,7 @@
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { Telemetry } from '@macro-inc/observability';
 import { gql } from '@urql/core';
-import { createComputed, createRoot, createSignal } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { selectRecords } from '../../../graphql-cache/exchange/record-selection';
 import { createNoopCacheHost } from '../../../graphql-cache/host/noop-host';
@@ -127,37 +127,25 @@ const flush = async () => {
   await Promise.resolve();
 };
 
-it('updates only subscribed fields and retains row and array identity', async () => {
+it('replaces only the patched row, sharing what the patch left', async () => {
   const state = setup();
   state.requests[0].resolve(snapshot());
   await flush();
   const rows = state.query.data()!.records;
-  const first = rows[0].record;
-  let reads = 0;
-  let names = 0;
-  let others = 0;
-  createRoot((dispose) => {
-    cleanups.push(dispose);
-    createComputed(() => {
-      first.read;
-      reads++;
-    });
-    createComputed(() => {
-      first.name;
-      names++;
-    });
-    createComputed(() => {
-      rows[1].record.read;
-      others++;
-    });
-  });
+  const [first, second] = rows;
   state.change('2');
   expect(state.requests[1].args.liveQuery?.since).toBe('1');
   state.requests[1].resolve(patch());
   await flush();
-  expect(state.query.data()!.records).toBe(rows);
-  expect(state.query.data()!.records[0].record).toBe(first);
-  expect([reads, names, others]).toEqual([2, 1, 1]);
+  const next = state.query.data()!.records;
+  expect(next).not.toBe(rows);
+  expect(next[0]).not.toBe(first);
+  expect(next[0].record).toMatchObject({ id: 'a', read: true });
+  expect(first.record).toMatchObject({ read: false });
+  expect((next[0].record as { nested: object }).nested).toBe(
+    (first.record as { nested: object }).nested
+  );
+  expect(next[1]).toBe(second);
 });
 
 it('applies membership and value changes atomically', async () => {
