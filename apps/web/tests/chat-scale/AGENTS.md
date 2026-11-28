@@ -40,10 +40,9 @@ sections' coverage.
   no first page shows. Sections grow with the account: six team sections
   and three personal ones hold about 92% of the channels that can be in a
   section (every channel but direct messages), from every era, and a fourth
-  personal section is a name rule over the private channels. The rail's
-  first pages are the account's newest 500 channels, which the guard
-  below counts against. Six of the 12
-  favorites are old. `savedView` is the viewer's saved rail: Favorites,
+  personal section is a name rule over the private channels. The guard
+  below counts against the account's newest 500 channels, which no single
+  page of Soup's largest size reaches past. Six of the 12 favorites are old. `savedView` is the viewer's saved rail: Favorites,
   Direct messages and one team section open, everything else collapsed.
 - `backend.ts`: every request the page makes, answered in the test process:
   Soup GraphQL (HTTP and `graphql-transport-ws`) from the fixture's
@@ -92,8 +91,9 @@ reading under one is a measurement that did not happen.
   would fail the whole query.
 - The viewer is a member of its team (`TEAM_ID`), which owns the team
   channels and sections, not an admin (admin-only surfaces such as the Slack
-  import stay shut), and has no CRM access: the CRM access hint must be
-  `none` or a UUID policy.
+  import stay shut), and has no CRM access: every document storage answer
+  carries `<TEAM_ID>:denied`, as the server writes it, and the CRM access
+  read agrees.
 - Request counts per step include the app's periodic polls, so they are
   recorded, not limited.
 - The rail pages its sections in as it scrolls, so it has no bottom to find,
@@ -107,7 +107,7 @@ reading under one is a measurement that did not happen.
   that makes the rail's by-ID reads grow with the account: sections hold at
   least `MIN_SECTION_COVERAGE` of the channels that can be in one, and at
   least `MIN_OUTSIDE_FIRST_PAGES` of the channels sections and favorites
-  name are outside the account's newest 500, the rail's first pages. A fixed handful of sections
+  name are outside the account's newest 500. A fixed handful of sections
   hides that growth.
 - The saved view is written to local storage before the app starts, under
   the viewer's key, only when nothing is there yet.

@@ -169,14 +169,15 @@ describe('the Chat scale fixture, filtering', () => {
   it('counts channel previews with the server reads', () => {
     const fixture = createChatFixture(700);
     const [channel] = fixture.channels;
-    const previews = fixture.channelPreviews([channel?.id ?? '', 'missing']);
+    const id = channel?.id ?? '';
+    const previews = fixture.channelPreviews([id, 'missing', id]);
     expect(previews.map((preview) => preview.type)).toEqual([
       'access',
       'does_not_exist',
     ]);
     expect(fixture.reads()).toMatchObject({
-      rowsRequested: 2,
-      idsRequested: 2,
+      rowsRequested: 3,
+      idsRequested: 3,
       rowsReturned: 1,
     });
   });

@@ -58,9 +58,9 @@ const SCHEMA = buildSchema(
     .join('\n')
 );
 
-/** The access hint every document storage answer carries: the viewer's team
- * gives it no CRM access to prove (`crm-access-cache.ts`). */
-const DSS_HEADERS = { 'x-macro-crm-access': 'none' };
+/** The access hint every document storage answer carries, as the server
+ * writes it for a team member without CRM access (`crm-access-cache.ts`). */
+const DSS_HEADERS = { 'x-macro-crm-access': `${TEAM_ID}:denied` };
 
 /** An empty account's answers to what the app shell asks at startup, by
  * method and path, in each service's response type. A service request that is
