@@ -1670,9 +1670,14 @@ describe('CoordinatorRouter', () => {
     // a starts and closes; b and c are hidden, and b hands over a commit.
     const hiddenElection = async () => {
       vi.useFakeTimers();
+      const observations: Array<{ ownerEvent?: string; outcome?: string }> = [];
       const router = new CoordinatorRouter({
         verifyTabLockHeld: async () => true,
         watchTabLock: () => () => undefined,
+        telemetry: {
+          record: (observation) => observations.push(observation),
+          flush: vi.fn(),
+        },
       });
       const [a, b, c] = [new FakePort(), new FakePort(), new FakePort()];
       await register(router, a, 'a');
@@ -1718,7 +1723,7 @@ describe('CoordinatorRouter', () => {
         kind: 'activating',
         tabId: 'b',
       });
-      return { router, b, c };
+      return { router, b, c, observations };
     };
 
     it('is given up for another tab once it loads too long', async () => {
@@ -1745,6 +1750,20 @@ describe('CoordinatorRouter', () => {
       await vi.advanceTimersByTimeAsync(HIDDEN_SETTLEMENT_STARTUP_TIMEOUT_MS);
       expect(messagesOfKind(b, 'terminate-engine')).toEqual([]);
       expect(router.snapshot()?.state).toMatchObject({ tabId: 'b' });
+    });
+
+    it('records the startup a shown tab takes over by opening', async () => {
+      const { router, b, observations } = await hiddenElection();
+      const d = new FakePort();
+      await register(router, d, 'd');
+      expect(messagesOfKind(b, 'terminate-engine')).toHaveLength(1);
+      expect(router.snapshot()?.state).toMatchObject({ tabId: 'd' });
+      expect(observations).toContainEqual(
+        expect.objectContaining({
+          ownerEvent: 'replacement',
+          outcome: 'graceful',
+        })
+      );
     });
   });
 

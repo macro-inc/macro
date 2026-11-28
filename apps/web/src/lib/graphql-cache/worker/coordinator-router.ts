@@ -16,6 +16,7 @@ import {
   type CoordinatorAction,
   CoordinatorCore,
   type CoordinatorSnapshot,
+  type CoordinatorState,
   type OwnerLockUnavailableReason,
   SETTLEMENT_WAIT_LIMIT_MS,
   SETTLEMENT_WAIT_MS,
@@ -539,20 +540,7 @@ export class CoordinatorRouter {
       .with({ kind: 'tab-visibility' }, ({ visible }) => {
         const before = core.state;
         const actions = core.setTabVisibility(tabId, visible);
-        // A shown tab took over a hidden startup: that owner left before it
-        // was ready, and a wipe it was to make passes to the next one.
-        if (
-          before.kind === 'activating' &&
-          actions.some(
-            (action) =>
-              action.kind === 'release-owner' &&
-              action.ownerEpoch === before.ownerEpoch
-          )
-        )
-          this.recordOwnerLeft(before.ownerEpoch, {
-            outcome: 'graceful',
-            ownerEvent: 'replacement',
-          });
+        this.recordStartupTakenOver(before, actions);
         this.applyActions(actions);
       })
       .with({ kind: 'ping' }, () => {
@@ -715,7 +703,9 @@ export class CoordinatorRouter {
         ...(coordinatorLockName === undefined ? {} : { coordinatorLockName }),
       })
     );
+    const before = this.coreValue.state;
     const actions = this.coreValue.registerTab(message.tabId, message.visible);
+    this.recordStartupTakenOver(before, actions);
     const previousReadState = this.handoff.readState;
     this.applyActions(actions);
     const readState = this.handoff.readState;
@@ -733,6 +723,26 @@ export class CoordinatorRouter {
       const progress = this.startupProgress();
       if (progress) this.postToTab(message.tabId, progress);
     }
+  }
+
+  /** A shown tab took over a hidden startup: that owner left before it was
+   * ready, and a wipe it was to make passes to the next one. */
+  private recordStartupTakenOver(
+    before: CoordinatorState,
+    actions: readonly CoordinatorAction[]
+  ): void {
+    if (
+      before.kind === 'activating' &&
+      actions.some(
+        (action) =>
+          action.kind === 'release-owner' &&
+          action.ownerEpoch === before.ownerEpoch
+      )
+    )
+      this.recordOwnerLeft(before.ownerEpoch, {
+        outcome: 'graceful',
+        ownerEvent: 'replacement',
+      });
   }
 
   /** Without it pages work, but don't notice this coordinator's end. */
