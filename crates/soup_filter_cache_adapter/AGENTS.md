@@ -97,6 +97,9 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
   `deny_unknown_fields`: send a new field only once a result shows the engine
   supports it, as `endCursor` does for a Mail page's `through`.
 
+- A channel push can include both the full active notification edge and bounded
+  display edges. Only the unfiltered edge establishes indexed status membership.
+
 ## Related
 
 - Rules: `.agents/rules/web/data.md`

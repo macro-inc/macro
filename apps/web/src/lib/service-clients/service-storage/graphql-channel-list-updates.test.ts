@@ -31,23 +31,27 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function setup() {
+function setup(maintained = false) {
   const query = vi.fn(
     (_document: unknown, _variables: unknown, _context: unknown) => ({
       toPromise: async () => ({ data: {} }),
     })
   );
   cleanup.push(
-    registerGraphqlSoupRevalidations(() => [
-      {
-        document: ChannelListSoupDocument,
-        variables: { input: { initial: { limit: 100 } } },
-      },
-      {
-        document: SoupDocument,
-        variables: { input: { initial: { limit: 100 } } },
-      },
-    ])
+    registerGraphqlSoupRevalidations(
+      () => [
+        {
+          document: ChannelListSoupDocument,
+          variables: { input: { initial: { limit: 100 } } },
+        },
+        {
+          document: SoupDocument,
+          variables: { input: { initial: { limit: 100 } } },
+        },
+      ],
+      undefined,
+      () => maintained
+    )
   );
   const client = { query } as unknown as Client;
   const coordinator = channelNotificationRefresh(client);
@@ -57,7 +61,13 @@ function setup() {
         document: ChannelListSoupDocument,
         variables: { input: { initial: { limit: 100 } } },
       },
-      { enabled: true, fetching: false, filtered: true, notificationIds: [] }
+      {
+        enabled: true,
+        fetching: false,
+        filtered: true,
+        notificationIds: [],
+        channelTypes: ['direct_message'],
+      }
     )
   );
   cleanup.push(() => disposeChannelNotificationRefresh(client));
@@ -331,7 +341,12 @@ describe('channel unread edge revalidation', () => {
 
 describe('new channel pushes', () => {
   const channelPush = (
-    overrides: { createdAt?: string; isParticipant?: boolean } = {}
+    overrides: {
+      createdAt?: string;
+      isParticipant?: boolean;
+      unreadNotifications?: [];
+      unreadMentions?: [];
+    } = {}
   ) =>
     ({
       __typename: 'SoupUpdated',
@@ -355,6 +370,24 @@ describe('new channel pushes', () => {
       id: 'new-dm',
       channelType: 'direct_message',
     });
+  });
+
+  it('uses a persisted push for a maintained page and catches up on reconnect', async () => {
+    const { handler, query } = setup(true);
+    handler.onSoupUpdates(
+      [channelPush({ unreadNotifications: [], unreadMentions: [] })],
+      true
+    );
+    await vi.advanceTimersByTimeAsync(301);
+    expect(query).not.toHaveBeenCalled();
+
+    handler.reconnect();
+    await vi.advanceTimersByTimeAsync(301);
+    expect(query).toHaveBeenCalledExactlyOnceWith(
+      ChannelListSoupDocument,
+      { input: { initial: { limit: 100 } } },
+      { requestPolicy: 'network-only' }
+    );
   });
 
   it('ignores older channels and channels the viewer is not in', () => {

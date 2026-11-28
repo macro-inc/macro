@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO comms_channel_participants (channel_id, user_id, role)\n         SELECT $1, 'macro|roster-' || n || '@example.com', 'member'\n         FROM generate_series(1, 503) n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bc4f915e3b8be43d2ecbfa8bfb73c0069b9a03510334e192f4d4e651ff94e61c"
+}

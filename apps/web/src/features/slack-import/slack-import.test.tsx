@@ -6,6 +6,7 @@ import { importReceipt } from './tests/fake-sources';
 
 const host = vi.hoisted(() => ({
   enabled: true,
+  receivesChannelPushes: true,
   directory: vi.fn(() => ({
     lookup: (id: string) => ({
       status: host.loaded.includes(id) ? 'loaded' : 'missing',
@@ -63,6 +64,7 @@ vi.mock('@service-connection/websocket', () => ({
 }));
 vi.mock('@service-storage/client', () => ({ storageServiceClient: {} }));
 vi.mock('@service-storage/graphql-soup', () => ({
+  channelListPushesAvailable: () => host.receivesChannelPushes,
   getGraphqlSoupClient: () => ({}),
 }));
 vi.mock('@service-storage/slack-import-upload', () => ({
@@ -99,6 +101,7 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   host.enabled = true;
+  host.receivesChannelPushes = true;
   host.loaded = [];
 });
 
@@ -153,6 +156,32 @@ describe('Slack import production boundary', () => {
       expect(host.hidePromotion).not.toHaveBeenCalled();
     }
   );
+
+  it('narrows completion refreshes when each channel update is queued', async () => {
+    render(() => <SlackImport teamId="team" isAdmin />);
+    await screen.findByText('Mounted import');
+    const job = importReceipt({ status: 'completed' });
+    await host.props!.onCompleted(job);
+    expect(host.revalidate).toHaveBeenLastCalledWith(expect.anything(), {
+      importedRowsQueued: false,
+    });
+    const queued = {
+      ...job,
+      conversations: job.conversations.map((conversation) => ({
+        ...conversation,
+        channelUpdatesQueued: true,
+      })),
+    };
+    await host.props!.onCompleted(queued);
+    expect(host.revalidate).toHaveBeenLastCalledWith(expect.anything(), {
+      importedRowsQueued: true,
+    });
+    host.receivesChannelPushes = false;
+    await host.props!.onCompleted(queued);
+    expect(host.revalidate).toHaveBeenLastCalledWith(expect.anything(), {
+      importedRowsQueued: false,
+    });
+  });
 
   it('hides the promotion after successful completion even if refreshing fails', async () => {
     render(() => <SlackImport teamId="team" isAdmin />);

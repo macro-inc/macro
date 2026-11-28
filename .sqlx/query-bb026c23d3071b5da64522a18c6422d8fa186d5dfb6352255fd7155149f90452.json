@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_import_conversation\n                   SET channel_updates_queued = channel_id IS NOT NULL\n                   WHERE job_id = $1 AND slack_channel_id = $2\n                     AND checkpoint_part = part_count AND checkpoint_record = 0\n                   RETURNING channel_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "bb026c23d3071b5da64522a18c6422d8fa186d5dfb6352255fd7155149f90452"
+}

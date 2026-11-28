@@ -36,6 +36,7 @@ afterEach(() => {
 });
 
 import { registerActivityRevalidator } from '../../queries/activity/push-registry';
+import { channelNotificationRefresh } from '../../queries/channel/notification-refresh';
 import { registerActiveGraphqlSoupQuery } from '../../queries/soup/graphql/active-queries';
 import {
   ActivityUpdatesDocument,
@@ -245,6 +246,7 @@ describe('GraphQL Soup subscription lifecycle', () => {
       expect(documents.includes(SoupUpdatesDocument)).toBe(
         host?.disabled === false
       );
+      expect(lifecycle.receivesSoupUpdates()).toBe(host?.disabled === false);
       const patch = {
         __typename: 'GraphqlNewNotification',
         notification: { id: 'one' },
@@ -259,6 +261,38 @@ describe('GraphQL Soup subscription lifecycle', () => {
     unregister();
     for (const unsubscribe of unsubscribes)
       expect(unsubscribe).toHaveBeenCalledOnce();
+  });
+
+  it('catches up after a lagged Soup stream ends and reattaches', () => {
+    const receive = new Map<unknown, (result: { hasNext: boolean }) => void>();
+    const client = {
+      query: vi.fn(),
+      subscription: vi.fn((document) => ({
+        subscribe: (next: (result: { hasNext: boolean }) => void) => {
+          receive.set(document, next);
+          return { unsubscribe: vi.fn() };
+        },
+      })),
+    };
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
+    lifecycle.replace(
+      client as never,
+      { disabled: false, onCacheGenerationChanged: () => () => {} } as never
+    );
+    expect(lifecycle.receivesSoupUpdates()).toBe(true);
+    const reconnect = vi.spyOn(
+      channelNotificationRefresh(client as never),
+      'reconnect'
+    );
+
+    receive.get(SoupUpdatesDocument)?.({ hasNext: false });
+    expect(lifecycle.receivesSoupUpdates()).toBe(false);
+    expect(reconnect).toHaveBeenCalledTimes(1);
+    setVisibility('visible');
+    expect(lifecycle.receivesSoupUpdates()).toBe(true);
+    expect(reconnect).toHaveBeenCalledTimes(2);
+    lifecycle.dispose();
+    expect(lifecycle.receivesSoupUpdates()).toBe(false);
   });
   it('refetches mounted call lists when a Soup update carries a call', async () => {
     const receive = new Map<unknown, (result: { data?: unknown }) => void>();

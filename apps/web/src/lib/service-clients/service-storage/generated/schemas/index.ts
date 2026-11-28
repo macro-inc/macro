@@ -668,6 +668,7 @@ export * from './conversationMetadataCreatorId';
 export * from './conversationMetadataMessageCount';
 export * from './conversationProgress';
 export * from './conversationProgressChannelId';
+export * from './conversationProgressChannelUpdatesQueued';
 export * from './conversationProgressError';
 export * from './conversationProgressPartCount';
 export * from './conversationSeal';

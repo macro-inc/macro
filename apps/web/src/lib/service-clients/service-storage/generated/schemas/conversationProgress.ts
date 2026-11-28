@@ -8,6 +8,7 @@
 import type { ConversationId } from './conversationId';
 import type { ConversationKind } from './conversationKind';
 import type { ConversationProgressChannelId } from './conversationProgressChannelId';
+import type { ConversationProgressChannelUpdatesQueued } from './conversationProgressChannelUpdatesQueued';
 import type { ConversationProgressError } from './conversationProgressError';
 import type { ConversationProgressPartCount } from './conversationProgressPartCount';
 import type { ConversationStatus } from './conversationStatus';
@@ -23,6 +24,9 @@ export interface ConversationProgress {
   archived: boolean;
   /** Authorized target only; absent for inaccessible reused targets. */
   channelId?: ConversationProgressChannelId;
+  /** Whether this worker records committed channel changes for Soup delivery.
+Older progress responses omit it. */
+  channelUpdatesQueued?: ConversationProgressChannelUpdatesQueued;
   /** Durably committed record counts. */
   counters: ImportCounters;
   error?: ConversationProgressError;

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM slack_import_channel_updates WHERE channel_id = $1 AND revision = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "be109f501942cb7eb8f543e2da29ed7cf4fed8115ee5cceed07f39c073e0e450"
+}

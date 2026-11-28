@@ -13,6 +13,8 @@ references into Macro as channels. It sends no emails or notifications.
   domain crates together; don't add that coordination to either crate's own
   adapter.
 - `src/composition/channel_sink.rs`: writes imported conversations as channels.
+  Creation, roster and activity transactions record Soup updates for committed
+  changes. Completion queues the final update and marks the progress receipt.
 - `src/composition/reference_reconciliation.rs` + `src/composition/references.rs`:
   resolving cross-message references (replies, mentions) after import.
 - `src/composition/authorizer.rs`: access checks.

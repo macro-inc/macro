@@ -320,6 +320,27 @@ fn harness(
 }
 
 #[tokio::test(start_paused = true)]
+async fn imported_channel_uses_current_membership_instead_of_the_cached_audience() {
+    let member = user("member");
+    let h = harness(vec![member.clone()], false, HashSet::new());
+    let channel = EntityType::Channel.with_entity_str(DOCUMENT_ID);
+    let delivery = h
+        .service
+        .notify_users(vec![SoupRealtimePatch::for_current_channel_members(
+            channel.clone(),
+        )])
+        .await
+        .unwrap();
+    assert_eq!(h.access_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(h.member_reads.lock().unwrap().as_slice(), [DOCUMENT_ID]);
+    assert_eq!(delivery.publish_count, 1);
+    assert_eq!(
+        h.messages.lock().unwrap().as_slice(),
+        [SoupRealtimeMessage::new(member, Patch::Updated(channel))]
+    );
+}
+
+#[tokio::test(start_paused = true)]
 async fn consumer_service_distributes_patches_only_to_their_users() {
     let one = user("one");
     let two = user("two");

@@ -17,6 +17,8 @@ export, map it onto Macro channels/messages/users, and import it as a job.
 - `src/inbound/axum_router.rs` (`create.rs`, `uploads.rs`, `jobs.rs`) and
   `src/inbound/worker.rs`: the upload/create HTTP routes and the import worker.
 - `src/outbound/pg_slack_import_repo.rs`: job/batch/upload/reference persistence.
+- `src/outbound/pg_slack_import_repo/channel_updates.rs`: coalesced channel
+  publication outbox, written in the same transaction as import changes.
 
 ## Scope
 

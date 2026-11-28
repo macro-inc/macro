@@ -19,6 +19,16 @@ const PATCH: &str = r#"query ChannelPatch { user { id soup(input: {initial: {}})
 } } } }"#;
 const NOTIFICATION: &str =
     r#"mutation Done { updateNotifications(input: {notificationIds: []}) { id state } }"#;
+const IMPORT_PUSH: &str = r#"subscription SoupChannelListCacheWrite {
+    soupUpdates { __typename ... on SoupUpdated { item {
+        __typename id cacheProjection notifications { id entityId entityType state }
+        ... on GraphqlSoupChannel {
+            ownerId channelType channelTeamId: teamId organizationId isParticipant createdAt updatedAt
+            unreadNotifications: notifications(filter: {states: [UNSEEN], topLevelMessagesOnly: true}, limit: 1) { id state createdAt }
+            unreadMentions: notifications(filter: {states: [UNSEEN], eventTypes: ["channel_mention"]}, limit: 10) { id state }
+        }
+    } } }
+}"#;
 
 fn id(n: u128) -> String {
     uuid::Uuid::from_u128(n).to_string()
@@ -35,6 +45,13 @@ fn row(n: u128) -> Value {
 }
 fn data(rows: Vec<Value>) -> Value {
     json!({"user":{"id":"macro|viewer@example.com","soup":{"items":rows}}})
+}
+fn pushed_channels(rows: impl IntoIterator<Item = Value>) -> Value {
+    let soup_updates: Vec<_> = rows
+        .into_iter()
+        .map(|item| json!({"__typename": "SoupUpdated", "item": item}))
+        .collect();
+    json!({"soupUpdates": soup_updates})
 }
 fn filters(channel: Value) -> Value {
     let nil = id(0);
@@ -111,6 +128,187 @@ fn canonical_channel_fields_and_aliased_team_id_form_v4_snapshots() {
         .retain(|fact| fact.attribute != vocabulary::channel_participant());
     assert!(soup_filter_projection::validate_soup_flat_v4(&malformed).is_err());
     assert!(soup_filter_projection::validate_soup_flat_v3(document).is_err());
+}
+
+#[test]
+fn channel_push_preserves_full_state_with_bounded_display_edges() {
+    let query = QUERY.replace(
+        "ownerId channelType",
+        "unreadNotifications: notifications(filter: {states: [UNSEEN], topLevelMessagesOnly: true}, limit: 1) { id state }
+         unreadMentions: notifications(filter: {states: [UNSEEN], eventTypes: [\"channel_mention\"]}, limit: 10) { id state }
+         ownerId channelType",
+    );
+    let mut channel = row(1);
+    channel["unreadNotifications"] = json!([]);
+    channel["unreadMentions"] = json!([]);
+    let projections = authoritative_projection_mutations(
+        cache_core::meta::bundled_schema_ref(),
+        &query,
+        None,
+        &data(vec![channel.clone()]),
+    )
+    .unwrap();
+    let [ProjectionMutation::Replace(document)] = projections.as_slice() else {
+        panic!("push must keep a complete active snapshot");
+    };
+    assert!(document.exact_facts.iter().any(|fact| {
+        fact.attribute == vocabulary::notification_unseen()
+            && fact.value.as_bytes() == uuid::Uuid::from_u128(101).as_bytes()
+    }));
+
+    let preview = query.replace(
+        "cacheProjection notifications { id entityId entityType state }",
+        "",
+    );
+    channel.as_object_mut().unwrap().remove("notifications");
+    let projections = authoritative_projection_mutations(
+        cache_core::meta::bundled_schema_ref(),
+        &preview,
+        None,
+        &data(vec![channel]),
+    )
+    .unwrap();
+    assert!(matches!(
+        projections.as_slice(),
+        [ProjectionMutation::Patch { exact, .. }]
+            if !exact.iter().any(|patch| patch.attribute == vocabulary::notification_unseen())
+    ));
+}
+
+#[test]
+fn imported_channel_push_populates_a_bounded_live_list() {
+    use cache_core::engine::live_query::LiveQuerySpec;
+    use cache_core::record_selection::RecordSelection;
+    use cache_core::value::EntityKey;
+    use cache_turso::TursoFileDatabase;
+    use std::sync::Arc;
+    use std::time::Instant;
+
+    let query = QUERY.replace(
+        "ownerId channelType",
+        "unreadNotifications: notifications(filter: {states: [UNSEEN], topLevelMessagesOnly: true}, limit: 1) { id state }
+         unreadMentions: notifications(filter: {states: [UNSEEN], eventTypes: [\"channel_mention\"]}, limit: 10) { id state }
+         ownerId channelType",
+    );
+    let selection = RecordSelection::parse(
+        cache_core::meta::bundled_schema_ref(),
+        r#"fragment ChannelList on GraphqlSoupChannel {
+            id isParticipant updatedAt
+            unreadNotifications: notifications(filter: {states: [UNSEEN], topLevelMessagesOnly: true}, limit: 1) { id state }
+            unreadMentions: notifications(filter: {states: [UNSEEN], eventTypes: ["channel_mention"]}, limit: 10) { id state }
+        }"#,
+        "ChannelList",
+    )
+    .unwrap();
+    let SoupFilterCompileOutcome::Supported(filter) = compile_filter_request(
+        filters(json!({"literal": {"isParticipant": true}})),
+        "UPDATED_AT",
+        "DESC",
+        20,
+    )
+    .unwrap() else {
+        panic!("supported channel list");
+    };
+    let spec = LiveQuerySpec {
+        query: filter,
+        baseline: vec![],
+        selection: Arc::new(selection.clone()),
+    };
+    pollster::block_on(async {
+        for channel_count in [3500, 7000] {
+            let directory = tempfile::tempdir().unwrap();
+            let db = TursoFileDatabase::new(directory.path().join("channels.turso")).unwrap();
+            let mut engine = Engine::new(db.open("archive").unwrap());
+            for first in (100..100 + channel_count).step_by(500) {
+                let rows = (first..(first + 500).min(100 + channel_count))
+                    .map(|number| {
+                        let mut channel = row(number);
+                        channel["unreadNotifications"] = json!([]);
+                        channel["unreadMentions"] = json!([]);
+                        channel
+                    })
+                    .collect();
+                write(&mut engine, &query, &data(rows)).await;
+            }
+            engine.into_storage().try_close().unwrap();
+            let open_started = Instant::now();
+            let storage = db.open("archive").unwrap();
+            let open = open_started.elapsed();
+            assert_eq!(storage.upgraded_from_storage_version(), None);
+            let mut engine = Engine::new(storage);
+            let initial = engine
+                .read_live_query("archive", spec.clone(), None)
+                .await
+                .unwrap();
+            assert_eq!(initial.upserts.len(), 20);
+            let first_import = 10_000;
+            let end = first_import + channel_count;
+            let push_started = Instant::now();
+            let imported = |number| {
+                let mut channel = row(number);
+                channel["updatedAt"] = if number == first_import {
+                    json!("2025-01-04T00:00:00Z")
+                } else {
+                    json!("2025-01-03T00:00:00Z")
+                };
+                channel["notifications"] = json!([]);
+                channel["unreadNotifications"] = json!([]);
+                channel["unreadMentions"] = json!([]);
+                channel
+            };
+            write(
+                &mut engine,
+                IMPORT_PUSH,
+                &pushed_channels([imported(first_import)]),
+            )
+            .await;
+            let updated = engine
+                .resume_live_query(
+                    "archive",
+                    initial.registration_id,
+                    Some(initial.revision.parse().unwrap()),
+                )
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(updated.keys.unwrap()[0], key(first_import));
+            assert_eq!(updated.upserts.len(), 1);
+            assert_eq!(updated.removed.len(), 1);
+            assert_eq!(updated.upserts[0].record["id"], id(first_import));
+            assert_eq!(updated.upserts[0].record["unreadMentions"], json!([]));
+
+            for first in (first_import + 1..end).step_by(10) {
+                let rows = (first..(first + 10).min(end)).map(imported);
+                write(&mut engine, IMPORT_PUSH, &pushed_channels(rows)).await;
+            }
+            let push_elapsed = push_started.elapsed();
+            let final_list = engine
+                .read_live_query("archive", spec.clone(), None)
+                .await
+                .unwrap();
+            let keys = final_list.keys.unwrap();
+            assert_eq!(keys.len(), 20);
+            assert_eq!(keys[0], key(first_import));
+            assert!(keys.iter().all(|key| {
+                let (_, channel_id) = key.as_str().split_once(':').unwrap();
+                let number = uuid::Uuid::parse_str(channel_id).unwrap().as_u128();
+                (first_import..end).contains(&number)
+            }));
+            for first in (first_import..end).step_by(100) {
+                let keys = (first..(first + 100).min(end))
+                    .map(|number| EntityKey::entity("GraphqlSoupChannel", &[&id(number)]))
+                    .collect::<Vec<_>>();
+                let read = engine
+                    .read_records_by_keys(&selection, &keys)
+                    .await
+                    .unwrap();
+                assert_eq!(read.value.len(), keys.len());
+            }
+            println!(
+                "{channel_count} imported channels, 20 displayed, first push one upsert and one removal, reopened {channel_count} existing channels in {open:?}, applied pushes in {push_elapsed:?}"
+            );
+        }
+    });
 }
 
 #[test]

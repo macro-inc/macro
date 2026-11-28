@@ -13,7 +13,10 @@ use slack_integration::{
         models::*,
         ports::{ExecutionRepo, HistoricalSink, ImportAuthorizer, ImportLedger, ImportRepo},
     },
-    outbound::{import_ledger::CanonicalImportLedger, pg_slack_import_repo::PgSlackImportRepo},
+    outbound::{
+        import_ledger::CanonicalImportLedger,
+        pg_slack_import_repo::{PgSlackImportRepo, channel_updates},
+    },
 };
 use sqlx::{Executor, PgPool};
 use uuid::Uuid;
@@ -398,6 +401,57 @@ fn end() -> Checkpoint {
 async fn counts(pool: &PgPool) -> (i64, i64, i64, i64) {
     let row = sqlx::query!(r#"SELECT (SELECT count(*) FROM comms_messages) AS "messages!", (SELECT count(*) FROM comms_reactions) AS "reactions!", (SELECT count(*) FROM slack_import_message_map) AS "mappings!", (SELECT count(*) FROM slack_import_outbox WHERE kind = 'search') AS "search!""#).fetch_one(pool).await.unwrap();
     (row.messages, row.reactions, row.mappings, row.search)
+}
+
+#[sqlx::test(migrations = "../../crates/macro_db_client/migrations")]
+async fn imported_channel_updates_survive_replay_and_stale_acknowledgment(pool: PgPool) {
+    let team = team(&pool).await;
+    let context = claim(&pool, team, ConversationKind::PublicChannel, 1).await;
+    let plan = target(&pool, &context).await;
+    let due = chrono::Utc::now() + chrono::Duration::seconds(3);
+    let created = channel_updates::claim(&pool, due).await.unwrap();
+    assert_eq!(created.len(), 1);
+    assert_eq!(created[0].channel_id, plan.channel_id);
+
+    let sink = sink(&pool);
+    let committed = sink
+        .commit(batch(&context, plan.channel_id, &[2], end()))
+        .await
+        .unwrap();
+    let replayed = sink
+        .commit(batch(&context, plan.channel_id, &[2], end()))
+        .await
+        .unwrap();
+    assert_eq!(committed, replayed);
+    channel_updates::acknowledge(&pool, created[0])
+        .await
+        .unwrap();
+
+    let refreshed = channel_updates::claim(&pool, due + chrono::Duration::seconds(3))
+        .await
+        .unwrap();
+    assert_eq!(refreshed.len(), 1);
+    assert_eq!(refreshed[0].channel_id, plan.channel_id);
+    assert_ne!(refreshed[0].revision, created[0].revision);
+    channel_updates::acknowledge(&pool, refreshed[0])
+        .await
+        .unwrap();
+
+    let repo = repo(&pool);
+    repo.settle(&context.lease, ConversationStatus::Completed, None)
+        .await
+        .unwrap();
+    let progress = repo
+        .progress(team, context.lease.event.job_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(progress.conversations[0].channel_updates_queued, Some(true));
+    let settled = channel_updates::claim(&pool, due + chrono::Duration::minutes(2))
+        .await
+        .unwrap();
+    assert_eq!(settled.len(), 1);
+    assert_eq!(settled[0].channel_id, plan.channel_id);
 }
 
 #[sqlx::test(migrations = "../../crates/macro_db_client/migrations")]

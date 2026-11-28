@@ -693,6 +693,10 @@ pub struct ConversationProgress {
     pub status: ConversationStatus,
     /// Authorized target only; absent for inaccessible reused targets.
     pub channel_id: Option<Uuid>,
+    /// Whether this worker records committed channel changes for Soup delivery.
+    /// Older progress responses omit it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel_updates_queued: Option<bool>,
     /// Null until sealed; zero is a valid sealed empty manifest.
     pub part_count: Option<u32>,
     /// Number of parts whose object identity has been verified.

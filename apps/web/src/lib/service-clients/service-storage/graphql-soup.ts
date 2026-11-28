@@ -114,6 +114,7 @@ import {
   canReopenCache,
   createCacheRecovery,
 } from './cache-recovery';
+import { channelListWitnessExchange } from './channel-list-witnesses';
 import { channelMembershipReceiptExchange } from './channel-membership';
 import {
   initializeCrmCacheOwner,
@@ -820,6 +821,7 @@ export function graphqlCacheEnabled(): boolean {
 }
 
 let cachedClient: Client | undefined;
+const channelPushReceivers = new WeakMap<Client, () => boolean>();
 let cachedCacheHost: CacheHost | undefined;
 let cachedCacheCleanup: (() => void) | undefined;
 let browserCacheClientActivated = false;
@@ -962,6 +964,11 @@ export async function initializeGraphqlSoupCache(): Promise<void> {
 /** Cache writes reach readers of the normalized cache only while it runs. */
 export const hasGraphqlCacheHost = (): boolean =>
   graphqlCacheEnabled() && getGraphqlCacheHost() !== undefined;
+
+/** Whether this client's channel list can consume changes through the browser cache. */
+export function channelListPushesAvailable(client: Client): boolean {
+  return channelPushReceivers.get(client)?.() ?? false;
+}
 
 /**
  * Resolves the urql client, lazily assembling the cached client on first
@@ -1230,6 +1237,7 @@ export function getGraphqlSoupClient(): Client {
               };
             },
           }),
+          ...(native ? [] : [channelListWitnessExchange]),
           notificationReceiptExchange(publishNotificationPatch),
           channelMembershipReceiptExchange(),
           sessionSubscriptionExchange(
@@ -1242,6 +1250,13 @@ export function getGraphqlSoupClient(): Client {
         fetch: (input, init) => dssGraphqlFetch(input, init, host),
       });
       // Publish both resources before observing the owner's baseline.
+      if (!native)
+        channelPushReceivers.set(
+          client,
+          () =>
+            websocketState === 'connected' &&
+            subscriptionsLifecycle.receivesSoupUpdates()
+        );
       cachedClient = client;
       cachedCacheHost = host;
       // A replacement stays blocked until its persisted queue is readable.

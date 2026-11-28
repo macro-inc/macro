@@ -16,3 +16,17 @@ subscription SoupUpdates {
 		...SoupPatchFields
 	}
 }
+
+# Only written to the cache. The transport still uses SoupUpdates.
+subscription SoupChannelListCacheWrite {
+	soupUpdates {
+		...SoupPatchFields
+		... on SoupUpdated {
+			item {
+				... on GraphqlSoupChannel {
+					...ChannelListUnreadFields
+				}
+			}
+		}
+	}
+}

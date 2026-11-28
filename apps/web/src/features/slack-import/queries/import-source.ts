@@ -66,6 +66,7 @@ export function toImportJob(teamId: string, job: ImportProgress): ImportJob {
         conversation.status === 'skipped'
           ? undefined
           : (conversation.channelId ?? undefined),
+      channelUpdatesQueued: conversation.channelUpdatesQueued === true,
       status: conversation.status,
       counters: { ...conversation.counters },
       partCount: conversation.partCount ?? undefined,

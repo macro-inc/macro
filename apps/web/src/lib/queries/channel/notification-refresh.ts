@@ -197,7 +197,10 @@ export class ChannelNotificationRefresh {
    * primary. Lists that show its type read their first page again until it is
    * there, since the page may come from a replica that has not seen it yet.
    */
-  expectChannel(channel: { id: string; channelType: string }) {
+  expectChannel(
+    channel: { id: string; channelType: string },
+    shouldRefresh?: (query: QueryRevalidation) => boolean
+  ) {
     const until = Date.now() + NEW_CHANNEL_WAIT_MS;
     for (const job of this.jobs.values()) {
       // Each message in a new conversation pushes it again; keep the first wait.
@@ -206,7 +209,7 @@ export class ChannelNotificationRefresh {
         (reader) =>
           reader.enabled && reader.channelTypes?.includes(channel.channelType)
       );
-      if (!shows) continue;
+      if (!shows || (shouldRefresh && !shouldRefresh(job.query))) continue;
       job.awaited.set(channel.id, { until, reads: 0 });
       this.invalidate(job);
     }

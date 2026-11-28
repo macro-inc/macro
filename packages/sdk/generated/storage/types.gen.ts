@@ -4935,6 +4935,11 @@ export type ConversationProgress = {
      */
     channelId?: string | null;
     /**
+     * Whether this worker records committed channel changes for Soup delivery.
+     * Older progress responses omit it.
+     */
+    channelUpdatesQueued?: boolean | null;
+    /**
      * Durably committed record counts.
      */
     counters: ImportCounters;

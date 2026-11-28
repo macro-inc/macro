@@ -86622,6 +86622,12 @@ export const listSlackImportsResponse = zod
                       .describe(
                         'Authorized target only; absent for inaccessible reused targets.'
                       ),
+                    channelUpdatesQueued: zod
+                      .boolean()
+                      .nullish()
+                      .describe(
+                        'Whether this worker records committed channel changes for Soup delivery.\nOlder progress responses omit it.'
+                      ),
                     counters: zod
                       .object({
                         duplicates: zod
@@ -87205,6 +87211,12 @@ export const createSlackImportResponse = zod
               .describe(
                 'Authorized target only; absent for inaccessible reused targets.'
               ),
+            channelUpdatesQueued: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Whether this worker records committed channel changes for Soup delivery.\nOlder progress responses omit it.'
+              ),
             counters: zod
               .object({
                 duplicates: zod
@@ -87550,6 +87562,12 @@ export const getSlackImportResponse = zod
               .nullish()
               .describe(
                 'Authorized target only; absent for inaccessible reused targets.'
+              ),
+            channelUpdatesQueued: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Whether this worker records committed channel changes for Soup delivery.\nOlder progress responses omit it.'
               ),
             counters: zod
               .object({
@@ -87897,6 +87915,12 @@ export const cancelSlackImportResponse = zod
               .describe(
                 'Authorized target only; absent for inaccessible reused targets.'
               ),
+            channelUpdatesQueued: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Whether this worker records committed channel changes for Soup delivery.\nOlder progress responses omit it.'
+              ),
             counters: zod
               .object({
                 duplicates: zod
@@ -88242,6 +88266,12 @@ export const finalizeSlackImportResponse = zod
               .nullish()
               .describe(
                 'Authorized target only; absent for inaccessible reused targets.'
+              ),
+            channelUpdatesQueued: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Whether this worker records committed channel changes for Soup delivery.\nOlder progress responses omit it.'
               ),
             counters: zod
               .object({
@@ -88830,6 +88860,12 @@ export const completeSlackImportUploadsResponse = zod
               .nullish()
               .describe(
                 'Authorized target only; absent for inaccessible reused targets.'
+              ),
+            channelUpdatesQueued: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Whether this worker records committed channel changes for Soup delivery.\nOlder progress responses omit it.'
               ),
             counters: zod
               .object({
