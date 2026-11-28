@@ -118,7 +118,8 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
 - Commits, branches, and PRs follow the `git` skill: Conventional Commit titles
   such as `fix(onboarding): preserve team inputs`, and Why / What bodies with no test plan.
 - Run the `review` skill before every push to a PR, and fix or justify its
-  findings; changed SQL or migrations always get its database reviews.
+  findings; changed service SQL or migrations always get its database
+  reviews, and changed on-device cache queries its cache query review.
 - Run the `audit` skill (via the `auditor` subagent) before saying work is done.
 - Update every doc your change makes stale, in the same change: the `AGENTS.md`
   of each directory you touched, `docs/guides/`, `docs/architecture/`, the

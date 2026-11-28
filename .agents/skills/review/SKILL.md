@@ -28,15 +28,17 @@ changes first. Pass the same base to every review you run.
 | The diff changes | Run |
 | --- | --- |
 | SQL that runs in a service: `sqlx::query*!` call sites, `.sqlx/` entries, `QueryBuilder` or other assembled SQL, Soup or GraphQL filters that become SQL, or a SQL function, view, or trigger that queries call | [`query-review`](../query-review/SKILL.md) |
-| A caller of an existing query: a new loop around it, a new page or job that fires it, or a wider scope passed to it (one user → a team, one item → a list) | [`query-review`](../query-review/SKILL.md) |
+| A caller of an existing service query: a new loop around it, a new page or job that fires it, or a wider scope passed to it (one user → a team, one item → a list) | [`query-review`](../query-review/SKILL.md) |
 | A file under a `migrations/` directory | [`migration-review`](../migration-review/SKILL.md), and `query-review` for any function, view, or trigger it defines |
+| A query against the on-device cache engine: cache-turso SQL, a web live query, filter, keyed read or search, a hook that builds the IDs or filter one reads, or a list that renders its results | [`cache-query-review`](../cache-query-review/SKILL.md) |
 | Nothing above | A general review of the diff by a reviewer that did not write it: [`qc`](../qc/SKILL.md), or the review your session already runs before a push |
 
 When a database row matches, the general review is optional.
 
-These reviews check finished work. The author of a query follows the
-[`query-writing`](../query-writing/SKILL.md) skill while writing it, and
-`query-review` checks the plan that skill records.
+These reviews check finished work. The author of a service query follows
+the [`query-writing`](../query-writing/SKILL.md) skill while writing it, and
+`query-review` checks the plan that skill records. A cache query has no
+Postgres plan; `cache-query-review` measures it instead.
 
 ## 2. Run them
 
@@ -61,7 +63,8 @@ A finding is closed by a code change or by evidence, never by rewording.
 Put the database reviews' result in the PR body under `## Database review`
 (see the `git` skill) whenever one ran, including for a caller-only change:
 each query or migration statement, the rows it touches, the index or lock it
-relies on, and how that was checked.
+relies on, and how that was checked. The cache query review's table goes
+under `## Cache query review` the same way.
 
 ## Not in this path yet
 
