@@ -307,7 +307,9 @@ impl TursoStorage {
     ) -> Result<QueueImport, TursoStorageError> {
         self.require_healthy()?;
         let connection = self.connection();
-        let result = driver::write_transaction(&connection, || import(&connection, queue, now_ms));
+        let result = driver::write_transaction(&connection, driver::Durability::Durable, || {
+            import(&connection, queue, now_ms)
+        });
         self.latch_result(result)
     }
 }

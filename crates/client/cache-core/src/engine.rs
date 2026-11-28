@@ -424,10 +424,12 @@ struct OptimisticLayer {
     uncertain_calendar_event_keys: Vec<EntityKey<'static>>,
 }
 
-struct BegunOptimisticWrite {
+struct BegunOptimisticWrite<E> {
     transaction_id: OptimisticTransactionId,
     upsert_kind: MutationUpsertKind,
     write_result: WriteResult,
+    /// The claim made with the upsert, when one was asked for.
+    claim: Option<Result<Option<ClaimedMutation>, E>>,
 }
 
 /// Reserved storage key holding the identity bound to this cache. The
@@ -2334,7 +2336,7 @@ impl<S: Storage> Engine<S> {
         projection_mutations: Vec<OptimisticProjectionMutation>,
     ) -> Result<(OptimisticTransactionId, WriteResult), EngineError<S::Error>> {
         let begun = self
-            .upsert_optimistic_write(origin_op, input, projection_mutations, Vec::new())
+            .upsert_optimistic_write(origin_op, input, projection_mutations, Vec::new(), None)
             .await?;
         Ok((begun.transaction_id, begun.write_result))
     }
@@ -2345,7 +2347,8 @@ impl<S: Storage> Engine<S> {
         input: BeginOptimisticWrite<'_>,
         projection_mutations: Vec<OptimisticProjectionMutation>,
         uncertain_calendar_event_keys: Vec<EntityKey<'static>>,
-    ) -> Result<BegunOptimisticWrite, EngineError<S::Error>> {
+        claim: Option<MutationClaimRequest>,
+    ) -> Result<BegunOptimisticWrite<S::Error>, EngineError<S::Error>> {
         let uuid = Uuid::parse_str(input.uuid)
             .map_err(|_| EngineError::InvalidMutationUuid(input.uuid.to_owned()))?;
         self.ensure_revision_can_advance()?;
@@ -2536,19 +2539,33 @@ impl<S: Storage> Engine<S> {
                 uncertainty: projection.uncertainty,
             })
             .collect();
-        let upsert = self
-            .storage
-            .upsert_mutation_with_shadow(
-                entry,
-                created_at_ms,
-                OptimisticUpsertReconciliation {
-                    expected_queue: Some(expected_queue),
-                    affected_keys: affected_projection_keys,
-                    replacements,
-                },
-            )
-            .await
-            .map_err(EngineError::Storage)?;
+        let reconciliation = OptimisticUpsertReconciliation {
+            expected_queue: Some(expected_queue),
+            affected_keys: affected_projection_keys,
+            replacements,
+        };
+        // The claim goes with the upsert, so a storage that pays a flush per
+        // write pays one for both.
+        let (upsert, claim) = match claim {
+            Some(claim) => {
+                let (upsert, claimed) = self
+                    .storage
+                    .upsert_mutation_and_claim(entry, created_at_ms, reconciliation, claim)
+                    .await
+                    .map_err(EngineError::Storage)?;
+                (upsert, Some(claimed))
+            }
+            None => (
+                self.storage
+                    .upsert_mutation_with_shadow(entry, created_at_ms, reconciliation)
+                    .await
+                    .map_err(EngineError::Storage)?,
+                None,
+            ),
+        };
+        // The expected queue snapshot already matched, so this does not
+        // happen; were it to, a claim made with the upsert stays leased until
+        // its lease expires, and the mutation runs then.
         if upsert.kind != expected_kind {
             return Err(EngineError::StaleOptimisticUpsert);
         }
@@ -2577,6 +2594,7 @@ impl<S: Storage> Engine<S> {
             },
         );
         Ok(BegunOptimisticWrite {
+            claim,
             transaction_id: upsert.id,
             upsert_kind: upsert.kind,
             write_result: WriteResult {
@@ -2643,12 +2661,14 @@ impl<S: Storage> Engine<S> {
                 input,
                 projection_mutations,
                 uncertain_calendar_event_keys,
+                Some(claim),
             )
             .await?;
-        let initial_claim = match self.claim_next_mutation(claim).await {
-            Ok(Some(claimed)) => InitialClaimOutcome::Claimed(Box::new(claimed)),
-            Ok(None) => InitialClaimOutcome::NotRunnable,
-            Err(error) => InitialClaimOutcome::Failed(error),
+        let initial_claim = match begun.claim {
+            Some(Ok(Some(claimed))) => InitialClaimOutcome::Claimed(Box::new(claimed)),
+            Some(Ok(None)) => InitialClaimOutcome::NotRunnable,
+            Some(Err(error)) => InitialClaimOutcome::Failed(EngineError::Storage(error)),
+            None => unreachable!("a claim was asked for"),
         };
         Ok(EnqueueOptimisticMutationResult {
             transaction_id: begun.transaction_id,

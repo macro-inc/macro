@@ -2015,6 +2015,21 @@ impl CacheEngine {
         })
     }
 
+    /// Flushes the WAL when a COMMIT appended to it since the last flush, so
+    /// every write so far survives an OS crash or power loss. Cache COMMITs
+    /// do not flush; the worker calls this once writes go quiet and before it
+    /// lets the database go. Resolves to whether it flushed.
+    #[wasm_bindgen(js_name = flushWal)]
+    pub fn flush_wal(&self) -> js_sys::Promise {
+        let state = self.state.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            let result = turso_storage(state.engine_mut()?.storage()).flush_wal();
+            let flushed = state.engine_result(result.map_err(EngineError::Storage))?;
+            Ok(JsValue::from_bool(flushed))
+        })
+    }
+
     /// Returns the current in-memory cache revision as an unsigned decimal string.
     #[wasm_bindgen(js_name = currentRevision)]
     pub fn current_revision(&self) -> js_sys::Promise {

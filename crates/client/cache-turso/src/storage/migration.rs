@@ -106,7 +106,7 @@ pub(super) fn run_steps(
     let mut committed = 0_u32;
     for step in steps.iter().filter(|step| step.from >= stored) {
         let target = step.from + 1;
-        driver::write_transaction(connection, || {
+        driver::write_transaction(connection, driver::Durability::Cache, || {
             (step.apply)(connection)?;
             driver::execute(
                 connection,
@@ -221,15 +221,19 @@ pub mod test_hooks {
     pub fn rewrite_as_storage_12(storage: &mut TursoStorage) -> Result<(), TursoStorageError> {
         storage.require_healthy()?;
         let connection = storage.connection();
-        storage.latch_result(driver::write_transaction(&connection, || {
-            for sql in [
-                "DROP TABLE cache_schema",
-                "UPDATE meta SET value = '12' WHERE key = 'storage_schema_version'",
-            ] {
-                driver::execute(&connection, sql, Vec::new())?;
-            }
-            Ok(())
-        }))
+        storage.latch_result(driver::write_transaction(
+            &connection,
+            driver::Durability::Cache,
+            || {
+                for sql in [
+                    "DROP TABLE cache_schema",
+                    "UPDATE meta SET value = '12' WHERE key = 'storage_schema_version'",
+                ] {
+                    driver::execute(&connection, sql, Vec::new())?;
+                }
+                Ok(())
+            },
+        ))
     }
 
     /// Rewrites a database of this build as the last storage 11 build left
@@ -242,7 +246,7 @@ pub mod test_hooks {
     pub fn rewrite_as_storage_11(storage: &mut TursoStorage) -> Result<(), TursoStorageError> {
         storage.require_healthy()?;
         let connection = storage.connection();
-        storage.latch_result(driver::write_transaction(&connection, || {
+        storage.latch_result(driver::write_transaction(&connection, driver::Durability::Cache, || {
             for sql in [
                 "DROP TABLE cache_schema",
                 "DROP INDEX records_contacts_cover_idx",
@@ -268,9 +272,11 @@ pub mod test_hooks {
     ) -> Result<(), TursoStorageError> {
         storage.require_healthy()?;
         let connection = storage.connection();
-        storage.latch_result(driver::write_transaction(&connection, || {
-            rewind(&connection, part)
-        }))
+        storage.latch_result(driver::write_transaction(
+            &connection,
+            driver::Durability::Cache,
+            || rewind(&connection, part),
+        ))
     }
 
     fn rewind(connection: &Db, part: Storage11DerivedState) -> Result<(), TursoStorageError> {
@@ -308,14 +314,18 @@ pub mod test_hooks {
     pub fn add_unknown_table(storage: &mut TursoStorage) -> Result<(), TursoStorageError> {
         storage.require_healthy()?;
         let connection = storage.connection();
-        storage.latch_result(driver::write_transaction(&connection, || {
-            driver::execute(
-                &connection,
-                "CREATE TABLE unknown_to_every_version (value INTEGER)",
-                Vec::new(),
-            )?;
-            Ok(())
-        }))
+        storage.latch_result(driver::write_transaction(
+            &connection,
+            driver::Durability::Cache,
+            || {
+                driver::execute(
+                    &connection,
+                    "CREATE TABLE unknown_to_every_version (value INTEGER)",
+                    Vec::new(),
+                )?;
+                Ok(())
+            },
+        ))
     }
 
     thread_local! {

@@ -2146,6 +2146,7 @@ async fn storage_reset_errors_latch_and_block_hot_read_write_and_control_methods
     .await;
     assert_reset_required(engine.clear()).await;
     assert_reset_required(engine.checkpoint_if_due()).await;
+    assert_reset_required(engine.flush_wal()).await;
 
     resolved(engine.physical_reset()).await;
     let identity: Option<String> = from_js(resolved(engine.bound_identity()).await);
@@ -2473,6 +2474,7 @@ async fn every_method_rejects_after_consuming_close() {
     assert_closed(engine.teardown_operation("closed:1".into())).await;
     assert_closed(engine.clear()).await;
     assert_closed(engine.checkpoint_if_due()).await;
+    assert_closed(engine.flush_wal()).await;
     assert_closed(engine.physical_reset()).await;
     assert_closed(engine.close()).await;
 
@@ -3059,6 +3061,29 @@ async fn idle_checkpoint_copies_a_due_wal_once_and_keeps_reads() {
         .await,
     );
     assert_eq!(read["kind"], "hit");
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn flush_wal_flushes_only_what_a_cache_write_left_unflushed() {
+    const SCOPE: &str = "cache-wasm-flush-wal";
+    let engine = fresh_engine(SCOPE).await;
+    let flush = || async { from_js::<bool>(resolved(engine.flush_wal()).await) };
+    // Whatever opening wrote goes first.
+    flush().await;
+    assert!(!flush().await, "a flush with nothing new flushed");
+
+    resolved(engine.write_query(
+        write_context(None),
+        QUERY.into(),
+        Some("Soup".into()),
+        js(variables()),
+        js(soup_data("unflushed")),
+        Some("user-1".into()),
+    ))
+    .await;
+    assert!(flush().await, "a cache write flushed in its COMMIT");
+    assert!(!flush().await, "the flush did not clear the WAL's mark");
     close_and_destroy(&engine, SCOPE).await;
 }
 

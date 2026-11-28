@@ -276,7 +276,7 @@ pub(super) fn adopt(
             return Ok(SchemaAdoption::unchanged(stored));
         }
     }
-    let sorted = driver::write_transaction(connection, || {
+    let sorted = driver::write_transaction(connection, driver::Durability::Cache, || {
         let stored = match load(connection)? {
             Some(row) => decode_stored_schema(&row.artifact).ok(),
             None if is_empty(connection)? => {
@@ -295,13 +295,15 @@ pub(super) fn adopt(
         // The tier rolled back. Dropping every record reads each once,
         // decoding only those that may hold identity metadata, and frees the
         // pages they held for what the cache writes next.
-        Err(error) if resets_after(error) => driver::write_transaction(connection, || {
-            let reset = SchemaChange {
-                tier: Tier::Reset(ResetReason::Failed),
-                stored: Arc::clone(incoming),
-            };
-            apply(connection, reset, incoming)
-        }),
+        Err(error) if resets_after(error) => {
+            driver::write_transaction(connection, driver::Durability::Cache, || {
+                let reset = SchemaChange {
+                    tier: Tier::Reset(ResetReason::Failed),
+                    stored: Arc::clone(incoming),
+                };
+                apply(connection, reset, incoming)
+            })
+        }
         sorted => sorted,
     }
     .map_err(TursoStorageError::initialization)
@@ -418,7 +420,7 @@ fn apply(
 /// schema, and the bundled guess would keep its records. One transaction, so
 /// an interrupted open leaves the old namespace.
 pub(super) fn leave_epoch(connection: &Db, namespace: &str) -> Result<(), TursoStorageError> {
-    driver::write_transaction(connection, || {
+    driver::write_transaction(connection, driver::Durability::Cache, || {
         mark_unreadable(connection)?;
         driver::execute(connection, NAMESPACE_UPDATE, vec![text(namespace)])?;
         Ok(())
@@ -449,7 +451,7 @@ pub(super) fn record(
     merged: &Schema,
     incoming: &Schema,
 ) -> Result<(), TursoStorageError> {
-    driver::write_transaction(connection, || {
+    driver::write_transaction(connection, driver::Durability::Cache, || {
         let incoming_hash = match load(connection)? {
             Some(row) if row.incoming_hash != incoming.hash() => SEVERAL_BUILDS,
             Some(_) | None => incoming.hash(),

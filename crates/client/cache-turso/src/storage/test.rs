@@ -5,6 +5,7 @@ mod conjunction_cost;
 mod conjunction_semantics;
 mod contact_search;
 mod derived_sorts;
+mod durability;
 mod engine_writes;
 mod fact_lookup_cost;
 mod filter_scope_cost;

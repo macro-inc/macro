@@ -65,7 +65,7 @@ pub(super) fn ensure_version(connection: &Db) -> Result<(), TursoStorageError> {
         return Ok(());
     }
     let applied = applied.split(';').collect::<BTreeSet<_>>();
-    driver::write_transaction(connection, || {
+    driver::write_transaction(connection, driver::Durability::Cache, || {
         for derivation in SORT_FACT_DERIVATIONS {
             if !applied.contains(derivation.fingerprint().as_str()) {
                 derive(connection, derivation)?;

@@ -6,7 +6,7 @@ use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 use turso_core::{
     CheckpointMode, CheckpointResult, Connection, IOExt, LimboError, Row, Statement, StepResult,
-    Value, WalAutoActions,
+    SyncMode, Value, WalAutoActions,
 };
 
 pub(crate) type Values = Vec<Value>;
@@ -79,6 +79,32 @@ pub(crate) struct Db {
     /// copied completely, as the copy reported it; until a write changes it,
     /// the WAL stays due but holds nothing to copy.
     copied_wal: Arc<Mutex<Option<(u32, u64)>>>,
+    /// Flushes the WAL of a connection whose COMMIT does not
+    /// (`synchronous = NORMAL`, the browser's), so a
+    /// [durable](Durability::Durable) write is on disk before it returns.
+    wal_flush: Option<WalFlush>,
+}
+
+/// Flushes a connection's WAL to disk.
+pub(crate) type WalFlush = Arc<dyn Fn() -> Result<(), ()> + Send + Sync>;
+
+/// Whether a write must be on disk before it returns, or may wait for the
+/// connection's next flush.
+///
+/// A connection that defers its flush (the browser's) loses at most its
+/// newest unflushed commits in an OS crash or power loss, and keeps every
+/// commit whole and in order: what remains is the database as it was at an
+/// earlier commit. A cache write lost that way is fetched again. A write the
+/// caller reports, or acts on outside the cache, is durable: a mutation
+/// queued, claimed, settled, deferred or dropped, and a queue salvaged into a
+/// new file. Native connections flush in every COMMIT, so both are durable
+/// there.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Durability {
+    /// May wait for the next flush.
+    Cache,
+    /// On disk before the transaction returns.
+    Durable,
 }
 
 impl Db {
@@ -88,6 +114,7 @@ impl Db {
             connection,
             statements: Some(Arc::new(Mutex::new(StatementCache::default()))),
             copied_wal: Arc::default(),
+            wal_flush: None,
         }
     }
 
@@ -98,6 +125,33 @@ impl Db {
             connection,
             statements: None,
             copied_wal: Arc::default(),
+            wal_flush: None,
+        }
+    }
+
+    /// Flushes the WAL with `flush` after each durable write, for a connection
+    /// whose COMMIT does not flush.
+    #[cfg(any(test, target_arch = "wasm32"))]
+    pub(crate) fn with_wal_flush(mut self, flush: WalFlush) -> Self {
+        self.wal_flush = Some(flush);
+        self
+    }
+
+    /// Runs this connection's COMMITs with `mode`, as the browser's runs NORMAL.
+    #[cfg(test)]
+    pub(crate) fn set_sync_mode(&self, mode: SyncMode) {
+        self.connection.set_sync_mode(mode);
+    }
+
+    /// Makes the commits so far durable, when this connection's COMMIT did not.
+    fn flush_durable(&self) -> Result<(), TursoStorageError> {
+        match &self.wal_flush {
+            Some(flush) if self.connection.get_sync_mode() != SyncMode::Full => {
+                flush().map_err(|()| {
+                    TursoStorageError::reset(PhysicalResetReason::TransactionOutcomeUncertain)
+                })
+            }
+            _ => Ok(()),
         }
     }
 
@@ -691,11 +745,16 @@ pub(crate) fn read_transaction<T>(
     connection: &Db,
     operation: impl FnOnce() -> Result<T, TursoStorageError>,
 ) -> Result<T, TursoStorageError> {
-    transaction(connection, "BEGIN", operation)
+    transaction(connection, "BEGIN", Durability::Cache, operation)
 }
 
+/// Runs `operation` in a write transaction. A [durable](Durability::Durable)
+/// one that wrote is on disk when it returns Ok: on a connection whose COMMIT
+/// does not flush, its flush follows the COMMIT, and a failed flush is an
+/// uncertain outcome, as a failed flush inside COMMIT would be.
 pub(crate) fn write_transaction<T>(
     connection: &Db,
+    durability: Durability,
     operation: impl FnOnce() -> Result<T, TursoStorageError>,
 ) -> Result<T, TursoStorageError> {
     // BEGIN IMMEDIATE eagerly initializes Turso's temp database, which reads
@@ -703,12 +762,13 @@ pub(crate) fn write_transaction<T>(
     // cache-local and operations are serialized, so a deferred write
     // transaction provides the required atomicity without reserving the writer
     // lock before the first write statement.
-    transaction(connection, "BEGIN", operation)
+    transaction(connection, "BEGIN", durability, operation)
 }
 
 fn transaction<T>(
     connection: &Db,
     begin_sql: &str,
+    durability: Durability,
     operation: impl FnOnce() -> Result<T, TursoStorageError>,
 ) -> Result<T, TursoStorageError> {
     let wal_end = connection.owned_wal_end();
@@ -724,12 +784,20 @@ fn transaction<T>(
         Ok(value) => {
             match execute_control(connection, "COMMIT", TestControlPhase::Commit) {
                 Ok(_) => {
+                    let owned_write = wal_end.is_some() && connection.owned_wal_end() != wal_end;
+                    if owned_write {
+                        crate::query_telemetry::record_commit();
+                    }
+                    // A connection that does not own its checkpoints cannot
+                    // tell whether the COMMIT wrote, so its flush runs anyway.
+                    if durability == Durability::Durable && (owned_write || wal_end.is_none()) {
+                        connection.flush_durable()?;
+                    }
                     // Turso's own checkpoint would have run here at 1,000 frames.
                     // As with that one, the write stands whether or not the copy
                     // runs; a failed copy leaves the WAL whole. Only a transaction
                     // that wrote copies, so a read never retries a failed copy.
-                    if wal_end.is_some() && connection.owned_wal_end() != wal_end {
-                        crate::query_telemetry::record_commit();
+                    if owned_write {
                         let copy_timer = crate::query_telemetry::QueryTimer::start();
                         let copy = connection.checkpoint_over(CHECKPOINT_CAP_FRAMES);
                         if let Some(timer) = copy_timer {

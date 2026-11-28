@@ -141,7 +141,7 @@ pub(super) fn ensure_projection_version(connection: &Db) -> Result<(), TursoStor
     {
         return Ok(());
     }
-    driver::write_transaction(connection, || {
+    driver::write_transaction(connection, driver::Durability::Cache, || {
         driver::execute(connection, "DELETE FROM calendar_ranges", Vec::new())?;
         let mut upsert = driver::prepare(connection, RANGE_UPSERT)?;
         for_each_record(connection, OCCURRENCE_TYPENAME, |key, record| {
@@ -538,7 +538,9 @@ impl CalendarRangeStorage for TursoStorage {
                 .validate()
                 .map_err(|_| TursoStorageError::InvalidInput)?;
             let connection = self.connection();
-            driver::write_transaction(&connection, || apply_commit(&connection, commit))
+            driver::write_transaction(&connection, driver::Durability::Cache, || {
+                apply_commit(&connection, commit)
+            })
         })();
         self.latch_result(result)
     }
