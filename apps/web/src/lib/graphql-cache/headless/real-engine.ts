@@ -20,14 +20,45 @@ const WASM_DIR = join(dirname(fileURLToPath(import.meta.url)), '../wasm');
 const WASM_JS = join(WASM_DIR, 'cache_wasm.js');
 const WASM_BINARY = join(WASM_DIR, 'cache_wasm_bg.wasm');
 
-/** One call into the engine. */
-export type EngineCall = { method: string };
+/** One call into the engine: its method, the view it reads for (see
+ * `VIEW_READS`), and, once it settles, how many records it handed back to the
+ * worker. */
+export type EngineCall = {
+  method: string;
+  view?: string;
+  recordsOut?: number;
+};
+
+/** Reads made for views in some steps: how many views were read, and how many
+ * reads repeated a view already read in them. */
+export type ViewReads = { views: number; repeats: number; maxPerView: number };
+
+/** The engine methods that read for one view, and what names the view: the
+ * query and its variables, or the whole request (a search without its clock).
+ * Two calls with the same key read the same view again. */
+const VIEW_READS = new Map<string, (args: unknown[]) => unknown>([
+  ['readQuery', (args) => [args[1], args[3]]],
+  ['watchQuery', (args) => [args[1], args[3]]],
+  ['entityFilter', (args) => args[0]],
+  ['search', (args) => withoutClock(args[0])],
+  ['readRecordsByKeys', (args) => [args[0], args[1], args[2]]],
+]);
+
+function withoutClock(request: unknown): unknown {
+  if (typeof request !== 'object' || request === null) return request;
+  const { nowMs: _nowMs, ...rest } = request as Record<string, unknown>;
+  return rest;
+}
 
 /** Every engine method call, in order. */
 export type EngineCallLog = {
   calls: EngineCall[];
-  /** Calls by method name since `mark` was last taken. */
+  /** Calls by method name since `mark` was taken. */
   countsSince(mark: number): Record<string, number>;
+  /** Records engine calls since `mark` returned, once they settled. */
+  recordsOutSince(mark: number): number;
+  /** View reads since `mark` (`VIEW_READS`). */
+  viewReadsSince(mark: number): ViewReads;
   mark(): number;
 };
 
@@ -42,7 +73,46 @@ export function createEngineCallLog(): EngineCallLog {
         counts[method] = (counts[method] ?? 0) + 1;
       return counts;
     },
+    recordsOutSince: (mark) =>
+      calls
+        .slice(mark)
+        .reduce((total, call) => total + (call.recordsOut ?? 0), 0),
+    viewReadsSince: (mark) => {
+      const perView = new Map<string, number>();
+      for (const { view } of calls.slice(mark))
+        if (view !== undefined) perView.set(view, (perView.get(view) ?? 0) + 1);
+      let repeats = 0;
+      let maxPerView = 0;
+      for (const count of perView.values()) {
+        repeats += count - 1;
+        maxPerView = Math.max(maxPerView, count);
+      }
+      return { views: perView.size, repeats, maxPerView };
+    },
   };
+}
+
+/** Records a result carries: live-query upserts and patches, records read by
+ * key, and query reads (one). Window keys are not records. */
+function countRecords(result: unknown): number {
+  if (typeof result !== 'object' || result === null) return 0;
+  const value = result as Record<string, unknown>;
+  let records = 0;
+  for (const field of ['upserts', 'patches', 'records'] as const) {
+    const list = value[field];
+    if (Array.isArray(list)) records += list.length;
+  }
+  if (value.kind === 'hit' && 'data' in value) records += 1;
+  return records;
+}
+
+async function settleCounted(
+  call: EngineCall,
+  pending: Promise<unknown>
+): Promise<unknown> {
+  const settled = await pending;
+  call.recordsOut = countRecords(settled);
+  return settled;
 }
 
 /** The engine with every method call recorded. Methods the worker core only
@@ -54,17 +124,32 @@ function recordedEngine(engine: CacheEngine, log: EngineCallLog): CacheEngine {
       if (typeof value !== 'function' || typeof property !== 'string')
         return value;
       return (...args: unknown[]) => {
-        log.calls.push({ method: property });
-        return Reflect.apply(value, target, args);
+        const viewOf = VIEW_READS.get(property);
+        const call: EngineCall = viewOf
+          ? {
+              method: property,
+              view: `${property} ${JSON.stringify(viewOf(args))}`,
+            }
+          : { method: property };
+        log.calls.push(call);
+        const result: unknown = Reflect.apply(value, target, args);
+        if (result instanceof Promise) return settleCounted(call, result);
+        call.recordsOut = countRecords(result);
+        return result;
       };
     },
   });
 }
 
-let compiled: Promise<WebAssembly.Module> | undefined;
+const COMPILED = Symbol.for('macro.headless-cache.compiled');
 
+type CompiledSlot = { [COMPILED]?: Promise<WebAssembly.Module> };
+
+// Compiled once per process, as the page hands one compile to every engine
+// worker (`worker/compiled-engine.ts`).
 function compileEngine(): Promise<WebAssembly.Module> {
-  compiled ??= (async () => {
+  const slots = globalThis as CompiledSlot;
+  slots[COMPILED] ??= (async () => {
     const bytes = await readFile(WASM_BINARY).catch((error: unknown) => {
       throw new Error(
         `the cache engine is not built (${WASM_BINARY}); run \`just build-cache-wasm\` in apps/web`,
@@ -73,7 +158,7 @@ function compileEngine(): Promise<WebAssembly.Module> {
     });
     return await WebAssembly.compile(bytes);
   })();
-  return compiled;
+  return slots[COMPILED];
 }
 
 export type RealCacheWasm = {
@@ -102,21 +187,44 @@ type CountingGlue = CacheWasmModule & {
 
 type EngineExports = { memory?: unknown };
 
-let loaded: Promise<RealCacheWasm> | undefined;
+const CURRENT_ENGINE = Symbol.for('macro.headless-cache.engine');
+const INSTANCES = Symbol.for('macro.headless-cache.instances');
 
-/**
- * Loads and initializes the engine once per test file's module graph, as
- * `loadCacheWasm` does in a worker: the linear memory must be exported and the
- * slow-query callback is installed. Every open hands out a recorded engine.
- */
-export function loadRealCacheWasm(): Promise<RealCacheWasm> {
-  loaded ??= initialize();
-  return loaded;
+// On `globalThis`: the engine worker's mock (`setup.ts`) and the runtime that
+// loaded the engine can sit in different module graphs.
+type EngineSlots = {
+  [CURRENT_ENGINE]?: RealCacheWasm;
+  [INSTANCES]?: number;
+};
+
+/** The engine the current runtime's engine worker gets (`setup.ts`). */
+export function currentRealCacheWasm(): RealCacheWasm {
+  const engine = (globalThis as EngineSlots)[CURRENT_ENGINE];
+  if (!engine)
+    throw new Error(
+      'No headless runtime is installed; start one with installHeadlessCacheRuntime'
+    );
+  return engine;
 }
 
-async function initialize(): Promise<RealCacheWasm> {
+export function setCurrentRealCacheWasm(engine: RealCacheWasm | undefined) {
+  (globalThis as EngineSlots)[CURRENT_ENGINE] = engine;
+}
+
+/**
+ * A new instance of the engine, as a new engine worker loads one: its own
+ * linear memory and counters, over the module compiled once per process. As in
+ * `loadCacheWasm`, the linear memory must be exported and the slow-query
+ * callback is installed. Every open hands out a recorded engine.
+ */
+export async function loadRealCacheWasm(): Promise<RealCacheWasm> {
+  const slots = globalThis as EngineSlots;
+  const instance = (slots[INSTANCES] ?? 0) + 1;
+  slots[INSTANCES] = instance;
+  // The glue holds its instance in module state; a distinct URL is a
+  // distinct module.
   const glue = (await import(
-    /* @vite-ignore */ pathToFileURL(WASM_JS).href
+    /* @vite-ignore */ `${pathToFileURL(WASM_JS).href}?instance=${instance}`
   )) as CountingGlue;
   const exports = (await glue.default({
     module_or_path: await compileEngine(),

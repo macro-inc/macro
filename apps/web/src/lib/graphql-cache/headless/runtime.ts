@@ -6,8 +6,8 @@
  * the same event loop, so every message crosses the same validation and
  * dispatch it does in a browser, without the thread hop.
  *
- * The engine itself comes from `loadCacheWasm`, which the test config must mock
- * with `loadRealCacheWasm` (`./setup.ts` does).
+ * Each runtime loads its own engine instance, as a new engine worker does; the
+ * test config must mock `loadCacheWasm` to hand it out (`./setup.ts` does).
  */
 import { vi } from 'vitest';
 import type { CacheHost } from '../host/types';
@@ -21,8 +21,16 @@ import { installCacheCoordinatorWorker } from '../worker/cache-coordinator-runti
 import { installCacheEngineWorker } from '../worker/cache-engine-runtime';
 import { CoordinatorRouter } from '../worker/coordinator-router';
 import { CacheWorkerCore } from '../worker/worker-core';
-import { createMemoryOpfs, type MemoryOpfs } from './memory-opfs';
-import { loadRealCacheWasm, type RealCacheWasm } from './real-engine';
+import {
+  createMemoryOpfs,
+  type MemoryOpfs,
+  reopenMemoryOpfs,
+} from './memory-opfs';
+import {
+  loadRealCacheWasm,
+  type RealCacheWasm,
+  setCurrentRealCacheWasm,
+} from './real-engine';
 
 export type HeadlessCacheRuntime = {
   engine: RealCacheWasm;
@@ -41,12 +49,18 @@ const REQUEST_TIMEOUT_MS = 60_000;
 
 /**
  * Installs the worker, OPFS and lock globals and loads the engine. One runtime
- * per test: the globals are stubbed with `vi.stubGlobal` and restored on
- * `dispose`.
+ * at a time: the globals are stubbed with `vi.stubGlobal` and restored on
+ * `dispose`. Pass `reopen`, the `opfs` of a disposed runtime, to load the next
+ * page over its files (`reopenMemoryOpfs`).
  */
-export async function installHeadlessCacheRuntime(): Promise<HeadlessCacheRuntime> {
+export async function installHeadlessCacheRuntime(
+  options: { reopen?: MemoryOpfs } = {}
+): Promise<HeadlessCacheRuntime> {
   const engine = await loadRealCacheWasm();
-  const opfs = createMemoryOpfs();
+  setCurrentRealCacheWasm(engine);
+  const opfs = options.reopen
+    ? reopenMemoryOpfs(options.reopen)
+    : createMemoryOpfs();
   for (const [name, value] of Object.entries(opfs.globals))
     vi.stubGlobal(name, value);
 
@@ -125,6 +139,7 @@ export async function installHeadlessCacheRuntime(): Promise<HeadlessCacheRuntim
     },
     async dispose() {
       for (const host of hosts.splice(0)) await host.dispose();
+      setCurrentRealCacheWasm(undefined);
       vi.unstubAllGlobals();
     },
   };

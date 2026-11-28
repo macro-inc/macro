@@ -7,7 +7,8 @@
  * handle is open, and `DOMException`s named as Chromium names them.
  */
 
-type FileState = {
+/** One file's bytes and its open access handle, if any. */
+export type MemoryFile = {
   bytes: Uint8Array;
   size: number;
   handle: MemorySyncAccessHandle | undefined;
@@ -29,15 +30,15 @@ export type MemoryOpfsCounters = {
 };
 
 export class MemorySyncAccessHandle {
-  #file: FileState | undefined;
+  #file: MemoryFile | undefined;
   readonly #counters: MemoryOpfsCounters;
 
-  constructor(file: FileState, counters: MemoryOpfsCounters) {
+  constructor(file: MemoryFile, counters: MemoryOpfsCounters) {
     this.#file = file;
     this.#counters = counters;
   }
 
-  #open(): FileState {
+  #open(): MemoryFile {
     if (!this.#file)
       throw domError('InvalidStateError', 'The access handle was closed.');
     return this.#file;
@@ -92,7 +93,7 @@ export class MemorySyncAccessHandle {
   }
 }
 
-function reserve(file: FileState, size: number): void {
+function reserve(file: MemoryFile, size: number): void {
   if (size <= file.bytes.byteLength) return;
   let capacity = Math.max(file.bytes.byteLength, 64 * 1024);
   while (capacity < size) capacity *= 2;
@@ -104,10 +105,10 @@ function reserve(file: FileState, size: number): void {
 export class MemoryFileHandle {
   readonly kind = 'file';
   readonly name: string;
-  readonly #file: FileState;
+  readonly #file: MemoryFile;
   readonly #counters: MemoryOpfsCounters;
 
-  constructor(name: string, file: FileState, counters: MemoryOpfsCounters) {
+  constructor(name: string, file: MemoryFile, counters: MemoryOpfsCounters) {
     this.name = name;
     this.#file = file;
     this.#counters = counters;
@@ -128,12 +129,17 @@ export class MemoryFileHandle {
 export class MemoryDirectoryHandle {
   readonly kind = 'directory';
   readonly name: string;
-  readonly #files = new Map<string, FileState>();
+  readonly #files = new Map<string, MemoryFile>();
   readonly #counters: MemoryOpfsCounters;
 
-  constructor(name: string, counters: MemoryOpfsCounters) {
+  constructor(
+    name: string,
+    counters: MemoryOpfsCounters,
+    files: Iterable<[string, MemoryFile]> = []
+  ) {
     this.name = name;
     this.#counters = counters;
+    for (const [fileName, file] of files) this.#files.set(fileName, file);
   }
 
   async getFileHandle(
@@ -176,11 +182,21 @@ export class MemoryDirectoryHandle {
   }
 
   async *values(): AsyncGenerator<MemoryFileHandle> {
-    for (const [, handle] of this.entries()) yield handle;
+    for await (const [, handle] of this.entries()) yield handle;
   }
 
   [Symbol.asyncIterator](): AsyncGenerator<[string, MemoryFileHandle]> {
     return this.entries();
+  }
+
+  /**
+   * The files, for a later page's root: every handle the last page held is
+   * closed, as the browser closes them when the worker holding them ends. A
+   * plain value, because the later page may load this module anew.
+   */
+  releaseFiles(): Array<[string, MemoryFile]> {
+    for (const file of this.#files.values()) file.handle?.close();
+    return [...this.#files];
   }
 
   /** Bytes held by each file, for reports. */
@@ -309,18 +325,15 @@ export type MemoryOpfs = {
   globals: Record<string, unknown>;
 };
 
-/** A fresh, empty origin. */
-export function createMemoryOpfs(
-  baseNavigator: Partial<Navigator> = {}
+function emptyCounters(): MemoryOpfsCounters {
+  return { reads: 0, writes: 0, bytesRead: 0, bytesWritten: 0, flushes: 0 };
+}
+
+function assembleOpfs(
+  root: MemoryDirectoryHandle,
+  counters: MemoryOpfsCounters,
+  baseNavigator: Partial<Navigator>
 ): MemoryOpfs {
-  const counters: MemoryOpfsCounters = {
-    reads: 0,
-    writes: 0,
-    bytesRead: 0,
-    bytesWritten: 0,
-    flushes: 0,
-  };
-  const root = new MemoryDirectoryHandle('', counters);
   const locks = new MemoryLockManager();
   return {
     root,
@@ -347,4 +360,33 @@ export function createMemoryOpfs(
       },
     },
   };
+}
+
+/** A fresh, empty origin. */
+export function createMemoryOpfs(
+  baseNavigator: Partial<Navigator> = {}
+): MemoryOpfs {
+  const counters = emptyCounters();
+  return assembleOpfs(
+    new MemoryDirectoryHandle('', counters),
+    counters,
+    baseNavigator
+  );
+}
+
+/**
+ * The origin of `previous` as the next page load finds it: the same files,
+ * with the last page's handles closed, no locks held and counters at zero.
+ */
+export function reopenMemoryOpfs(
+  previous: MemoryOpfs,
+  baseNavigator: Partial<Navigator> = {}
+): MemoryOpfs {
+  const counters = emptyCounters();
+  const root = new MemoryDirectoryHandle(
+    '',
+    counters,
+    previous.root.releaseFiles()
+  );
+  return assembleOpfs(root, counters, baseNavigator);
 }
