@@ -47,6 +47,36 @@ export type HeadlessCacheRuntime = {
 
 const REQUEST_TIMEOUT_MS = 60_000;
 
+/**
+ * How long `dispose` waits for the engine workers to finish their departure:
+ * the host's request timeout, the longest an admitted read can hold it.
+ */
+const DEPARTURE_TIMEOUT_MS = REQUEST_TIMEOUT_MS;
+
+/** Resolves once every worker in `exits` has ended, or fails after `ms`. */
+async function awaitWorkerExits(
+  exits: readonly Promise<void>[],
+  ms: number
+): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () =>
+        reject(
+          new Error(
+            `An engine worker did not drain or terminate within ${ms} ms of dispose`
+          )
+        ),
+      ms
+    );
+  });
+  try {
+    await Promise.race([Promise.all(exits), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Every channel the page and workers open, so `dispose` can close them. */
 function trackedMessageChannel(
   opened: LinkedMessageChannel[]
@@ -83,6 +113,9 @@ export async function installHeadlessCacheRuntime(
   });
   const channels: LinkedMessageChannel[] = [];
   const TrackedMessageChannel = trackedMessageChannel(channels);
+  // One per engine worker: settles when it closes itself after draining, or
+  // when the page terminates it.
+  const workerExits: Promise<void>[] = [];
   vi.stubGlobal('MessageChannel', TrackedMessageChannel);
   vi.stubGlobal(
     'SharedWorker',
@@ -105,12 +138,18 @@ export async function installHeadlessCacheRuntime(
     class {
       onerror: ((event: ErrorEvent) => unknown) | null = null;
       onmessageerror: ((event: MessageEvent) => unknown) | null = null;
+      private exited: () => void = () => {};
       private readonly scope = {
         onmessage: null as ((event: MessageEvent<unknown>) => void) | null,
-        close: () => {},
+        close: () => this.exited(),
       };
 
       constructor() {
+        workerExits.push(
+          new Promise<void>((resolve) => {
+            this.exited = resolve;
+          })
+        );
         installCacheEngineWorker({
           scope: this.scope,
           createCore: (options) => new CacheWorkerCore(options),
@@ -125,13 +164,39 @@ export async function installHeadlessCacheRuntime(
         } as unknown as MessageEvent);
       }
 
-      terminate(): void {}
+      terminate(): void {
+        this.exited();
+      }
     }
   );
 
   const observations: CacheTelemetryObservation[] = [];
   const initializationErrors: Error[] = [];
   const hosts: CacheHost[] = [];
+  const dispose = async (): Promise<void> => {
+    try {
+      for (const host of hosts.splice(0)) await host.dispose();
+      // A host's dispose starts its departure and returns. Its engine worker
+      // still answers what the host admitted, then drains (flushing its
+      // files) and closes, so wait for that; the next runtime reopens those
+      // files. The coordinator keeps posting to the page's ports for a while
+      // after, and closed ports drop those messages, so none reaches a port
+      // after the test's environment is gone.
+      await awaitWorkerExits(workerExits.splice(0), DEPARTURE_TIMEOUT_MS);
+    } finally {
+      // Also after a worker that never drained, so the next test starts
+      // without this runtime's ports and globals.
+      for (const channel of channels.splice(0)) {
+        channel.port1.close();
+        channel.port2.close();
+      }
+      setCurrentRealCacheWasm(undefined);
+      vi.unstubAllGlobals();
+    }
+  };
+  // Every caller waits for the same teardown: a second call must not find
+  // the lists already taken and close the ports while a worker drains.
+  let disposed: Promise<void> | undefined;
   return {
     engine,
     opfs,
@@ -151,17 +216,9 @@ export async function installHeadlessCacheRuntime(
       hosts.push(host);
       return host;
     },
-    async dispose() {
-      for (const host of hosts.splice(0)) await host.dispose();
-      // A host's dispose starts its departure and returns: the workers keep
-      // answering it for a while. Closed ports drop those messages, so none
-      // reaches a port after the test's environment is gone.
-      for (const channel of channels.splice(0)) {
-        channel.port1.close();
-        channel.port2.close();
-      }
-      setCurrentRealCacheWasm(undefined);
-      vi.unstubAllGlobals();
+    dispose() {
+      disposed ??= dispose();
+      return disposed;
     },
   };
 }

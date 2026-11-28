@@ -41,6 +41,13 @@ OPFS and Web Locks held in memory. No browser, no stand-in engine.
 - Workers are linked message ports on one event loop: messages cross the same
   validation and dispatch as in a browser, without the thread hop. Timings here
   are not browser timings; count work instead.
+- A host's `dispose` only starts its departure. The runtime's `dispose` waits
+  for every engine worker to drain (answering what its host admitted, then
+  closing itself) or be terminated, up to the request timeout, and only then
+  closes the ports, so no reply is cut off and no message reaches a port after
+  the test's environment is gone. A worker that never drains fails the
+  dispose, which still closes the ports and restores the globals; a second
+  `dispose` waits for the first.
 - Load the wasm by file path, never `new URL(..., import.meta.url)`: Vite
   rewrites that into a served URL the Node loader refuses.
 - A cold open over a seeded cache is a second runtime with `reopen`, in a fresh
