@@ -92,6 +92,8 @@ declare module '@urql/core' {
      * cursor would duplicate or drop the rows at a boundary the write moved.
      * The exchange calls each active owner once per write. */
     networkRevalidation?: NetworkRevalidation;
+    /** A batch caller will refresh its affected readers once after the batch. */
+    deferNetworkRevalidation?: boolean;
   }
 }
 
@@ -295,7 +297,12 @@ export function networkRevalidationExchange(
             if (!result.stale && !result.hasNext)
               finish(operation.key, !result.error);
           }
-          if (operation.kind !== 'mutation' || !enabled() || result.hasNext)
+          if (
+            operation.kind !== 'mutation' ||
+            !enabled() ||
+            result.hasNext ||
+            operation.context.deferNetworkRevalidation
+          )
             return fromValue(result);
           // The reads run after the response, outside the write's span: they
           // join the trace its caller named.

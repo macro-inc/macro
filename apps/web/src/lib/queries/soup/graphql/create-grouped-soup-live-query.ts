@@ -197,15 +197,19 @@ export function createGroupedSoupLiveQuery(
         select: ({ pages, pageParams }) => ({ pages: () => pages, pageParams }),
       }));
       onCleanup(
-        registerGraphqlSoupRevalidations(() =>
-          continued.isEnabled
-            ? [...new Set([cursor, ...(continued.data?.pageParams ?? [])])].map(
-                (cursor) => ({
+        registerGraphqlSoupRevalidations(
+          () =>
+            continued.isEnabled
+              ? [
+                  ...new Set([cursor, ...(continued.data?.pageParams ?? [])]),
+                ].map((cursor) => ({
                   document: GroupSoupDocument,
                   variables: { input: continuationInput(cursor) },
-                })
-              )
-            : []
+                }))
+              : [],
+          undefined,
+          undefined,
+          () => initial.initial?.filters
         )
       );
       createComputed(() => {

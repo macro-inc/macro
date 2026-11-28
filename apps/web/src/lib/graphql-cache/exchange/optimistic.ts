@@ -174,7 +174,11 @@ export type OptimisticMutationDisposition<TData> =
 
 /** Exchange-private metadata attached after queue routing or settlement. */
 export type OptimisticMutationDispositionMetadata =
-  | { kind: 'committed'; transactionId?: string }
+  | {
+      kind: 'committed';
+      transactionId?: string;
+      cacheEffectsApplied?: boolean;
+    }
   | { kind: 'queued'; transactionId: string }
   | {
       kind: 'superseded';
@@ -265,6 +269,24 @@ export function withOptimisticMutationDisposition(
   };
 }
 
+function dispositionMetadata(result: Pick<OperationResult, 'extensions'>) {
+  const value: unknown =
+    result.extensions?.[OPTIMISTIC_MUTATION_DISPOSITION_KEY];
+  if (value === null || typeof value !== 'object' || !('kind' in value)) {
+    return undefined;
+  }
+
+  return value as OptimisticMutationDispositionMetadata;
+}
+
+/** A durable commit carried its own list revalidations through the queue. */
+export function queuedMutationCommitOf(
+  result: Pick<OperationResult, 'extensions'>
+) {
+  const metadata = dispositionMetadata(result);
+  if (metadata?.kind === 'committed' && metadata.transactionId) return metadata;
+}
+
 /** Reads the typed caller-facing disposition attached by the cache exchange. */
 export function optimisticMutationDispositionOf<
   TData,
@@ -272,13 +294,8 @@ export function optimisticMutationDispositionOf<
 >(
   result: OperationResult<TData, TVariables>
 ): OptimisticMutationDisposition<TData> | undefined {
-  const value: unknown =
-    result.extensions?.[OPTIMISTIC_MUTATION_DISPOSITION_KEY];
-  if (value === null || typeof value !== 'object' || !('kind' in value)) {
-    return undefined;
-  }
-
-  const metadata = value as OptimisticMutationDispositionMetadata;
+  const metadata = dispositionMetadata(result);
+  if (!metadata) return undefined;
   if (metadata.kind === 'queued' && metadata.transactionId) {
     return { kind: 'queued', transactionId: metadata.transactionId };
   }

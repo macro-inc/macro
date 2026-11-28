@@ -179,6 +179,20 @@ describe('networkRevalidationExchange', () => {
     list.unsubscribe();
   });
 
+  it('leaves list refresh to the caller for a batch write', async () => {
+    const { client, requests, respond, flush } = setup();
+    const list = client.query(LIST, {}).subscribe(() => {});
+    respond(0);
+    const saved = client
+      .mutation(SAVE, {}, { deferNetworkRevalidation: true })
+      .toPromise();
+    respond(1);
+    await flush();
+    expect(requests).toHaveLength(2);
+    expect(networkRevalidated(await saved)).toBe(false);
+    list.unsubscribe();
+  });
+
   it('rejects an old query response arriving after the post-save refresh', async () => {
     const { client, respond, flush } = setup();
     const values: unknown[] = [];
