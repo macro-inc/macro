@@ -27,6 +27,7 @@ const policies = {
   MarkEmailThreadSeen: 'resolver',
   MarkEmailThreadUnread: 'resolver',
   SetEmailThreadArchived: 'resolver',
+  SetEmailThreadFolderStates: 'resolver',
   SetEmailThreadsArchived: 'resolver',
   UpdateNotifications: 'resolver',
   RenameEntities: 'resolver',

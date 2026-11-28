@@ -49,7 +49,7 @@ describe('canonical offline Mail preview', () => {
         'DRAFTS',
         'now'
       )
-    ).toBeUndefined();
+    ).toBeNull();
     expect(isCachedMailView('STARRED')).toBe(false);
   });
 });

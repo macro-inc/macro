@@ -462,6 +462,11 @@ type CompleteMutationRoot {
 	"""
 	setEmailThreadState(input: SetEmailThreadStateInput!): GraphqlSoupEmailThread!
 	"""
+	Set folder membership and acknowledge each thread independently of
+	loading its updated Mail row.
+	"""
+	setEmailThreadFolderStates(input: SetEmailThreadFolderStatesInput!): [EmailThreadFolderOutcome!]!
+	"""
 	Resolve an email write conflict and return the current canonical thread.
 	"""
 	resolveEmailMessageOperation(input: ResolveEmailMessageOperationInput!): GraphqlSoupEmailThread!
@@ -1675,6 +1680,39 @@ enum EmailSendStatus {
 	This attempt cannot deliver.
 	"""
 	CANCELLED
+}
+
+"""
+Provider-neutral folders whose membership can change.
+"""
+enum EmailThreadFolderField {
+	"""
+	Spam or junk.
+	"""
+	JUNK
+	"""
+	Trash or deleted items.
+	"""
+	TRASHED
+}
+
+"""
+One thread's write acknowledgement with a separately resolved Mail row.
+"""
+type EmailThreadFolderOutcome {
+	"""
+	Canonical identity the write was applied to or rejected for.
+	"""
+	threadId: ID!
+	"""
+	Write failure, independent of errors in the returned row.
+	"""
+	error: String
+	"""
+	Load the committed thread from the primary. Projection errors can null
+	this field while leaving the write acknowledgement available.
+	"""
+	effect: GraphqlSoupEmailThread
 }
 
 """
@@ -13312,6 +13350,24 @@ input SetEmailThreadArchivedInput {
 	True for Done; false for Mark Not Done or Undo.
 	"""
 	archived: Boolean!
+}
+
+"""
+Change folder membership for up to 32 independent email threads.
+"""
+input SetEmailThreadFolderStatesInput {
+	"""
+	Canonical thread IDs in the batch.
+	"""
+	threadIds: [ID!]!
+	"""
+	Folder to move into or out of.
+	"""
+	field: EmailThreadFolderField!
+	"""
+	Whether the threads should be in the folder.
+	"""
+	value: Boolean!
 }
 
 """

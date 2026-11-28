@@ -112,7 +112,6 @@ export const REST: readonly Operation[] = [
     kind: 'rest',
     scope: 'email',
   },
-  { id: 'PATCH /email/email/threads/{}/state', kind: 'rest', scope: 'email' },
   {
     id: 'GET /email/email/threads/previews/cursor/{}',
     kind: 'rest',
@@ -169,6 +168,8 @@ export const GRAPHQL: readonly Operation[] = [
   { id: 'SaveEmailDraft', kind: 'mutation', scope: 'email' },
   { id: 'SendEmailMessage', kind: 'mutation', scope: 'email' },
   { id: 'SetEmailThreadArchived', kind: 'mutation', scope: 'email' },
+  { id: 'SetEmailThreadFolderStates', kind: 'mutation', scope: 'email' },
+  { id: 'RecoverEmailThreadFolderRow', kind: 'query', scope: 'email' },
   { id: 'SetEmailThreadsArchived', kind: 'mutation', scope: 'email' },
   { id: 'SetEntityFavorite', kind: 'mutation', scope: 'shared' },
   { id: 'SetEntityProperty', kind: 'mutation', scope: 'shared' },

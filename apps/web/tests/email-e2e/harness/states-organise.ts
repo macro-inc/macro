@@ -13,18 +13,6 @@ export function method(name: string): Matches {
   return (request) => request.method() === name;
 }
 
-/** A PATCH of a thread's state that sets `field` to `value`. */
-export function stateWrite(field: string, value: boolean): Matches {
-  return (request) => {
-    if (request.method() !== 'PATCH') return false;
-    const body = request.postDataJSON() as { field?: string; value?: boolean };
-    return body.field === field && body.value === value;
-  };
-}
-
-/** The app's write of a thread's state (Trash, Spam, their restores). */
-export const THREAD_STATE = '**/email/threads/*/state';
-
 const REFUSAL = {
   status: 500,
   contentType: 'application/json',

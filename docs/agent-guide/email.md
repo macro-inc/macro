@@ -765,6 +765,19 @@ spam on Gmail files the thread under Spam, then takes it out of the inbox. The
 assistant adding or removing the SPAM label does the same.
 Gmail restores update the canonical preview and ordering immediately, before the
 queued provider write completes.
+Trash, Undo and folder restores use the same bounded GraphQL mailbox mutation.
+Each thread has its own write acknowledgement and Mail row. A committed write
+whose row cannot be loaded keeps its acknowledgement and reads the thread by ID
+within a fixed time budget. The durable queue can settle and retry that read
+afterward. If the retry misses too, the cache revalidates mounted queries. Each
+offline replayed trash write settles independently by thread.
+A rejected thread keeps its state and other acknowledged threads stay in Trash.
+Returned and recovered rows update Inbox and other locally maintained Mail lists.
+Spam and Trash still get membership and their list-specific preview from the
+server. The mutation queues those reads once per batch, including after offline
+replay. An offline trash removes the thread from locally maintained Mail as
+soon as the write is queued. A restore uses the server's returned previews
+to place the thread back in the right Mail views.
 Outlook uses pending mailbox operations, and the thread's operation notice shows
 provider confirmation or failure. Gmail uses the existing queued label-sync path
 and does not expose those operation notices. A success toast means the request was
@@ -773,7 +786,8 @@ sync events, inbox backfill and inbox removal read the open folder list again. O
 while the thread is open; otherwise
 folder refresh follows the provider sync event. The unread facet remains
 thread-level, so an unread reply outside Spam can make its Spam row unread.
-Bulk restores limit concurrent requests. Failed requests remain retryable, and a partial
+Bulk restores send one write at a time through the durable cache queue and
+bound parallel requests when the cache is unavailable. Failed requests remain retryable, and a partial
 bulk failure does not undo successful restores. While a restore is pending, switch
 folders and select another row; completing the old restore must preserve the new
 selection. The same applies to selecting different rows in the original folder.

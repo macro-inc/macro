@@ -16,7 +16,9 @@ use graphql_common::{parse_id, require_authenticated_user};
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
+mod folders;
 mod send;
+use folders::{EmailThreadFolderOutcome, SetEmailThreadFolderStatesInput};
 use send::{SendEmailMessageInput, SendEmailMessagePayload};
 
 #[cfg(test)]
@@ -763,6 +765,17 @@ where
             .await
             .map_err(|e| mutation_error(&e))?;
         reload_thread::<O>(ctx, user, thread).await
+    }
+
+    /// Set folder membership and acknowledge each thread independently of
+    /// loading its updated Mail row.
+    #[tracing::instrument(skip_all, err(Debug))]
+    async fn set_email_thread_folder_states(
+        &self,
+        ctx: &Context<'_>,
+        input: SetEmailThreadFolderStatesInput,
+    ) -> async_graphql::Result<Vec<EmailThreadFolderOutcome<O>>> {
+        folders::set_folder_states::<S, O>(ctx, input).await
     }
 
     /// Resolve an email write conflict and return the current canonical thread.

@@ -12,6 +12,8 @@ types, the `EmailThread` edge resolvers, and draft mutations.
 - `src/send.rs`: idempotent send/cancel/status plus actor/inbox-scoped pending-send pagination.
 - `src/mutation.rs`: `GraphqlEmailMutation` (save/delete draft, mark seen/unread,
   update label).
+- `src/mutation/folders.rs`: bounded Spam and Trash writes with per-thread
+  acknowledgements and a nullable primary-backed Mail row.
 - `src/loaders.rs`: DataLoader batching for thread metadata, mail projection,
   and content, keyed by thread/message id.
 - `src/user_query.rs` / `src/user_objects.rs`: viewer-scoped email settings

@@ -1,0 +1,18 @@
+mutation SetEmailThreadFolderStates($input: SetEmailThreadFolderStatesInput!) {
+	setEmailThreadFolderStates(input: $input) {
+		threadId
+		error
+		effect {
+			...SoupItemPreviewFields
+		}
+	}
+}
+
+query RecoverEmailThreadFolderRow($threadId: ID!) {
+	user {
+		id
+		soupEntity(input: { entityType: EMAIL_THREAD, entityId: $threadId }) {
+			...SoupItemPreviewFields
+		}
+	}
+}

@@ -15,13 +15,11 @@ import { expect, test } from './harness/fixtures';
 import { trashFolder } from './harness/journeys';
 import { openThreadId, rowIds } from './harness/list';
 import { notice } from './harness/send';
+import { refuseOperation } from './harness/states-list';
 import {
   deliverWithoutSubject,
   noticesGone,
-  refuse,
   sheetIn,
-  stateWrite,
-  THREAD_STATE,
 } from './harness/states-organise';
 import { PHONE } from './harness/ways-list1';
 import {
@@ -72,16 +70,16 @@ test.describe('the title menu of a thread on a desktop', () => {
   }) => {
     const ids = await deliverAll(mailbox, ['Agenda', 'Minutes', 'Budget']);
     let refusing: 'restore' | 'trash' | undefined;
-    await refuse(
+    await refuseOperation(
       page,
-      THREAD_STATE,
-      stateWrite('trashed', false),
+      'SetEmailThreadFolderStates',
+      (body) => body.includes('"value":false'),
       () => refusing === 'restore'
     );
-    await refuse(
+    await refuseOperation(
       page,
-      THREAD_STATE,
-      stateWrite('trashed', true),
+      'SetEmailThreadFolderStates',
+      (body) => body.includes('"value":true'),
       () => refusing === 'trash'
     );
     await mailbox.open();
@@ -209,16 +207,16 @@ test.describe('the title menu of a thread on a phone', () => {
   }) => {
     const ids = await deliverAll(mailbox, ['Agenda', 'Minutes', 'Budget']);
     let refusing: 'restore' | 'trash' | undefined;
-    await refuse(
+    await refuseOperation(
       page,
-      THREAD_STATE,
-      stateWrite('trashed', false),
+      'SetEmailThreadFolderStates',
+      (body) => body.includes('"value":false'),
       () => refusing === 'restore'
     );
-    await refuse(
+    await refuseOperation(
       page,
-      THREAD_STATE,
-      stateWrite('trashed', true),
+      'SetEmailThreadFolderStates',
+      (body) => body.includes('"value":true'),
       () => refusing === 'trash'
     );
 

@@ -14,14 +14,8 @@ import { deliverToSpam, syncedInView } from './harness/journeys';
 import { deliverLabelled } from './harness/list';
 import { grantView, threadOf } from './harness/sharing';
 import type { Provider } from './harness/stack';
-import {
-  hold,
-  mentionInDocument,
-  method,
-  refuse,
-  sidePanel,
-  THREAD_STATE,
-} from './harness/states-organise';
+import { holdOperation, refuseOperation } from './harness/states-list';
+import { mentionInDocument, sidePanel } from './harness/states-organise';
 import { openTouchTab, PHONE } from './harness/ways-list1';
 import { listShows, rowCheckbox } from './harness/ways-list2';
 import { deliverAll, row } from './harness/ways-organise';
@@ -148,11 +142,14 @@ test.describe('the side panel and selection toolbar on a desktop', () => {
     const photos = await syncedInView(mailbox, 'spam', 'Team photos');
     const library = page.getByRole('navigation', { name: 'Email library' });
     const selected = page.getByText('1 selected', { exact: true });
-    // The service client asks again after a refusal: every ask is refused
-    // until the test stops it, and the first one is held.
     let refusing = true;
-    await refuse(page, THREAD_STATE, method('PATCH'), () => refusing);
-    const restoring = await hold(page, THREAD_STATE, method('PATCH'));
+    await refuseOperation(
+      page,
+      'SetEmailThreadFolderStates',
+      () => true,
+      () => refusing
+    );
+    const restoring = await holdOperation(page, 'SetEmailThreadFolderStates');
 
     await mailbox.open();
     await library.getByRole('button', { name: 'Trash' }).click();
@@ -161,24 +158,24 @@ test.describe('the side panel and selection toolbar on a desktop', () => {
     await expect(selected).toBeVisible();
     const restore = toolbarButton(page, 'Restore');
     await restore.click();
-    await expect.poll(restoring.held).toBe(1);
+    await expect.poll(restoring.count).toBe(1);
     await expect(restore).toBeDisabled();
     saw('STL-607', 'F-076');
-    await restoring.release('refuse');
+    await restoring.release();
     await expect(restore).toBeEnabled();
     await expect(selected).toBeVisible();
     refusing = false;
     await restore.click();
     await listShows(page, []);
 
-    const reporting = await hold(page, THREAD_STATE, method('PATCH'));
+    const reporting = await holdOperation(page, 'SetEmailThreadFolderStates');
     await library.getByRole('button', { name: 'Spam' }).click();
     await listShows(page, [photos]);
     await (await rowCheckbox(page, photos)).click();
     await expect(selected).toBeVisible();
     const notSpam = toolbarButton(page, 'Not spam');
     await notSpam.click();
-    await expect.poll(reporting.held).toBe(1);
+    await expect.poll(reporting.count).toBe(1);
     await expect(notSpam).toBeDisabled();
     saw('STL-607', 'F-078');
     await reporting.release();
@@ -227,7 +224,7 @@ test.describe('the details sheet and selection toolbar on a phone', () => {
       text: 'The photos from Friday.',
     });
     const photos = await syncedInView(mailbox, 'spam', 'Team photos');
-    const reporting = await hold(page, THREAD_STATE, method('PATCH'));
+    const reporting = await holdOperation(page, 'SetEmailThreadFolderStates');
 
     await mailbox.open();
     await openTouchTab(page, 'Spam');
@@ -238,7 +235,7 @@ test.describe('the details sheet and selection toolbar on a phone', () => {
     await expect(page.getByText('1 selected', { exact: true })).toBeVisible();
     const notSpam = toolbarButton(page, 'Not spam');
     await notSpam.tap();
-    await expect.poll(reporting.held).toBe(1);
+    await expect.poll(reporting.count).toBe(1);
     await expect(notSpam).toBeDisabled();
     saw('STL-607', 'F-078');
     await reporting.release();

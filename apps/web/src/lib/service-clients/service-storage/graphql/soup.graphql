@@ -146,7 +146,12 @@ fragment MailSignalStateFields on GraphqlSoupEmailThread {
 # Local-only selection: materialize canonical preview references instead of the
 # query-dependent preview fields last written by a different tab/filter.
 fragment MailItemFields on GraphqlSoupEntity {
-	...SoupItemFields
+	...MailItemPreviewFields
+	notifications { ...SoupNotificationFields }
+}
+
+fragment MailItemPreviewFields on GraphqlSoupEntity {
+	...SoupItemPreviewFields
 	... on GraphqlSoupEmailThread {
 		mailDraftState { ...EmailDraftStateFields }
         mailAllPreview { ...MailPreviewFields }

@@ -418,16 +418,6 @@ export const emailClient = {
       body: JSON.stringify(input),
     });
   },
-  async updateThreadState(args: {
-    thread_id: string;
-    field: 'read' | 'starred' | 'trashed' | 'junk';
-    value: boolean;
-  }) {
-    return emailFetch(`/email/threads/${args.thread_id}/state`, {
-      method: 'PATCH',
-      body: JSON.stringify({ field: args.field, value: args.value }),
-    });
-  },
   async updateThreadLabel(
     args: { thread_id: string } & UpdateThreadLabelRequest
   ) {
