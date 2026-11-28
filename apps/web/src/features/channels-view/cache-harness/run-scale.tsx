@@ -149,6 +149,8 @@ export type ChatScaleResult = {
     unsupportedReads: string[];
     escapes: string[];
     initializationErrors: string[];
+    /** Engine calls that threw or rejected. */
+    engineErrors: string[];
   };
   openSubscriptions: Record<string, number>;
   /** The channel the message scenario delivers to. */
@@ -437,6 +439,7 @@ export async function seedChatCache(fixture: ChatFixture): Promise<{
   const faults = [
     ...graph.network.log.errors,
     ...graph.runtime.initializationErrors.map(String),
+    ...graph.runtime.engine.log.errors(),
   ];
   const engineCalls = graph.runtime.engine.log.calls.length;
   const sql = graph.runtime.engine.sqlCounters();
@@ -581,6 +584,7 @@ export async function measureChat(
         unsupportedReads: fixture.reads().unsupported,
         escapes: [...harnessState().escapes],
         initializationErrors: graph.runtime.initializationErrors.map(String),
+        engineErrors: graph.runtime.engine.log.errors(),
       },
       openSubscriptions: graph.network.log.openSubscriptions(),
       messageChannelId,

@@ -22,11 +22,12 @@ const WASM_BINARY = join(WASM_DIR, 'cache_wasm_bg.wasm');
 
 /** One call into the engine: its method, the view it reads for (see
  * `VIEW_READS`), and, once it settles, how many records it handed back to the
- * worker. */
+ * worker (0 when it failed, with the reason in `error`). */
 export type EngineCall = {
   method: string;
   view?: string;
   recordsOut?: number;
+  error?: string;
 };
 
 /** Reads made for views in some steps: how many views were read, and how many
@@ -59,6 +60,8 @@ export type EngineCallLog = {
   recordsOutSince(mark: number): number;
   /** View reads since `mark` (`VIEW_READS`). */
   viewReadsSince(mark: number): ViewReads;
+  /** Every call that threw or rejected, as `method: reason`. */
+  errors(): string[];
   mark(): number;
 };
 
@@ -77,6 +80,10 @@ export function createEngineCallLog(): EngineCallLog {
       calls
         .slice(mark)
         .reduce((total, call) => total + (call.recordsOut ?? 0), 0),
+    errors: () =>
+      calls.flatMap((call) =>
+        call.error === undefined ? [] : [`${call.method}: ${call.error}`]
+      ),
     viewReadsSince: (mark) => {
       const perView = new Map<string, number>();
       for (const { view } of calls.slice(mark))
@@ -106,13 +113,25 @@ function countRecords(result: unknown): number {
   return records;
 }
 
+/** Marks `call` settled with nothing returned, so a step waiting for open
+ * calls does not wait on it, and keeps why. */
+function recordFailure(call: EngineCall, error: unknown): void {
+  call.recordsOut = 0;
+  call.error = error instanceof Error ? error.message : String(error);
+}
+
 async function settleCounted(
   call: EngineCall,
   pending: Promise<unknown>
 ): Promise<unknown> {
-  const settled = await pending;
-  call.recordsOut = countRecords(settled);
-  return settled;
+  try {
+    const settled = await pending;
+    call.recordsOut = countRecords(settled);
+    return settled;
+  } catch (error) {
+    recordFailure(call, error);
+    throw error;
+  }
 }
 
 /** The engine with every method call recorded. Methods the worker core only
@@ -132,7 +151,13 @@ function recordedEngine(engine: CacheEngine, log: EngineCallLog): CacheEngine {
             }
           : { method: property };
         log.calls.push(call);
-        const result: unknown = Reflect.apply(value, target, args);
+        let result: unknown;
+        try {
+          result = Reflect.apply(value, target, args);
+        } catch (error) {
+          recordFailure(call, error);
+          throw error;
+        }
         if (result instanceof Promise) return settleCounted(call, result);
         call.recordsOut = countRecords(result);
         return result;
@@ -145,18 +170,24 @@ const COMPILED = Symbol.for('macro.headless-cache.compiled');
 
 type CompiledSlot = { [COMPILED]?: Promise<WebAssembly.Module> };
 
+/** The engine binary, or why there is none to run. */
+async function readEngineBinary() {
+  try {
+    return await readFile(WASM_BINARY);
+  } catch (error) {
+    throw new Error(
+      `the cache engine is not built (${WASM_BINARY}); run \`just build-cache-wasm\` in apps/web`,
+      { cause: error }
+    );
+  }
+}
+
 // Compiled once per process, as the page hands one compile to every engine
 // worker (`worker/compiled-engine.ts`).
 function compileEngine(): Promise<WebAssembly.Module> {
   const slots = globalThis as CompiledSlot;
   slots[COMPILED] ??= (async () => {
-    const bytes = await readFile(WASM_BINARY).catch((error: unknown) => {
-      throw new Error(
-        `the cache engine is not built (${WASM_BINARY}); run \`just build-cache-wasm\` in apps/web`,
-        { cause: error }
-      );
-    });
-    return await WebAssembly.compile(bytes);
+    return await WebAssembly.compile(await readEngineBinary());
   })();
   return slots[COMPILED];
 }

@@ -302,6 +302,7 @@ describe('Chat sidebar over the real cache', () => {
         unsupportedReads: [],
         escapes: [],
         initializationErrors: [],
+        engineErrors: [],
       });
     }
     const runs = results.map(gatedRun);

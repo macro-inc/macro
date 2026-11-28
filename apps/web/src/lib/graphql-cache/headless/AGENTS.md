@@ -15,7 +15,9 @@ OPFS and Web Locks held in memory. No browser, no stand-in engine.
   method, the records it returned, and for reads the view it serves, keyed by
   query and variables or by request, so `viewReadsSince` counts a view read
   twice) and reads the engine's SQL counters (`sqlCounters()`: statements
-  executed and rows they stepped, from `cache-turso`'s `sql_counts`).
+  executed and rows they stepped, from `cache-turso`'s `sql_counts`). A call
+  that throws or rejects is recorded as finished with its `error`
+  (`log.errors()`), so a wait for open calls never hangs on it.
 - `memory-opfs.ts`: in-memory sync access handles and locks, with I/O counters.
   `installHeadlessCacheRuntime({ reopen })` loads the next page over a
   disposed runtime's files (`reopenMemoryOpfs`).
