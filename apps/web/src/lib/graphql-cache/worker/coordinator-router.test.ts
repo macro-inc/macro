@@ -1665,7 +1665,7 @@ describe('CoordinatorRouter', () => {
       expect(messagesOfKind(tab, 'cache-superseded')).toHaveLength(1);
   });
 
-  it('gives a head claimed during the wait a wait of its own, up to a limit', async () => {
+  it('gives a head claimed during the wait a wait of its own, and claims none late in it', async () => {
     const { router, tabB, engine, ask } = await holdTheDatabase(1_000);
     const claim = async (id: number) => {
       await router.handleTabMessage(tabB as CoordinatorMessagePort, {
@@ -1707,13 +1707,17 @@ describe('CoordinatorRouter', () => {
     ask(2_000);
     await vi.advanceTimersByTimeAsync(60_000);
     answer(first.routeId, '42');
-    await vi.advanceTimersByTimeAsync(SETTLEMENT_WAIT_MS - 1);
-    expect(messagesOfKind(engine, 'drain-engine')).toEqual([]);
-    // Another claim near the end gets no more than the limit.
+    // Another claim gets its own full wait.
+    await vi.advanceTimersByTimeAsync(5_000);
     answer((await claim(8)).routeId, '43');
+    // Past this point a head claimed now could not settle before the limit.
     await vi.advanceTimersByTimeAsync(
-      SETTLEMENT_WAIT_LIMIT_MS - 60_000 - SETTLEMENT_WAIT_MS
+      SETTLEMENT_WAIT_LIMIT_MS - SETTLEMENT_WAIT_MS - 65_000
     );
+    const routed = messagesOfKind(engine, 'engine-request').length;
+    await claim(9);
+    expect(messagesOfKind(engine, 'engine-request')).toHaveLength(routed);
+    await vi.advanceTimersByTimeAsync(SETTLEMENT_WAIT_MS - 5_000 - 1);
     expect(messagesOfKind(engine, 'drain-engine')).toEqual([]);
     await vi.advanceTimersByTimeAsync(1);
     expect(messagesOfKind(engine, 'drain-engine')).toHaveLength(1);

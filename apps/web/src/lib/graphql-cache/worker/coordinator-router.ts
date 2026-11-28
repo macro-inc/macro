@@ -18,6 +18,7 @@ import {
   type CoordinatorSnapshot,
   type OwnerLockUnavailableReason,
   SETTLEMENT_WAIT_LIMIT_MS,
+  SETTLEMENT_WAIT_MS,
   startupPhaseMayTouchStorage,
 } from './coordinator-core';
 import {
@@ -386,6 +387,7 @@ export class CoordinatorRouter {
   /** When a newer build began waiting for claimed heads. */
   private settlementWaitStartedAt: number | undefined;
   private settlementWaitTimer: ReturnType<typeof setTimeout> | undefined;
+  private claimsCloseTimer: ReturnType<typeof setTimeout> | undefined;
   private recoveryRetryTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly now = (): number =>
     globalThis.performance?.now() ?? Date.now();
@@ -1276,6 +1278,12 @@ export class CoordinatorRouter {
               ownerEvent: 'settlement-wait-started',
               count: action.claims,
             });
+            // A claim made after this still gets its full wait.
+            const core = this.coreValue;
+            this.claimsCloseTimer = this.setTimeoutFn(() => {
+              this.claimsCloseTimer = undefined;
+              if (this.coreValue === core && core) core.closeClaims();
+            }, SETTLEMENT_WAIT_LIMIT_MS - SETTLEMENT_WAIT_MS);
           }
           const ms = Math.min(
             action.ms,
@@ -1291,12 +1299,28 @@ export class CoordinatorRouter {
           }, ms);
           break;
         }
+        case 'claim-lease': {
+          // Past its lease another page may claim the head, so it is no
+          // longer this claim's to settle.
+          const core = this.coreValue;
+          const { transactionId, leaseGeneration } = action;
+          this.setTimeoutFn(() => {
+            if (this.coreValue === core && core)
+              this.applyActions(
+                core.claimLeaseEnded(transactionId, leaseGeneration)
+              );
+          }, action.ms);
+          break;
+        }
         case 'settlement-wait-ended': {
           const startedAt = this.settlementWaitStartedAt;
           this.settlementWaitStartedAt = undefined;
           if (this.settlementWaitTimer !== undefined)
             this.clearTimeoutFn(this.settlementWaitTimer);
           this.settlementWaitTimer = undefined;
+          if (this.claimsCloseTimer !== undefined)
+            this.clearTimeoutFn(this.claimsCloseTimer);
+          this.claimsCloseTimer = undefined;
           // Abrupt: a head still out may reach a retired host, and be sent
           // again by a page of the newer build.
           this.telemetry.record({

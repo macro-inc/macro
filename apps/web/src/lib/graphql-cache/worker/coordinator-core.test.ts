@@ -462,6 +462,7 @@ describe('CoordinatorCore', () => {
           ok({ transactionId: '7', leaseGeneration: '1' })
         )
       ).toEqual([
+        expect.objectContaining({ kind: 'claim-lease', transactionId: '7' }),
         { kind: 'await-settlements', ms: SETTLEMENT_WAIT_MS, claims: 1 },
         expect.objectContaining({ kind: 'deliver-response', tabId: 'tab-b' }),
       ]);
@@ -511,7 +512,7 @@ describe('CoordinatorCore', () => {
       ).toContainEqual(expect.objectContaining({ kind: 'drain-owner' }));
     });
 
-    it('keeps waiting when a settlement was not written, or settles an older lease', () => {
+    it('keeps waiting when a settlement was not answered, or settles an older lease', () => {
       const core = new CoordinatorCore('scope');
       core.registerTab('tab-a');
       core.registerTab('tab-b');
@@ -541,13 +542,94 @@ describe('CoordinatorCore', () => {
       expect(
         settle(2, '2', { id: 0, ok: false, error: 'storage failed' })
       ).not.toContainEqual(drained);
-      expect(
-        settle(3, '2', ok({ kind: 'failed', error: 'the lease was lost' }))
-      ).not.toContainEqual(drained);
       expect(settle(4, '1', ok({ kind: 'committed' }))).not.toContainEqual(
         drained
       );
-      expect(settle(5, '2', ok({ kind: 'committed' }))).toContainEqual(drained);
+      // A commit the engine could not resolve rolled the head back.
+      expect(
+        settle(5, '2', ok({ kind: 'failed', error: 'identity unresolved' }))
+      ).toContainEqual(drained);
+    });
+
+    it('lets a claim go when its lease runs out', () => {
+      const core = claimed();
+      expect(core.supersede()).toEqual([
+        expect.objectContaining({ kind: 'await-settlements', claims: 1 }),
+      ]);
+      expect(core.claimLeaseEnded('8', undefined)).toEqual([]);
+      expect(core.claimLeaseEnded('7', undefined)).toContainEqual(
+        expect.objectContaining({ kind: 'drain-owner' })
+      );
+    });
+
+    it('claims no head late in the wait', () => {
+      const core = claimed();
+      core.supersede();
+      core.closeClaims();
+      expect(
+        core.request('tab-b', {
+          id: 5,
+          kind: 'enqueue-optimistic-mutation',
+        } as unknown as CacheRequest)
+      ).toEqual([]);
+      expect(core.request('tab-b', claimNext(6))).toEqual([]);
+      expect(core.snapshot().queuedRequestCount).toBe(2);
+    });
+
+    it('starts a hidden engine to write a settlement during the wait', () => {
+      const core = new CoordinatorCore('scope');
+      core.registerTab('tab-a');
+      core.registerTab('tab-b');
+      ready(core, 'tab-a', 1, 'opened-existing');
+      const claim = action(
+        core.request('tab-b', claimNext(1)),
+        'route-request'
+      );
+      core.engineResponse(1, claim.routeId, ok({ transactionId: '7' }));
+      core.setTabVisibility('tab-a', false);
+      core.setTabVisibility('tab-b', false);
+      core.drainHiddenOwner(1);
+      core.engineDrained('tab-a', 1);
+      expect(core.state.kind).toBe('parked');
+      // No tab is visible, yet the claimed head needs an engine of this build.
+      expect(core.supersede()).toContainEqual(
+        expect.objectContaining({ kind: 'elect-owner', ownerEpoch: 2 })
+      );
+      const next = core.state as { tabId: string };
+      const routes = ready(core, next.tabId, 2, 'opened-existing');
+      expect(routes).not.toContainEqual(
+        expect.objectContaining({ kind: 'drain-owner' })
+      );
+      const settle = action(core.request('tab-b', commit(2)), 'route-request');
+      expect(
+        core.engineResponse(2, settle.routeId, ok({ kind: 'committed' }))
+      ).toContainEqual(expect.objectContaining({ kind: 'drain-owner' }));
+    });
+
+    it('hands a settlement the lost owner was writing to the next engine', () => {
+      const core = new CoordinatorCore('scope');
+      for (const tab of ['tab-a', 'tab-b', 'tab-c']) core.registerTab(tab);
+      ready(core, 'tab-a', 1, 'opened-existing');
+      const claim = action(
+        core.request('tab-b', claimNext(1)),
+        'route-request'
+      );
+      core.engineResponse(1, claim.routeId, ok({ transactionId: '7' }));
+      core.supersede();
+      action(core.request('tab-b', commit(2)), 'route-request');
+      const lost = core.tabLost('tab-a');
+      expect(lost).not.toContainEqual(
+        expect.objectContaining({ kind: 'deliver-response', tabId: 'tab-b' })
+      );
+      const next = core.state as { tabId: string };
+      const routes = ready(core, next.tabId, 2, 'opened-existing').filter(
+        (route) => route.kind === 'route-request'
+      );
+      expect(routes).toEqual([
+        expect.objectContaining({
+          request: expect.objectContaining({ kind: 'commit-optimistic-write' }),
+        }),
+      ]);
     });
 
     it('drains once a clear leaves no claimed head', () => {

@@ -128,6 +128,13 @@ export type CoordinatorAction =
   | { kind: 'await-settlements'; ms: number; claims: number }
   /** The wait for claimed heads is over: they settled, or `unsettled` did not. */
   | { kind: 'settlement-wait-ended'; unsettled: number }
+  /** Calls `claimLeaseEnded` after `ms`, when another page may claim the head. */
+  | {
+      kind: 'claim-lease';
+      transactionId: string;
+      leaseGeneration: string | undefined;
+      ms: number;
+    }
   | {
       kind: 'broadcast-cache-unavailable';
       reason: string;
@@ -237,11 +244,14 @@ function mayClaim(request: CacheRequest): boolean {
   );
 }
 
-/** The engine wrote this settlement: its head left the queue or was deferred. */
-function settlementWritten(response: CacheResponse): boolean {
-  if (!response.ok) return false;
-  const { kind } = (response.result ?? {}) as { kind?: unknown };
-  return kind !== 'failed';
+/** How long a claim made by this request holds its head. */
+function leaseMs(request: CacheRequest): number {
+  if (!mayClaim(request)) return 0;
+  const { nowMs, leaseExpiresAtMs } = request as {
+    nowMs: number;
+    leaseExpiresAtMs: number;
+  };
+  return Math.max(0, leaseExpiresAtMs - nowMs);
 }
 
 /** Known outcomes must survive a caller leaving while storage is parked. */
@@ -325,6 +335,8 @@ export class CoordinatorCore {
    * database.
    */
   private awaitingSettlements = false;
+  /** Late in the wait no head is claimed, so each claim gets its full wait. */
+  private claimsClosed = false;
   private readonly queuedRequests: QueuedRequest[] = [];
   private readonly inFlight = new Map<RouteId, InFlightRequest>();
   private readonly cacheChanges = new CacheChangeBatch();
@@ -447,6 +459,14 @@ export class CoordinatorCore {
     // handover refuses the claim as superseded.
     if (this.stateValue.kind !== 'active' || this.holdsForNewerBuild(request)) {
       this.queuedRequests.push(queued);
+      // While a newer build waits, a settlement reaches an engine even when
+      // every tab is hidden.
+      if (
+        this.stateValue.kind === 'parked' &&
+        this.awaitingSettlements &&
+        isMutationSettlement(request)
+      )
+        return this.activateNext(this.stateValue.nextDatabaseAction);
       return [];
     }
     return [this.route(queued, this.stateValue)];
@@ -660,6 +680,8 @@ export class CoordinatorCore {
         queue: ready.queue,
       });
     }
+    // A reset queue holds none of the heads claimed from the one before.
+    if (ready.queue === 'reset') this.claims.clear();
     if (this.supersedePending && !this.awaitingSettlements) {
       actions.push(...this.drainForNewerBuild(this.stateValue));
       return actions;
@@ -709,6 +731,11 @@ export class CoordinatorCore {
           tabId: request.tabId,
           leaseGeneration: claimed.leaseGeneration,
         });
+        actions.push({
+          kind: 'claim-lease',
+          ...claimed,
+          ms: leaseMs(request.request),
+        });
         // A head claimed during the wait gets a wait of its own.
         if (this.awaitingSettlements) actions.push(this.awaitSettlements());
       }
@@ -719,19 +746,46 @@ export class CoordinatorCore {
       });
     }
     if (request.request.kind === 'clear' && response.ok) this.claims.clear();
-    if (isMutationSettlement(request.request) && settlementWritten(response)) {
-      const { transactionId, leaseGeneration } = request.request;
-      const claim = this.claims.get(transactionId);
-      // An older lease settles nothing of the head claimed again since.
-      if (
-        claim?.leaseGeneration === undefined ||
-        claim.leaseGeneration === leaseGeneration
-      )
-        this.claims.delete(transactionId);
-    }
+    // A settlement the engine answered took the head out, put it back, or
+    // found it gone (a failed commit rolls back); one it could not write keeps
+    // the claim for a retry.
+    if (isMutationSettlement(request.request) && response.ok)
+      this.forgetClaim(
+        request.request.transactionId,
+        request.request.leaseGeneration
+      );
     actions.push(...this.handOverIfSettled());
     return actions;
   }
+
+  /** The claim's lease ran out: another page may claim its head now. */
+  claimLeaseEnded(
+    transactionId: string,
+    leaseGeneration: string | undefined
+  ): CoordinatorAction[] {
+    this.forgetClaim(transactionId, leaseGeneration);
+    return this.handOverIfSettled();
+  }
+
+  /** From here on the wait claims no head: what it holds runs to the limit. */
+  closeClaims(): void {
+    if (this.awaitingSettlements) this.claimsClosed = true;
+  }
+
+  private forgetClaim(
+    transactionId: string,
+    leaseGeneration: string | undefined
+  ): void {
+    const claim = this.claims.get(transactionId);
+    // An older lease settles nothing of the head claimed again since.
+    if (
+      claim?.leaseGeneration === undefined ||
+      leaseGeneration === undefined ||
+      claim.leaseGeneration === leaseGeneration
+    )
+      this.claims.delete(transactionId);
+  }
+
 
   enginePush(ownerEpoch: OwnerEpoch, push: CachePush): CoordinatorAction[] {
     if (!this.acceptsEngineMessages(ownerEpoch)) {
@@ -885,7 +939,11 @@ export class CoordinatorCore {
       // must reach an engine of this build, or another page sends it again.
       this.supersedePending = true;
       this.awaitingSettlements = true;
-      return [this.awaitSettlements()];
+      const wait = this.awaitSettlements();
+      // Every tab is hidden, so no engine runs to write the answer: start one.
+      if (state.kind === 'parked')
+        return [wait, ...this.activateNext(state.nextDatabaseAction)];
+      return [wait];
     }
     if (
       state.kind === 'draining' ||
@@ -925,7 +983,11 @@ export class CoordinatorCore {
 
   /** While a newer build waits, no page claims a head the wait does not see. */
   private holdsForNewerBuild(request: CacheRequest): boolean {
-    return this.awaitingSettlements && request.kind === 'claim-next-mutation';
+    if (!this.awaitingSettlements) return false;
+    return (
+      request.kind === 'claim-next-mutation' ||
+      (this.claimsClosed && request.kind === 'enqueue-optimistic-mutation')
+    );
   }
 
   /** Hands the database to the newer build once nothing claimed is unsettled. */
@@ -973,12 +1035,17 @@ export class CoordinatorCore {
   }
 
   private completeSupersede(): CoordinatorAction[] {
+    const ended: CoordinatorAction[] = this.awaitingSettlements
+      ? [{ kind: 'settlement-wait-ended', unsettled: this.claims.size }]
+      : [];
     this.supersedePending = false;
     this.awaitingSettlements = false;
+    this.claimsClosed = false;
     this.claims.clear();
     const reason = SUPERSEDED_REASON;
     this.supersededReason = reason;
     const actions: CoordinatorAction[] = [
+      ...ended,
       ...this.releaseStartingOwner(reason),
       ...this.broadcastCacheChanges(this.cacheChanges.flush()),
       ...this.queuedRequests
@@ -1199,6 +1266,18 @@ export class CoordinatorCore {
     for (const [routeId, request] of this.inFlight) {
       if (request.ownerEpoch !== ownerEpoch) continue;
       this.inFlight.delete(routeId);
+      // While a newer build waits, the next engine writes it instead: the
+      // head is fenced by its lease, and refusing it here would leave the
+      // head for the newer build to send again.
+      if (
+        this.awaitingSettlements &&
+        isMutationSettlement(request.request) &&
+        this.claims.has(request.request.transactionId)
+      ) {
+        const { tabId, request: settlement, queuedAt } = request;
+        this.queuedRequests.push({ tabId, request: settlement, queuedAt });
+        continue;
+      }
       // Fencing an engine does not undo a durable enqueue. Even a planned
       // reset has not erased it yet, so a missing reply must never cause
       // the caller to retry or forward the mutation directly to the API.
@@ -1286,10 +1365,25 @@ export class CoordinatorCore {
   }
 
   private chooseCandidate(avoid?: string): string | undefined {
-    const visible = this.eligibleTabs().filter((tabId) =>
-      this.visibleTabs.has(tabId)
+    const eligible = this.eligibleTabs();
+    const visible = eligible.filter((tabId) => this.visibleTabs.has(tabId));
+    // While a newer build waits, a claimed head is settled by an engine of
+    // this build, even a hidden one.
+    const candidates =
+      visible.length === 0 &&
+      this.awaitingSettlements &&
+      this.settlementsWaiting()
+        ? eligible
+        : visible;
+    return candidates.find((tabId) => tabId !== avoid) ?? candidates[0];
+  }
+
+  /** A claimed head is out, or its settlement waits for an engine. */
+  private settlementsWaiting(): boolean {
+    return (
+      this.unsettled() ||
+      this.queuedRequests.some(({ request }) => isMutationSettlement(request))
     );
-    return visible.find((tabId) => tabId !== avoid) ?? visible[0];
   }
 
   private route(
