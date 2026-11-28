@@ -345,7 +345,7 @@ pub async fn process_message(
         }
         // Peer is requesting a snapshot from the remote
         FromPeer::PeerRequestSnapshot {} => {
-            let snapshot = document_state.export_shallow_snapshot()?;
+            let snapshot = document_state.export_compact_snapshot(document_id)?;
             telemetry.response_bytes = Some(snapshot.len());
 
             sender

@@ -6,6 +6,8 @@ use std::borrow::Cow;
 
 use loro::{ExportMode, LoroDoc, VersionVector};
 
+use super::compact_snapshot;
+
 pub const MAX_BINARY_BYTES: usize = 4 * 1024 * 1024;
 pub const MAX_REVISION_BYTES: usize = 64 * 1024;
 const MAX_UPDATE_OPERATIONS: u64 = 100_000;
@@ -153,25 +155,28 @@ pub fn snapshot(
     _access: &DocumentAccess,
     doc: &LoroDoc,
 ) -> Result<(Vec<u8>, Vec<u8>), DocumentError> {
-    export_state(doc, ExportMode::Snapshot)
+    let snapshot = doc
+        .export(ExportMode::Snapshot)
+        .map_err(|_| EXPORT_FAILED)?;
+    bounded_state(doc, snapshot)
 }
 
-/// Current state without prior history, at the same editable revision. This
-/// bounds readers' work by live content rather than the document's age.
+/// Current state at the same editable revision, without prior history when
+/// that is cheap to export ([`compact_snapshot::export`]). Otherwise it is the
+/// full snapshot, which carries the document's history.
 pub fn shallow_snapshot(
     _access: &DocumentAccess,
+    document_id: &str,
     doc: &LoroDoc,
 ) -> Result<(Vec<u8>, Vec<u8>), DocumentError> {
-    export_state(
-        doc,
-        ExportMode::ShallowSnapshot(Cow::Owned(doc.state_frontiers())),
-    )
+    let (snapshot, _) = compact_snapshot::export(doc, document_id).map_err(|_| EXPORT_FAILED)?;
+    bounded_state(doc, snapshot)
 }
 
-fn export_state(doc: &LoroDoc, mode: ExportMode<'_>) -> Result<(Vec<u8>, Vec<u8>), DocumentError> {
-    let snapshot = doc
-        .export(mode)
-        .map_err(|_| DocumentError::Invalid("The document snapshot could not be exported."))?;
+const EXPORT_FAILED: DocumentError =
+    DocumentError::Invalid("The document snapshot could not be exported.");
+
+fn bounded_state(doc: &LoroDoc, snapshot: Vec<u8>) -> Result<(Vec<u8>, Vec<u8>), DocumentError> {
     if snapshot.len() > MAX_BINARY_BYTES {
         return Err(DocumentError::TooLarge);
     }

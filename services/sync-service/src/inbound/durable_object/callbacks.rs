@@ -210,13 +210,16 @@ impl SyncSession {
 
             state.mark_exported();
 
-            let document_id = self.document_id().await.ok();
+            // Export here rather than in `wait_until`, so the export is part of
+            // this alarm's trace.
+            let report = self.document_id().await.ok().and_then(|document_id| {
+                let snapshot = doc_state.export_compact_snapshot(&document_id).ok()?;
+                Some((document_id, snapshot))
+            });
             let pending_editors = self.pending_editors.clone();
             let env = self.env.clone();
             self.state.wait_until(async move {
-                if let Some(document_id) = document_id
-                    && let Ok(snapshot) = doc_state.export_shallow_snapshot()
-                {
+                if let Some((document_id, snapshot)) = report {
                     let editors = take_editors(&pending_editors);
                     report_new_doc_state(&document_id, &snapshot, &env, editors).await;
                     report_interaction(&document_id, &env, InteractionReason::Edited).await;
@@ -277,7 +280,7 @@ impl SyncSession {
             if self.state.get_websockets().len() == 1
                 && let Ok(state) = self.document_state().await
                 && let Ok(document_id) = self.document_id().await
-                && let Ok(snapshot) = state.export_shallow_snapshot()
+                && let Ok(snapshot) = state.export_compact_snapshot(&document_id)
             {
                 let editors = take_editors(&self.pending_editors);
                 let env = self.env.clone();
