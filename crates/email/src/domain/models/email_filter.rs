@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 /// Maximum number of changed threads sent to the realtime pipeline per filter write.
+#[cfg(feature = "outbound")]
 pub(crate) const MAX_SENDER_FILTER_THREAD_UPDATES: usize = 250;
 
 /// Outcome of a sender filter write and coverage of its realtime publication.
@@ -24,6 +25,7 @@ pub struct EmailFilterChange<T> {
     pub truncated: bool,
 }
 
+#[cfg(feature = "outbound")]
 impl<T> EmailFilterChange<T> {
     pub(crate) fn new(result: T, mut changed_thread_ids: Vec<Uuid>) -> Self {
         let truncated = changed_thread_ids.len() > MAX_SENDER_FILTER_THREAD_UPDATES;
