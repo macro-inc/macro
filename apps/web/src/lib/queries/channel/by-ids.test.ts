@@ -166,6 +166,28 @@ describe('registerChannelListNotificationRefresh', () => {
     }
   });
 
+  it('waits for reads to resume again after a read fails while they hold', async () => {
+    const { dispose, setRead } = list();
+    try {
+      setRead(false);
+      vi.advanceTimersByTime(40_000);
+      setRead(true);
+      vi.advanceTimersByTime(0);
+      expect(readPages()).toEqual([SECOND, THIRD]);
+      // The queue answers false for good (the query can't run): asking again
+      // at once would only fail again.
+      await landAll(false);
+      vi.advanceTimersByTime(60_000);
+      expect(reads).toHaveLength(0);
+      setRead(false);
+      setRead(true);
+      vi.advanceTimersByTime(0);
+      expect(readPages()).toEqual([SECOND, THIRD]);
+    } finally {
+      dispose();
+    }
+  });
+
   it('counts a page that lands while reads are stopped from when it landed', () => {
     const { dispose, setPages, setRead } = list([FIRST]);
     try {

@@ -99,7 +99,8 @@ export function registerChannelListNotificationRefresh(
  * them for `freshMs`, it is read again while reads hold, in the refresh
  * queue's turn; a page the queue does not read, because reads stopped first,
  * keeps its deadline for when they resume, or for when its dropped read
- * settles if they resumed before it did.
+ * settles if they resumed before it did. A page whose read fails while reads
+ * hold waits for the next time they resume.
  */
 function catchUpLaterPages(
   pages: Accessor<readonly QueryRevalidation[]>,
@@ -107,6 +108,9 @@ function catchUpLaterPages(
 ) {
   const missed = new Map<number, MissedPage>();
   const queued = new Set<number>();
+  // How many times reads have stopped, so a read can tell whether they
+  // stopped and resumed while it waited in the queue.
+  let stops = 0;
   // The current read cycle's deadline, while reads hold.
   let rearm: (() => void) | undefined;
   // Each read is its own trace: its wait in the refresh queue, every attempt
@@ -114,6 +118,7 @@ function catchUpLaterPages(
   const readAgain = (key: number, page: MissedPage) =>
     Telemetry.span('channel_list.later_page_read', async (span) => {
       queued.add(key);
+      const cycle = stops;
       span.setAttr('channel_list.missed_ms', Date.now() - page.since);
       const landed = await channelNotificationRefresh(
         getGraphqlSoupClient()
@@ -121,9 +126,11 @@ function catchUpLaterPages(
       span.setAttr('channel_list.read_landed', landed);
       queued.delete(key);
       if (landed && missed.get(key) === page) missed.delete(key);
-      // A page dropped because reads stopped, settling after they resumed,
-      // was skipped by that cycle's deadline as still queued.
-      rearm?.();
+      // A read the queue dropped because reads stopped, settling after they
+      // resumed, was skipped by the new cycle's deadline as still queued. One
+      // that failed within its own cycle waits for the next, as a dropped one
+      // does.
+      if (cycle !== stops) rearm?.();
     });
   createEffect(
     on([read, pages], ([reads, all]) => {
@@ -138,6 +145,7 @@ function catchUpLaterPages(
       for (const key of [...missed.keys()])
         if (!later.has(key)) missed.delete(key);
       if (!reads) {
+        stops += 1;
         const now = Date.now();
         for (const [key, query] of later)
           if (!missed.has(key)) missed.set(key, { query, since: now });
