@@ -17,8 +17,9 @@ nearly every Rust service's `main.rs` calls.
 - `src/datadog_fmt.rs`: JSON log format injecting `dd.trace_id`/`dd.span_id`
   for prod/develop trace-log correlation.
 - `src/grafana.rs`: a second, best-effort span exporter that mirrors spans to
-  Grafana where `GRAFANA_OTLP_ENDPOINT` is set (ECS tasks with the Alloy sidecar)
-  without affecting the primary (Datadog) exporter.
+  Grafana where `GRAFANA_OTLP_ENDPOINT` is set (ECS tasks with the Alloy
+  sidecar, Firecracker hosts with Alloy) without affecting the primary
+  (Datadog) exporter.
 - `src/shutdown.rs`: `shutdown_signal` — the standard graceful-shutdown
   future every service awaits on.
 
