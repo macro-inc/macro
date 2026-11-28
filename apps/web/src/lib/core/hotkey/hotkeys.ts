@@ -178,9 +178,15 @@ export function registerHotkey(
 
   // Tokens are shared across scopes on purpose (a list and an open entity
   // both bind entity.step.end), and getActiveCommandByToken resolves them by
-  // the active branch. Only a same-token command in this scope is a conflict.
+  // the active branch. Only a same-token command in this scope is a conflict,
+  // and not a persistent one this override replaces below (a soup view's j/k
+  // left on the split scope when the next view's list binds the token).
   const existingCommand = hotkeyToken
-    ? scopeNode.commands.find((c) => c.hotkeyToken === hotkeyToken)
+    ? scopeNode.commands.find(
+        (c) =>
+          c.hotkeyToken === hotkeyToken &&
+          (registrationType !== 'override' || ownerBoundCommands.has(c))
+      )
     : undefined;
   if (existingCommand && hotkeys && existingCommand.hotkeys) {
     // Yes, you should be able to register multiple hotkeys with the same token. But if you do this, they should be "the same" hotkey.
