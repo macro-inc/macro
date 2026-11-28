@@ -64,6 +64,17 @@ export type PredicateQueryStatus =
 // A busy or stale cache must release cache-first readers to network hydration.
 const MAX_STALE_READS = 3;
 
+// Notifications can arrive out of order (native writes and hydrations take
+// separate paths), so a read is stale against the highest one seen.
+function laterRevision(
+  current: CacheRevision | undefined,
+  next: CacheRevision
+): CacheRevision {
+  return current !== undefined && BigInt(current) > BigInt(next)
+    ? current
+    : next;
+}
+
 /**
  * Binds one cache-engine maintained view for `createSoupLiveQuery`. Owns
  * subscription, coalescing, generation recovery, and keyed Solid rows.
@@ -278,7 +289,8 @@ export function createPredicateQuery<T extends object>(options: {
               }
               outcome = 'error';
               observationId = undefined;
-              if (changedDuringRead) pending = true;
+              // Ask through the deferral: a tab hidden since the read began waits.
+              if (changedDuringRead) deferral.request();
               setError(() => cause);
               setStatus('error');
             } finally {
@@ -318,11 +330,11 @@ export function createPredicateQuery<T extends object>(options: {
             observationId !== undefined &&
             changes?.unchangedViews?.includes(observationId)
           ) {
-            latest = revision;
+            latest = laterRevision(latest, revision);
             return;
           }
           observationId = undefined;
-          latest = revision;
+          latest = laterRevision(latest, revision);
           // The running read either reaches this revision, or is stale and
           // reads again (the check against `latest`).
           if (running) {
