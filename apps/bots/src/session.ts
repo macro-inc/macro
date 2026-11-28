@@ -22,6 +22,8 @@ export const session = {
       const options = {
         baseUrl: new URL('/auth', window.location.origin).href,
         credentials: 'same-origin' as const,
+        mode: 'same-origin' as const,
+        redirect: 'error' as const,
       };
       const viewer = await auth.getUserInfo(options);
       const user = viewer.data;
@@ -33,9 +35,13 @@ export const session = {
       if (!current.response || current.response.status >= 500) {
         return { status: 'unavailable' };
       }
+      const team = current.data?.team;
       if (
-        !current.data?.team.id ||
-        !current.data.members.some((member) => member.user_id === user.user_id)
+        !team?.id ||
+        !current.data?.members.some(
+          (member) =>
+            member.user_id === user.user_id && member.team_id === team.id
+        )
       ) {
         return { status: 'team-unresolved' };
       }
@@ -43,7 +49,7 @@ export const session = {
       return {
         status: 'signed-in',
         user,
-        team: current.data.team,
+        team,
       };
     } catch {
       return { status: 'unavailable' };

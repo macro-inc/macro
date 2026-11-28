@@ -283,8 +283,11 @@ pub(crate) fn bring_up(
     // live frontend edits show on the dev server, not on it. Dry run:
     // synchronously, so the command preview prints in order.
     let bots_frontend = mode == Mode::Local && (plan.vite || plan.static_bundle);
-    if bots_frontend && stage.is_dry_run() {
-        frontend::build_bots(stage, instance)?;
+    if bots_frontend {
+        build::prepare_js_dependencies(stage)?;
+        if stage.is_dry_run() {
+            frontend::build_bots(stage, instance)?;
+        }
     }
     if plan.static_bundle && stage.is_dry_run() {
         frontend::build_static(stage, instance, mode)?;

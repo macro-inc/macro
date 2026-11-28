@@ -170,7 +170,21 @@ fn workspace_packages(ws: &Path) -> Result<HashSet<String>> {
 }
 
 /// Install JavaScript dependencies a fresh worktree doesn't have yet.
-fn ensure_js_dependencies(stage: &Stage, root: &Path) -> Result<()> {
+pub(super) fn ensure_js_dependencies(stage: &Stage, root: &Path) -> Result<()> {
+    // The installer creates node_modules before finishing. Acquire the lock
+    // before looking for it so parallel named instances wait for completion.
+    let _lock = if stage.is_dry_run() {
+        None
+    } else {
+        let generated = root.join("infra/local/generated");
+        std::fs::create_dir_all(&generated)?;
+        let path = generated.join(".js-dependencies.lock");
+        let lock =
+            std::fs::File::create(&path).with_context(|| format!("opening {}", path.display()))?;
+        lock.lock()
+            .with_context(|| format!("locking {}", path.display()))?;
+        Some(lock)
+    };
     for dir in missing_js_dependency_dirs(root) {
         let mut install = Command::new("bun");
         install

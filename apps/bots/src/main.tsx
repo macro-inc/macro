@@ -1,10 +1,4 @@
-import {
-  A,
-  Route,
-  Router,
-  useCurrentMatches,
-  useLocation,
-} from '@solidjs/router';
+import { A, Route, Router, useCurrentMatches } from '@solidjs/router';
 import {
   createResource,
   ErrorBoundary,
@@ -38,7 +32,6 @@ const Passwords = __BOTS_FIXTURES__
 const Billing = lazy(() => import('./billing'));
 
 function Shell(props: ParentProps) {
-  const location = useLocation();
   const matches = useCurrentMatches();
   const route = () => matches().at(-1)?.route.originalPath;
   const [identity] = createResource(() => session.getSession());
@@ -88,7 +81,7 @@ function Shell(props: ParentProps) {
           </Show>
         </div>
       </header>
-      <main data-route={location.pathname}>
+      <main data-route={route()}>
         <ErrorBoundary fallback={<p role="alert">This view is unavailable.</p>}>
           {props.children}
         </ErrorBoundary>
