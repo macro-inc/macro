@@ -27,6 +27,37 @@ function register(query: Parameters<typeof registerActiveGraphqlSoupQuery>[0]) {
 }
 
 describe('active GraphQL Soup queries', () => {
+  it('acknowledges the scope actually dispatched when recovery queued behind a read', async () => {
+    vi.useFakeTimers();
+    onTestFinished(() => vi.useRealTimers());
+    const earlier = Promise.withResolvers<void>();
+    const wrongScope = Promise.withResolvers<void>();
+    let scope = 'original';
+    const dispatched: string[] = [];
+    register({
+      isEnabled: () => true,
+      body: () => ({ scope }),
+      refresh: async () => {
+        dispatched.push(scope);
+        if (dispatched.length === 1) await earlier.promise;
+        if (dispatched.length === 2) await wrongScope.promise;
+      },
+    });
+    const initial = refreshActiveGraphqlSoupQueries();
+    const ready = recoverActiveGraphqlSoupQueries();
+    scope = 'changed';
+    earlier.resolve();
+    await initial;
+    await vi.advanceTimersByTimeAsync(0);
+    expect(dispatched).toEqual(['original', 'changed']);
+
+    scope = 'original';
+    wrongScope.resolve();
+    await vi.advanceTimersByTimeAsync(1000);
+    await expect(ready).resolves.toBe(true);
+    expect(dispatched).toEqual(['original', 'changed', 'original']);
+  });
+
   it('retries failed readers and includes newly enabled readers without rereading successes', async () => {
     vi.useFakeTimers();
     const consoleError = vi
