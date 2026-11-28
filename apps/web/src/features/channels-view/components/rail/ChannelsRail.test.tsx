@@ -444,9 +444,12 @@ vi.mock('./SmartTagDialog', () => ({ promptSmartTag: vi.fn() }));
 vi.mock('./ExpandedChannelsRail', async (importOriginal) => {
   const { ExpandedChannelsRail: RealRenderer } =
     await importOriginal<typeof import('./ExpandedChannelsRail')>();
+  const { useChannelsRail } = await import('./ChannelsRailContext');
   return {
-    ExpandedChannelsRail: (props: Parameters<typeof RealRenderer>[0]) =>
-      mocks.realRenderer ? <RealRenderer {...props} /> : null,
+    ExpandedChannelsRail: (props: Parameters<typeof RealRenderer>[0]) => {
+      mocks.rail = useChannelsRail();
+      return mocks.realRenderer ? <RealRenderer {...props} /> : null;
+    },
   };
 });
 vi.mock('./hooks/useChannelCalls', () => ({ useChannelCalls: () => ({}) }));
@@ -1040,7 +1043,55 @@ describe('bounded reference window', () => {
     ];
     mocks.closedGroups = ['favorites'];
     mount();
+    expect(windowIds()).toEqual([]);
+    // The label's heading is on screen.
+    mocks.rail!.reportSectionRange('team_channels', { start: 0, end: 1 });
     expect(windowIds()).toEqual(members);
+  });
+
+  it('looks up only the original-rail labels with a row on screen', () => {
+    mocks.sectionsEnabled = false;
+    mocks.flags = ['enable-channel-tags'];
+    const first = numbered('first', 30);
+    const second = numbered('second', 30);
+    mocks.labels = [first, second].map((channelIds, sortOrder) => ({
+      id: `label-${sortOrder}`,
+      teamId: 'team',
+      name: `Label ${sortOrder}`,
+      channelIds,
+      channelCount: channelIds.length,
+      sortOrder,
+      createdAt: '2026-01-01',
+      updatedAt: '2026-01-01',
+    }));
+    mount();
+    // Neither label's members have rows yet: the rows are the two headings.
+    mocks.rail!.reportSectionRange('team_channels', { start: 1, end: 2 });
+    expect(windowIds()).toEqual(second);
+    mocks.rail!.reportSectionRange('team_channels', { start: 0, end: 1 });
+    expect(windowIds()).toEqual(first);
+  });
+
+  it('looks up no original-rail label members while Team channels is collapsed', () => {
+    mocks.sectionsEnabled = false;
+    mocks.flags = ['enable-channel-tags'];
+    const members = numbered('member', 40);
+    mocks.labels = [
+      {
+        id: 'section',
+        teamId: 'team',
+        name: 'Section',
+        channelIds: members,
+        channelCount: members.length,
+        sortOrder: 0,
+        createdAt: '2026-01-01',
+        updatedAt: '2026-01-01',
+      },
+    ];
+    mocks.closedGroups = ['favorites', 'team_channels'];
+    mount();
+    mocks.rail!.reportSectionRange('team_channels', { start: 0, end: 1 });
+    expect(windowIds()).toEqual([]);
   });
 });
 

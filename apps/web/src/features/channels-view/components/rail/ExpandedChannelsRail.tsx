@@ -19,12 +19,16 @@ import XIcon from '@icon/system/regular/x.svg';
 import { createDroppable } from '@thisbeyond/solid-dnd';
 import { cn, EmptyStatePanel, Hotkey, type TabOption, Tabs } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
+import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   type Accessor,
+  createEffect,
   createSignal,
   For,
   type JSX,
   Match,
+  on,
+  onCleanup,
   Show,
   Switch,
 } from 'solid-js';
@@ -320,6 +324,9 @@ function ExpandedSearchResults(props: { search: ChannelRailSearch }) {
   );
 }
 
+/** Rows past the viewport counted as on screen, the list's own overscan. */
+const ROWS_OVERSCAN_PX = 240;
+
 const labelRowOf = (row: ChannelSectionRow) =>
   row.kind === 'label' ? row : undefined;
 const channelRowOf = (row: ChannelSectionRow) =>
@@ -367,6 +374,34 @@ function ChannelsSectionRows(props: {
     );
   };
 
+  // The rows on screen tell the rail which labels' members to look up.
+  const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
+  const registerVirtualizer = (handle?: VirtualizerHandle) => {
+    setVirtualizer(handle);
+    props.registerVirtualizer(handle);
+  };
+  const viewport = createElementSize(() => props.scrollRoot);
+  const reportRowsOnScreen = () => {
+    const handle = virtualizer();
+    if (!handle) return;
+    const top = handle.scrollOffset;
+    const bottom = top + (viewport.height ?? 0);
+    rail.reportSectionRange('team_channels', {
+      start: handle.findItemIndex(Math.max(0, top - ROWS_OVERSCAN_PX)),
+      end: Math.min(
+        props.rows.length,
+        handle.findItemIndex(bottom + ROWS_OVERSCAN_PX) + 1
+      ),
+    });
+  };
+  createEffect(
+    on(
+      [virtualizer, () => viewport.height, () => props.rows.length],
+      reportRowsOnScreen
+    )
+  );
+  onCleanup(() => rail.reportSectionRange('team_channels', undefined));
+
   return (
     <div ref={droppable.ref} class="flex min-h-full flex-col">
       <Show
@@ -378,13 +413,16 @@ function ChannelsSectionRows(props: {
         }
       >
         <Virtualizer
-          ref={props.registerVirtualizer}
+          ref={registerVirtualizer}
           data={props.rows}
           scrollRef={props.scrollRoot}
           itemSize={34}
-          bufferSize={240}
+          bufferSize={ROWS_OVERSCAN_PX}
           keepMounted={props.keepMounted}
-          onScroll={props.onScroll}
+          onScroll={(offset) => {
+            props.onScroll(offset);
+            reportRowsOnScreen();
+          }}
         >
           {(row, index) => (
             <div class={groupHighlight(row, index())}>

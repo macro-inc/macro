@@ -636,10 +636,11 @@ export function ChannelsRail(props: ChannelsRailProps) {
     return slices;
   }
   // The original rail lists every favorite and label member, which are joined
-  // channels; the pool holds them once the directory fills.
-  // The original rail renders an open section whole, so it looks up every
-  // member of each open section that no list holds, up to the window's cap;
-  // a collapsed section shows only its heading and looks up nothing.
+  // channels; the pool holds them once the directory fills. A member no list
+  // holds has no row until it is looked up, so the rail looks up, up to the
+  // window's caps, the open favorites (rendered whole) and the members of
+  // each open label with a row on screen in an open Team channels section; a
+  // collapsed section shows only its heading and looks up nothing.
   function legacyReferenceSlices(): ChannelWindowSlice[] {
     const loaded = loadedChannelIds();
     const pool = poolById();
@@ -648,8 +649,17 @@ export function ChannelsRail(props: ChannelsRailProps) {
     if (state.expandedGroups.favorites) {
       slices.push({ key: 'favorites', ids: favoriteChannelIds(), isLoaded });
     }
+    // The section reports its rows once laid out, after the rows are built.
+    const range = sectionRanges.team_channels;
+    if (!state.expandedGroups.team_channels || !range) return slices;
+    const onScreen = new Set(
+      channelSectionRows()
+        .slice(range.start, range.end)
+        .map((row) => (row.kind === 'label' ? row.label.id : row.labelId))
+    );
     for (const label of labels()) {
       if (state.collapsedLabels.includes(label.id)) continue;
+      if (!onScreen.has(label.id)) continue;
       slices.push({
         key: `label:${label.id}`,
         ids: label.channelIds,
