@@ -694,6 +694,8 @@ export type WriteResult = CacheChangeHints & {
    */
   unwritableResponse?: string;
   mutationUuid?: string;
+  /** How long proving `unchangedViews` took, on browser writes that ran the proof. */
+  proofMs?: number;
   /** Effective-view revision installed by this logical mutation. */
   revision: CacheRevision;
   /** Whether this write advanced `revision`. */

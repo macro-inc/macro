@@ -2462,9 +2462,9 @@ impl CacheEngine {
                 && !written.reset
                 && let Ok(engine) = state.engine_mut()
             {
-                let started = js_sys::Date::now();
+                let started = crate::query_telemetry::now_ms();
                 written.unchanged_views = engine.unchanged_observed_windows().await.ok();
-                written.proof_ms = Some(js_sys::Date::now() - started);
+                written.proof_ms = Some(crate::query_telemetry::now_ms() - started);
             }
             to_js(&written)
         })

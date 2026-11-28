@@ -1488,9 +1488,11 @@ serialized asynchronous reads. The maintained predicate reader
 while hidden, one read at a time. It keeps the highest revision it has been
 notified of, because write and hydration notices arrive on separate paths and
 can arrive out of order; a reply at or past that revision covers every change
-seen during the read, and an older reply reads again. A read that fails after a
-change asks again through the deferral. Generation resets and explicit/initial
-reads remain immediate. The
+seen during the read, and an older reply reads again, up to three times before
+the reader shows an error and asks once more later. A read that fails after a
+change asks again through the deferral. A generation reset clears the rows at
+once and reads through the deferral too; initial and explicit reads run at once.
+The
 revision fence still observes every accepted notification before scheduling
 work, so a late persistence acknowledgement cannot regain network authority.
 Predicate snapshots publish revision progress independently of stable row/order
