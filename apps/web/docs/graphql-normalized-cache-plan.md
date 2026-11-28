@@ -642,7 +642,9 @@ draining it, answers:
   (`createRetirableCacheHost` pins it until the head settles or its lease
   ends), and a retired host refuses any other settlement
   (`CacheSettlementUnwrittenError`) rather than acknowledging one it did not
-  write. A head still out after the wait, or whose coordinator restarted, or
+  write; its attempt ends `ack-lost` with `LOCAL_SETTLEMENT_UNWRITTEN`. The
+  wait records the `settlement-wait-started` and `settlement-wait-ended`
+  owner events. A head still out after the wait, or whose coordinator restarted, or
   out when the owner's engine crashed just before a newer build opened (the
   lock is free until the coordinator notices), stays
   queued and is sent again, at least once as on any lost page. A
