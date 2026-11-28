@@ -2,23 +2,20 @@ import { CombinedError } from '@urql/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  cache: true,
+  client: undefined as unknown,
   mutation: vi.fn(),
-  refresh: vi.fn(),
   reminders: vi.fn(),
   revalidations: vi.fn(() => [] as unknown[]),
 }));
 vi.mock('@service-email/client', () => ({ emailClient: {} }));
 vi.mock('@service-storage/client', () => ({ storageServiceClient: {} }));
 vi.mock('@service-storage/graphql-soup', () => ({
-  getGraphqlSoupClient: () => ({ mutation: mocks.mutation }),
-  graphqlCacheEnabled: () => mocks.cache,
+  getGraphqlSoupClient: () => mocks.client ?? { mutation: mocks.mutation },
 }));
 vi.mock('../reminders/email-collection', () => ({
   invalidateEmailReminderCollection: mocks.reminders,
 }));
 vi.mock('../soup/graphql/active-queries', () => ({
-  refreshActiveGraphqlSoupQueries: mocks.refresh,
   getUnmaintainedGraphqlSoupRevalidations: mocks.revalidations,
 }));
 
@@ -29,12 +26,12 @@ import {
   SoupDocument,
 } from '@service-storage/graphql/generated/graphql';
 import { soupOptimisticResolvers } from '../optimistic-resolvers';
+import { createRevalidatingClient } from '../soup/graphql/revalidating-client.test-helpers';
 import { archiveEmailThread, archiveEmailThreads } from './integration';
 
 beforeEach(() => {
   vi.resetAllMocks();
-  mocks.cache = true;
-  mocks.refresh.mockResolvedValue(undefined);
+  mocks.client = undefined;
   mocks.revalidations.mockReturnValue([]);
 });
 
@@ -79,31 +76,38 @@ describe('GraphQL email archive writes', () => {
           inboxVisible: !value,
         },
       });
-      expect(mocks.refresh).not.toHaveBeenCalled();
       expect(mocks.reminders).not.toHaveBeenCalled();
       finish();
       await expect(result).resolves.toBe('committed');
       expect(mocks.reminders).toHaveBeenCalledOnce();
       // The cached record carries the change to every list the cache
       // maintains; only the others are read again, by the exchange.
-      expect(mocks.refresh).not.toHaveBeenCalled();
       expect(mocks.revalidations).toHaveBeenCalledOnce();
     }
   );
 
-  it('refreshes lists after the write only without the normalized cache', async () => {
-    mocks.cache = false;
-    mocks.mutation.mockReturnValue({
-      toPromise: async () => ({
-        data: { setEmailThreadArchived: { id: 'thread' } },
-      }),
+  it('reads a mounted list once after the write without the normalized cache', async () => {
+    const server = createRevalidatingClient(() => ({
+      setEmailThreadArchived: {
+        __typename: 'GraphqlSoupEmailThread',
+        id: 'thread',
+        inboxVisible: false,
+      },
+    }));
+    mocks.client = server.client;
+    const list = await server.mount(SoupDocument, {
+      input: { initial: { limit: 50 } },
     });
-    await expect(
-      archiveEmailThread({ id: 'thread', value: true })
-    ).resolves.toBe('committed');
-    expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith({
-      target: { kind: 'email-archive', threadId: 'thread' },
-    });
+    try {
+      await expect(
+        archiveEmailThread({ id: 'thread', value: true })
+      ).resolves.toBe('committed');
+      // The client's exchange read the list before the write settled; nothing
+      // reads it a second time.
+      expect(server.reads('Soup')).toBe(2);
+    } finally {
+      list.unsubscribe();
+    }
   });
 
   it('gives Done, Undo and Redo distinct ordered mutation intents', async () => {
@@ -154,7 +158,6 @@ describe('GraphQL email archive writes', () => {
     expect(
       mocks.mutation.mock.calls[0][2].optimisticMutation.revalidations
     ).toEqual(unmaintained);
-    expect(mocks.refresh).not.toHaveBeenCalled();
     expect(mocks.reminders).not.toHaveBeenCalled();
   });
 
@@ -176,7 +179,6 @@ describe('GraphQL email archive writes', () => {
       await expect(
         archiveEmailThread({ id: 'thread', value: true })
       ).rejects.toThrow();
-      expect(mocks.refresh).not.toHaveBeenCalled();
       expect(mocks.reminders).not.toHaveBeenCalled();
     }
   );
@@ -240,27 +242,33 @@ describe('bulk email archive writes', () => {
     expect(results[0]).toEqual({ status: 'fulfilled', value: 'committed' });
     expect(results[1].status).toBe('rejected');
     expect(results[2]).toEqual({ status: 'fulfilled', value: 'committed' });
-    expect(mocks.refresh).not.toHaveBeenCalled();
     expect(mocks.reminders).toHaveBeenCalledOnce();
   });
 
-  it('refreshes lists for each changed thread only without the normalized cache', async () => {
-    mocks.cache = false;
-    mocks.mutation.mockReturnValue({
-      toPromise: async () => ({
-        data: {
-          setEmailThreadsArchived: {
-            threads: [],
-            failedThreadIds: ['skipped'],
-          },
-        },
-      }),
-    });
-    await archiveEmailThreads(['archived', 'skipped'], true);
-    expect(mocks.refresh.mock.calls).toEqual([
-      [{ target: { kind: 'email-archive', threadId: 'archived' } }],
-    ]);
-  });
+  it.each([50, 100])(
+    'reads a mounted list once per request after archiving %i threads without the normalized cache',
+    async (count) => {
+      const server = createRevalidatingClient(() => ({
+        setEmailThreadsArchived: { threads: [], failedThreadIds: [] },
+      }));
+      mocks.client = server.client;
+      const list = await server.mount(SoupDocument, {
+        input: { initial: { limit: 50 } },
+      });
+      try {
+        const ids = Array.from({ length: count }, (_, i) => `thread-${i}`);
+        const results = await archiveEmailThreads(ids, true);
+        expect(results.every((result) => result.status === 'fulfilled')).toBe(
+          true
+        );
+        // One request of up to 100 threads, one read of the list after it,
+        // however many threads changed.
+        expect(server.reads('Soup')).toBe(2);
+      } finally {
+        list.unsubscribe();
+      }
+    }
+  );
 
   it('settles every thread as queued when the GraphQL write is queued', async () => {
     mocks.mutation.mockReturnValue({
@@ -277,7 +285,6 @@ describe('bulk email archive writes', () => {
       { status: 'fulfilled', value: 'queued' },
       { status: 'fulfilled', value: 'queued' },
     ]);
-    expect(mocks.refresh).not.toHaveBeenCalled();
     expect(mocks.reminders).not.toHaveBeenCalled();
   });
 

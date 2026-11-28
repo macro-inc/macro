@@ -53,6 +53,7 @@ import {
   hasGraphqlCacheHost,
 } from '../../../service-clients/service-storage/graphql-soup';
 import { createUrqlInfiniteQuery } from '../../../urql-solid/create-urql-infinite-query';
+import { createPagedNetworkRevalidation } from '../../../urql-solid/paged-network-revalidation';
 import type { UrqlInfiniteData } from '../../../urql-solid/types';
 import { createHiddenDeferral } from '../../visible-refresh';
 import { registerGraphqlSoupRevalidations } from './active-queries';
@@ -107,6 +108,9 @@ export type SoupLiveQueryOptions = {
    * mounted within it reads the cached page and does not fetch it again.
    */
   staleTime?: number;
+  /** Runs as a write without the cache reads this list again, for state
+   * that read replaces. */
+  beforeNetworkRevalidation?: () => void;
 };
 
 /** Whether a list may take its cached first page, for one input and client. */
@@ -483,6 +487,16 @@ export function createSoupLiveQuery(
     )
   );
 
+  // Without the cache, a committed write reads this list again through its own
+  // cursor chain: re-sending each loaded page with its old cursor would repeat
+  // or drop the row at a boundary the write moved.
+  const networkRevalidation = createPagedNetworkRevalidation(() => query, {
+    client: getGraphqlSoupClient,
+    chain: inputKey,
+    reads: () => fetches() && !options().networkPaused,
+    before: () => options().beforeNetworkRevalidation?.(),
+  });
+
   const query = createUrqlInfiniteQuery<
     SoupQuery | ChannelListSoupQuery | SoupPreviewPageQuery,
     SoupQueryVariables,
@@ -499,6 +513,7 @@ export function createSoupLiveQuery(
       client,
       initialPageParam: null,
       context: {
+        networkRevalidation: networkRevalidation(),
         externalCacheWriteTypes: crmExternalWriteTypes(
           networkInput()?.initial?.filters
         ),

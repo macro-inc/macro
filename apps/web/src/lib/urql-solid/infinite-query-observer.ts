@@ -6,6 +6,7 @@ import {
   type OperationContext,
   type OperationResult,
 } from '@urql/core';
+import { ResultAsync } from 'neverthrow';
 import type { UrqlObserver } from './observer';
 import { QueryObserver } from './query-observer';
 import {
@@ -15,6 +16,7 @@ import {
 import type {
   UrqlInfiniteData,
   UrqlInfiniteQueryOptions,
+  UrqlInfiniteQueryRefetchOptions,
   UrqlInfiniteQueryResult,
   UrqlQueryOptions,
   UrqlQueryRefetchOptions,
@@ -162,6 +164,8 @@ export class InfiniteQueryObserver<
   private refetchPromise:
     | Promise<InfiniteResult<PageData, Variables, PageParam, SelectedData>>
     | undefined;
+  /** Whether the refetch in `refetchPromise` throws its failures. */
+  private refetchThrows = false;
 
   constructor(
     client: Client,
@@ -370,10 +374,19 @@ export class InfiniteQueryObserver<
     return trackedAction;
   };
 
-  readonly refetch = (
-    refetchOptions: UrqlQueryRefetchOptions = {}
-  ): Promise<InfiniteResult<PageData, Variables, PageParam, SelectedData>> => {
-    if (this.refetchPromise) return this.refetchPromise;
+  readonly refetch = ({
+    fresh = false,
+    ...refetchOptions
+  }: UrqlInfiniteQueryRefetchOptions = {}): Promise<
+    InfiniteResult<PageData, Variables, PageParam, SelectedData>
+  > => {
+    const pending = this.refetchPromise;
+    // A caller that needs failures thrown never joins a refetch that keeps them.
+    const stricter =
+      refetchOptions.throwOnError === true && !this.refetchThrows;
+    if (pending && (fresh || stricter))
+      return this.refetchAfter(pending, refetchOptions);
+    if (pending) return pending;
 
     const signal = this.actionController.signal;
     const pendingFetchNext = this.fetchNextPromise;
@@ -387,9 +400,21 @@ export class InfiniteQueryObserver<
     });
 
     this.refetchPromise = trackedAction;
+    this.refetchThrows = refetchOptions.throwOnError === true;
 
     return trackedAction;
   };
+
+  /** A refetch that starts after `pending`, which may have read too early. */
+  private async refetchAfter(
+    pending: Promise<unknown>,
+    refetchOptions: UrqlQueryRefetchOptions
+  ): Promise<InfiniteResult<PageData, Variables, PageParam, SelectedData>> {
+    // Its outcome belongs to whoever started it.
+    await ResultAsync.fromPromise(pending, () => undefined);
+    // One started after `pending` settled is late enough to join.
+    return this.refetch(refetchOptions);
+  }
 
   private applyOptions(
     options: InfiniteOptions<PageData, Variables, PageParam, SelectedData>,

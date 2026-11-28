@@ -410,6 +410,9 @@ export function useSoupAstItemsQuery(
       localReconciliation: options?.().graphqlLocalReconciliation,
       showSupportedForeignEntities: options?.().showSupportedForeignEntities,
       staleTime: graphqlStaleTime(options?.().staleTime),
+      // As the registry refresh below does: a read of the flat list replaces
+      // pages the caller loaded beside it.
+      beforeNetworkRevalidation: options?.().onBeforeGraphqlRefresh,
     })
   );
   const graphqlGroupedQuery = createGraphqlGroupedSoupAstItemsQuery(

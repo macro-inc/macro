@@ -1,4 +1,12 @@
-import { type Exchange, makeOperation, type Operation } from '@urql/core';
+import { type Span, Telemetry } from '@macro-inc/observability';
+import {
+  type Client,
+  type Exchange,
+  getOperationName,
+  makeOperation,
+  type Operation,
+} from '@urql/core';
+import { ResultAsync } from 'neverthrow';
 import {
   empty,
   fromPromise,
@@ -11,8 +19,87 @@ import {
 } from 'wonka';
 import { optimisticMutationDispositionOf } from './optimistic';
 
+/** A paged list's own read of its loaded pages, in cursor order. */
+export type NetworkRevalidation = {
+  /** Reads the list again, starting after the write committed. */
+  revalidate: () => Promise<unknown>;
+  /** The list reads the network now. One that doesn't (paused) is skipped,
+   * and keeps its pages. */
+  active: () => boolean;
+  /** The list has left these pages (unmounted, or moved to another chain);
+   * the exchange then re-sends them for any other reader. */
+  gone: () => boolean;
+};
+
+const CLIENT_OWNERS = new WeakMap<Client, Set<NetworkRevalidation>>();
+
+/**
+ * Registers a list's owner with the client it reads through, so the list is
+ * read again after a write even when urql joined its first request onto
+ * another list's: that list's operation, and its context, never reach the
+ * exchange. Returns the unregister function.
+ */
+export function registerNetworkRevalidation(
+  client: Client,
+  owner: NetworkRevalidation
+): () => void {
+  const owners = CLIENT_OWNERS.get(client) ?? new Set();
+  owners.add(owner);
+  CLIENT_OWNERS.set(client, owners);
+  return () => {
+    owners.delete(owner);
+  };
+}
+
+declare module '@urql/core' {
+  interface OperationContext {
+    /** Reads this query again together with the queries it pages with. A
+     * paged list sets it on every page: re-sending each page with its old
+     * cursor would duplicate or drop the rows at a boundary the write moved.
+     * The exchange calls each active owner once per write. */
+    networkRevalidation?: NetworkRevalidation;
+  }
+}
+
 const REQUEST_CONTEXT_KEY = '__macroNetworkRevalidationRequest';
 const REVALIDATION_WAIT_MS = 15_000;
+
+/** Waits for an owner's own re-read, at most as long as for one query, though
+ * the owner reads its pages one after another. A failed read is the reader's
+ * to show; it never fails the write. */
+async function revalidateOwner(
+  owner: NetworkRevalidation
+): Promise<'read' | 'failed' | 'timed_out'> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<'timed_out'>((resolve) => {
+    timer = setTimeout(() => resolve('timed_out'), REVALIDATION_WAIT_MS);
+  });
+  const read = async () => {
+    await owner.revalidate();
+    return 'read' as const;
+  };
+  const outcome = await ResultAsync.fromPromise(
+    Promise.race([read(), expired]),
+    () => 'failed' as const
+  );
+  clearTimeout(timer);
+  return outcome.isOk() ? outcome.value : outcome.error;
+}
+
+function recordOutcomes(
+  span: Span,
+  outcomes: readonly ('read' | 'failed' | 'timed_out')[]
+): void {
+  span.setAttr('revalidation.lists', outcomes.length);
+  span.setAttr(
+    'revalidation.lists_failed',
+    outcomes.filter((outcome) => outcome === 'failed').length
+  );
+  span.setAttr(
+    'revalidation.lists_timed_out',
+    outcomes.filter((outcome) => outcome === 'timed_out').length
+  );
+}
 
 /**
  * Keeps mounted queries current when the normalized cache is unavailable.
@@ -23,21 +110,34 @@ const REVALIDATION_WAIT_MS = 15_000;
 export function networkRevalidationExchange(
   enabled: () => boolean = () => true
 ): Exchange {
-  return ({ forward }) => {
+  return ({ client, forward }) => {
     let requestId = 0;
     const queries = new Map<
       number,
       { operation: Operation; requestId: number }
     >();
     const waiters = new Map<number, Set<() => void>>();
+    // The lists reading each query key. A key with one never gets its old
+    // operation re-sent: its lists read it again in cursor order.
+    const owners = new Map<number, Set<NetworkRevalidation>>();
+    // Keys whose request has not answered yet.
+    const inFlight = new Set<number>();
     const refreshes = makeSubject<Operation>();
 
     function track(operation: Operation): Operation {
       if (operation.kind === 'teardown') {
         queries.delete(operation.key);
+        owners.delete(operation.key);
         finish(operation.key);
       }
       if (operation.kind !== 'query') return operation;
+      inFlight.add(operation.key);
+      const owner = operation.context.networkRevalidation;
+      if (owner) {
+        const keyOwners = owners.get(operation.key) ?? new Set();
+        keyOwners.add(owner);
+        owners.set(operation.key, keyOwners);
+      }
       const authorization = operation.context.queryAuthorization;
       const id = ++requestId;
       const tagged = makeOperation('query', operation, {
@@ -57,15 +157,34 @@ export function networkRevalidationExchange(
     }
 
     function finish(key: number): void {
+      inFlight.delete(key);
       const pending = waiters.get(key);
       waiters.delete(key);
       for (const resolve of pending ?? []) resolve();
     }
 
-    async function refreshQueries(): Promise<void> {
+    async function refreshQueries(span: Span): Promise<void> {
+      const revalidations = new Set<NetworkRevalidation>();
+      // Includes lists whose operations urql joined onto another list's.
+      for (const owner of CLIENT_OWNERS.get(client) ?? []) {
+        if (owner.active()) revalidations.add(owner);
+      }
       const pending = [...queries.values()].flatMap(({ operation }) => {
         // Explicit cache-only readers must never cause a network request.
         if (operation.context.requestPolicy === 'cache-only') return [];
+        const keyOwners = owners.get(operation.key);
+        for (const owner of keyOwners ?? []) {
+          // A list that is gone leaves its pages to any other reader.
+          if (owner.gone()) keyOwners?.delete(owner);
+        }
+        if (keyOwners?.size) {
+          for (const owner of keyOwners) {
+            if (owner.active()) revalidations.add(owner);
+          }
+          // urql joins a list's read of a key onto its request in flight,
+          // which may have started before the write: send that one again.
+          if (!inFlight.has(operation.key)) return [];
+        }
         const settled = new Promise<void>((resolve) => {
           let queryWaiters = waiters.get(operation.key);
           if (!queryWaiters) {
@@ -100,7 +219,12 @@ export function networkRevalidationExchange(
         refreshes.next(refresh);
         return [settled];
       });
-      await Promise.all(pending);
+      span.setAttr('revalidation.queries_resent', pending.length);
+      const [, outcomes] = await Promise.all([
+        Promise.all(pending),
+        Promise.all([...revalidations].map(revalidateOwner)),
+      ]);
+      recordOutcomes(span, outcomes);
     }
 
     return (operations$) =>
@@ -131,7 +255,16 @@ export function networkRevalidationExchange(
             return fromValue(result);
           }
           async function refreshBeforeSettling() {
-            await refreshQueries();
+            await Telemetry.span(
+              'graphql.mutation.network_revalidation',
+              async (span) => {
+                span.setAttr(
+                  'graphql.operation.name',
+                  getOperationName(operation.query) ?? 'unknown'
+                );
+                await refreshQueries(span);
+              }
+            );
             return result;
           }
           return fromPromise(refreshBeforeSettling());

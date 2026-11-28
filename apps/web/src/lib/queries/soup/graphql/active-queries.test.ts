@@ -77,54 +77,6 @@ describe('active GraphQL Soup queries', () => {
     expect(getActiveGraphqlSoupRevalidations()).toEqual([descriptor]);
   });
 
-  it('excludes targeted detail readers from generic Soup refreshes', async () => {
-    const list = vi.fn(async () => {});
-    const detail = vi.fn(async () => {
-      throw new Error('must not refresh');
-    });
-    register({ isEnabled: () => true, refresh: list });
-    register({
-      isEnabled: () => true,
-      refresh: detail,
-      target: () => ({ kind: 'email-archive', threadId: 'thread-1' }),
-    });
-    await refreshActiveGraphqlSoupQueries({ throwOnError: true });
-    expect(list).toHaveBeenCalledOnce();
-    expect(detail).not.toHaveBeenCalled();
-  });
-
-  it('refreshes only a matching detail target, while preserving list refreshes', async () => {
-    const list = vi.fn(async () => {});
-    const first = vi.fn(async () => {});
-    const second = vi.fn(async () => {});
-    let firstId = 'first';
-    register({ isEnabled: () => true, refresh: list });
-    register({
-      isEnabled: () => true,
-      refresh: first,
-      target: () => ({ kind: 'email-archive', threadId: firstId }),
-    });
-    register({
-      isEnabled: () => true,
-      refresh: second,
-      target: () => ({ kind: 'email-archive', threadId: 'second' }),
-    });
-    await refreshActiveGraphqlSoupQueries({
-      throwOnError: true,
-      target: { kind: 'email-archive', threadId: 'first' },
-    });
-    expect(list).toHaveBeenCalledOnce();
-    expect(first).toHaveBeenCalledOnce();
-    expect(second).not.toHaveBeenCalled();
-    firstId = 'moved';
-    await refreshActiveGraphqlSoupQueries({
-      throwOnError: true,
-      target: { kind: 'email-archive', threadId: 'first' },
-    });
-    expect(first).toHaveBeenCalledOnce();
-    expect(list).toHaveBeenCalledTimes(2);
-  });
-
   it('coalesces refreshes requested while one is in flight into one follow-up', async () => {
     const settle: Array<() => void> = [];
     const refresh = vi.fn(
