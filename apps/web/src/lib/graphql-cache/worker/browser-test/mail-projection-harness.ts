@@ -68,9 +68,8 @@ const preview = (n: number, subject: string, isDraft: boolean) => ({
 });
 let nextCursor: string | undefined;
 let requestId = 0;
-async function refresh(append = false) {
-  const current = ++requestId;
-  more.disabled = true;
+/** The Mail filter tree the controls select, or none when they select all. */
+function selectedTree() {
   const literals: Record<string, unknown>[] = [];
   for (const [control, field] of [
     ['signal', 'importance'],
@@ -88,10 +87,15 @@ async function refresh(append = false) {
     literals.push({ literal: { shared: select('sharing').value } });
   if (select('attachment').value !== 'all')
     literals.push({ literal: { attachment: select('attachment').value } });
-  const tree = literals.reduce<Record<string, unknown> | undefined>(
+  return literals.reduce<Record<string, unknown> | undefined>(
     (left, right) => (left ? { and: { left, right } } : right),
     undefined
   );
+}
+async function refresh(append = false) {
+  const current = ++requestId;
+  more.disabled = true;
+  const tree = selectedTree();
   const filters = {
     ...mailOnlyFilters,
     ...(tree ? { emailFilter: { tree } } : {}),
