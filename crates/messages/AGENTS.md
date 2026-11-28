@@ -72,7 +72,7 @@ a code-mode token, never from the request body.
 
 A channel post's `notification_policy` is part of the request: any caller may
 quiet its own post, since every policy only narrows who is notified. `Silent`
-notifies no one, mentions and first-message invites included, while delivery,
+notifies no one, mentions and first-message notifications included, while delivery,
 realtime, search, mention events and agent triggers still run. Other parents
 accept only `Default` over HTTP, because their discussion delivery also grants
 mentioned people access. `attribution` stays server-set.

@@ -151,12 +151,11 @@ Chat list on desktop and closes the pane on touch. Agent teammates are the
 exception: they write first, so their DM is created when it opens (see Agent
 teammates in [settings.md](settings.md#agent-teammates)).
 
-A person's first message in a new DM or group chat notifies its registered
-members as every later message does (an unread dot on the row, the Chat badge,
-and the message text in the push); people without an account get the
-invitation email instead. In a named channel, a person's first top-level
-message still invites the members it does not mention; a bot's first message
-does not. The recipient's open Chat list shows the new conversation without a
+A person's first top-level message in a new DM, group chat or named channel
+notifies its registered members as every later message does (an unread dot on
+the row, the Chat badge, and the message text in the push); people without an
+account get the invitation email instead. A bot's first message invites no
+one. The recipient's open Chat list shows the new conversation without a
 reload. When the `soupUpdates` push for a channel created in the last few
 minutes says the viewer is a member, each list whose first page shows that
 channel type reads its first page again, for up to a minute, until the

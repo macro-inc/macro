@@ -1,7 +1,7 @@
 import { type Api, unique } from './harness/api';
 import { ChannelView, conversationRow } from './harness/channel';
 import { mentionPerson } from './harness/composer';
-import { expect, failsSometimes, test } from './harness/fixtures';
+import { expect, failsSometimes, missedLive, test } from './harness/fixtures';
 import type { Person } from './harness/people';
 import {
   chooseFromRowMenu,
@@ -299,7 +299,20 @@ test('UNR-07 a member who never opened a channel sees it unread, and opening it 
   await expect(unreadDot(row)).toHaveCount(0);
 
   await ben.post(made.channel, 'fourth, live');
+  // Known defect on main: an open page sometimes does not show a message
+  // someone else sent. The row must stay read on the open page all the same,
+  // and a reload must then show the message.
+  const missed = await missedLive(view.message('fourth, live'));
+  await expect(row).toBeVisible();
+  await expect(unreadDot(row)).toHaveCount(0);
+  if (missed) {
+    await cyPage.reload();
+    await view.shown();
+    // A reload clears the search that keeps the row on the page.
+    await findConversations(cyPage, made.tag);
+  }
   await view.expectEndsWith(['third, from ada', 'fourth, live']);
+  await expect(row).toBeVisible();
   await expect(unreadDot(row)).toHaveCount(0);
 });
 

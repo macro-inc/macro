@@ -782,45 +782,45 @@ async fn assert_document_attachment_share_permission_side_effect_contract(
         );
     }
 
-    let bob_invite = wait_for_notification(
+    let bob_message = wait_for_notification(
         &ctx.http,
         &ctx.world.services,
         &ctx.users.bob_token,
         |notification| {
-            notification_matches(notification, "channel_invite", &channel.id)
+            notification_matches(notification, "channel_message_send", &channel.id)
                 && notification_content(notification, "messageContent") == Some(content.as_str())
         },
     )
     .await
-    .with_context(|| format!("{} first message bob invite notification", ctx.api.label()))?;
-    assert_sender(&bob_invite, &ctx.users.actor.user_id)?;
+    .with_context(|| format!("{} first message bob message notification", ctx.api.label()))?;
+    assert_sender(&bob_message, &ctx.users.actor.user_id)?;
 
-    let charlie_invite = wait_for_notification(
+    let charlie_message = wait_for_notification(
         &ctx.http,
         &ctx.world.services,
         &ctx.users.charlie_token,
         |notification| {
-            notification_matches(notification, "channel_invite", &channel.id)
+            notification_matches(notification, "channel_message_send", &channel.id)
                 && notification_content(notification, "messageContent") == Some(content.as_str())
         },
     )
     .await
     .with_context(|| {
         format!(
-            "{} first message charlie invite notification",
+            "{} first message charlie message notification",
             ctx.api.label()
         )
     })?;
-    assert_sender(&charlie_invite, &ctx.users.actor.user_id)?;
+    assert_sender(&charlie_message, &ctx.users.actor.user_id)?;
 
     let actor_notifications =
         list_notifications(&ctx.http, &ctx.world.services, &ctx.users.actor_token).await?;
     ensure!(
         find_notification(&actor_notifications, |notification| {
-            notification_matches(notification, "channel_invite", &channel.id)
+            notification_matches(notification, "channel_message_send", &channel.id)
         })
         .is_none(),
-        "{} sender should not receive channel_invite for {}",
+        "{} sender should not receive channel_message_send for {}",
         ctx.api.label(),
         channel.id
     );

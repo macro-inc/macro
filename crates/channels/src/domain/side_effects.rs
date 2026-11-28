@@ -675,7 +675,7 @@ where
             // Bot first messages fall through to a regular channel-message
             // notification; invites (which can email unregistered users) are
             // only sent on behalf of user senders.
-            self.send_first_message_invites(channel_id, &message, has_attachments, context)
+            self.send_first_message_notifications(channel_id, &message, has_attachments, context)
                 .await;
         } else {
             self.send_channel_message_notification(channel_id, &message, has_attachments, &context)
@@ -977,7 +977,7 @@ where
         .await;
     }
 
-    async fn send_first_message_invites(
+    async fn send_first_message_notifications(
         &self,
         channel_id: Uuid,
         message: &MutatedMessage,
@@ -1005,28 +1005,26 @@ where
             }
         };
 
-        // A DM or group chat is created by its first message, so that message is
-        // the first its members hear of it: notify them as every later message
-        // does, so it counts as unread and shows its text. Only people without an
-        // account still get the invitation, which emails them (for a DM, the
-        // fallback when the immediate DM email could not be queued).
-        if context.metadata.is_dm_or_group_chat() {
-            context
-                .recipients_without_sender_and_mentions
-                .retain(|id| existing_user_ids.contains(id.as_ref()));
-            if !context.recipients_without_sender_and_mentions.is_empty() {
-                self.send_channel_message_notification(
-                    channel_id,
-                    message,
-                    has_attachments,
-                    &context,
-                )
+        // The first message is the first a conversation's members hear of it,
+        // in a named channel as in a DM or group chat: notify them as every
+        // later message does, so it counts as unread and shows its text. An
+        // invitation never makes a channel unread. Only people without an
+        // account still get one, which emails them (for a DM, the fallback
+        // when the immediate DM email could not be queued).
+        context
+            .recipients_without_sender_and_mentions
+            .retain(|id| existing_user_ids.contains(id.as_ref()));
+        // A mentioned member who has turned mentions off still hears of the
+        // message through this notification's fallback.
+        if !context.recipients_without_sender_and_mentions.is_empty()
+            || !context.mentioned_members.is_empty()
+        {
+            self.send_channel_message_notification(channel_id, message, has_attachments, &context)
                 .await;
-            }
-            recipient_user_ids.retain(|id| !existing_user_ids.contains(id.as_ref()));
-            if recipient_user_ids.is_empty() {
-                return;
-            }
+        }
+        recipient_user_ids.retain(|id| !existing_user_ids.contains(id.as_ref()));
+        if recipient_user_ids.is_empty() {
+            return;
         }
 
         self.send_invite_notification(InviteNotificationRequest {

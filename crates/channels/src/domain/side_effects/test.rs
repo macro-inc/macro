@@ -1989,13 +1989,15 @@ async fn first_group_chat_message_notifies_members_and_invites_only_nonusers() {
 }
 
 #[tokio::test]
-async fn first_message_in_a_named_channel_still_invites_its_members() {
+async fn first_message_in_a_named_channel_notifies_members_and_invites_only_nonusers() {
     let sender = user("sender@example.com");
     let member = user("member@example.com");
+    let nonuser = user("new@example.com");
     let notifications = FakeNotifications::default();
     let service = ChannelSideEffectService::new(
         FakeContext {
             message_count: 1,
+            unregistered_users: HashSet::from([nonuser.to_string()]),
             ..FakeContext::default()
         },
         FakeRealtime::default(),
@@ -2008,18 +2010,27 @@ async fn first_message_in_a_named_channel_still_invites_its_members() {
             ChannelType::Private,
             true,
             &sender,
-            &[&member],
+            &[&member, &nonuser],
         ))
         .await;
 
     let effects = notifications.effects.lock().unwrap();
-    assert_eq!(effects.len(), 1);
+    assert_eq!(effects.len(), 2);
+    let ChannelNotificationEffect::ChannelMessage { recipient_ids, .. } = &effects[0] else {
+        panic!(
+            "expected a channel message notification, got {:?}",
+            effects[0]
+        );
+    };
+    assert_eq!(*recipient_ids, HashSet::from([member]));
     let ChannelNotificationEffect::Invite {
         registered_recipient_ids,
+        unregistered_recipient_ids,
         ..
-    } = &effects[0]
+    } = &effects[1]
     else {
-        panic!("expected an invitation, got {:?}", effects[0]);
+        panic!("expected an invitation, got {:?}", effects[1]);
     };
-    assert_eq!(*registered_recipient_ids, HashSet::from([member]));
+    assert!(registered_recipient_ids.is_empty());
+    assert_eq!(*unregistered_recipient_ids, HashSet::from([nonuser]));
 }
