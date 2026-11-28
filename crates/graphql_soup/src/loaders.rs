@@ -488,12 +488,18 @@ impl AgentSessionEntityLoader {
 /// Primary-backed Soup reader for reads that must see a write committed
 /// moments earlier, before a replica has replayed it: `soupUpdates`
 /// hydration, where a replica read returns the pre-write row and the client
-/// caches it as current, and `soupEntity`, which opens an entity right after
-/// it is created or edited. Lists keep the replica-backed reader.
+/// caches it as current, `soupEntity`, which opens an entity right after it
+/// is created or edited, and the effects a mutation returns. Lists keep the
+/// replica-backed reader.
 #[derive(Clone)]
 pub struct PrimarySoupItemLoader(pub(crate) SoupItemDataLoader);
 
 impl PrimarySoupItemLoader {
+    /// The primary-backed DataLoader.
+    pub fn loader(&self) -> &SoupItemDataLoader {
+        &self.0
+    }
+
     /// Build the reader over a primary-backed Soup service, rechecking the
     /// viewer's team so team-stored PRs and CRM records hydrate.
     pub fn new<S, E, A>(soup_service: S, email_service: Arc<E>, access: A) -> Self
