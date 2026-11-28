@@ -144,54 +144,59 @@ done
 rm -f "$tarball"
 
 # Registers both runners with a token read from the terminal (or stdin), then
-# starts them; on a fresh instance only. The token reaches config.sh only
-# through its environment (ACTIONS_RUNNER_INPUT_TOKEN), never a command line
-# or a log. Both runners register before either starts, so no job has run
-# when config.sh, which a job could change, gets the token. A runner already
-# registered is skipped, so a run that failed half-way can be repeated; once
-# the runners have started, the script refuses, and a runner that needs
-# registering again needs a new instance.
+# starts them. The token reaches config.sh only through its environment
+# (ACTIONS_RUNNER_INPUT_TOKEN), never a command line or a log. Both runners
+# register before either starts, and a root-only marker is written before they
+# do, so config.sh, which a job could change, gets a token only while no job
+# has run. Running it again is safe: a runner registered earlier is skipped,
+# and once the marker exists it asks for no token and only starts the runners.
+# A runner that needs registering again needs a new instance.
 register() {
   umask 022
   if [ "$(id -u)" -ne 0 ]; then
     echo "Run it as root: sudo register-db-migrator-runners" >&2
     return 1
   fi
-  local started=/var/lib/db-migrator-runners/started
-  if [ -e "$started" ]; then
-    echo "The runners on this instance have run jobs already. To register them again, replace the instance (docs/runbooks/db-migrator-runner.md)." >&2
+  local state=/var/lib/db-migrator-runners token name dir
+  install -d -m 0700 "$state"
+  # One run at a time, from the marker check until the runners have started.
+  exec 9>"$state/lock"
+  if ! flock -n 9; then
+    echo "Another registration is running on this instance." >&2
     return 1
   fi
-  local token name dir
-  if [ -t 0 ]; then
-    read -r -s -p "Runner registration token: " token
-    echo
+
+  if [ -e "$state/started" ]; then
+    echo "The runners are registered already; starting any that are stopped. To register them again, replace the instance (docs/runbooks/db-migrator-runner.md)."
   else
-    IFS= read -r token || true
-  fi
-  if [ -z "$token" ]; then
-    echo "No token given. See docs/runbooks/db-migrator-runner.md." >&2
-    return 1
-  fi
-
-  for name in "${RUNNER_NAMES[@]}"; do
-    dir="/home/${RUNNER_USER}/${name}"
-    if [ -e "$dir/.runner" ]; then
-      echo "${name} is already registered."
-      continue
+    if [ -t 0 ]; then
+      read -r -s -p "Runner registration token: " token
+      echo
+    else
+      IFS= read -r token || true
     fi
-    ACTIONS_RUNNER_INPUT_TOKEN="$token" runuser -u "$RUNNER_USER" -- "$dir/config.sh" \
-      --unattended \
-      --url "$GITHUB_RUNNER_URL" \
-      --name "$name" \
-      --labels "$RUNNER_LABEL" \
-      --runnergroup "$RUNNER_GROUP" \
-      --work _work \
-      --replace
-  done
+    if [ -z "$token" ]; then
+      echo "No token given. See docs/runbooks/db-migrator-runner.md." >&2
+      return 1
+    fi
+    for name in "${RUNNER_NAMES[@]}"; do
+      dir="/home/${RUNNER_USER}/${name}"
+      if [ -e "$dir/.runner" ]; then
+        echo "${name} is already registered."
+        continue
+      fi
+      ACTIONS_RUNNER_INPUT_TOKEN="$token" runuser -u "$RUNNER_USER" -- "$dir/config.sh" \
+        --unattended \
+        --url "$GITHUB_RUNNER_URL" \
+        --name "$name" \
+        --labels "$RUNNER_LABEL" \
+        --runnergroup "$RUNNER_GROUP" \
+        --work _work \
+        --replace
+    done
+    date -u +%FT%TZ >"$state/started"
+  fi
 
-  install -d -m 0700 "$(dirname "$started")"
-  date -u +%FT%TZ >"$started"
   for name in "${RUNNER_NAMES[@]}"; do
     systemctl enable --now "github-runner@${name}.service"
   done

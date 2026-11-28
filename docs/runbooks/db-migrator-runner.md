@@ -123,9 +123,10 @@ aws ssm start-session --target "$id"
 sudo register-db-migrator-runners    # paste the token at the prompt
 ```
 
-It ends with `>>> db-migrator runners registered and started`. A runner an
-earlier, failed run registered is skipped. Once the runners have started, the
-script refuses to run again.
+It ends with `>>> db-migrator runners registered and started`. If it stops
+before that (a dropped session), run it again: a runner an earlier run
+registered is skipped, and once both are registered it asks for no token and
+only starts them.
 
 ## Replacing the hand-made runner
 
