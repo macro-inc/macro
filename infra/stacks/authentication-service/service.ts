@@ -18,6 +18,7 @@ import {
   getGatewayAlb,
   GatewayService,
   getKafkaClusterPolicy,
+  grafanaTelemetryEnabled,
   stack,
 } from '../../packages/shared';
 
@@ -512,6 +513,10 @@ export class AuthenticationService extends pulumi.ComponentResource {
           },
         ],
         taskDefinitionArgs: {
+          // The size Fargate picks from reservations, set here because the
+          // memory scaling target depends on it.
+          cpu: '512',
+          memory: grafanaTelemetryEnabled ? '2048' : '1024',
           taskRole: {
             roleArn: this.role.arn,
           },
@@ -791,7 +796,10 @@ export class AuthenticationService extends pulumi.ComponentResource {
         scalableDimension: serviceScalableTarget.scalableDimension,
         serviceNamespace: serviceScalableTarget.serviceNamespace,
         targetTrackingScalingPolicyConfiguration: {
-          targetValue: 70.0,
+          // A share of task memory: half of 70% in the 2 GB task keeps scaling
+          // out at the 717 MiB it did at 1 GB, before the service's 718 MiB
+          // limit.
+          targetValue: grafanaTelemetryEnabled ? 35.0 : 70.0,
           predefinedMetricSpecification: {
             predefinedMetricType: 'ECSServiceAverageMemoryUtilization',
           },
