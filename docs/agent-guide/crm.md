@@ -119,7 +119,11 @@ Revenue and Last Interaction columns. A Stage column is off by default; turn it
 on, or hide Owner or Revenue, under **Display options**. Its single-row desktop
 header matches Tasks: title, filter group, view-options group (sort, group,
 display options, and saved views), then the shared **New** menu and expandable
-Search. New has the same options as the sidebar.
+Search. New has the same options as the sidebar. A pane too narrow for those
+actions hides the view options, then shows **Visibility** as its icon alone,
+then hides Visibility, then the filters and last the title, before New or
+Search would leave the pane (People hides only Visibility's label, Visibility
+and the title); each comes back once there is room.
 The header Owner menu remains team-scoped. An active Owner chip can search paged
 personal contacts on desktop or phone, with No owner and unavailable saved IDs
 preserved as further pages load on scroll. Only changes
