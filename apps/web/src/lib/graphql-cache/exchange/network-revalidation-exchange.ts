@@ -20,6 +20,7 @@ import {
   pipe,
 } from 'wonka';
 import {
+  firstRequestIn,
   mutationTraceParentOf,
   TRACE_PARENT_CONTEXT_KEY,
 } from '../../urql-solid/trace-parent-exchange';
@@ -193,8 +194,6 @@ export function networkRevalidationExchange(
 
     /** Whether every query and list was read again. */
     async function refreshQueries(span: Span): Promise<boolean> {
-      // Its re-sent queries join the write's trace through this span.
-      const trace = Telemetry.captureContext();
       const revalidations = new Set<NetworkRevalidation>();
       // Includes lists whose operations urql joined onto another list's.
       for (const owner of CLIENT_OWNERS.get(client) ?? []) {
@@ -241,7 +240,9 @@ export function networkRevalidationExchange(
           makeOperation('query', operation, {
             ...operation.context,
             requestPolicy: 'network-only',
-            [TRACE_PARENT_CONTEXT_KEY]: trace,
+            // Joins this span's trace for this send only: the operation is
+            // kept and may be sent again later, outside this write.
+            [TRACE_PARENT_CONTEXT_KEY]: firstRequestIn(span),
           })
         );
         // Client.reexecuteOperation deduplicates a query whose first request is

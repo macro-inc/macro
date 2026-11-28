@@ -1,4 +1,9 @@
 import {
+  type Span,
+  Telemetry,
+  type TraceContext,
+} from '@macro-inc/observability';
+import {
   CombinedError,
   createClient,
   gql,
@@ -65,7 +70,10 @@ function setup(enabled = () => true) {
 }
 
 describe('networkRevalidationExchange', () => {
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
   it('updates every mounted query before releasing mutation optimism', async () => {
     const { client, requests, respond, flush } = setup();
     const events: string[] = [];
@@ -99,19 +107,36 @@ describe('networkRevalidationExchange', () => {
     const { client, requests, respond, flush } = setup();
     const list = client.query(LIST, {}).subscribe(() => {});
     respond(0);
-    const parent = { run: vi.fn(<T>(work: () => T) => work()) };
+    const runs = { parent: 0, reread: 0 };
+    const parent: TraceContext = {
+      run: (work) => {
+        runs.parent += 1;
+        return work();
+      },
+    };
+    const reread = {
+      setAttr: () => {},
+      run: <T>(work: () => T) => {
+        runs.reread += 1;
+        return work();
+      },
+    } as unknown as Span;
+    vi.spyOn(Telemetry, 'span').mockImplementation(((
+      _name: string,
+      operation: (span: Span) => Promise<unknown>
+    ) => operation(reread)) as typeof Telemetry.span);
     const saved = client
       .mutation(SAVE, {}, { [TRACE_PARENT_CONTEXT_KEY]: parent })
       .toPromise();
     respond(1);
     await flush();
-    expect(parent.run).toHaveBeenCalledOnce();
-    // The re-sent list names the reread's trace, not its first request's.
+    expect(runs.parent).toBe(1);
+    // The re-sent list's request joins the reread's trace; a later send of
+    // the same operation, outside this write, does not.
     const resent = requests[2].operation.context[TRACE_PARENT_CONTEXT_KEY];
-    expect(resent).toBeDefined();
-    expect(resent).not.toBe(
-      requests[0].operation.context[TRACE_PARENT_CONTEXT_KEY]
-    );
+    resent?.run(() => {});
+    resent?.run(() => {});
+    expect(runs.reread).toBe(1);
     respond(2);
     await saved;
     list.unsubscribe();
