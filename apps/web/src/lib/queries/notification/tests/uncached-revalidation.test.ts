@@ -12,7 +12,10 @@ vi.mock('@service-storage/graphql-soup', async (importOriginal) => ({
 }));
 
 import { SoupDocument } from '@service-storage/graphql/generated/graphql';
-import { registerActiveGraphqlSoupQuery } from '../../soup/graphql/active-queries';
+import {
+  registerActiveGraphqlSoupQuery,
+  registerGraphqlSoupRevalidations,
+} from '../../soup/graphql/active-queries';
 import { createRevalidatingClient } from '../../soup/graphql/revalidating-client.test-helpers';
 import { updateNotificationsForEntities } from '../entity-mutations';
 import {
@@ -25,7 +28,8 @@ afterEach(() => {
   for (const dispose of cleanup.splice(0)) dispose();
 });
 
-/** A mounted Soup list, registered for refreshes as soup/items.ts does. */
+/** A mounted Soup list, registered for refreshes and with its pages, as
+ * soup/items.ts and create-soup-live-query.ts do. */
 async function mountList() {
   const server = createRevalidatingClient(() => ({
     updateNotifications: [],
@@ -44,6 +48,12 @@ async function mountList() {
           .toPromise();
       },
     })
+  );
+  cleanup.push(
+    registerGraphqlSoupRevalidations(
+      () => [{ document: SoupDocument, variables }],
+      () => server.client
+    )
   );
   return server;
 }

@@ -1,3 +1,4 @@
+import { networkRevalidated } from '@graphql-cache/exchange/network-revalidation-exchange';
 import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
 import type { Client, OperationResult } from '@urql/core';
 import { revalidateNotificationReaders } from '../../queries/notification/revalidation';
@@ -84,8 +85,13 @@ export async function executeGraphqlUpdateNotifications(
     })
     .toPromise();
 
-  // Without the normalized exchange there is no durable revalidation runner.
-  if (!result.error && optimisticMutationDispositionOf(result) === undefined) {
+  // Without the normalized exchange there is no durable revalidation runner;
+  // the client's own exchange may already have read the lists again.
+  if (
+    !result.error &&
+    optimisticMutationDispositionOf(result) === undefined &&
+    !networkRevalidated(result)
+  ) {
     await revalidateChannelLists(client);
   }
   return result;
@@ -117,7 +123,9 @@ export async function executeGraphqlUpdateNotificationsForEntities(
   const result = await client
     .mutation(UpdateNotificationsForEntityDocument, variables)
     .toPromise();
-  if (!result.error && result.data) {
+  // Without the cache the client's exchange already read every mounted
+  // query again before the write settled.
+  if (!result.error && result.data && !networkRevalidated(result)) {
     // The changed rows update every reader the cache maintains; the others
     // are read again. A stale mark seen reads every reader again: the rows
     // it left out are seen or done, and only the server knows which.
