@@ -1,12 +1,20 @@
 import type { RecordSelection } from '../../../graphql-cache/exchange/record-selection';
-import { readRecordsByKeys } from '../../../graphql-cache/exchange/record-selection';
+import {
+  readRecordsByKeys,
+  selectRecords,
+} from '../../../graphql-cache/exchange/record-selection';
 import type { CacheHost } from '../../../graphql-cache/host/types';
 import type { EntityFilterCacheResult } from '../../../graphql-cache/protocol';
-import type { MailItemFieldsFragment } from '../../../service-clients/service-storage/graphql/generated/graphql';
+import {
+  type MailItemFieldsFragment,
+  MailItemPreviewFieldsFragmentDoc,
+} from '../../../service-clients/service-storage/graphql/generated/graphql';
 import type { GraphqlSoupItem } from '../../../service-clients/service-storage/graphql-soup';
 import { readMailState } from './mail-state';
 import { type CachedMailView, materializeMailView } from './mail-view';
 import { materializeReconciledSoup, soupItemKey } from './reconciliation';
+
+const mailPreviewSelection = selectRecords(MailItemPreviewFieldsFragmentDoc);
 
 /** Compatibility materialization for Mail pages and hosts without live views.
  * Both initial reads and pagination publish only a single coherent revision.
@@ -36,6 +44,21 @@ export async function readSoupPage(
     );
   }
   const selected = chunks.flatMap((chunk) => chunk.records);
+  // A restore can admit a previously unseen thread whose mutation reply
+  // contains canonical previews but no notification edge.
+  if (page.kind === 'mail-page' && selected.length < page.keys.length) {
+    const selectedKeys = new Set(selected.map(({ recordKey }) => recordKey));
+    const missing = page.keys.filter((key) => !selectedKeys.has(key));
+    for (let offset = 0; offset < missing.length; offset += 500) {
+      const chunk = await readRecordsByKeys(
+        host,
+        mailPreviewSelection,
+        missing.slice(offset, offset + 500)
+      );
+      chunks.push(chunk);
+      selected.push(...chunk.records);
+    }
+  }
   const selectedByKey = new Map(
     selected.map((row) => [row.recordKey, row.record])
   );

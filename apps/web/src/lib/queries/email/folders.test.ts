@@ -1,26 +1,32 @@
 import {
+  TRACE_PARENT_CONTEXT_KEY,
+  traceParentExchange,
+} from '@app/lib/urql-solid/trace-parent-exchange';
+import { emailMailboxEffectsExchange } from '@service-storage/email-mailbox-effects-exchange';
+import {
   ChannelListSoupDocument,
   MailFolderSoupDocument,
-  SetEmailThreadStateDocument,
-  type SetEmailThreadStateInput,
+  SetEmailThreadFolderStatesDocument,
+  type SetEmailThreadFolderStatesInput,
   SoupDocument,
 } from '@service-storage/graphql/generated/graphql';
+import { type Client, createClient, fetchExchange } from '@urql/core';
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { registerGraphqlSoupRevalidations } from '../soup/graphql/active-queries';
 
 const mocks = vi.hoisted(() => ({
+  client: undefined as Client | undefined,
   update: vi.fn(),
   mutation: vi.fn(),
   invalidate: vi.fn(),
   invalidateSoup: vi.fn(),
   spanActive: false,
-  cache: false,
 }));
 vi.mock('@service-storage/graphql-soup', () => {
   const client = { mutation: mocks.mutation };
   return {
-    getGraphqlSoupClient: () => client,
-    getGraphqlCacheHost: () => (mocks.cache ? {} : undefined),
+    getGraphqlSoupClient: () => mocks.client ?? client,
+    getGraphqlCacheHost: () => undefined,
   };
 });
 vi.mock('../client', () => ({
@@ -55,12 +61,27 @@ import { restoreEmailFolderThreads } from './folders';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.cache = false;
+  mocks.client = undefined;
   mocks.mutation.mockImplementation(
-    (_document, { input }: { input: SetEmailThreadStateInput }) => ({
+    (_document, { input }: { input: SetEmailThreadFolderStatesInput }) => ({
       toPromise: async () => {
-        await mocks.update(input);
-        return { data: { setEmailThreadState: { id: input.threadId } } };
+        const outcomes = await Promise.allSettled(
+          input.threadIds.map((threadId) =>
+            mocks.update({ threadId, field: input.field, value: input.value })
+          )
+        );
+        return {
+          data: {
+            setEmailThreadFolderStates: input.threadIds.map(
+              (threadId, index) => ({
+                threadId,
+                error:
+                  outcomes[index].status === 'rejected' ? 'Write failed' : null,
+                effect: { id: threadId },
+              })
+            ),
+          },
+        };
       },
     })
   );
@@ -84,7 +105,7 @@ describe('restore provider folders', () => {
       ]);
       expect(result).toEqual({ restoredIds: ['one', 'two'], failedIds: [] });
       expect(mocks.mutation.mock.calls[0]?.[0]).toBe(
-        SetEmailThreadStateDocument
+        SetEmailThreadFolderStatesDocument
       );
       expect(mocks.invalidate).toHaveBeenCalledTimes(2);
       expect(mocks.invalidateSoup).toHaveBeenCalledOnce();
@@ -103,6 +124,110 @@ describe('restore provider folders', () => {
     expect(mocks.invalidate).toHaveBeenCalledOnce();
   });
 
+  it('keeps a committed restore when only its returned Mail row fails', async () => {
+    mocks.mutation.mockReturnValueOnce({
+      toPromise: async () => ({
+        data: {
+          setEmailThreadFolderStates: [
+            { threadId: 'one', error: null, effect: null },
+          ],
+        },
+      }),
+    });
+
+    await expect(
+      restoreEmailFolderThreads({ folder: 'trash', threadIds: ['one'] })
+    ).resolves.toEqual({ restoredIds: ['one'], failedIds: [] });
+  });
+
+  it.each([true, false])(
+    'reads only the missing row by ID and preserves the write acknowledgement (repair succeeds=%s)',
+    async (repairSucceeds) => {
+      const requests: Array<{
+        operation: string;
+        variables: unknown;
+        traced: boolean;
+      }> = [];
+      mocks.client = createClient({
+        url: 'http://localhost/graphql',
+        preferGetMethod: false,
+        exchanges: [
+          emailMailboxEffectsExchange,
+          traceParentExchange,
+          fetchExchange,
+        ],
+        fetch: async (_input, init) => {
+          const { operationName, variables } = JSON.parse(String(init?.body));
+          requests.push({
+            operation: operationName,
+            variables,
+            traced: mocks.spanActive,
+          });
+          if (operationName === 'RecoverEmailThreadFolderRow') {
+            if (!repairSucceeds)
+              return Response.json({
+                errors: [{ message: 'Read unavailable' }],
+              });
+            return Response.json({
+              data: {
+                user: {
+                  id: 'viewer',
+                  soupEntity: {
+                    __typename: 'GraphqlSoupEmailThread',
+                    id: 'one',
+                  },
+                },
+              },
+            });
+          }
+          return Response.json({
+            data: {
+              setEmailThreadFolderStates: [
+                { threadId: 'one', error: null, effect: null },
+                { threadId: 'two', error: 'Rejected', effect: null },
+              ],
+            },
+            errors: [
+              {
+                message: 'Preview unavailable',
+                path: [
+                  'setEmailThreadFolderStates',
+                  0,
+                  'effect',
+                  'mailAllPreview',
+                ],
+              },
+            ],
+          });
+        },
+      });
+      expect(
+        await restoreEmailFolderThreads({
+          folder: 'trash',
+          threadIds: ['one', 'two'],
+        })
+      ).toEqual({ restoredIds: ['one'], failedIds: ['two'] });
+      expect(requests).toEqual([
+        {
+          operation: 'SetEmailThreadFolderStates',
+          variables: {
+            input: {
+              threadIds: ['one', 'two'],
+              field: 'TRASHED',
+              value: false,
+            },
+          },
+          traced: true,
+        },
+        {
+          operation: 'RecoverEmailThreadFolderRow',
+          variables: { threadId: 'one' },
+          traced: true,
+        },
+      ]);
+    }
+  );
+
   it('does not refresh lists when every request fails', async () => {
     mocks.update.mockRejectedValue(new Error('Offline'));
     const result = await restoreEmailFolderThreads({
@@ -113,48 +238,37 @@ describe('restore provider folders', () => {
     expect(mocks.invalidate).not.toHaveBeenCalled();
     expect(mocks.invalidateSoup).not.toHaveBeenCalled();
   });
-  it.each([false, true])(
-    'bounds foreground writes (cache=%s) and continues after a partial failure',
-    async (cache) => {
-      mocks.cache = cache;
-      const concurrency = cache ? 1 : 8;
-      let active = 0;
-      let peak = 0;
-      let release!: () => void;
-      const firstBatch = new Promise<void>((resolve) => {
-        release = resolve;
-      });
-      let started!: () => void;
-      const batchStarted = new Promise<void>((resolve) => {
-        started = resolve;
-      });
-      mocks.update.mockImplementation(
-        async ({ threadId }: { threadId: string }) => {
-          active++;
-          peak = Math.max(peak, active);
-          if (active === concurrency) started();
-          if (Number(threadId) < concurrency) await firstBatch;
-          active--;
-          if (threadId === '3') throw new Error('Provider unavailable');
-        }
-      );
-      const result = restoreEmailFolderThreads({
-        folder: 'trash',
-        threadIds: Array.from({ length: 25 }, (_, i) => String(i)),
-      });
-      await batchStarted;
-      expect(mocks.update).toHaveBeenCalledTimes(concurrency);
-      release();
-      expect(await result).toEqual({
-        restoredIds: Array.from({ length: 25 }, (_, i) => String(i)).filter(
-          (id) => id !== '3'
-        ),
-        failedIds: ['3'],
-      });
-      expect(peak).toBe(concurrency);
-      expect(mocks.invalidateSoup).toHaveBeenCalledOnce();
+  it('sends one bounded mutation and folder revalidation per batch through partial failure', async () => {
+    const folder = {
+      document: MailFolderSoupDocument,
+      variables: {
+        input: { initial: { emailView: 'TRASH', limit: 25 } },
+        page: 'TRASH:test',
+      },
+    };
+    onTestFinished(registerGraphqlSoupRevalidations(() => [folder]));
+    mocks.update.mockImplementation(
+      async ({ threadId }: { threadId: string }) => {
+        if (threadId === '3') throw new Error('Provider unavailable');
+      }
+    );
+    const ids = Array.from({ length: 65 }, (_, i) => String(i));
+    expect(
+      await restoreEmailFolderThreads({ folder: 'trash', threadIds: ids })
+    ).toEqual({
+      restoredIds: ids.filter((id) => id !== '3'),
+      failedIds: ['3'],
+    });
+    expect(
+      mocks.mutation.mock.calls.map(
+        ([, variables]) => variables.input.threadIds.length
+      )
+    ).toEqual([32, 32, 1]);
+    for (const [, , context] of mocks.mutation.mock.calls) {
+      expect(context.optimisticMutation.revalidations).toEqual([folder]);
     }
-  );
+    expect(mocks.invalidateSoup).toHaveBeenCalledOnce();
+  });
 
   it('attaches only server-owned lists to a queued restore', async () => {
     const folder = {
@@ -201,9 +315,14 @@ describe('restore provider folders', () => {
       restoreEmailFolderThreads({ folder: 'trash', threadIds: ['one'] })
     ).resolves.toEqual({ restoredIds: ['one'], failedIds: [] });
     expect(mocks.mutation).toHaveBeenCalledWith(
-      SetEmailThreadStateDocument,
-      { input: { threadId: 'one', field: 'TRASHED', value: false } },
-      { optimisticMutation: { revalidations: [folder] } }
+      SetEmailThreadFolderStatesDocument,
+      { input: { threadIds: ['one'], field: 'TRASHED', value: false } },
+      expect.objectContaining({
+        [TRACE_PARENT_CONTEXT_KEY]: expect.anything(),
+        optimisticMutation: expect.objectContaining({
+          revalidations: [folder],
+        }),
+      })
     );
   });
 

@@ -49,7 +49,7 @@ test.describe('the failure notices of the list of a Gmail inbox', () => {
     );
     await refuseOperation(
       page,
-      'SetEmailThreadState',
+      'SetEmailThreadFolderStates',
       () => true,
       () => failingTrash
     );

@@ -3,7 +3,7 @@
 // Restore, which waits while a restore is on its way. Each for a Gmail and
 // an Outlook inbox.
 
-import { loadAppSteadily } from './harness/drafts';
+import { graphqlOperation, loadAppSteadily } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
 import { deliverToSpam, syncedInView } from './harness/journeys';
 import {
@@ -26,7 +26,7 @@ import { listShows, row, rowCheckbox } from './harness/ways-list2';
 import { did, saw } from './ledger/record';
 
 // A disconnected trash must leave All Mail, reach the provider on reconnect,
-// and return to the mounted list from Undo's mutation result.
+// and return to the mounted list even if Undo's committed reply drops its row.
 test('replays a disconnected trash and restores All Mail without a Soup read', async ({
   page,
   mailbox,
@@ -42,7 +42,7 @@ test('replays a disconnected trash and restores All Mail without a Soup read', a
     .toBe(true);
   const sent = sentOperations(page);
   const stateWrites = () =>
-    sent.filter(({ name }) => name === 'SetEmailThreadState');
+    sent.filter(({ name }) => name === 'SetEmailThreadFolderStates');
   const isTrashed = async () =>
     (await mailbox.providerMessages()).some((message) =>
       message.labels.includes('TRASH')
@@ -65,22 +65,60 @@ test('replays a disconnected trash and restores All Mail without a Soup read', a
       .slice(attemptedOffline)
       .map(({ variables }) => variables)
   ).toContainEqual({
-    input: { threadId: thread, field: 'TRASHED', value: true },
+    input: { threadIds: [thread], field: 'TRASHED', value: true },
   });
 
   const moved = notice(page, 'Moved to Trash');
   await moved.hover();
+  // Route.fetch uses the runner's connection, so inject the failure only
+  // after Undo has been admitted offline and the provider is still in Trash.
+  let injectMissingEffect = false;
+  await page.route(/\/graphql(\?|$)/, async (route) => {
+    const request = route.request();
+    if (
+      !injectMissingEffect ||
+      graphqlOperation(request) !== 'SetEmailThreadFolderStates' ||
+      !request.postData()?.includes('"value":false')
+    )
+      return route.fallback();
+
+    const response = await route.fetch();
+    const payload = await response.json();
+    expect(payload.data.setEmailThreadFolderStates).toMatchObject([
+      { threadId: thread, error: null },
+    ]);
+    payload.data.setEmailThreadFolderStates[0].effect = null;
+    await route.fulfill({
+      response,
+      json: {
+        ...payload,
+        errors: [
+          {
+            message: 'Preview projection unavailable',
+            path: ['setEmailThreadFolderStates', 0, 'effect'],
+          },
+        ],
+      },
+    });
+  });
   const beforeUndo = sent.length;
   await page.context().setOffline(true);
   try {
     await moved.getByRole('button', { name: 'Undo' }).click();
     await expect(notice(page, 'Restored from Trash')).toBeVisible();
     expect(await isTrashed()).toBe(true);
+    injectMissingEffect = true;
   } finally {
     await page.context().setOffline(false);
   }
   await listShows(page, [thread]);
   await expect.poll(isTrashed).toBe(false);
+  expect(
+    sent
+      .slice(beforeUndo)
+      .filter(({ name }) => name === 'RecoverEmailThreadFolderRow')
+      .map(({ variables }) => variables)
+  ).toEqual([{ threadId: thread }]);
   expect(sent.slice(beforeUndo).filter(({ name }) => name === 'Soup')).toEqual(
     []
   );
@@ -111,8 +149,8 @@ for (const provider of PROVIDERS) {
         await syncedInView(mailbox, 'trash', 'Old invoice'),
         await syncedInView(mailbox, 'trash', 'Older invoice'),
       ];
-      await refuseOperation(page, 'SetEmailThreadState');
-      const held = await holdOperation(page, 'SetEmailThreadState');
+      await refuseOperation(page, 'SetEmailThreadFolderStates');
+      const held = await holdOperation(page, 'SetEmailThreadFolderStates');
 
       await mailbox.open();
       await sidebarTab(page, 'Spam');

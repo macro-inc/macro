@@ -765,10 +765,12 @@ spam on Gmail files the thread under Spam, then takes it out of the inbox. The
 assistant adding or removing the SPAM label does the same.
 Gmail restores update the canonical preview and ordering immediately, before the
 queued provider write completes.
-Trash, Undo and folder restores use the same GraphQL mailbox-state mutation.
-Its returned thread updates Inbox and other locally maintained Mail lists.
+Trash, Undo and folder restores use the same bounded GraphQL mailbox mutation.
+Each thread has its own write acknowledgement and Mail row. A committed write
+whose row cannot be loaded keeps its acknowledgement and reads the thread by ID.
+Returned and recovered rows update Inbox and other locally maintained Mail lists.
 Spam and Trash still get membership and their list-specific preview from the
-server. The mutation queues those reads for settlement, including after offline
+server. The mutation queues those reads once per batch, including after offline
 replay. An offline trash removes the thread from locally maintained Mail as
 soon as the write is queued. A restore uses the server's returned previews
 to place the thread back in the right Mail views.

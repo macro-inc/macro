@@ -3,7 +3,7 @@ import {
   MarkEmailThreadSeenDocument,
   MarkEmailThreadUnreadDocument,
   SetEmailThreadArchivedDocument,
-  SetEmailThreadStateDocument,
+  SetEmailThreadFolderStatesDocument,
   SetEmailThreadsArchivedDocument,
   UpdateNotificationsDocument,
 } from '../service-clients/service-storage/graphql/generated/graphql';
@@ -29,25 +29,28 @@ export const soupOptimisticResolvers = [
     id: String(input.threadId),
     inboxVisible: !input.archived,
   })),
-  optimisticResolver(SetEmailThreadStateDocument, ({ input }) => {
-    const thread = {
-      __typename: 'GraphqlSoupEmailThread' as const,
-      id: String(input.threadId),
-    };
-    if (input.field === 'TRASHED' && input.value) {
-      return {
-        ...thread,
-        inboxVisible: false,
-        mailAllPreview: null,
-        mailDraftPreview: null,
-        mailSentPreview: null,
+  optimisticResolver(SetEmailThreadFolderStatesDocument, ({ input }) =>
+    input.threadIds.map((threadId) => {
+      const thread = {
+        __typename: 'GraphqlSoupEmailThread' as const,
+        id: String(threadId),
       };
-    }
-    // The provider decides which messages return to Inbox and other views.
-    // Keep the intent durable without guessing the restored previews.
-    if (input.field === 'TRASHED' || (input.field === 'JUNK' && !input.value))
-      return thread;
-  }),
+      return {
+        threadId: thread.id,
+        error: null,
+        effect:
+          input.field === 'TRASHED' && input.value
+            ? {
+                ...thread,
+                inboxVisible: false,
+                mailAllPreview: null,
+                mailDraftPreview: null,
+                mailSentPreview: null,
+              }
+            : thread,
+      };
+    })
+  ),
   // Which threads fail is the server's call; it reloads them with their
   // unchanged state.
   optimisticResolver(SetEmailThreadsArchivedDocument, ({ input }) => ({

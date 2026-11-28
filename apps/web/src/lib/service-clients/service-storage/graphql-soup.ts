@@ -120,6 +120,7 @@ import {
   installCrmCacheHost,
 } from './crm-access-cache';
 import { emailCacheDeletionKeys } from './email-cache-deletions';
+import { emailMailboxEffectsExchange } from './email-mailbox-effects-exchange';
 import { emailThreadSortTs } from './email-thread-sort';
 import type { SoupApiItem } from './generated/schemas/soupApiItem';
 import type { SoupCalendarEventSoupPropertiesField } from './generated/schemas/soupCalendarEventSoupPropertiesField';
@@ -497,6 +498,7 @@ const graphqlSoupClient = createClient({
     cacheSessionExchange,
     captureTraceParentExchange,
     networkRevalidationExchange(),
+    emailMailboxEffectsExchange,
     traceParentExchange,
     fetchExchange,
   ],
@@ -623,6 +625,7 @@ function getUncachedRealtimeClient(): Client {
         websocketClient,
         stripGraphqlSoupClientDirectives
       ),
+      emailMailboxEffectsExchange,
       traceParentExchange,
       fetchExchange,
     ],
@@ -1237,6 +1240,7 @@ export function getGraphqlSoupClient(): Client {
             graphqlWsClient,
             stripGraphqlSoupClientDirectives
           ),
+          emailMailboxEffectsExchange,
           traceParentExchange,
           fetchExchange,
         ],

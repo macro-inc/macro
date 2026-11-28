@@ -145,11 +145,11 @@ test.describe('the side panel and selection toolbar on a desktop', () => {
     let refusing = true;
     await refuseOperation(
       page,
-      'SetEmailThreadState',
+      'SetEmailThreadFolderStates',
       () => true,
       () => refusing
     );
-    const restoring = await holdOperation(page, 'SetEmailThreadState');
+    const restoring = await holdOperation(page, 'SetEmailThreadFolderStates');
 
     await mailbox.open();
     await library.getByRole('button', { name: 'Trash' }).click();
@@ -168,7 +168,7 @@ test.describe('the side panel and selection toolbar on a desktop', () => {
     await restore.click();
     await listShows(page, []);
 
-    const reporting = await holdOperation(page, 'SetEmailThreadState');
+    const reporting = await holdOperation(page, 'SetEmailThreadFolderStates');
     await library.getByRole('button', { name: 'Spam' }).click();
     await listShows(page, [photos]);
     await (await rowCheckbox(page, photos)).click();
@@ -224,7 +224,7 @@ test.describe('the details sheet and selection toolbar on a phone', () => {
       text: 'The photos from Friday.',
     });
     const photos = await syncedInView(mailbox, 'spam', 'Team photos');
-    const reporting = await holdOperation(page, 'SetEmailThreadState');
+    const reporting = await holdOperation(page, 'SetEmailThreadFolderStates');
 
     await mailbox.open();
     await openTouchTab(page, 'Spam');

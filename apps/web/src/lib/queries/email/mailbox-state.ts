@@ -1,10 +1,11 @@
+import { TRACE_PARENT_CONTEXT_KEY } from '@app/lib/urql-solid/trace-parent-exchange';
 import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
-import { Telemetry } from '@macro-inc/observability';
+import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import {
   GroupSoupDocument,
   MailFolderSoupDocument,
-  SetEmailThreadStateDocument,
-  type SetEmailThreadStateInput,
+  SetEmailThreadFolderStatesDocument,
+  type SetEmailThreadFolderStatesInput,
   SoupDocument,
   SoupPreviewPageDocument,
 } from '@service-storage/graphql/generated/graphql';
@@ -12,14 +13,11 @@ import {
   getGraphqlCacheHost,
   getGraphqlSoupClient,
 } from '@service-storage/graphql-soup';
-import { createSignal } from 'solid-js';
+import { ReactiveMap } from '@solid-primitives/map';
 import { queryAccountSession } from '../auth/account-scope';
 import { getActiveGraphqlSoupRevalidations } from '../soup/graphql/active-queries';
 
-type MailboxFolderField = Extract<
-  SetEmailThreadStateInput['field'],
-  'JUNK' | 'TRASHED'
->;
+const FOLDER_BATCH_SIZE = 32;
 
 const mailListDocuments = new Set([
   SoupDocument,
@@ -28,16 +26,17 @@ const mailListDocuments = new Set([
   MailFolderSoupDocument,
 ]);
 
-const [pendingTrash, setPendingTrash] = createSignal<
-  ReadonlyMap<string, { session: number; key: string }>
->(new Map());
+const pendingTrash = new ReactiveMap<
+  string,
+  { session: number; keys: string[] }
+>();
 
 export function pendingEmailTrashKeys(): ReadonlySet<string> {
   const session = queryAccountSession();
   return new Set(
-    [...pendingTrash().values()]
+    [...pendingTrash.values()]
       .filter((entry) => entry.session === session)
-      .map((entry) => entry.key)
+      .flatMap((entry) => entry.keys)
   );
 }
 
@@ -45,24 +44,18 @@ export function pendingEmailTrashKeys(): ReadonlySet<string> {
  * The normalized reply owns membership once the write settles. */
 function holdTrashVisibility(
   uuid: string,
-  threadId: SetEmailThreadStateInput['threadId']
+  threadIds: SetEmailThreadFolderStatesInput['threadIds']
 ) {
   const host = getGraphqlCacheHost();
-  const entry = {
+  pendingTrash.set(uuid, {
     session: queryAccountSession(),
-    key: `GraphqlSoupEmailThread:${threadId}`,
-  };
-  setPendingTrash((pending) => new Map(pending).set(uuid, entry));
+    keys: threadIds.map((id) => `GraphqlSoupEmailThread:${id}`),
+  });
 
   const release = () => {
     unsubscribeSettlement?.();
     unsubscribeGeneration?.();
-    setPendingTrash((pending) => {
-      if (!pending.has(uuid)) return pending;
-      const next = new Map(pending);
-      next.delete(uuid);
-      return next;
-    });
+    pendingTrash.delete(uuid);
   };
   const unsubscribeSettlement = host?.onMutationSettled((settlement) => {
     if (settlement.mutationUuid === uuid) release();
@@ -75,25 +68,28 @@ function holdTrashVisibility(
 
 export async function setEmailMailboxFolderStates(
   threadIds: readonly string[],
-  field: MailboxFolderField,
+  field: SetEmailThreadFolderStatesInput['field'],
   value: boolean
 ): Promise<PromiseSettledResult<void>[]> {
   const context = Telemetry.captureContext();
   const client = getGraphqlSoupClient();
-  // Await each foreground result with a live cache so a sibling does not
-  // return as queued behind it. The network-only client can send in parallel.
-  const concurrency = getGraphqlCacheHost() ? 1 : 8;
   const outcomes: PromiseSettledResult<void>[] = [];
-  for (let start = 0; start < threadIds.length; start += concurrency) {
-    const batch = threadIds.slice(start, start + concurrency);
-    const settled = await Promise.allSettled(
-      batch.map((threadId) =>
-        context.run(() =>
-          setEmailMailboxFolderState(client, { threadId, field, value })
+  for (let start = 0; start < threadIds.length; start += FOLDER_BATCH_SIZE) {
+    const batch = threadIds.slice(start, start + FOLDER_BATCH_SIZE);
+    try {
+      const settled = await context.run(() =>
+        setEmailMailboxFolderState(
+          client,
+          { threadIds: batch, field, value },
+          context
         )
-      )
-    );
-    outcomes.push(...settled);
+      );
+      outcomes.push(...settled);
+    } catch (reason) {
+      outcomes.push(
+        ...batch.map(() => ({ status: 'rejected' as const, reason }))
+      );
+    }
   }
   return outcomes;
 }
@@ -102,18 +98,20 @@ export async function setEmailMailboxFolderStates(
  * including the list-keyed Spam and Trash pages, revalidate after replay too. */
 async function setEmailMailboxFolderState(
   client: ReturnType<typeof getGraphqlSoupClient>,
-  input: SetEmailThreadStateInput
-) {
+  input: SetEmailThreadFolderStatesInput,
+  trace: TraceContext
+): Promise<PromiseSettledResult<void>[]> {
   const uuid =
     input.field === 'TRASHED' && input.value ? crypto.randomUUID() : undefined;
-  const release = uuid && holdTrashVisibility(uuid, input.threadId);
+  const release = uuid && holdTrashVisibility(uuid, input.threadIds);
   let queued = false;
   try {
     const result = await client
       .mutation(
-        SetEmailThreadStateDocument,
+        SetEmailThreadFolderStatesDocument,
         { input },
         {
+          [TRACE_PARENT_CONTEXT_KEY]: trace,
           optimisticMutation: {
             uuid,
             revalidations: getActiveGraphqlSoupRevalidations(client, {
@@ -125,12 +123,30 @@ async function setEmailMailboxFolderState(
       .toPromise();
     const disposition = optimisticMutationDispositionOf(result);
     queued = disposition?.kind === 'queued';
-    if (queued) return;
+    if (queued)
+      return input.threadIds.map(() => ({
+        status: 'fulfilled',
+        value: undefined,
+      }));
     if (disposition?.kind === 'permanently-failed') throw disposition.error;
     if (result.error) throw result.error;
-    if (disposition?.kind === 'committed') return;
-    if (!result.data?.setEmailThreadState)
-      throw new Error('Email thread state mutation returned no thread');
+    const acknowledged = new Map(
+      result.data?.setEmailThreadFolderStates.map((thread) => [
+        String(thread.threadId),
+        thread,
+      ])
+    );
+    return input.threadIds.map((id) => {
+      const thread = acknowledged.get(String(id));
+      if (!thread || thread.error)
+        return {
+          status: 'rejected',
+          reason: new Error(
+            thread?.error ?? 'Mailbox write was not acknowledged'
+          ),
+        };
+      return { status: 'fulfilled', value: undefined };
+    });
   } finally {
     if (!queued && release) release();
   }

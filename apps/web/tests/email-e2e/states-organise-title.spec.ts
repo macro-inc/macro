@@ -72,13 +72,13 @@ test.describe('the title menu of a thread on a desktop', () => {
     let refusing: 'restore' | 'trash' | undefined;
     await refuseOperation(
       page,
-      'SetEmailThreadState',
+      'SetEmailThreadFolderStates',
       (body) => body.includes('"value":false'),
       () => refusing === 'restore'
     );
     await refuseOperation(
       page,
-      'SetEmailThreadState',
+      'SetEmailThreadFolderStates',
       (body) => body.includes('"value":true'),
       () => refusing === 'trash'
     );
@@ -209,13 +209,13 @@ test.describe('the title menu of a thread on a phone', () => {
     let refusing: 'restore' | 'trash' | undefined;
     await refuseOperation(
       page,
-      'SetEmailThreadState',
+      'SetEmailThreadFolderStates',
       (body) => body.includes('"value":false'),
       () => refusing === 'restore'
     );
     await refuseOperation(
       page,
-      'SetEmailThreadState',
+      'SetEmailThreadFolderStates',
       (body) => body.includes('"value":true'),
       () => refusing === 'trash'
     );
