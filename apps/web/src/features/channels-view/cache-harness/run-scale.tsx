@@ -56,6 +56,7 @@ import {
   type FixtureReads,
   VIEWER_ID,
 } from './fixture';
+import type { ScenarioName } from './gate';
 import { clearMappedRows, harnessState } from './harness-state';
 import {
   type ChatDataPath,
@@ -71,6 +72,9 @@ const CACHE_SCOPE = 'chat-cache-harness';
  * (`ACCOUNT_WIDE_REFRESH_INTERVAL_MS`, 2 s). A shorter wait lets the refresh a
  * step caused land in the next step. */
 const QUIET_MS = ACCOUNT_WIDE_REFRESH_INTERVAL_MS + 500;
+/** The quiet that ends the mutation queue's own drain, which waits on no
+ * timer: its engine calls chain one after another. */
+const DRAIN_QUIET_MS = 500;
 const POLL_MS = 20;
 const SETTLE_LIMIT_MS = 120_000;
 /** Bounds the "Show more" rounds a cold open makes for the viewport. */
@@ -78,16 +82,6 @@ const LOAD_MORE_ROUNDS = 20;
 /** The section the expand and collapse scenarios toggle: one whose rows are on
  * screen when Chat opens, so its heading is one the viewer can click. */
 const TOGGLED_SECTION: ChannelsRailSection = 'direct_messages';
-
-export const SCENARIOS = [
-  'appShell',
-  'chatOpen',
-  'unrelatedWrite',
-  'message',
-  'expand',
-  'collapse',
-] as const;
-export type ScenarioName = (typeof SCENARIOS)[number];
 
 export type RowCounts = {
   /** Rows the rail built: headings, conversations, favorites, statuses. */
@@ -177,8 +171,9 @@ async function openGraph(
   // crm-access-cache.ts does this when the owner's first baseline arrives.
   cacheSessionGeneration.initialize(authority.generation);
   const network = createFixtureNetwork(() => fixture.rootValue());
-  const clients = createHarnessClients(host, network);
   const state = harnessState();
+  state.mutationQueues = [];
+  const clients = createHarnessClients(host, network);
   state.client = clients.client;
   state.networkClient = clients.networkClient;
   state.host = host;
@@ -254,13 +249,13 @@ function delay(ms: number): Promise<void> {
 
 /** Waits until no engine call, request or query is open and nothing new
  * started for `QUIET_MS`; resolves with the time to the last change. */
-async function settle(graph: Graph): Promise<number> {
+async function settle(graph: Graph, quietMs = QUIET_MS): Promise<number> {
   const started = performance.now();
   const activity = () => {
     const calls = graph.runtime.engine.log.calls;
     const open = calls.filter((call) => call.recordsOut === undefined).length;
     return {
-      key: `${calls.length}:${graph.network.log.operations.length}:${graph.network.log.frames.length}`,
+      key: `${calls.length}:${graph.network.log.operations.length}:${graph.network.log.frames.length}:${harnessState().rest.length}`,
       busy:
         open > 0 ||
         graph.network.log.inFlight() > 0 ||
@@ -278,7 +273,7 @@ async function settle(graph: Graph): Promise<number> {
       lastChange = performance.now();
       continue;
     }
-    if (performance.now() - lastChange >= QUIET_MS) return lastChange - started;
+    if (performance.now() - lastChange >= quietMs) return lastChange - started;
   }
   throw new Error(`Chat work did not settle within ${SETTLE_LIMIT_MS} ms`);
 }
@@ -293,11 +288,22 @@ async function loadViewport(graph: Graph, view: ChatView): Promise<void> {
   }
 }
 
+/** REST calls by method, keyed apart from GraphQL operation names. */
+function restCounts(calls: readonly string[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const method of calls) {
+    const key = `rest ${method}`;
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  return counts;
+}
+
 type Snapshot = {
   engineMark: number;
   sql: SqlCounters;
   opfs: MemoryOpfsCounters;
   networkMark: number;
+  restMark: number;
   frames: number;
   reads: FixtureReads;
   mappers: Record<string, Omit<MapperWork, 'rows'>>;
@@ -310,6 +316,7 @@ function snapshot(graph: Graph, solid: SolidAllocationCounter): Snapshot {
     sql: graph.runtime.engine.sqlCounters(),
     opfs: { ...graph.runtime.opfs.counters },
     networkMark: graph.network.log.mark(),
+    restMark: harnessState().rest.length,
     frames: graph.network.log.frames.length,
     reads: graph.fixture.reads(),
     mappers: Object.fromEntries(
@@ -356,6 +363,11 @@ async function measureStep(
   solid: SolidAllocationCounter,
   step: () => Promise<void> | void
 ): Promise<ScenarioCounts> {
+  // Every step starts a fresh 30 s poll of the empty mutation queue, so the
+  // poll lands in no step that takes less (each takes a few seconds), rather
+  // than in whichever step is running 30 s after the last one.
+  for (const queue of harnessState().mutationQueues) queue.wake();
+  await settle(graph, DRAIN_QUIET_MS);
   const before = snapshot(graph, solid);
   clearMappedRows();
   const started = performance.now();
@@ -381,6 +393,12 @@ async function measureStep(
   const allocated = solid.since(before.solid);
   const rows = rowCounts(view.path());
   const byMethod = engine.log.countsSince(before.engineMark);
+  // No step sends a mutation, so a claim is the queue's poll: the step ran
+  // past the poll's period and its counts depend on the machine's speed.
+  if (byMethod.claimNextMutation)
+    throw new Error(
+      `A step ran ${Math.round(wallMs)} ms, into the mutation queue's 30 s poll`
+    );
   return {
     engine: {
       calls: Object.values(byMethod).reduce((total, count) => total + count, 0),
@@ -400,7 +418,10 @@ async function measureStep(
       flushes: opfs.flushes - before.opfs.flushes,
     },
     network: {
-      operations: graph.network.log.countsSince(before.networkMark),
+      operations: {
+        ...graph.network.log.countsSince(before.networkMark),
+        ...restCounts(harnessState().rest.slice(before.restMark)),
+      },
       frames: graph.network.log.frames.length - before.frames,
     },
     server: {

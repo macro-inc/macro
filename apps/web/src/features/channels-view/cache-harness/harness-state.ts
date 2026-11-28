@@ -24,6 +24,12 @@ export type ChatHarnessState = {
   flags: Record<string, boolean>;
   /** Calls that would have left the process; a faithful run has none. */
   escapes: string[];
+  /** REST calls the mocked service clients answered, in order, by method
+   * (`channelSections.list`): counted with the network's operations. */
+  rest: string[];
+  /** The open graph's mutation queue runners, so a step can restart their
+   * wall-clock poll before it starts (`run-scale.tsx`). */
+  mutationQueues: Array<{ wake(): void }>;
 };
 
 /** One mapper's work. `calls` counts every call; `built` only calls whose
@@ -55,13 +61,12 @@ export function harnessState(): ChatHarnessState {
 // Results every mapper has returned, to tell a memoized answer from new work.
 const RETURNED = new WeakSet<object>();
 
-/** A Solid store proxy answers `$RAW` with its target; plain data has none. */
-function isStoreProxy(row: unknown): boolean {
-  return (
-    typeof row === 'object' &&
-    row !== null &&
-    Reflect.get(row, $RAW) !== undefined
-  );
+/** The object under a Solid store proxy, or `row` itself. A proxy answers
+ * `$RAW` before it tracks anything, so reading it creates no store node; the
+ * probe then reads the target, never the proxy. */
+function rawOf(row: unknown): unknown {
+  if (typeof row !== 'object' || row === null) return row;
+  return Reflect.get(row, $RAW) ?? row;
 }
 
 /** Counts one call of `name` over `rows` and returns `run`'s result. */
@@ -70,7 +75,8 @@ export function countMapper<T>(
   rows: readonly unknown[],
   run: () => T
 ): T {
-  const trackedWalk = getListener() !== null && rows.some(isStoreProxy);
+  const trackedWalk =
+    getListener() !== null && rows.some((row) => rawOf(row) !== row);
   const result = run();
   const state = (globalThis as WithState)[STATE_KEY];
   if (!state) return result;
@@ -100,9 +106,11 @@ export function clearMappedRows(): void {
     counter.ids.clear();
 }
 
-/** The `id` a mapper's input row carries, if any. */
-export function rowId(row: unknown): string | undefined {
-  if (typeof row !== 'object' || row === null || !('id' in row))
+/** The `id` a mapper's input row carries, if any, read from the row's
+ * target so the count adds no store node of its own. */
+function rowId(row: unknown): string | undefined {
+  const raw = rawOf(row);
+  if (typeof raw !== 'object' || raw === null || !('id' in raw))
     return undefined;
-  return typeof row.id === 'string' ? row.id : undefined;
+  return typeof raw.id === 'string' ? raw.id : undefined;
 }

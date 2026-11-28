@@ -67,7 +67,9 @@ export function countSolidAllocations(): SolidAllocationCounter {
   } as typeof Object.defineProperty;
   const read = (): SolidAllocations => {
     let storeNodes = 0;
-    for (const nodes of nodeMaps) storeNodes += Object.keys(nodes).length;
+    // `Reflect.ownKeys`: the node a key iteration tracks is keyed by a
+    // symbol (`store-self`), which `Object.keys` skips.
+    for (const nodes of nodeMaps) storeNodes += Reflect.ownKeys(nodes).length;
     return { owners, signals, storeNodes };
   };
   return {

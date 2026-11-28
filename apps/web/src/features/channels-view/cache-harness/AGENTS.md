@@ -26,6 +26,9 @@ grows with the account, not with what is on screen.
 
 - `fixture.ts`: the deterministic account (about 75 participants a channel)
   and the GraphQL resolvers that serve it, counting rows asked and returned.
+  It pages as the server does (`models_pagination`): a full page carries a
+  cursor even when nothing follows, so reading to the end costs one more,
+  empty page.
 - `mount.tsx`: `ChatDataPathMount`, the `ChannelsRail` composition without its
   rendering, and `modelViewport`, the rows a fixed 816px sidebar mounts. A
   section's visible range comes from `onSectionRange`; `ChatDataPath.viewport()`
@@ -44,13 +47,16 @@ Per scenario, each its own number:
   `views`, reads per view (a query and its variables, a filter, a search), so
   `repeats` is how many reads read a view again within the step.
 - `sql`: statements the engine ran and rows they stepped; `opfs`: file I/O.
-- `network` and `server`: operations sent, and the rows the fixture server was
-  asked for and returned.
+- `network` and `server`: operations sent (GraphQL by operation name, and
+  the REST section lists as `rest channelSections.list`), and the rows the
+  fixture server was asked for and returned.
 - `mappers`: `calls` to each counted mapper, `built` (results not returned
   before, so a memoized answer is not work), `trackedWalks` (calls inside a
   tracking scope over a store proxy, each field read making a store node,
   FE-70), and `rows` (distinct rows mapped).
 - `solid`: owners, signals and store nodes created, also per resolved row.
+  Store nodes include the symbol-keyed ones a key iteration tracks; the mapper
+  count reads row ids from the store's target, so it adds none.
 - `rows`: rows the rail built, resolved to a channel, and mounted.
 
 ## Gate
@@ -66,6 +72,10 @@ Per scenario, each its own number:
   capped at main's count plus about 10% at both sizes. A baseline update never
   moves a cap; change a cap only by hand, and lower it when a change lowers the
   count.
+- Coverage: a size that did not measure every scenario (`SCENARIOS`), or a
+  scenario without the work that shows it ran (`EVIDENCE`: rows on screen,
+  an engine call, a statement). A baseline written from an empty or idle run
+  therefore cannot pass.
 
 When a change is meant to move the counts, run `just test-cache-harness-update`
 from `apps/web` and commit `baseline.json` in the same change, with the reason
@@ -94,6 +104,11 @@ in the PR. Reviewers read its diff as the change's cost.
 - A step has settled once nothing moved for `QUIET_MS`, longer than the
   channel directory's 2 s refresh spacing; a shorter wait lets the refresh a
   step caused land in the next step's counts.
+- The mutation queue polls an empty queue every 30 s of wall time. Each step
+  wakes the runners first (`chat.harness.tsx` keeps them), so the poll starts
+  over and lands in no step; a step that still claims a mutation ran past the
+  poll and fails the run, since its counts would depend on the machine.
+  Two runs give the same counts, every one of them.
 - The app reaches the harness only through `harness-state.ts`, on
   `globalThis`: each load is a new module graph, and the mocks of both graphs
   must read the same state.

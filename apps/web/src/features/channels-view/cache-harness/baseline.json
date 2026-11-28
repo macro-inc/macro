@@ -3,10 +3,10 @@
   "sizes": {
     "3500": {
       "appShell": {
-        "engine.calls": 23,
+        "engine.calls": 18,
         "engine.recordsOut": 3502,
         "engine.repeatViewReads": 1,
-        "sql.statements": 86,
+        "sql.statements": 74,
         "sql.rows": 9990,
         "network.operations": 0,
         "server.rowsRequested": 0,
@@ -27,7 +27,7 @@
         "engine.repeatViewReads": 2,
         "sql.statements": 279,
         "sql.rows": 31032,
-        "network.operations": 5,
+        "network.operations": 7,
         "server.rowsRequested": 537,
         "server.rowsReturned": 358,
         "mappers.calls": 13280,
@@ -35,7 +35,7 @@
         "mappers.trackedWalks": 46,
         "solid.owners": 3260,
         "solid.signals": 2928,
-        "solid.storeNodes": 43923,
+        "solid.storeNodes": 43887,
         "rows.built": 416,
         "rows.resolved": 399,
         "rows.rendered": 48
@@ -98,10 +98,10 @@
         "rows.rendered": 48
       },
       "collapse": {
-        "engine.calls": 39,
+        "engine.calls": 34,
         "engine.recordsOut": 564,
         "engine.repeatViewReads": 2,
-        "sql.statements": 134,
+        "sql.statements": 126,
         "sql.rows": 20337,
         "network.operations": 3,
         "server.rowsRequested": 300,
@@ -119,10 +119,10 @@
     },
     "7000": {
       "appShell": {
-        "engine.calls": 37,
+        "engine.calls": 32,
         "engine.recordsOut": 7002,
         "engine.repeatViewReads": 1,
-        "sql.statements": 142,
+        "sql.statements": 130,
         "sql.rows": 20606,
         "network.operations": 0,
         "server.rowsRequested": 0,
@@ -143,7 +143,7 @@
         "engine.repeatViewReads": 2,
         "sql.statements": 297,
         "sql.rows": 42082,
-        "network.operations": 5,
+        "network.operations": 7,
         "server.rowsRequested": 537,
         "server.rowsReturned": 358,
         "mappers.calls": 20280,
@@ -151,7 +151,7 @@
         "mappers.trackedWalks": 46,
         "solid.owners": 3260,
         "solid.signals": 2928,
-        "solid.storeNodes": 43923,
+        "solid.storeNodes": 43887,
         "rows.built": 416,
         "rows.resolved": 399,
         "rows.rendered": 48
@@ -214,10 +214,10 @@
         "rows.rendered": 48
       },
       "collapse": {
-        "engine.calls": 57,
+        "engine.calls": 53,
         "engine.recordsOut": 1133,
         "engine.repeatViewReads": 2,
-        "sql.statements": 198,
+        "sql.statements": 190,
         "sql.rows": 32962,
         "network.operations": 6,
         "server.rowsRequested": 600,

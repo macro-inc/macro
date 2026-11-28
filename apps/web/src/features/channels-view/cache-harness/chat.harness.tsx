@@ -10,6 +10,7 @@ import { dirname, resolve } from 'node:path';
 import type * as Posthog from '@app/lib/analytics/posthog';
 import type * as GlobalAppState from '@components/app/GlobalAppState';
 import type * as UserContext from '@core/context/user';
+import type * as MutationQueueRunner from '@graphql-cache/exchange/mutation-queue-runner';
 import type * as DirectoryCore from '@queries/channel/directory-core';
 import type * as ListEntity from '@queries/channel/list-entity';
 import type * as TransformUtils from '@queries/soup/transform-utils';
@@ -55,22 +56,52 @@ vi.mock('@app/lib/analytics/posthog', async (importOriginal) => {
   };
 });
 
-// The rail's section lists come from REST, not the cache.
+// The rail's section lists come from REST, not the cache; each call is
+// logged so a step's network operations include it.
 vi.mock('@service-storage/client', async (importOriginal) => {
   const original = await importOriginal<typeof StorageClient>();
   const { harnessState } = await import('./harness-state');
-  const list = async (scope?: string) =>
-    ok(harnessState().fixture.labels(scope));
+  const list = (method: string) => async (scope?: string) => {
+    harnessState().rest.push(method);
+    return ok(harnessState().fixture.labels(scope));
+  };
   const client = original.storageServiceClient;
   return {
     ...original,
     storageServiceClient: {
       ...client,
-      channelLabels: { ...client.channelLabels, list },
-      channelSections: { ...client.channelSections, list },
+      channelLabels: {
+        ...client.channelLabels,
+        list: list('channelLabels.list'),
+      },
+      channelSections: {
+        ...client.channelSections,
+        list: list('channelSections.list'),
+      },
     },
   };
 });
+
+// The mutation queue polls an empty queue every 30 s of wall time, so where
+// the poll lands among the steps depends on how long each took. The harness
+// keeps each runner to restart that poll before every step.
+vi.mock(
+  '@graphql-cache/exchange/mutation-queue-runner',
+  async (importOriginal) => {
+    const original = await importOriginal<typeof MutationQueueRunner>();
+    const { harnessState } = await import('./harness-state');
+    return {
+      ...original,
+      createMutationQueueRunner: (
+        ...args: Parameters<typeof original.createMutationQueueRunner>
+      ) => {
+        const runner = original.createMutationQueueRunner(...args);
+        harnessState().mutationQueues.push(runner);
+        return runner;
+      },
+    };
+  }
+);
 
 // The sidebar mounts no notification feed: GraphQL rows carry their own
 // unread edge, and the legacy feed only fills rows without one.
@@ -255,7 +286,14 @@ function guardNetwork(): () => void {
 async function runScale(channels: number): Promise<RunScale.ChatScaleResult> {
   localStorage.clear();
   const fixture = createChatFixture(channels, FIXTURE_SEED);
-  setHarnessState({ fixture, mappers: {}, flags: {}, escapes: [] });
+  setHarnessState({
+    fixture,
+    mappers: {},
+    flags: {},
+    escapes: [],
+    rest: [],
+    mutationQueues: [],
+  });
   // Each load is its own module graph, as two page loads are.
   vi.resetModules();
   const earlier: typeof RunScale = await import('./run-scale');

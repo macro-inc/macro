@@ -9,6 +9,9 @@
  *    Doubling the account may double the work, never more.
  * 3. Visible-window caps: a count that should follow what is on screen stays
  *    under its cap (`WINDOW_CAPS`) at both sizes, whatever the baseline says.
+ * 4. Coverage: every size measured every scenario (`SCENARIOS`), and each did
+ *    the work that shows it ran (`EVIDENCE`), so a run that measured nothing,
+ *    or a baseline written from one, cannot pass.
  *
  * The baseline is generated (`writeBaseline`); limits and caps change only
  * here, by hand, in a reviewed change.
@@ -17,11 +20,19 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
-import type {
-  ChatScaleResult,
-  ScenarioCounts,
-  ScenarioName,
-} from './run-scale';
+import type { ChatScaleResult, ScenarioCounts } from './run-scale';
+
+/** What `run-scale.tsx` measures, in order. */
+export const SCENARIOS = [
+  'appShell',
+  'chatOpen',
+  'unrelatedWrite',
+  'message',
+  'expand',
+  'collapse',
+] as const;
+
+export type ScenarioName = (typeof SCENARIOS)[number];
 
 export type GatedRun = {
   channels: number;
@@ -61,6 +72,21 @@ const GROWTH_LIMIT = 2.2;
 /** Counts under this at N are compared as if they were this. */
 const GROWTH_FLOOR = 10;
 
+/**
+ * Counts that are above zero whenever a scenario did what it is named for,
+ * however much a change cuts its work: the shell's directory pass writes the
+ * cache, the write is a statement, and every scenario from Chat's open on
+ * has rows on screen.
+ */
+const EVIDENCE: Record<ScenarioName, readonly GatedCount[]> = {
+  appShell: ['sql.statements'],
+  chatOpen: ['engine.calls', 'rows.rendered'],
+  unrelatedWrite: ['sql.statements', 'rows.rendered'],
+  message: ['engine.calls', 'rows.rendered'],
+  expand: ['rows.rendered'],
+  collapse: ['rows.rendered'],
+};
+
 type WindowCaps = Partial<
   Record<ScenarioName, Partial<Record<GatedCount, number>>>
 >;
@@ -84,6 +110,7 @@ const WINDOW_CAPS: WindowCaps = {
     'solid.signals': 3_230,
     'solid.storeNodes': 48_400,
     'rows.resolved': 440,
+    'rows.rendered': 53,
   },
   unrelatedWrite: {
     'engine.calls': 10,
@@ -94,6 +121,7 @@ const WINDOW_CAPS: WindowCaps = {
     'solid.owners': 0,
     'solid.signals': 0,
     'solid.storeNodes': 0,
+    'rows.rendered': 53,
   },
   message: {
     'engine.recordsOut': 1_310,
@@ -105,6 +133,7 @@ const WINDOW_CAPS: WindowCaps = {
     'solid.signals': 870,
     'solid.storeNodes': 8_600,
     'rows.resolved': 440,
+    'rows.rendered': 53,
   },
   expand: {
     'engine.recordsOut': 0,
@@ -113,6 +142,7 @@ const WINDOW_CAPS: WindowCaps = {
     'mappers.trackedWalks': 0,
     'solid.signals': 0,
     'rows.resolved': 440,
+    'rows.rendered': 53,
   },
   collapse: {
     'engine.recordsOut': 1_250,
@@ -123,6 +153,7 @@ const WINDOW_CAPS: WindowCaps = {
     'solid.signals': 1_250,
     'solid.storeNodes': 13_100,
     'rows.resolved': 590,
+    'rows.rendered': 53,
   },
 };
 
@@ -295,9 +326,30 @@ function capFailures(runs: GatedRun[]): string[] {
   return failures;
 }
 
+function coverageFailures(runs: GatedRun[]): string[] {
+  const failures: string[] = [];
+  for (const run of runs) {
+    for (const name of SCENARIOS) {
+      const counts = run.scenarios[name];
+      if (!counts) {
+        failures.push(`${name} at ${run.channels}: not measured`);
+        continue;
+      }
+      for (const count of EVIDENCE[name]) {
+        if (counts[count] > 0) continue;
+        failures.push(
+          `${name} at ${run.channels}: ${count} is 0, so the scenario did not run`
+        );
+      }
+    }
+  }
+  return failures;
+}
+
 /** Every way the runs fail the gate, worded for the CI log; empty passes. */
 export function gateFailures(runs: GatedRun[], baseline: Baseline): string[] {
   return [
+    ...coverageFailures(runs),
     ...driftFailures(runs, baseline),
     ...growthFailures(runs),
     ...capFailures(runs),
