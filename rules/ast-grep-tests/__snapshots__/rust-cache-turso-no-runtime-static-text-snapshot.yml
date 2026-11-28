@@ -1,26 +1,54 @@
 id: rust-cache-turso-no-runtime-static-text
 snapshots:
   ? |
+    extern crate self as std;
+  : labels:
+    - source: extern crate self as std;
+      style: primary
+      start: 0
+      end: 25
+  ? |
     fn f(text: String) -> &'static str { Box::leak(text.into_boxed_str()) }
   : labels:
-    - source: Box::leak(text.into_boxed_str())
+    - source: leak
       style: primary
-      start: 37
-      end: 69
+      start: 42
+      end: 46
   ? |
     fn f(text: String) -> &'static str { String::leak(text) }
   : labels:
-    - source: String::leak(text)
+    - source: leak
       style: primary
-      start: 37
-      end: 55
+      start: 45
+      end: 49
+  ? |
+    fn f(text: String) -> &'static str { let leak = Box::leak; leak(text.into_boxed_str()) }
+  : labels:
+    - source: leak
+      style: primary
+      start: 41
+      end: 45
+  ? |
+    fn f(text: String) -> &'static str { std::boxed::Box::leak(text.into_boxed_str()) }
+  : labels:
+    - source: leak
+      style: primary
+      start: 54
+      end: 58
   ? |
     fn f(text: String) -> &'static str { text.leak() }
   : labels:
-    - source: text.leak()
+    - source: leak
       style: primary
-      start: 37
-      end: 48
+      start: 42
+      end: 46
+  ? |
+    macro_rules! text { () => { static SQL: OnceLock<String> = OnceLock::new(); }; }
+  : labels:
+    - source: 'macro_rules! text { () => { static SQL: OnceLock<String> = OnceLock::new(); }; }'
+      style: primary
+      start: 0
+      end: 80
   ? |
     mod std { pub struct Text; }
   : labels:

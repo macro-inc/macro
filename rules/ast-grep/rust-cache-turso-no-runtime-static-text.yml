@@ -12,7 +12,9 @@ note: |-
   atomic integer or bool named by its full `std::sync::atomic::` path, such
   as `OnceLock`, `LazyLock` or an alias or struct around one), makes run-time
   text, such as a record field or a search term, look like source text and
-  lets it reach telemetry. Bind the value as a parameter instead, or run a
+  lets it reach telemetry. `extern crate` and a `macro_rules!` that expands
+  to a `static` are refused too, since they would hide either from this
+  check. Bind the value as a parameter instead, or run a
   statement that must embed outside text as an `UnreportedSql`. Tests are
   exempt.
 files:
@@ -22,9 +24,18 @@ ignores:
   - '**/test/**'
 rule:
   any:
-    - pattern: $VALUE.leak()
-    - pattern: Box::leak($$$ARGS)
-    - pattern: String::leak($$$ARGS)
+    # Any `leak`, by any path, called or taken as a value (`let f = Box::leak`).
+    - kind: identifier
+      regex: "^(r#)?leak$"
+    - kind: field_identifier
+      regex: "^(r#)?leak$"
+    # `extern crate self as std` would make the atomic paths below name a
+    # local module.
+    - kind: extern_crate_declaration
+    # A `macro_rules!` body is token trees: a static it expands to is not a
+    # `static_item` here. Allow `'static` lifetimes only.
+    - kind: macro_definition
+      regex: "(^|[^'\\w])static\\s"
     # A static is fixed at compile time only when it cannot be written and its
     # type holds no cell or lock. Allow only plain types by name, so an alias
     # or a wrapper struct around a cell fails closed. Atomics need their full
@@ -51,4 +62,4 @@ rule:
       not:
         has:
           field: type
-          regex: "^(std::sync::atomic::Atomic(Bool|[UI](8|16|32|64|size))|bool|char|[ui](8|16|32|64|128|size)|f(32|64)|&('static )?str|&('static )?\\[&('static )?str\\]|\\[&('static )?str; *[A-Z0-9_]+\\])$"
+          regex: "^((::)?std::sync::atomic::Atomic(Bool|[UI](8|16|32|64|size))|bool|char|[ui](8|16|32|64|128|size)|f(32|64)|&('static )?str|&('static )?\\[&('static )?str\\]|\\[&('static )?str; *[A-Z0-9_]+\\])$"

@@ -14,6 +14,10 @@ valid:
   - |
     static READY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
   - |
+    static NEXT: ::std::sync::atomic::AtomicU64 = ::std::sync::atomic::AtomicU64::new(1);
+  - |
+    macro_rules! sql { ($text:literal) => { Sql::from_static($text as &'static str) }; }
+  - |
     static TABLES: &[&str] = &["records", "meta"];
   - |
     static LIMIT: usize = 4_096;
@@ -28,6 +32,14 @@ invalid:
     fn f(text: String) -> &'static str { Box::leak(text.into_boxed_str()) }
   - |
     fn f(text: String) -> &'static str { String::leak(text) }
+  - |
+    fn f(text: String) -> &'static str { std::boxed::Box::leak(text.into_boxed_str()) }
+  - |
+    fn f(text: String) -> &'static str { let leak = Box::leak; leak(text.into_boxed_str()) }
+  - |
+    extern crate self as std;
+  - |
+    macro_rules! text { () => { static SQL: OnceLock<String> = OnceLock::new(); }; }
   - |
     static TEXT: LazyLock<String> = LazyLock::new(|| std::env::args().collect());
   - |
