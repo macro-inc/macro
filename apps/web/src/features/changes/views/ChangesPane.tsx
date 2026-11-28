@@ -122,7 +122,10 @@ function ChangesTreeToggle(props: {
 }
 
 /** Borderless diff controls above the stack, scoped to the diff column's width. */
-function ChangesControls(props: { narrow: boolean; drawerOpen: boolean }) {
+export function ChangesControls(props: {
+  narrow: boolean;
+  drawerOpen: boolean;
+}) {
   const { model, layout, diffStyle, setDiffStyle } = useChanges();
   const refreshing = () =>
     model.refreshing() || model.state().kind === 'capturing';
@@ -177,7 +180,10 @@ function ChangesControls(props: { narrow: boolean; drawerOpen: boolean }) {
 }
 
 /** Count on the left, with the tree visibility toggle on the right. */
-function ChangesTreeHeader(props: { narrow: boolean; onClose: () => void }) {
+export function ChangesTreeHeader(props: {
+  narrow: boolean;
+  onClose: () => void;
+}) {
   const { model, layout } = useChanges();
   return (
     <div

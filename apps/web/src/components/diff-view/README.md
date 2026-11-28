@@ -23,6 +23,8 @@ that release; an initial pending selection still waits for its file card.
 scroll anchoring stays in `Stack` and also reacts to later highlighting.
 Both queues are scoped to their respective Solid owners. A host that animates
 an exit retains those owners until the visual exit completes.
+Annotation roots inherit the mounting Solid owner so deferred Pierre callbacks
+retain provider context and clean up with the file.
 
 Each file is an outlined `@ui` `Card` with a 40px sticky header: a ghost
 disclosure button, the status letter and `text-xs` path (directory in
@@ -48,6 +50,13 @@ The host composes the rest:
   lit line is the one found. Omit these for a read-only diff.
 - Toolbar parts, `DiffView.CollapseAll` and `DiffView.StyleToggle`, anywhere
   inside `Root`.
+- Host-only stack layout through `contentClass` and `headerClass`, and optional
+  Pierre `hunkSeparators`; omitted props retain the shared agent-session defaults.
+- File-level `footer` content when stored comments do not include a reliable diff
+  side. Do not invent line anchors from incomplete comment metadata.
+- Native-scroller bindings through `scrollerRef`, `scrollerHandlers`, and
+  `onScrollerScroll`; nested editor scrolls do not invoke the host callback.
+  `endContent` lets a host mirror collapsing chrome inside its scroll range.
 - Collapse state that persists, by passing `collapse`; the default lives in memory.
   Files with at most 40 additions + deletions start expanded; larger files start
   collapsed. Individual toggles and Collapse all / Expand all override defaults.

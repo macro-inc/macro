@@ -18,6 +18,7 @@ import {
 import {
   createEffect,
   createMemo,
+  getOwner,
   type JSX,
   on,
   onCleanup,
@@ -72,7 +73,9 @@ export function PierreFileDiff(props: {
   onSelectLines?: (range: LineRange) => void;
   /** CSS injected into Pierre's shadow root. */
   unsafeCSS?: string;
+  hunkSeparators?: FileDiffOptions<string>['hunkSeparators'];
 }) {
+  const owner = getOwner();
   let container!: HTMLDivElement;
   let instance: FileDiff<string> | undefined;
   const roots = new Map<string, () => void>();
@@ -96,7 +99,7 @@ export function PierreFileDiff(props: {
     const element = document.createElement('div');
     roots.set(
       key,
-      render(() => props.renderAnnotation(key), element)
+      render(() => props.renderAnnotation(key), element, undefined, { owner })
     );
     return element;
   };
@@ -126,6 +129,7 @@ export function PierreFileDiff(props: {
 
   const currentOptions = (): FileDiffOptions<string> => ({
     ...BASE_OPTIONS,
+    hunkSeparators: props.hunkSeparators ?? BASE_OPTIONS.hunkSeparators,
     diffStyle: props.diffStyle,
     themeType: props.themeType,
     unsafeCSS: `${LIT_LINE_CSS}${props.onSelectLines ? GUTTER_UTILITY_CSS : ''}${props.unsafeCSS ?? ''}`,

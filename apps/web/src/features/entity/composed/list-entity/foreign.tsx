@@ -185,7 +185,7 @@ function formatDuration(milliseconds: number): string | undefined {
   return `${seconds}s`;
 }
 
-function checkDurationText(
+export function checkDurationText(
   check: GithubPullRequestEntity['metadata']['checks'][number],
   now: number
 ): string | undefined {
@@ -206,7 +206,7 @@ function checkDurationText(
   return formatDuration(now - started);
 }
 
-function CheckStateIcon(props: {
+export function CheckStateIcon(props: {
   state: CheckVisualState;
   circle?: boolean;
   size?: 'md';

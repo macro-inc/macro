@@ -7,10 +7,11 @@
  */
 
 import { createRenderQueue } from '@app/lib/utils/create-render-queue';
+import type { createScrollIntentTracker } from '@core/util/scroll-intent';
 import ArrowsInIcon from '@icon/system/regular/arrows-in.svg';
 import ArrowsOutIcon from '@icon/system/regular/arrows-out.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
-import { DIFFS_TAG_NAME } from '@pierre/diffs';
+import { DIFFS_TAG_NAME, type FileDiffOptions } from '@pierre/diffs';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, Card, cn, Tabs } from '@ui';
@@ -137,7 +138,18 @@ type DiffListProps = {
    * It targets Pierre's internal markup, so it can break on an upgrade.
    */
   unsafeCSS?: string;
+  /** Optional host-specific hunk labels; defaults retain the shared viewer's rendering. */
+  hunkSeparators?: FileDiffOptions<string>['hunkSeparators'];
+  /** Host content below a file's diff, without inventing missing line anchors. */
+  footer?: (entry: DiffEntry) => JSX.Element;
+  contentClass?: string;
+  headerClass?: string;
   class?: string;
+  /** Optional bindings for the Stack native scroller, not its descendants. */
+  scrollerRef?: (element: HTMLDivElement) => void;
+  onScrollerScroll?: (element: HTMLDivElement) => void;
+  scrollerHandlers?: ReturnType<typeof createScrollIntentTracker>['handlers'];
+  endContent?: JSX.Element;
 };
 
 const FLASH_MS = 900;
@@ -295,17 +307,23 @@ function Stack(props: DiffListProps) {
   // sticky headers, leaving a band above them where lines scroll into view.
   return (
     <div
-      ref={scroller}
+      ref={(element) => {
+        scroller = element;
+        props.scrollerRef?.(element);
+      }}
       class={cn(
         'min-h-0 min-w-0 flex-1 overflow-y-auto scroll-smooth motion-reduce:scroll-auto',
         props.class
       )}
       aria-busy={!view.ready()}
-      onWheel={releaseAnchor}
-      onPointerDown={releaseAnchor}
-      onKeyDown={releaseAnchor}
-      onScroll={() => {
+      {...props.scrollerHandlers}
+      on:wheel={releaseAnchor}
+      on:pointerdown={releaseAnchor}
+      on:keydown={releaseAnchor}
+      onScroll={(event) => {
+        if (event.target !== event.currentTarget) return;
         if (scrollingToAnchor) settleAnchor();
+        props.onScrollerScroll?.(event.currentTarget);
       }}
     >
       <Show when={!view.ready()}>
@@ -313,7 +331,9 @@ function Stack(props: DiffListProps) {
           Loading the diff…
         </div>
       </Show>
-      <div class="flex min-w-0 flex-col gap-3 p-3 pb-24">
+      <div
+        class={cn('flex min-w-0 flex-col gap-3 p-3 pb-24', props.contentClass)}
+      >
         <For each={view.entries()}>
           {(entry) => {
             const path = () => entry.file.path;
@@ -338,7 +358,8 @@ function Stack(props: DiffListProps) {
                   <header
                     class={cn(
                       'sticky top-0 z-5 flex h-10 items-center gap-1 bg-surface px-1.5 transition-colors duration-150 hover:overlay-hover motion-reduce:transition-none',
-                      !collapsed() && 'border-b border-edge-muted'
+                      !collapsed() && 'border-b border-edge-muted',
+                      props.headerClass
                     )}
                   >
                     {props.header ? props.header(entry) : <DefaultHeader />}
@@ -373,17 +394,20 @@ function Stack(props: DiffListProps) {
                               selection={selection()}
                               onSelectLines={props.onSelectLines}
                               unsafeCSS={props.unsafeCSS}
+                              hunkSeparators={props.hunkSeparators}
                             />
                           )}
                         </Show>
                       </Show>
                     </Show>
+                    {props.footer?.(entry)}
                   </Show>
                 </Card>
               </FileContext.Provider>
             );
           }}
         </For>
+        {props.endContent}
       </div>
     </div>
   );

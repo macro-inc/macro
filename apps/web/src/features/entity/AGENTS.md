@@ -10,6 +10,12 @@ AI composers use `lib/core/component/AI/primitives/create-composer-item-drop.ts`
 to convert these payloads into mention context. Keep source selection intact
 when adding context; movement targets own any selection clearing.
 
+## Pull request display
+
+`composed/list-entity/foreign.tsx` exports `CheckStateIcon` and
+`checkDurationText` for the PR page's shared check rows. Keep list-row and
+PR-page check state and duration rendering consistent.
+
 ## Checks
 
 From `apps/web`:
