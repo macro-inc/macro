@@ -373,7 +373,7 @@ impl MutationEffectsQuery {
 async fn mutation_effects_share_non_nullable_hydration_and_omit_misses() {
     let soup = CountingSoupService::default();
     soup.set_raw_response(vec![soup_document(Uuid::from_u128(1))]);
-    let loader = graphql_soup::soup_item_loader(
+    let loader = graphql_soup::PrimarySoupItemLoader::new(
         soup.clone(),
         Arc::new(NoOpEmailService),
         NoOpEntityAccessService,
@@ -406,6 +406,49 @@ async fn mutation_effects_share_non_nullable_hydration_and_omit_misses() {
     assert!(data["result"]["effects"].as_array().unwrap().is_empty());
 }
 
+/// A write's effects are read from the primary: the replica behind lists may
+/// not have replayed the write yet, and would return the old row or none.
+#[tokio::test]
+async fn mutation_effects_read_the_primary_not_the_list_replica() {
+    let replica = CountingSoupService::default();
+    replica.set_raw_response(Vec::new());
+    let replica_calls = replica.raw_calls.clone();
+    let primary = CountingSoupService::default();
+    primary.set_raw_response(vec![soup_document(Uuid::from_u128(1))]);
+    let schema = Schema::build(
+        MutationEffectsQuery(entity(1)),
+        EmptyMutation,
+        EmptySubscription,
+    )
+    .data(graphql_soup::soup_item_loader(
+        replica,
+        Arc::new(NoOpEmailService),
+        NoOpEntityAccessService,
+    ))
+    .data(graphql_soup::PrimarySoupItemLoader::new(
+        primary,
+        Arc::new(NoOpEmailService),
+        NoOpEntityAccessService,
+    ))
+    .data(entity_mutation::EntityMutationActor {
+        user_id: MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
+        organization_id: None,
+    })
+    .finish();
+    let response = schema
+        .execute(format!(
+            "{{ result {{ ... on GraphqlMutationSuccess {{ effects {{ {PATCH_SELECTION} }} }} }} }}"
+        ))
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    assert_eq!(
+        data["result"]["effects"][0]["item"]["id"],
+        Uuid::from_u128(1).to_string()
+    );
+    assert_eq!(replica_calls.load(Ordering::SeqCst), 0);
+}
+
 /// Favoriting a database succeeds as a mutation whose effects cannot name a
 /// Soup record; that must not turn the committed write into a GraphQL error.
 #[tokio::test]
@@ -417,7 +460,7 @@ async fn mutation_effects_omit_entities_soup_does_not_represent() {
     ] {
         let soup = CountingSoupService::default();
         let calls = soup.raw_calls.clone();
-        let loader = graphql_soup::soup_item_loader(
+        let loader = graphql_soup::PrimarySoupItemLoader::new(
             soup,
             Arc::new(NoOpEmailService),
             NoOpEntityAccessService,
