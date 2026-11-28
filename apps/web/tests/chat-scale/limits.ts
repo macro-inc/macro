@@ -1,0 +1,201 @@
+/**
+ * What the Chat scale tier measures per step, and the loose limits a run
+ * fails on: ceilings at each size, and growth from 3,500 to 7,000 channels.
+ * The tier runs on shared CI machines, so a ceiling sits two to four times
+ * above what a local run measured and catches a regression of that order,
+ * not a few percent.
+ */
+import type { BackendCounts } from './backend';
+
+export const STEP_NAMES = [
+  'seed',
+  'coldOpen',
+  'message',
+  'scroll',
+  'collapse',
+  'expand',
+] as const;
+
+export type StepName = (typeof STEP_NAMES)[number];
+
+export type StepMeasure = {
+  /** From the step's start to its last request. */
+  settleMs: number;
+  /** From navigation until the rail showed its first rows; loads only. */
+  rowsMs: number | null;
+  longTasks: { count: number; totalMs: number; maxMs: number };
+  /** The page's JavaScript heap after a forced collection. */
+  heapMb: number;
+  /** `measureUserAgentSpecificMemory`, page and its workers, when offered. */
+  agentMemoryMb: number | null;
+  domNodes: number;
+  /** Chromium's counters over the step (`Performance.getMetrics`). */
+  metrics: Record<string, number>;
+  requests: BackendCounts;
+};
+
+export type ChatScaleRun = {
+  channels: number;
+  steps: Record<StepName, StepMeasure>;
+  backendErrors: string[];
+  pageErrors: string[];
+  requests: BackendCounts;
+};
+
+/** The steps that load the page; the rest are what a viewer does in it. */
+const LOADS: readonly StepName[] = ['seed', 'coldOpen'];
+
+/**
+ * Ceilings, the same at both sizes unless a size is named. A local run
+ * (2026-11-28) measured, at 3,500 / 7,000 channels: heap after collection
+ * 156 / 198 MB at most, 1,637 DOM nodes at both, rows on screen 1.4–1.8 s
+ * after navigation, a load's longest task 0.58 s and its tasks 2.6 s in all,
+ * and an interaction's longest task 0.18 s and its tasks 1.6 s in all.
+ */
+export const CEILINGS = {
+  heapMb: { 3500: 320, 7000: 400 } as Readonly<Record<number, number>>,
+  domNodes: 4_000,
+  rowsMs: 8_000,
+  load: { longestTaskMs: 2_000, longTasksMs: 9_000 },
+  interaction: { longestTaskMs: 700, longTasksMs: 5_000 },
+} as const;
+
+/**
+ * Growth from N to 2N channels, per step. Chat mounts only the rows on
+ * screen, so its DOM should not grow with the account and its heap should
+ * grow far less than the account does (1.27 times at most, measured). Long
+ * tasks may grow with the work a step does, though not faster than the
+ * account; under `LONG_TASK_FLOOR_MS` at N they compare as that floor, since
+ * a few long tasks' jitter is not growth.
+ */
+export const GROWTH = {
+  heap: 1.6,
+  domNodes: 1.2,
+  longTasks: 2.2,
+} as const;
+
+export const LONG_TASK_FLOOR_MS = 500;
+
+type Check = { name: string; value: number; limit: number };
+
+function ceilingChecks(run: ChatScaleRun): Check[] {
+  const heapLimit = CEILINGS.heapMb[run.channels];
+  return STEP_NAMES.flatMap((name) => {
+    const step = run.steps[name];
+    const tasks = LOADS.includes(name) ? CEILINGS.load : CEILINGS.interaction;
+    const at = `${run.channels} channels, ${name}`;
+    const checks: Check[] = [
+      {
+        name: `${at}: DOM nodes`,
+        value: step.domNodes,
+        limit: CEILINGS.domNodes,
+      },
+      {
+        name: `${at}: longest task (ms)`,
+        value: step.longTasks.maxMs,
+        limit: tasks.longestTaskMs,
+      },
+      {
+        name: `${at}: long tasks in all (ms)`,
+        value: step.longTasks.totalMs,
+        limit: tasks.longTasksMs,
+      },
+    ];
+    if (heapLimit !== undefined)
+      checks.push({
+        name: `${at}: heap (MB)`,
+        value: step.heapMb,
+        limit: heapLimit,
+      });
+    if (step.rowsMs !== null)
+      checks.push({
+        name: `${at}: rows on screen (ms)`,
+        value: step.rowsMs,
+        limit: CEILINGS.rowsMs,
+      });
+    return checks;
+  });
+}
+
+function growthChecks(small: ChatScaleRun, large: ChatScaleRun): Check[] {
+  const at = `${small.channels} to ${large.channels} channels`;
+  return STEP_NAMES.flatMap((name) => {
+    const n = small.steps[name];
+    const twoN = large.steps[name];
+    const ratio = (value: number, base: number) => value / Math.max(base, 1);
+    return [
+      {
+        name: `${at}, ${name}: heap growth`,
+        value: ratio(twoN.heapMb, n.heapMb),
+        limit: GROWTH.heap,
+      },
+      {
+        name: `${at}, ${name}: DOM growth`,
+        value: ratio(twoN.domNodes, n.domNodes),
+        limit: GROWTH.domNodes,
+      },
+      {
+        name: `${at}, ${name}: long task growth`,
+        value: ratio(
+          twoN.longTasks.totalMs,
+          Math.max(n.longTasks.totalMs, LONG_TASK_FLOOR_MS)
+        ),
+        limit: GROWTH.longTasks,
+      },
+    ];
+  });
+}
+
+function describe(check: Check): string {
+  const shown = (value: number) =>
+    Number.isInteger(value) ? String(value) : value.toFixed(2);
+  return `${check.name}: ${shown(check.value)}, limit ${shown(check.limit)}`;
+}
+
+/** The measurements as a Markdown table, for the run's summary. */
+export function summaryTable(runs: readonly ChatScaleRun[]): string {
+  const rows = runs.flatMap((run) =>
+    STEP_NAMES.map((name) => {
+      const step = run.steps[name];
+      const requests = Object.values(step.requests.requests).reduce(
+        (sum, count) => sum + count,
+        0
+      );
+      return [
+        run.channels,
+        name,
+        step.rowsMs === null ? '' : Math.round(step.rowsMs),
+        step.heapMb.toFixed(1),
+        step.domNodes,
+        step.longTasks.count,
+        step.longTasks.totalMs,
+        step.longTasks.maxMs,
+        requests,
+      ].join(' | ');
+    })
+  );
+  return [
+    '| Channels | Step | Rows on screen (ms) | Heap (MB) | DOM nodes | Long tasks | Long tasks (ms) | Longest (ms) | Requests |',
+    '| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
+    ...rows.map((row) => `| ${row} |`),
+  ].join('\n');
+}
+
+/** Every limit a run broke, or none. Growth needs both sizes; a run of one
+ * size (`-g 3500`) checks only its ceilings. */
+export function limitFailures(runs: readonly ChatScaleRun[]): string[] {
+  if (runs.length === 0) return ['no size was measured'];
+  const bySize = [...runs].sort((a, b) => a.channels - b.channels);
+  const unknown = bySize
+    .filter((run) => CEILINGS.heapMb[run.channels] === undefined)
+    .map((run) => `${run.channels} channels has no heap ceiling`);
+  const pairs = bySize.flatMap((small) => {
+    const large = bySize.find((run) => run.channels === small.channels * 2);
+    return large ? [growthChecks(small, large)] : [];
+  });
+  const failed = [...bySize.map(ceilingChecks), ...pairs]
+    .flat()
+    .filter((check) => check.value > check.limit)
+    .map(describe);
+  return [...unknown, ...failed];
+}

@@ -179,6 +179,11 @@ several people in separate browser profiles: `just test-channels-e2e <instance>`
 not on pull requests; run it on a branch by hand
 (`gh workflow run channels_e2e.yml --ref <branch>`).
 
+Chat's cost at 3,500 and 7,000 joined channels in the built app (heap after a
+forced collection, long tasks, DOM size), with no backend, is the nightly
+Chat scale tier: `just build-chat-scale`, then `just test-chat-scale-browser`
+(`tests/chat-scale/AGENTS.md`).
+
 `just test-functional` builds a production-like bundle of its fixtures and runs
 Playwright against it, not a dev server: each page otherwise fetches thousands of
 modules through the test's own routes, which limits how many tests can run at
