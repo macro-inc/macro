@@ -347,10 +347,12 @@ read-only (see [Legacy chats are read-only](#legacy-chats-are-read-only)).
 
 While an agent works, a draft can be sent to its queue; queued messages send in
 order as each turn ends. The busy composer offers **Send** with a draft and
-**Stop** without one; Enter on an empty draft does nothing. Each queued row
-offers **Steer** while a turn is running, to interrupt it and send that row next.
-Steer stays available while a previous one is starting; read-only sessions don't
-get it.
+**Stop** without one. Each queued row offers **Steer** while a turn is running,
+to interrupt it and send that row next. Steer stays available while a previous
+one is starting; read-only sessions don't get it. On desktop, a plain Enter with
+no text and no attachments presses the top row's Steer (the newest queued
+message), once per press; with no Steer to press it does nothing. A draft with
+only attachments still sends them.
 
 Phone verification: check portrait and landscape with touch emulation. In the
 Agents composer, enter multiple lines and tap Send, attach, or the model control;
@@ -2449,7 +2451,8 @@ must stay hidden; subsequent live messages must still appear.
   Down walks back and past the bottom row returns to the input. The queued-message
   fixture at `apps/web/src/features/block-agent/browser-test/queued.html` renders
   these rows over the real composer, with `?count=N` entries. With an empty composer the
-  busy action is Stop, and Enter does nothing; the queue drains in order, oldest first,
+  busy action is Stop, and a plain Enter steers the top (newest) row, once per press;
+  otherwise the queue drains in order, oldest first,
   as each turn ends. Steer on a queued row is the interrupt for that one message. Each
   Steer shows its message as a pending bubble at once and drops its row; consecutive
   ones never wait on each other in the UI. Their steer requests go out one at a time in press order, each after the

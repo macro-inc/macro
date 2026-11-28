@@ -93,6 +93,13 @@ export interface AgentInputProps {
   onSend: (markdown: string, attachments: InputAttachmentData[]) => void;
   onStop?: () => void;
   /**
+   * A plain Enter with nothing to send: no text, no attachments, no
+   * modifier, no IME composition. The composer installs it only while a
+   * queued message is there to steer; absent, Enter on an empty draft does
+   * nothing.
+   */
+  onEnterEmpty?: () => void;
+  /**
    * Files attached so far, uploaded or still uploading. Owned by the parent
    * (an `InputAttachmentTracker`), which is what lets the composer clear
    * them after a send.
@@ -120,6 +127,20 @@ export interface AgentInputProps {
    *  `undefined` again on unmount. */
   registerFocus?: (focus: (() => void) | undefined) => void;
 }
+
+/**
+ * A fresh Enter with no modifier: not the Enter that confirms an IME
+ * composition, and not a held key's auto-repeat (which would steer one
+ * queued row after another).
+ */
+const isPlainEnter = (event: KeyboardEvent) =>
+  !event.repeat &&
+  !event.altKey &&
+  !event.ctrlKey &&
+  !event.metaKey &&
+  !event.shiftKey &&
+  !event.isComposing &&
+  event.keyCode !== 229;
 
 export function AgentInput(props: AgentInputProps) {
   const imageUnsupportedReason = () =>
@@ -178,6 +199,9 @@ export function AgentInput(props: AgentInputProps) {
     !props.readOnly &&
     !dictation.active();
 
+  const isEmpty = () =>
+    markdown().trim().length === 0 && attachments().length === 0;
+
   // The channel composer's chips, drop zone, and overlay read their state
   // from `Input.Root`'s context; this is that context, over this composer's
   // props. Only attaching and removing do anything - there is no channel
@@ -226,11 +250,18 @@ export function AgentInput(props: AgentInputProps) {
         );
       },
     })
-    .onEnter(() => {
+    .onEnter((event) => {
       // On a virtual keyboard Enter is a newline, as in channels; the send
       // button is the only way to submit.
       if (isTouchDevice()) return false;
       if (canSend()) send();
+      else if (
+        isEmpty() &&
+        isPlainEnter(event) &&
+        !props.readOnly &&
+        !dictation.active()
+      )
+        props.onEnterEmpty?.();
       return true;
     })
     .onFocusLeave({

@@ -2,7 +2,8 @@
  * The queued-message cards above the agent composer, with the real
  * composer below them so Up / Enter / Escape travel the way they do in a
  * session. `?count=N` queues N prompts (default 3); `?light` renders the
- * light theme. Edits and removals land in the log under the composer.
+ * light theme. Edits, removals and steers land in the log under the
+ * composer; a steered row leaves the queue, as the session's does.
  */
 import '@app/index.css';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
@@ -74,7 +75,14 @@ function Fixture() {
     }))
   );
   const [log, setLog] = createSignal<string[]>([]);
+  // Controlled like the session composer, which keeps its draft per session.
+  const [draft, setDraft] = createSignal('');
   const record = (line: string) => setLog((lines) => [...lines, line]);
+  // A steered message is shown as sent at once, so it leaves the queue.
+  const steer = (actionId: string) => {
+    setItems((current) => current.filter((item) => item.actionId !== actionId));
+    record(`steer ${actionId}`);
+  };
   let focusQueueBottom: (() => void) | undefined;
   let focusInput: (() => void) | undefined;
 
@@ -131,9 +139,7 @@ function Fixture() {
                                     );
                                     record(`remove ${actionId}`);
                                   }}
-                                  onSteer={(actionId) =>
-                                    record(`steer ${actionId}`)
-                                  }
+                                  onSteer={steer}
                                   onNavigateBelow={() => focusInput?.()}
                                   registerFocusFromBelow={(focus) => {
                                     focusQueueBottom = focus;
@@ -144,9 +150,19 @@ function Fixture() {
                             <AgentInput
                               busy
                               autofocus
+                              draft={draft()}
+                              onDraftChange={setDraft}
                               placeholder="Message the agent, @mention anything"
                               onSend={(markdown) => record(`send: ${markdown}`)}
                               onStop={() => record('stop')}
+                              // As AgentComposer: Enter on an empty draft
+                              // presses the top row's Steer, the newest entry.
+                              onEnterEmpty={(() => {
+                                const top = items().at(-1);
+                                return top
+                                  ? () => steer(top.actionId)
+                                  : undefined;
+                              })()}
                               onNavigateUp={
                                 items().length > 0
                                   ? () => focusQueueBottom?.()
