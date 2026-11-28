@@ -1,3 +1,4 @@
+import type { ChannelMessageSearchResponseItem } from '../../../generated/search/types.gen';
 import type {
   Message as MessageRecord,
   MessageTimelineQuery,
@@ -106,6 +107,21 @@ export class Message extends FavoritableEntity<MessageRecord> {
     return new Message(client, channelId, id, mentions);
   }
 
+  /**
+   * A handle to a channel message search hit, seeded with the creation time
+   * and sender the hit carries. The search index keeps the creation time to
+   * the millisecond.
+   */
+  static fromSearchHit(
+    client: MacroClient,
+    hit: ChannelMessageSearchResponseItem,
+  ): Message {
+    return new Message(client, hit.channel_id, hit.message_id).withListed({
+      created_at: hit.created_at,
+      sender_id: hit.sender_id,
+    });
+  }
+
   /** Build a root or reply from a message record (pre-seeded, no fetch). */
   static from(
     client: MacroClient,
@@ -133,7 +149,10 @@ export class Message extends FavoritableEntity<MessageRecord> {
    * @readonly
    */
   async author(): Promise<User> {
-    return User.byId(this.client, (await this.detail.get()).sender_id);
+    const sender =
+      this.detail.listedField('sender_id') ??
+      (await this.detail.get()).sender_id;
+    return User.byId(this.client, sender);
   }
 
   /**
