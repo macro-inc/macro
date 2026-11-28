@@ -1,0 +1,19 @@
+apps/web/tests/native/README.md
+  s_5f0d788775a633::t_8a7cb590387d09 79-81
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "77abb6ef2a2a1453b84de24c10699377269f6567",
+  "prompts": {},
+  "sessions": {
+    "s_5f0d788775a633": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "47c9f5d3-8e8f-4951-b625-4e88f2444be8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
