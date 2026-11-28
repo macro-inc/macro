@@ -39,12 +39,8 @@ import {
   validate,
 } from 'graphql';
 import { match } from 'ts-pattern';
-import {
-  type ChatFixture,
-  FIXTURE_NOW,
-  VIEWER_ID,
-} from './fixture';
 import { bundleFile } from '../email-e2e/harness/front';
+import { type ChatFixture, FIXTURE_NOW, VIEWER_ID } from './fixture';
 
 const SCHEMA = buildSchema(
   [

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { createChatFixture } from './fixture';
+import {
+  createChatFixture,
+  MIN_OUTSIDE_FIRST_PAGES,
+  MIN_SECTION_COVERAGE,
+  sectionCoverage,
+} from './fixture';
 
 type Page = { items: unknown[]; nextCursor: string | null };
 type SoupRoot = {
@@ -176,5 +181,79 @@ describe('the Chat scale fixture, filtering', () => {
       (notification) => notification.state === 'UNSEEN'
     );
     expect(unseen).toHaveLength((later?.length ?? 0) - 1);
+  });
+});
+
+describe('the Chat scale fixture, sections', () => {
+  const atN = createChatFixture(3_500, 1);
+  const at2N = createChatFixture(7_000, 1);
+  const scopes = ['team', 'personal'] as const;
+
+  it('holds nine in ten of the channels a section can hold, most past the first pages', () => {
+    for (const fixture of [atN, at2N]) {
+      const coverage = sectionCoverage(fixture);
+      expect(coverage.held / coverage.holdable).toBeGreaterThanOrEqual(
+        MIN_SECTION_COVERAGE
+      );
+      expect(
+        coverage.outsideFirstPages / coverage.referenced
+      ).toBeGreaterThanOrEqual(MIN_OUTSIDE_FIRST_PAGES);
+    }
+  });
+
+  it('names about twice the channels at 2N, keeping every member N had', () => {
+    expect(sectionCoverage(at2N).referenced).toBeGreaterThanOrEqual(
+      1.9 * sectionCoverage(atN).referenced
+    );
+    for (const scope of scopes) {
+      const larger = at2N.labels(scope).labels;
+      for (const [index, label] of atN.labels(scope).labels.entries())
+        expect(larger[index]?.channelIds).toEqual(
+          expect.arrayContaining(label.channelIds)
+        );
+    }
+  });
+
+  it('puts in each section only channels the app lets it hold', () => {
+    const typeOf = new Map(
+      atN.channels.map((channel) => [channel.id, channel.channelType])
+    );
+    for (const label of atN.labels('team').labels)
+      for (const id of label.channelIds) expect(typeOf.get(id)).toBe('team');
+    const personal = atN.labels('personal').labels;
+    for (const label of personal)
+      for (const id of label.channelIds)
+        expect(typeOf.get(id)).not.toBe('direct_message');
+    const ruled = personal.find((label) => label.rule);
+    expect(ruled?.explicitChannelIds).toEqual([]);
+    expect(ruled?.channelIds).toEqual(
+      atN.channels
+        .filter((channel) => channel.channelType === 'private')
+        .map((channel) => channel.id)
+    );
+  });
+
+  it('keeps half the favorites in the older half of the account', () => {
+    const older = new Set(
+      at2N.channels.slice(3_500).map((channel) => channel.id)
+    );
+    expect(at2N.favoriteChannelIds).toHaveLength(12);
+    expect(at2N.favoriteChannelIds.filter((id) => older.has(id))).toHaveLength(
+      6
+    );
+  });
+
+  it('saves every section collapsed but Favorites, Direct messages and one team section', () => {
+    const labels = scopes.flatMap((scope) => atN.labels(scope).labels);
+    const open = labels.filter(
+      (label) => !atN.savedView.collapsedLabels.includes(label.id)
+    );
+    expect(open.map((label) => label.teamId)).toEqual(['team-1']);
+    expect(atN.savedView.expandedGroups).toEqual({
+      favorites: true,
+      team_channels: false,
+      channels: false,
+      direct_messages: true,
+    });
   });
 });

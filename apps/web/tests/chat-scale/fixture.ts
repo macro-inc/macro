@@ -8,9 +8,12 @@
  * The mix follows the "chat" tier of the cache-pressure benchmark: member
  * channels of about 75 participants each. One seed gives one account, and 2N
  * is N plus older channels (`ERA_CHANNELS`), so the two differ only in what
- * the account holds beyond its first pages.
+ * the account holds beyond its first pages. Its sections grow with it: they
+ * hold nearly every channel a section can hold, at every size, as an account
+ * that has organized thousands of channels does.
  */
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
+import type { ChannelLabelRule } from '@service-storage/generated/schemas/channelLabelRule';
 import type { ChannelLabelsList } from '@service-storage/generated/schemas/channelLabelsList';
 import { match } from 'ts-pattern';
 
@@ -20,16 +23,37 @@ const ORGANIZATION_ID = '1';
 const PEOPLE = 400;
 const PARTICIPANTS_PER_CHANNEL = 75;
 const FAVORITES = 12;
-const SHARED_SECTIONS = 6;
-const SHARED_SECTION_SIZE = 30;
-const PERSONAL_SECTIONS = 4;
-const PERSONAL_SECTION_SIZE = 20;
+/** Favorites from the account's older half, which no first page shows; the
+ * rest come from its first 1,750 channels. */
+const OLD_FAVORITES = 6;
+/** The share of the channels each kind of section can hold that one holds:
+ * team sections hold team channels, and the viewer's own sections public
+ * ones (`canLabelChannel`; a name rule holds every private one). Direct
+ * messages go in no section. */
+const SECTION_COVERAGE = 0.92;
+/** Team sections by their share of the team channels sections hold: one
+ * large section, then smaller ones. */
+const TEAM_SECTION_WEIGHTS = [0.4, 0.2, 0.15, 0.1, 0.1, 0.05] as const;
+/** The viewer's hand-picked sections by their share of the public channels
+ * sections hold. */
+const PERSONAL_SECTION_WEIGHTS = [0.5, 0.3, 0.2] as const;
+/** The viewer's name-rule section matches every private channel
+ * (`private-channel-<n>`), about a sixth of the account. */
+const NAME_RULE = 'private-channel';
 /** The server's page size when a request names none (GraphQL Soup's
  * `limit.unwrap_or(20)`), and the bounds it clamps a requested one to
  * (Soup's `limit.clamp(1, 500)`). */
 const DEFAULT_LIMIT = 20;
 const MIN_LIMIT = 1;
 const MAX_LIMIT = 500;
+/** The most recent channels a first page can show: Soup's largest page. */
+export const FIRST_PAGE_CHANNELS = MAX_LIMIT;
+/** The least of the channels a section can hold that the sections must hold
+ * before a run measures them (`sectionCoverage`). */
+export const MIN_SECTION_COVERAGE = 0.9;
+/** The least share of the channels sections and favorites name that must be
+ * past the first pages, so the rail has channels to resolve by ID. */
+export const MIN_OUTSIDE_FIRST_PAGES = 0.5;
 const U16_MAX = 65_535;
 /** The channel literals the fixture matches; any other is a fault. */
 const LITERAL_KEYS = new Set([
@@ -99,10 +123,28 @@ export type FixtureReads = {
   unsupported: string[];
 };
 
+/** The Chat state the viewer saved (`macro:channels:view-state:v1`, in
+ * `features/channels-view/persistence.ts`). */
+export type SavedChatView = {
+  version: 1;
+  tab: 'browse';
+  expandedGroups: {
+    favorites: boolean;
+    team_channels: boolean;
+    channels: boolean;
+    direct_messages: boolean;
+  };
+  collapsedLabels: string[];
+};
+
 export type ChatFixture = {
   channels: readonly FixtureChannel[];
   favoriteChannelIds: readonly string[];
   labels(scope: string | undefined): ChannelLabelsList;
+  /** Favorites, Direct messages and the smallest team section open, every
+   * other section collapsed, as a viewer with this many sections keeps
+   * them. */
+  savedView: SavedChatView;
   /** The root value for `createFixtureNetwork`. */
   rootValue(): unknown;
   /** Reads served so far; `readsSince` subtracts a snapshot. */
@@ -294,6 +336,77 @@ function sortKey(channel: FixtureChannel, method: string): number {
     .otherwise(() => timestamp(channel.updatedAt));
 }
 
+/** The index whose running total of `weights` first passes `roll`, a draw
+ * in [0, 1). */
+function weightedIndex(weights: readonly number[], roll: number): number {
+  let total = 0;
+  for (const [index, weight] of weights.entries()) {
+    total += weight;
+    if (roll < total) return index;
+  }
+  return weights.length - 1;
+}
+
+/** A section as `/channel-sections` answers it: hand-picked, or a name rule
+ * whose matches the server has resolved. */
+function sectionLabel(section: {
+  scope: 'team' | 'personal';
+  index: number;
+  channelIds: string[];
+  rule?: ChannelLabelRule;
+}): ChannelLabel {
+  const { scope, index, channelIds, rule } = section;
+  return {
+    id: uuidFor(scope === 'team' ? 4 : 5, index),
+    name: `${scope} section ${index + 1}`,
+    channelCount: channelIds.length,
+    channelIds,
+    explicitChannelIds: rule ? [] : channelIds,
+    ...(rule ? { rule } : {}),
+    createdAt: iso(FIXTURE_NOW - TWO_YEARS_MS / 2),
+    updatedAt: iso(FIXTURE_NOW - TWO_YEARS_MS / 4),
+    sortOrder: index,
+    teamId: scope === 'team' ? TEAM_ID : undefined,
+  };
+}
+
+/** How much of the account the sections name. */
+export type SectionCoverage = {
+  /** Channels a section can hold: team, public and private ones. */
+  holdable: number;
+  /** Of those, the ones a section holds. */
+  held: number;
+  /** Channels a section or favorite names, which the rail resolves. */
+  referenced: number;
+  /** Of those, the ones outside the `FIRST_PAGE_CHANNELS` most recently
+   * updated, which no first page shows. */
+  outsideFirstPages: number;
+};
+
+export function sectionCoverage(fixture: ChatFixture): SectionCoverage {
+  const held = new Set(
+    (['team', 'personal'] as const).flatMap((scope) =>
+      fixture.labels(scope).labels.flatMap((label) => label.channelIds)
+    )
+  );
+  const referenced = new Set([...held, ...fixture.favoriteChannelIds]);
+  const firstPages = new Set(
+    [...fixture.channels]
+      .sort((a, b) => timestamp(b.updatedAt) - timestamp(a.updatedAt))
+      .slice(0, FIRST_PAGE_CHANNELS)
+      .map((channel) => channel.id)
+  );
+  return {
+    holdable: fixture.channels.filter(
+      (channel) => channel.channelType !== 'direct_message'
+    ).length,
+    held: held.size,
+    referenced: referenced.size,
+    outsideFirstPages: [...referenced].filter((id) => !firstPages.has(id))
+      .length,
+  };
+}
+
 /** Builds the account for `channelCount` channels. */
 export function createChatFixture(
   channelCount: number,
@@ -304,51 +417,74 @@ export function createChatFixture(
     createChannel(random, index)
   );
   const byId = new Map(channels.map((channel) => [channel.id, channel]));
-  // Favorites, sections and their members are drawn from the first N/2
-  // channels' worth of a fixed stream, so N and 2N share them.
+  // Every channel takes the same two draws, whatever its type, in index
+  // order: the channels N and 2N share sit in the same sections, and 2N's
+  // sections are N's plus its older channels.
   const memberRandom = createRandom(seed ^ 0xa11);
-  const sharedPool = channels.filter(
-    (channel) => channel.channelType !== 'direct_message'
-  );
-  const drawFrom = (pool: readonly FixtureChannel[], count: number) => {
-    const chosen = new Set<string>();
-    const bound = Math.min(pool.length, 1_750);
-    while (chosen.size < Math.min(count, bound)) {
-      const channel = pool[Math.floor(memberRandom() * bound)];
-      if (channel) chosen.add(channel.id);
-    }
-    return [...chosen];
-  };
-  const favoriteChannelIds = drawFrom(channels, FAVORITES);
-  const favoriteSet = new Set(favoriteChannelIds);
-  const makeLabels = (
-    scope: 'team' | 'personal',
-    count: number,
-    size: number
-  ): ChannelLabel[] =>
-    Array.from({ length: count }, (_, index) => {
-      const channelIds = drawFrom(
-        scope === 'team' ? sharedPool : channels,
-        size
+  const teamMembers = TEAM_SECTION_WEIGHTS.map((): string[] => []);
+  const personalMembers = PERSONAL_SECTION_WEIGHTS.map((): string[] => []);
+  const ruleMembers: string[] = [];
+  for (const channel of channels) {
+    const held = memberRandom() < SECTION_COVERAGE;
+    const roll = memberRandom();
+    if (channel.name.includes(NAME_RULE)) ruleMembers.push(channel.id);
+    if (!held) continue;
+    if (channel.channelType === 'team')
+      teamMembers[weightedIndex(TEAM_SECTION_WEIGHTS, roll)]?.push(channel.id);
+    if (channel.channelType === 'public')
+      personalMembers[weightedIndex(PERSONAL_SECTION_WEIGHTS, roll)]?.push(
+        channel.id
       );
-      return {
-        id: uuidFor(scope === 'team' ? 4 : 5, index),
-        name: `${scope} section ${index + 1}`,
-        channelCount: channelIds.length,
-        channelIds,
-        explicitChannelIds: channelIds,
-        createdAt: iso(FIXTURE_NOW - TWO_YEARS_MS / 2),
-        updatedAt: iso(FIXTURE_NOW - TWO_YEARS_MS / 4),
-        sortOrder: index,
-        teamId: scope === 'team' ? TEAM_ID : undefined,
-      };
-    });
-  const teamLabels = makeLabels('team', SHARED_SECTIONS, SHARED_SECTION_SIZE);
-  const personalLabels = makeLabels(
-    'personal',
-    PERSONAL_SECTIONS,
-    PERSONAL_SECTION_SIZE
+  }
+  const teamLabels = teamMembers.map((channelIds, index) =>
+    sectionLabel({ scope: 'team', index, channelIds })
   );
+  const personalLabels = [
+    ...personalMembers.map((channelIds, index) =>
+      sectionLabel({ scope: 'personal', index, channelIds })
+    ),
+    sectionLabel({
+      scope: 'personal',
+      index: personalMembers.length,
+      channelIds: ruleMembers,
+      rule: { attribute: 'name', contains: NAME_RULE },
+    }),
+  ];
+  const openLabel = teamLabels.at(-1)?.id;
+  const savedView: SavedChatView = {
+    version: 1,
+    tab: 'browse',
+    expandedGroups: {
+      favorites: true,
+      team_channels: false,
+      channels: false,
+      direct_messages: true,
+    },
+    collapsedLabels: [...teamLabels, ...personalLabels]
+      .map((label) => label.id)
+      .filter((id) => id !== openLabel),
+  };
+
+  // Recent favorites from the first 1,750 channels, old ones from the
+  // account's older half, each from its own stream.
+  const favoriteRandom = createRandom(seed ^ 0xfa7);
+  const favorites = new Set<string>();
+  const drawFavorites = (from: number, to: number, count: number) => {
+    const target = Math.min(favorites.size + count, channels.length);
+    for (let tries = 0; favorites.size < target && tries < 1_000; tries += 1) {
+      const channel =
+        channels[from + Math.floor(favoriteRandom() * (to - from))];
+      if (channel) favorites.add(channel.id);
+    }
+  };
+  drawFavorites(0, Math.min(channels.length, 1_750), FAVORITES - OLD_FAVORITES);
+  drawFavorites(
+    Math.floor(channels.length / 2),
+    channels.length,
+    OLD_FAVORITES
+  );
+  const favoriteChannelIds = [...favorites];
+  const favoriteSet = new Set(favoriteChannelIds);
 
   const reads: FixtureReads = {
     fields: {},
@@ -720,6 +856,7 @@ export function createChatFixture(
   return {
     channels,
     favoriteChannelIds,
+    savedView,
     labels: (scope) => {
       const personal = scope === 'personal';
       return {
