@@ -409,7 +409,7 @@ in
       default = if cfg.datadog.enable then "http://127.0.0.1:4317" else null;
       defaultText = lib.literalExpression ''if datadog.enable then "http://127.0.0.1:4317" else null'';
       example = "http://10.0.0.5:4317";
-      description = "Where the host agent's primary exporter sends its spans (OTLP gRPC): the local Datadog agent by default, or a collector on a host without one. Null turns that exporter off. Alloy's copy for Grafana (`alloy.enable`) doesn't depend on it.";
+      description = "Where the host agent's primary exporter sends its spans (OTLP gRPC): the local Datadog agent by default, or a collector on a host without one. Null leaves `OTEL_EXPORTER_OTLP_ENDPOINT` unset, so the exporter tries its default, http://127.0.0.1:4317, and its spans are lost where nothing listens there. Alloy's copy for Grafana (`alloy.enable`) doesn't depend on it.";
     };
     alloy = {
       enable = lib.mkOption {
@@ -424,8 +424,9 @@ in
       };
       remoteWriteUrl = lib.mkOption {
         type = lib.types.str;
-        default = "https://otlp.macro-internal.com/api/v1/write";
-        description = "Prometheus remote-write endpoint of the observability stack (infra/stacks/observability).";
+        default = "${cfg.alloy.otlpUrl}/api/v1/write";
+        defaultText = lib.literalExpression ''"''${alloy.otlpUrl}/api/v1/write"'';
+        description = "Prometheus remote-write endpoint of the observability stack (infra/k8s/observability), on the same origin as its OTLP ingest by default.";
       };
       passwordFile = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
