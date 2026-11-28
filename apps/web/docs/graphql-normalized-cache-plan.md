@@ -146,7 +146,8 @@ entire cache in browser memory. With 10s of thousands of cached objects
     Settlement removes the pending mutation and counter; there is no retained DLQ.
     A response that carries its data and whose only GraphQL errors sit under an
     `effect` or `effects` field committed: the server could not read some of its
-    rows back, and returns the rest. It settles as committed, not as a failure,
+    rows back, and returns the rest (a row that no longer exists is simply left
+    out, with no error). It settles as committed, not as a failure,
     and reads every mounted query again (`mutation_queue.rows_missing`), in the
     write's trace when its caller named one, including when it is applied after
     a reload.
