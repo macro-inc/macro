@@ -248,15 +248,17 @@ its group (`service.name` is the group's name without `/aws/lambda/`,
 to the OTLP log path, so emails are hashed as in every other log. The group,
 stream and function name are structured metadata (`aws_log_group_names`,
 `aws_log_stream_names`, `faas_name`). An AWS WAF event (`aws-waf-logs-*`) also
-gets the trace and span ID of its `traceparent` header, as Datadog's WAF
-pipeline does (only the first such header, and none from one with an all-zero
-trace or parent ID, which W3C calls invalid), and loses its client address: `clientIp`, a rate-based rule's
-`limitValue` and its `IP` or `FORWARDED_IP` custom key's value, and every
-header or `HEADER` custom key named for forwarding or a client address
-(`x-forwarded-for`, `forwarded`, `cf-connecting-ip`, ...) read `redacted`,
-whatever the JSON's whitespace or the order of an entry's fields.
-Firehose has its answer once the events
-are handed on: a batch the memory limiter then refuses is lost, not retried
+gets the trace and span ID of its first well-formed `traceparent` header, as
+Datadog's WAF pipeline does. A header a service's propagator would ignore
+(upper-case hex, or an all-zero trace or parent ID) gives none. The event loses
+its client address: `clientIp`, a rate-based rule's `limitValue`, the value of
+an `IP` or `FORWARDED_IP` custom key, and the value of every header, `HEADER`
+custom key and rule match (`matchedData`) named for a client address
+(`x-forwarded-for`, `forwarded`, `cf-connecting-ip`, `x-real-ip`, ...) read
+`redacted`. `x-forwarded-proto` and `-host` stay. The patterns are regular
+expressions over WAF's JSON, which has flat entries (a header, a custom key, a
+match): they allow whitespace, either field order and other fields within an
+entry. Firehose has its answer once the events are handed on: a batch the memory limiter then refuses is lost, not retried
 (the limiter's `otelcol_processor_incoming_items_total` minus
 `outgoing_items_total`, and the error "failed to consume log entries"). Events
 from Firehose's own log groups are dropped, so its delivery errors can't loop
