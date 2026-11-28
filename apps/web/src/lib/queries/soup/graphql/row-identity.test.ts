@@ -88,6 +88,32 @@ const grouped = (count: number): GroupSoupQuery =>
     },
   }) as GroupSoupQuery;
 
+/** The projection a Soup view of `kind` shows over `source`. */
+function project(kind: 'keyed' | 'grouped', source: () => unknown) {
+  return kind === 'keyed'
+    ? createKeyedProjection(
+        () => listOf(kind, source()) as GraphqlSoupItem[],
+        soupItemKey,
+        (record) => mapItem(plainSoupRecord(record))
+      )
+    : createGraphqlGroupedSoupProjection(
+        () => source() as GroupSoupQuery,
+        () => ({ type: 'property', propertyDefinitionId: 'status' }),
+        () => ({})
+      );
+}
+
+const listPathOf = (kind: 'keyed' | 'grouped') =>
+  kind === 'keyed'
+    ? ['user', 'soup', 'items']
+    : ['user', 'groupSoup', 'bins', 0, 'items'];
+
+const listOf = (kind: 'keyed' | 'grouped', snapshot: unknown) =>
+  listPathOf(kind).reduce<unknown>(
+    (value, part) => (value as Record<string | number, unknown>)[part],
+    snapshot
+  ) as Row[];
+
 type Step = { name: string; maps: number; ms: number };
 const reps = 15;
 
@@ -107,26 +133,9 @@ function run(
       const data =
         kind === 'keyed' ? flat(count, identifiedUser) : grouped(count);
       const view = new LiveQuery(data as Record<string, unknown>, undefined);
-      const items = (snapshot: unknown) =>
-        kind === 'keyed'
-          ? (snapshot as ReturnType<typeof flat>).user.soup.items
-          : (snapshot as GroupSoupQuery).user.groupSoup.bins[0].items;
-      const listPath =
-        kind === 'keyed'
-          ? ['user', 'soup', 'items']
-          : ['user', 'groupSoup', 'bins', 0, 'items'];
-      const projected =
-        kind === 'keyed'
-          ? createKeyedProjection(
-              () => items(querySnapshot(view.data)) as GraphqlSoupItem[],
-              soupItemKey,
-              (record) => mapItem(plainSoupRecord(record))
-            )
-          : createGraphqlGroupedSoupProjection(
-              () => querySnapshot(view.data) as GroupSoupQuery,
-              () => ({ type: 'property', propertyDefinitionId: 'status' }),
-              () => ({})
-            );
+      const items = (snapshot: unknown) => listOf(kind, snapshot);
+      const listPath = listPathOf(kind);
+      const projected = project(kind, () => querySnapshot(view.data));
       projected();
       const initial = mapItem.mock.calls.length;
       const steps: Step[] = [];
@@ -196,9 +205,10 @@ describe('Soup rows by identity', () => {
     'maps only the rows a %s result changed, at %i rows',
     (kind, count) => {
       const { steps, initial } = run(kind, count);
-      process.stderr.write(
-        `BENCH ${JSON.stringify({ kind, count, initial, steps })}\n`
-      );
+      if (process.env.ROW_IDENTITY_BENCH)
+        process.stderr.write(
+          `BENCH ${JSON.stringify({ kind, count, initial, steps })}\n`
+        );
       expect(initial).toBe(count);
       expect(steps.map((entry) => entry.maps)).toEqual([1, 0, 0, count]);
     }
@@ -230,8 +240,9 @@ function random(seed: number) {
 
 /**
  * A seeded sequence of patched and full results through each projection,
- * recording what it shows after every step. The fixtures were recorded on the
- * row-version build this replaced; both must show the same entities.
+ * recording what it shows after every step. Each step must show what a fresh
+ * projection of the same result shows, and the fixtures, recorded on the
+ * row-version build this replaced, pin the same entities.
  */
 function differential(kind: 'keyed' | 'grouped', seed: number): string[] {
   return createRoot((dispose) => {
@@ -241,28 +252,23 @@ function differential(kind: 'keyed' | 'grouped', seed: number): string[] {
         (kind === 'keyed' ? flat(40) : grouped(40)) as Record<string, unknown>,
         undefined
       );
-      const listPath =
-        kind === 'keyed'
-          ? ['user', 'soup', 'items']
-          : ['user', 'groupSoup', 'bins', 0, 'items'];
-      const list = (snapshot: unknown) =>
-        listPath.reduce<unknown>(
-          (value, part) => (value as Record<string | number, unknown>)[part],
-          snapshot
-        ) as Row[];
-      const projected =
-        kind === 'keyed'
-          ? createKeyedProjection(
-              () => list(querySnapshot(view.data)) as GraphqlSoupItem[],
-              soupItemKey,
-              (record) => mapItem(plainSoupRecord(record))
-            )
-          : createGraphqlGroupedSoupProjection(
-              () => querySnapshot(view.data) as GroupSoupQuery,
-              () => ({ type: 'property', propertyDefinitionId: 'status' }),
-              () => ({})
-            );
-      const shown = [digest(projected())];
+      const listPath = listPathOf(kind);
+      const list = (snapshot: unknown) => listOf(kind, snapshot);
+      const projected = project(kind, () => querySnapshot(view.data));
+      // What a fresh projection of the same result shows.
+      const fresh = () =>
+        createRoot((disposeFresh) => {
+          const copy = structuredClone(view.snapshot);
+          const shown = JSON.stringify(project(kind, () => copy)());
+          disposeFresh();
+          return shown;
+        });
+      const read = () => {
+        const shown = JSON.stringify(projected());
+        expect(shown).toBe(fresh());
+        return digest(JSON.parse(shown));
+      };
+      const shown = [read()];
       const replaceList = (rows: Row[]) =>
         view.replace(
           applyQueryPatches(view.snapshot, [
@@ -307,7 +313,7 @@ function differential(kind: 'keyed' | 'grouped', seed: number): string[] {
             view.replace(full);
           }
         }
-        shown.push(digest(projected()));
+        shown.push(read());
       }
       return shown;
     } finally {
