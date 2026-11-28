@@ -990,20 +990,24 @@ or `prod`).
 Other prod projects keep their Datadog-only configuration until they join the
 list. Prod emits about 37 times dev's spans, more than half of them from the
 `email-service` project and a quarter from `cloud-storage-service`. Add projects
-smallest first, and check before each one:
+smallest first, a few at a time, and check before each batch:
 
 - the cluster's ingest, Tempo and Loki have headroom for the project's spans and
   logs (Datadog's `datadog.estimated_usage.apm.ingested_spans` and
   `datadog.estimated_usage.logs.ingested_bytes` by `service`);
-- the task has memory for Alloy, which reserves 128 MiB but has used up to
-  402 MiB. Fargate sizes the task from the reservation alone, so `unfurl-service`,
-  `static-file-service` and `lexical-service` need a larger task first.
+- the task has memory for Alloy, which reserves 128 MiB, has used up to
+  402 MiB and is limited to 512 MiB. Fargate sizes the task from reservations
+  alone, so check the worst case: the service at its limit, Alloy at 512 MiB,
+  and the Datadog agent and FireLens at their resident peaks
+  (`ecs.fargate.mem.rss`; `ecs.fargate.mem.usage` counts page cache). A task
+  without that room sets a larger size when `grafanaTelemetryEnabled`, as
+  `unfurl-service` does.
 
 A merged list change reaches prod with the next published release that contains
 it, or for one project with *Deploy Service (Generic)* with `prod` selected. The
 job finishes before ECS does: wait for the service's new revision to reach steady
 state (a failed one rolls back on its own), then check that Datadog and Grafana
-both receive the service before adding another.
+both receive each service before adding the next batch.
 
 To stop a project's copy, set its entry to `false` and deploy it the same way; its
 Datadog export never changes. Delete the entry, which revokes the task execution

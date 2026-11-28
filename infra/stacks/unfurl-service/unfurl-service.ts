@@ -14,6 +14,7 @@ import {
   DopplerEcsEnvironment,
   getGatewayAlb,
   GatewayService,
+  grafanaTelemetryEnabled,
   stack,
 } from '../../packages/shared';
 
@@ -156,6 +157,11 @@ export class UnfurlService extends pulumi.ComponentResource {
           },
         ],
         taskDefinitionArgs: {
+          // Fargate sizes a task from reservations, which leave Alloy too
+          // little room in 1 GB: the service and Alloy have 512 MiB limits, and
+          // prod's Datadog agent and FireLens have used 216 MiB resident.
+          cpu: '256',
+          memory: grafanaTelemetryEnabled ? '2048' : '1024',
           taskRole: {
             roleArn: this.role.arn,
           },
@@ -317,7 +323,10 @@ export class UnfurlService extends pulumi.ComponentResource {
         scalableDimension: serviceScalableTarget.scalableDimension,
         serviceNamespace: serviceScalableTarget.serviceNamespace,
         targetTrackingScalingPolicyConfiguration: {
-          targetValue: 70.0,
+          // A share of task memory: half of 70% in the 2 GB task keeps scaling
+          // out at the 717 MiB it did at 1 GB, before the service's 512 MiB
+          // limit.
+          targetValue: grafanaTelemetryEnabled ? 35.0 : 70.0,
           predefinedMetricSpecification: {
             predefinedMetricType: 'ECSServiceAverageMemoryUtilization',
           },
