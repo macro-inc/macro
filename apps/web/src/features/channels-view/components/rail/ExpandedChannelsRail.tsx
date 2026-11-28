@@ -21,6 +21,7 @@ import { cn, EmptyStatePanel, Hotkey, type TabOption, Tabs } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import {
   type Accessor,
+  createMemo,
   createSignal,
   For,
   type JSX,
@@ -326,6 +327,28 @@ const channelRowOf = (row: ChannelSectionRow) =>
   row.kind === 'conversation' ? row : undefined;
 
 /**
+ * A list rendered by row key, so a row whose object was replaced keeps its
+ * mounted option, focus and open menu: channel rows are immutable values, a
+ * new object on every change.
+ */
+function keyedRows<T>(rows: Accessor<readonly T[]>, keyOf: (row: T) => string) {
+  const byKey = createMemo(
+    () => new Map(rows().map((row) => [keyOf(row), row]))
+  );
+  const keys = createMemo(() => rows().map(keyOf), [], {
+    equals: (previous, next) =>
+      previous.length === next.length &&
+      previous.every((key, index) => key === next[index]),
+  });
+  return { keys, row: (key: string) => byKey().get(key) };
+}
+
+const sectionRowKey = (row: ChannelSectionRow) =>
+  row.kind === 'label'
+    ? `label-heading:${row.label.id}`
+    : rowKeyForChannel(row.channel.id, row.labelId);
+
+/**
  * The Team channels section body: an optional "new label" draft, then one
  * virtualized list of label headings and channels. Dropping a dragged channel
  * on the list itself, outside any row, takes it out of its label.
@@ -339,6 +362,7 @@ function ChannelsSectionRows(props: {
   emptyLabel: string;
   children: JSX.Element;
 }) {
+  const sectionRows = keyedRows(() => props.rows, sectionRowKey);
   const rail = useChannelsRail();
   const droppable = createDroppable(`${rail.railId}:channel-label:unlabelled`, {
     dragType: 'channel-label-target',
@@ -379,34 +403,40 @@ function ChannelsSectionRows(props: {
       >
         <Virtualizer
           ref={props.registerVirtualizer}
-          data={props.rows}
+          data={sectionRows.keys()}
           scrollRef={props.scrollRoot}
           itemSize={34}
           bufferSize={240}
           keepMounted={props.keepMounted}
           onScroll={props.onScroll}
         >
-          {(row, index) => (
-            <div class={groupHighlight(row, index())}>
-              <Switch>
-                <Match when={labelRowOf(row)}>
-                  {(labelRow) => <ChannelLabelRow label={labelRow().label} />}
-                </Match>
-                <Match when={channelRowOf(row)}>
-                  {(channelRow) => (
-                    <ChannelOption
-                      channel={channelRow().channel}
-                      labelId={channelRow().labelId}
-                      rowId={rowKeyForChannel(
-                        channelRow().channel.id,
-                        channelRow().labelId
+          {(key, index) => (
+            <Show when={sectionRows.row(key)}>
+              {(row) => (
+                <div class={groupHighlight(row(), index())}>
+                  <Switch>
+                    <Match when={labelRowOf(row())}>
+                      {(labelRow) => (
+                        <ChannelLabelRow label={labelRow().label} />
                       )}
-                      draggable={canLabelChannel(channelRow().channel)}
-                    />
-                  )}
-                </Match>
-              </Switch>
-            </div>
+                    </Match>
+                    <Match when={channelRowOf(row())}>
+                      {(channelRow) => (
+                        <ChannelOption
+                          channel={channelRow().channel}
+                          labelId={channelRow().labelId}
+                          rowId={rowKeyForChannel(
+                            channelRow().channel.id,
+                            channelRow().labelId
+                          )}
+                          draggable={canLabelChannel(channelRow().channel)}
+                        />
+                      )}
+                    </Match>
+                  </Switch>
+                </div>
+              )}
+            </Show>
           )}
         </Virtualizer>
         {props.children}
@@ -458,6 +488,10 @@ function ExpandedGroupSection(props: {
     setScrollRoot(element);
     rail.registerScrollRef(props.config.group, element);
   };
+  const items = keyedRows(
+    () => section().items,
+    (channel) => channel.id
+  );
 
   return (
     <CollapsibleSection.Root
@@ -585,17 +619,21 @@ function ExpandedGroupSection(props: {
           <Match when={section().items.length > 0}>
             <Virtualizer
               ref={pagination.registerVirtualizer}
-              data={section().items}
+              data={items.keys()}
               scrollRef={scrollRoot()}
               itemSize={34}
               bufferSize={240}
               keepMounted={section().keepMounted}
               onScroll={pagination.loadMoreNearEnd}
             >
-              {(channel) => (
-                <div class="pb-0.5">
-                  <ChannelOption channel={channel} />
-                </div>
+              {(id) => (
+                <Show when={items.row(id)}>
+                  {(channel) => (
+                    <div class="pb-0.5">
+                      <ChannelOption channel={channel()} />
+                    </div>
+                  )}
+                </Show>
               )}
             </Virtualizer>
             <Show when={section().source.isLoadingMore()}>
