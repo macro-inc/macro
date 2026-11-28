@@ -130,15 +130,22 @@ describe('useCollapsedUnreadChannels', () => {
       );
       return dispose;
     });
+    const options = useSoupAstItemsQuery.mock.calls[0]?.[1] as () => {
+      graphqlRepairContinuations?: boolean;
+    };
     try {
       // Kept pages are read again once they have been stale for as long as
-      // the query counts them fresh.
+      // the query counts them fresh, and a page whose cursor the page before
+      // it moved is read from the new one, while the view is on screen.
       expect(refreshes.laterPages?.freshMs).toBe(30_000);
       expect(refreshes.laterPages?.read()).toBe(true);
+      expect(options().graphqlRepairContinuations).toBe(true);
       setReadsMore(false);
       expect(refreshes.laterPages?.read()).toBe(false);
+      expect(options().graphqlRepairContinuations).toBe(false);
       setReadsMore(true);
       expect(refreshes.laterPages?.read()).toBe(true);
+      expect(options().graphqlRepairContinuations).toBe(true);
     } finally {
       dispose();
     }

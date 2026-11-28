@@ -75,6 +75,50 @@ const DOCUMENT = gql`
 `;
 
 const disposals: Array<() => void> = [];
+
+/**
+ * Two loaded pages, `b, member` then `c`, from a query that repairs its
+ * cursor chain while `repairs` holds.
+ */
+async function twoPagesRepairedWhile(repairs: () => boolean) {
+  const fake = makeFakeClient();
+  let query!: ReturnType<
+    typeof createUrqlInfiniteQuery<Page, Variables, string | null, string[]>
+  >;
+  const dispose = createRoot((rootDispose) => {
+    query = createUrqlInfiniteQuery<Page, Variables, string | null, string[]>(
+      () => ({
+        query: DOCUMENT,
+        client: fake.client,
+        initialPageParam: null,
+        variables: (cursor) => ({ cursor }),
+        getNextPageParam: (lastPage) => lastPage.nextCursor,
+        select: ({ pages }) => pages.flatMap((page) => page.values),
+        repairContinuations: repairs(),
+      })
+    );
+    return rootDispose;
+  });
+  disposals.push(dispose);
+
+  fake.executions[0]?.next({
+    values: ['b', 'member'],
+    nextCursor: 'after-member',
+  });
+  const nextPage = query.fetchNextPage();
+  fake.executions[1]?.next({ values: ['c'], nextCursor: null });
+  await nextPage;
+  expect(query.data).toEqual(['b', 'member', 'c']);
+  return { fake, query };
+}
+
+/**
+ * A new row tops the first page and pushes `member` onto the next one, past
+ * where that page's saved cursor starts.
+ */
+function pushMemberAcross(fake: ReturnType<typeof makeFakeClient>) {
+  fake.executions[0]?.next({ values: ['new', 'b'], nextCursor: 'after-b' });
+}
 afterEach(() => {
   for (const dispose of disposals.splice(0)) dispose();
   vi.restoreAllMocks();
@@ -494,6 +538,137 @@ describe('createUrqlInfiniteQuery', () => {
     await refetch;
     expect(query.data).toEqual(['first-refreshed']);
     expect(fake.executions).toHaveLength(4);
+  });
+
+  it('reads a later page again from where the page before it now ends', async () => {
+    const { fake, query } = await twoPagesRepairedWhile(() => true);
+
+    pushMemberAcross(fake);
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(3));
+    expect(fake.executions[2]?.variables).toEqual({ cursor: 'after-b' });
+    // The stale page stays until its replacement lands.
+    expect(query.data).toEqual(['new', 'b', 'c']);
+    expect(query.isFetching).toBe(true);
+
+    fake.executions[2]?.next({ values: ['member', 'c'], nextCursor: null });
+    await vi.waitFor(() =>
+      expect(query.data).toEqual(['new', 'b', 'member', 'c'])
+    );
+    expect(fake.executions[1]?.unsubscribed).toBe(true);
+    expect(query.isFetching).toBe(false);
+    expect(fake.executions).toHaveLength(3);
+  });
+
+  it('leaves a broken cursor chain alone until repairs are on', async () => {
+    const [repairs, setRepairs] = createSignal(false);
+    const { fake, query } = await twoPagesRepairedWhile(repairs);
+
+    pushMemberAcross(fake);
+    await Promise.resolve();
+    expect(fake.executions).toHaveLength(2);
+    expect(query.data).toEqual(['new', 'b', 'c']);
+
+    setRepairs(true);
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(3));
+    expect(fake.executions[2]?.variables).toEqual({ cursor: 'after-b' });
+    fake.executions[2]?.next({ values: ['member', 'c'], nextCursor: null });
+    await vi.waitFor(() =>
+      expect(query.data).toEqual(['new', 'b', 'member', 'c'])
+    );
+  });
+
+  it('drops the pages after one that now ends the list', async () => {
+    const { fake, query } = await twoPagesRepairedWhile(() => true);
+
+    fake.executions[0]?.next({
+      values: ['b', 'member', 'c'],
+      nextCursor: null,
+    });
+    await vi.waitFor(() => expect(query.data).toEqual(['b', 'member', 'c']));
+    expect(fake.executions[1]?.unsubscribed).toBe(true);
+    expect(fake.executions).toHaveLength(2);
+    expect(query.hasNextPage).toBe(false);
+  });
+
+  it('keeps the stale page when a repair fails and tries again on the next read', async () => {
+    const { fake, query } = await twoPagesRepairedWhile(() => true);
+
+    pushMemberAcross(fake);
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(3));
+    const offline = new CombinedError({ networkError: new Error('offline') });
+    fake.executions[2]?.fail(offline);
+    await vi.waitFor(() => expect(query.error).toBe(offline));
+    expect(query.data).toEqual(['new', 'b', 'c']);
+    expect(fake.executions[1]?.unsubscribed).toBe(false);
+
+    pushMemberAcross(fake);
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(4));
+    fake.executions[3]?.next({ values: ['member', 'c'], nextCursor: null });
+    await vi.waitFor(() =>
+      expect(query.data).toEqual(['new', 'b', 'member', 'c'])
+    );
+    expect(query.error).toBeNull();
+  });
+
+  it('asks for the next page from the end of a repaired chain', async () => {
+    const fake = makeFakeClient();
+    let query!: ReturnType<
+      typeof createUrqlInfiniteQuery<Page, Variables, string | null, string[]>
+    >;
+    disposals.push(
+      createRoot((dispose) => {
+        query = createUrqlInfiniteQuery<
+          Page,
+          Variables,
+          string | null,
+          string[]
+        >(() => ({
+          query: DOCUMENT,
+          client: fake.client,
+          initialPageParam: null,
+          variables: (cursor) => ({ cursor }),
+          getNextPageParam: (lastPage) => lastPage.nextCursor,
+          select: ({ pages }) => pages.flatMap((page) => page.values),
+          repairContinuations: true,
+        }));
+        return dispose;
+      })
+    );
+    fake.executions[0]?.next({
+      values: ['b', 'member'],
+      nextCursor: 'after-member',
+    });
+    const secondPage = query.fetchNextPage();
+    fake.executions[1]?.next({ values: ['c'], nextCursor: 'after-c' });
+    await secondPage;
+
+    pushMemberAcross(fake);
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(3));
+    const thirdPage = query.fetchNextPage();
+    await Promise.resolve();
+    // The next page waits for the repair, which may move where it starts.
+    expect(fake.executions).toHaveLength(3);
+
+    fake.executions[2]?.next({
+      values: ['member', 'c'],
+      nextCursor: 'after-c',
+    });
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(4));
+    expect(fake.executions[3]?.variables).toEqual({ cursor: 'after-c' });
+    fake.executions[3]?.next({ values: ['d'], nextCursor: null });
+    await thirdPage;
+    expect(query.data).toEqual(['new', 'b', 'member', 'c', 'd']);
+  });
+
+  it('stops a repair when the list goes back to its first page', async () => {
+    const { fake, query } = await twoPagesRepairedWhile(() => true);
+
+    pushMemberAcross(fake);
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(3));
+    query.resetToInitialPage();
+    expect(fake.executions[2]?.unsubscribed).toBe(true);
+    expect(query.data).toEqual(['new', 'b']);
+    expect(query.isFetching).toBe(false);
   });
 
   it('disables page subscriptions and re-enables them', () => {

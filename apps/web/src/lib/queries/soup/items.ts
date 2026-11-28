@@ -75,6 +75,11 @@ export interface SoupItemsQueryOptions {
   graphqlCacheFirstEntities?: readonly SoupEntityRef[];
   /** Seed mixed lists from indexed non-email members; keep the full server query. */
   graphqlLocalReconciliation?: 'without-email';
+  /**
+   * Read a later page again when the page before it no longer ends where its
+   * cursor starts, so rows pushed across a page boundary stay listed.
+   */
+  graphqlRepairContinuations?: boolean;
   meta?: {
     /** Keep view-specific REST previews out of the shared entity normalizer. */
     normalize?: boolean;
@@ -410,6 +415,7 @@ export function useSoupAstItemsQuery(
       localReconciliation: options?.().graphqlLocalReconciliation,
       showSupportedForeignEntities: options?.().showSupportedForeignEntities,
       staleTime: graphqlStaleTime(options?.().staleTime),
+      repairContinuations: options?.().graphqlRepairContinuations,
     })
   );
   const graphqlGroupedQuery = createGraphqlGroupedSoupAstItemsQuery(

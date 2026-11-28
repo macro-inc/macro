@@ -152,6 +152,15 @@ export type UrqlInfiniteQueryOptions<
   context?: Partial<OperationContext>;
   /** Retains accumulated data while the query identity changes. */
   keepPreviousData?: boolean;
+  /**
+   * Reads a continuation page again from the cursor the page before it now
+   * ends at, once a read of that page moves its last row: the saved cursor
+   * would skip the rows pushed across the boundary. The stale page stays
+   * until its replacement lands. Cursors compare with `Object.is`, so
+   * `getNextPageParam` must return the same value for the same page.
+   * Defaults to false.
+   */
+  repairContinuations?: boolean;
   /** Observes page results after the corresponding page state updates. */
   onResult?: (
     result: OperationResult<PageData, Variables>,

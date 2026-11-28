@@ -30,14 +30,18 @@ const UNREAD_PAGES_FRESH_MS = 30_000;
  * next page, and live updates read the later pages again, only while
  * `readsMore` holds too, such as while that view is on screen; it keeps the
  * pages it has meanwhile, and reads them again once they have gone stale
- * while the view is on screen. When the view goes, the later pages are
- * dropped, so live updates revalidate the first page alone.
+ * while the view is on screen. Meanwhile a later page whose cursor no longer
+ * follows the page before it is read again from the one that does, so a
+ * channel pushed across a page boundary stays listed. When the view goes,
+ * the later pages are dropped, so live updates revalidate the first page
+ * alone.
  */
 export function useCollapsedUnreadChannels(
   enabled: Accessor<boolean>,
   listsEvery: Accessor<boolean> = enabled,
   readsMore: Accessor<boolean> = listsEvery
 ) {
+  const reading = () => listsEvery() && readsMore();
   const query = useSoupAstItemsQuery(
     () => ({
       params: { limit: 100, sort_method: 'updated_at' },
@@ -47,9 +51,9 @@ export function useCollapsedUnreadChannels(
       enabled: enabled(),
       staleTime: UNREAD_PAGES_FRESH_MS,
       graphqlProjection: 'channel-list',
+      graphqlRepairContinuations: reading(),
     })
   );
-  const reading = () => listsEvery() && readsMore();
   registerChannelListNotificationRefresh(
     query,
     channelTypesShownBy(UNREAD_CHANNEL_FILTERS),
