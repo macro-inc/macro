@@ -18,6 +18,7 @@ jobs:
       pull-requests: write
       statuses: write
     outputs:
+      bots: ${{ steps.filter.outputs.bots }}
       infra: ${{ steps.filter.outputs.infra }}
       conventions: ${{ steps.filter.outputs.conventions }}
       cargo_deny: ${{ steps.filter.outputs.cargo_deny }}
@@ -485,6 +486,17 @@ jobs:
         uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590
         with:
           filters: |
+            bots:
+              - 'apps/bots/**'
+              - 'packages/sdk/**'
+              - 'apps/web/patches/@kobalte*'
+              - 'biome.base.jsonc'
+              - 'bun.lock'
+              - 'package.json'
+              - '.github/workflows/bots-check.yml'
+              - 'tooling/xtask/crates/xtask_workflows/src/workflows/bots_check.rs'
+              - 'tooling/xtask/crates/xtask_local/src/local.rs'
+              - 'tooling/xtask/crates/xtask_local/src/local/**'
             infra:
               - 'infra/**'
               - 'flake.nix'
@@ -647,6 +659,12 @@ jobs:
     name: Web App
     uses: ./.github/workflows/web-app-check-main.yml
     secrets: inherit
+  bots:
+    needs:
+      - start
+    if: needs.start.outputs.bots == 'true'
+    name: Bots
+    uses: ./.github/workflows/bots-check.yml
   infra:
     needs:
       - start
@@ -757,6 +775,7 @@ jobs:
       - start
       - cloud-storage
       - web-app
+      - bots
       - infra
       - conventions
       - cargo-deny

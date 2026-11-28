@@ -65,9 +65,15 @@ describe('return intents', () => {
     expect(macroLoginPath(hireIntent, 'https://example.invalid')).toBe(
       '/app/login?return=bots'
     );
-    expect(macroLoginPath(fleetIntent, handoff)).toBe('/app/login?return=bots-fleet');
-    expect(macroLoginPath(passwordsIntent)).toBe('/app/login?return=bots-passwords');
-    expect(macroLoginPath(billingIntent)).toBe('/app/login?return=bots-billing');
+    expect(macroLoginPath(fleetIntent, handoff)).toBe(
+      '/app/login?return=bots-fleet'
+    );
+    expect(macroLoginPath(passwordsIntent)).toBe(
+      '/app/login?return=bots-passwords'
+    );
+    expect(macroLoginPath(billingIntent)).toBe(
+      '/app/login?return=bots-billing'
+    );
   });
 
   test('rejects duplicate parameters and extras', () => {
