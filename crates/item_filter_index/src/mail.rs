@@ -1,16 +1,22 @@
 //! Offline Mail tab predicates over canonical thread facts and preview membership.
 use super::*;
 use item_filters::SharedEmailFilter;
+pub use item_filters::ast::email::AttachmentKind;
 
 /// Stable, separately versioned Mail projection; existing Soup profiles remain usable.
 pub fn profile() -> Profile {
     Profile::new(token(PROFILE))
 }
 const PROFILE: &str = "soup-mail-v5";
+/// The profiles Mail thread documents are stored under: [`profile`], and
+/// the property-aware [`crate::properties::MAIL_PROFILE`].
+pub const DOCUMENT_PROFILES: [&str; 2] = [PROFILE, crate::properties::MAIL_PROFILE];
 /// Email thread partition.
 pub fn partition() -> Token {
-    token("email")
+    token(PARTITION)
 }
+/// Token of [`partition`].
+pub const PARTITION: &str = "email";
 /// Inbox timestamp of a thread the Inbox view can show: inbox-visible, with a
 /// message. The projection writes it as a sort fact only.
 pub const INBOX_VIEW_SORT: &str = "mail-inbox-view-ts";
@@ -18,7 +24,7 @@ pub const INBOX_VIEW_SORT: &str = "mail-inbox-view-ts";
 /// rule to Mail documents written before it existed. Stored Mail documents
 /// carry the property-aware profile, which keeps every fact of this one.
 pub const INBOX_VIEW_DERIVATION: SortFactDerivation = SortFactDerivation {
-    profiles: &[PROFILE, crate::properties::MAIL_PROFILE],
+    profiles: &DOCUMENT_PROFILES,
     source: "mail-inbox-ts",
     target: INBOX_VIEW_SORT,
     required: &[("mail-inbox", &[1]), ("mail-has-message", &[1])],
@@ -30,7 +36,7 @@ pub const IMPORTANT_VIEW_SORT: &str = "mail-important-view-ts";
 /// How the projection derives [`IMPORTANT_VIEW_SORT`]; storage applies it to
 /// Mail documents written before it existed.
 pub const IMPORTANT_VIEW_DERIVATION: SortFactDerivation = SortFactDerivation {
-    profiles: &[PROFILE, crate::properties::MAIL_PROFILE],
+    profiles: &DOCUMENT_PROFILES,
     source: "mail-inbox-ts",
     target: IMPORTANT_VIEW_SORT,
     required: &[
@@ -42,6 +48,36 @@ pub const IMPORTANT_VIEW_DERIVATION: SortFactDerivation = SortFactDerivation {
 /// Mail-owned fact vocabulary.
 pub fn token(value: &str) -> Token {
     Token::new(value).expect("static Mail token")
+}
+
+/// The kinds of attachment a thread's messages carry, one exact fact per kind.
+pub const ATTACHMENT_ATTRIBUTE: &str = "mail-attachment";
+
+/// The value of an [`ATTACHMENT_ATTRIBUTE`] fact for `kind`.
+pub fn attachment_value(kind: AttachmentKind) -> ExactValue {
+    let code: u8 = match kind {
+        AttachmentKind::Pdf => 1,
+        AttachmentKind::Image => 2,
+        AttachmentKind::Document => 3,
+    };
+    ExactValue::new([code]).expect("bounded attachment kind")
+}
+
+/// The kinds of the attachments with these MIME types, each once, in
+/// [`AttachmentKind::ALL`] order: what the server's thread attachment flags
+/// hold for a thread whose messages carry them.
+pub fn attachment_kinds<'a>(mime_types: impl IntoIterator<Item = &'a str>) -> Vec<AttachmentKind> {
+    let mut found = [false; AttachmentKind::ALL.len()];
+    for mime_type in mime_types {
+        for (index, kind) in AttachmentKind::ALL.into_iter().enumerate() {
+            found[index] |= kind.matches_mime_type(mime_type);
+        }
+    }
+    AttachmentKind::ALL
+        .into_iter()
+        .zip(found)
+        .filter_map(|(kind, found)| found.then_some(kind))
+        .collect()
 }
 
 /// Compile email-only Mail tabs. Readable inbox scope comes from emailLinks;
@@ -141,6 +177,10 @@ pub fn compile(
             EmailLiteral::Shared(_) => PredicateExpr::All,
             EmailLiteral::CalendarOnly(true) => boolean("mail-calendar", true),
             EmailLiteral::CalendarOnly(false) => PredicateExpr::All,
+            EmailLiteral::Attachment(kind) => PredicateExpr::Exact {
+                attribute: token(ATTACHMENT_ATTRIBUTE),
+                value: attachment_value(*kind),
+            },
             EmailLiteral::Label(id) => PredicateExpr::And(
                 Box::new(exact_uuid(token("mail-label-id"), id)),
                 Box::new(label_scope.clone()),
@@ -257,6 +297,7 @@ fn supported(expr: Option<&Expr<EmailLiteral>>, allow_shared: bool) -> bool {
                 | EmailLiteral::Importance(_)
                 | EmailLiteral::UpdatedAt(_)
                 | EmailLiteral::CalendarOnly(_)
+                | EmailLiteral::Attachment(_)
                 | EmailLiteral::Label(_)
         ),
     }
