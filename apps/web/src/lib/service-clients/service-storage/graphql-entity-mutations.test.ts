@@ -18,6 +18,15 @@ import { filter, map, pipe } from 'wonka';
 import { MoveEntitiesDocument } from './graphql/generated/graphql';
 
 let graphql: Client | undefined;
+// The cache's result metadata, set by the normalized exchange this test skips.
+vi.mock(
+  '@graphql-cache/exchange/normalized-cache-exchange',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    normalizedCacheResultMetadata: (result: OperationResult) =>
+      result.extensions?.cacheMetadata,
+  })
+);
 vi.mock('./graphql-soup', () => ({
   getEntityGraphqlClient: () => {
     if (!graphql) throw new Error('The test must inject a client');
@@ -79,7 +88,11 @@ describe('entity move transport', () => {
         },
         []
       )
-    ).resolves.toMatchObject({ __typename: 'GraphqlMutationSuccess' });
+    ).resolves.toMatchObject({
+      __typename: 'GraphqlMutationSuccess',
+      queued: true,
+      effectsResolved: true,
+    });
   });
 
   it('rejects a move the server refused after retries', async () => {
@@ -138,6 +151,7 @@ describe('moveGraphqlEntity', () => {
       __typename: 'GraphqlMutationSuccess',
       effects: [],
       effectsResolved: false,
+      queued: false,
       listsReadAgain: false,
     });
   });
@@ -232,5 +246,31 @@ describe('revalidations', () => {
       [unmaintained]
     );
     expect(optimisticContextOf(sent[0]!)?.revalidations).toEqual([wire]);
+  });
+});
+
+it('reports a committed move whose rows the cache failed to apply', async () => {
+  replyWith((operation) =>
+    withOptimisticMutationDisposition(
+      {
+        operation,
+        stale: false,
+        hasNext: false,
+        data: {
+          moveEntities: {
+            results: [{ __typename: 'GraphqlMutationSuccess', effects: [] }],
+          },
+        },
+        extensions: {
+          cacheMetadata: { source: 'live-network', cacheEffectsApplied: false },
+        },
+      },
+      { kind: 'committed' }
+    )
+  );
+
+  await expect(moveGraphqlEntity(input, [])).resolves.toMatchObject({
+    effectsResolved: false,
+    queued: false,
   });
 });

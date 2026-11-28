@@ -51,13 +51,14 @@ export async function moveEntity(
   entity: EntityRefInput,
   projectId: string | null
 ) {
-  // With a live cache a move is queued with the lists to read once it
-  // commits, so only one whose rows never came back reads them here.
+  // A move the cache queued carries the lists to read once it commits. One
+  // sent directly (no live cache, or the queue refused it) reads here, as
+  // does one whose rows never came back.
   const result = await moveGraphqlEntity(
     { entity, projectId },
     getUnmaintainedGraphqlSoupRevalidations()
   );
-  if (getGraphqlCacheHost() && result.effectsResolved) return;
+  if (result.queued && result.effectsResolved) return;
   refreshAfterWrite(result);
 }
 
