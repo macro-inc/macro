@@ -37,6 +37,7 @@ export default {
   options: 'Calendar options',
   color: 'Calendar color',
   namedColor: '{{name}} color',
+  colorFor: 'Color for {{name}} ({{address}})',
   showOnly: 'Show only this calendar',
   settingsTitle: 'Calendar settings',
   busyCalendars: 'Busy calendars',

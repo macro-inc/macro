@@ -101,7 +101,10 @@ export function SourceControls(props: SourceControlsProps) {
                         <span class="-mx-1 flex shrink-0 touch:-mx-2">
                           <CalendarColorPicker
                             compact
-                            label={`Color for ${source().name} (${source().emailAddress ?? ''})`}
+                            label={t('calendar.colorFor', {
+                              name: source().name,
+                              address: source().emailAddress ?? '',
+                            })}
                             color={source().color}
                             overridden={source().hasCustomColor === true}
                             onChange={(color) =>
