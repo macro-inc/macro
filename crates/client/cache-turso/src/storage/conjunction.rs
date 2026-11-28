@@ -1,6 +1,7 @@
 //! Point-probed residual predicates for a scoped, already-selected candidate set.
 
 use super::*;
+use crate::sql::{Ordinal, Ordinals};
 use predicate_index::ExactValue;
 
 #[derive(Clone, Copy)]
@@ -73,15 +74,18 @@ fn exists(
     source: FactSource,
     kind: FactKind,
     attribute: &Token,
-    condition: &str,
+    condition: impl SqlPart,
     values: impl IntoIterator<Item = Value>,
     parameters: &mut Vec<Value>,
-) -> String {
+) -> Sql {
     parameters.push(text(attribute.as_str()));
     parameters.extend(values);
     let (table, index) = source.table(kind);
-    format!(
-        "EXISTS (SELECT 1 FROM {table} AS f INDEXED BY {index} WHERE f.document_id = d.id AND f.attribute = ?{condition})"
+    crate::sql!(
+        "EXISTS (SELECT 1 FROM {table} AS f INDEXED BY {index} WHERE f.document_id = d.id AND f.attribute = ?{condition})",
+        table,
+        index,
+        condition
     )
 }
 
@@ -95,8 +99,9 @@ const MAX_JOINED_FACTS: usize = 16;
 /// probed for every candidate while an `EXISTS` can be skipped.
 pub(super) struct ExactJoins {
     source: FactSource,
-    facts: Vec<(Token, ExactValue)>,
-    sql: String,
+    facts: Vec<(Token, ExactValue, Ordinal)>,
+    names: Ordinals,
+    sql: Sql,
     parameters: Vec<Value>,
 }
 
@@ -105,40 +110,48 @@ impl ExactJoins {
         Self {
             source,
             facts: Vec::new(),
-            sql: String::new(),
+            names: Ordinals::new(),
+            sql: Sql::new(),
             parameters: Vec::new(),
         }
     }
 
     /// The joins, to follow the table that `d` names, and their parameters,
     /// which follow every parameter of the select list.
-    pub(super) fn finish(self) -> (String, Vec<Value>) {
+    pub(super) fn finish(self) -> (Sql, Vec<Value>) {
         (self.sql, self.parameters)
     }
 
-    fn test(&mut self, attribute: &Token, value: &ExactValue) -> Option<String> {
-        let index = match self
+    fn test(&mut self, attribute: &Token, value: &ExactValue) -> Option<Sql> {
+        let name = match self
             .facts
             .iter()
-            .position(|(known, known_value)| known == attribute && known_value == value)
+            .find(|(known, known_value, _)| known == attribute && known_value == value)
         {
-            Some(index) => index,
+            Some((_, _, name)) => *name,
             None if self.facts.len() < MAX_JOINED_FACTS => {
-                let index = self.facts.len();
+                let name = self.names.take();
                 let (table, key) = self.source.table(FactKind::Exact);
-                self.sql.push_str(&format!(
-                    " LEFT JOIN {table} AS x{index} INDEXED BY {key} ON x{index}.document_id = d.id AND x{index}.attribute = ? AND x{index}.value = ?"
+                let join = Sql::numbered("x", name);
+                self.sql.push(crate::sql!(
+                    " LEFT JOIN {table} AS {join} INDEXED BY {key} ON {join}.document_id = d.id AND {join}.attribute = ? AND {join}.value = ?",
+                    table,
+                    join,
+                    key
                 ));
                 self.parameters.extend([
                     text(attribute.as_str()),
                     Value::from_blob(value.as_bytes().to_vec()),
                 ]);
-                self.facts.push((attribute.clone(), value.clone()));
-                index
+                self.facts.push((attribute.clone(), value.clone(), name));
+                name
             }
             None => return None,
         };
-        Some(format!("x{index}.document_id IS NOT NULL"))
+        Some(crate::sql!(
+            "{join}.document_id IS NOT NULL",
+            join = Sql::numbered("x", name)
+        ))
     }
 }
 
@@ -146,7 +159,7 @@ pub(super) fn condition(
     expr: &PredicateExpr,
     source: FactSource,
     parameters: &mut Vec<Value>,
-) -> String {
+) -> Sql {
     condition_with(expr, source, parameters, &mut None)
 }
 
@@ -155,7 +168,7 @@ pub(super) fn joined_condition(
     expr: &PredicateExpr,
     parameters: &mut Vec<Value>,
     joins: &mut ExactJoins,
-) -> String {
+) -> Sql {
     let source = joins.source;
     condition_with(expr, source, parameters, &mut Some(joins))
 }
@@ -165,7 +178,7 @@ fn condition_with(
     source: FactSource,
     parameters: &mut Vec<Value>,
     joins: &mut Option<&mut ExactJoins>,
-) -> String {
+) -> Sql {
     if matches!(expr, PredicateExpr::Or(_, _))
         && let Some((attribute, values)) = alternatives::exact_alternatives(expr)
     {
@@ -173,7 +186,10 @@ fn condition_with(
             source,
             FactKind::Exact,
             attribute,
-            &format!(" AND f.value IN ({})", vec!["?"; values.len()].join(", ")),
+            crate::sql!(
+                " AND f.value IN ({placeholders})",
+                placeholders = Sql::placeholders(values.len())
+            ),
             values
                 .iter()
                 .map(|value| Value::from_blob(value.as_bytes().to_vec())),
@@ -181,8 +197,8 @@ fn condition_with(
         );
     }
     match expr {
-        PredicateExpr::All => "1".into(),
-        PredicateExpr::None => "0".into(),
+        PredicateExpr::All => crate::sql!("1"),
+        PredicateExpr::None => crate::sql!("0"),
         PredicateExpr::Exact { attribute, value } => match joins
             .as_mut()
             .and_then(|joins| joins.test(attribute, value))
@@ -205,12 +221,12 @@ fn condition_with(
             lower,
             upper,
         } => {
-            let mut range = String::new();
+            let mut range = Sql::new();
             let mut values = Vec::new();
             for (bound, lower) in [(lower, true), (upper, false)] {
                 if let Some(bound) = bound {
                     let (operator, value) = sql_bound(*bound, lower);
-                    range.push_str(&format!(" AND f.value {operator} ?"));
+                    range.push(crate::sql!(" AND f.value {operator} ?", operator));
                     values.push(Value::from_i64(value));
                 }
             }
@@ -218,7 +234,7 @@ fn condition_with(
                 source,
                 FactKind::Integer,
                 attribute,
-                &range,
+                range,
                 values,
                 parameters,
             )
@@ -244,7 +260,11 @@ fn condition_with(
                 source,
                 FactKind::Sort,
                 attribute,
-                &format!(" AND (f.value {order} ? OR (f.value = ? AND d.record_key {tie} ?))"),
+                crate::sql!(
+                    " AND (f.value {order} ? OR (f.value = ? AND d.record_key {tie} ?))",
+                    order,
+                    tie
+                ),
                 [
                     Value::from_i64(*value),
                     Value::from_i64(*value),
@@ -253,18 +273,21 @@ fn condition_with(
                 parameters,
             )
         }
-        PredicateExpr::And(left, right) => format!(
-            "({} AND {})",
-            condition_with(left, source, parameters, joins),
-            condition_with(right, source, parameters, joins)
+        PredicateExpr::And(left, right) => crate::sql!(
+            "({left} AND {right})",
+            left = condition_with(left, source, parameters, joins),
+            right = condition_with(right, source, parameters, joins)
         ),
-        PredicateExpr::Or(left, right) => format!(
-            "({} OR {})",
-            condition_with(left, source, parameters, joins),
-            condition_with(right, source, parameters, joins)
+        PredicateExpr::Or(left, right) => crate::sql!(
+            "({left} OR {right})",
+            left = condition_with(left, source, parameters, joins),
+            right = condition_with(right, source, parameters, joins)
         ),
         PredicateExpr::Not(inner) => {
-            format!("NOT ({})", condition_with(inner, source, parameters, joins))
+            crate::sql!(
+                "NOT ({inner})",
+                inner = condition_with(inner, source, parameters, joins)
+            )
         }
     }
 }

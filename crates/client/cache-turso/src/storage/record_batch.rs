@@ -1,6 +1,7 @@
 //! Bounded indexed lookups, retaining the caller's order and duplicate keys.
 
 use super::*;
+use crate::sql::{Ordinals, Sql};
 
 const BATCH_SIZE: usize = 128;
 
@@ -20,15 +21,22 @@ fn padded(count: usize) -> usize {
         .unwrap_or(BATCH_SIZE)
 }
 
-fn sql(count: usize) -> String {
-    let values = (0..count)
-        .map(|index| format!("({index}, ?, ?)"))
-        .collect::<Vec<_>>()
-        .join(", ");
-    format!(
+fn sql(count: usize) -> Sql {
+    let mut positions = Ordinals::new();
+    let values = Sql::join(
+        (0..count).map(|_| {
+            crate::sql!(
+                "({position}, ?, ?)",
+                position = Sql::numbered("", positions.take())
+            )
+        }),
+        ", ",
+    );
+    crate::sql!(
         "WITH requested(position, typename, id) AS (VALUES {values}) \
          SELECT q.position, r.value FROM requested AS q \
-         LEFT JOIN records AS r ON r.__typename = q.typename AND r.id = q.id"
+         LEFT JOIN records AS r ON r.__typename = q.typename AND r.id = q.id",
+        values
     )
 }
 

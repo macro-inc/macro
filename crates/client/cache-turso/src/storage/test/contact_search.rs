@@ -36,7 +36,7 @@ fn contact_reads_use_both_covering_indexes_without_a_sort_or_limit() {
             "{plan}"
         );
         assert!(!plan.contains("TEMP B-TREE"), "{plan}");
-        assert!(!sql.contains("LIMIT"));
+        assert!(!sql.as_str().contains("LIMIT"));
     }
 }
 

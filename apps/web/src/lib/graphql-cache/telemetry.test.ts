@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+// Written by the engine's excerpt; `query_telemetry/test.rs` checks it.
+import engineExcerpt from '../../../../../crates/client/cache-turso/src/query_telemetry/excerpt.json';
 import {
   browserCacheTelemetryContext,
   type CacheTelemetryEnvelope,
@@ -11,6 +13,7 @@ import {
   isolateCacheTelemetry,
   operationCategoryForRequest,
   resetReasonForError,
+  SLOW_QUERY_TEMPLATE_BYTES,
 } from './telemetry';
 
 describe('cache telemetry privacy contract', () => {
@@ -341,6 +344,150 @@ describe('cache telemetry sampling and failure isolation', () => {
       queryFingerprint: 'SELECT private-data',
     });
     expect(events[3]).not.toHaveProperty('queryFingerprint');
+  });
+
+  it('keeps a bounded query template only on a fingerprinted slow query', () => {
+    const events: CacheTelemetryObservation[] = [];
+    const recorder = new CacheTelemetryRecorder({
+      emit: (event) => events.push(event),
+    });
+    const template = 'SELECT value FROM records WHERE id IN (?, ?)';
+    // 13 bytes before the placeholders, 11 UTF-16 code units: the euro sign is
+    // one code unit and three bytes.
+    const atBound = `SELECT '\u20ac' ${'?'.repeat(SLOW_QUERY_TEMPLATE_BYTES - 13)}`;
+    // Fingerprints are FNV-1a 64 of each text, computed outside the app.
+    const slow = {
+      name: 'graphql_cache.slow_query',
+      operationCategory: 'storage',
+      durationMs: 201,
+      queryFingerprint: '9cd1640cd0470612',
+      outcome: 'success',
+    } as const;
+    recorder.record({ ...slow, queryTemplate: template });
+    recorder.record({
+      ...slow,
+      queryFingerprint: 'b3bc1686d062852e',
+      queryTemplate: '?'.repeat(SLOW_QUERY_TEMPLATE_BYTES + 1),
+    });
+    recorder.record({
+      ...slow,
+      queryFingerprint: 'd57c0b70dcf2fe56',
+      queryTemplate: atBound,
+    });
+    // Within the bound in UTF-16 code units, over it in UTF-8.
+    recorder.record({
+      ...slow,
+      queryFingerprint: 'b4c5d9c770e64c6b',
+      queryTemplate: `${atBound}?`,
+    });
+    recorder.record({
+      ...slow,
+      queryFingerprint: '8351823baa0f2325',
+      queryTemplate: '\u20ac'.repeat(SLOW_QUERY_TEMPLATE_BYTES / 2),
+    });
+    // A fingerprint with leading zeros, which the hex form keeps.
+    recorder.record({
+      ...slow,
+      queryFingerprint: '006a3b7abe35ee7b',
+      queryTemplate: 'SELECT 2652583577',
+    });
+    // The empty text beside its own fingerprint, the FNV offset basis.
+    recorder.record({
+      ...slow,
+      queryFingerprint: 'cbf29ce484222325',
+      queryTemplate: '',
+    });
+    // Text that is not what the fingerprint was taken from: expanded SQL.
+    recorder.record({
+      ...slow,
+      queryTemplate: 'SELECT value FROM records WHERE id IN (1, 2)',
+    });
+    recorder.record({
+      ...slow,
+      queryFingerprint: 'not-a-fingerprint',
+      queryTemplate: template,
+    });
+    recorder.record({
+      name: 'graphql_cache.wal_checkpoint',
+      operationCategory: 'storage',
+      queryFingerprint: '9cd1640cd0470612',
+      queryTemplate: template,
+    });
+    recorder.flush();
+    expect(events.map((event) => event.queryTemplate)).toEqual([
+      template,
+      undefined,
+      atBound,
+      undefined,
+      undefined,
+      'SELECT 2652583577',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ]);
+    expect(
+      isCacheTelemetryObservation({ ...slow, queryTemplate: template })
+    ).toBe(true);
+  });
+
+  it('keeps the engine excerpt of a long template and drops look-alikes', () => {
+    const events: CacheTelemetryObservation[] = [];
+    const recorder = new CacheTelemetryRecorder({
+      emit: (event) => events.push(event),
+    });
+    const slow = {
+      name: 'graphql_cache.slow_query',
+      operationCategory: 'storage',
+      durationMs: 201,
+      queryFingerprint: engineExcerpt.fingerprint,
+      outcome: 'success',
+    } as const;
+    recorder.record({ ...slow, queryTemplate: engineExcerpt.template });
+    // A marker naming a length within the bound is not an excerpt.
+    recorder.record({
+      ...slow,
+      queryTemplate: 'SELECT 1 /* 100 bytes */ FROM records',
+    });
+    // The marker of a long template, with halves of the wrong size.
+    recorder.record({
+      ...slow,
+      queryTemplate: engineExcerpt.template.slice(64),
+    });
+    // The right halves around a length the engine would not have shortened.
+    recorder.record({
+      ...slow,
+      queryTemplate: engineExcerpt.template.replace(
+        ' /* 12050 bytes */ ',
+        ' /* 8192 bytes */ '
+      ),
+    });
+    // The engine writes no leading zeros.
+    recorder.record({
+      ...slow,
+      queryTemplate: engineExcerpt.template.replace('12050', '012050'),
+    });
+    // Marker-like comments in the template before the engine's own marker,
+    // sharing a space: one names a short length, one a long one.
+    const comments = 'S /* 100 bytes */ /* 9999 bytes */ ';
+    const commented = `${comments}${engineExcerpt.template.slice(comments.length)}`;
+    recorder.record({ ...slow, queryTemplate: commented });
+    // A comment ending the head, whose closing space is the marker's opening
+    // one: a search that does not overlap matches would never see the marker.
+    const decoy = ' /* 9999 bytes */';
+    const marker = engineExcerpt.template.indexOf(' /* 12050 bytes */ ');
+    const adjacent = `${engineExcerpt.template.slice(0, marker - decoy.length)}${decoy}${engineExcerpt.template.slice(marker)}`;
+    recorder.record({ ...slow, queryTemplate: adjacent });
+    recorder.flush();
+    expect(events.map((event) => event.queryTemplate)).toEqual([
+      engineExcerpt.template,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      commented,
+      adjacent,
+    ]);
   });
 
   it('never samples or aggregates slow requests and drops an invalid queue wait', () => {

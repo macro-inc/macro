@@ -143,6 +143,9 @@ export function createOtelCacheTelemetrySink(): CacheTelemetrySink {
             const attributes = {
               'db.system.name': 'sqlite',
               'db.query.fingerprint': event.queryFingerprint,
+              // A parameterized template, as OpenTelemetry's db.query.text
+              // expects: the engine sends no bound values.
+              'db.query.text': event.queryTemplate,
               'cache.backend': event.backend,
               'cache.duration_ms': event.durationMs,
               'cache.outcome': event.outcome,

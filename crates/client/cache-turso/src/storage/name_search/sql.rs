@@ -1,4 +1,5 @@
 use super::*;
+use crate::sql::Sql;
 
 /// Lowercase address fact from the people SQL projection, present on every
 /// complete contact.
@@ -9,9 +10,9 @@ pub(super) struct Params {
     pub values: driver::Values,
 }
 impl Params {
-    pub fn bind(&mut self, value: Value) -> String {
+    pub fn bind(&mut self, value: Value) -> Sql {
         self.values.push(value);
-        format!("?{}", self.values.len())
+        Sql::placeholder(self.values.len())
     }
 }
 pub(super) enum Bounds {
@@ -26,28 +27,28 @@ pub(super) struct Seed {
     pub bounds: Bounds,
 }
 impl Seed {
-    pub fn restriction(&self, p: &mut Params, alias: &str) -> String {
+    pub fn restriction(&self, p: &mut Params, alias: &'static str) -> Sql {
         let attr = p.bind(text(self.attribute));
-        let mut sql = format!("{alias}.attribute={attr}");
+        let mut sql = crate::sql!("{alias}.attribute={attr}", alias, attr);
         match &self.bounds {
             Bounds::Equal(value) => {
                 let value = p.bind(Value::from_blob(value.clone()));
-                sql.push_str(&format!(" AND {alias}.value={value}"));
+                sql.push(crate::sql!(" AND {alias}.value={value}", alias, value));
             }
             Bounds::Prefix(value) => {
                 let low = p.bind(Value::from_blob(value.clone()));
-                sql.push_str(&format!(" AND {alias}.value>={low}"));
+                sql.push(crate::sql!(" AND {alias}.value>={low}", alias, low));
                 if let Some(end) = prefix_end(value) {
                     let high = p.bind(Value::from_blob(end));
-                    sql.push_str(&format!(" AND {alias}.value<{high}"));
+                    sql.push(crate::sql!(" AND {alias}.value<{high}", alias, high));
                 }
             }
             Bounds::Between(low, high) => {
                 let low = p.bind(Value::from_blob(low.clone()));
-                sql.push_str(&format!(" AND {alias}.value>={low}"));
+                sql.push(crate::sql!(" AND {alias}.value>={low}", alias, low));
                 if let Some(high) = high {
                     let high = p.bind(Value::from_blob(high.clone()));
-                    sql.push_str(&format!(" AND {alias}.value<{high}"));
+                    sql.push(crate::sql!(" AND {alias}.value<{high}", alias, high));
                 }
             }
             Bounds::All => {}
@@ -55,20 +56,23 @@ impl Seed {
         sql
     }
 }
-fn exists(p: &mut Params, seed: Seed) -> String {
+fn exists(p: &mut Params, seed: Seed) -> Sql {
     let restriction = seed.restriction(p, "f");
-    format!(
-        "EXISTS (SELECT 1 FROM exact_facts f INDEXED BY sqlite_autoindex_exact_facts_1 WHERE f.document_id=d.id AND {restriction})"
+    crate::sql!(
+        "EXISTS (SELECT 1 FROM exact_facts f INDEXED BY sqlite_autoindex_exact_facts_1 WHERE f.document_id=d.id AND {restriction})",
+        restriction
     )
 }
-pub(super) fn scope(p: &mut Params, read: &NameSearchRead<'_>, complete: bool) -> String {
+pub(super) fn scope(p: &mut Params, read: &NameSearchRead<'_>, complete: bool) -> Sql {
     let profile = p.bind(text(people::PROFILE));
     let partition = p.bind(text(&people::partition(&read.request().scope.identity)));
-    let mut sql = format!(
-        "d.profile={profile} AND d.partition={partition} AND substr(d.record_key,1,15)='GraphqlContact:'"
+    let mut sql = crate::sql!(
+        "d.profile={profile} AND d.partition={partition} AND substr(d.record_key,1,15)='GraphqlContact:'",
+        profile,
+        partition
     );
     if complete {
-        sql.push_str(" AND d.state=0");
+        sql.push(" AND d.state=0");
         let invalid = exists(
             p,
             Seed {
@@ -83,16 +87,20 @@ pub(super) fn scope(p: &mut Params, read: &NameSearchRead<'_>, complete: bool) -
                 bounds: Bounds::Equal(read.epoch().as_bytes().to_vec()),
             },
         );
-        sql.push_str(&format!(" AND NOT {invalid} AND NOT {hidden}"));
+        sql.push(crate::sql!(
+            " AND NOT {invalid} AND NOT {hidden}",
+            invalid,
+            hidden
+        ));
         if !read.request().excluded.is_empty() {
             let values = read
                 .request()
                 .excluded
                 .iter()
                 .map(|id| p.bind(Value::from_blob(id.as_ref().as_bytes().to_vec())))
-                .collect::<Vec<_>>()
-                .join(",");
-            sql.push_str(&format!(" AND NOT EXISTS (SELECT 1 FROM exact_facts excluded INDEXED BY sqlite_autoindex_exact_facts_1 WHERE excluded.document_id=d.id AND excluded.attribute='id' AND excluded.value IN ({values}))"));
+                .collect::<Vec<_>>();
+            let values = Sql::join(values, ",");
+            sql.push(crate::sql!(" AND NOT EXISTS (SELECT 1 FROM exact_facts excluded INDEXED BY sqlite_autoindex_exact_facts_1 WHERE excluded.document_id=d.id AND excluded.attribute='id' AND excluded.value IN ({values}))", values));
         }
     }
     sql
@@ -147,9 +155,9 @@ fn exact_name(query: &str) -> Seed {
         bounds: Bounds::Between(query, first_name),
     }
 }
-pub(super) fn matches(p: &mut Params, read: &NameSearchRead<'_>, stage: NameStage) -> String {
+pub(super) fn matches(p: &mut Params, read: &NameSearchRead<'_>, stage: NameStage) -> Sql {
     match (read.query(), stage) {
-        (_, NameStage::Browse) => "1".into(),
+        (_, NameStage::Browse) => crate::sql!("1"),
         (NameSearch::Name(q), NameStage::WordPrefix) => {
             let words = q
                 .words()
@@ -164,7 +172,7 @@ pub(super) fn matches(p: &mut Params, read: &NameSearchRead<'_>, stage: NameStag
                 })
                 .collect::<Vec<_>>();
             if words.is_empty() {
-                return "0".into();
+                return crate::sql!("0");
             }
             let overflow = exists(
                 p,
@@ -173,7 +181,11 @@ pub(super) fn matches(p: &mut Params, read: &NameSearchRead<'_>, stage: NameStag
                     bounds: Bounds::Equal(b"1".to_vec()),
                 },
             );
-            format!("(({}) OR {overflow})", words.join(" AND "))
+            crate::sql!(
+                "(({words}) OR {overflow})",
+                words = Sql::join(&words, " AND "),
+                overflow
+            )
         }
         (NameSearch::Name(q), NameStage::Contains | NameStage::Address) => {
             let attribute = if stage == NameStage::Contains {
@@ -182,17 +194,19 @@ pub(super) fn matches(p: &mut Params, read: &NameSearchRead<'_>, stage: NameStag
                 EMAIL
             };
             let Some(terms) = contains_terms(p, q.normalized(), "f.value") else {
-                return "0".into();
+                return crate::sql!("0");
             };
-            format!(
-                "EXISTS (SELECT 1 FROM exact_facts f INDEXED BY sqlite_autoindex_exact_facts_1 WHERE f.document_id=d.id AND f.attribute='{attribute}' AND {terms})"
+            crate::sql!(
+                "EXISTS (SELECT 1 FROM exact_facts f INDEXED BY sqlite_autoindex_exact_facts_1 WHERE f.document_id=d.id AND f.attribute='{attribute}' AND {terms})",
+                attribute,
+                terms
             )
         }
         _ => seeds(read, stage)
             .into_iter()
             .next()
             .map(|seed| exists(p, seed))
-            .unwrap_or_else(|| "0".into()),
+            .unwrap_or_else(|| crate::sql!("0")),
     }
 }
 pub(super) fn candidate(
@@ -200,7 +214,7 @@ pub(super) fn candidate(
     stage: Option<NameStage>,
     seed: &Seed,
     exclude_overflow: bool,
-) -> (String, driver::Values) {
+) -> (Sql, driver::Values) {
     let mut p = Params::default();
     let restriction = seed.restriction(&mut p, "seed");
     let scope = scope(&mut p, read, true);
@@ -209,9 +223,9 @@ pub(super) fn candidate(
     // the same name again for every document in the directory.
     let matching = seed_filter(&mut p, read, stage, seed);
     let overflow = if exclude_overflow {
-        format!(
-            " AND NOT {}",
-            exists(
+        crate::sql!(
+            " AND NOT {exists}",
+            exists = exists(
                 &mut p,
                 Seed {
                     attribute: names::WORD_OVERFLOW,
@@ -220,11 +234,16 @@ pub(super) fn candidate(
             )
         )
     } else {
-        String::new()
+        Sql::new()
     };
     (
-        format!(
-            "SELECT r.__typename,r.id,r.value FROM exact_facts seed INDEXED BY exact_facts_lookup_idx CROSS JOIN index_documents d ON d.id=seed.document_id {RECORD_JOIN} WHERE {restriction} AND {scope} AND {matching}{overflow}"
+        crate::sql!(
+            "SELECT r.__typename,r.id,r.value FROM exact_facts seed INDEXED BY exact_facts_lookup_idx CROSS JOIN index_documents d ON d.id=seed.document_id {RECORD_JOIN} WHERE {restriction} AND {scope} AND {matching}{overflow}",
+            RECORD_JOIN,
+            restriction,
+            scope,
+            matching,
+            overflow
         ),
         p.values,
     )
@@ -235,11 +254,11 @@ pub(super) fn seed_filter(
     read: &NameSearchRead<'_>,
     stage: Option<NameStage>,
     seed: &Seed,
-) -> String {
+) -> Sql {
     match (stage, read.query(), seed.attribute, &seed.bounds) {
         (Some(NameStage::Contains), NameSearch::Name(q), names::NAME, _)
         | (Some(NameStage::Address), NameSearch::Name(q), EMAIL, _) => {
-            contains_terms(p, q.normalized(), "seed.value").unwrap_or_else(|| "0".into())
+            contains_terms(p, q.normalized(), "seed.value").unwrap_or_else(|| crate::sql!("0"))
         }
         (Some(NameStage::WordPrefix), NameSearch::Name(q), names::WORD, Bounds::Prefix(prefix)) => {
             let rest = q
@@ -256,12 +275,12 @@ pub(super) fn seed_filter(
                 })
                 .collect::<Vec<_>>();
             if rest.is_empty() {
-                "1".into()
+                crate::sql!("1")
             } else {
-                rest.join(" AND ")
+                Sql::join(rest, " AND ")
             }
         }
-        (Some(NameStage::WordPrefix), _, names::WORD_OVERFLOW, _) => "1".into(),
+        (Some(NameStage::WordPrefix), _, names::WORD_OVERFLOW, _) => crate::sql!("1"),
         (
             Some(
                 NameStage::ExactName
@@ -273,14 +292,14 @@ pub(super) fn seed_filter(
             _,
             _,
         )
-        | (None, _, _, _) => "1".into(),
+        | (None, _, _, _) => crate::sql!("1"),
         (Some(stage), _, _, _) => matches(p, read, stage),
     }
 }
 
 /// Every whitespace-separated term of the normalized query occurs literally in `column`, a text
 /// fact value. None when the query has no terms.
-fn contains_terms(p: &mut Params, query: &str, column: &str) -> Option<String> {
+fn contains_terms(p: &mut Params, query: &str, column: &'static str) -> Option<Sql> {
     let terms = query
         .split_whitespace()
         .map(|term| {
@@ -293,11 +312,15 @@ fn contains_terms(p: &mut Params, query: &str, column: &str) -> Option<String> {
             }
             like.push('%');
             let pattern = p.bind(text(&like));
-            format!("CAST({column} AS TEXT) LIKE {pattern} ESCAPE '\\'")
+            crate::sql!(
+                "CAST({column} AS TEXT) LIKE {pattern} ESCAPE '\\'",
+                column,
+                pattern
+            )
         })
         .collect::<Vec<_>>();
     if terms.is_empty() {
         return None;
     }
-    Some(terms.join(" AND "))
+    Some(Sql::join(terms, " AND "))
 }

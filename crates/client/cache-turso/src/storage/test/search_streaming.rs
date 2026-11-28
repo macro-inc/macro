@@ -65,7 +65,7 @@ fn streamed_search_reset_failure_retires_storage_even_after_rows_were_visited() 
             .unwrap();
         let query = SearchQuery::new("ndl");
         let (sql, _) = search::statement(SearchProfile::QuickAccessV1, "document");
-        driver::arm_reset_failure(&sql);
+        driver::arm_reset_failure(sql);
         let mut visited = 0;
         expect_reset_reason(
             storage

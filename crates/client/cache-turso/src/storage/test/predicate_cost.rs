@@ -212,9 +212,9 @@ fn exact_alternatives_use_one_lookup_without_widening_nested_boolean_filters() {
             })
             .unwrap();
             let (sql, parameters) = compile_predicate_selection(&query, &[], true);
-            assert!(sql.contains("CROSS JOIN exact_facts AS f INDEXED BY exact_facts_lookup_idx ON f.attribute = ? AND f.value = w.value"));
+            assert!(sql.as_str().contains("CROSS JOIN exact_facts AS f INDEXED BY exact_facts_lookup_idx ON f.attribute = ? AND f.value = w.value"));
             assert!(
-                sql.matches(" exact_facts AS f").count() <= 2,
+                sql.as_str().matches(" exact_facts AS f").count() <= 2,
                 "one lookup for alternatives, at most one for negated owner"
             );
             let rows = driver::query(&storage.connection(), &sql, parameters).unwrap();

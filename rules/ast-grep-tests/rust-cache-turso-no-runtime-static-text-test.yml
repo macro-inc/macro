@@ -1,0 +1,98 @@
+id: rust-cache-turso-no-runtime-static-text
+valid:
+  - |
+    const TABLE: &str = "records";
+  - |
+    static NAMES: [&str; 2] = ["records", "meta"];
+  - |
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+  - |
+    use std::sync::atomic::AtomicU64;
+    type Slot = u64;
+  - |
+    use std::sync::atomic::AtomicBool as Flag;
+  - |
+    static READY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+  - |
+    static NEXT: ::std::sync::atomic::AtomicU64 = ::std::sync::atomic::AtomicU64::new(1);
+  - |
+    macro_rules! sql { ($text:literal) => { Sql::from_static($text as &'static str) }; }
+  - |
+    macro_rules! sql {
+        // A static fragment is checked before it becomes a template.
+        ($text:literal) => { Sql::from_static($text) };
+    }
+  - |
+    thread_local! { static SENT: RefCell<Vec<u64>> = RefCell::new(Vec::new()); }
+  - |
+    fn f(t: &Template) -> Sql { sql!("SELECT {t}", t = { t as &Template<'static> }) }
+  - |
+    static TABLES: &[&str] = &["records", "meta"];
+  - |
+    static LIMIT: usize = 4_096;
+  - |
+    fn f(sql: &mut Sql) { sql.push("SELECT 1"); }
+  - |
+    fn f(text: String) -> UnreportedSql { UnreportedSql::new(text) }
+invalid:
+  - |
+    fn f(text: String) -> &'static str { text.leak() }
+  - |
+    fn f(text: String) -> &'static str { Box::leak(text.into_boxed_str()) }
+  - |
+    fn f(text: String) -> &'static str { String::leak(text) }
+  - |
+    fn f(text: String) -> &'static str { std::boxed::Box::leak(text.into_boxed_str()) }
+  - |
+    fn f(text: String) -> &'static str { let leak = Box::leak; leak(text.into_boxed_str()) }
+  - |
+    extern crate self as std;
+  - |
+    fn f(input: String) -> Sql { sql!("SELECT {part}", part = { static PART: OnceLock<String> = OnceLock::new(); PART.get_or_init(|| input).as_str() }) }
+  - |
+    macro_rules! text { () => { static SQL: OnceLock<String> = OnceLock::new(); }; }
+  - |
+    thread_local! { static T: &'static str = { static P: OnceLock<String> = OnceLock::new(); P.get_or_init(|| record_field()).as_str() }; }
+  - |
+    static TEXT: LazyLock<String> = LazyLock::new(|| std::env::args().collect());
+  - |
+    static TEXT: OnceLock<String> = OnceLock::new();
+  - |
+    static mut TEXT: String = String::new();
+  - |
+    static TEXT: OnceLock<Box<str>> = OnceLock::new();
+  - |
+    static TEXT: Mutex<Option<Cow<'static, str>>> = Mutex::new(None);
+  - |
+    static mut TEXT: &str = "";
+  - |
+    type Slot = OnceLock<Box<str>>;
+    static SQL: Slot = Slot::new();
+  - |
+    struct Holder(OnceLock<String>);
+    static SQL: Holder = Holder(OnceLock::new());
+  - |
+    type AtomicText = OnceLock<String>;
+    static SQL: AtomicText = AtomicText::new();
+  - |
+    type AtomicBool = OnceLock<String>;
+    static SQL: AtomicBool = AtomicBool::new();
+  - |
+    use std::sync::OnceLock as AtomicU64;
+    static SQL: AtomicU64<String> = AtomicU64::new();
+  - |
+    static NEXT: AtomicU64 = AtomicU64::new(1);
+  - |
+    type r#AtomicBool = OnceLock<String>;
+    static SQL: r#AtomicBool = r#AtomicBool::new();
+  - |
+    struct AtomicBool(OnceLock<String>);
+    static SQL: AtomicBool = AtomicBool(OnceLock::new());
+  - |
+    struct u64(OnceLock<String>);
+  - |
+    type r#bool = OnceLock<String>;
+  - |
+    mod std { pub struct Text; }
+  - |
+    static SQL: AtomicPtr<u8> = AtomicPtr::new(std::ptr::null_mut());

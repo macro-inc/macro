@@ -145,3 +145,14 @@ fn every_batch_size_reads_through_a_few_cached_statements() {
         );
     });
 }
+
+#[test]
+fn the_batch_statement_keeps_its_text() {
+    // The text main built with `format!`, so its slow-query fingerprint holds.
+    assert_eq!(
+        sql(3).as_str(),
+        "WITH requested(position, typename, id) AS (VALUES (0, ?, ?), (1, ?, ?), (2, ?, ?)) \
+         SELECT q.position, r.value FROM requested AS q \
+         LEFT JOIN records AS r ON r.__typename = q.typename AND r.id = q.id"
+    );
+}

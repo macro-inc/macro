@@ -12,10 +12,10 @@ import { createOtelCacheTelemetrySink } from './telemetry-otel';
 // Shared by every open build. A reporter drops an observation that has a field
 // its build does not know, so a build that adds a field moves to a new version:
 // otherwise an older build's reporter drops this build's events whole.
-// v2 adds `unavailableReason`.
-const CACHE_TELEMETRY_CHANNEL = 'macro:graphql-cache-telemetry:v2';
+// v2 adds `unavailableReason`; v3 adds `queryTemplate`.
+const CACHE_TELEMETRY_CHANNEL = 'macro:graphql-cache-telemetry:v3';
 const CACHE_TELEMETRY_REPORTER_LOCK =
-  'macro:graphql-cache-telemetry-reporter:v2';
+  'macro:graphql-cache-telemetry-reporter:v3';
 
 type BroadcastChannelLike = Pick<
   BroadcastChannel,
@@ -53,6 +53,10 @@ export class CacheTelemetryRelay {
         this.options.createChannel ??
         ((name: string) => new BroadcastChannel(name));
       this.channel = createChannel(CACHE_TELEMETRY_CHANNEL);
+      // Any same-origin context can post here, and the relay cannot tell an
+      // engine worker from one. That is no new reach: such a script can
+      // already send the page's telemetry itself. The reporter's checks
+      // (field allowlist, template hash) catch a buggy sender, not a hostile one.
       this.channel.onmessage = (event: MessageEvent<unknown>) => {
         if (this.leader && isCacheTelemetryObservation(event.data)) {
           this.reporter.emit(event.data);

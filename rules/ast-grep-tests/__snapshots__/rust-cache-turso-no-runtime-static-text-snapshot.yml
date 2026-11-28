@@ -1,0 +1,219 @@
+id: rust-cache-turso-no-runtime-static-text
+snapshots:
+  ? |
+    extern crate self as std;
+  : labels:
+    - source: extern crate self as std;
+      style: primary
+      start: 0
+      end: 25
+  ? |
+    fn f(input: String) -> Sql { sql!("SELECT {part}", part = { static PART: OnceLock<String> = OnceLock::new(); PART.get_or_init(|| input).as_str() }) }
+  : labels:
+    - source: '{ static PART: OnceLock<String> = OnceLock::new(); PART.get_or_init(|| input).as_str() }'
+      style: primary
+      start: 58
+      end: 146
+    - source: static
+      style: secondary
+      start: 60
+      end: 66
+  ? |
+    fn f(text: String) -> &'static str { Box::leak(text.into_boxed_str()) }
+  : labels:
+    - source: leak
+      style: primary
+      start: 42
+      end: 46
+  ? |
+    fn f(text: String) -> &'static str { String::leak(text) }
+  : labels:
+    - source: leak
+      style: primary
+      start: 45
+      end: 49
+  ? |
+    fn f(text: String) -> &'static str { let leak = Box::leak; leak(text.into_boxed_str()) }
+  : labels:
+    - source: leak
+      style: primary
+      start: 41
+      end: 45
+  ? |
+    fn f(text: String) -> &'static str { std::boxed::Box::leak(text.into_boxed_str()) }
+  : labels:
+    - source: leak
+      style: primary
+      start: 54
+      end: 58
+  ? |
+    fn f(text: String) -> &'static str { text.leak() }
+  : labels:
+    - source: leak
+      style: primary
+      start: 42
+      end: 46
+  ? |
+    macro_rules! text { () => { static SQL: OnceLock<String> = OnceLock::new(); }; }
+  : labels:
+    - source: '{ static SQL: OnceLock<String> = OnceLock::new(); }'
+      style: primary
+      start: 26
+      end: 77
+    - source: static
+      style: secondary
+      start: 28
+      end: 34
+  ? |
+    mod std { pub struct Text; }
+  : labels:
+    - source: mod std { pub struct Text; }
+      style: primary
+      start: 0
+      end: 28
+    - source: std
+      style: secondary
+      start: 4
+      end: 7
+  ? |
+    static NEXT: AtomicU64 = AtomicU64::new(1);
+  : labels:
+    - source: 'static NEXT: AtomicU64 = AtomicU64::new(1);'
+      style: primary
+      start: 0
+      end: 43
+  ? |
+    static SQL: AtomicPtr<u8> = AtomicPtr::new(std::ptr::null_mut());
+  : labels:
+    - source: 'static SQL: AtomicPtr<u8> = AtomicPtr::new(std::ptr::null_mut());'
+      style: primary
+      start: 0
+      end: 65
+  ? |
+    static TEXT: LazyLock<String> = LazyLock::new(|| std::env::args().collect());
+  : labels:
+    - source: 'static TEXT: LazyLock<String> = LazyLock::new(|| std::env::args().collect());'
+      style: primary
+      start: 0
+      end: 77
+  ? |
+    static TEXT: Mutex<Option<Cow<'static, str>>> = Mutex::new(None);
+  : labels:
+    - source: 'static TEXT: Mutex<Option<Cow<''static, str>>> = Mutex::new(None);'
+      style: primary
+      start: 0
+      end: 65
+  ? |
+    static TEXT: OnceLock<Box<str>> = OnceLock::new();
+  : labels:
+    - source: 'static TEXT: OnceLock<Box<str>> = OnceLock::new();'
+      style: primary
+      start: 0
+      end: 50
+  ? |
+    static TEXT: OnceLock<String> = OnceLock::new();
+  : labels:
+    - source: 'static TEXT: OnceLock<String> = OnceLock::new();'
+      style: primary
+      start: 0
+      end: 48
+  ? |
+    static mut TEXT: &str = "";
+  : labels:
+    - source: 'static mut TEXT: &str = "";'
+      style: primary
+      start: 0
+      end: 27
+    - source: mut
+      style: secondary
+      start: 7
+      end: 10
+  ? |
+    static mut TEXT: String = String::new();
+  : labels:
+    - source: 'static mut TEXT: String = String::new();'
+      style: primary
+      start: 0
+      end: 40
+    - source: mut
+      style: secondary
+      start: 7
+      end: 10
+  ? |
+    struct AtomicBool(OnceLock<String>);
+    static SQL: AtomicBool = AtomicBool(OnceLock::new());
+  : labels:
+    - source: 'static SQL: AtomicBool = AtomicBool(OnceLock::new());'
+      style: primary
+      start: 37
+      end: 90
+  ? |
+    struct Holder(OnceLock<String>);
+    static SQL: Holder = Holder(OnceLock::new());
+  : labels:
+    - source: 'static SQL: Holder = Holder(OnceLock::new());'
+      style: primary
+      start: 33
+      end: 78
+  ? |
+    struct u64(OnceLock<String>);
+  : labels:
+    - source: struct u64(OnceLock<String>);
+      style: primary
+      start: 0
+      end: 29
+    - source: u64
+      style: secondary
+      start: 7
+      end: 10
+  ? |
+    type AtomicBool = OnceLock<String>;
+    static SQL: AtomicBool = AtomicBool::new();
+  : labels:
+    - source: 'static SQL: AtomicBool = AtomicBool::new();'
+      style: primary
+      start: 36
+      end: 79
+  ? |
+    type AtomicText = OnceLock<String>;
+    static SQL: AtomicText = AtomicText::new();
+  : labels:
+    - source: 'static SQL: AtomicText = AtomicText::new();'
+      style: primary
+      start: 36
+      end: 79
+  ? |
+    type Slot = OnceLock<Box<str>>;
+    static SQL: Slot = Slot::new();
+  : labels:
+    - source: 'static SQL: Slot = Slot::new();'
+      style: primary
+      start: 32
+      end: 63
+  ? |
+    type r#AtomicBool = OnceLock<String>;
+    static SQL: r#AtomicBool = r#AtomicBool::new();
+  : labels:
+    - source: 'static SQL: r#AtomicBool = r#AtomicBool::new();'
+      style: primary
+      start: 38
+      end: 85
+  ? |
+    type r#bool = OnceLock<String>;
+  : labels:
+    - source: type r#bool = OnceLock<String>;
+      style: primary
+      start: 0
+      end: 31
+    - source: r#bool
+      style: secondary
+      start: 5
+      end: 11
+  ? |
+    use std::sync::OnceLock as AtomicU64;
+    static SQL: AtomicU64<String> = AtomicU64::new();
+  : labels:
+    - source: 'static SQL: AtomicU64<String> = AtomicU64::new();'
+      style: primary
+      start: 38
+      end: 87

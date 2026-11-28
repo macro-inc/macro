@@ -1,5 +1,6 @@
 use crate::driver::{self, Db, WalCheckpoint, WalPosition};
 use crate::key::RecordKey;
+use crate::sql::{Ordinals, Sql, SqlPart, UnreportedSql};
 use crate::{PhysicalResetReason, TursoStorageError};
 use cache_core::codec::{
     CACHE_FORMAT_VERSION, MIGRATABLE_CACHE_FORMAT_VERSIONS, cache_namespace,
@@ -46,8 +47,6 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::Mutex;
-#[cfg(not(target_arch = "wasm32"))]
-use std::sync::atomic::AtomicU64;
 #[cfg(not(target_arch = "wasm32"))]
 use turso_core::{Database, IO, MemoryIO, OpenOptions, PlatformIO, SqliteDialect, TempStore};
 #[cfg(target_arch = "wasm32")]
@@ -401,7 +400,7 @@ pub fn count_queued_mutations(
     session: &ConnectedOpfsSession,
 ) -> Result<QueuedMutationCount, TursoStorageError> {
     let connection = Db::uncached(session.connection());
-    let count = |sql: &str| -> Result<u64, TursoStorageError> {
+    let count = |sql: &'static str| -> Result<u64, TursoStorageError> {
         let rows = driver::query(&connection, sql, Vec::new())?;
         let [row] = rows.as_slice() else {
             return Err(invariant());
@@ -714,7 +713,7 @@ impl TursoFileDatabase {
             .and_then(|compact_path| {
                 driver::execute(
                     &storage.connection(),
-                    &format!("VACUUM INTO {}", sql_literal(compact_path)),
+                    &UnreportedSql::new(format!("VACUUM INTO {}", sql_literal(compact_path))),
                     Vec::new(),
                 )
             })
@@ -986,7 +985,8 @@ pub enum TursoStorageCloseOutcome {
 impl TursoStorage {
     /// Opens a one-use isolated Turso `MemoryIO` database.
     pub fn open_in_memory(scope: &str) -> Result<Self, TursoStorageError> {
-        static NEXT_MEMORY_DATABASE: AtomicU64 = AtomicU64::new(1);
+        static NEXT_MEMORY_DATABASE: std::sync::atomic::AtomicU64 =
+            std::sync::atomic::AtomicU64::new(1);
         let id = NEXT_MEMORY_DATABASE.fetch_add(1, Ordering::Relaxed);
         TursoMemoryDatabase::new(format!("cache-turso-memory-{id}.db")).open(scope)
     }
@@ -1359,7 +1359,7 @@ impl Storage for TursoStorage {
         self.require_healthy()?;
         let (sql, values) = search::statement(profile, bucket);
         let mut key = String::new();
-        let result = driver::query_each(&self.connection(), &sql, values, |row| {
+        let result = driver::query_each(&self.connection(), sql, values, |row| {
             search::visit_row(row, profile, query, &mut key, &mut visit)
         });
         self.latch_result(result)
@@ -2671,7 +2671,10 @@ impl PendingFacts {
         ] {
             insert_rows(
                 connection,
-                &format!("INSERT INTO {table} (document_id, attribute, value) VALUES "),
+                &crate::sql!(
+                    "INSERT INTO {table} (document_id, attribute, value) VALUES ",
+                    table
+                ),
                 "",
                 3,
                 values,
@@ -2700,18 +2703,21 @@ fn insert_batches(mut rows: usize) -> impl Iterator<Item = usize> {
 /// inserts.
 fn insert_rows(
     connection: &Db,
-    prefix: &str,
-    suffix: &str,
+    prefix: impl SqlPart + Copy,
+    suffix: &'static str,
     width: usize,
     values: Vec<Value>,
 ) -> Result<(), TursoStorageError> {
     if !values.len().is_multiple_of(width) {
         return Err(invariant());
     }
-    let row = format!("({})", vec!["?"; width].join(", "));
+    let row = crate::sql!("({placeholders})", placeholders = Sql::placeholders(width));
     let mut values = values.into_iter();
     for size in insert_batches(values.len() / width) {
-        let sql = format!("{prefix}{}{suffix}", vec![row.as_str(); size].join(", "));
+        let mut sql = Sql::new();
+        sql.push(prefix)
+            .push(Sql::repeat(&row, size, ", "))
+            .push(suffix);
         let changed = driver::execute(
             connection,
             &sql,
@@ -2794,8 +2800,8 @@ fn write_changed_facts<F: Ord>(
     connection: &Db,
     old: &[F],
     next: &[F],
-    delete: &str,
-    insert: &str,
+    delete: &'static str,
+    insert: &'static str,
     parameters: impl Fn(&F) -> Vec<Value>,
 ) -> Result<(), TursoStorageError> {
     let old_set = old.iter().collect::<BTreeSet<_>>();
@@ -2862,8 +2868,9 @@ fn load_projection_states(
     let placeholders = sql_placeholders(keys.len());
     let rows = driver::query(
         connection,
-        &format!(
-            "SELECT id, record_key, profile, partition, state FROM index_documents WHERE record_key IN ({placeholders})"
+        &crate::sql!(
+            "SELECT id, record_key, profile, partition, state FROM index_documents WHERE record_key IN ({placeholders})",
+            placeholders
         ),
         keys.iter().map(|key| text(key.as_str())).collect(),
     )?;
@@ -2934,8 +2941,9 @@ fn load_optimistic_projections(
     let placeholders = sql_placeholders(keys.len());
     let rows = driver::query(
         connection,
-        &format!(
-            "SELECT id, owner_mutation_id, record_key, profile, partition, state, incomplete_kind FROM optimistic_index_documents WHERE record_key IN ({placeholders})"
+        &crate::sql!(
+            "SELECT id, owner_mutation_id, record_key, profile, partition, state, incomplete_kind FROM optimistic_index_documents WHERE record_key IN ({placeholders})",
+            placeholders
         ),
         keys.iter().map(|key| text(key.as_str())).collect(),
     )?;
@@ -3007,8 +3015,9 @@ fn load_optimistic_projections(
     let id_parameters = || ids.iter().copied().map(Value::from_i64).collect::<Vec<_>>();
     for row in driver::query(
         connection,
-        &format!(
-            "SELECT document_id, attribute, value FROM optimistic_exact_facts WHERE document_id IN ({id_placeholders})"
+        &crate::sql!(
+            "SELECT document_id, attribute, value FROM optimistic_exact_facts WHERE document_id IN ({id_placeholders})",
+            id_placeholders
         ),
         id_parameters(),
     )? {
@@ -3024,8 +3033,9 @@ fn load_optimistic_projections(
     }
     for row in driver::query(
         connection,
-        &format!(
-            "SELECT document_id, attribute, value FROM optimistic_integer_facts WHERE document_id IN ({id_placeholders})"
+        &crate::sql!(
+            "SELECT document_id, attribute, value FROM optimistic_integer_facts WHERE document_id IN ({id_placeholders})",
+            id_placeholders
         ),
         id_parameters(),
     )? {
@@ -3040,8 +3050,9 @@ fn load_optimistic_projections(
     }
     for row in driver::query(
         connection,
-        &format!(
-            "SELECT document_id, attribute, value FROM optimistic_sort_facts WHERE document_id IN ({id_placeholders})"
+        &crate::sql!(
+            "SELECT document_id, attribute, value FROM optimistic_sort_facts WHERE document_id IN ({id_placeholders})",
+            id_placeholders
         ),
         id_parameters(),
     )? {
@@ -3057,8 +3068,9 @@ fn load_optimistic_projections(
     let mut raw_uncertainty: HashMap<i64, Vec<String>> = HashMap::new();
     for row in driver::query(
         connection,
-        &format!(
-            "SELECT document_id, attribute FROM optimistic_uncertain_attributes WHERE document_id IN ({id_placeholders})"
+        &crate::sql!(
+            "SELECT document_id, attribute FROM optimistic_uncertain_attributes WHERE document_id IN ({id_placeholders})",
+            id_placeholders
         ),
         id_parameters(),
     )? {
@@ -3124,11 +3136,8 @@ fn parse_optimistic_uncertainty(
     })
 }
 
-fn sql_placeholders(count: usize) -> String {
-    (1..=count)
-        .map(|index| format!("?{index}"))
-        .collect::<Vec<_>>()
-        .join(", ")
+fn sql_placeholders(count: usize) -> Sql {
+    Sql::numbered_placeholders(1, count)
 }
 
 /// Fills the facts of complete index documents, keyed by their row ids.
@@ -3145,8 +3154,9 @@ fn load_index_facts(
     let id_parameters = || ids.iter().copied().map(Value::from_i64).collect::<Vec<_>>();
     for row in driver::query(
         connection,
-        &format!(
-            "SELECT document_id, attribute, value FROM exact_facts WHERE document_id IN ({id_placeholders})"
+        &crate::sql!(
+            "SELECT document_id, attribute, value FROM exact_facts WHERE document_id IN ({id_placeholders})",
+            id_placeholders
         ),
         id_parameters(),
     )? {
@@ -3163,8 +3173,9 @@ fn load_index_facts(
     }
     for row in driver::query(
         connection,
-        &format!(
-            "SELECT document_id, attribute, value FROM integer_facts WHERE document_id IN ({id_placeholders})"
+        &crate::sql!(
+            "SELECT document_id, attribute, value FROM integer_facts WHERE document_id IN ({id_placeholders})",
+            id_placeholders
         ),
         id_parameters(),
     )? {
@@ -3180,8 +3191,9 @@ fn load_index_facts(
     }
     for row in driver::query(
         connection,
-        &format!(
-            "SELECT document_id, attribute, value FROM sort_facts WHERE document_id IN ({id_placeholders})"
+        &crate::sql!(
+            "SELECT document_id, attribute, value FROM sort_facts WHERE document_id IN ({id_placeholders})",
+            id_placeholders
         ),
         id_parameters(),
     )? {
@@ -3216,9 +3228,10 @@ fn present_predicate_records(
             let parsed = RecordKey::from_entity(&EntityKey(key.as_str().into()))?;
             parameters.extend([text(&parsed.typename), text(&parsed.id)]);
         }
-        let values = vec!["(?, ?)"; batch.len()].join(", ");
-        let sql = format!(
-            "WITH requested(typename, id) AS (VALUES {values}) SELECT r.__typename, r.id FROM requested AS q JOIN records AS r ON r.__typename = q.typename AND r.id = q.id"
+        let values = Sql::repeat("(?, ?)", batch.len(), ", ");
+        let sql = crate::sql!(
+            "WITH requested(typename, id) AS (VALUES {values}) SELECT r.__typename, r.id FROM requested AS q JOIN records AS r ON r.__typename = q.typename AND r.id = q.id",
+            values
         );
         for row in driver::query(connection, &sql, parameters)? {
             if row.len() != 2 {
@@ -3266,20 +3279,20 @@ fn optimistic_query_status(
     query: &ValidatedIndexQuery,
 ) -> Result<OptimisticQueryStatus, TursoStorageError> {
     let descriptor = query.as_query();
-    let current_clauses = descriptor
-        .partitions
-        .iter()
-        .map(|_| "(d.profile = ? AND d.partition = ?)")
-        .collect::<Vec<_>>()
-        .join(" OR ");
-    let authority_clauses = descriptor
-        .partitions
-        .iter()
-        .map(|_| "(a.profile = ? AND a.partition = ?)")
-        .collect::<Vec<_>>()
-        .join(" OR ");
-    let sql = format!(
-        "SELECT d.id, d.profile, d.partition, d.state, u.attribute FROM optimistic_index_documents AS d LEFT JOIN optimistic_uncertain_attributes AS u ON u.document_id = d.id WHERE ({current_clauses}) OR EXISTS (SELECT 1 FROM index_documents AS a WHERE a.record_key = d.record_key AND ({authority_clauses})) ORDER BY d.id, u.attribute"
+    let current_clauses = Sql::repeat(
+        "(d.profile = ? AND d.partition = ?)",
+        descriptor.partitions.len(),
+        " OR ",
+    );
+    let authority_clauses = Sql::repeat(
+        "(a.profile = ? AND a.partition = ?)",
+        descriptor.partitions.len(),
+        " OR ",
+    );
+    let sql = crate::sql!(
+        "SELECT d.id, d.profile, d.partition, d.state, u.attribute FROM optimistic_index_documents AS d LEFT JOIN optimistic_uncertain_attributes AS u ON u.document_id = d.id WHERE ({current_clauses}) OR EXISTS (SELECT 1 FROM index_documents AS a WHERE a.record_key = d.record_key AND ({authority_clauses})) ORDER BY d.id, u.attribute",
+        current_clauses,
+        authority_clauses
     );
     let mut parameters = Vec::with_capacity(descriptor.partitions.len() * 4);
     for _ in 0..2 {
@@ -3328,7 +3341,7 @@ fn optimistic_query_status(
     Ok(status)
 }
 
-fn compile_predicate_sql(query: &ValidatedIndexQuery) -> (String, Vec<Value>) {
+fn compile_predicate_sql(query: &ValidatedIndexQuery) -> (Sql, Vec<Value>) {
     compile_predicate_selection(query, &[], false)
 }
 
@@ -3336,7 +3349,7 @@ fn compile_predicate_selection(
     query: &ValidatedIndexQuery,
     excluded_optimistic: &[i64],
     include_sort: bool,
-) -> (String, Vec<Value>) {
+) -> (Sql, Vec<Value>) {
     let descriptor = query.as_query();
     let mut compiler = SqlPredicateCompiler::new(excluded_optimistic);
     let roots = descriptor
@@ -3351,13 +3364,16 @@ fn compile_predicate_selection(
         })
         .collect::<Vec<_>>();
     let matches = compiler.next_name();
-    let union = roots
-        .iter()
-        .map(|root| format!("SELECT source, document_id FROM {root}"))
-        .collect::<Vec<_>>()
-        .join(" UNION ");
-    compiler.ctes.push(format!(
-        "{matches}(source, document_id) AS MATERIALIZED ({union})"
+    let union = Sql::join(
+        roots
+            .iter()
+            .map(|root| crate::sql!("SELECT source, document_id FROM {root}", root)),
+        " UNION ",
+    );
+    compiler.ctes.push(crate::sql!(
+        "{matches}(source, document_id) AS MATERIALIZED ({union})",
+        matches,
+        union
     ));
     let hits = compiler.next_name();
     compiler
@@ -3370,9 +3386,7 @@ fn compile_predicate_selection(
     // Without both constraints Turso prefers the (attribute, value, document_id)
     // lookup index using only attribute, rescanning all sort facts for each match.
     // The composite primary keys are part of the validated storage schema.
-    compiler.ctes.push(format!(
-        "{hits}(record_key, value) AS MATERIALIZED (SELECT d.record_key, s.value FROM {matches} AS m CROSS JOIN index_documents AS d ON m.source = 0 AND d.id = m.document_id CROSS JOIN sort_facts AS s INDEXED BY sqlite_autoindex_sort_facts_1 ON s.document_id = m.document_id AND s.attribute = ? UNION ALL SELECT d.record_key, s.value FROM {matches} AS m CROSS JOIN optimistic_index_documents AS d ON m.source = 1 AND d.id = m.document_id CROSS JOIN optimistic_sort_facts AS s INDEXED BY sqlite_autoindex_optimistic_sort_facts_1 ON s.document_id = m.document_id AND s.attribute = ?)"
-    ));
+    compiler.ctes.push(crate::sql!("{hits}(record_key, value) AS MATERIALIZED (SELECT d.record_key, s.value FROM {matches} AS m CROSS JOIN index_documents AS d ON m.source = 0 AND d.id = m.document_id CROSS JOIN sort_facts AS s INDEXED BY sqlite_autoindex_sort_facts_1 ON s.document_id = m.document_id AND s.attribute = ? UNION ALL SELECT d.record_key, s.value FROM {matches} AS m CROSS JOIN optimistic_index_documents AS d ON m.source = 1 AND d.id = m.document_id CROSS JOIN optimistic_sort_facts AS s INDEXED BY sqlite_autoindex_optimistic_sort_facts_1 ON s.document_id = m.document_id AND s.attribute = ?)", hits, matches));
     compiler
         .parameters
         .push(Value::from_i64(i64::from(descriptor.limit)));
@@ -3385,9 +3399,13 @@ fn compile_predicate_selection(
         SortDirection::Desc => "DESC",
     };
     let sort_selection = if include_sort { ", value" } else { "" };
-    let sql = format!(
-        "WITH {} SELECT record_key{sort_selection} FROM {hits} ORDER BY value {sort_direction}, record_key {tie_direction} LIMIT ?",
-        compiler.ctes.join(", ")
+    let sql = crate::sql!(
+        "WITH {ctes} SELECT record_key{sort_selection} FROM {hits} ORDER BY value {sort_direction}, record_key {tie_direction} LIMIT ?",
+        ctes = Sql::join(&compiler.ctes, ", "),
+        sort_selection,
+        hits,
+        sort_direction,
+        tie_direction
     );
     (sql, compiler.parameters)
 }
@@ -3401,41 +3419,40 @@ fn compile_predicate_selection(
 // point-probe residual facts instead of materializing every posting list.
 // Application predicates remain unchanged in the IR.
 struct SqlPredicateCompiler {
-    ctes: Vec<String>,
+    ctes: Vec<Sql>,
     parameters: Vec<Value>,
-    next_id: usize,
+    names: Ordinals,
 }
 
 impl SqlPredicateCompiler {
     fn new(excluded_optimistic: &[i64]) -> Self {
         let exclusion = if excluded_optimistic.is_empty() {
-            String::new()
+            Sql::new()
         } else {
-            format!(
-                " AND o.id NOT IN ({})",
-                sql_placeholders(excluded_optimistic.len())
+            crate::sql!(
+                " AND o.id NOT IN ({placeholders})",
+                placeholders = sql_placeholders(excluded_optimistic.len())
             )
         };
         Self {
-            ctes: vec![format!(
-                "optimistic_documents(document_id, record_key, profile, partition) AS MATERIALIZED (SELECT o.id, o.record_key, o.profile, o.partition FROM optimistic_index_documents AS o WHERE o.state = 0{exclusion})"
+            ctes: vec![crate::sql!(
+                "optimistic_documents(document_id, record_key, profile, partition) AS MATERIALIZED (SELECT o.id, o.record_key, o.profile, o.partition FROM optimistic_index_documents AS o WHERE o.state = 0{exclusion})",
+                exclusion
             )],
             parameters: excluded_optimistic
                 .iter()
                 .copied()
                 .map(Value::from_i64)
                 .collect(),
-            next_id: 0,
+            names: Ordinals::new(),
         }
     }
 
-    fn next_name(&mut self) -> String {
-        let name = format!("expr_{}", self.next_id);
-        self.next_id += 1;
-        name
+    fn next_name(&mut self) -> Sql {
+        Sql::numbered("expr_", self.names.take())
     }
 
-    fn compile(&mut self, expr: &PredicateExpr, profile: &Profile, partition: &Token) -> String {
+    fn compile(&mut self, expr: &PredicateExpr, profile: &Profile, partition: &Token) -> Sql {
         if let Some((seed, terms)) = conjunction::split(expr) {
             return self.conjunction(seed, &terms, profile, partition);
         }
@@ -3448,8 +3465,9 @@ impl SqlPredicateCompiler {
             PredicateExpr::All => self.universe(profile, partition),
             PredicateExpr::None => {
                 let name = self.next_name();
-                self.ctes.push(format!(
-                    "{name}(source, document_id) AS MATERIALIZED (SELECT 0, 0 WHERE 0)"
+                self.ctes.push(crate::sql!(
+                    "{name}(source, document_id) AS MATERIALIZED (SELECT 0, 0 WHERE 0)",
+                    name
                 ));
                 name
             }
@@ -3463,9 +3481,7 @@ impl SqlPredicateCompiler {
                     self.parameters.push(text(partition.as_str()));
                     self.parameters.push(text(attribute.as_str()));
                 }
-                self.ctes.push(format!(
-                    "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM exact_facts AS f JOIN index_documents AS d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ? UNION SELECT 1, f.document_id FROM optimistic_documents AS d CROSS JOIN optimistic_exact_facts AS f INDEXED BY sqlite_autoindex_optimistic_exact_facts_1 ON f.document_id = d.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?)"
-                ));
+                self.ctes.push(crate::sql!("{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM exact_facts AS f JOIN index_documents AS d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ? UNION SELECT 1, f.document_id FROM optimistic_documents AS d CROSS JOIN optimistic_exact_facts AS f INDEXED BY sqlite_autoindex_optimistic_exact_facts_1 ON f.document_id = d.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?)", name));
                 name
             }
             PredicateExpr::I64Range {
@@ -3474,14 +3490,14 @@ impl SqlPredicateCompiler {
                 upper,
             } => {
                 let name = self.next_name();
-                let mut range = String::new();
+                let mut range = Sql::new();
                 if let Some(bound) = lower {
                     let (operator, _) = sql_bound(*bound, true);
-                    range.push_str(&format!(" AND f.value {operator} ?"));
+                    range.push(crate::sql!(" AND f.value {operator} ?", operator));
                 }
                 if let Some(bound) = upper {
                     let (operator, _) = sql_bound(*bound, false);
-                    range.push_str(&format!(" AND f.value {operator} ?"));
+                    range.push(crate::sql!(" AND f.value {operator} ?", operator));
                 }
                 for _ in 0..2 {
                     self.parameters.push(text(profile.token().as_str()));
@@ -3496,9 +3512,7 @@ impl SqlPredicateCompiler {
                             .push(Value::from_i64(sql_bound(*bound, false).1));
                     }
                 }
-                self.ctes.push(format!(
-                    "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM integer_facts AS f JOIN index_documents AS d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ?{range} UNION SELECT 1, f.document_id FROM optimistic_documents AS d CROSS JOIN optimistic_integer_facts AS f INDEXED BY sqlite_autoindex_optimistic_integer_facts_1 ON f.document_id = d.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?{range})"
-                ));
+                self.ctes.push(crate::sql!("{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM integer_facts AS f JOIN index_documents AS d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ?{range} UNION SELECT 1, f.document_id FROM optimistic_documents AS d CROSS JOIN optimistic_integer_facts AS f INDEXED BY sqlite_autoindex_optimistic_integer_facts_1 ON f.document_id = d.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?{range})", name, range));
                 name
             }
             PredicateExpr::After {
@@ -3529,7 +3543,7 @@ impl SqlPredicateCompiler {
                         text(key.as_str()),
                     ]);
                 }
-                self.ctes.push(format!("{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM sort_facts f JOIN index_documents d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ? AND (f.value {cmp} ? OR (f.value = ? AND d.record_key {tie} ?)) UNION SELECT 1, f.document_id FROM optimistic_documents d CROSS JOIN optimistic_sort_facts f INDEXED BY sqlite_autoindex_optimistic_sort_facts_1 ON f.document_id = d.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND (f.value {cmp} ? OR (f.value = ? AND d.record_key {tie} ?)))"));
+                self.ctes.push(crate::sql!("{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM sort_facts f JOIN index_documents d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ? AND (f.value {cmp} ? OR (f.value = ? AND d.record_key {tie} ?)) UNION SELECT 1, f.document_id FROM optimistic_documents d CROSS JOIN optimistic_sort_facts f INDEXED BY sqlite_autoindex_optimistic_sort_facts_1 ON f.document_id = d.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND (f.value {cmp} ? OR (f.value = ? AND d.record_key {tie} ?)))", name, cmp, tie));
                 name
             }
             PredicateExpr::And(left, right) | PredicateExpr::Or(left, right) => {
@@ -3548,18 +3562,14 @@ impl SqlPredicateCompiler {
                 let left = self.compile(left, profile, partition);
                 let right = self.compile(right, profile, partition);
                 let name = self.next_name();
-                self.ctes.push(format!(
-                    "{name}(source, document_id) AS MATERIALIZED (SELECT source, document_id FROM {left} {operator} SELECT source, document_id FROM {right})"
-                ));
+                self.ctes.push(crate::sql!("{name}(source, document_id) AS MATERIALIZED (SELECT source, document_id FROM {left} {operator} SELECT source, document_id FROM {right})", name, left, operator, right));
                 name
             }
             PredicateExpr::Not(expr) => {
                 let universe = self.universe(profile, partition);
                 let child = self.compile(expr, profile, partition);
                 let name = self.next_name();
-                self.ctes.push(format!(
-                    "{name}(source, document_id) AS MATERIALIZED (SELECT source, document_id FROM {universe} EXCEPT SELECT source, document_id FROM {child})"
-                ));
+                self.ctes.push(crate::sql!("{name}(source, document_id) AS MATERIALIZED (SELECT source, document_id FROM {universe} EXCEPT SELECT source, document_id FROM {child})", name, universe, child));
                 name
             }
         }
@@ -3571,13 +3581,13 @@ impl SqlPredicateCompiler {
         terms: &[&PredicateExpr],
         profile: &Profile,
         partition: &Token,
-    ) -> String {
+    ) -> Sql {
         let seed = self.compile(seed, profile, partition);
         let mut branches = Vec::new();
         for (source, table, facts) in [
-            (0, "index_documents", conjunction::FactSource::Authority),
+            ("0", "index_documents", conjunction::FactSource::Authority),
             (
-                1,
+                "1",
                 "optimistic_index_documents",
                 conjunction::FactSource::Optimistic,
             ),
@@ -3585,14 +3595,15 @@ impl SqlPredicateCompiler {
             let condition = terms
                 .iter()
                 .map(|expr| conjunction::condition(expr, facts, &mut self.parameters))
-                .collect::<Vec<_>>()
-                .join(" AND ");
-            branches.push(format!("SELECT {source}, m.document_id FROM {seed} AS m CROSS JOIN {table} AS d ON d.id = m.document_id WHERE m.source = {source} AND ({condition})"));
+                .collect::<Vec<_>>();
+            let condition = Sql::join(condition, " AND ");
+            branches.push(crate::sql!("SELECT {source}, m.document_id FROM {seed} AS m CROSS JOIN {table} AS d ON d.id = m.document_id WHERE m.source = {source} AND ({condition})", source, seed, table, condition));
         }
         let name = self.next_name();
-        self.ctes.push(format!(
-            "{name}(source, document_id) AS MATERIALIZED ({})",
-            branches.join(" UNION ALL ")
+        self.ctes.push(crate::sql!(
+            "{name}(source, document_id) AS MATERIALIZED ({branches})",
+            name,
+            branches = Sql::join(&branches, " UNION ALL ")
         ));
         name
     }
@@ -3603,7 +3614,7 @@ impl SqlPredicateCompiler {
         values: &[&predicate_index::ExactValue],
         profile: &Profile,
         partition: &Token,
-    ) -> String {
+    ) -> Sql {
         if values.len() > 1 {
             return self.exact_alternatives(attribute, values, profile, partition);
         }
@@ -3619,9 +3630,7 @@ impl SqlPredicateCompiler {
                     .map(|value| Value::from_blob(value.as_bytes().to_vec())),
             );
         }
-        self.ctes.push(format!(
-            "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM exact_facts AS f JOIN index_documents AS d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value {condition} UNION SELECT 1, f.document_id FROM optimistic_documents AS d CROSS JOIN optimistic_exact_facts AS f INDEXED BY sqlite_autoindex_optimistic_exact_facts_1 ON f.document_id = d.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value {condition})"
-        ));
+        self.ctes.push(crate::sql!("{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM exact_facts AS f JOIN index_documents AS d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value {condition} UNION SELECT 1, f.document_id FROM optimistic_documents AS d CROSS JOIN optimistic_exact_facts AS f INDEXED BY sqlite_autoindex_optimistic_exact_facts_1 ON f.document_id = d.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value {condition})", name, condition));
         name
     }
 
@@ -3635,7 +3644,7 @@ impl SqlPredicateCompiler {
         values: &[&predicate_index::ExactValue],
         profile: &Profile,
         partition: &Token,
-    ) -> String {
+    ) -> Sql {
         // Each value once: a repeated one would seek and read its facts again.
         let mut values = values.to_vec();
         values.sort_by(|left, right| left.as_bytes().cmp(right.as_bytes()));
@@ -3646,9 +3655,10 @@ impl SqlPredicateCompiler {
                 .iter()
                 .map(|value| Value::from_blob(value.as_bytes().to_vec())),
         );
-        self.ctes.push(format!(
-            "{wanted}(value) AS MATERIALIZED (VALUES {})",
-            vec!["(?)"; values.len()].join(", ")
+        self.ctes.push(crate::sql!(
+            "{wanted}(value) AS MATERIALIZED (VALUES {rows})",
+            wanted,
+            rows = Sql::repeat("(?)", values.len(), ", ")
         ));
         let name = self.next_name();
         self.parameters.extend([
@@ -3659,13 +3669,11 @@ impl SqlPredicateCompiler {
             text(partition.as_str()),
             text(attribute.as_str()),
         ]);
-        self.ctes.push(format!(
-            "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM {wanted} AS w CROSS JOIN exact_facts AS f INDEXED BY exact_facts_lookup_idx ON f.attribute = ? AND f.value = w.value CROSS JOIN index_documents AS d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? UNION SELECT 1, f.document_id FROM optimistic_documents AS d CROSS JOIN optimistic_exact_facts AS f INDEXED BY sqlite_autoindex_optimistic_exact_facts_1 ON f.document_id = d.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value IN (SELECT value FROM {wanted}))"
-        ));
+        self.ctes.push(crate::sql!("{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM {wanted} AS w CROSS JOIN exact_facts AS f INDEXED BY exact_facts_lookup_idx ON f.attribute = ? AND f.value = w.value CROSS JOIN index_documents AS d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? UNION SELECT 1, f.document_id FROM optimistic_documents AS d CROSS JOIN optimistic_exact_facts AS f INDEXED BY sqlite_autoindex_optimistic_exact_facts_1 ON f.document_id = d.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value IN (SELECT value FROM {wanted}))", name, wanted));
         name
     }
 
-    fn universe(&mut self, profile: &Profile, partition: &Token) -> String {
+    fn universe(&mut self, profile: &Profile, partition: &Token) -> Sql {
         let name = self.next_name();
         for _ in 0..2 {
             self.parameters.push(text(profile.token().as_str()));
@@ -3674,9 +3682,7 @@ impl SqlPredicateCompiler {
         // Apply scope before materialization, using the validated scope index.
         // Any shadow still suppresses authority, including a shadow that moved
         // outside this scope or whose facts are excluded as uncertain.
-        self.ctes.push(format!(
-            "{name}(source, document_id) AS MATERIALIZED (SELECT 0, d.id FROM index_documents AS d INDEXED BY index_documents_scope_idx WHERE d.profile = ? AND d.partition = ? AND d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) UNION ALL SELECT 1, d.document_id FROM optimistic_documents AS d WHERE d.profile = ? AND d.partition = ?)"
-        ));
+        self.ctes.push(crate::sql!("{name}(source, document_id) AS MATERIALIZED (SELECT 0, d.id FROM index_documents AS d INDEXED BY index_documents_scope_idx WHERE d.profile = ? AND d.partition = ? AND d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) UNION ALL SELECT 1, d.document_id FROM optimistic_documents AS d WHERE d.profile = ? AND d.partition = ?)", name));
         name
     }
 }
@@ -4722,7 +4728,7 @@ fn validate_support_table(
     let escaped = table.replace('\'', "''");
     let rows = driver::query(
         connection,
-        &format!("PRAGMA table_xinfo('{escaped}')"),
+        &UnreportedSql::new(format!("PRAGMA table_xinfo('{escaped}')")),
         Vec::new(),
     )
     .map_err(TursoStorageError::initialization)?;
@@ -4761,14 +4767,14 @@ fn validate_support_table(
     }
     if !driver::query(
         connection,
-        &format!("PRAGMA index_list('{escaped}')"),
+        &UnreportedSql::new(format!("PRAGMA index_list('{escaped}')")),
         Vec::new(),
     )
     .map_err(TursoStorageError::initialization)?
     .is_empty()
         || !driver::query(
             connection,
-            &format!("PRAGMA foreign_key_list('{escaped}')"),
+            &UnreportedSql::new(format!("PRAGMA foreign_key_list('{escaped}')")),
             Vec::new(),
         )
         .map_err(TursoStorageError::initialization)?
@@ -4784,7 +4790,7 @@ fn validate_table_columns(
     table: &str,
     expected: &[ColumnSpec],
 ) -> Result<(), TursoStorageError> {
-    let sql = format!("PRAGMA table_xinfo('{table}')");
+    let sql = UnreportedSql::new(format!("PRAGMA table_xinfo('{table}')"));
     let rows =
         driver::query(connection, &sql, Vec::new()).map_err(TursoStorageError::initialization)?;
     if rows.len() != expected.len() {
@@ -4972,7 +4978,7 @@ fn validate_mutation_index_columns(
 ) -> Result<(), TursoStorageError> {
     let rows = driver::query(
         connection,
-        &format!("PRAGMA index_xinfo('{index}')"),
+        &UnreportedSql::new(format!("PRAGMA index_xinfo('{index}')")),
         Vec::new(),
     )
     .map_err(TursoStorageError::initialization)?;
@@ -5005,7 +5011,10 @@ fn validate_table_indexes(
 ) -> Result<(), TursoStorageError> {
     let rows = driver::query(
         connection,
-        &format!("PRAGMA index_list('{}')", table.replace('\'', "''")),
+        &UnreportedSql::new(format!(
+            "PRAGMA index_list('{}')",
+            table.replace('\'', "''")
+        )),
         Vec::new(),
     )
     .map_err(TursoStorageError::initialization)?;
@@ -5037,7 +5046,10 @@ fn validate_primary_index(
     let index_name = required_text(row, 1).map_err(|_| compatibility())?;
     let index_rows = driver::query(
         connection,
-        &format!("PRAGMA index_xinfo('{}')", index_name.replace('\'', "''")),
+        &UnreportedSql::new(format!(
+            "PRAGMA index_xinfo('{}')",
+            index_name.replace('\'', "''")
+        )),
         Vec::new(),
     )
     .map_err(TursoStorageError::initialization)?;
@@ -5279,7 +5291,7 @@ fn validate_predicate_indexes(connection: &Db) -> Result<(), TursoStorageError> 
     ] {
         let indexes = driver::query(
             connection,
-            &format!("PRAGMA index_list('{table}')"),
+            &crate::sql!("PRAGMA index_list('{table}')", table),
             Vec::new(),
         )
         .map_err(TursoStorageError::initialization)?;
@@ -5292,7 +5304,7 @@ fn validate_predicate_indexes(connection: &Db) -> Result<(), TursoStorageError> 
         }
         let columns = driver::query(
             connection,
-            &format!("PRAGMA index_info('{index}')"),
+            &crate::sql!("PRAGMA index_info('{index}')", index),
             Vec::new(),
         )
         .map_err(TursoStorageError::initialization)?;
@@ -5353,7 +5365,7 @@ fn validate_optimistic_predicate_indexes(connection: &Db) -> Result<(), TursoSto
         }
         let columns = driver::query(
             connection,
-            &format!("PRAGMA index_info('{index}')"),
+            &crate::sql!("PRAGMA index_info('{index}')", index),
             Vec::new(),
         )
         .map_err(TursoStorageError::initialization)?;
@@ -5376,7 +5388,7 @@ fn validate_no_foreign_keys(connection: &Db, table: &str) -> Result<(), TursoSto
     let escaped = table.replace('\'', "''");
     if driver::query(
         connection,
-        &format!("PRAGMA foreign_key_list('{escaped}')"),
+        &UnreportedSql::new(format!("PRAGMA foreign_key_list('{escaped}')")),
         Vec::new(),
     )
     .map_err(TursoStorageError::initialization)?
@@ -5440,7 +5452,10 @@ fn validate_cascade_foreign_key(
 ) -> Result<(), TursoStorageError> {
     let rows = driver::query(
         connection,
-        &format!("PRAGMA foreign_key_list('{}')", table.replace('\'', "''")),
+        &UnreportedSql::new(format!(
+            "PRAGMA foreign_key_list('{}')",
+            table.replace('\'', "''")
+        )),
         Vec::new(),
     )
     .map_err(TursoStorageError::initialization)?;
@@ -5660,9 +5675,7 @@ fn delete_search_documents_batch(
     keys: &[&RecordKey],
 ) -> Result<(), TursoStorageError> {
     for keys in keys.chunks(SEARCH_WRITE_BATCH_SIZE) {
-        let lookup_sql = std::iter::repeat_n(SEARCH_ROWID, keys.len())
-            .collect::<Vec<_>>()
-            .join(" UNION ALL ");
+        let lookup_sql = Sql::repeat(SEARCH_ROWID, keys.len(), " UNION ALL ");
         let mut parameters = Vec::with_capacity(keys.len() * 3);
         for key in keys {
             parameters.push(text(profile.as_str()));
@@ -5680,9 +5693,9 @@ fn delete_search_documents_batch(
         require_changed(
             driver::execute(
                 connection,
-                &format!(
-                    "DELETE FROM search_documents WHERE rowid IN ({})",
-                    sql_placeholders(rowids.len())
+                &crate::sql!(
+                    "DELETE FROM search_documents WHERE rowid IN ({placeholders})",
+                    placeholders = sql_placeholders(rowids.len())
                 ),
                 rowids.into_iter().map(Value::from_i64).collect(),
             )?,
@@ -5697,9 +5710,7 @@ fn upsert_search_documents_batch(
     documents: &[(&RecordKey, &SearchDocument)],
 ) -> Result<(), TursoStorageError> {
     for documents in documents.chunks(SEARCH_WRITE_BATCH_SIZE) {
-        let values_sql = std::iter::repeat_n(SEARCH_UPSERT_ROW, documents.len())
-            .collect::<Vec<_>>()
-            .join(", ");
+        let values_sql = Sql::repeat(SEARCH_UPSERT_ROW, documents.len(), ", ");
         let mut parameters = Vec::with_capacity(documents.len() * 7);
         for (key, document) in documents {
             parameters.push(text(document.profile.as_str()));
@@ -5713,7 +5724,12 @@ fn upsert_search_documents_batch(
         require_changed(
             driver::execute(
                 connection,
-                &format!("{SEARCH_UPSERT_PREFIX}{values_sql}{SEARCH_UPSERT_SUFFIX}"),
+                &crate::sql!(
+                    "{prefix}{values_sql}{suffix}",
+                    prefix = SEARCH_UPSERT_PREFIX,
+                    values_sql,
+                    suffix = SEARCH_UPSERT_SUFFIX
+                ),
                 parameters,
             )?,
             i64::try_from(documents.len()).map_err(|_| invariant())?,

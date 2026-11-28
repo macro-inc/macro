@@ -13,6 +13,7 @@
 //! cost each.
 
 use super::*;
+use crate::sql::Ordinals;
 use predicate_index::{IndexQuery, PartitionPredicate, ReferenceHit};
 
 const MIN_CANDIDATES: usize = 64;
@@ -102,22 +103,26 @@ pub(super) fn listed_within_window(
     // would scan every fact of the attribute and test it against the list.
     let mut parameters = Vec::new();
     let mut wanted = Vec::new();
-    for (index, (_, values)) in lists.iter().enumerate() {
+    let mut ordinals = Ordinals::new();
+    let names: Vec<_> = lists.iter().map(|_| ordinals.take()).collect();
+    for ((_, values), name) in lists.iter().zip(&names) {
         parameters.extend(
             values
                 .iter()
                 .map(|value| Value::from_blob(value.as_bytes().to_vec())),
         );
-        wanted.push(format!(
-            "w{index}(value) AS (VALUES {})",
-            vec!["(?)"; values.len()].join(", ")
+        wanted.push(crate::sql!(
+            "{name}(value) AS (VALUES {rows})",
+            name = Sql::numbered("w", *name),
+            rows = Sql::repeat("(?)", values.len(), ", ")
         ));
     }
     let mut branches = Vec::new();
-    for (index, (attribute, _)) in lists.iter().enumerate() {
+    for ((attribute, _), name) in lists.iter().zip(&names) {
         parameters.push(text(attribute.as_str()));
-        branches.push(format!(
-            "SELECT 1 FROM w{index} AS w CROSS JOIN exact_facts AS f INDEXED BY exact_facts_lookup_idx ON f.attribute = ? AND f.value = w.value"
+        branches.push(crate::sql!(
+            "SELECT 1 FROM {name} AS w CROSS JOIN exact_facts AS f INDEXED BY exact_facts_lookup_idx ON f.attribute = ? AND f.value = w.value",
+            name = Sql::numbered("w", *name)
         ));
     }
     parameters.push(Value::from_i64(
@@ -125,10 +130,10 @@ pub(super) fn listed_within_window(
     ));
     let rows = driver::query(
         connection,
-        &format!(
-            "WITH {} SELECT count(*) FROM ({} LIMIT ?)",
-            wanted.join(", "),
-            branches.join(" UNION ALL ")
+        &crate::sql!(
+            "WITH {wanted} SELECT count(*) FROM ({branches} LIMIT ?)",
+            wanted = Sql::join(&wanted, ", "),
+            branches = Sql::join(&branches, " UNION ALL ")
         ),
         parameters,
     )?;
@@ -215,13 +220,17 @@ fn window_bound(query: &IndexQuery) -> Option<i64> {
 
 /// `terms` joined by `OR` as a balanced tree, so the SQL nests by the
 /// logarithm of the partition count instead of the count.
-fn balanced_or(terms: &[String]) -> String {
+fn balanced_or(terms: &[Sql]) -> Sql {
     match terms {
-        [] => "0".to_owned(),
+        [] => crate::sql!("0"),
         [term] => term.clone(),
         _ => {
             let (left, right) = terms.split_at(terms.len() / 2);
-            format!("({} OR {})", balanced_or(left), balanced_or(right))
+            crate::sql!(
+                "({left} OR {right})",
+                left = balanced_or(left),
+                right = balanced_or(right)
+            )
         }
     }
 }
@@ -244,7 +253,7 @@ fn candidate_sql(
     after: Option<Position>,
     budget: usize,
     pending: bool,
-) -> (String, Vec<Value>) {
+) -> (Sql, Vec<Value>) {
     let (facts, index, documents) = match source {
         conjunction::FactSource::Authority => {
             ("sort_facts", "sort_facts_lookup_idx", "index_documents")
@@ -288,13 +297,18 @@ fn candidate_sql(
     ]);
     let shadow = match source {
         // Any shadow suppresses authority, even a deleted, uncertain, or moved one.
-        conjunction::FactSource::Authority if !pending => String::new(),
-        conjunction::FactSource::Authority => " AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key)".to_owned(),
+        conjunction::FactSource::Authority if !pending => Sql::new(),
+        conjunction::FactSource::Authority => crate::sql!(
+            " AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key)"
+        ),
         conjunction::FactSource::Optimistic if !excluded_optimistic.is_empty() => {
             parameters.extend(excluded_optimistic.iter().copied().map(Value::from_i64));
-            format!(" AND d.id NOT IN ({})", vec!["?"; excluded_optimistic.len()].join(", "))
+            crate::sql!(
+                " AND d.id NOT IN ({placeholders})",
+                placeholders = Sql::placeholders(excluded_optimistic.len())
+            )
         }
-        conjunction::FactSource::Optimistic => String::new(),
+        conjunction::FactSource::Optimistic => Sql::new(),
     };
     let mut joins = conjunction::ExactJoins::new(source);
     let partitions = searched_partitions(query)
@@ -302,7 +316,7 @@ fn candidate_sql(
             parameters.push(text(partition.partition.as_str()));
             let predicate =
                 conjunction::joined_condition(&partition.predicate, &mut parameters, &mut joins);
-            format!("(d.partition = ? AND ({predicate}))")
+            crate::sql!("(d.partition = ? AND ({predicate}))", predicate)
         })
         .collect::<Vec<_>>();
     let partitions = balanced_or(&partitions);
@@ -312,8 +326,16 @@ fn candidate_sql(
     // speculation into a full-index walk. Ordering document_id with value lets
     // Turso walk the existing index without sorting the corpus. Record-key
     // ordering is resolved only after proving the entire cutoff tie is present.
-    let sql = format!(
-        "WITH candidates AS MATERIALIZED (SELECT document_id, value FROM {facts} INDEXED BY {index} WHERE attribute = ?{boundary} ORDER BY value {direction}, document_id {direction} LIMIT ?) SELECT d.record_key, s.value, s.document_id, CASE WHEN d.profile = ? AND d.state = 0{shadow} AND ({partitions}) THEN 1 ELSE 0 END FROM candidates AS s CROSS JOIN {documents} AS d ON d.id = s.document_id{joins}"
+    let sql = crate::sql!(
+        "WITH candidates AS MATERIALIZED (SELECT document_id, value FROM {facts} INDEXED BY {index} WHERE attribute = ?{boundary} ORDER BY value {direction}, document_id {direction} LIMIT ?) SELECT d.record_key, s.value, s.document_id, CASE WHEN d.profile = ? AND d.state = 0{shadow} AND ({partitions}) THEN 1 ELSE 0 END FROM candidates AS s CROSS JOIN {documents} AS d ON d.id = s.document_id{joins}",
+        facts,
+        index,
+        boundary,
+        direction,
+        shadow,
+        partitions,
+        documents,
+        joins
     );
     (sql, parameters)
 }

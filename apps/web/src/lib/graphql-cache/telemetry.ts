@@ -335,8 +335,15 @@ export type CacheTelemetryObservation = {
   revisionCategory?: CacheRevisionCategory;
   resetAttempt?: 'wipe-before-open';
   durationMs?: number;
-  /** FNV-1a of the unexpanded SQL template; never SQL text or bound values. */
+  /** FNV-1a of the unexpanded SQL template text; never of bound values. */
   queryFingerprint?: string;
+  /**
+   * The slow statement's template text, sent by the engine the first time a
+   * worker reports its fingerprint: SQL written in the engine's source, with
+   * `?` placeholders for every value. The engine never sends a statement that
+   * embeds other text, nor any bound value.
+   */
+  queryTemplate?: string;
   bytes?: number;
   highWaterBytes?: number;
   usageBytes?: number;
@@ -378,6 +385,92 @@ export interface CacheTelemetrySink {
 export interface CacheTelemetryRecorderLike {
   record(observation: CacheTelemetryObservation): void;
   flush(): void;
+}
+
+/** Longest slow-query template accepted, in UTF-8 bytes, as the engine caps it. */
+export const SLOW_QUERY_TEMPLATE_BYTES = 8 * 1024;
+
+const UTF8_ENCODER = new TextEncoder();
+const FNV_OFFSET_BASIS = 0xcbf29ce484222325n;
+const FNV_PRIME = 0x100000001b3n;
+
+/** The engine's statement fingerprint: FNV-1a 64 of the template's UTF-8. */
+function fnv1a64Hex(bytes: Uint8Array): string {
+  let hash = FNV_OFFSET_BASIS;
+  for (const byte of bytes) {
+    hash = BigInt.asUintN(64, (hash ^ BigInt(byte)) * FNV_PRIME);
+  }
+  return hash.toString(16).padStart(16, '0');
+}
+
+// Every place a marker starts, overlapping ones included; the engine writes the
+// length in canonical decimal.
+const EXCERPT_MARKERS = /(?= \/\* ([1-9]\d*) bytes \*\/ )/g;
+
+/**
+ * Whether `bytes` has the engine's excerpt form for a template longer than the
+ * bound (`bounded` in `cache-turso/src/query_telemetry.rs`): its first and last
+ * halves around ` /* <length> bytes *\/ `, each half cut to a character
+ * boundary at most three bytes short. An excerpt cannot be hashed back to its
+ * fingerprint, so its form is what is checked.
+ */
+function isEngineExcerpt(value: string, bytes: Uint8Array): boolean {
+  // The template can hold marker-like comments of its own: try each one.
+  for (const marker of value.matchAll(EXCERPT_MARKERS)) {
+    const length = Number(marker[1]);
+    if (!Number.isSafeInteger(length) || length <= SLOW_QUERY_TEMPLATE_BYTES)
+      continue;
+    const markerBytes = ` /* ${marker[1]} bytes */ `.length;
+    const half = Math.floor((SLOW_QUERY_TEMPLATE_BYTES - markerBytes) / 2);
+    const head = UTF8_ENCODER.encode(value.slice(0, marker.index)).length;
+    const tail = bytes.length - head - markerBytes;
+    if (head <= half && head >= half - 3 && tail <= half && tail >= half - 3)
+      return true;
+  }
+  return false;
+}
+
+/**
+ * The template, only when it is the text its fingerprint was taken from, or
+ * the engine's excerpt of a longer one. The engine fingerprints the unexpanded
+ * template, so expanded SQL or other text posted beside a real fingerprint
+ * does not match and is dropped.
+ */
+function slowQueryTemplate(
+  value: unknown,
+  fingerprint: string
+): string | undefined {
+  // A code unit is at least one byte, so a longer string is never encoded.
+  if (
+    typeof value !== 'string' ||
+    value.length === 0 ||
+    value.length > SLOW_QUERY_TEMPLATE_BYTES
+  )
+    return undefined;
+  const bytes = UTF8_ENCODER.encode(value);
+  if (bytes.length > SLOW_QUERY_TEMPLATE_BYTES) return undefined;
+  return fnv1a64Hex(bytes) === fingerprint || isEngineExcerpt(value, bytes)
+    ? value
+    : undefined;
+}
+
+/** A slow query's fingerprint, and its template only beside a valid one. */
+function slowQueryFields(
+  input: CacheTelemetryObservation
+): Pick<CacheTelemetryObservation, 'queryFingerprint' | 'queryTemplate'> {
+  if (
+    input.name !== 'graphql_cache.slow_query' ||
+    typeof input.queryFingerprint !== 'string' ||
+    !/^[0-9a-f]{16}$/.test(input.queryFingerprint)
+  )
+    return {};
+  const queryTemplate = slowQueryTemplate(
+    input.queryTemplate,
+    input.queryFingerprint
+  );
+  return queryTemplate === undefined
+    ? { queryFingerprint: input.queryFingerprint }
+    : { queryFingerprint: input.queryFingerprint, queryTemplate };
 }
 
 const HIGH_VOLUME_NAMES = new Set<CacheTelemetryEventName>([
@@ -502,11 +595,7 @@ function sanitizeObservation(
     ...(boundedNumber(input.durationMs, 3_600_000) !== undefined
       ? { durationMs: boundedNumber(input.durationMs, 3_600_000) }
       : {}),
-    ...(input.name === 'graphql_cache.slow_query' &&
-    typeof input.queryFingerprint === 'string' &&
-    /^[0-9a-f]{16}$/.test(input.queryFingerprint)
-      ? { queryFingerprint: input.queryFingerprint }
-      : {}),
+    ...slowQueryFields(input),
     ...(boundedNumber(input.bytes) !== undefined
       ? { bytes: boundedNumber(input.bytes) }
       : {}),
@@ -975,6 +1064,7 @@ export function isCacheTelemetryObservation(
       'resetAttempt',
       'durationMs',
       'queryFingerprint',
+      'queryTemplate',
       'bytes',
       'highWaterBytes',
       'usageBytes',

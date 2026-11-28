@@ -6,7 +6,7 @@
 //! SQL.
 
 use super::{SEARCH_LOAD, SearchProfile, SearchQuery, driver, text};
-use crate::{PhysicalResetReason, TursoStorageError, key::RecordKey};
+use crate::{PhysicalResetReason, TursoStorageError, key::RecordKey, sql::Sql};
 use cache_core::search::SearchDocumentRef;
 use turso_core::{Numeric, Row, Value};
 
@@ -54,11 +54,8 @@ pub(super) fn visit_row(
 }
 
 /// Every row of one profile bucket; [`visit_row`] applies the query.
-pub(super) fn statement(profile: SearchProfile, bucket: &str) -> (String, driver::Values) {
-    (
-        SEARCH_LOAD.to_owned(),
-        vec![text(profile.as_str()), text(bucket)],
-    )
+pub(super) fn statement(profile: SearchProfile, bucket: &str) -> (&'static str, driver::Values) {
+    (SEARCH_LOAD, vec![text(profile.as_str()), text(bucket)])
 }
 
 /// Whether every token of `query` occurs in `text` as an ordered subsequence of
@@ -81,21 +78,22 @@ pub(super) fn may_match(query: &SearchQuery, text: &str) -> bool {
 }
 
 pub(super) fn statement_with_base(
-    base: &str,
+    base: &'static str,
     profile: SearchProfile,
     bucket: &str,
     query: &SearchQuery,
-) -> (String, driver::Values) {
-    let mut sql = base.to_owned();
+) -> (Sql, driver::Values) {
+    let mut sql = Sql::new();
+    sql.push(base);
     let mut values = vec![text(profile.as_str()), text(bucket)];
     let mut tokens = query.tokens().peekable();
     if tokens.peek().is_some() {
-        sql.push_str(" AND ((");
+        sql.push(" AND ((");
         for (index, token) in tokens.enumerate() {
             if index > 0 {
-                sql.push_str(" AND ");
+                sql.push(" AND ");
             }
-            sql.push_str("search_text LIKE ? ESCAPE '\\'");
+            sql.push("search_text LIKE ? ESCAPE '\\'");
             let mut pattern = String::from("%");
             for character in token.chars() {
                 if matches!(character, '%' | '_' | '\\') {
@@ -108,7 +106,7 @@ pub(super) fn statement_with_base(
         }
         // SQLite LIKE stops at NUL, while Rust's matching does not. Include
         // these rare rows as a superset and let the ranker decide the match.
-        sql.push_str(") OR instr(search_text, char(0)) > 0)");
+        sql.push(") OR instr(search_text, char(0)) > 0)");
     }
     (sql, values)
 }

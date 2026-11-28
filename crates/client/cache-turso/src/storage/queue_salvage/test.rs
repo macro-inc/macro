@@ -1,5 +1,6 @@
 use super::file::SalvageFile;
 use super::*;
+use crate::sql::Template;
 use crate::storage::test::queued;
 use crate::{PhysicalResetReason, TursoMemoryDatabase};
 use cache_core::engine::authority::AUTHORITY_META_KEY;
@@ -24,11 +25,11 @@ fn fresh() -> TursoStorage {
     TursoStorage::open_in_memory(SCOPE).unwrap()
 }
 
-fn rows(storage: &TursoStorage, sql: &str) -> Vec<Vec<Value>> {
+fn rows<'s>(storage: &TursoStorage, sql: impl Into<Template<'s>>) -> Vec<Vec<Value>> {
     driver::query(&storage.connection(), sql, Vec::new()).unwrap()
 }
 
-fn execute(storage: &TursoStorage, sql: &str) {
+fn execute<'s>(storage: &TursoStorage, sql: impl Into<Template<'s>>) {
     driver::execute(&storage.connection(), sql, Vec::new()).unwrap();
 }
 
@@ -915,7 +916,7 @@ fn a_queue_this_build_cannot_read_is_not_carried() {
 
 /// The copy stayed after its import, its writes settled, then `damage`.
 #[track_caller]
-fn assert_settled_stays_settled(damage: &str) {
+fn assert_settled_stays_settled(damage: &'static str) {
     let mut first = fresh();
     block_on(enqueue(&mut first, "one"));
     let queue = carried(&first);

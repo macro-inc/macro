@@ -359,7 +359,11 @@ fn query_coverage(
     Ok(coverage)
 }
 
-fn record_keys(connection: &Db, sql: &str, value: &str) -> Result<Vec<String>, TursoStorageError> {
+fn record_keys(
+    connection: &Db,
+    sql: &'static str,
+    value: &str,
+) -> Result<Vec<String>, TursoStorageError> {
     driver::query(connection, sql, vec![text(value)])?
         .iter()
         .map(|row| required_text(row, 0))
@@ -621,7 +625,7 @@ pub(super) fn validate_schema(connection: &Db) -> Result<(), TursoStorageError> 
         }
         let columns = driver::query(
             connection,
-            &format!("PRAGMA index_info('{index}')"),
+            &crate::sql!("PRAGMA index_info('{index}')", index),
             Vec::new(),
         )
         .map_err(TursoStorageError::initialization)?;

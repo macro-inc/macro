@@ -120,7 +120,7 @@ async fn populate(storage: TursoStorage) -> TursoStorage {
     storage
 }
 
-fn count(storage: &TursoStorage, sql: &str) -> i64 {
+fn count<'s>(storage: &TursoStorage, sql: impl Into<Template<'s>>) -> i64 {
     raw_scalar(storage, sql)
 }
 

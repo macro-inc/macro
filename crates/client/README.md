@@ -647,11 +647,22 @@ Search Datadog logs for `service:web-app "graphql_cache.slow_query"`:
 - `cache.duration_ms`: binding, stepping/OPFS I/O, row collection, and cleanup;
   excludes statement preparation and time queued in the worker.
 - `db.query.fingerprint`: 16-digit lowercase FNV-1a hash of the exact unexpanded
-  SQL template, allowing repeated executions to be grouped without exporting SQL.
+  SQL template, allowing repeated executions to be grouped.
+- `db.query.text`: that template, placeholders and all, on the first slow report
+  of each fingerprint per engine thread (a sent set of 512, cleared whole when
+  full). A template over 8 KiB of UTF-8 is sent as its first and last halves
+  around a ` /* <length> bytes */ ` marker, within the 8 KiB. Templates are built from
+  `&'static str` parts (`cache-turso/src/sql.rs`), so no bound value or other
+  run-time text can be in one; a statement that must embed outside text runs as
+  `UnreportedSql` and reports its fingerprint only. The page drops a template
+  whose own FNV-1a hash is not the fingerprint beside it, unless it has the
+  engine's excerpt shape (`crates/client/cache-turso/src/query_telemetry/excerpt.json`
+  holds one both sides test). The check catches a sender bug, not a hostile
+  script: any same-origin script can already send the page's telemetry itself.
 - `cache.outcome`: `success` or `error`; slow failures are reported too.
 - `cache.slow_query_threshold_ms`: `200`.
 
-Parameters, results, raw SQL, and user identity are not exported. Logging uses
+Parameters, results, expanded SQL, and user identity are not exported. Logging uses
 an anonymous span context. A throwing JS telemetry callback cannot change query
 results. Native hosts are unchanged unless they install their own telemetry sink.
 

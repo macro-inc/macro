@@ -19,7 +19,7 @@ fn facts_use_document_seeks_instead_of_quadratic_attribute_scans() {
         let connection = engine.storage().connection();
         let rows = driver::query(
             &connection,
-            &format!("EXPLAIN QUERY PLAN {}", statement(&plan)),
+            &format!("EXPLAIN QUERY PLAN {}", statement(&plan).as_str()),
             vec![Value::Null; plan.parameters().len() + 2],
         )
         .unwrap();
