@@ -6,7 +6,6 @@ import {
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isChannelEntity } from '@entity';
 import type { QueryRevalidation } from '@graphql-cache/exchange/optimistic';
-import { Telemetry } from '@macro-inc/observability';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { createRequest } from '@urql/core';
 import {
@@ -113,25 +112,20 @@ function catchUpLaterPages(
   let stops = 0;
   // The current read cycle's deadline, while reads hold.
   let rearm: (() => void) | undefined;
-  // Each read is its own trace: its wait in the refresh queue, every attempt
-  // the queue makes for it, and whether it landed.
-  const readAgain = (key: number, page: MissedPage) =>
-    Telemetry.span('channel_list.later_page_read', async (span) => {
-      queued.add(key);
-      const cycle = stops;
-      span.setAttr('channel_list.missed_ms', Date.now() - page.since);
-      const landed = await channelNotificationRefresh(
-        getGraphqlSoupClient()
-      ).readAgain(page.query, span);
-      span.setAttr('channel_list.read_landed', landed);
-      queued.delete(key);
-      if (landed && missed.get(key) === page) missed.delete(key);
-      // A read the queue dropped because reads stopped, settling after they
-      // resumed, was skipped by the new cycle's deadline as still queued. One
-      // that failed within its own cycle waits for the next, as a dropped one
-      // does.
-      if (cycle !== stops) rearm?.();
-    });
+  const readAgain = async (key: number, page: MissedPage) => {
+    queued.add(key);
+    const cycle = stops;
+    const landed = await channelNotificationRefresh(
+      getGraphqlSoupClient()
+    ).readAgain(page.query, page.since);
+    queued.delete(key);
+    if (landed && missed.get(key) === page) missed.delete(key);
+    // A read the queue dropped because reads stopped, settling after they
+    // resumed, was skipped by the new cycle's deadline as still queued. One
+    // that failed within its own cycle waits for the next, as a dropped one
+    // does.
+    if (cycle !== stops) rearm?.();
+  };
   createEffect(
     on([read, pages], ([reads, all]) => {
       const later = new Map(

@@ -1,5 +1,6 @@
 import { TRACE_PARENT_CONTEXT_KEY } from '@app/lib/urql-solid/trace-parent-exchange';
 import type { QueryRevalidation } from '@graphql-cache/exchange/optimistic';
+import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import type { GraphqlNotificationPatch } from '@service-storage/graphql-soup-websocket';
 import { type Client, CombinedError, gql } from '@urql/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -428,20 +429,20 @@ describe('shared channel notification refresh', () => {
   it('reads a query again in its turn and answers when that read lands', async () => {
     const f = setup();
     f.register();
-    const landed = f.queue.readAgain(descriptor());
+    const landed = f.queue.readAgain(descriptor(), Date.now());
     await tick();
     expect(f.query).toHaveBeenCalledOnce();
     await expect(landed).resolves.toBe(true);
-    await expect(f.queue.readAgain(descriptor('unregistered'))).resolves.toBe(
-      false
-    );
+    await expect(
+      f.queue.readAgain(descriptor('unregistered'), Date.now())
+    ).resolves.toBe(false);
   });
 
   it('holds a read again while hidden, unlike an explicit refresh', async () => {
     const f = setup();
     f.register();
     vi.spyOn(globalThis.document, 'hidden', 'get').mockReturnValue(true);
-    const landed = f.queue.readAgain(descriptor());
+    const landed = f.queue.readAgain(descriptor(), Date.now());
     await tick();
     expect(f.query).not.toHaveBeenCalled();
     vi.spyOn(globalThis.document, 'hidden', 'get').mockReturnValue(false);
@@ -459,7 +460,7 @@ describe('shared channel notification refresh', () => {
     });
     f.queue.onPatch(patch(), false);
     await tick();
-    const landed = f.queue.readAgain(descriptor());
+    const landed = f.queue.readAgain(descriptor(), Date.now());
     await tick();
     expect(f.query).toHaveBeenCalledOnce();
     await vi.advanceTimersByTimeAsync(1000);
@@ -474,7 +475,7 @@ describe('shared channel notification refresh', () => {
       error: new CombinedError({ networkError: new Error('offline') }),
     });
     const answer = vi.fn();
-    const landed = f.queue.readAgain(descriptor());
+    const landed = f.queue.readAgain(descriptor(), Date.now());
     const answered = (async () => answer(await landed))();
     await tick();
     expect(f.query).toHaveBeenCalledOnce();
@@ -487,30 +488,88 @@ describe('shared channel notification refresh', () => {
     expect(f.query).toHaveBeenCalledTimes(2);
   });
 
-  it('sends every attempt of a read again in its caller trace, and live updates in none', async () => {
+  it('records each attempt of a read again on its own span, and live updates on none', async () => {
     const f = setup();
     f.register();
+    const spans: {
+      attrs: Record<string, unknown>;
+      error: ReturnType<typeof vi.fn>;
+      end: ReturnType<typeof vi.fn>;
+      run: ReturnType<typeof vi.fn>;
+    }[] = [];
+    const span = Telemetry.span.bind(Telemetry) as (
+      ...args: unknown[]
+    ) => unknown;
+    vi.spyOn(Telemetry, 'span').mockImplementation(((
+      name: string,
+      ...rest: unknown[]
+    ) => {
+      if (name !== 'channel_list.read_again') return span(name, ...rest);
+      const attrs: Record<string, unknown> = {};
+      const fake = {
+        attrs,
+        setAttr: (key: string, value: unknown) => {
+          attrs[key] = value;
+        },
+        error: vi.fn(),
+        end: vi.fn(),
+        run: vi.fn(<T>(work: () => T) => work()),
+      };
+      spans.push(fake);
+      return fake;
+    }) as typeof Telemetry.span);
     f.request.mockResolvedValueOnce({
       error: new CombinedError({ networkError: new Error('offline') }),
     });
-    const trace = { run: <T>(work: () => T) => work() };
-    const landed = f.queue.readAgain(descriptor(), trace);
+    // Waiting while hidden opens no span: one opens as an attempt sends.
+    vi.spyOn(globalThis.document, 'hidden', 'get').mockReturnValue(true);
+    const landed = f.queue.readAgain(descriptor(), Date.now() - 45_000);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(spans).toHaveLength(0);
+    vi.spyOn(globalThis.document, 'hidden', 'get').mockReturnValue(false);
+    globalThis.document.dispatchEvent(new Event('visibilitychange'));
     await tick();
     await vi.advanceTimersByTimeAsync(1000);
     await expect(landed).resolves.toBe(true);
     f.queue.onPatch(patch(), false);
     await tick();
-    expect(f.query.mock.calls.map(([, , context]) => context)).toEqual([
-      { requestPolicy: 'network-only', [TRACE_PARENT_CONTEXT_KEY]: trace },
-      { requestPolicy: 'network-only', [TRACE_PARENT_CONTEXT_KEY]: trace },
-      { requestPolicy: 'network-only' },
+
+    // The first attempt sends 100 ms (the queue's least delay) after the tab
+    // shows; the retry, 1 s after it fails.
+    expect(spans.map((entry) => entry.attrs)).toEqual([
+      {
+        'channel_list.queued_ms': 5100,
+        'channel_list.missed_ms': 50_100,
+        'channel_list.read_attempt': 1,
+        'channel_list.read_outcome': 'retrying',
+      },
+      {
+        'channel_list.queued_ms': 6100,
+        'channel_list.missed_ms': 51_100,
+        'channel_list.read_attempt': 2,
+        'channel_list.read_outcome': 'landed',
+      },
     ]);
+    expect(spans.map((entry) => entry.end.mock.calls.length)).toEqual([1, 1]);
+    expect(spans[0]?.error).toHaveBeenCalledOnce();
+    expect(spans[1]?.error).not.toHaveBeenCalled();
+    // Each attempt's request runs in its span once; a re-sent operation would
+    // join no ended trace. The live update's read names no trace.
+    const contexts = f.query.mock.calls.map(([, , context]) => context);
+    for (const [index, context] of contexts.slice(0, 2).entries()) {
+      const trace: TraceContext | undefined =
+        context?.[TRACE_PARENT_CONTEXT_KEY];
+      trace?.run(() => 'sent');
+      trace?.run(() => 're-sent');
+      expect(spans[index]?.run).toHaveBeenCalledOnce();
+    }
+    expect(contexts[2]).toEqual({ requestPolicy: 'network-only' });
   });
 
   it('answers that a read again did not land when its reader closes first', async () => {
     const f = setup();
     const { dispose } = f.register();
-    const landed = f.queue.readAgain(descriptor());
+    const landed = f.queue.readAgain(descriptor(), Date.now());
     dispose();
     await expect(landed).resolves.toBe(false);
     await tick();

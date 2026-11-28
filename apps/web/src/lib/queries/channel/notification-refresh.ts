@@ -1,11 +1,14 @@
-import { TRACE_PARENT_CONTEXT_KEY } from '@app/lib/urql-solid/trace-parent-exchange';
+import {
+  firstRequestIn,
+  TRACE_PARENT_CONTEXT_KEY,
+} from '@app/lib/urql-solid/trace-parent-exchange';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   isGraphqlServerFault,
   isTransientRequestError,
 } from '@core/util/request-error';
 import type { QueryRevalidation } from '@graphql-cache/exchange/optimistic';
-import type { TraceContext } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import type { GraphqlNotificationPatch } from '@service-storage/graphql-soup-websocket';
 import { type Client, createRequest } from '@urql/core';
 
@@ -32,9 +35,11 @@ type Waiter = {
   reject: (error: unknown) => void;
   /** Waits its turn as live updates do, not as an explicit refresh. */
   background?: boolean;
-  /** The trace a read again joins, with every attempt the queue makes for it. */
-  trace?: TraceContext;
+  /** A read again's: when it was asked for, and since when its page missed updates. */
+  readAgain?: { queuedAt: number; missedSince: number };
 };
+/** How one attempt for a read again ended, for its span. */
+type ReadAgainOutcome = 'landed' | 'retrying' | 'failed' | 'dropped';
 type Job = {
   query: QueryRevalidation;
   readers: Set<ChannelNotificationReader>;
@@ -59,6 +64,22 @@ const coordinators = new WeakMap<QueryClient, ChannelNotificationRefresh>();
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+/**
+ * The span for one attempt at a job a read again waits on: how long that read
+ * has waited in the queue, how long its page has missed updates, and which
+ * attempt this is. Undefined for a job no read again waits on.
+ */
+function startReadAgainAttempt(job: Job): Span | undefined {
+  const readAgain = job.waiters.find((waiter) => waiter.readAgain)?.readAgain;
+  if (!readAgain) return undefined;
+  const now = Date.now();
+  const span = Telemetry.span('channel_list.read_again');
+  span.setAttr('channel_list.queued_ms', now - readAgain.queuedAt);
+  span.setAttr('channel_list.missed_ms', now - readAgain.missedSince);
+  span.setAttr('channel_list.read_attempt', job.failures + 1);
+  return span;
 }
 
 /** Continuation pages cannot show a new channel; only the first page waits. */
@@ -182,9 +203,11 @@ export class ChannelNotificationRefresh {
    * under its backoff, and answers whether that read landed. It waits through
    * the retries of a failure that can recover, and answers false when the
    * query cannot run, fails for good, or its readers close first. Each
-   * attempt sends in `trace`.
+   * attempt is its own `channel_list.read_again` span, which records how long
+   * the read waited and how long its page has missed updates (since
+   * `missedSince`).
    */
-  readAgain(query: QueryRevalidation, trace?: TraceContext): Promise<boolean> {
+  readAgain(query: QueryRevalidation, missedSince: number): Promise<boolean> {
     const job = this.jobs.get(
       createRequest(query.document, query.variables).key
     );
@@ -197,7 +220,7 @@ export class ChannelNotificationRefresh {
         resolve: () => resolve(true),
         reject: () => resolve(false),
         background: true,
-        trace,
+        readAgain: { queuedAt: Date.now(), missedSince },
       });
     });
     this.schedule();
@@ -413,18 +436,23 @@ export class ChannelNotificationRefresh {
     const epoch = this.epoch;
     job.running = true;
     this.active += 1;
+    // A live update's read belongs to no flow; each attempt for a read again
+    // is its own span, opened as it sends, so a read that waits on a hidden
+    // or offline tab holds no span open.
+    const attempt = startReadAgainAttempt(job);
+    let outcome: ReadAgainOutcome = 'dropped';
     try {
-      // A live update's read belongs to no flow; a read again belongs to its
-      // caller's, attempt by attempt.
-      const trace = job.waiters.find((waiter) => waiter.trace)?.trace;
       const result = await this.client
         .query(job.query.document, job.query.variables, {
           requestPolicy: 'network-only',
-          ...(trace && { [TRACE_PARENT_CONTEXT_KEY]: trace }),
+          ...(attempt && {
+            [TRACE_PARENT_CONTEXT_KEY]: firstRequestIn(attempt),
+          }),
         })
         .toPromise();
       if (this.disposed || epoch !== this.epoch || !job.readers.size) return;
       if (result.error) throw result.error;
+      outcome = 'landed';
       job.completed = generation;
       job.failures = 0;
       job.retryAt = 0;
@@ -439,18 +467,23 @@ export class ChannelNotificationRefresh {
         error instanceof Error &&
         (isTransientRequestError(error) || isGraphqlServerFault(error))
       ) {
+        outcome = 'retrying';
         // Reads again wait for the retry; explicit refreshes report the failure.
         this.settle(job, generation, error, true);
         job.retryAt =
           Date.now() +
           Math.min(30_000, 1000 * 2 ** Math.min(job.failures - 1, 5));
       } else {
+        outcome = 'failed';
         job.blocked = true;
         // Later generations cannot run while blocked; reject their callers too.
         this.settle(job, Infinity, error);
       }
+      attempt?.error(error);
       console.warn('Failed to refresh channel notifications', error);
     } finally {
+      attempt?.setAttr('channel_list.read_outcome', outcome);
+      attempt?.end();
       job.running = false;
       this.active -= 1;
       if (!job.readers.size) this.jobs.delete(key);
