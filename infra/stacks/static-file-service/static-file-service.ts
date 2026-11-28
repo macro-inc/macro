@@ -15,6 +15,7 @@ import {
   BASE_DOMAIN,
   MACRO_SUBDOMAIN_CERT,
   DopplerEcsEnvironment,
+  grafanaTelemetryEnabled,
 } from '../../packages/shared';
 import { StaticFileCloudFront } from './distribution';
 
@@ -557,6 +558,11 @@ export class StaticFileService extends pulumi.ComponentResource {
           rollback: true,
         },
         taskDefinitionArgs: {
+          // Fargate sizes a task from reservations, which leave Alloy too
+          // little room in 1 GB: the service and Alloy have 512 MiB limits, and
+          // prod's Datadog agent and FireLens have used 217 MiB resident.
+          cpu: '256',
+          memory: grafanaTelemetryEnabled ? '2048' : '1024',
           taskRole: {
             roleArn: this.role.arn,
           },

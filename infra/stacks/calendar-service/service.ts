@@ -226,6 +226,12 @@ export class CalendarService extends pulumi.ComponentResource {
           },
         ],
         taskDefinitionArgs: {
+          // Fargate sizes a task from reservations: 1 GB in dev, 2 GB in prod.
+          // Dev always runs Alloy, and 1 GB leaves it too little room: the
+          // service and Alloy have 512 MiB limits there, and prod's Datadog
+          // agent and FireLens have used 213 MiB resident.
+          cpu: stack === 'prod' ? '1024' : '512',
+          memory: '2048',
           taskRole: {
             roleArn: this.role.arn,
           },
