@@ -16,11 +16,13 @@ import {
   getGatewayAlb,
   GatewayService,
   getServiceUrl,
+  grafanaTelemetryEnabled,
   ServiceUrl,
   stack,
 } from '../../packages/shared';
 
 const gatewayLoadBalancer = getGatewayAlb();
+const prodTaskMemory = grafanaTelemetryEnabled ? '5120' : '4096';
 
 const BASE_NAME = pulumi.getProject();
 const REPO_ROOT = '../../..';
@@ -197,6 +199,13 @@ export class ConnectionGateway extends pulumi.ComponentResource {
           },
         ],
         taskDefinitionArgs: {
+          // Fargate sizes a task from reservations: 3 GB in dev, 4 GB in prod.
+          // That leaves Alloy too little room: the service's limit (2.5 GB in
+          // dev, 3.5 GB in prod), Alloy's 512 MiB and the Datadog agent and
+          // FireLens (194 MiB resident in prod) need 1 GB more. Dev always
+          // runs Alloy.
+          cpu: stack === 'prod' ? '1024' : '512',
+          memory: stack === 'prod' ? prodTaskMemory : '4096',
           taskRole: {
             roleArn: this.role.arn,
           },
