@@ -1,3 +1,4 @@
+import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
@@ -69,7 +70,8 @@ export function CreateCompanyModal(props: {
         domain: companyDomain() || undefined,
       });
       resetAndClose();
-      props.onCreated(id);
+      if (id) props.onCreated(id);
+      else toast.success('Company queued for creation');
     } catch (cause) {
       console.error('Failed to create company', cause);
       setError(companyCreationError(cause));

@@ -42,6 +42,8 @@ const policies = {
   SetEntityProperty: 'custom: assignment identity and parent links',
   UpdateEntityPropertyOptions: 'custom: ordered option deltas',
   CreateCalendarEvent: 'custom: client event identity and occurrences',
+  CreateCrmCompany: 'custom: durable command with a server-assigned record ID',
+  CreateCrmContact: 'custom: durable command with a server-assigned record ID',
   UpdateCalendarEvent: 'custom: event and occurrence edits',
   DeleteCalendarEvent: 'custom: event and occurrence removal',
   RespondToCalendarEvent: 'custom: attendee response',
