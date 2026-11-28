@@ -28,6 +28,8 @@ type Waiter = {
   generation: number;
   resolve: () => void;
   reject: (error: unknown) => void;
+  /** Waits its turn as live updates do, not as an explicit refresh. */
+  background?: boolean;
 };
 type Job = {
   query: QueryRevalidation;
@@ -169,6 +171,30 @@ export class ChannelNotificationRefresh {
     this.invalidate(job);
     this.schedule();
     return true;
+  }
+
+  /**
+   * Reads a registered query again as a live update would, in its turn and
+   * under its backoff, and answers whether that read landed: false when the
+   * query cannot run, the read fails, or its readers close first.
+   */
+  readAgain(query: QueryRevalidation): Promise<boolean> {
+    const job = this.jobs.get(
+      createRequest(query.document, query.variables).key
+    );
+    if (!job || !this.enabled(job) || job.blocked)
+      return Promise.resolve(false);
+    this.invalidate(job);
+    const landed = new Promise<boolean>((resolve) => {
+      job.waiters.push({
+        generation: job.generation,
+        resolve: () => resolve(true),
+        reject: () => resolve(false),
+        background: true,
+      });
+    });
+    this.schedule();
+    return landed;
   }
 
   /** Explicit refreshes await one attempt. Background recovery never fails a mutation. */
@@ -342,7 +368,7 @@ export class ChannelNotificationRefresh {
       job.generation > job.completed &&
       ![...job.readers].some((reader) => reader.enabled && reader.fetching) &&
       // Explicit user refreshes may run in hidden tabs. Background work waits.
-      (job.waiters.length > 0 ||
+      (this.awaitedExplicitly(job) ||
         (!document.hidden && navigator.onLine !== false))
     );
   }
@@ -439,7 +465,11 @@ export class ChannelNotificationRefresh {
     if (nextRead === undefined) return;
     this.invalidate(job);
     // An explicit refresh waiting on this job reads at once, not after the backoff.
-    if (job.waiters.length === 0) job.retryAt = nextRead;
+    if (!this.awaitedExplicitly(job)) job.retryAt = nextRead;
+  }
+
+  private awaitedExplicitly(job: Job) {
+    return job.waiters.some((waiter) => !waiter.background);
   }
 
   private settle(job: Job, generation: number, error?: unknown) {

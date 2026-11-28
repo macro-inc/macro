@@ -424,6 +424,58 @@ describe('shared channel notification refresh', () => {
     expect(f.query).toHaveBeenCalledTimes(2);
   });
 
+  it('reads a query again in its turn and answers when that read lands', async () => {
+    const f = setup();
+    f.register();
+    const landed = f.queue.readAgain(descriptor());
+    await tick();
+    expect(f.query).toHaveBeenCalledOnce();
+    await expect(landed).resolves.toBe(true);
+    await expect(f.queue.readAgain(descriptor('unregistered'))).resolves.toBe(
+      false
+    );
+  });
+
+  it('holds a read again while hidden, unlike an explicit refresh', async () => {
+    const f = setup();
+    f.register();
+    vi.spyOn(globalThis.document, 'hidden', 'get').mockReturnValue(true);
+    const landed = f.queue.readAgain(descriptor());
+    await tick();
+    expect(f.query).not.toHaveBeenCalled();
+    vi.spyOn(globalThis.document, 'hidden', 'get').mockReturnValue(false);
+    globalThis.document.dispatchEvent(new Event('visibilitychange'));
+    await tick();
+    expect(f.query).toHaveBeenCalledOnce();
+    await expect(landed).resolves.toBe(true);
+  });
+
+  it('keeps the background retry delay for a read again', async () => {
+    const f = setup();
+    f.register();
+    f.request.mockResolvedValueOnce({
+      error: new CombinedError({ networkError: new Error('offline') }),
+    });
+    f.queue.onPatch(patch(), false);
+    await tick();
+    const landed = f.queue.readAgain(descriptor());
+    await tick();
+    expect(f.query).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(f.query).toHaveBeenCalledTimes(2);
+    await expect(landed).resolves.toBe(true);
+  });
+
+  it('answers that a read again did not land when its reader closes first', async () => {
+    const f = setup();
+    const { dispose } = f.register();
+    const landed = f.queue.readAgain(descriptor());
+    dispose();
+    await expect(landed).resolves.toBe(false);
+    await tick();
+    expect(f.query).not.toHaveBeenCalled();
+  });
+
   it('unregisters duplicate views independently and cancels the last pending job', async () => {
     const f = setup();
     const a = f.register();
