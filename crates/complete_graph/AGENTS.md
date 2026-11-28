@@ -44,7 +44,11 @@ Clients key cache records by `__typename:id`. Consequences:
   the shared record, because the last view to fetch the thread would win.
   Expose the facts it derives from (`latestInboundMessageTs`,
   `reminderReturnedAt`, `latestOutboundMessageTs`, `latestNonSpamMessageTs`)
-  and let each view recompute its key.
+  and let each view recompute its key. When a view cannot recompute it (the
+  Spam and Trash folder date and message), return it from an embedded field
+  with a cache-key argument naming the list, as
+  `GraphqlSoupEmailThread.pagePreview(page:)` does: the cache stores it per
+  argument inside the thread, so lists never overwrite each other's value.
 - `id` fields must be exactly `ID!` (non-null, non-list); the cache build
   (`crates/client/cache-core/build.rs`) fails otherwise, and fails if
   the query root exposes an `id`.
