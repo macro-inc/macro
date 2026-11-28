@@ -21,7 +21,8 @@ export type StepName = (typeof STEP_NAMES)[number];
 export type StepMeasure = {
   /** From the step's start to its last request. */
   settleMs: number;
-  /** From navigation until the rail showed its first rows; loads only. */
+  /** From navigation until the Conversations rail showed its first rows on
+   * screen; loads only. */
   rowsMs: number | null;
   longTasks: { count: number; totalMs: number; maxMs: number };
   /** The page's JavaScript heap after a forced collection. */

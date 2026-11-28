@@ -158,8 +158,8 @@ const ZERO_METRICS = Object.fromEntries(
 ) as Metrics;
 
 /** Runs in every document before the app: long tasks from the start, when
- * the rail first shows `firstRows` rows, and the viewer's saved Chat state
- * unless the app has written its own. */
+ * the Conversations rail first shows `firstRows` rows on screen, and the
+ * viewer's saved Chat state unless the app has written its own. */
 function observePage({
   firstRows,
   tree,
@@ -182,11 +182,32 @@ function observePage({
     for (const entry of list.getEntries())
       state.longTasks.push([entry.startTime, entry.duration]);
   }).observe({ type: 'longtask', buffered: true });
+  // The rows are shown once the rail's `firstRows`-th row, the one
+  // `rowsShown` asserts, is rendered and not clipped out of the rail or the
+  // window. An IntersectionObserver reads that in the browser's own
+  // rendering step, so the timer forces no layout in the measured page.
+  let watched: Element | undefined;
+  const shown = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (entry.target !== watched || entry.intersectionRatio === 0) continue;
+      if (!entry.target.checkVisibility({ visibilityProperty: true })) {
+        // Watched again on the next mutation, which reports it afresh.
+        shown.unobserve(entry.target);
+        watched = undefined;
+        continue;
+      }
+      state.rowsAt = entry.time;
+      shown.disconnect();
+      rows.disconnect();
+      return;
+    }
+  });
   const rows = new MutationObserver(() => {
-    const shown = document.querySelectorAll(`${tree} ${row}`).length;
-    if (shown < firstRows) return;
-    state.rowsAt = performance.now();
-    rows.disconnect();
+    const last = document.querySelectorAll(`${tree} ${row}`)[firstRows - 1];
+    if (last === undefined || last === watched) return;
+    if (watched !== undefined) shown.unobserve(watched);
+    watched = last;
+    shown.observe(last);
   });
   rows.observe(document, { childList: true, subtree: true });
 }
