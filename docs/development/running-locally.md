@@ -294,7 +294,7 @@ environment the stack is started from) starts
 the model emulator (`crates/model_emulator`) as the `model_emulator` service,
 and `OVERRIDE_GOOGLE_GENERATIVE_AI_API_URL` points the agent harness's Gemini
 client at it (`xtask_local`'s `model_emulator.rs`). A new local user is on
-the free plan, whose model is Gemini Flash, so the assistant's turns are answered by the
+the free plan, whose model is Gemini 4 Hydrogen, so the assistant's turns are answered by the
 emulator, not by a model provider. Image generation does not go through it.
 
 - Every message is answered `OK.` until a script says otherwise. Add one with

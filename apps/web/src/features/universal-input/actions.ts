@@ -61,8 +61,6 @@ import {
 } from '../calendar/utils/calendar-description';
 import { buildRecurrenceLines } from '../calendar/utils/recurrence';
 import { authoredMentions } from '../channel/Input/message-payload';
-import { searchNeedsKeywords } from '../next-soup/core/search-filters';
-import { searchFiltersOperatorText } from '../next-soup/core/search-operator-filters';
 import { createGlobalSearchOpener } from '../next-soup/open-search';
 import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
 import { createTagOptions } from '../next-soup/soup-view/filters-bar/tag-filter-state';
@@ -70,7 +68,11 @@ import type { InputCapabilities } from './context/capabilities';
 import type { InputFields, Intent, Submission } from './core/input';
 import { type Recipient, resolveRecipients } from './core/recipients';
 import { parseRecurrenceDraft } from './core/recurrence';
-import { resolveSearchFilters } from './core/search';
+import {
+  type SearchDraftText,
+  searchDraftText,
+  searchNeedsWord,
+} from './core/search';
 import { useInputPeople } from './queries/input-people';
 import { createTaskFieldSource } from './queries/task-field-source';
 
@@ -158,6 +160,21 @@ export function createInputActions(
       .inboxes()
       .find((a) => a.id === (f.inboxId || email.accounts.primaryId())) ??
     (!f.inboxId ? email.accounts.inboxes()[0] : undefined);
+  const search = (f: InputFields): SearchDraftText =>
+    searchDraftText(f, {
+      people: person,
+      channels: searchChannels(),
+      inboxes: email.accounts.inboxes(),
+      names: {
+        userId,
+        tag: (id) => tagOptions.optionsById().get(id)?.label,
+        channel: (id) =>
+          searchChannels().find((channel) => channel.id === id)?.label,
+        inbox: (id) =>
+          email.accounts.inboxes().find((inbox) => inbox.id === id)
+            ?.email_address,
+      },
+    });
   const connectGoogle = async () => {
     if (connectingGoogle()) return;
     setConnectingGoogle(true);
@@ -217,15 +234,10 @@ export function createInputActions(
   };
   const validate: InputCapabilities['validate'] = (input) => {
     if (input.intent === 'search') {
-      const filters = resolveSearchFilters(
-        input.fields.searchFilters,
-        person,
-        searchChannels(),
-        email.accounts.inboxes()
-      );
-      if (filters.unresolved.length)
-        return `Choose a specific person or channel for ${filters.unresolved.join(', ')}`;
-      if (searchNeedsKeywords(filters.state, input.fields.query))
+      const draft = search(input.fields);
+      if (draft.unresolved.length)
+        return `Choose a specific person or channel for ${draft.unresolved.join(', ')}`;
+      if (searchNeedsWord(draft.text, draft.bindings))
         return 'Add search text to search by sender or speaker.';
     }
     if (input.intent === 'task') {
@@ -358,32 +370,16 @@ export function createInputActions(
         };
       })
       .with('search', async () => {
-        const { state } = resolveSearchFilters(
-          f.searchFilters,
-          person,
-          searchChannels(),
-          email.accounts.inboxes()
-        );
-        // The draft's filters become operators in the Search field, which
-        // shows the whole search; its tags and channels stay bound to the
-        // ids picked, so a DM or an emoji-only tag still narrows it.
-        const operators = searchFiltersOperatorText(state, {
-          userId,
-          tag: (id) => tagOptions.optionsById().get(id)?.label,
-          channel: (id) =>
-            searchChannels().find((channel) => channel.id === id)?.label,
-          inbox: (id) =>
-            email.accounts.inboxes().find((inbox) => inbox.id === id)
-              ?.email_address,
-        });
+        // Search opens on the same text the draft's field shows.
+        const draft = search(f);
         const preset = getViewPreset('search');
-        const search = {
-          query: [operators.text, f.query.trim()].filter(Boolean).join(' '),
-          bindings: operators.bindings,
+        const opened = {
+          query: draft.text.trim(),
+          bindings: draft.bindings,
           filters: preset?.filters ?? {},
           clientFilters: preset?.clientFilters ?? {},
         };
-        return { message: 'Search opened', open: () => openSearch(search) };
+        return { message: 'Search opened', open: () => openSearch(opened) };
       })
       .with('note', async () => {
         const created = await createDocumentWithTags(
@@ -547,6 +543,7 @@ export function createInputActions(
     selectedCalendar,
     selectedInbox,
     inboxes: email.accounts.inboxes,
+    search,
     connectGoogle,
     connectingGoogle: () =>
       connectingGoogle() ||

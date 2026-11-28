@@ -41,8 +41,9 @@ They then open two more splits beside Email, resize the window to 1000px and
 They then open Tasks, narrow the window from 520px to 400px and expect every
 Tasks list header control, New and Search included, inside the header, then
 restore the size and expect the layout switch and Group by back.
-They then open Calendar and expect its header controls, Search events included,
-inside the header and uncovered at 440px, 400px, 360px and 320px (where Search
+They then open Calendar and expect its header controls, Search events included
+(a field at the default size, a button in a narrow pane), inside the header and
+uncovered at the default size, at 440px, 400px, 360px and 320px (where Search
 wraps onto its own row, where it is also opened and must leave the other
 controls in view) and at the restored size.
 The full suite checks native Soup predicate evaluation via
@@ -75,7 +76,10 @@ empty resources, in `fixtures/bootstrap.ts` and as empty `GraphqlUser` fields in
 `fixtures/server.ts`; the running-timer read (`user.timeTracking`) gets no timer
 and the current server clock. The fixture user joined no channels, so the channel
 backfill lane (`SoupChannelDirectoryBackfill`) and the directory's network
-fallback (`ChannelDirectoryPage`) read an empty directory. Unexpected requests,
+fallback (`ChannelDirectoryPage`) read an empty directory. The fixture user owns
+and has viewed nothing, so one-shot preview lists (`SoupPreviewPage`: quick-access
+skills, snippets, initiatives, recently viewed) read no items; a preview that asks
+for a Mail view fails. Unexpected requests,
 unknown cursors and GraphQL validation errors are recorded and fail the smoke
 suite; nothing forwards to hosted services. This does not test the Rust HTTP
 server's authorization, SQL, or Gmail synchronization.

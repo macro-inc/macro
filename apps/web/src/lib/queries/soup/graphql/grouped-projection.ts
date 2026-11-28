@@ -1,5 +1,6 @@
 import { type Accessor, createMemo } from 'solid-js';
 import { arrayEquals } from '../../../core/util/compareUtils';
+import { readRowSnapshot } from '../../../graphql-cache/exchange/live-query';
 import type { GroupSoupQuery } from '../../../service-clients/service-storage/graphql/generated/graphql';
 import {
   type GraphqlSoupItem,
@@ -30,9 +31,10 @@ export function createGraphqlGroupedSoupProjection(
     { equals: arrayEquals }
   );
   const rows = createKeyedProjection(records, soupItemKey, (record) => {
-    const item = mapGraphqlSoupItem(record);
+    const rawRecord = readRowSnapshot(record);
+    const item = mapGraphqlSoupItem(rawRecord);
     return {
-      id: record.id,
+      id: rawRecord.id,
       item,
       entity: item
         ? mapSoupPageToEntityList(

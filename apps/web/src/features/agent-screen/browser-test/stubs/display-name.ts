@@ -9,3 +9,8 @@ export function isAgentAccount(id: string | undefined | null) {
 export function getDisplayName(id: string | undefined | null) {
   return id === AGENT ? AGENT_NAME : 'You';
 }
+
+export function getDisplayNameParts(id: string | undefined | null) {
+  const fullName = getDisplayName(id);
+  return { firstName: id === AGENT ? AGENT_NAME : '', lastName: '', fullName };
+}

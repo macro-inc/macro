@@ -187,7 +187,10 @@ operator's name list that operator above the recent searches (`su` gives
 `from:`, `to:`, `cc:` and `bcc:` list the people matching what follows,
 found and ranked as the composer's recipient picker finds them, and finish
 with their address; `label:` lists the person's tags and their inboxes' own
-labels (not system labels such as Inbox), quoting a name with a space.
+labels (not system labels such as Inbox), quoting a name with a space and
+writing it without its own double quotes, as the search matches it (a tag
+named Q3 "Plan" finishes as `label:"Q3 Plan"`); a name an emoji alone makes
+(`label:🔥`, `in:🔥`) is an operator too.
 A plain word that stands for a filter offers it as the first row
 (`unread`, `starred`, `attachment`, `today`, `this week`, and `sent` beside
 other words, since a view alone searches nothing), and a word of three or

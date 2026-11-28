@@ -35,6 +35,9 @@ the server says its connection can be imported from (`importAvailable`),
   trackers, and lets the owner exclude objects and change sharing. On phones,
   **Open full review** uses the existing full-height sheet. Approve on the card,
   or say yes and let the agent submit it with `DecideReview`; planning must be ready.
+  To include a skipped Notion page, tick its checkbox to change it to **Copy**.
+  To retry a previously skipped page in a fresh review, ask to import its
+  Notion link as a workspace root and approve the resulting plan.
   For Notion, items marked **Needs you** cannot be selected for automatic import.
   The completed report shows their reasons in an open **Needs you** section
   apart from items left out in review. Stop affects the selected source only,
@@ -77,15 +80,22 @@ handoff paths without a backend.
 
 On desktop, signed in, every Notion, Linear, Jira and Slack import run also
 shows in the bottom-right corner, above upload progress (`src/features/import-jobs`,
-mounted in `ToastRegion`). A pill (`2 imports`, with an overall progress ring)
-toggles the list (**Hide imports** / **Show imports**); each row names the
+mounted in `ToastRegion`). A pill (`2 imports`, with an overall progress ring
+while something is moving) toggles the list (**Hide imports** / **Show imports**); each row names the
 source and its phase: `Scanning 120 pages` (Linear and Jira: `Reading N
 issues`, Slack: `Finding channels`), `Deciding on N items`, `Waiting for your
 approval`, `Importing 31 of 124` with a percentage, then `Imported`, `Import
-failed` or `Import cancelled`. **Open the <Source> import** opens the agent
+failed` (or a short reason from the run's failure kind, such as `Failed:
+Notion access lost`) or `Import cancelled`. **Open the <Source> import** opens the agent
 session presenting the review, once one does; Slack rows have no session.
-Runs that stopped moving stay for an hour after their last change, and
-**Dismiss the <Source> import** hides them until they change again. Phones
+A failed row offers **Reconnect <Source>** when the connection was revoked,
+expired or unusable, and **View details** (its review) otherwise; a partly
+failed import reads `Imported with N problems` (`Imported with some problems` until its report counts them), and one that wrote nothing reads `Nothing imported`. A finished or cancelled
+run leaves after about five seconds; a failed one stays until **Dismiss the
+<Source> import** or a week; a partly failed one stays until dismissed; a
+plan waiting for approval stays for an hour after its last change.
+Dismissals are kept per user on the device, and dismissing a failed review in
+the thread dismisses its run's tray entry too. Phones
 never show the tray. It reads `/import/state` (polling only while something
 is running, otherwise on `import_updated` pushes) and each listed workspace
 run's `/import/workspaces/{source}` report. `src/features/import-jobs/browser-test/`

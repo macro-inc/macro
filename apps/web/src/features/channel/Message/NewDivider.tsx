@@ -1,4 +1,5 @@
-import { formatRelativeDate } from '@core/util/time';
+import { useCurrentDay } from '@core/signal/currentDay';
+import { formatConversationDay } from '@core/util/time';
 import { Show } from 'solid-js';
 import { isDateDividerVisible } from './DateDivider';
 import type { ChannelMessageListMeta } from './list-meta';
@@ -12,11 +13,12 @@ type NewDividerProps = {
 };
 
 export function NewDivider(props: NewDividerProps) {
+  const currentDay = useCurrentDay();
   const isVisible = () =>
     !props.isReply && props.listMeta?.isFirstNewMessage === true;
   const text = () =>
     isDateDividerVisible(props.createdAt, props.listMeta, props.isReply)
-      ? `${formatRelativeDate(props.createdAt)} - New`
+      ? `${formatConversationDay(props.createdAt, currentDay())} - New`
       : 'New';
 
   return (

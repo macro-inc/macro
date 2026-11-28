@@ -36,6 +36,7 @@ mod cargo_deny;
 mod cargo_deny_advisories;
 mod cargo_workspace_dependency_check;
 mod channels_e2e;
+mod check_deploy_nix_sources;
 mod check_generated;
 mod check_node_modules_nix;
 mod check_tauri_lockfiles;
@@ -488,6 +489,11 @@ pub(crate) const WORKFLOWS: &[WorkflowFile] = &[
         slug: "check_node_modules_nix",
         file_name: "check_node_modules_nix.yml",
         render_yaml: || render_gh_workflow(check_node_modules_nix::check_node_modules_nix)(),
+    },
+    WorkflowFile {
+        slug: "check_deploy_nix_sources",
+        file_name: "check_deploy_nix_sources.yml",
+        render_yaml: || render_gh_workflow(check_deploy_nix_sources::check_deploy_nix_sources)(),
     },
     WorkflowFile {
         slug: "check_tauri_lockfiles",

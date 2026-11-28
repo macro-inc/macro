@@ -15,6 +15,8 @@ export type ChannelNotificationReader = {
   scope?: 'all-entities';
   /** Omitted for channel lists, which can gain previously absent channels. */
   channelId?: string;
+  /** Explicit member set for by-ID channel lookups; unrelated channels are ignored. */
+  channelIds?: ReadonlySet<string>;
   /** The channel types a channel list shows, so it can wait for a new one. */
   channelTypes?: readonly string[];
   filtered: boolean;
@@ -319,6 +321,7 @@ export class ChannelNotificationRefresh {
           (reader) =>
             reader.enabled &&
             (!reader.channelId || reader.channelId === channelId) &&
+            (!reader.channelIds || reader.channelIds.has(channelId)) &&
             // Updating a normalized record cannot add it to an older edge.
             (normalizedUpdateId === undefined ||
               reader.filtered ||

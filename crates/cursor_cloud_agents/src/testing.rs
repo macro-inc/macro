@@ -335,7 +335,7 @@ impl FakeCursor {
     }
 
     /// Reject the next create (agent or run) the way Cursor does when the
-    /// account's background-agent budget is spent.
+    /// account is out of credit or near its limit.
     pub fn script_usage_limit_rejection(&self) {
         self.inner.lock().unwrap().reject_create_for_usage_limit = true;
     }
@@ -468,11 +468,11 @@ impl FakeCursor {
 }
 
 /// The refusal Cursor answered a production create with once the account's
-/// budget was spent, as [`crate::api`] types it.
+/// prepaid credit was used up, as [`crate::api`] types it.
 fn usage_limit_exceeded() -> rootcause::Report {
     rootcause::report!(crate::domain::error::UsageLimitExceeded {
         code: "usage_limit_exceeded".to_owned(),
-        detail: r#"{"error":{"code":"usage_limit_exceeded","message":"You need to increase your hard limit. Background Agent requires at least $2 remaining until your hard limit. Manage it at https://www.cursor.com/dashboard?tab=settings."}}"#.to_owned(),
+        detail: r#"{"error":{"code":"usage_limit_exceeded","message":"Your prepaid balance is used up. Add funds or enable auto top-up in your billing settings to keep going."}}"#.to_owned(),
     })
     .into_dynamic()
 }

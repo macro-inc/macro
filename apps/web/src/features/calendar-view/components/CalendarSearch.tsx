@@ -801,61 +801,74 @@ function CalendarSearchControl(props: {
       </div>
       <Popover.Portal>
         <Layer depth={3}>
-          <Popover.Content
-            class="portal-scope z-modal outline-none transition-opacity duration-200 ease-out motion-reduce:transition-none"
+          {/* While the popup is hidden, clicks must reach the header under it:
+              Kobalte sets `pointer-events: auto` inline on the content (only
+              `!` beats it) and wraps it in a positioner of the same size. */}
+          <div
+            class="contents"
             classList={{
-              'pointer-events-none opacity-0': !popupVisible(),
-            }}
-            aria-hidden={!popupVisible() ? true : undefined}
-            inert={!popupVisible()}
-            onOpenAutoFocus={(event) => {
-              event.preventDefault();
-            }}
-            onCloseAutoFocus={(event) => {
-              event.preventDefault();
-            }}
-            onEscapeKeyDown={(event) => {
-              event.preventDefault();
-              dismissSearch();
-            }}
-            onKeyDown={handleContentKeyDown}
-            onInteractOutside={(event) => {
-              const target = event.detail.originalEvent.target;
-              if (
-                target instanceof Element &&
-                target.closest('[data-calendar-search-filters]')
-              ) {
-                event.preventDefault();
-              }
-              // The header dismisses after a period control's click. Collapsing
-              // on pointerdown can move that control before mouseup and lose the click.
-              if (
-                target instanceof Element &&
-                target.closest('[data-calendar-period-controls]') &&
-                inputRef?.closest('[data-view-shell-top-bar]')?.contains(target)
-              ) {
-                event.preventDefault();
-              }
-              if (
-                target instanceof Node &&
-                inputRef?.closest('[data-search-bar]')?.contains(target)
-              ) {
-                event.preventDefault();
-              }
+              '[&>[data-popper-positioner]]:pointer-events-none':
+                !popupVisible(),
             }}
           >
-            <div
-              class={cn(
-                'menu-surface max-w-[calc(100vw-2rem)] overflow-hidden transition-[translate] duration-200 ease-out motion-reduce:transition-none',
-                'w-[var(--kb-popper-anchor-width)]'
-              )}
+            <Popover.Content
+              class="portal-scope z-modal outline-none transition-opacity duration-200 ease-out motion-reduce:transition-none"
               classList={{
-                '-translate-y-1': !popupVisible(),
+                'pointer-events-none! opacity-0': !popupVisible(),
+              }}
+              aria-hidden={!popupVisible() ? true : undefined}
+              inert={!popupVisible()}
+              onOpenAutoFocus={(event) => {
+                event.preventDefault();
+              }}
+              onCloseAutoFocus={(event) => {
+                event.preventDefault();
+              }}
+              onEscapeKeyDown={(event) => {
+                event.preventDefault();
+                dismissSearch();
+              }}
+              onKeyDown={handleContentKeyDown}
+              onInteractOutside={(event) => {
+                const target = event.detail.originalEvent.target;
+                if (
+                  target instanceof Element &&
+                  target.closest('[data-calendar-search-filters]')
+                ) {
+                  event.preventDefault();
+                }
+                // The header dismisses after a period control's click. Collapsing
+                // on pointerdown can move that control before mouseup and lose the click.
+                if (
+                  target instanceof Element &&
+                  target.closest('[data-calendar-period-controls]') &&
+                  inputRef
+                    ?.closest('[data-view-shell-top-bar]')
+                    ?.contains(target)
+                ) {
+                  event.preventDefault();
+                }
+                if (
+                  target instanceof Node &&
+                  inputRef?.closest('[data-search-bar]')?.contains(target)
+                ) {
+                  event.preventDefault();
+                }
               }}
             >
-              {resultsBody()}
-            </div>
-          </Popover.Content>
+              <div
+                class={cn(
+                  'menu-surface max-w-[calc(100vw-2rem)] overflow-hidden transition-[translate] duration-200 ease-out motion-reduce:transition-none',
+                  'w-[var(--kb-popper-anchor-width)]'
+                )}
+                classList={{
+                  '-translate-y-1': !popupVisible(),
+                }}
+              >
+                {resultsBody()}
+              </div>
+            </Popover.Content>
+          </div>
         </Layer>
       </Popover.Portal>
     </Popover>

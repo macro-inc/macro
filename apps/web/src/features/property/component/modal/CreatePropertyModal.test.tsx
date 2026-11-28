@@ -1,5 +1,7 @@
-import { ThrownResultError, thrownResultErrorHasCode } from '@core/util/result';
-import { PROPERTY_NAME_RESERVED_CODE } from '@service-properties/client';
+import {
+  CatalogMutationError,
+  isCatalogConflict,
+} from '@queries/properties/catalog/errors';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -29,7 +31,7 @@ vi.mock('@queries/properties/entity', () => ({
 }));
 vi.mock('@queries/properties/definitions', () => ({
   isPropertyNameReserved: (error: unknown) =>
-    thrownResultErrorHasCode(error, PROPERTY_NAME_RESERVED_CODE),
+    isCatalogConflict(error, 'RESERVED_NAME'),
   useCreatePropertyDefinitionMutation: (
     callbacks: typeof mocks.createCallbacks
   ) => {
@@ -207,9 +209,7 @@ it('says why when the server refuses a built-in name the dialog did not know', a
     target: { value: 'Region' },
   });
   mocks.createCallbacks?.onError?.(
-    new ThrownResultError([
-      { code: PROPERTY_NAME_RESERVED_CODE, message: 'refused' },
-    ]),
+    new CatalogMutationError('refused', 'CONFLICT', 'RESERVED_NAME'),
     mocks.create.mock.calls[0]?.[0]
   );
 
@@ -217,3 +217,24 @@ it('says why when the server refuses a built-in name the dialog did not know', a
   expect(screen.queryByText(/^Region is a built-in property/)).toBeNull();
   expect(screen.queryByText('Unable to create property')).toBeNull();
 });
+
+it.each([
+  ['NAME_TAKEN', 'A property with that name already exists'],
+  ['OPTION_VALUE_TAKEN', 'Duplicate values not allowed'],
+])(
+  'says what was taken when the server refuses it as %s',
+  async (reason, message) => {
+    render(() => (
+      <CreatePropertyModal isOpen initialName="Phase" onClose={() => {}} />
+    ));
+
+    await fireEvent.click(screen.getByRole('button', { name: /^Create/ }));
+    mocks.createCallbacks?.onError?.(
+      new CatalogMutationError('taken', 'CONFLICT', reason),
+      mocks.create.mock.calls[0]?.[0]
+    );
+
+    expect(await screen.findByText(message)).toBeTruthy();
+    expect(screen.queryByText(/is a built-in property/)).toBeNull();
+  }
+);

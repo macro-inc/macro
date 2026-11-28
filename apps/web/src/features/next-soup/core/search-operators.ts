@@ -1,4 +1,8 @@
 import {
+  isPhraseQuote,
+  namesSomething,
+} from '@app/components/view-shell/search-terms';
+import {
   isUnfinishedEmailSearchOperator,
   readsAsEmailSearchOperator,
 } from '@app/features/email-view/search/email-search-operators';
@@ -229,28 +233,6 @@ const isOneOf = <T extends string>(
 const hasWord = (text: string) => /[\p{Alphabetic}\p{N}]/u.test(text);
 
 /**
- * Whether an operator's value can name something: a letter, a digit, or
- * another non-ASCII character such as an emoji, so `tag:🔥` is a tag while
- * ASCII punctuation alone (`tag:-`) stays a word, as the service reads it.
- */
-const namesSomething = (value: string) =>
-  /[\p{Alphabetic}\p{N}]|[^\p{ASCII}\s]/u.test(value);
-
-/** Quotes a phrase is typed with, as the service reads them. */
-const PHRASE_QUOTES = /["“”„]/;
-
-/** Whether `char` opens or closes a phrase, as the service reads it. */
-export const isPhraseQuote = (char: string) => PHRASE_QUOTES.test(char);
-
-/**
- * `name` as a typed value can hold it: a query's terms drop the phrase
- * quotes they're typed with, so a tag named `Q3 "Plan"` is typed as
- * `tag:"Q3 Plan"`.
- */
-export const nameAsTyped = (name: string) =>
-  [...name].filter((char) => !isPhraseQuote(char)).join('');
-
-/**
  * The query's terms as the service splits them: by whitespace outside
  * quotes, the quotes dropped.
  */
@@ -264,7 +246,7 @@ export function splitSearchTerms(text: string): string[] {
     current = '';
   };
   for (const char of text) {
-    if (PHRASE_QUOTES.test(char)) inQuotes = !inQuotes;
+    if (isPhraseQuote(char)) inQuotes = !inQuotes;
     else if (/\s/.test(char) && !inQuotes) push();
     else current += char;
   }
@@ -616,7 +598,7 @@ function finishedTokens(
   };
   for (let index = 0; index < text.length; index++) {
     const char = text[index] ?? '';
-    if (PHRASE_QUOTES.test(char)) inQuotes = !inQuotes;
+    if (isPhraseQuote(char)) inQuotes = !inQuotes;
     if (/\s/.test(char) && !inQuotes) close(index);
     else if (start < 0) start = index;
   }
@@ -711,11 +693,28 @@ export function searchQueryParts(
     text,
     bindings
   );
+  // The request carries one tag group by id, any or all of it. Bound tag
+  // groups it can't hold as one (a group of alternatives beside another)
+  // stay in the service's text, which reads every group by name. A token
+  // bound to two same-named tags is such a group too.
+  const boundTagGroups = read.groups.filter(
+    (group) => group.name === 'tag' && isBoundSearchOperatorGroup(group)
+  );
+  const alternatives = (group: SearchOperatorGroup) =>
+    group.values.reduce(
+      (count, value) => count + (value.kind === 'tags' ? value.tags.length : 1),
+      0
+    );
+  const tagsByName =
+    boundTagGroups.length > 1 &&
+    boundTagGroups.some((group) => alternatives(group) > 1);
+  const sentById = (group: SearchOperatorGroup) =>
+    isBoundSearchOperatorGroup(group) && !(tagsByName && group.name === 'tag');
   const boundTokens = new Set(
     groupTermIndexes(terms, read.groups)
       .filter((_, index) => {
         const group = read.groups[index];
-        return group !== undefined && isBoundSearchOperatorGroup(group);
+        return group !== undefined && sentById(group);
       })
       .flat()
       .map((index) => readable[index])
@@ -728,7 +727,7 @@ export function searchQueryParts(
       boundTokens.has(readable[index + 1]);
     if (token.term === OR && besideBound) boundTokens.add(token);
   });
-  const boundGroups = read.groups.filter(isBoundSearchOperatorGroup);
+  const boundGroups = read.groups.filter(sentById);
   // Mail's operators are conditions only where email is searched.
   const words = searchesEmail
     ? read.terms.filter((term) => !readsAsEmailSearchOperator(term))

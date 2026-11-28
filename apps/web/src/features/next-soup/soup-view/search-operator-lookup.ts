@@ -1,5 +1,5 @@
+import { nameAsTyped } from '@app/components/view-shell/search-terms';
 import type { SearchOperatorLookup } from '@app/features/next-soup/core/search-operator-filters';
-import { nameAsTyped } from '@app/features/next-soup/core/search-operators';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';
 import { useMailAccountsQuery } from '@queries/email/mail-accounts';
@@ -45,7 +45,9 @@ export function createSearchOperatorLookup(
       channels: (name) => {
         const wanted = name.toLowerCase();
         return named
-          .filter((channel) => channel.data.name.toLowerCase() === wanted)
+          .filter(
+            (channel) => nameAsTyped(channel.data.name).toLowerCase() === wanted
+          )
           .map((channel) => channel.id);
       },
     };

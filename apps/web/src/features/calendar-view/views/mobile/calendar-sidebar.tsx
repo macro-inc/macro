@@ -4,6 +4,7 @@ import { CopyAvailabilityButton } from '@app/features/calendar/availability/Copy
 import { CalendarSwatch } from '@app/features/calendar/components/CalendarSwatch';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { CalendarColorPicker } from '@app/features/calendar/components/calendar-color-picker';
+import { SubscriptionMark } from '@app/features/calendar/components/SourceControls';
 import { useCalendarNavigation } from '@app/features/calendar/context/calendar-navigation-context';
 import { useSetCalendarColor } from '@app/features/calendar/hooks/use-calendar-color';
 import { useHasTeammates } from '@app/features/calendar/hooks/use-team-ooo';
@@ -245,8 +246,13 @@ export function MobileCalendarSidebar() {
                               >
                                 <Checkbox.Control />
                                 <CalendarSwatch color={source.color} />
-                                <Checkbox.Label class="min-w-0 flex-1 truncate">
-                                  {source.name}
+                                <Checkbox.Label class="flex min-w-0 flex-1 items-center gap-2">
+                                  <span class="min-w-0 flex-1 truncate">
+                                    {source.name}
+                                  </span>
+                                  <Show when={source.isSubscription}>
+                                    <SubscriptionMark />
+                                  </Show>
                                 </Checkbox.Label>
                               </Checkbox>
                             </div>

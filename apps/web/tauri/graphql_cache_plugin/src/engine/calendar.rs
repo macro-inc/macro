@@ -41,11 +41,17 @@ impl EngineHandle {
     /// before publishing coverage; this commit supersedes unrelated queued warming.
     pub async fn calendar_commit(&self, commit: CalendarCommit) -> Result<WriteResultWire, String> {
         let mut state = self.snapshot_write().await?;
-        let EngineState { engine, ops, .. } = &mut *state;
+        let EngineState {
+            engine,
+            ops,
+            commits,
+            ..
+        } = &mut *state;
         let result = engine
             .calendar_commit(&commit)
             .await
             .map_err(|error| error.to_string())?;
+        self.commits.settle(commits, || None);
         let unchanged_views = engine
             .unchanged_observed_windows()
             .await

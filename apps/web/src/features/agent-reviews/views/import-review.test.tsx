@@ -1,5 +1,10 @@
 /** @vitest-environment jsdom */
-import type { ImportEntity, NotionImportReport } from '@queries/import';
+import { readDismissedRuns } from '@app/features/import-jobs/dismissed-runs';
+import type {
+  ImportEntity,
+  ImportRun,
+  NotionImportReport,
+} from '@queries/import';
 import {
   cleanup,
   fireEvent,
@@ -28,7 +33,16 @@ const imports = vi.hoisted(() => {
     report: NotionImportReport | undefined;
     cancel: Mock;
     open: Mock;
-  } = { entities: [], report: undefined, cancel: vi.fn(), open: vi.fn() };
+    connect: Mock;
+    runs: ImportRun[];
+  } = {
+    entities: [],
+    report: undefined,
+    cancel: vi.fn(),
+    open: vi.fn(),
+    connect: vi.fn(),
+    runs: [],
+  };
   return state;
 });
 vi.mock('@components/app/split-layout/layout', () => ({
@@ -37,17 +51,26 @@ vi.mock('@components/app/split-layout/layout', () => ({
 vi.mock('@core/mobile/isMobile', () => ({
   isMobile: () => window.innerWidth < 640,
 }));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => 'macro|owner@macro.local',
+}));
 // The real icon table loads every block, which opens app connections.
 vi.mock('@core/component/EntityIcon', () => ({
   EntityIcon: (props: { targetType: string }) => (
     <span data-icon={props.targetType} />
   ),
 }));
+vi.mock('@queries/connectors', () => ({
+  appConnectorKey: (slug: string) => `app/${slug}`,
+  connectConnector: imports.connect,
+}));
 vi.mock('@queries/import', () => ({
   useImportQuery: () => ({
     isPending: false,
     isPlaceholderData: false,
-    data: { runs: [], entities: imports.entities },
+    get data() {
+      return { runs: imports.runs, entities: imports.entities };
+    },
   }),
   useWorkspaceImportReportQuery: () => ({
     get isPending() {
@@ -59,6 +82,26 @@ vi.mock('@queries/import', () => ({
   }),
   useCancelWorkspaceImportMutation: () => ({ mutateAsync: imports.cancel }),
 }));
+
+/** A Notion run whose plan failed; tests set its kind. */
+const FAILED: NotionImportReport = {
+  status: 'failed',
+  reviewId: null,
+  onTeam: false,
+  pages: 0,
+  dataSources: 0,
+  copy: 0,
+  tasks: 0,
+  skip: 0,
+  hand: 0,
+  documents: 0,
+  databases: 0,
+  databaseRows: 0,
+  taskRows: 0,
+  imported: 0,
+  waiting: 0,
+  writing: 0,
+};
 
 function entity(
   id: string,
@@ -202,6 +245,10 @@ beforeEach(() => {
   imports.report = undefined;
   imports.cancel.mockReset();
   imports.open.mockReset();
+  imports.connect.mockReset();
+  imports.runs = [];
+  localStorage.clear();
+  imports.connect.mockResolvedValue('connected');
   vi.stubGlobal('scrollTo', vi.fn());
   vi.stubGlobal(
     'ResizeObserver',
@@ -240,7 +287,7 @@ function setup(
         id: 'plan',
         status: 'pending',
         error: null,
-        draft: { source: 'notion' },
+        draft: { source: 'notion', excluded: [], shared: [], personal: [] },
         result: null,
         ...options.item,
       },
@@ -256,7 +303,15 @@ function setup(
       items: [
         decision.action === 'edit'
           ? decision.draft.kind === 'import'
-            ? { ...item, draft: decision.draft.draft }
+            ? {
+                ...item,
+                draft: {
+                  ...decision.draft.draft,
+                  excluded: decision.draft.draft.excluded ?? [],
+                  shared: decision.draft.draft.shared ?? [],
+                  personal: decision.draft.draft.personal ?? [],
+                },
+              }
             : item
           : {
               ...item,
@@ -674,7 +729,7 @@ describe('import review', () => {
     expect(
       screen.getByRole<HTMLInputElement>('checkbox', { name: 'Import Scratch' })
         .disabled
-    ).toBe(true);
+    ).toBe(false);
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Import Roadmap' }));
     expect(screen.getByRole('button', { name: 'Import 1 page' })).toBeTruthy();
@@ -790,10 +845,25 @@ describe('import review', () => {
     expect(screen.queryByText(/Started by the agent/)).toBeNull();
   });
 
+  it('says why an approved import stopped, by its kind, never the raw error', () => {
+    imports.report = {
+      ...FAILED,
+      reviewId: 'review',
+      errorKind: 'interrupted',
+      imported: 1,
+      waiting: 2,
+    };
+    setup({ item: { status: 'completed' } });
+
+    expect(screen.getByRole('alert').textContent).toBe(
+      "Couldn't finish this import.It stopped before it finished. Start it again to pick up what is left."
+    );
+    expect(screen.queryByText(/raw provider detail/)).toBeNull();
+  });
+
   it('says what stays after the run was stopped', () => {
     imports.report = {
       status: 'dismissed',
-      error: 'Cancelled',
       pages: 3,
       dataSources: 1,
       copy: 1,
@@ -817,6 +887,288 @@ describe('import review', () => {
       screen.getByText('Import stopped — 2 imported items stay')
     ).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
+  });
+
+  it('says planning failed, with what to do, instead of an empty plan', async () => {
+    // Planning a new plan clears the run's review, so the failed run names none.
+    imports.entities = [];
+    imports.report = {
+      ...FAILED,
+      errorKind: 'connection_unavailable',
+    };
+    const decide = setup();
+
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toBe(
+      "Couldn't plan this import.Macro couldn’t use your Notion connection. Reconnect Notion, then plan the import again."
+    );
+    // The detail is clamped and never the server's raw error.
+    expect(within(alert).getByText(/Macro couldn’t use/).className).toContain(
+      'line-clamp-3'
+    );
+    expect(screen.queryByText(/apn_1/)).toBeNull();
+    expect(screen.queryByText(/nothing/i)).toBeNull();
+    expect(screen.queryByText('The plan has no objects to show.')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Import/ })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect Notion' }));
+    await waitFor(() =>
+      expect(imports.connect).toHaveBeenCalledWith({ key: 'app/notion' })
+    );
+
+    // The owner can still dismiss it, so the review does not stay pending.
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    await waitFor(() =>
+      expect(decide).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'dismiss' })
+      )
+    );
+  });
+
+  it('offers to reconnect after a write lost the connection, and says when it fails', async () => {
+    imports.report = {
+      ...FAILED,
+      reviewId: 'review',
+      errorKind: 'access_lost',
+    };
+    imports.connect.mockRejectedValue(new Error('refused'));
+    setup({ item: { status: 'completed' } });
+
+    expect(screen.getByRole('alert').textContent).toContain(
+      "Couldn't finish this import."
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect Notion' }));
+    expect(
+      await screen.findByText('Notion could not be reconnected. Try again.')
+    ).toBeTruthy();
+  });
+
+  it('says nothing when reconnecting was closed without finishing', async () => {
+    imports.report = { ...FAILED, errorKind: 'connection_unavailable' };
+    imports.connect.mockResolvedValue('closed');
+    setup();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect Notion' }));
+    await waitFor(() => expect(imports.connect).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText(/could not be reconnected/)).toBeNull();
+  });
+
+  it('dismissing a failed review dismisses its run in the imports tray too', async () => {
+    imports.report = { ...FAILED, errorKind: 'connection_unavailable' };
+    imports.runs = [
+      {
+        source: 'notion',
+        status: 'failed',
+        error_kind: 'connection_unavailable',
+        updated_at: '2026-11-22T10:00:00Z',
+      },
+    ];
+    const decide = setup();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    await waitFor(() => expect(decide).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(readDismissedRuns('macro|owner@macro.local')).toEqual([
+        'notion:failed:2026-11-22T10:00:00Z',
+      ])
+    );
+  });
+
+  it('shows the object a partial import could not write, with why', () => {
+    imports.entities = [
+      entity(
+        'wiki',
+        null,
+        'Wiki',
+        { decision: 'copy' },
+        { status: 'imported' }
+      ),
+      entity(
+        'guide',
+        'wiki',
+        'Guide',
+        { decision: 'copy' },
+        { status: 'imported' }
+      ),
+      entity(
+        'onboarding',
+        'guide',
+        'Onboarding',
+        { decision: 'copy' },
+        { status: 'staged', last_error: "Notion couldn't be reached." }
+      ),
+    ];
+    imports.report = {
+      ...FAILED,
+      status: 'completed',
+      reviewId: 'review',
+      errorKind: null,
+      imported: 2,
+      failures: [
+        {
+          importId: 'onboarding',
+          title: 'Onboarding',
+          kind: 'page',
+          reason: "Notion couldn't be reached.",
+        },
+      ],
+    };
+    setup({ item: { status: 'completed' } });
+
+    expect(
+      screen.getByLabelText("Failed: Notion couldn't be reached.")
+    ).toBeTruthy();
+    const plan = screen.getByRole('list', { name: 'Import plan' });
+    expect(within(plan).getByText('Onboarding')).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toBe(
+      'Imported 2 of 3 objects'
+    );
+    // The reason is visible text, not a tooltip, so touch shows it too.
+    expect(within(plan).getByText("Notion couldn't be reached.")).toBeTruthy();
+  });
+
+  it('offers to reconnect only when the connection was lost', () => {
+    for (const errorKind of [
+      'access_lost',
+      'connection_unavailable',
+    ] as const) {
+      imports.report = { ...FAILED, errorKind };
+      setup();
+      expect(
+        screen.getByRole('button', { name: 'Reconnect Notion' })
+      ).toBeTruthy();
+      cleanup();
+    }
+    for (const errorKind of [
+      'not_found',
+      'forbidden',
+      'not_connected',
+      'rate_limited',
+      'unreachable',
+      'usage_refused',
+      'interrupted',
+      'internal',
+      null,
+    ] as const) {
+      imports.report = { ...FAILED, errorKind };
+      setup();
+      expect(screen.getByRole('alert').textContent).toContain(
+        "Couldn't plan this import."
+      );
+      expect(
+        screen.queryByRole('button', { name: 'Reconnect Notion' }),
+        String(errorKind)
+      ).toBeNull();
+      cleanup();
+    }
+  });
+
+  it('shows a plan that failed after it was presented without its rows', () => {
+    imports.report = {
+      ...FAILED,
+      reviewId: 'review',
+      errorKind: 'unreachable',
+    };
+    setup();
+
+    expect(screen.getByRole('alert').textContent).toBe(
+      "Couldn't plan this import.Notion couldn’t be reached. Try again later."
+    );
+    expect(screen.queryByRole('list', { name: 'Import plan' })).toBeNull();
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Import/ })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Reconnect Notion' })
+    ).toBeNull();
+  });
+
+  it('keeps the failure on a dismissed review and no rows waiting', () => {
+    imports.report = {
+      ...FAILED,
+      reviewId: 'review',
+      errorKind: 'access_lost',
+    };
+    setup({ item: { status: 'dismissed' } });
+
+    expect(screen.getByRole('alert').textContent).toBe(
+      "Couldn't plan this import. Dismissed.Notion no longer accepts Macro’s connection. Reconnect Notion, then plan the import again."
+    );
+    expect(screen.queryByRole('list', { name: 'Import plan' })).toBeNull();
+    expect(screen.queryByText('Waiting')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull();
+  });
+
+  it('does not relabel a dismissed review with a later plan that failed', () => {
+    imports.report = { ...FAILED, errorKind: 'unreachable' };
+    setup({ item: { status: 'dismissed' } });
+
+    expect(screen.getByText('Dismissed — nothing was imported')).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('saves a skipped Notion page as Copy before approving', async () => {
+    imports.entities = [
+      entity('template', null, 'Workspace template', {
+        decision: 'skip',
+        reason: 'Setup page',
+      }),
+      entity('manual', null, 'Needs a decision', { decision: 'hand' }),
+    ];
+    const decide = setup();
+    const checkbox = screen.getByRole<HTMLInputElement>('checkbox', {
+      name: 'Import Workspace template',
+    });
+    expect(checkbox.disabled).toBe(false);
+    expect(checkbox.checked).toBe(false);
+    expect(
+      screen.getByRole<HTMLInputElement>('checkbox', {
+        name: 'Import Needs a decision',
+      }).disabled
+    ).toBe(true);
+    fireEvent.click(checkbox);
+    fireEvent.click(screen.getByRole('button', { name: 'Import 1 page' }));
+    await waitFor(() => expect(decide).toHaveBeenCalledTimes(2));
+    expect(decide.mock.calls[0][0]).toMatchObject({
+      action: 'edit',
+      draft: { kind: 'import', draft: { copySkipped: ['template'] } },
+    });
+    expect(decide.mock.calls[1][0]).toMatchObject({
+      action: 'submit',
+      revision: 1,
+    });
+  });
+
+  it('honors a restored Copy choice when approving immediately', async () => {
+    imports.entities = [
+      entity('template', null, 'Workspace template', { decision: 'skip' }),
+    ];
+    const decide = setup({
+      item: {
+        draft: {
+          source: 'notion',
+          excluded: [],
+          shared: [],
+          personal: [],
+          copySkipped: ['template'],
+        },
+      },
+    });
+    const checkbox = screen.getByRole<HTMLInputElement>('checkbox', {
+      name: 'Import Workspace template',
+    });
+    expect(checkbox.checked).toBe(true);
+    fireEvent.click(checkbox);
+    fireEvent.click(checkbox);
+    fireEvent.click(screen.getByRole('button', { name: 'Import 1 page' }));
+    await waitFor(() => expect(decide).toHaveBeenCalledTimes(2));
+    expect(decide.mock.calls[0][0]).toMatchObject({
+      action: 'edit',
+      draft: { kind: 'import', draft: { copySkipped: ['template'] } },
+    });
+    expect(decide.mock.calls[1][0]).toMatchObject({
+      action: 'submit',
+      revision: 1,
+    });
   });
 
   it('saves who each object is shared with, down the tree', async () => {
@@ -1104,7 +1456,12 @@ describe('import review', () => {
         { importId: 'contact', kind: 'hubspot_contact', title: 'Contact' },
       ],
     };
-    setup({ item: { status: 'completed', draft: { source: 'hubspot' } } });
+    setup({
+      item: {
+        status: 'completed',
+        draft: { source: 'hubspot', excluded: [], shared: [], personal: [] },
+      },
+    });
 
     expect(screen.getByRole('status').textContent).toBe(
       `Imported 1 object — ${error}`

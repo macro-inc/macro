@@ -45,6 +45,7 @@
               ./modules/rds.nix
               ./modules/edge.nix
               ./modules/alarms.nix
+              ./modules/firehose.nix
               ./modules/outputs.nix
             ] settings.state.mainKey;
             bootstrap = render [

@@ -96,18 +96,52 @@ vi.mock('@property/utils', () => ({
   isInstantiatedProperty: isInstantiatedPropertyMock,
 }));
 
-const listPropertiesMock = vi.hoisted(() => vi.fn());
 vi.mock('../../service-clients/service-properties/client', () => ({
   propertiesServiceClient: {
     getEntityProperties: getRestEntityPropertiesMock,
     deleteEntityProperty: deleteEntityPropertyMock,
-    listProperties: listPropertiesMock,
   },
 }));
 
-vi.mock('@core/context/user', () => ({
-  useIsAuthenticated: () => () => true,
+// The definitions read, as the cache-backed hook reports it: pending until
+// its first answer, then data or an error, keeping its data when a refresh
+// fails. Each test sets what it answers.
+const definitionsRead = vi.hoisted(() => ({
+  calls: [] as Array<{ params: unknown; enabled: () => boolean }>,
+  state: undefined as
+    | undefined
+    | (() => { data?: unknown[]; error?: unknown; pending: boolean }),
 }));
+vi.mock('./definitions', async () => {
+  const { createMemo } = await import('solid-js');
+  return {
+    useListPropertiesQuery: (
+      params: () => unknown,
+      enabled: () => boolean = () => true
+    ) => {
+      definitionsRead.calls.push({ params: params(), enabled });
+      const state = createMemo(() =>
+        enabled() && definitionsRead.state
+          ? definitionsRead.state()
+          : { pending: true }
+      );
+      return {
+        get data() {
+          return state().data;
+        },
+        get error() {
+          return state().error ?? null;
+        },
+        get isPending() {
+          return state().pending;
+        },
+        get isLoading() {
+          return enabled() && state().pending;
+        },
+      };
+    },
+  };
+});
 
 vi.mock('./graphql/entity', () => ({
   refetchGraphqlInitiativeProperties: async (initiativeId: string) => {
@@ -242,6 +276,8 @@ function renderEntityQuery(
 describe('useEntityPropertiesQuery transport', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    definitionsRead.calls = [];
+    definitionsRead.state = undefined;
     graphqlExecutions = [];
     graphqlQueryMock.mockImplementation(
       (request: { variables: unknown }, context: unknown) => {
@@ -520,27 +556,34 @@ describe('useEntityPropertiesQuery transport', () => {
       });
     }
 
+    /** Answers the definitions read from a signal the test drives. */
+    function answerDefinitions(initial: {
+      data?: unknown[];
+      error?: unknown;
+      pending: boolean;
+    }) {
+      const [state, setState] = createSignal(initial);
+      definitionsRead.state = state;
+      return setState;
+    }
+    const enabledReads = () =>
+      definitionsRead.calls.filter((call) => call.enabled());
+
     it('takes its option names from its definition, showing nothing until they load', async () => {
-      let answer: (value: unknown) => void = () => {};
-      listPropertiesMock.mockReturnValue(
-        new Promise((resolve) => {
-          answer = resolve;
-        })
-      );
+      const answer = answerDefinitions({ pending: true });
       renderEntityQuery(false);
 
       deliver([property, phase]);
 
-      await vi.waitFor(() =>
-        expect(listPropertiesMock).toHaveBeenCalledWith({
-          scope: 'all',
-          include_options: true,
-        })
-      );
+      await vi.waitFor(() => expect(enabledReads()).toHaveLength(1));
+      expect(enabledReads()[0]?.params).toEqual({
+        scope: 'all',
+        includeOptions: true,
+      });
       expect(entityQuery.data).toBeUndefined();
       expect(entityQuery.isLoading).toBe(true);
 
-      answer(ok(definitions));
+      answer({ data: definitions, pending: false });
 
       await vi.waitFor(() =>
         expect(entityQuery.data).toEqual([
@@ -552,6 +595,7 @@ describe('useEntityPropertiesQuery transport', () => {
     });
 
     it('reads no definitions when every select already has its options', async () => {
+      answerDefinitions({ data: definitions, pending: false });
       const status = {
         ...phase,
         propertyDefinitionId: 'status',
@@ -565,10 +609,11 @@ describe('useEntityPropertiesQuery transport', () => {
         expect(entityQuery.data).toEqual([property, status])
       );
       expect(entityQuery.isLoading).toBe(false);
-      expect(listPropertiesMock).not.toHaveBeenCalled();
+      expect(enabledReads()).toHaveLength(0);
     });
 
     it('reads no definitions for tags, which name their options from the tag sets', async () => {
+      answerDefinitions({ data: definitions, pending: false });
       const tags = {
         ...phase,
         propertyDefinitionId: 'labels',
@@ -580,37 +625,29 @@ describe('useEntityPropertiesQuery transport', () => {
 
       await vi.waitFor(() => expect(entityQuery.data).toEqual([tags]));
       expect(entityQuery.isLoading).toBe(false);
-      expect(listPropertiesMock).not.toHaveBeenCalled();
+      expect(enabledReads()).toHaveLength(0);
     });
 
     it('still shows its values when the definitions fail to load', async () => {
-      listPropertiesMock.mockResolvedValue(
-        err([{ code: 'UNKNOWN', message: 'failed' }])
-      );
+      answerDefinitions({ error: new Error('failed'), pending: false });
       renderEntityQuery(false);
 
       deliver([phase]);
 
       await vi.waitFor(() => expect(entityQuery.data).toEqual([phase]));
       expect(entityQuery.isLoading).toBe(false);
-      expect(listPropertiesMock).toHaveBeenCalledOnce();
+      expect(enabledReads()).toHaveLength(1);
     });
 
     it('keeps its option names when the definitions fail to refresh', async () => {
-      listPropertiesMock.mockResolvedValueOnce(ok(definitions));
+      const answer = answerDefinitions({ data: definitions, pending: false });
       renderEntityQuery(false);
       deliver([phase]);
       const named = [{ ...phase, options: PHASE_OPTIONS }];
       await vi.waitFor(() => expect(entityQuery.data).toEqual(named));
 
-      listPropertiesMock.mockResolvedValue(
-        err([{ code: 'UNKNOWN', message: 'failed' }])
-      );
-      await testQueryClient.refetchQueries({
-        queryKey: ['properties', 'definitions'],
-      });
+      answer({ data: definitions, error: new Error('failed'), pending: false });
 
-      expect(listPropertiesMock).toHaveBeenCalledTimes(2);
       expect(entityQuery.data).toEqual(named);
     });
   });

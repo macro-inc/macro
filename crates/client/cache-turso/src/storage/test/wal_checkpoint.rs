@@ -6,7 +6,13 @@
 //! real file: after a failed checkpoint, Turso never starts the log over the
 //! frames it could not sync into the database file.
 
+use super::schema_store::{ADDED, OLD, ROOTS, adopt, pending};
 use super::*;
+use crate::storage::migration::test_hooks;
+use cache_core::engine::{IDENTITY_META_KEY, IDENTITY_VALUE_FIELD};
+use cache_core::meta::Schema;
+use cache_core::schema_change::{ProjectionInputs, ResetReason, Tier};
+use cache_core::value::CacheValue;
 
 /// About 3 KB of hex, distinct per write: some 27 WAL frames per write of 50.
 fn incompressible(write: usize, index: usize) -> String {
@@ -468,4 +474,104 @@ fn a_read_never_retries_a_failed_cap_copy() {
     // The next write copies it.
     write(&mut storage, AFTER).unwrap();
     assert_eq!(wal_frames(&storage), 0);
+}
+
+/// A cache on the browser's connection that stores [`OLD`], holds the
+/// account a salvage needs and a queued write, and has a WAL past Turso's
+/// own 1,000 frames that nothing has copied. Returns its WAL frames.
+fn owned_with_a_queue(io: &Arc<FaultIo>, path: &str) -> (TursoStorage, u64) {
+    let mut storage = open_owned(io, path);
+    assert_eq!(adopt(&storage, OLD, &ProjectionInputs::none()).change, None);
+    let mut account = Record::default();
+    account.fields.insert(
+        IDENTITY_VALUE_FIELD.into(),
+        CacheValue::String("identity".into()),
+    );
+    block_on(storage.put_batch(vec![
+        (key(IDENTITY_META_KEY), account),
+        (key(SENTINEL), sentinel()),
+        (key("Thing:1"), record("thing")),
+    ]))
+    .unwrap();
+    write_until(&mut storage, 0, 1_500);
+    block_on(storage.enqueue_mutation(pending(
+        "Rename",
+        "mutation Rename { rename(id: \"1\") { id value } }",
+        serde_json::json!({ "rename": { "id": "1", "value": "renamed" } }),
+        &["Thing:1"],
+    )))
+    .unwrap();
+    let frames = wal_frames(&storage);
+    assert!(
+        frames < driver::OWNED_CHECKPOINT_DUE_FRAMES,
+        "{frames} frames"
+    );
+    (storage, frames)
+}
+
+#[test]
+fn a_reset_tier_on_an_owned_wal_stands_through_a_crash_before_any_copy() {
+    let io = FaultIo::new();
+    let path = "owned-reset-tier.db";
+    let (storage, before) = owned_with_a_queue(&io, path);
+    let adoption = adopt(&storage, ROOTS, &ProjectionInputs::none());
+    assert_eq!(adoption.change, Some(Tier::Reset(ResetReason::Roots)));
+    assert_eq!(adoption.retired_overlays, 1);
+    // The tier's COMMIT leaves the WAL to the storage's own copies, as any
+    // other COMMIT below the cap does.
+    let after = wal_frames(&storage);
+    assert!(
+        before < after && after < driver::CHECKPOINT_CAP_FRAMES,
+        "{before} -> {after} frames"
+    );
+    drop(storage);
+
+    let reopened = open(&io, path, false);
+    assert_eq!(
+        adopt(&reopened, ROOTS, &ProjectionInputs::none()).change,
+        None,
+        "the crash lost the stored schema"
+    );
+    assert_eq!(
+        block_on(reopened.get_batch(&[key(SENTINEL), key("Thing:1")])).unwrap(),
+        vec![None, None]
+    );
+    assert_eq!(block_on(reopened.load_mutation_queue()).unwrap().len(), 1);
+}
+
+#[test]
+fn a_failed_adoption_on_an_owned_wal_leaves_the_log_whole_for_the_wipe_to_read() {
+    let io = FaultIo::new();
+    let path = "owned-failed-adoption.db";
+    let (storage, frames) = owned_with_a_queue(&io, path);
+    let written = io.database_writes();
+    test_hooks::corrupt_next_adoption();
+    let failed = storage
+        .adopt_schema(
+            &Schema::from_sdl(ADDED).unwrap(),
+            &ProjectionInputs::none(),
+            Unrecorded::Guess,
+        )
+        .unwrap_err();
+    assert!(failed.requires_physical_reset(), "{failed:?}");
+    assert_eq!(
+        storage.try_close().unwrap(),
+        TursoStorageCloseOutcome::ResetRequired(PhysicalResetReason::Corruption)
+    );
+
+    // The close copied nothing into the file the wipe deletes, and the read
+    // before the wipe replays the whole log.
+    assert_eq!(io.database_writes(), written, "the close copied the WAL");
+    let reopened = open(&io, path, false);
+    let left = wal_frames(&reopened);
+    assert!(
+        left >= frames,
+        "the close copied the WAL: {frames} -> {left}"
+    );
+    let queue = reopened.salvage_queue("scope", None, 0).queue.unwrap();
+    assert_eq!(queue.len(), 1);
+    // With the schema it was queued under.
+    let mut next = TursoStorage::open_in_memory("scope").unwrap();
+    next.import_queue(&queue, 0).unwrap();
+    assert_eq!(adopt(&next, OLD, &ProjectionInputs::none()).change, None);
 }

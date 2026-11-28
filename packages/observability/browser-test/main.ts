@@ -3,7 +3,7 @@ import type {
   TelemetryStartupOptions,
 } from '../src/config';
 import { Telemetry } from '../src/index';
-import { createWebTracingProvider } from '../src/web';
+import { createWebTracingProvider, StackContextManager } from '../src/web';
 
 export interface ProbeResult {
   nativeCalls: number;
@@ -31,13 +31,11 @@ window.runExporterProbe = async (collector) => {
     );
   };
   globalThis.fetch = Object.assign(rejectNativeFetch, browserFetch);
-  const startup = Promise.resolve().then(
-    (): TelemetryStartupOptions => ({
-      recording: true,
-      tracesUrl: `${collector}/v1/traces`,
-      logsUrl: `${collector}/v1/logs`,
-    })
-  );
+  const startup = Promise.resolve<TelemetryStartupOptions>({
+    recording: true,
+    tracesUrl: `${collector}/v1/traces`,
+    logsUrl: `${collector}/v1/logs`,
+  });
   const config: TelemetryInitConfig = {
     serviceName: 'webview-export-probe',
     environment: 'test',
@@ -46,7 +44,21 @@ window.runExporterProbe = async (collector) => {
     samplingKey: () => 'webview-export-probe',
     tracesUrl: 'http://invalid.example/fallback/v1/traces',
     logsUrl: 'http://invalid.example/fallback/v1/logs',
+    resourceAttributes: {
+      'service.version': 'test-release',
+      'app.runtime': 'browser',
+      frontend_instance_id: 'synthetic-frontend',
+      'service.instance.id': Promise.resolve('synthetic-launch'),
+      'macro.recording.id': Promise.resolve('synthetic-recording'),
+      'macro.native.pid': 123,
+    },
+    spanAttributes: () => ({
+      frontend_instance_id: 'synthetic-frontend',
+      native_instance_id: 'synthetic-native',
+      'macro.recording.id': 'synthetic-recording',
+    }),
     startup,
+    contextManager: new StackContextManager(),
     exportFetch: (input, init) => {
       const options: RequestInit = { ...init, credentials: 'omit' };
       result.requests.push({
@@ -63,9 +75,16 @@ window.runExporterProbe = async (collector) => {
       tracingProvider: (resource, getUserId, sampling) =>
         createWebTracingProvider(config, resource, getUserId, sampling),
     });
+    Telemetry.config.setUser('synthetic-user');
+    Telemetry.recordAnonymousSample('export.anonymous_before_ready', {});
     Telemetry.span('export.early', { sampling: 'perf' }).end();
     await ready;
-    Telemetry.span('export.ready', { sampling: 'perf' }).end();
+    await Telemetry.flush();
+    const parent = Telemetry.span('export.ready', { sampling: 'perf' });
+    parent.run(() =>
+      Telemetry.recordAnonymousSample('export.anonymous', { bucket: 'coarse' })
+    );
+    parent.end();
     Telemetry.info('export.log');
     await Telemetry.flush();
   } catch {

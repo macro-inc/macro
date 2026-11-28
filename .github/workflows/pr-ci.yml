@@ -24,6 +24,7 @@ jobs:
       workspace_dependencies: ${{ steps.filter.outputs.workspace_dependencies }}
       generated_workflows: ${{ steps.filter.outputs.generated_workflows }}
       node_modules_nix: ${{ steps.filter.outputs.node_modules_nix }}
+      deploy_nix_sources: ${{ steps.filter.outputs.deploy_nix_sources }}
       tauri_lockfiles: ${{ steps.filter.outputs.tauri_lockfiles }}
       desktop: ${{ steps.filter.outputs.desktop }}
       sdk: ${{ steps.filter.outputs.sdk }}
@@ -545,6 +546,16 @@ jobs:
               - 'flake.nix'
               - 'flake.lock'
               - '.github/workflows/check_node_modules_nix.yml'
+            deploy_nix_sources:
+              - 'vendor/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - '.github/workspace-dep-closures.json'
+              - 'nix/**'
+              - 'nix-support/**'
+              - 'flake.nix'
+              - 'flake.lock'
+              - '.github/workflows/check_deploy_nix_sources.yml'
             tauri_lockfiles:
               - 'apps/web/tauri/**'
               - 'crates/**/Cargo.toml'
@@ -678,6 +689,13 @@ jobs:
     name: node_modules nix
     uses: ./.github/workflows/check_node_modules_nix.yml
     secrets: inherit
+  deploy-nix-sources:
+    needs:
+      - start
+    if: needs.start.outputs.deploy_nix_sources == 'true'
+    name: Deploy nix sources
+    uses: ./.github/workflows/check_deploy_nix_sources.yml
+    secrets: inherit
   tauri-lockfiles:
     needs:
       - start
@@ -745,6 +763,7 @@ jobs:
       - workspace-dependencies
       - generated-workflows
       - node-modules-nix
+      - deploy-nix-sources
       - tauri-lockfiles
       - desktop
       - sdk

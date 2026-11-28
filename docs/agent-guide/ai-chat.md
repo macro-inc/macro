@@ -656,17 +656,18 @@ the shimmer.
   Search is separated from the first section by a parent-owned 24px desktop gap or 16px phone gap. The search input fills its field on desktop and phone with normal text line-height. The phone search row does not initiate sheet dragging, so tapping, focusing, and selecting text keep the sheet open. Empty search shows a centered search icon, **No matches for “query”**, and a **Clear search** pill on every selection page. The pill clears the query and restores field focus; ArrowDown reaches it and Enter activates it. The phone card unmounts while its sheet is open, so keyboard viewport changes cannot reposition a hidden card. Navigation, hidden or detached triggers, outside taps, and Escape dismiss the selector; its portals retain the list composer's expanded interaction state. Open selector controls own keyboard dismissal, so touching their portaled card, sheet, or search does not blur the editor through the composer's outside-touch handler. The composer stays expanded through the closing transition and final focus handoff; afterward it remains expanded only if focus returns inside it. Repository, branch, and Add controls use the same focus-scope lifetime, including overlapping settings handoffs.
   Auto has its own heading-free section between the agents and model groups, including on More models, agent-model pages, and matching search results. Every section groups its heading and rows in one container; parent gaps provide 24px from the agents' names to Auto and 16px between model sections, without child layout margins. Each row in More models carries its provider logo; provider headings are text-only. Agent identities reuse the Agents view's circular, surface-1 avatars with muted glyphs. Returning from a phone sheet waits until its closing focus trap retires before showing the card again.
   The in-memory catalog leads with **Auto**, where automatic routing sorts each
-  turn's prompt: hard prompts run on **Opus 5.5**, simple ones on **Gemini 3.8
-  Flash**, and the rest on **GPT-6.2 Sol**. It then offers the closed Anthropic and OpenAI chat
+  turn's prompt: hard prompts run on **Opus 5.5**, simple ones on **Gemini 4
+  Hydrogen**, and the rest on **GPT-6.2 Sol**. It then offers the closed Anthropic and OpenAI chat
   models; Kimi, DeepSeek, Muse, GLM, Qwen, MiniMax, GPT OSS, and Nemotron
-  open-weight models; and Google's **Gemini 3.8 Flash**. The Anthropic models
+  open-weight models; and Google's **Gemini 4 Hydrogen**. The Anthropic models
   are **Sonnet 5.5**, **Opus 5.5**, and **Haiku 5.5**, and the OpenAI ones **GPT-6
   Astra**, **GPT-6.2 Sol**, and **GPT-6 Luna**; older Claude versions (Sonnet 5,
   Opus 5, Fable 5.1, Haiku 4.5) and GPT versions (GPT-6.1 Sol, GPT-5.6, GPT-5.6
-  mini, GPT-5.5, GPT-5 mini) are not offered. A retired model saved anywhere (an
+  mini, GPT-5.5, GPT-5 mini) and Gemini 3.8 Flash are not offered. A retired model saved anywhere (an
   agent, a routine step, a remembered choice, a draft, a chat, or a session
   resumed after the change) runs on its replacement: Haiku 4.5 on Haiku 5.5,
-  GPT-6.1 Sol, GPT-5.6 and GPT-5.5 on GPT-6.2 Sol, and the minis on GPT-6 Luna
+  GPT-6.1 Sol, GPT-5.6 and GPT-5.5 on GPT-6.2 Sol, the minis on GPT-6 Luna,
+  and Gemini 3.8 Flash on Gemini 4 Hydrogen
   (`chat::domain::models::RETIRED_MODELS`, mirrored by the web's
   `RETIRED_MODELS`).
   Selecting a model here selects
@@ -1532,7 +1533,8 @@ ACP call.
 Its card can appear before the program finishes and stays editable afterwards.
 Presentation means “Presented to the user,” not approved or sent. After
 presenting, the agent asks “Should I kick it off?”, unless the user said not
-to send it yet; when the person whose
+to send it yet or it is an import plan still being made (then it says to approve
+it on the card once it is ready); when the person whose
 account the review uses answers yes, it submits the review with
 **DecideReview**, and the card then reads “Started by the agent at your
 request”. The HTTP review decision endpoint requires direct user authentication;
@@ -1659,11 +1661,11 @@ Desktop composer and conversation body text use 15px type. Mobile keeps its
 existing text sizing.
 
 - Contenteditable composer (placeholder `Ask AI, @mention anything` / `Describe the edit…`).
-- Model picker button showing the current model (e.g. `Gemini 3.8 Flash`). Paid plans list
+- Model picker button showing the current model (e.g. `Gemini 4 Hydrogen`). Paid plans list
   `Sonnet 5.5`, `Opus 5.5`, `Haiku 5.5`, `GPT-6 Astra`, `GPT-6.2 Sol`, `GPT-6 Luna`,
-  and `Gemini 3.8 Flash`;
+  and `Gemini 4 Hydrogen`;
   in dev, heavy models carry a `2.5× usage` / `5× usage` hint.
-  On the free plan everything but `Gemini 3.8 Flash` is
+  On the free plan everything but `Gemini 4 Hydrogen` is
   dimmed with a lock and opens the `Smart models are premium` paywall when clicked.
 - `Send` button (disabled when empty). While streaming it becomes `Stop generating`.
 
@@ -2637,7 +2639,7 @@ agent settings leave a usable reservation available for the default agent.
 ### Free-plan models in the new Macro agent
 
 The in-memory Macro runtime uses the session owner's current permissions.
-Free users see only Gemini 3.8 Flash in model discovery and the live session
+Free users see only Gemini 4 Hydrogen in model discovery and the live session
 picker. New and resumed sessions replace an inaccessible saved model with Gemini.
 A direct request to select a paid model is rejected, and each prompt rechecks
 permissions before inference, including after a plan downgrade. Permission
@@ -2811,7 +2813,12 @@ Multiple drafts appear as a deck with subtle card edges behind the active compos
 The position button opens a searchable list of recipients/subjects or event
 titles/times. Only the active composer is mounted. A single email or event has no
 deck header, position counter, navigation, or batch action.
-Navigation and batch submission save the visible editor first. Completed and
+Navigation and batch submission save the visible editor first. In an import plan,
+untick every source, tick them back, then approve immediately: the imported set
+must match the restored selections. Repeat while the exclusion save is still in
+flight. Approval waits for the latest edit and submits its saved revision; a
+conflicting revision must offer **Reload saved review** without starting a write.
+Completed and
 dismissed items stay in the stack, with their saved state. Calendar cards reuse
 the existing event composer and offer **Create all** for a batch. Once an item's
 event is created (from the card or by the agent after approval), its preview
@@ -2841,7 +2848,18 @@ until the agent starts its reply. This behaves the same on mobile. Approving an
 import plan only starts its write, so no **Responding** shows until the write
 ends; the card shows its final state and the agent's reply follows. Verify that
 sibling pages keep their review order while writing and after completion, even
-for a large plan staged together. A plan still being made when it was presented also wakes the agent once it is ready.
+for a large plan staged together. A plan
+still being made when it was presented also wakes the agent once it is ready.
+An import review cannot be presented for a plan that failed, finished, or was
+never made: the agent is told why (for example, the source lost access), and
+nothing is saved or shown. If the plan fails while the review is being saved,
+the review stays saved, dismissed with the reason, and is never shown. A card
+whose plan fails after it was presented shows **Couldn't plan this import.**
+with what happened (from the failure's kind, never the raw error) and
+**Dismiss**, plus **Reconnect <source>** when the connection was revoked,
+expired or unusable. Dismissing it keeps that line and shows no plan rows.
+Approving a plan that is no longer ready (it failed, or a newer plan replaced
+it) is refused on the card and in chat, and nothing is written.
 These events create no user bubble; events without an existing card use a
 quiet timeline row.
 The agent can read final drafts and confirmed outcomes through **GetReview**.

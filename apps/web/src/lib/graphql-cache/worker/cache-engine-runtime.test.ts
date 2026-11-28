@@ -259,6 +259,42 @@ describe('cache engine worker runtime', () => {
     expect(handleRequest).toHaveBeenCalledOnce();
   });
 
+  it('gives up the owner lock when drained before its storage grant', async () => {
+    const scope = new FakeWorkerScope();
+    const direct = new FakePort();
+    direct.autoOpen = false;
+    const handleRequest = vi.fn();
+    let initialization: Promise<unknown> | undefined;
+    installRuntime({
+      scope,
+      createCore: (coreOptions) => ({
+        prepare: async () => undefined,
+        handleRequest: async () => {
+          initialization = coreOptions.onOwnerLockAcquired?.();
+          await initialization;
+          handleRequest();
+        },
+        addPort: vi.fn(),
+        // Like CacheWorkerCore, which waits for an initialization under way.
+        drain: async () => {
+          await Promise.allSettled([initialization]);
+        },
+      }),
+    });
+    scope.activate(activation(), direct);
+    await vi.waitFor(() =>
+      expect(messagesOfKind(direct, 'owner-lock-acquired')).toHaveLength(1)
+    );
+    direct.receive({ ...version, kind: 'drain-engine', ownerEpoch: 7 });
+
+    await vi.waitFor(() =>
+      expect(messagesOfKind(direct, 'engine-drained')).toHaveLength(1)
+    );
+    expect(scope.closed).toBe(true);
+    expect(messagesOfKind(direct, 'activation-failed')).toEqual([]);
+    expect(handleRequest).not.toHaveBeenCalled();
+  });
+
   it('fatals on a storage grant before it holds the owner lock', async () => {
     const scope = new FakeWorkerScope();
     const direct = new FakePort();

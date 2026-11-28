@@ -27,6 +27,7 @@ use system_properties::{PriorityOption, StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
 use super::email_operators::name_and_value;
+use super::terms::names_something;
 use crate::api::search::simple::SearchError;
 use crate::domain::operator_names::{NamedIds, TypedNames};
 
@@ -248,15 +249,6 @@ fn priority(value: &str) -> Option<PriorityOption> {
         "urgent" => PriorityOption::Urgent,
         _ => return None,
     })
-}
-
-/// Whether `value` can name something: a letter, a digit, or another
-/// non-ASCII character such as an emoji, so `tag:🔥` is a tag while ASCII
-/// punctuation alone (`tag:-`) stays a word.
-fn names_something(value: &str) -> bool {
-    value
-        .chars()
-        .any(|c| c.is_alphanumeric() || !(c.is_ascii() || c.is_whitespace()))
 }
 
 /// The operator `term` names, if it is one with a valid value.

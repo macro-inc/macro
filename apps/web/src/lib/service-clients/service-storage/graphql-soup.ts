@@ -757,6 +757,15 @@ const [cacheAvailability, setCacheAvailability] = createSignal(0);
 const [sessionActive, setSessionActive] = createSignal(hasLoginCookie());
 
 /**
+ * Whether this tab's signed-in session still runs. A sign-out clears the
+ * login cookie before it wipes the cache and ends the session, so this turns
+ * false before either; it is reactive on the session ending.
+ */
+export function graphqlSoupSessionActive(): boolean {
+  return sessionActive() && hasLoginCookie();
+}
+
+/**
  * Records whether this tab has a signed-in session. Ending one disposes the
  * cached and realtime clients, so their websocket and queue runner stop.
  */

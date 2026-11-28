@@ -26,11 +26,11 @@ use tokio_util::task::TaskTracker;
 use super::*;
 use crate::domain::models::{
     ImportKind, ImportTargetReservation, NotionDocMeta, NotionPlanItem, NotionSharing,
-    NotionWriteChoices,
+    NotionWriteChoices, RunErrorKind,
 };
 use crate::domain::ports::{
-    ImportedDocumentProperties, ImportedTaskProperties, NewDatabase, NotionLinks, PlanRow,
-    SharedEntity, SourceDates, TeamMember,
+    ImportError, ImportedDocumentProperties, ImportedTaskProperties, NewDatabase, NotionLinks,
+    PlanRow, SharedEntity, SourceDates, TeamMember, UnreviewableRun,
 };
 use crate::domain::service::NotionWorkspaceImporter;
 use crate::domain::service::test::admission::{NoConnector, no_connections};
@@ -188,6 +188,37 @@ impl NotionConnections for Connected {
     }
 }
 
+/// Notion answering with an error whose body must never reach the agent.
+struct Upstream;
+
+impl NotionConnections for Upstream {
+    type Api = Pages;
+
+    async fn for_user(
+        &self,
+        _: &MacroUserIdStr<'static>,
+    ) -> std::result::Result<Option<Pages>, NotionError> {
+        Err(NotionError::Upstream {
+            status: 400,
+            body: "provider-secret-body".into(),
+        })
+    }
+}
+
+/// Notion refusing the connection, as it does a revoked token.
+struct Revoked;
+
+impl NotionConnections for Revoked {
+    type Api = Pages;
+
+    async fn for_user(
+        &self,
+        _: &MacroUserIdStr<'static>,
+    ) -> std::result::Result<Option<Pages>, NotionError> {
+        Err(NotionError::AccessLost)
+    }
+}
+
 struct AfterReplacement(Arc<Notify>);
 
 impl NotionConnections for AfterReplacement {
@@ -291,6 +322,22 @@ async fn approved_source(
     source: ImportSource,
 ) -> (Uuid, Vec<Uuid>) {
     let repo = PgImportRepo::new(pool.clone());
+    // A review is presented while its plan is being made. A user approving
+    // again plans again, which replaces the earlier run and the review that
+    // held it (each review holds its own plan), before the new plan is staged.
+    repo.start_run(
+        owner,
+        source,
+        &[
+            RunStatus::Running,
+            RunStatus::Ready,
+            RunStatus::Completed,
+            RunStatus::Failed,
+            RunStatus::Dismissed,
+        ],
+    )
+    .await
+    .unwrap();
     let staged = repo.replace_plan(owner, source, rows).await.unwrap();
     let session = Uuid::now_v7();
     sqlx::query!(
@@ -432,7 +479,7 @@ async fn a_failed_database_keeps_confirmed_rows_without_counting_a_completed_cop
     // A per-source failure still lets the writer account for the remaining plan.
     assert!(
         service
-            .end_write(&owner, RunStatus::Completed, None)
+            .end_write(&owner, RunStatus::Completed, None, None)
             .await
             .unwrap()
     );
@@ -620,6 +667,7 @@ async fn a_run_that_keeps_stopping_is_given_up_with_its_rows_back_in_staged(pool
 
     assert_eq!(report.status, Some(RunStatus::Failed));
     assert_eq!(report.error.as_deref(), Some(IMPORT_STOPPED));
+    assert_eq!(report.error_kind, Some(RunErrorKind::Interrupted));
     assert_eq!(report.writing, 0);
     assert_eq!(report.waiting, 2, "both can be imported again");
 }
@@ -1049,3 +1097,269 @@ mod tracker;
 
 mod dates;
 mod folders;
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_approval_after_the_plan_failed_writes_nothing(pool: PgPool) {
+    let owner = user("approved-after-failure");
+    // The plan was presented while it was being made; the card still shows it.
+    let (review, rows) = approved_plan(&pool, &owner).await;
+    let repo = PgImportRepo::new(pool.clone());
+    // Planning then failed (the chat approved it before it heard).
+    assert!(
+        repo.transition_run(
+            &owner,
+            ImportSource::Notion,
+            &[RunStatus::Running],
+            RunStatus::Failed,
+            Some("Notion was unreachable"),
+        )
+        .await
+        .unwrap()
+    );
+    let tracker = TaskTracker::new();
+    let writer = Writer::default();
+    let service = service(
+        &pool,
+        writer,
+        tokio_util::sync::CancellationToken::new(),
+        tracker.clone(),
+    );
+
+    let refused = service
+        .start_notion_write(&owner, review, NotionWriteChoices::default())
+        .await;
+    tracker.close();
+    tracker.wait().await;
+
+    assert!(
+        matches!(
+            refused,
+            Err(ImportError::RunNotReviewable(
+                UnreviewableRun::Failed { .. }
+            ))
+        ),
+        "{refused:?}"
+    );
+    let runs = repo.list_runs(&owner).await.unwrap();
+    assert_eq!(runs[0].status, RunStatus::Failed);
+    for row in rows {
+        let row = repo.get(&owner, row).await.unwrap().unwrap();
+        assert_eq!(row.status, ImportStatus::Staged, "nothing was claimed");
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_failed_replan_leaves_the_old_card_unable_to_write(pool: PgPool) {
+    let owner = user("failed-replan");
+    let (review, _) = approved_plan(&pool, &owner).await;
+    let repo = PgImportRepo::new(pool.clone());
+    assert!(
+        repo.transition_run(
+            &owner,
+            ImportSource::Notion,
+            &[RunStatus::Running],
+            RunStatus::Ready,
+            None
+        )
+        .await
+        .unwrap()
+    );
+    // A new plan starts (clearing the run's review) and fails; review A's
+    // card still shows the old plan.
+    assert!(
+        repo.start_run(&owner, ImportSource::Notion, &[RunStatus::Ready])
+            .await
+            .unwrap()
+    );
+    assert!(
+        repo.transition_run(
+            &owner,
+            ImportSource::Notion,
+            &[RunStatus::Running],
+            RunStatus::Failed,
+            Some("Notion was unreachable"),
+        )
+        .await
+        .unwrap()
+    );
+    let tracker = TaskTracker::new();
+    let service = service(
+        &pool,
+        Writer::default(),
+        tokio_util::sync::CancellationToken::new(),
+        tracker.clone(),
+    );
+
+    let refused = service
+        .start_notion_write(&owner, review, NotionWriteChoices::default())
+        .await;
+    tracker.close();
+    tracker.wait().await;
+
+    assert!(
+        matches!(
+            refused,
+            Err(ImportError::RunNotReviewable(
+                UnreviewableRun::Failed { .. }
+            ))
+        ),
+        "{refused:?}"
+    );
+    assert_eq!(
+        repo.list_runs(&owner).await.unwrap()[0].status,
+        RunStatus::Failed
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_write_that_loses_the_connection_records_why(pool: PgPool) {
+    let owner = user("write-revoked");
+    let (review, _) = approved_plan(&pool, &owner).await;
+    let repo = PgImportRepo::new(pool.clone());
+    assert!(
+        repo.transition_run(
+            &owner,
+            ImportSource::Notion,
+            &[RunStatus::Running],
+            RunStatus::Ready,
+            None
+        )
+        .await
+        .unwrap()
+    );
+    let tracker = TaskTracker::new();
+    let service = ImportServiceImpl::new(
+        PgImportRepo::new(pool.clone()),
+        no_connections(),
+        Arc::new(Writer::default()),
+        Arc::new(ai_usage::NoOpUsageRecorder),
+    )
+    .with_notion_connections(Arc::new(Revoked))
+    .with_job_shutdown(tokio_util::sync::CancellationToken::new(), tracker.clone());
+
+    service
+        .start_notion_write(&owner, review, NotionWriteChoices::default())
+        .await
+        .unwrap();
+    tracker.close();
+    tracker.wait().await;
+
+    let runs = repo.list_runs(&owner).await.unwrap();
+    assert_eq!(runs[0].status, RunStatus::Failed);
+    assert_eq!(runs[0].error_kind, Some(RunErrorKind::AccessLost));
+}
+
+#[test]
+fn a_failure_reads_from_its_kind_never_the_providers_text() {
+    let text = crate::domain::service::notion_workspace::failure_text(
+        &ImportError::Notion(NotionError::Upstream {
+            status: 400,
+            body: "provider-secret-body".into(),
+        }),
+        ImportSource::Notion,
+    );
+    // Notion's own failures keep Macro's finer copy (from #11655).
+    assert_eq!(text, "Notion couldn’t return this item’s content.");
+    assert!(!text.contains("provider-secret-body"));
+    // A lost connection reads from its kind, which says how to fix it.
+    let lost = crate::domain::service::notion_workspace::failure_text(
+        &ImportError::Notion(NotionError::AccessLost),
+        ImportSource::Notion,
+    );
+    assert!(lost.contains("Notion no longer accepts Macro"), "{lost}");
+}
+
+/// A yes the chat sends while the plan is being made approves nothing, and
+/// the review it was said about can never start the plan that replaces it.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_approval_before_the_plan_is_ready_never_reaches_it_or_a_replan(pool: PgPool) {
+    let owner = user("approved-while-planning");
+    let (review, rows) = approved_plan(&pool, &owner).await;
+    let repo = PgImportRepo::new(pool.clone());
+    let tracker = TaskTracker::new();
+    let service = service(
+        &pool,
+        Writer::default(),
+        tokio_util::sync::CancellationToken::new(),
+        tracker.clone(),
+    );
+
+    // The early yes: refused, nothing queued.
+    let early = service
+        .start_notion_write(&owner, review, NotionWriteChoices::default())
+        .await;
+    assert!(
+        matches!(
+            early,
+            Err(ImportError::RunNotReviewable(
+                UnreviewableRun::StillPlanning
+            ))
+        ),
+        "{early:?}"
+    );
+
+    // The plan becomes ready: it waits for an approval of its own.
+    assert!(
+        repo.transition_run(
+            &owner,
+            ImportSource::Notion,
+            &[RunStatus::Running],
+            RunStatus::Ready,
+            None
+        )
+        .await
+        .unwrap()
+    );
+    assert_eq!(
+        repo.list_runs(&owner).await.unwrap()[0].status,
+        RunStatus::Ready
+    );
+    for row in &rows {
+        let row = repo.get(&owner, *row).await.unwrap().unwrap();
+        assert_eq!(row.status, ImportStatus::Staged, "nothing was claimed");
+    }
+
+    // The plan is made again, differently, and is ready: the first review
+    // cannot start it. (That a fresh approval of a ready plan starts it is
+    // `only_the_ready_plan_a_review_holds_can_start_writing`'s job.)
+    assert!(
+        repo.start_run(&owner, ImportSource::Notion, &[RunStatus::Ready])
+            .await
+            .unwrap()
+    );
+    let replanned = repo
+        .replace_plan(&owner, ImportSource::Notion, &[page('c', "Changed")])
+        .await
+        .unwrap();
+    assert!(
+        repo.transition_run(
+            &owner,
+            ImportSource::Notion,
+            &[RunStatus::Running],
+            RunStatus::Ready,
+            None
+        )
+        .await
+        .unwrap()
+    );
+    let stale = service
+        .start_notion_write(&owner, review, NotionWriteChoices::default())
+        .await;
+    tracker.close();
+    tracker.wait().await;
+
+    // None of the plan it was said about is left to write.
+    assert!(
+        matches!(
+            stale,
+            Err(ImportError::RunNotReviewable(UnreviewableRun::NothingLeft))
+        ),
+        "{stale:?}"
+    );
+    assert_eq!(
+        repo.list_runs(&owner).await.unwrap()[0].status,
+        RunStatus::Ready
+    );
+    let changed = repo.get(&owner, replanned[0].id).await.unwrap().unwrap();
+    assert_eq!(changed.status, ImportStatus::Staged);
+}

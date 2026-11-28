@@ -200,8 +200,10 @@ vi.mock('@queries/agents/models', () => ({
       if (harness === 'in-memory' && mocks.freePlan) {
         return {
           status: 'available',
-          currentModel: 'google/gemini-3.8-flash',
-          models: [{ id: 'google/gemini-3.8-flash', name: 'Gemini 3.8 Flash' }],
+          currentModel: 'google/gemini-4-hydrogen',
+          models: [
+            { id: 'google/gemini-4-hydrogen', name: 'Gemini 4 Hydrogen' },
+          ],
         };
       }
       return {
@@ -223,7 +225,7 @@ vi.mock('@queries/agents/models', () => ({
                 { id: 'anthropic/claude-opus-5-5', name: 'Claude Opus 5.5' },
                 { id: 'openai/gpt-5.6', name: 'GPT-5.6' },
                 { id: 'openai/gpt-6-astra', name: 'GPT-6 Astra' },
-                { id: 'google/gemini-3.8-flash', name: 'Gemini 3.8 Flash' },
+                { id: 'google/gemini-4-hydrogen', name: 'Gemini 4 Hydrogen' },
                 { id: 'fireworks/kimi-k3', name: 'Kimi K3' },
                 { id: 'fireworks/glm-5p3', name: 'GLM 5.3' },
                 {
@@ -1640,7 +1642,7 @@ describe('agent-led new conversation', () => {
       prompt: 'Prompt',
       botId: 'saved-agent',
       repoUrl: undefined,
-      modelOverride: 'google/gemini-3.8-flash',
+      modelOverride: 'google/gemini-4-hydrogen',
     });
   });
   it.each(['codex-cloud', 'future-runtime'])(
@@ -2714,14 +2716,14 @@ describe('agent-led new conversation', () => {
     expect(
       screen.getByRole('button', { name: 'Choose an agent or model' })
         .textContent
-    ).toBe('Gemini 3.8 Flash');
+    ).toBe('Gemini 4 Hydrogen');
     openAgents();
     await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy());
     expect(screen.queryByRole('button', { name: 'Sonnet 5.5' })).toBeNull();
     expect(
       within(screen.getByRole('dialog'))
         .getAllByRole('button', {
-          name: 'Gemini 3.8 Flash',
+          name: 'Gemini 4 Hydrogen',
         })
         .find((button) => button.hasAttribute('data-model-choice'))
     ).toBeTruthy();
@@ -2729,7 +2731,7 @@ describe('agent-led new conversation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenCalledWith(
       expect.objectContaining({
-        modelOverride: 'google/gemini-3.8-flash',
+        modelOverride: 'google/gemini-4-hydrogen',
       })
     );
   });

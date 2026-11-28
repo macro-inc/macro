@@ -5,8 +5,8 @@
 A differential fuzzer for the client GraphQL cache. Two builds of it, one per
 version of the cache (before and after a change), run the same seeded operation
 sequences through the native host engine. Every response and every table left on
-disk after a reopen must come out the same, apart from what a mode below masks on
-purpose (it says what).
+disk after a reopen must come out the same, apart from the lock timings a queued
+mutation's answers report and what a mode below masks on purpose (it says what).
 
 ## How it works
 
@@ -23,13 +23,17 @@ purpose (it says what).
   op hydrates every core page and filters for a few documents past the first window: the
   window has to extend past the rows it rejects. It invalidates nothing, since any incomplete
   document in a query's partitions answers it as incomplete before a window runs.
+  An `id-list` op filters a channel, document or chat partition on 2 to 500 ids (some uncached,
+  sometimes one twice) as a balanced `or`, as the channel list does: storage reads a short
+  list from its keys instead of a window, and both must agree.
   Mail filters often use the app's mail tabs (`assets/mail-tabs.json`), and some of those
   with the tab's tree reshaped: `not(not(tree))`, or joined by `or` or `and` to a random tree or,
   half the time, to one literal the cache compiles (read, inbox visibility, thread, owner). A
   tab's `shared` literal joined to its tree by `and` stays at the top, the only place the cache
   compiles it, and a tree that is only a `shared` literal is not reshaped.
 - `src/exec.rs` runs a case. `src/normalize.rs` replaces the ids the engine mints
-  (`#1`, `#2`, …) and keeps every id that appears in the case. `src/dump.rs`
+  (`#1`, `#2`, …), keeps every id that appears in the case, and drops the
+  lock timings (`engine`) a queued mutation's enqueue and commit answers report. `src/dump.rs`
   writes the tables after a final reopen, each value tagged with its type.
 - A reset on open (`open_or_reset` deleting a file it can't read) and a failed
   checkpoint at an `idle` op's hook are recorded, not hidden: the first goes into the

@@ -44,6 +44,12 @@ fn main() {
     if read(&host.join("engine/authority.rs")).contains("pub fn abandonable(") {
         println!("cargo::rustc-cfg=abandon_reads");
     }
+    // Hosts whose hydrates take the engine since the write they began at
+    // (`EngineAccess::write_epoch`) get `cfg(hydrate_epoch)`.
+    println!("cargo::rustc-check-cfg=cfg(hydrate_epoch)");
+    if read(&host.join("engine/access.rs")).contains("fn write_epoch(") {
+        println!("cargo::rustc-cfg=hydrate_epoch");
+    }
     let hooks = manifest.join("src/fuzz_hooks.rs");
     std::fs::write(out.join("engine/fuzz_hooks.rs"), read(&hooks)).unwrap();
     std::fs::write(

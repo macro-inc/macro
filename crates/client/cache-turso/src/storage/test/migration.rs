@@ -247,11 +247,12 @@ fn a_browser_open_resets_an_older_version() {
 #[test]
 fn versions_without_a_chain_and_failing_steps_still_reset() {
     block_on(async {
+        let newer = format!(
+            "UPDATE meta SET value = '{}' WHERE key = 'storage_schema_version'",
+            STORAGE_SCHEMA_VERSION + 1
+        );
         for (name, sql) in [
-            (
-                "newer",
-                "UPDATE meta SET value = '13' WHERE key = 'storage_schema_version'",
-            ),
+            ("newer", newer.as_str()),
             (
                 "older-than-every-step",
                 "UPDATE meta SET value = '10' WHERE key = 'storage_schema_version'",
@@ -349,7 +350,9 @@ fn a_rejected_upgrade_leaves_the_older_file_untouched() {
         let mut storage = database.open("scope").unwrap();
         populate(&mut storage).await;
         test_hooks::add_unknown_table(&mut storage).unwrap();
-        downgrade_to_storage_11(&mut storage);
+        // The last step's transaction runs the checks, so the file stays as
+        // the version before it left it.
+        test_hooks::rewrite_as_storage_12(&mut storage).unwrap();
         let schema = schema_rows(&storage.connection());
         let rows = table_rows(&storage.connection());
         storage.try_close().unwrap();
@@ -365,7 +368,7 @@ fn a_rejected_upgrade_leaves_the_older_file_untouched() {
         let connection = Db::uncached(raw.connect().unwrap());
         assert_eq!(
             crate::storage::migration::stored_storage_version(&connection),
-            Some(11)
+            Some(12)
         );
         assert_eq!(schema_rows(&connection), schema);
         assert_eq!(table_rows(&connection), rows);
@@ -666,9 +669,7 @@ fn leak_steps(
 /// same logical rows as `source`.
 fn fresh_at_target(source: &Db, fresh: &FreshSchema, path: &Path, version: u32) {
     let (_database, connection) = raw_open(path);
-    let mut creates = CREATE_SCHEMA
-        .into_iter()
-        .chain(calendar::CREATE_SCHEMA)
+    let mut creates = fresh_schema_statements()
         .map(str::to_owned)
         .collect::<Vec<_>>();
     for (table, definition) in &fresh.added_columns {

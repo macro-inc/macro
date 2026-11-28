@@ -30,6 +30,8 @@ milliseconds instead of waiting on container provisioning.
   MCP calls and a failed turn guard it.
 - `src/domain/tool_stream.rs`: throttled, bounded argument previews for pending
   calls; replay ignores previews and retains only calls that began execution.
+  A dropped call (`StreamPart::ToolCallDropped`) closes `failed` at once with
+  `DROPPED_TOOL_CALL`; calls still open when the turn ends close `failed` then.
 - `src/domain/session.rs` / `src/domain/replay.rs`: in-process session state
   and log replay on reconnect.
 - `src/domain/admission.rs` + `src/outbound/approval_gate.rs`: usage/plan
@@ -128,7 +130,7 @@ MCP catalog lacks any `mcp__macro_internal__` code tool fails
   before it, so a follow-up keeps the previous turn's entities.
 - `auto` is a picker entry, not a routable id: `RigTurnEngine` asks its
   `AutoModelSelector` (Jev through cognition's named decisions, 1 s budget) per turn and runs
-  Opus 5.5 (hard), GPT-6.2 Sol (mid) or Gemini 3.8 Flash (simple, and
+  Opus 5.5 (hard), GPT-6.2 Sol (mid) or Gemini 4 Hydrogen (simple, and
   whenever Jev is unavailable). Capability lookups go through
   `models::resolve`.
 - Owners with the `auto-skills` flag route each turn's request to their skills

@@ -4,7 +4,8 @@ use crate::domain::models::{CHAT_MODELS, RETIRED_MODELS, current_model};
 const SONNET_5_5: &str = "anthropic/claude-sonnet-5-5";
 const OPUS_5_5: &str = "anthropic/claude-opus-5-5";
 const HAIKU_5_5: &str = "anthropic/claude-haiku-5-5";
-const GEMINI_FLASH: &str = "google/gemini-3.8-flash";
+const GEMINI_HYDROGEN: &str = "google/gemini-4-hydrogen";
+const GEMINI_3_8_FLASH: &str = "google/gemini-3.8-flash";
 const GPT_6_2_SOL: &str = "openai/gpt-6.2-sol";
 const GPT_6_LUNA: &str = "openai/gpt-6-luna";
 const HAIKU_4_5: &str = "anthropic/claude-haiku-4-5";
@@ -17,8 +18,8 @@ fn free_user_only_has_the_free_model() {
     let svc = ModelAccessServiceImpl;
     assert_eq!(svc.best_model(false), FREE_MODEL);
     assert!(svc.has_access(false, FREE_MODEL));
-    assert_eq!(FREE_MODEL, GEMINI_FLASH);
-    assert!(svc.has_access(false, GEMINI_FLASH));
+    assert_eq!(FREE_MODEL, GEMINI_HYDROGEN);
+    assert!(svc.has_access(false, GEMINI_HYDROGEN));
     assert!(!svc.has_access(false, HAIKU_5_5));
     assert!(!svc.has_access(false, "unknown/model"));
     assert!(!svc.has_access(false, OPUS_5_5));
@@ -74,6 +75,7 @@ fn every_retired_model_is_replaced_by_an_offered_one() {
     assert_eq!(current_model("openai/gpt-6.1-sol"), GPT_6_2_SOL);
     assert_eq!(current_model("openai/gpt-5.6"), GPT_6_2_SOL);
     assert_eq!(current_model("openai/gpt-5.6-mini"), GPT_6_LUNA);
+    assert_eq!(current_model(GEMINI_3_8_FLASH), GEMINI_HYDROGEN);
 }
 
 #[test]

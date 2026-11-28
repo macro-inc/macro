@@ -4,6 +4,10 @@
 # sends logs to Loki, traces to the sampler (./sampler) and metrics to Mimir.
 # Two replicas in different zones; the edge reaches them through their Service.
 #
+# The cluster adds CloudWatch Logs from Amazon Data Firehose on
+# `macro.ingest.firehosePort` (./ingest-firehose.alloy), which join the OTLP
+# logs at the memory limiter.
+#
 # It also forwards the spans and log records that metrics are derived from to the
 # `derived-metrics` application (`macro.derivedMetrics.ingestTap`).
 {
@@ -74,10 +78,21 @@ let
     assert lib.assertMsg (
       !lib.hasInfix "127.0.0.1" result
     ) "ingest.alloy has a loopback address modules/ingest.nix doesn't replace";
-    result + "\n" + config.macro.derivedMetrics.ingestTap;
+    result + "\n" + firehoseConfig + "\n" + config.macro.derivedMetrics.ingestTap;
+  firehosePort = config.macro.ingest.firehosePort;
+  firehoseConfig = builtins.replaceStrings [ "@FIREHOSE_PORT@" ] [ (toString firehosePort) ] (
+    builtins.readFile ./ingest-firehose.alloy
+  );
 in
 {
-  applications.alloy-ingest = {
+  options.macro.ingest.firehosePort = lib.mkOption {
+    type = lib.types.port;
+    readOnly = true;
+    default = 4319;
+    description = "Alloy ingest's port for Amazon Data Firehose deliveries; the edge's /awsfirehose/api/v1/push proxies to it.";
+  };
+
+  config.applications.alloy-ingest = {
     inherit namespace;
 
     helm.releases.${name} = {
@@ -132,6 +147,12 @@ in
               targetPort = 4318;
               protocol = "TCP";
             }
+            {
+              name = "firehose";
+              port = firehosePort;
+              targetPort = firehosePort;
+              protocol = "TCP";
+            }
           ];
           mounts.extra = [
             {
@@ -178,7 +199,10 @@ in
       ingress = [
         {
           from = [ (workload.pods { "app.kubernetes.io/name" = "edge"; }) ];
-          ports = workload.tcpPorts [ 4318 ];
+          ports = workload.tcpPorts [
+            4318
+            firehosePort
+          ];
         }
         workload.scrapedByNodeAlloy
       ];

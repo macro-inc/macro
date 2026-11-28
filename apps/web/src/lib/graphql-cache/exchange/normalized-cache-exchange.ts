@@ -84,6 +84,7 @@ import {
 } from 'wonka';
 import { supportsStoreReconciliation } from '../../urql-solid/reactive-selection';
 import { mutationTraceParentOf } from '../../urql-solid/trace-parent-exchange';
+import { CacheWriteSupersededError } from '../host/errors';
 import type { CacheHost } from '../host/types';
 import {
   type CacheReadPriority,
@@ -756,6 +757,13 @@ export function normalizedCacheExchange(
               state.retainedReplacementFallback !== retained ||
               retained.invalidated
             ) {
+              return;
+            }
+            if (error instanceof CacheWriteSupersededError) {
+              // A mutation changed its records since: ask again.
+              retained.invalidated = true;
+              state.retainedReplacementFallback = undefined;
+              refetchAfterOutage(key);
               return;
             }
             const active = activeOps.get(key);
@@ -1540,6 +1548,9 @@ export function normalizedCacheExchange(
             data: result.data,
             identity: options.extractIdentity?.(result.data),
             registerDependencies: isActive(),
+            // Nobody awaits it; a native host refuses it once a newer commit
+            // changed its records.
+            background: true,
           };
           const retained: RetainedReplacementFallback | undefined =
             result.error === undefined && result.hasNext !== true && isActive()
@@ -1593,6 +1604,14 @@ export function normalizedCacheExchange(
             }
             return deletion?.revision ?? write.revision;
           } catch (error) {
+            if (error instanceof CacheWriteSupersededError) {
+              // A mutation committed after this response was sent changed its
+              // records: the same as predating it, found natively.
+              if (state.retainedReplacementFallback === retained)
+                state.retainedReplacementFallback = undefined;
+              refreshObsoleteQuery(op);
+              return undefined;
+            }
             reportError(error);
             if (
               error instanceof StaleCacheAuthorityError &&

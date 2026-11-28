@@ -13,6 +13,8 @@ mod hydration_scope;
 mod mail_projection;
 mod people;
 mod queue_salvage;
+mod schema_change;
+mod schema_cost;
 
 /// The old way of reading a hydrate's data, which `json_value_from_js` must
 /// match.
@@ -387,6 +389,7 @@ fn empty_js_write_result() -> JsWriteResult {
         unchanged_views: None,
         field_changes: None,
         identity_errors: Vec::new(),
+        unwritable_response: None,
         mutation_uuid: None,
         revision: "0".to_string(),
         revision_advanced: false,
@@ -404,6 +407,7 @@ fn tagged_wire_enum_fields_are_camel_case() {
     committed
         .identity_errors
         .push("missing identity response object".into());
+    committed.unwritable_response = Some("unknown field".into());
     let value =
         serde_json::to_value(JsCommitOptimisticWriteResult::Committed { result: committed })
             .unwrap();
@@ -412,6 +416,7 @@ fn tagged_wire_enum_fields_are_camel_case() {
         value["identityErrors"],
         serde_json::json!(["missing identity response object"])
     );
+    assert_eq!(value["unwritableResponse"], "unknown field");
     assert_eq!(
         serde_json::to_value(JsMutationUpsertKind::ReplacedPending {
             removed_transaction_id: "1".to_string(),
@@ -1752,6 +1757,62 @@ async fn queue_and_optimistic_layers_survive_preserve_reopen_in_id_order() {
     );
 
     close_and_destroy(&reopened, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_confirmed_response_that_does_not_normalize_retires_the_write() {
+    const SCOPE: &str = "cache-wasm-unwritable-settlement";
+    let engine = fresh_engine(SCOPE).await;
+    let enqueue: serde_json::Value = from_js(
+        resolved(engine.enqueue_optimistic_mutation(
+            None,
+            "00000000-0000-4000-8000-000000000009".into(),
+            PROPERTY_MUTATION.into(),
+            Some("SetEntityProperty".into()),
+            js(mutation_variables()),
+            js(serde_json::json!({
+                "setEntityProperty": { "id": "prop-1", "displayName": "Stage" }
+            })),
+            JsValue::UNDEFINED,
+            JsValue::UNDEFINED,
+            JsValue::UNDEFINED,
+            123.0,
+            "runner".into(),
+            10.0,
+            1_000.0,
+            JsValue::UNDEFINED,
+            JsValue::UNDEFINED,
+            test_generation(&engine).await,
+        ))
+        .await,
+    );
+
+    // No retry of this response can be written, so it settles without its
+    // content and the queue moves on.
+    let commit: serde_json::Value = from_js(
+        resolved(
+            engine.commit_optimistic_write(
+                enqueue["transactionId"].as_str().unwrap().to_owned(),
+                "runner".into(),
+                enqueue["initialClaim"]["mutation"]["leaseGeneration"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned(),
+                PROPERTY_MUTATION.into(),
+                Some("SetEntityProperty".into()),
+                js(mutation_variables()),
+                js(serde_json::json!({ "setEntityProperty": "malformed" })),
+                test_generation(&engine).await,
+            ),
+        )
+        .await,
+    );
+    assert_eq!(commit["kind"], "committed");
+    assert!(commit["unwritableResponse"].is_string(), "{commit}");
+    let queued: serde_json::Value = from_js(resolved(engine.inspect_mutations()).await);
+    assert_eq!(queued, serde_json::json!([]));
+
+    close_and_destroy(&engine, SCOPE).await;
 }
 
 #[wasm_bindgen_test(async)]

@@ -1,4 +1,5 @@
 import { throwOnErr } from '@core/util/result';
+import { refreshPropertyDefinitions } from '@queries/properties/definitions';
 import type { CrmStageInput } from '@service-storage/generated/schemas/crmStageInput';
 import { useMutation } from '@tanstack/solid-query';
 import { soupKeys } from '../../../lib/queries/soup/keys';
@@ -7,10 +8,8 @@ import { CRM_TEAM_SETTINGS_QUERY_KEY } from './team-config';
 
 function invalidateStageReaders(deps: CrmQueryDependencies) {
   return Promise.all([
-    deps.client.invalidateQueries({
-      predicate: ({ queryKey }) =>
-        queryKey.includes('properties') && queryKey.includes('definitions'),
-    }),
+    // Stages are the options of the stage property: reload the lists showing them.
+    refreshPropertyDefinitions(),
     deps.client.invalidateQueries({ queryKey: soupKeys._def }),
     deps.client.invalidateQueries({ queryKey: CRM_TEAM_SETTINGS_QUERY_KEY }),
   ]);

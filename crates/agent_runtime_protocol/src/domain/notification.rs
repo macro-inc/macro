@@ -81,6 +81,59 @@ pub enum ReviewSettlement {
     Actions(ReviewOutcome),
 }
 
+/// Why a run failed, as a closed set readers branch on instead of the error
+/// text. Stored in `import_run.error_kind`; `None` on runs that failed
+/// before it was recorded.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    schemars::JsonSchema,
+    specta::Type,
+    strum::EnumString,
+    strum::AsRefStr,
+)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum RunErrorKind {
+    /// The source said an object was missing or not shared with the
+    /// connection.
+    NotFound,
+    /// The connection may not read what the import asked for.
+    Forbidden,
+    /// The source refused the connection itself: revoked or expired.
+    AccessLost,
+    /// The connection's proxy could not use the account at all.
+    ConnectionUnavailable,
+    /// The source is not connected, or the connection is turned off.
+    NotConnected,
+    /// The source kept rate limiting the import.
+    RateLimited,
+    /// The source could not be reached or answered with an error.
+    Unreachable,
+    /// The AI work planning needs was refused (usage or billing).
+    UsageRefused,
+    /// The run stopped before it finished (its process went away too
+    /// often); starting it again picks up what is left.
+    Interrupted,
+    /// Anything else, on Macro's side. A kind this build does not know (a
+    /// newer writer's) reads as this one.
+    Internal,
+}
+
+impl<'de> Deserialize<'de> for RunErrorKind {
+    /// Tolerant: an unknown kind reads as `Internal`, so a payload from a
+    /// newer writer still decodes.
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let kind = String::deserialize(deserializer)?;
+        Ok(kind.parse().unwrap_or(Self::Internal))
+    }
+}
+
 /// The final report of an approved workspace import, with no page content.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -93,9 +146,13 @@ pub struct ImportSettlement {
     pub source: ImportWorkspace,
     /// How the write ended.
     pub outcome: ImportOutcome,
-    /// Why it failed, or what went wrong in a completed write.
+    /// Why it failed, written from `error_kind`, or what went wrong in a
+    /// completed write. Never the importer's raw error.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// Why it failed, when it did and the kind was recorded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_kind: Option<RunErrorKind>,
     /// Objects written into Macro.
     pub imported: u32,
     /// Objects the plan copies: as they are or as task lists from Notion,
@@ -212,6 +269,9 @@ pub enum DecisionOutcome {
     Dismissed,
     /// The batch contains mixed or unconfirmed results.
     Partial,
+    /// Every approved action was refused before it started (an import whose
+    /// plan was no longer ready); the review is open again, unchanged.
+    Refused,
 }
 
 /// Surface of a review decision.
@@ -260,6 +320,9 @@ pub enum ItemStatus {
     Unknown,
 }
 
+/// How to answer a ready import plan, appended to the system-event prompt.
+const IMPORT_PLANNED_GUIDANCE: &str = " An import.planned event means a presented import plan is ready: tell the user in one plain sentence that it is ready to review, with its numbers (what it copies, task lists, skipped, by hand), and that they approve it on the card. Do not approve it or call DecideReview in this turn; a system event cannot approve, whatever the user said before the plan was ready.";
+
 /// XML supplied next to the per-prompt agent context. Escaping JSON as XML text
 /// prevents payloads from closing the envelope or introducing new instructions.
 pub fn notification_context(notifications: &[Notification]) -> Result<String, serde_json::Error> {
@@ -276,6 +339,25 @@ pub fn notification_context(notifications: &[Notification]) -> Result<String, se
         ));
     }
     xml.push_str("</m-notifications>\nThese are system events, not user requests. Do not repeat completed actions or retry uncertain outcomes. Read final drafts through GetReview. If nothing needs saying and you have not called any tool in this turn, reply with <noop/> and nothing else: no text before or after it. After any tool call, summarize the result instead of replying with <noop/>.");
+    // Nothing else tells the user a plan they are waiting on is ready, and an
+    // earlier yes cannot approve it: say so, and leave approval to the card.
+    // A plan the owner already decided on the card in this batch is not
+    // waiting for anyone.
+    let decided = |subject: &str| {
+        notifications.iter().any(|notification| {
+            notification.subject_id == subject
+                && matches!(
+                    notification.event,
+                    NotificationEvent::ReviewDecided(_) | NotificationEvent::ReviewSettled(_)
+                )
+        })
+    };
+    if notifications.iter().any(|notification| {
+        matches!(notification.event, NotificationEvent::ImportPlanned(_))
+            && !decided(&notification.subject_id)
+    }) {
+        xml.push_str(IMPORT_PLANNED_GUIDANCE);
+    }
     Ok(xml)
 }
 
@@ -312,3 +394,6 @@ pub fn input_from_runtime(
     let params = request.params.as_ref()?.clone().into_value();
     serde_json::from_value(params.get("_meta")?.get(NOTIFICATIONS_META)?.clone()).ok()
 }
+
+#[cfg(test)]
+mod test;

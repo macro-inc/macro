@@ -14,7 +14,7 @@ operators, the search service's (`type:task`, `status:in_progress`,
 `from:` beside `type:channel` or `type:call`) and Mail's (`subject:`,
 `is:unread`, `in:inbox`); `OR` between two of the same operator joins them. A
 `tag:` or `in:#` value named by an emoji alone (`tag:🔥`) is an operator, and a
-tag name is typed with its own double quotes left out. The
+tag or channel name is typed with its own double quotes left out. The
 field draws every whole operator in the accent colour and offers operator
 names, then their values (types, statuses, priorities, `me` and people, the
 person's tags, inboxes, and channels and DMs, a DM by the other person's name as `in:#"Ana Lima"`), under it as they are typed: arrow keys
@@ -53,11 +53,6 @@ Routines are found by name in a typed `Ctrl+K` **All** query, in touch Search's
 come from the routines list (Quick Access `routine` bucket), not the search
 service, and open the routine in the Agents workspace. They stay out of the
 empty recency list and out of Home, Drive and Tasks searches.
-
-The universal input's search filter chips use one compact control size for
-values, match mode, and clear actions. Labels and controls stay vertically
-centered inside a frame that grows to fit them, rather than clipping taller
-segments.
 
 On touch devices, the dock's **Search** button opens a persistent **Search…**
 input in `/app/search`. It starts with Command Menu-style Quick Access name

@@ -174,11 +174,7 @@ export function DocumentCard(props: DocumentCardDecoratorProps) {
           when={props.blockName === 'form' && pollBodyHeight(props.previewData)}
         >
           {(height) => (
-            <Card
-              variant="filled"
-              depth={2}
-              class="my-2 overflow-hidden rounded-xl"
-            >
+            <Card variant="raised" depth={2} class="my-2 overflow-hidden">
               <PollCardPlaceholder
                 name={props.documentName}
                 bodyHeight={height()}
@@ -261,48 +257,15 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
     });
   };
 
-  const previewContext = createMemo<
-    Partial<PreviewState & { showDraftSelectorButton: boolean }>
-  >(() => {
-    return {
-      onChangePreviewHeight: (h: string) => resizePreview(h),
-      showDraftSelectorButton: true,
-      canvas: {
-        onLocationChange: (location) => {
-          const currentEditor = editor();
-          if (!currentEditor) return;
-          const focused = document.activeElement;
-          const restoreFocus =
-            focused instanceof HTMLElement &&
-            currentEditor.getElementByKey(props.key)?.contains(focused);
-          currentEditor.update(
-            () => {
-              $addUpdateTag(HISTORY_MERGE_TAG);
-              const node = $getNodeByKey(props.key);
-              if (!$isDocumentCardNode(node)) return;
-              node.setPreviewData({
-                view: location,
-              });
-            },
-            {
-              onUpdate: () => {
-                if (
-                  restoreFocus &&
-                  focused instanceof HTMLElement &&
-                  focused.isConnected
-                )
-                  focused.focus({ preventScroll: true });
-              },
-            }
-          );
-        },
-      },
-    };
-  });
+  const previewContext: PreviewState = {
+    onChangePreviewHeight: resizePreview,
+    showDraftSelectorButton: true,
+  };
 
-  const previewData = () => {
+  const initialPreviewParams = () => {
     const data = props.previewData;
-    if (data && 'view' in data) {
+    // Legacy camera data is an initial position for this preview.
+    if (data && typeof data === 'object' && 'view' in data) {
       return { view: data.view };
     }
     return {};
@@ -369,8 +332,8 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
         resolveBlockAlias(verifyBlockName(props.blockName)),
         i.id,
         {
-          params: previewData(),
-          nested: { parentContext: previewContext() },
+          params: initialPreviewParams(),
+          nested: { parentContext: previewContext },
         }
       );
       if (!preview) return;
@@ -679,7 +642,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
 
   return (
     <Card
-      variant="filled"
+      variant="raised"
       depth={2}
       ref={(el) => {
         setContainerRef(el);
@@ -687,10 +650,8 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
       }}
       contentEditable={false}
       class={cn(
-        'my-2 rounded-xl no-select-children select-none overflow-hidden',
-        isSelectedAsNode() &&
-          !channelMessageId() &&
-          'border-[color-mix(in_oklch,var(--color-edge)_80%,var(--color-ink))] ring-2 ring-edge-muted',
+        'my-2 no-select-children select-none overflow-hidden',
+        isSelectedAsNode() && !channelMessageId() && 'outline-4 outline-edge',
         resizable() && 'resize-y shrink-0 min-h-80'
       )}
       style={{

@@ -54,6 +54,13 @@
           derived-metrics-mapping = pkgs.writeText "MAPPING.md" (
             import ./modules/derived-metrics/mapping.nix { inherit (pkgs) lib; }
           );
+          # Committed as grafana-provisioning/datadog/MAPPING.md in the host
+          # stack: Datadog's monitors and the Grafana rules they became.
+          datadog-mapping = pkgs.writeText "MAPPING.md" (
+            import ../../../stacks/observability/nixos/grafana-provisioning/datadog/mapping.nix {
+              inherit (pkgs) lib;
+            }
+          );
           inherit (tools)
             render
             check

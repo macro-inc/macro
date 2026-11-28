@@ -17,6 +17,8 @@ use uuid::Uuid;
 pub const PROFILE: &str = "people-sql-v1";
 /// Disposable fact layout; changing it rebuilds only this owned profile.
 pub const VERSION: u32 = 3;
+/// The record type storage projects people rows from.
+pub const TYPENAME: &str = "GraphqlContact";
 /// Fields required from a normalized contact; local ranking facts are unrelated.
 pub const FIELDS: &[&str] = &["userId", "email", "name"];
 /// Fields copied by storage for this projection. Private context is an input to

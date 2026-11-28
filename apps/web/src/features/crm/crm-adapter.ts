@@ -1,6 +1,9 @@
 import { propertyValueLabel } from '@app/features/activity/queries/property-value';
 import { useCreateContext } from '@app/features/command/context/create-context';
-import { useQuickAccessCrmCompaniesQuery } from '@app/features/crm/crm-search';
+import {
+  useCrmCompanyPickerSearch,
+  useQuickAccessCrmCompaniesQuery,
+} from '@app/features/crm/crm-search';
 import { composeEmail } from '@app/features/email-view/compose-email';
 import { openAddInboxDialog } from '@app/features/inbox/AddInboxDialog';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
@@ -382,6 +385,7 @@ export function createAppCrmContext(): CrmContext {
     createResetStages: () => useResetCrmStagesMutation(deps),
     exportCompanies: fetchCrmExportCompanies,
     createCompanySuggestions: useQuickAccessCrmCompaniesQuery,
+    createCompanySearch: useCrmCompanyPickerSearch,
     createContactSuggestions: useQuickAccessCrmContactsQuery,
     createContactSearch: useCrmContactSearch,
     hydrateCompany(company) {

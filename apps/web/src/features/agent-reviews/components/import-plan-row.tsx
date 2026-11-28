@@ -7,6 +7,8 @@ import { cn } from '@ui/utils/classname';
 import { Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
+  canCopySkippedPage,
+  type ImportDraft,
   type ImportPlanDecision,
   type ImportPlanNode,
   type ImportTaskFields,
@@ -166,7 +168,14 @@ function RowStatus(props: { node: ImportPlanNode; excluded: boolean }) {
         </span>
       }
     >
-      <span class="shrink-0 text-xs text-failure">Failed</span>
+      {(error) => (
+        <span
+          class="shrink-0 text-xs text-failure"
+          aria-label={`Failed: ${error()}`}
+        >
+          Failed
+        </span>
+      )}
     </Show>
   );
 }
@@ -183,6 +192,8 @@ export function ImportPlanRow(props: {
   /** Show the checkbox that leaves the object out, and the sharing toggle. */
   choosing: boolean;
   disabled: boolean;
+  /** Source determines whether skipping can be overridden in review. */
+  source?: ImportDraft['source'];
   /** Show how the write went instead of the plan. */
   showStatus: boolean;
   /** Keep plan samples without their estimate after confirmed counts arrive. */
@@ -260,7 +271,11 @@ export function ImportPlanRow(props: {
         <Show when={props.choosing}>
           <Checkbox
             checked={included()}
-            disabled={props.disabled || !written()}
+            disabled={
+              props.disabled ||
+              (!written() &&
+                !canCopySkippedPage(props.node, props.source ?? 'notion'))
+            }
             onChange={(checked) => props.onIncludedChange(checked)}
           >
             <Checkbox.Control />
@@ -301,6 +316,14 @@ export function ImportPlanRow(props: {
             <span class="truncate text-xs text-ink-muted mobile:order-last mobile:basis-full mobile:whitespace-normal mobile:wrap-break-word">
               {props.node.reason}
             </span>
+          </Show>
+          {/* Why it failed, readable on touch too (no tooltip there). */}
+          <Show when={props.showStatus && props.node.error}>
+            {(error) => (
+              <span class="min-w-0 text-xs text-ink-muted wrap-break-word">
+                {error()}
+              </span>
+            )}
           </Show>
         </span>
         <span class="contents mobile:order-1 mobile:flex mobile:basis-full mobile:flex-wrap mobile:items-center mobile:justify-end mobile:gap-1.5">

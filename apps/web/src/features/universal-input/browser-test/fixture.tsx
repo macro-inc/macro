@@ -12,9 +12,9 @@ import type {
 import { attachGlobalDOMScope, useHotKeyRoot } from '@core/hotkey/hotkeys';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { $createUserMentionNode } from '@macro-inc/lexical-core';
+import { authKeys } from '@queries/auth/keys';
 import { useContactRecipientSource } from '@queries/contacts/recipient-source';
-import { propertiesKeys } from '@queries/properties/keys';
-import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
+import { routeCatalogQueries } from '@queries/properties/catalog/fixture-routes';
 import { ComposerSurface } from '@ui';
 import { $createParagraphNode, $createTextNode, $getRoot } from 'lexical';
 import type { ComponentProps } from 'solid-js';
@@ -29,11 +29,10 @@ import { CommandState } from '../../command/state';
 import type { CommandMenuItem } from '../../command/useCommandItems';
 import { CommandResults } from '../../command/views/command-results';
 import { ComposeSubjectField } from '../../email-compose/components/compose-subject-field';
-import { searchNeedsKeywords } from '../../next-soup/core/search-filters';
 import { SearchbarInput } from '../../next-soup/soup-view/filters-bar/soup-view-search-bar';
 import { parsePropertyDraft } from '../../property/utils/parse-property-draft';
 import type { InputLayoutParts } from '../context/capabilities';
-import { resolveSearchFilters } from '../core/search';
+import { searchDraftText, searchNeedsWord } from '../core/search';
 import { SearchDraft } from '../views/search-draft';
 import { globalSearchRequests } from './global-search-service-fixture';
 import {
@@ -80,6 +79,8 @@ import {
   TaskReferenceFixture,
   type TaskValues,
 } from './task-reference-fixture';
+
+const FIXTURE_VIEWER = 'macro|viewer@example.com';
 
 const [commandSubmissions, setCommandSubmissions] = createSignal<Submission[]>(
   []
@@ -177,6 +178,13 @@ function SearchbarFixture() {
       </button>
       <button onClick={() => setQuery('externally changed query')}>
         Set external search
+      </button>
+      <button
+        onClick={() =>
+          setQuery('comparison <ana@example.com> from:ana@example.com next')
+        }
+      >
+        Set external address search
       </button>
       <output data-testid="standalone-query">{query()}</output>
       <output data-testid="standalone-query-changes">{changes()}</output>
@@ -439,29 +447,40 @@ export function UniversalInputFixture(
   const queryClient = new QueryClient({
     defaultOptions: { queries: { enabled: false, retry: false } },
   });
-  queryClient.setQueryData<TagSetResponse[]>(propertiesKeys.tags.queryKey, [
-    {
-      scope: 'user',
-      definition: {
-        id: 'tags',
-        scope: 'user',
-        user_id: 'fixture',
-        displayName: 'Tags',
-        dataType: 'TAG',
-        isMultiSelect: true,
-        isSystem: false,
-        isMetadata: false,
-      },
-      options: [
+  // Tag reads wait for a signed-in viewer, then come from the catalog routes.
+  queryClient.setQueryData(authKeys.userInfo.queryKey, {
+    id: FIXTURE_VIEWER,
+    email: 'viewer@example.com',
+    authenticated: true,
+  });
+  onCleanup(
+    routeCatalogQueries({
+      userId: FIXTURE_VIEWER,
+      tagSets: [
         {
-          id: 'launch',
-          propertyDefinitionId: 'tags',
-          displayOrder: 0,
-          value: { type: 'string', value: 'Launch' },
+          scope: 'user',
+          definition: {
+            id: 'tags',
+            scope: 'user',
+            user_id: 'fixture',
+            displayName: 'Tags',
+            dataType: 'TAG',
+            isMultiSelect: true,
+            isSystem: false,
+            isMetadata: false,
+          },
+          options: [
+            {
+              id: 'launch',
+              propertyDefinitionId: 'tags',
+              displayOrder: 0,
+              value: { type: 'string', value: 'Launch' },
+            },
+          ],
         },
       ],
-    },
-  ]);
+    })
+  );
   const params = new URLSearchParams(window.location.search);
   if (params.has('task-references')) seedTaskReferences(queryClient);
   if (params.has('person-references')) seedInputReferences(queryClient);
@@ -501,6 +520,21 @@ export function UniversalInputFixture(
     },
   ];
   const actions: InputDisplay = {
+    search: (fields) =>
+      searchDraftText(fields, {
+        people: actions.person,
+        channels: actions.searchChannels(),
+        inboxes: actions.inboxes(),
+        names: {
+          userId: 'macro|viewer@example.com',
+          tag: () => undefined,
+          channel: (id) =>
+            actions.searchChannels().find((channel) => channel.id === id)
+              ?.label,
+          inbox: (id) =>
+            actions.inboxes().find((inbox) => inbox.id === id)?.email_address,
+        },
+      }),
     person: (term) =>
       params.has('person-references') ? inputPeople()?.lookup(term) : people,
     createRecipientSource: useContactRecipientSource,
@@ -685,15 +719,10 @@ export function UniversalInputFixture(
           return 'Choose an unambiguous assignee';
       }
       if (input.intent === 'search') {
-        const filters = resolveSearchFilters(
-          input.fields.searchFilters,
-          actions.person,
-          actions.searchChannels(),
-          actions.inboxes()
-        );
-        if (filters.unresolved.length)
-          return `Choose a specific person or channel for ${filters.unresolved.join(', ')}`;
-        if (searchNeedsKeywords(filters.state, input.fields.query))
+        const draft = actions.search(input.fields);
+        if (draft.unresolved.length)
+          return `Choose a specific person or channel for ${draft.unresolved.join(', ')}`;
+        if (searchNeedsWord(draft.text, draft.bindings))
           return 'Add search text to search by sender or speaker.';
       }
       if (params.has('person-references')) {

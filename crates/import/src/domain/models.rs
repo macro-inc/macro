@@ -321,6 +321,43 @@ pub enum RunStatus {
     Dismissed,
 }
 
+pub use agent_runtime_protocol::domain::notification::RunErrorKind;
+
+/// Why a run failed, in a sentence for the agent, from its kind (`None`
+/// for runs that failed before kinds were recorded). Never the raw error,
+/// which can carry provider detail.
+pub fn explain_failure(kind: Option<RunErrorKind>, source: ImportSource) -> String {
+    let name = source.label();
+    match kind {
+        Some(RunErrorKind::NotFound) => format!(
+            "{name} said something the import needs is missing or isn't shared with Macro's connection"
+        ),
+        Some(RunErrorKind::Forbidden) => {
+            format!("{name} doesn't let Macro's connection read part of the workspace")
+        }
+        Some(RunErrorKind::AccessLost) => format!(
+            "{name} no longer accepts Macro's connection (it was revoked or expired), so the user needs to reconnect {name}"
+        ),
+        Some(RunErrorKind::ConnectionUnavailable) => format!(
+            "Macro couldn't use the user's {name} connection, so the user needs to reconnect {name}"
+        ),
+        Some(RunErrorKind::NotConnected) => {
+            format!("{name} isn't connected, so the user needs to connect it")
+        }
+        Some(RunErrorKind::RateLimited) => {
+            format!("{name} kept rate limiting the import; it can be tried again later")
+        }
+        Some(RunErrorKind::Unreachable) => format!("{name} couldn't be reached"),
+        Some(RunErrorKind::UsageRefused) => {
+            "the AI work planning needs was refused (usage or billing)".to_string()
+        }
+        Some(RunErrorKind::Interrupted) => {
+            "it stopped before it finished; starting it again picks up what is left".to_string()
+        }
+        Some(RunErrorKind::Internal) | None => "something went wrong on Macro's side".to_string(),
+    }
+}
+
 /// A stable Slack conversation ID, never a legacy channel name.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SlackConversationId(String);
@@ -921,6 +958,9 @@ pub struct ImportRun {
     pub status: RunStatus,
     /// Discovery failure detail, when the run failed.
     pub error: Option<String>,
+    /// Why the run failed, when it did and the kind was recorded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_kind: Option<RunErrorKind>,
     /// When the run state last changed.
     pub updated_at: DateTime<Utc>,
     /// What the run has found in the source so far, while it is `running`.
@@ -1107,9 +1147,17 @@ pub struct NotionImportReport {
     /// `dismissed` when cancelled. Absent before the first run.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status: Option<RunStatus>,
-    /// Why the run failed, when it did.
+    /// Why the run failed or what it could not finish, in text Macro wrote
+    /// (a canned reason, a reviewed object's title, or the sentence for its
+    /// kind; never a provider's text): the report keeps it only when the run
+    /// recorded a kind. The agent's tool answers drop it and read
+    /// `error_kind`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// The kind of failure, when the run failed and it was recorded. Show
+    /// the user copy for this, not `error`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_kind: Option<RunErrorKind>,
     /// What planning has found in Notion so far, while it is `running`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scanned: Option<ScanCounts>,

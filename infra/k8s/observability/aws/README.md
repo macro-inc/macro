@@ -21,6 +21,7 @@ approval, with the steps under [First apply](#first-apply).
 | `modules/rds.nix` | Grafana's Postgres 17, db.t4g.micro, Multi-AZ, 20 GiB gp3, reachable only from the cluster security group; its RDS-managed password rotates once a year (first Sunday of January, 05:00–06:00 UTC) instead of every 7 days. |
 | `modules/edge.nix` | IP target groups `obs-k8s-grafana`, `obs-k8s-otlp` and `obs-k8s-argocd` and the security group rules ALB → pods on port 8080. At the switch (`settings.switched`), listener rules for `grafana.`, `otlp.` and `argo.macro-internal.com` (priorities 10, 11 and 12). `argo.` is new, not the stack's (`own`), so this layer also makes its alias record and a DNS-validated certificate added to the stack's listener by SNI. |
 | `modules/alarms.nix` | At the switch (`settings.switched`), per target group: no healthy target, and target 5xx, to the stack's alarm topic. |
+| `modules/firehose.nix` | In us-east-1 (production's region, provider `aws.production`): the Amazon Data Firehose stream `observability-cloudwatch-logs`, which posts CloudWatch Logs subscription data to `https://otlp.macro-internal.com/awsfirehose/api/v1/push` (gzip, at least every 60 s, retried 5 minutes), its access key secret `observability/firehose-access-key` (value set by hand, "Secrets"), the failed-records bucket `macro-observability-k8s-firehose-failed` (14 days) and its error log group; the delivery role, and the role CloudWatch Logs passes in a subscription filter (`observability-k8s-cloudwatch-logs`). |
 | `modules/outputs.nix` | Names and ARNs the cluster layer needs; `nix run .#tofu -- main output`. |
 
 `settings.nix` holds every value; change it there, not in the modules.
@@ -82,6 +83,10 @@ removed first.
   on RDS refuses unencrypted connections. RDS rotates that password
   once a year (`settings.grafanaDb.passwordRotation`, not the 7-day default),
   so Grafana must pick up a changed Secret (refresh it often, restart on change).
+- CloudWatch Logs: a log group in us-east-1 sends to Loki with a subscription
+  filter to `firehose_stream_arn` with role `cloudwatch_logs_role_arn`. The
+  stream posts to the edge's `/awsfirehose/api/v1/push`, which Alloy ingest
+  serves on `macro.ingest.firehosePort` and checks against the OTLP token.
 
 ## Secrets
 
@@ -91,6 +96,28 @@ host stack. RDS generates Grafana's database password into a secret it manages
 keeps its certificate's private key. `nix flake check` fails on any resource
 type or argument that would carry a secret value (`aws_secretsmanager_secret_version`,
 `password`, `secret_string`, ...).
+
+One value is set by hand: Firehose's access key. This layer creates the secret
+`observability/firehose-access-key` in us-east-1 without a value; it holds the
+OTLP token (Doppler `observability/prd` `OTLP_TOKEN`, the cluster's
+`otlp_token`) as `{"api_key": "<token>"}`. Create the secret first, set it, then
+apply the rest:
+
+```sh
+nix run .#tofu -- main apply -target=aws_secretsmanager_secret.firehose_access_key
+doppler secrets get OTLP_TOKEN --project observability --config prd --plain |
+  jq -Rc '{api_key: .}' |
+  aws secretsmanager put-secret-value --region us-east-1 \
+    --secret-id observability/firehose-access-key --secret-string file:///dev/stdin
+nix run .#tofu -- main apply
+```
+
+Alloy accepts one token at a time, and Firehose rereads this secret only now
+and then. When the OTLP token changes, put the new one here first, wait several
+minutes, then change the cluster's `otlp_token`. Posts in between are refused
+(401) and retried for `retrySeconds`; those still refused after that land in
+the failed-records bucket, which keeps them `failedDays` for inspection. There
+is no replay: those events reach only Datadog.
 
 ## Working on it
 
@@ -107,7 +134,8 @@ into `.tofu/<config>/` (gitignored) and runs the flake's OpenTofu there, with th
 AWS provider pinned by the flake. `tofu plan` needs credentials that can read
 the Pulumi stack's resources in us-east-2 (EC2, ELB, Route 53, SNS, Secrets
 Manager describe, EKS add-on versions, `tag:GetResources` for the host's
-buckets, IAM `GetInstanceProfile` for the backfill) and the state bucket. `ReadOnlyAccess` covers all of them.
+buckets, IAM `GetInstanceProfile` for the backfill), this layer's resources in
+us-east-1 (`modules/firehose.nix`) and the state bucket. `ReadOnlyAccess` covers all of them.
 
 ## Preview
 

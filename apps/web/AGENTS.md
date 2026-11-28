@@ -257,8 +257,9 @@ and distinct icons, keyboard focus staying on a status as the tabs switch, and
 list/board switches:
 `bunx playwright test --config src/features/reviews-view/browser-test/playwright.config.ts`.
 
-Search facet chip sizing, text alignment, and filter interactions have a backend-free
-regression: `bunx playwright test --config src/features/universal-input/browser-test/playwright.config.ts global-search.browser.e2e.ts --project chromium`.
+The universal input's search (operators written into **Search for**, unresolved
+people holding the search, typing in place) has a backend-free regression:
+`bunx playwright test --config src/features/universal-input/browser-test/playwright.config.ts global-search.browser.e2e.ts --project chromium`.
 
 Agent image attachments preserve external and inline image URLs; only configured
 static-file endpoints receive thumbnail sizing. The backend-free regression is
@@ -347,6 +348,17 @@ scrolling the channel sideways, and the hover card wraps it whole. The
 backend-free regression mounts the real message body on desktop, a narrow
 split, and phone:
 `bunx playwright test --config src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/playwright.config.ts contact-mention.browser.e2e.ts`.
+
+A routine step's entity knobs (the real `RoutineSteps` and a `SuggestionCard`,
+with stand-ins for the picked items' names) have a backend-free desktop,
+narrow-pane and phone regression: every picked item stays inside its card, a
+sentence of many items wraps with short names whole, a long item ends in an
+ellipsis with the comma after it on its line and its whole name on hover, a
+long value under Settings leaves its label room, and a link there with
+nowhere to break breaks to fit its column.
+Keep `KnobEntityValue` an inline grid whose name column can shrink to 0: an
+inline flex row is as wide as its whole name, which pushed the card's edge aside:
+`bunx playwright test --config src/features/routines/browser-test/playwright.config.ts knob-overflow.browser.e2e.ts`.
 
 Pinch zoom on opened image files (Drive details and image splits) has a
 backend-free phone and tablet regression:
@@ -1228,7 +1240,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   uncertain enqueues. Space failed coordinator registrations with bounded,
   cancelable waits; a missing startup frame is not proof of untouched storage.
   A coordinator that ends without a word is noticed through the Web Lock it
-  holds, or an unanswered `ping`, and handled the same way.
+  holds, or an unanswered `ping`, and handled the same way. One that never
+  answers is replaced under a new name (`CoordinatorGenerations`).
 - Nothing but a newer build ends a browser cache for the page: bound retries in
   rate, never in number, and never quarantine a scope over a handoff, drain,
   timeout or transport failure. While nothing can open the database the host is
@@ -1324,6 +1337,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Cmd+K, mobile name search, and the desktop Search page find routines by name from the Quick Access `routine` bucket (the scheduled-action list, which holds top-level routines only: sub-routines, which another routine's run created, are reached from their creator); keep them out of `entityPool`, which Home, Drive, and Tasks searches share, and use `routinePool` for workspace Search only.
 - Keep Quick Access cache availability reactive to `getGraphqlSoupCacheHost()`; the host can appear, change or be disabled after the provider mounts, and email has no legacy source fallback.
 - Browser storage schema 12 enables covering-index search through a fresh versioned cache; native caches run registered storage upgrade steps in place, keeping queued writes; a native file still resets without a complete chain, when a step or the final schema check fails, or when another scope or an unmigratable format wrote it, and a browser build resets an older version it finds under its own name. Preserve the historical unversioned tuple and existing old-queue cleanup safeguards; see `../../crates/client/README.md#streaming-text-search`.
+- Browser storage schema 13 (`s4.v4.t13`) stores the cache's GraphQL schema: an open under another schema keeps every type it can still read and drops the rest ([schema changes](../../crates/client/README.md#schema-changes)), and `graphql_cache.schema_init` and the open span record the tier, counts and duration (`cache.schema.*`). A schema change no longer needs a fresh cache.
 - Contact backfill shares Soup's authenticated tab leadership and account/session ownership. Capture contact admission before each fetch, hydrate with `contactFence`, then verify cached IDs in 500-record keyset windows through the existing exact lookup. Checkpoint v2 completes only after verification; with `enable-contact-lists` the backfill and exact lookup select `GraphqlContact.lists` (the `…WithLists` operations, never the fetch-only pages) and scan under checkpoint v3, so only clients the flag turns on rehydrate; persist cursors after acknowledged writes and generation checks. Never delete from scan omissions or failed/foreign evidence, and never downgrade unsupported fencing. Keep the 15-minute coalescing floor and hourly name refresh. An invalidation naming `changed` contacts also tops up just those ids through the exact lookup (`contacts/top-up.ts`), taking turns on the contact fence with scan pages (`write-turn.ts`); top-ups never delete. Deploy canonical-ID lookup fixes before client removal checks; see `../../docs/design/disk-backed-contacts.md`.
 - A surface orders its personal people window by contact list through `ContactPeoplePolicy.listPriority` (`QuickAccessListOptions.peopleListPriority`); with `enable-contact-lists` only @mention windows pass one (`useMentionListPriority` in `queries/contacts/lists.ts`, the order itself in `list-priority.ts`). `readContactDirectory` sends list fields only to a host that has answered a search with people policy 7 or later (5 and 6 refuse them); the first search on a host goes without and is resent once it answers. On policy 8, among names that start with the query (exact and word-prefix) the list group decides first, then exact before word-prefix, then recency; contains-only and address matches follow, each by group. Policy 7 hosts (native builds before the release that brings 8) rank by name stage before group, and their windows are kept as they come. Keep orders within the host's bounds (16 groups, 64 keys, 128-byte keys). The real-engine regression is `people-list-order.browser.e2e.ts` in `bunx playwright test --config src/lib/graphql-cache/worker/browser-test/playwright.config.ts`.
 - Use bounded contact windows and separate exact selection lookup; copy primitive inputs/cursors out of reactive query data and keep history at `gcTime: 0`. Pass resolved `UserIcon.name` to avoid redundant shared-name lookups. `/app/debug/data`, Calendar search, Drive creators and CRM Notes creators exercise this on desktop/phone: `bunx playwright test --config src/lib/core/internal/browser-test/playwright.config.ts`. DM-ranked pickers still need before-limit ranking/exclusions.
@@ -1569,7 +1583,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Animate section reorder with the shared layout animation engine; preserve unanimated measurement wrappers, reduced-motion preferences, and cancellation on scrolling. Show a card preview and subdued source while dragging.
   Name the team-channel section after the current team, falling back to Team channels while its name is unavailable.
   Keep every joined team channel in the team section regardless of custom-section assignments; use the same complete membership for bulk notification actions.
-  Keep available channel rows visible on desktop and phone during section hydration and refetches; retain each by-ID batch's resolved rows while pending, discard snapshots when its account or membership changes, and key virtualized rows by stable IDs so updates cannot interrupt a click. Pass server-returned member IDs to `queries/channel/by-ids`, whose single Soup owner selects cached rows and fetches missing records. Keep entity-ID hydration generic in Soup, with channel identities, batching, and unread refreshes in the channel query layer; append per-section skeletons only while unresolved members load.
+  Keep available channel rows visible on desktop and phone during section hydration and refetches; retain each by-ID batch's resolved rows while pending, discard batch snapshots on account resets, drop removed IDs immediately while keeping untouched 500-ID batches mounted on membership churn, and key virtualized rows by stable IDs so updates cannot interrupt a click. Pass server-returned member IDs to `queries/channel/by-ids`, whose single Soup owner selects cached rows and fetches missing records. Keep entity-ID hydration generic in Soup, with channel identities, batching, and unread refreshes in the channel query layer; append per-section skeletons only while unresolved members load.
   Compile each by-ID batch's filter once per membership change and reuse it through loading and notification updates.
   Keep legacy `/channel-labels` and flagged `/channel-sections` queries in separate account-scoped caches; invalidate both after shared-storage writes and refetch authoritative memberships rather than patching explicit picks as effective membership.
   Show lock icons for private conversations and visible per-section options; keep empty sections usable as drop targets without an all-sections management menu.
@@ -2011,7 +2025,10 @@ below it (`transcript.browser.e2e.ts`): the press must land and the group must
 stay put, which `ThreadList`'s `holdOnDisclosure` provides.
 
 Reuse the responsive import review for Notion, Linear and Jira; scope report
-queries and cancellation to the saved draft source. Issue tracker handoffs
+queries and cancellation to the saved draft source. Compare edits with the latest
+queued draft, including a reversion to the saved value while a save is in flight.
+Approval flushes those edits before submitting their acknowledged revision; keep
+server conflicts fail-closed. Issue tracker handoffs
 call the reviewed workspace tools, and show separate task/project totals.
 Import review metadata decodes `plan.dependencyOf` into **Linked from** and
 `plan.inlineOn` into **Linked from** labels on existing rows. Readable sources
@@ -2020,7 +2037,8 @@ Link; ticking removes their id from the saved draft's excluded list. Including
 a parent must not opt in external children. Refresh the saved review when new
 dependencies arrive, keeping them excluded until its defaults are saved. Use
 ordinary inclusion and sharing controls;
-unavailable by-hand rows stay disabled and show their reason. Desktop and touch
+unavailable by-hand rows stay disabled and show their reason. Ticking a skipped
+Notion page saves an explicit Copy choice for that page in the review draft. Desktop and touch
 keep the same controls; phone rows let titles wrap, put counts and badges on a second line, and wrap
 **Linked from** onto its own full-width line below them. Keep editable per-row
 sharing controls available even when the current sharing choices are uniform. On phones, the counted notices disclosure starts collapsed

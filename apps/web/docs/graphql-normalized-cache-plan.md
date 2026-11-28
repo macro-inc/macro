@@ -100,12 +100,19 @@ entire cache in browser memory. With 10s of thousands of cached objects
     write cannot be bypassed by a timeout. Login waits for all logout wipes and teardown, not just
     normalized-cache clearing. A post-write identity check cannot
     undo a native mutation already dispatched.
-    Additive GraphQL schema changes retain existing normalized records;
-    fragment reads can continue projecting fields already present. Manually
-    bump the schema compatibility epoch when identity, field storage shape, or
-    other schema-derived cache semantics become incompatible. Discard records
-    on compatibility-epoch/format mismatch (cache is disposable, rebuild from
-    network).
+    A cache stores the GraphQL schema its records were written under. An
+    open under another schema keeps every record it can still read: additive
+    changes keep all of them, a changed type drops only its own records and
+    rows derived from them, and a renamed operation root drops every record
+    (`crates/client/README.md#schema-changes`). Manually bump the schema
+    compatibility epoch only for cache semantics the schema cannot show.
+    Discard records on compatibility-epoch/format mismatch (cache is
+    disposable, rebuild from network). Every schema change keeps queued
+    mutations, and so does a native epoch change or a native move from a
+    format in `MIGRATABLE_CACHE_FORMAT_VERSIONS`; any other format change
+    resets the file, queue included. A browser
+    database's name holds the epoch, format and storage schema, so a bump of
+    any of them opens a new, empty file without the old one's queued writes.
 
     **Key policy — presence-of-id convention**: no client-side key config.
     An output object type with `id: ID!` is keyed by `__typename:id`; no
@@ -346,6 +353,11 @@ Rereads of mounted queries are `user-visible` reads, ahead of ordinary ones. A
 query that feeds app state rather than a view sets `backgroundReader` in its
 operation context and is reread at ordinary rank, behind the views on screen;
 the notification feed (500 entities with their notifications) does.
+An operation's teardown orders only the requests about that operation
+(`worker/operation-order.ts`): those queued before it run before it, those
+queued after it run after it, and a read never shares an answer across it.
+Other requests pass it by priority, and a remount's read lends its priority
+to the teardown and the read it waits for.
 The engine worker does not start a request the moment it arrives. The browser
 delivers one message per task and engine calls run to completion, so a request
 started on arrival usually finishes before the next is seen: the queue would
@@ -473,6 +485,28 @@ request, or while the host waits for an engine, is asked with a `ping`. No
 page's port after a message it could not read (`messageerror`) tells the page
 with `connection-closed`, which is handled the same way.
 
+A browser can also stop answering under a SharedWorker's name: Firefox sometimes
+does after the process of the page that started it crashes, until every page of
+the build is closed. So the name has a *generation* (`CoordinatorGenerations`):
+0 is the plain name, and any other, a time in milliseconds so that it is never
+used twice, is appended to it. A coordinator's lock names its generation, which is
+how a page finds the newest that runs; without one it uses the last it knew. A
+page whose registration is not answered goes to a newer generation if one runs,
+asks the same again while that one's lock is held (it may only be slow), and
+otherwise, or for its last attempt, starts a generation under a Web Lock that
+gives one page at a time the turn. Pages that wait for an answer look once a
+second for a newer generation and go to it at no cost in attempts. A coordinator
+that takes its lock first looks at the others of its scope and build: it ends
+itself under a newer generation, and it ends the older ones by stealing their
+locks, which also tells the pages of one that hangs. An ended coordinator drains
+its engine, whose page may be stuck, tells its pages with `connection-closed`, and
+closes its worker. Through all of it the owner lock keeps two engines off one
+database. A lock list the browser does not give within five seconds
+(`LOCK_QUERY_TIMEOUT_MS`) is unknown, and then no page renames: it looks before
+it takes the turn and again with it. Only locks held exclusively count as running,
+since a page that watches one is given it in shared mode when its holder ends.
+`ownerEvent: coordinator-renamed` and `coordinator-replaced` record both.
+
 A handshake nobody answers in its startup phase's time is treated like a lost
 connection: the same host connects again, within the same budget, and then ends
 with `request-timeout` and the database kept. `graphql_cache.owner` records each
@@ -494,11 +528,12 @@ Startup phase budgets are relayed to every page, including late joiners: asset
 loading gets five minutes, taking the lock gets the retry window plus five
 seconds, and database opening gets twenty seconds, plus a five-second page
 response grace. Ordinary read deadlines remain ten seconds. Coordinator
-registration gets sixty seconds per attempt, with three attempts separated by
-100 ms and 200 ms waits. Safari can abort a shared worker's download when its
+registration gets sixty seconds per attempt, ten on a page that registered before,
+with three attempts separated by 100 ms and 200 ms waits. Safari can abort a shared worker's download when its
 creating page leaves, then briefly reuse that failed startup for immediate
 retries. These waits let the browser retire it without changing the worker name,
-URL, or storage scope. Navigation and disposal cancel the wait; no new adapter
+URL, or storage scope; only an attempt that nobody answered changes the name, as
+above. Navigation and disposal cancel the wait; no new adapter
 is created by a canceled initialization, even if its timer already fired.
 `graphql_cache.registration_retry` reports the wait duration, retry number,
 triggering error class, and whether the wait completed or was canceled. This is
@@ -556,7 +591,8 @@ a page stopped.
 Cache failure telemetry adds `cache.error_name` and `cache.error_detail`, each
 from a fixed list (`describeCacheError`), so the message itself never leaves.
 
-A build's coordinator has its build time in the SharedWorker name, so builds
+A build's coordinator has its build time (and its generation, see above) in the
+SharedWorker name, so builds
 use separate coordinators even when their coordinator script URL is identical.
 This keeps each build's tabs attached to its matching engine and GraphQL schema.
 The database identity stays shared across compatible builds; the newer build
@@ -677,7 +713,8 @@ that fails tries to keep the migrated file as it is.
 A recovery wipe in the browser keeps the mutation queue. Under the owner lock, the
 engine about to wipe opens the old database, copies what it queues (rows with their
 IDs, leases and attempt counts, their optimistic layers and shadows, the aliases
-they use, and the account binding) into a side file, `{database}-salvage`, and
+they use, the account binding, and the stored GraphQL schema their overlays were
+made under) into a side file, `{database}-salvage`, and
 flushes it before it removes the database. The next open queues the copy again
 before it serves its first request, in one transaction that also records that this
 copy was taken, and then removes the side file. An engine may die between any two of
@@ -702,7 +739,15 @@ opened and reset, even when no copy says what it queued. A side file that cannot
 `unreadable` rather than queued behind newer writes later; only one that can be neither
 removed nor emptied then can still come back, behind them and as `partial`. Records, the
 projections and index facts the server's answers gave them, and everything else
-refetchable are not carried; only the pending writes' own projections are. The copy
+refetchable are not carried; only the pending writes' own projections are. The
+next database takes the copy's stored schema with it, so the schema adoption after the
+open retires the overlays the wiped database would have retired. A copy joined from
+databases of two schemas when the older one adds a write, or taken into a database
+that stores another schema or holds records, or rows derived from them, under none,
+leaves that database's schema unreadable instead: adoption then resets it and keeps
+every write, without their overlays. A copy that adds no write leaves the schema as
+it is. An adoption that fails as a corrupt file wipes the same way, keeping the
+queue, and its open tells the page one report for both databases, each loss once. The copy
 is given up after three engines die reading the old database, three die taking the
 copy in, or eight wipes in two minutes, and a database bound to another account
 refuses it. Logout, an account switch, a mismatched identity and stale-database
@@ -1211,7 +1256,7 @@ queued drafts, so an older OTA bundle cannot recover that data during rollback;
 authored variables and current-bundle draft recovery metadata remain intact.
 
 [Mutation coverage](../src/lib/queries/mutation-coverage.test.ts) enumerates all
-47 mutation documents and fails when a document has no declared strategy.
+64 mutation documents and fails when a document has no declared strategy.
 Because predictions are keyed by mutation field, it also checks that local
 resolver documents select only resolved fields, and that any other document
 reaching a field resolver is a listed exception the resolver declines.
@@ -1222,9 +1267,9 @@ every schema argument of its field with the schema's type:
 
 | Strategy | Operations |
 | --- | --- |
-| Local resolver (9) | MarkEmailThreadSeen, MarkEmailThreadUnread, SetEmailThreadArchived, SetEmailThreadsArchived, UpdateNotifications, RenameEntities, MoveEntities, UpdateInitiative, DeleteEntityProperty |
-| Existing domain optimistic recipe (18) | SaveEmailDraft, DeleteEmailDraft, SendEmailMessage, CancelEmailSend, SetFavorite, ReorderFavorites, SetEntityProperty, UpdateEntityPropertyOptions, CreateCalendarEvent, UpdateCalendarEvent, DeleteCalendarEvent, RespondToCalendarEvent, InviteCalendarEventGuests, MarkWorkFeedItemsDone, MarkNotificationInboxRowsDone, ClearNotificationInbox, MarkNotificationInboxNotificationDone, MarkNotificationInboxRowsSeen |
-| Authoritative outcome (14) | CreateSavedView, UpdateSavedView, DeleteSavedView, CreateInitiative, DeleteInitiative, EnsureInitiativeDescriptionSurface, RenameDatabase, TrashDatabase, RenameForm, TrashForm, RecordChannelActivity, UpdateNotificationsForEntity, UndoWorkFeedItemsDone, UndoNotificationInboxRowsDone |
+| Local resolver (12) | MarkEmailThreadSeen, MarkEmailThreadUnread, SetEmailThreadArchived, SetEmailThreadsArchived, UpdateNotifications, RenameEntities, MoveEntities, UpdateInitiative, DeleteEntityProperty, UpdatePropertyOption, DeletePropertyOption, DeletePropertyDefinition |
+| Existing domain optimistic recipe (21) | SavedViewAppearanceCacheWrite, SaveEmailDraft, DeleteEmailDraft, SendEmailMessage, CancelEmailSend, SetFavorite, ReorderFavorites, SetEntityProperty, UpdateEntityPropertyOptions, CreateCalendarEvent, UpdateCalendarEvent, DeleteCalendarEvent, RespondToCalendarEvent, InviteCalendarEventGuests, MarkWorkFeedItemsDone, MarkNotificationInboxRowsDone, ClearNotificationInbox, MarkNotificationInboxNotificationDone, MarkNotificationInboxRowsSeen, UndoNotificationInboxClear, AddPropertyOption |
+| Authoritative outcome (19) | CreateSavedView, UpdateSavedView, DeleteSavedView, ReorderSavedViews, CreateInitiative, DeleteInitiative, EnsureInitiativeDescriptionSurface, RenameDatabase, TrashDatabase, RenameForm, TrashForm, RecordChannelActivity, UpdateNotificationsForEntity, UndoWorkFeedItemsDone, UndoNotificationInboxRowsDone, CreatePropertyDefinition, EnsureTagSet, PromoteTag, MergeTag |
 | Authoritative entity mutation (5) | UpdateEntitySharePolicies, TrashEntities, RestoreEntities, DeleteEntitiesPermanently, DuplicateEntities |
 | Inactive (1) | SetEntityFavorite |
 
@@ -1235,6 +1280,21 @@ alias. Moves predict the destination folder (`projectId`, or `parentId` for a
 project), which folder lists filter on locally; a batch that moves a database or
 form waits for the server. Property removal unlinks only the assignment from its parent, retaining a
 rollbackable link until the server confirms deletion.
+Property catalog option edits and deletes, and definition deletes, are predicted.
+A new option is created under an id the client mints and sends; the server
+answers a replay of that id with the option it made, so the id is final. It
+shows at once in the cached option and tag-set lists, and through the
+definition's record in every cached list holding that definition. The add
+resolves only once the server has it (a queued add waits for its commit), so a
+caller never applies an option id to an entity that the server could still
+refuse. Once the server has an add, or an option's new value or order, the
+mounted lists holding that definition's options reload: the server orders
+options of equal display order by value under the database's collation, which
+the cache cannot reproduce. Creating a definition, provisioning a tag set, and
+sharing or replacing a tag wait for the server, then reload the mounted catalog lists they can
+change (`lib/queries/properties/catalog`). A write the server answers waits
+while the app is offline, as TanStack paused it, and is dropped if another
+login took over the page meanwhile.
 
 Server-generated identities, per-task permission outcomes, and exact notification
 IDs used by undo are not fabricated. A queued acknowledgement is not a completed

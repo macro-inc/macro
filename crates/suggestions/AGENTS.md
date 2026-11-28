@@ -40,7 +40,11 @@ scheduler's spec.
   again, replacing both, at most 15 topics a generation) before a suggestion may
   carry its key. Suggesting a key again keeps its topic unless the new version
   names one, or null. Which topics
-  there are and what belongs to them is the session's call alone. A routine
+  there are and what belongs to them is the session's call alone: the brief
+  groups suggestions by the result they end at, not by a shared sender,
+  company or kind of work, and moves each open row of an earlier topic that
+  doesn't end at its result to the topic of the result it does, or to none,
+  retiring a key that stands for no result. A routine
   suggestion has none. `review` and the feed return the topics of the
   open suggestions they list (`review`, of its closed ones too), in the order
   those first appear, each with how many are open; a topic is never deleted but with its person, so the key keeps its

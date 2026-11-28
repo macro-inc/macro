@@ -9,6 +9,12 @@ fail() {
 }
 
 [ "$ENVIRONMENT" = "dev" ] || fail "environment must be dev"
+bin="$CLI_DIR/image-upgrade"
+[[ ${CLI_SHA256:-} =~ ^[0-9a-f]{64}$ ]] || fail "the rollout CLI checksum is missing or invalid"
+printf '%s  %s\n' "$CLI_SHA256" "$bin" | sha256sum --check --strict - \
+  || fail "the rollout CLI checksum could not be verified"
+# Artifact downloads discard executable permissions.
+chmod +x "$bin"
 command -v jq >/dev/null || fail "jq is missing on this runner"
 
 [[ "${NIX_CACHE_URL:-}" =~ ^s3://([a-z0-9.-]+)\?(.*&)?region=([a-z0-9-]+) ]] \
@@ -54,10 +60,8 @@ fi
 echo "::add-mask::$database_url"
 printf '%s' "$database_url" >"$secrets/database.url"
 
-cargo build --release --locked -p hosted_runtimes --features image-upgrade-cli --bin image-upgrade
-bin=target/release/image-upgrade
-
-upgrade_id=$("$bin" start --environment dev --database-url-file "$secrets/database.url" \
+upgrade_id=$(env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY \
+  "$bin" start --environment dev --database-url-file "$secrets/database.url" \
   --manifest "$secrets/manifest.json" --computers "$COMPUTERS" --batch-size "$BATCH_SIZE" \
   --idle-wait-minutes "$IDLE_WAIT_MINUTES" --reconnect-timeout-minutes "$RECONNECT_TIMEOUT_MINUTES" \
   --created-by "$RUN_URL")
@@ -69,5 +73,6 @@ count=$(tr ',' '\n' <<<"$COMPUTERS" | wc -l)
 timeout=$((IDLE_WAIT_MINUTES + 60 + count * (RECONNECT_TIMEOUT_MINUTES + 5)))
 # Under the job's 360 minutes, so the cleanup above runs.
 if [ "$timeout" -gt 300 ]; then timeout=300; fi
-"$bin" wait --environment dev --database-url-file "$secrets/database.url" \
+env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY \
+  "$bin" wait --environment dev --database-url-file "$secrets/database.url" \
   --upgrade-id "$upgrade_id" --timeout-minutes "$timeout" | tee -a "$GITHUB_STEP_SUMMARY"

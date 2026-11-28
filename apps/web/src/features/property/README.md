@@ -207,15 +207,19 @@ only for a built-in property whose look-alike breaks something a person would
 expect, not for every system property.
 
 A name that is a built-in property's own (the whole name, any case) is
-different: the server refuses it with a 409, because built-in names are reserved
+different: the server refuses it as a conflict, because built-in names are reserved
 for user and team properties. The dialog reads the built-in definitions
 (`scope: 'system'`), says the name is taken, and disables **Create**. It offers
 **Use …** only when that property applies to the entity being edited, which it
 learns from the same list narrowed by `forEntityType`; `PropertyEditorDialog`
 passes the type the selected entities share, and a draft host supplies it
 through its `PropertiesProvider`. If the list has not loaded and the request
-goes out, the refusal (`isPropertyNameReserved`) shows the same sentence in
-place of the generic create error.
+goes out, the refusal (`isPropertyNameReserved`: a GraphQL error whose
+`extensions.code` is `CONFLICT` and `extensions.reason` is `RESERVED_NAME`)
+shows the same sentence in place of the generic create error.
+The server also refuses a name the owner already uses (`NAME_TAKEN`) and
+repeated option values (`OPTION_VALUE_TAKEN`); the dialog then says "A
+property with that name already exists" or "Duplicate values not allowed".
 
 ## Assignee selection
 
@@ -243,6 +247,10 @@ an enclosing dropdown consumes the event. Do not move that handler to `document`
 Kobalte can prevent the arrow key's default before a document listener runs.
 Ignore IME confirmation keys, including WebKit's key code 229; composing Escape
 must cancel composition without dismissing the popover.
+
+Its list is uncapped for kinds without an explicit pool (every channel, say), so
+it virtualizes and mounts only the rows in view (`PropertyEntityRow`). Browser
+tests reach a row further down with `browser-test/entity-list.ts`.
 
 ## References kept across updates
 

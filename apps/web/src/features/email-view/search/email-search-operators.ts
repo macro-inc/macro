@@ -1,3 +1,7 @@
+import {
+  nameAsTyped,
+  namesSomething,
+} from '@app/components/view-shell/search-terms';
 import * as EmailValidator from 'email-validator';
 import { match } from 'ts-pattern';
 
@@ -92,7 +96,7 @@ const isValueKey = (key: string): key is EmailSearchValueKey =>
  * with another minus.
  */
 function readToken(token: string): OperatorToken | undefined {
-  const term = token.replaceAll('"', '').trim();
+  const term = nameAsTyped(token).trim();
   const body = term.slice(1);
   const exclude =
     term.startsWith('-') && !body.startsWith('-') && hasWord(body);
@@ -149,13 +153,15 @@ function isDateStart(value: string) {
 /** Whether the service reads `token` as an operator, not a search word. */
 export function readsAsEmailSearchOperator(token: string): boolean {
   const read = readToken(token);
-  if (!read || !hasWord(read.value)) return false;
+  if (!read || !namesSomething(read.value)) return false;
 
   const value = read.value.toLowerCase();
   if (!isKey(read.key)) return false;
 
+  // Text is matched by its words, so an emoji alone stays a word there.
   return match(read.key)
-    .with('subject', 'from', 'to', 'cc', 'bcc', 'label', () => true)
+    .with('subject', 'from', 'to', 'cc', 'bcc', () => hasWord(read.value))
+    .with('label', () => true)
     .with('in', () => {
       if ((SERVICE_VIEWS as readonly string[]).includes(value)) {
         return !(
@@ -271,7 +277,7 @@ export function typedEmailSearchValue(
   if (!parts) return undefined;
 
   const key = (parts[1] ?? '').toLowerCase();
-  const value = (parts[2] ?? '').replaceAll('"', '');
+  const value = nameAsTyped(parts[2] ?? '');
   if (isPersonKey(key)) return { kind: 'person', key, exclude, value };
   if (isLabelKey(key)) return { kind: 'label', key, exclude, value };
   return undefined;
@@ -354,7 +360,8 @@ export function emailSearchCompletionText(
     )
     .with(
       { kind: 'label' },
-      ({ key, label }) => `${minus}${key}:${searchValue(label.name)} `
+      ({ key, label }) =>
+        `${minus}${key}:${searchValue(nameAsTyped(label.name))} `
     )
     .with({ kind: 'word' }, ({ filter }) => `${filter} `)
     .exhaustive();
@@ -411,8 +418,9 @@ const MIN_INNER_MATCH = 2;
 
 /**
  * The labels and tags whose names hold what is typed, one row per name,
- * those that start with it first. A name with a quote mark is left out: the
- * search reads quotes as a phrase's ends, so it can't be named exactly.
+ * those that start with it first. Names match with their quote marks left
+ * out, as the search reads them, since a typed term drops its quotes; a name
+ * nothing typed can reach (ASCII punctuation alone) is left out.
  */
 export function matchEmailSearchLabels(
   labels: readonly EmailSearchLabel[],
@@ -423,8 +431,8 @@ export function matchEmailSearchLabels(
   const starts: EmailSearchLabel[] = [];
   const contains: EmailSearchLabel[] = [];
   for (const label of labels) {
-    const name = label.name.toLowerCase();
-    if (seen.has(name) || name.includes('"')) continue;
+    const name = nameAsTyped(label.name).toLowerCase();
+    if (seen.has(name) || !namesSomething(name)) continue;
     seen.add(name);
     if (name.startsWith(wanted)) starts.push(label);
     else if (wanted.length >= MIN_INNER_MATCH && name.includes(wanted))

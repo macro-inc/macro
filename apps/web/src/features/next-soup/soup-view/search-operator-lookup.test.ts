@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 const items = [
   { bucket: 'channel', id: 'launch', data: { name: 'Launch' } },
+  { bucket: 'channel', id: 'beta', data: { name: 'Launch "beta"' } },
   { bucket: 'dm', id: 'dm-ana', data: { name: 'Ana Lima' } },
 ];
 
@@ -32,6 +33,7 @@ describe('createSearchOperatorLookup', () => {
       });
       expect(lookup().channels('ana lima')).toEqual(['dm-ana']);
       expect(lookup().channels('Launch')).toEqual(['launch']);
+      expect(lookup().channels('launch beta')).toEqual(['beta']);
       dispose();
     });
   });

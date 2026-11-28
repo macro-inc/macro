@@ -3,6 +3,7 @@ import { PROPERTY_OPTION_IDS } from '../../property/identifiers';
 import {
   bothTargetAsts,
   compileToAst,
+  NIL_UUID,
   queryStateFrom,
 } from '../filters/filter-store';
 import {
@@ -53,6 +54,29 @@ const compile = (query: string, bindings: SearchOperatorBinding[] = []) =>
     readSearchOperators(splitSearchTerms(query), true, bindings),
     LOOKUP
   );
+
+describe('searchOperatorQuery', () => {
+  it('keeps the feed to the types the operators leave, as one type does', () => {
+    // `in:#` alone reads channels and calls: the feed is asked for those
+    // only, so the channel lists rather than a page of other kinds.
+    const targets = compileToAst(
+      queryStateFrom(searchOperatorQuery(compile('in:#launch')))
+    );
+    const open = (target: keyof typeof targets) =>
+      !JSON.stringify(targets[target] ?? {}).includes(NIL_UUID);
+    expect(open('chanf')).toBe(true);
+    expect(open('callf')).toBe(true);
+    for (const target of ['df', 'ef', 'cf', 'pf'] as const)
+      expect(open(target)).toBe(false);
+
+    // Tasks and docs share their target, which stays open.
+    const work = compileToAst(
+      queryStateFrom(searchOperatorQuery(compile('type:task OR type:doc')))
+    );
+    expect(JSON.stringify(work.df ?? {})).not.toContain(NIL_UUID);
+    expect(JSON.stringify(work.chanf ?? {})).toContain(NIL_UUID);
+  });
+});
 
 describe('searchOperatorFilters', () => {
   it('sets the task facets and narrows to tasks', () => {

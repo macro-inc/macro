@@ -315,15 +315,44 @@ export type HubspotReport = {
  *  sharing they changed: `shared` to share with their team, `personal` to
  *  keep to themselves.
  */
-export type ImportDraft = {
+export type ImportDraft = ImportDraft_Serialize | ImportDraft_Deserialize;
+
+/**
+ *  The one draft an import review carries: which source's staged plan it
+ *  presents, the plan rows the user took out of it, and the rows whose
+ *  sharing they changed: `shared` to share with their team, `personal` to
+ *  keep to themselves.
+ */
+export type ImportDraft_Deserialize = {
 	/**  The staged plan's source; fixed once the review is presented. */
 	source: ImportReviewSource,
 	/**  Plan rows left out of the import. */
 	excluded?: string[],
+	/**  Skipped Notion pages the owner chose to copy. */
+	copySkipped?: string[],
 	/**  Plan rows shared with the team although the plan keeps them private. */
 	shared?: string[],
 	/**  Plan rows kept private although the plan shares them. */
 	personal?: string[],
+};
+
+/**
+ *  The one draft an import review carries: which source's staged plan it
+ *  presents, the plan rows the user took out of it, and the rows whose
+ *  sharing they changed: `shared` to share with their team, `personal` to
+ *  keep to themselves.
+ */
+export type ImportDraft_Serialize = {
+	/**  The staged plan's source; fixed once the review is presented. */
+	source: ImportReviewSource,
+	/**  Plan rows left out of the import. */
+	excluded: string[],
+	/**  Skipped Notion pages the owner chose to copy. */
+	copySkipped?: string[],
+	/**  Plan rows shared with the team although the plan keeps them private. */
+	shared: string[],
+	/**  Plan rows kept private although the plan shares them. */
+	personal: string[],
 };
 
 /**
@@ -428,8 +457,19 @@ export type NotionImportReport_Deserialize = {
 	 *  `dismissed` when cancelled. Absent before the first run.
 	 */
 	status?: RunStatus | null,
-	/**  Why the run failed, when it did. */
+	/**
+	 *  Why the run failed or what it could not finish, in text Macro wrote
+	 *  (a canned reason, a reviewed object's title, or the sentence for its
+	 *  kind; never a provider's text): the report keeps it only when the run
+	 *  recorded a kind. The agent's tool answers drop it and read
+	 *  `error_kind`.
+	 */
 	error?: string | null,
+	/**
+	 *  The kind of failure, when the run failed and it was recorded. Show
+	 *  the user copy for this, not `error`.
+	 */
+	errorKind?: RunErrorKind | null,
 	/**  What planning has found in Notion so far, while it is `running`. */
 	scanned?: ScanCounts | null,
 	/**  Pages in the plan. */
@@ -512,8 +552,19 @@ export type NotionImportReport_Serialize = {
 	 *  `dismissed` when cancelled. Absent before the first run.
 	 */
 	status?: RunStatus | null,
-	/**  Why the run failed, when it did. */
+	/**
+	 *  Why the run failed or what it could not finish, in text Macro wrote
+	 *  (a canned reason, a reviewed object's title, or the sentence for its
+	 *  kind; never a provider's text): the report keeps it only when the run
+	 *  recorded a kind. The agent's tool answers drop it and read
+	 *  `error_kind`.
+	 */
 	error?: string | null,
+	/**
+	 *  The kind of failure, when the run failed and it was recorded. Show
+	 *  the user copy for this, not `error`.
+	 */
+	errorKind?: RunErrorKind | null,
 	/**  What planning has found in Notion so far, while it is `running`. */
 	scanned?: ScanCounts | null,
 	/**  Pages in the plan. */
@@ -867,7 +918,7 @@ export type ReviewDraft_Deserialize =
 /**  An edited calendar event. */
 { kind: "calendar"; draft: CreateCalendarEvent_Deserialize } |
 /**  An edited import plan selection. */
-{ kind: "import"; draft: ImportDraft };
+{ kind: "import"; draft: ImportDraft_Deserialize };
 
 /**  One replacement draft, keyed by the kind of the review it edits. */
 export type ReviewDraft_Serialize =
@@ -876,7 +927,7 @@ export type ReviewDraft_Serialize =
 /**  An edited calendar event. */
 { kind: "calendar"; draft: CreateCalendarEvent_Serialize } |
 /**  An edited import plan selection. */
-{ kind: "import"; draft: ImportDraft };
+{ kind: "import"; draft: ImportDraft_Serialize };
 
 /**  The drafts a new review presents, keyed by the review's kind. */
 export type ReviewDrafts = ReviewDrafts_Serialize | ReviewDrafts_Deserialize;
@@ -888,7 +939,7 @@ export type ReviewDrafts_Deserialize =
 /**  Calendar events, each created with the CreateCalendarEvent action. */
 { kind: "calendar"; drafts: DraftList<CreateCalendarEvent_Deserialize> } |
 /**  Exactly one staged import plan, approved as one item. */
-{ kind: "import"; drafts: [ImportDraft] };
+{ kind: "import"; drafts: [ImportDraft_Deserialize] };
 
 /**  The drafts a new review presents, keyed by the review's kind. */
 export type ReviewDrafts_Serialize =
@@ -897,7 +948,7 @@ export type ReviewDrafts_Serialize =
 /**  Calendar events, each created with the CreateCalendarEvent action. */
 { kind: "calendar"; drafts: DraftList<CreateCalendarEvent_Serialize> } |
 /**  Exactly one staged import plan, approved as one item. */
-{ kind: "import"; drafts: [ImportDraft] };
+{ kind: "import"; drafts: [ImportDraft_Serialize] };
 
 /**  Persisted review identity. */
 export type ReviewId = string;
@@ -932,7 +983,7 @@ export type ReviewItems_Deserialize =
 /**  Calendar drafts and their created events. */
 { kind: "calendar"; items: (ReviewItem<CreateCalendarEvent_Deserialize, ToolCalendarEvent>)[] } |
 /**  The import plan selection and the started write's report. */
-{ kind: "import"; items: [(ReviewItem<ImportDraft, NotionImportReport_Deserialize>)] };
+{ kind: "import"; items: [(ReviewItem<ImportDraft_Deserialize, NotionImportReport_Deserialize>)] };
 
 /**  Saved items keyed by the review's kind. */
 export type ReviewItems_Serialize =
@@ -941,7 +992,7 @@ export type ReviewItems_Serialize =
 /**  Calendar drafts and their created events. */
 { kind: "calendar"; items: (ReviewItem<CreateCalendarEvent_Serialize, ToolCalendarEvent>)[] } |
 /**  The import plan selection and the started write's report. */
-{ kind: "import"; items: [(ReviewItem<ImportDraft, NotionImportReport_Serialize>)] };
+{ kind: "import"; items: [(ReviewItem<ImportDraft_Serialize, NotionImportReport_Serialize>)] };
 
 /**  Full UI record, fetched outside the model context. */
 export type ReviewRecord = ReviewRecord_Serialize | ReviewRecord_Deserialize;
@@ -992,6 +1043,42 @@ export type ReviewRecord_Serialize = {
 
 /**  A review stack label: not blank, at most 256 characters. */
 export type ReviewTitle = string;
+
+/**
+ *  Why a run failed, as a closed set readers branch on instead of the error
+ *  text. Stored in `import_run.error_kind`; `None` on runs that failed
+ *  before it was recorded.
+ */
+export type RunErrorKind =
+/**
+ *  The source said an object was missing or not shared with the
+ *  connection.
+ */
+"not_found" |
+/**  The connection may not read what the import asked for. */
+"forbidden" |
+/**  The source refused the connection itself: revoked or expired. */
+"access_lost" |
+/**  The connection's proxy could not use the account at all. */
+"connection_unavailable" |
+/**  The source is not connected, or the connection is turned off. */
+"not_connected" |
+/**  The source kept rate limiting the import. */
+"rate_limited" |
+/**  The source could not be reached or answered with an error. */
+"unreachable" |
+/**  The AI work planning needs was refused (usage or billing). */
+"usage_refused" |
+/**
+ *  The run stopped before it finished (its process went away too
+ *  often); starting it again picks up what is left.
+ */
+"interrupted" |
+/**
+ *  Anything else, on Macro's side. A kind this build does not know (a
+ *  newer writer's) reads as this one.
+ */
+"internal";
 
 /**  Lifecycle of a discovery run (one per user × source). */
 export type RunStatus =

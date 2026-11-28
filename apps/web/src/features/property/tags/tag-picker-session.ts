@@ -2,10 +2,10 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useDropdownSearch } from '@property/editors/selectors/PropertyOptionSelector';
+import { queryAccountSession } from '@queries/auth/account-scope';
 import { useAddPropertyOptionMutation } from '@queries/properties/options';
 import {
   type CreateTagResult,
-  invalidateTags,
   useEnsureTagSetMutation,
 } from '@queries/properties/tags';
 import { useCurrentTeamQuery } from '@queries/team/teams';
@@ -317,13 +317,16 @@ export function createTagPickerSession(props: {
     const value = createDraftLabel().trim();
     if (!value) return;
 
+    // The add is dropped if another login takes over before it is sent.
+    const session = queryAccountSession();
     try {
       if (!(await persistSelection())) return;
 
-      const provisioned = await ensureTagSet.mutateAsync({ scope });
+      const provisioned = await ensureTagSet.mutateAsync({ scope, session });
       if (!provisioned.definition) return;
 
       const created = await addOption.mutateAsync({
+        session,
         propertyDefinitionId: provisioned.definition.id,
         body: {
           type: 'select_string',
@@ -334,7 +337,8 @@ export function createTagPickerSession(props: {
           },
         },
       });
-      invalidateTags();
+      // A tag made under the login that left is not applied under the next.
+      if (queryAccountSession() !== session) return;
       await props.docTags.applyTag(scope, created.id);
       props.onClose();
     } catch (error) {

@@ -270,6 +270,49 @@ proptest! {
     }
 }
 
+/// A queue frame of format `version` holding what `queue`'s frame holds
+/// up to its stored schema, as a storage 12 build wrote format 1. Built from
+/// the layout, not from this build's writer.
+fn schemaless_frame(queue: &SalvagedQueue, version: u8) -> Vec<u8> {
+    const HEADER: usize = 4 + 8 + 1;
+    let frame = queue.to_frame();
+    let (header, body) = frame.split_at(HEADER);
+    let [2, rest @ .., 0] = body else {
+        panic!("a format 2 frame of a queue that stores no schema")
+    };
+    let body = [&[version], rest].concat();
+    let kind = header[HEADER - 1];
+    let checksum = std::iter::once(&kind)
+        .chain(&body)
+        .fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
+            (hash ^ u64::from(*byte)).wrapping_mul(0x0000_0100_0000_01b3)
+        });
+    let mut frame = (body.len() as u32).to_le_bytes().to_vec();
+    frame.extend(checksum.to_le_bytes());
+    frame.push(kind);
+    frame.extend(body);
+    frame
+}
+
+#[test]
+fn a_side_file_a_storage_12_build_wrote_still_counts_its_writes() {
+    block_on(async {
+        let mut storage = fresh();
+        enqueue(&mut storage, "First").await;
+        enqueue(&mut storage, "Second").await;
+        let queue = carried(&storage);
+        let older = SalvageFile::decode(&schemaless_frame(&queue, 1));
+        assert_eq!(older.queue().map(SalvagedQueue::len), Some(2));
+        assert_eq!(older.into_queue(), Some(queue.clone()));
+        // A format no build wrote yet is not read.
+        assert!(
+            SalvageFile::decode(&schemaless_frame(&queue, 3))
+                .queue()
+                .is_none()
+        );
+    });
+}
+
 #[test]
 fn import_attempts_count_since_their_queue() {
     block_on(async {

@@ -91,6 +91,15 @@ pub(in crate::api::search) fn drop_wordless_terms(
     terms.into_iter().filter(has_word).collect()
 }
 
+/// Whether an operator's `value` can name something: a letter, a digit, or
+/// another non-ASCII character such as an emoji, so `tag:🔥` and `label:🔥`
+/// name a tag while ASCII punctuation alone (`tag:-`) stays a word.
+pub(in crate::api::search) fn names_something(value: &str) -> bool {
+    value
+        .chars()
+        .any(|c| c.is_alphanumeric() || !(c.is_ascii() || c.is_whitespace()))
+}
+
 /// The word or phrase `term` leaves out of a search when a minus starts it:
 /// `draft` for `-draft`, `team lunch` for `-"team lunch"`. A minus inside a
 /// word (`e-mail`), a term starting with two (`--force`) and a minus before

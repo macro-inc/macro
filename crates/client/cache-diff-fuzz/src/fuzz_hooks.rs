@@ -47,6 +47,18 @@ impl FuzzStagedHydrate {
 
 #[cfg(staged_hydrate)]
 impl EngineHandle {
+    /// Takes the engine as a hydrate that begins now does.
+    async fn fuzz_snapshot_hydration(
+        &self,
+    ) -> Result<super::access::AccessGuard<'_, super::EngineState>, String> {
+        #[cfg(hydrate_epoch)]
+        return self
+            .snapshot_hydration(self.inner.write_epoch(), false)
+            .await;
+        #[cfg(not(hydrate_epoch))]
+        return self.snapshot_hydration().await;
+    }
+
     /// Does what the browser host's `prepareHydrate` and `stageHydrate` do:
     /// reads the projections the hydrate changes and computes its write,
     /// writing nothing, with the storage position they were read at.
@@ -54,7 +66,7 @@ impl EngineHandle {
         &self,
         request: crate::exec::HydrateRequest<'_>,
     ) -> Result<FuzzStagedHydrate, String> {
-        let mut state = self.snapshot_hydration().await?;
+        let mut state = self.fuzz_snapshot_hydration().await?;
         let engine = &mut state.engine;
         // The position before anything is read: a write between here and the
         // commit moves it, whatever the stage read.
@@ -122,7 +134,7 @@ impl EngineHandle {
             wal,
             error,
         } = staged;
-        let mut state = match self.snapshot_hydration().await {
+        let mut state = match self.fuzz_snapshot_hydration().await {
             Ok(state) => state,
             Err(error) => return Some(Err(error)),
         };

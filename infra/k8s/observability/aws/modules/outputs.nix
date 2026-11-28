@@ -7,6 +7,12 @@ let
 in
 {
   output = {
+    firehose_stream_arn = out "Firehose stream for CloudWatch Logs subscription filters (modules/firehose.nix)." (
+      ref "aws_kinesis_firehose_delivery_stream.cloudwatch_logs.arn"
+    );
+    cloudwatch_logs_role_arn = out "Role a subscription filter to the Firehose stream passes." (
+      ref "aws_iam_role.cloudwatch_to_firehose.arn"
+    );
     region = out "AWS region of the cluster and its resources." settings.region;
     vpc_id = out "The observability VPC (owned by the Pulumi stack)." (
       ref "data.aws_vpc.observability.id"

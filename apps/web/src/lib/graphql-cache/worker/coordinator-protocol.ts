@@ -109,6 +109,8 @@ export type TabToCoordinatorEnvelope =
       /** When the page's app build was made, in ms since the epoch; 0 if
        * unstamped. A newer build takes the database over from an older one. */
       buildTime: number;
+      /** Of the coordinator name the page connected to; 0 if absent. */
+      generation?: number;
     }
   | {
       coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
@@ -1035,12 +1037,15 @@ export function validateTabToCoordinatorEnvelope(
           'visible',
           'hotCapacity',
           'buildTime',
+          'generation',
         ]) &&
         isNonEmptyString(value.scope) &&
         isNonEmptyString(value.livenessLockName) &&
         typeof value.visible === 'boolean' &&
         isOptionalPositiveInteger(value.hotCapacity) &&
-        isSafeNonNegativeInteger(value.buildTime)
+        isSafeNonNegativeInteger(value.buildTime) &&
+        (value.generation === undefined ||
+          isSafeNonNegativeInteger(value.generation))
       ) {
         return pass(value as TabToCoordinatorEnvelope);
       }
@@ -1596,10 +1601,53 @@ const TAB_LIVENESS_LOCK_PREFIX = 'graphql-cache-tab:';
 export const tabLivenessLockName = (scope: string, tabId: string): string =>
   `${TAB_LIVENESS_LOCK_PREFIX}${scope}:${tabId}`;
 
+/**
+ * Which coordinator a page connects to. The pages of one build share one, under
+ * generation 0, unless its name stops answering: then they move to a new
+ * generation, which is a new SharedWorker name.
+ */
+export type CoordinatorIdentity = {
+  scope: string;
+  buildTime: number;
+  generation: number;
+};
+
+const coordinatorBuildName = ({
+  scope,
+  buildTime,
+}: Pick<CoordinatorIdentity, 'scope' | 'buildTime'>): string =>
+  `graphql-cache-coordinator:${scope}:${buildTime}`;
+
+export const coordinatorWorkerName = (identity: CoordinatorIdentity): string =>
+  identity.generation === 0
+    ? coordinatorBuildName(identity)
+    : `${coordinatorBuildName(identity)}:${identity.generation}`;
+
 /** Each coordinator has its own, so one that is gone never shares a name with
  * the one that replaced it. */
-export const coordinatorLivenessLockName = (coordinatorId: string): string =>
-  `graphql-cache-coordinator:${coordinatorId}`;
+export const coordinatorLivenessLockName = (
+  identity: CoordinatorIdentity,
+  coordinatorId: string
+): string =>
+  `${coordinatorBuildName(identity)}:${identity.generation}:${coordinatorId}`;
+
+/** The generation of the coordinator that `lockName` is the liveness lock of,
+ * if it is one of this scope and build. */
+export function generationFromCoordinatorLockName(
+  build: Pick<CoordinatorIdentity, 'scope' | 'buildTime'>,
+  lockName: string
+): number | undefined {
+  const prefix = `${coordinatorBuildName(build)}:`;
+  if (!lockName.startsWith(prefix)) return;
+  const generation = /^(\d+):./.exec(lockName.slice(prefix.length))?.[1];
+  return generation === undefined ? undefined : Number(generation);
+}
+
+/** Held by the page that is starting a new generation, so that the others wait
+ * for it and join. */
+export const newCoordinatorLockName = (
+  build: Pick<CoordinatorIdentity, 'scope' | 'buildTime'>
+): string => `${coordinatorBuildName(build)}:new`;
 
 /** The tab id in a liveness lock name for `scope`, if it is one. */
 export function tabIdFromLivenessLockName(
@@ -1621,7 +1669,7 @@ export function tabIdFromLivenessLockName(
 export const CACHE_STORAGE_VERSION = {
   schemaCompatibilityEpoch: 4,
   formatVersion: 4,
-  storageSchemaVersion: 12,
+  storageSchemaVersion: 13,
 } as const;
 
 /**

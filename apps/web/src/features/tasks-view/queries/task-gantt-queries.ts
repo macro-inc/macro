@@ -46,7 +46,7 @@ export function createTaskGanttQueries(options: {
   const groupProperty = createMemo(() => {
     const group = grouping();
     if (!group || !definitions.isSuccess) return;
-    const item = definitions.data.find(
+    const item = definitions.data?.find(
       (item) =>
         ('definition' in item ? item.definition : item).id ===
         taskBoardPropertyId(group)

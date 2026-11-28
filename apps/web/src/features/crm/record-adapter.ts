@@ -10,7 +10,10 @@ import { isCrmContactEntity } from '@entity/types/entity';
 import { createContactAliasWindow } from '@queries/contacts/alias-window';
 import { queryReadyGate } from '@queries/gate';
 import { storageServiceClient } from '@service-storage/client';
-import { crmAccessAllowed } from '@service-storage/crm-access-authority';
+import {
+  crmAccessAllowed,
+  crmAccessAuthority,
+} from '@service-storage/crm-access-authority';
 import { useQueryClient } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import { createContactDiscovery } from './primitives/contact-discovery';
@@ -123,22 +126,27 @@ export function useCrmContactSearch(search: Accessor<string>) {
     () => search().trim(),
     CONTACT_SEARCH_DEBOUNCE_MS
   );
+  // Records, not an entry point: fetch and list them only while access is
+  // proven, so cached pages don't outlive a lapse in it.
+  const allowed = () => crmAccessAuthority.allowed();
   const server = useCrmContactsQuery(
     { client: useQueryClient() },
-    () =>
-      crmAccessAllowed() &&
-      !contactSearchDisabled().enabled &&
-      query().length > 0,
+    () => allowed() && !contactSearchDisabled().enabled && query().length > 0,
     query
   );
+  // Until typing settles, the pages answer an earlier search: list none of
+  // them, and count the wait as loading.
+  const settling = () => search().trim() !== query();
   return {
     contacts: () =>
-      queryReadyGate(server)
+      allowed() && !settling() && queryReadyGate(server)
         ? server.data.pages.flatMap((page) =>
             page.contacts.map(toCrmContactEntity)
           )
         : [],
-    isLoading: () => query().length > 0 && server.isLoading,
+    isLoading: () =>
+      search().trim().length > 0 &&
+      (!allowed() || settling() || (query().length > 0 && server.isLoading)),
     hasMore: () => !!server.hasNextPage && !server.isFetchNextPageError,
     isLoadingMore: () => server.isFetchingNextPage,
     loadMore: async () => {

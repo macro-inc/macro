@@ -11,13 +11,17 @@ import { createConnectorContinuation } from '../primitives/create-connector-cont
 export function AgentConnections(props: ParentProps) {
   const state = useAgentSession();
   const continuation = createConnectorContinuation({
+    // Only the owner connects their own account, in a session that loaded.
     disabled: () =>
       !state.sessionId() ||
       state.pending() ||
       state.loadFailed() ||
       state.session()?.canEdit !== true ||
       state.session()?.ownerId !== state.userId() ||
-      isSessionArchived(state.session()) ||
+      isSessionArchived(state.session()),
+    // The agent is mid-turn or has queued work: connecting is fine, but the
+    // turn that asked can't be continued in place.
+    busy: () =>
       !['idle', 'disconnected'].includes(state.turn()) ||
       state.queue.entries().length > 0,
     revision: () =>

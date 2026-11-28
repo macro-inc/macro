@@ -143,6 +143,14 @@ export function startFixtureServer(port = 0, filterMatrix = false) {
         input.initial.filters.documentFilter?.literal?.id !== fixtureId(0);
       return { items: coreLane ? core : [], nextCursor: null };
     }
+    // One-shot previews (quick-access skills, snippets, initiatives, recently
+    // viewed): the fixture user owns and has viewed nothing. Mail views come
+    // only from the Soup and backfill operations above.
+    if (operation === 'SoupPreviewPage') {
+      if (input.initial?.emailView)
+        throw new Error('SoupPreviewPage does not serve Mail views');
+      return { items: [], nextCursor: null };
+    }
     if (
       operation === 'SoupNotifications' ||
       operation === 'HomeUnreadPresence' ||
@@ -219,6 +227,8 @@ export function startFixtureServer(port = 0, filterMatrix = false) {
               watermark: [],
             },
             workFeed: { entries: [], nextCursor: null, nextPosition: null },
+            // The fixture user has no tasks to group.
+            groupSoup: { bins: [] },
             contacts: { nodes: [], nextCursor: null },
             timeTracking: {
               id: USER_ID,

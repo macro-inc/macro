@@ -365,3 +365,130 @@ fn rejects_invalid_file_metadata_in_a_published_manifest() {
         );
     }
 }
+
+fn run_migrator(root: &Path, digest: Option<&str>) -> std::process::Output {
+    let mut command = std::process::Command::new("bash");
+    command
+        .args([
+            "-c",
+            "export PATH=\"$STUB_BIN:$PATH\"\nexec bash \"$STUB_SCRIPT\"",
+        ])
+        .env_remove("BASH_ENV")
+        .env_remove("CLI_SHA256")
+        .env("STUB_BIN", root)
+        .env(
+            "STUB_SCRIPT",
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("src/workflows/scripts/firecracker_image_rollout_run.sh"),
+        )
+        .env("ENVIRONMENT", "dev")
+        .env("CLI_DIR", root)
+        .env("FILES_DIR", root)
+        .env("RUNNER_TEMP", root)
+        .env("GITHUB_STEP_SUMMARY", root.join("summary"))
+        .env("NIX_CACHE_URL", "s3://fixture-bucket?region=us-east-1")
+        .env("AWS_ACCESS_KEY_ID", "fixture-key")
+        .env("AWS_SECRET_ACCESS_KEY", "fixture-secret")
+        .env("SOURCE_SHA", SOURCE_SHA)
+        .env("IMAGE_VERSION", VERSION)
+        .env("COMPUTERS", "00000000-0000-0000-0000-000000000001")
+        .env("BATCH_SIZE", "1")
+        .env("IDLE_WAIT_MINUTES", "30")
+        .env("RECONNECT_TIMEOUT_MINUTES", "10")
+        .env("RUN_URL", "https://example.invalid/run/1");
+    if let Some(digest) = digest {
+        command.env("CLI_SHA256", digest);
+    }
+    command.output().expect("run the migrator script")
+}
+
+#[test]
+fn the_migrator_rejects_a_missing_malformed_or_mismatched_digest() {
+    let temp = tempfile::tempdir().expect("fixture directory");
+    std::fs::write(temp.path().join("image-upgrade"), "other bytes").expect("write binary");
+    let mismatch = sha256_hex(b"original bytes");
+
+    for (digest, message) in [
+        (None, "the rollout CLI checksum is missing or invalid"),
+        (
+            Some("xyz"),
+            "the rollout CLI checksum is missing or invalid",
+        ),
+        (
+            Some(mismatch.as_str()),
+            "the rollout CLI checksum could not be verified",
+        ),
+    ] {
+        let output = run_migrator(temp.path(), digest);
+        assert!(!output.status.success(), "{output:?}");
+        assert!(
+            String::from_utf8_lossy(&output.stdout).contains(message),
+            "{output:?}"
+        );
+    }
+}
+
+#[test]
+fn the_migrator_runs_the_verified_cli_without_bucket_credentials() {
+    let temp = tempfile::tempdir().expect("fixture directory");
+    stub(
+        temp.path(),
+        "aws",
+        r#"
+case "$1" in
+  s3) [[ "$2" == presign && -v AWS_ACCESS_KEY_ID && -v AWS_SECRET_ACCESS_KEY ]];
+      echo 'https://example.invalid/image.zst' ;;
+  secretsmanager) [[ ! -v AWS_ACCESS_KEY_ID && ! -v AWS_SECRET_ACCESS_KEY ]];
+                  echo 'postgres://example.invalid/test' ;;
+  *) exit 1 ;;
+esac"#,
+    );
+    stub(
+        temp.path(),
+        "image-upgrade",
+        r#"
+[[ ! -v AWS_ACCESS_KEY_ID && ! -v AWS_SECRET_ACCESS_KEY ]]
+case "$1" in
+  start) echo 'upgrade-id' ;;
+  wait) echo 'rollout completed' ;;
+  *) exit 1 ;;
+esac"#,
+    );
+    let kernel_sha = "1".repeat(64);
+    let files: Vec<_> = ["vmlinux", "rootfs.ext4", "boot_args"]
+        .into_iter()
+        .map(|name| serde_json::json!({"name": name, "sha256": kernel_sha, "bytes": 1}))
+        .collect();
+    let manifest = serde_json::json!({"source_sha": SOURCE_SHA, "files": files});
+    std::fs::write(temp.path().join("files.json"), manifest.to_string()).expect("write manifest");
+    let binary = temp.path().join("image-upgrade");
+    let digest = sha256_hex(&std::fs::read(&binary).expect("read binary fixture"));
+    std::fs::set_permissions(binary, std::fs::Permissions::from_mode(0o644))
+        .expect("strip the executable bit as artifact download does");
+
+    let output = run_migrator(temp.path(), Some(&digest));
+    assert!(output.status.success(), "{output:?}");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("upgrade upgrade-id recorded"), "{stdout}");
+    assert!(stdout.contains("rollout completed"), "{stdout}");
+}
+
+#[test]
+fn the_workflow_builds_the_cli_before_publish_and_runs_it_without_cargo_on_the_migrator() {
+    let yaml = super::firecracker_image_rollout()
+        .to_string()
+        .expect("render rollout workflow");
+    let build_step = yaml
+        .find("name: Build the rollout CLI")
+        .expect("build CLI step");
+    let publish_step = yaml
+        .find("name: Build, hash and publish the image")
+        .expect("publish step");
+    assert!(build_step < publish_step);
+
+    let rollout = yaml.split("\n  roll-out:\n").nth(1).expect("rollout job");
+    assert!(rollout.contains("CLI_SHA256: ${{ needs.build.outputs.cli_sha256 }}"));
+    assert!(rollout.contains("name: Download Rollout CLI"));
+    assert!(!rollout.contains("actions/checkout@"));
+    assert!(!rollout.contains("cargo "));
+}

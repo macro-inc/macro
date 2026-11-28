@@ -3,7 +3,7 @@
 use super::models::{
     AdoptedRun, ImportEntity, ImportKind, ImportRun, ImportSource, ImportSourceBinding,
     ImportStatus, ImportTargetKey, ImportTargetKind, ImportTargetReservation, Initiator, NotionJob,
-    ReviewedRun, RunStatus, ScanCounts, SlackConversationId, SlackConversationPage,
+    ReviewedRun, RunErrorKind, RunStatus, ScanCounts, SlackConversationId, SlackConversationPage,
     SlackMemberPage, SlackUserPage, SlackWorkspaceId, TeamClaim, WrittenObject,
 };
 use agent_session::domain::model::AgentSessionId;
@@ -112,9 +112,93 @@ pub enum ImportError {
     /// The entity-access check itself failed, so access is unknown.
     #[error("could not check access to the entity")]
     AccessCheck(#[source] anyhow::Error),
+    /// A review was presented for a plan that cannot be approved: the run
+    /// failed, finished, or never started.
+    #[error(transparent)]
+    RunNotReviewable(#[from] UnreviewableRun),
+    /// An approved write failed before anything about the plan changed (or
+    /// after it was put back as it was), so approving again is safe.
+    #[error("the import did not start: {0}")]
+    NotStarted(Box<ImportError>),
     /// Anything else.
     #[error(transparent)]
     Other(#[from] anyhow::Error),
+}
+
+/// Why a workspace import run cannot take a review. Only a run that is
+/// planning or has a ready plan can.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum UnreviewableRun {
+    /// No plan was ever started for this source.
+    #[error("there is no import plan to review; plan the import first")]
+    Missing,
+    /// Planning failed; `error_kind` says why (e.g. the grant lost access).
+    /// Never carries the raw error, which can hold provider detail.
+    #[error("the import plan failed; nothing can be reviewed until it is planned again")]
+    Failed {
+        /// Why the run failed, when it was recorded.
+        error_kind: Option<RunErrorKind>,
+    },
+    /// The plan is already being written.
+    #[error("this import is already being written; there is no plan left to review")]
+    Importing,
+    /// The plan was written; plan again to import more.
+    #[error("this import already finished; plan it again to review a new plan")]
+    Completed,
+    /// The import was cancelled; plan again to review a new plan.
+    #[error("this import was cancelled; plan it again to review a new plan")]
+    Dismissed,
+    /// The plan is still being made, so it cannot be written yet.
+    #[error("this import plan is still being made; it can be approved once it is ready")]
+    StillPlanning,
+    /// Another review presents this plan; only that review can approve it.
+    #[error("another review presents this import plan; approve that one instead")]
+    PresentedElsewhere,
+    /// The review's plan has no rows left to write.
+    #[error("this import plan has nothing left to import")]
+    NothingLeft,
+}
+
+impl UnreviewableRun {
+    /// The refusal in a sentence for the agent: a failed plan says why from
+    /// its kind, for `source`.
+    pub fn describe(&self, source: ImportSource) -> String {
+        match self {
+            Self::Failed { error_kind } => format!(
+                "the import plan failed ({}); nothing can be reviewed until it is planned again",
+                super::models::explain_failure(*error_kind, source)
+            ),
+            Self::Missing
+            | Self::Importing
+            | Self::Completed
+            | Self::Dismissed
+            | Self::StillPlanning
+            | Self::PresentedElsewhere
+            | Self::NothingLeft => self.to_string(),
+        }
+    }
+
+    /// Why a run in `status` cannot take a review, or `None` when it can.
+    pub fn of(status: RunStatus, error_kind: Option<RunErrorKind>) -> Option<Self> {
+        match status {
+            RunStatus::Running | RunStatus::Ready => None,
+            RunStatus::Failed => Some(Self::Failed { error_kind }),
+            RunStatus::Importing => Some(Self::Importing),
+            RunStatus::Completed => Some(Self::Completed),
+            RunStatus::Dismissed => Some(Self::Dismissed),
+        }
+    }
+}
+
+impl ImportError {
+    /// The same error, marked as one that left the plan as it was. A
+    /// refusal already says that.
+    pub fn not_started(self) -> Self {
+        match self {
+            refusal @ (Self::RunNotReviewable(_) | Self::NotStarted(_)) => refusal,
+            error => Self::NotStarted(Box::new(error)),
+        }
+    }
 }
 
 /// Result alias for import operations.
@@ -1195,7 +1279,10 @@ pub trait NotionPlanRepo: Send + Sync + 'static {
     /// staged rows, and the run while it is still planning (`running`), so
     /// rows staged later are tied too. The first review presenting a plan
     /// keeps its session, which hears when the plan is ready and when its
-    /// write ends. Returns how many rows it tied.
+    /// write ends. A ready run takes the review too when it has none yet.
+    /// Returns how many rows it tied, or [`ImportError::RunNotReviewable`]
+    /// when the run is not planning or ready (failed, finished, or missing)
+    /// or another review already holds it, changing nothing.
     fn attach_review(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -1203,6 +1290,34 @@ pub trait NotionPlanRepo: Send + Sync + 'static {
         review_id: Uuid,
         session_id: AgentSessionId,
     ) -> impl Future<Output = Result<u64>> + Send;
+
+    /// Release `review_id`'s hold on the plan (`import_run.review_id`) and
+    /// untie the staged rows it holds, so the next review can present the
+    /// plan. Rows already being written and finished runs keep it.
+    fn release_review(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        review_id: Uuid,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Start writing the plan `review_id` presents: move the run from
+    /// `ready` to `importing` in one statement, only while that review holds
+    /// it (`import_run.review_id`, or, for a plan presented before the run
+    /// recorded its review, staged rows tied to it). Otherwise change nothing
+    /// and refuse with [`ImportError::RunNotReviewable`]: still planning,
+    /// another review's plan, or a failed, finished, cancelled or missing run
+    /// (except below). The first start records the review it admitted
+    /// (`import_run.write_review_id`, cleared by a new plan); a write that
+    /// then failed may be started again by that review alone, once no
+    /// earlier writer's lease is live, with its adoptions reset. Returns the
+    /// status the write started from (`ready` or `failed`).
+    fn start_reviewed_write(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        review_id: Uuid,
+    ) -> impl Future<Output = Result<RunStatus>> + Send;
 
     /// Move `user`'s run for `source` to `to` when it is in one of `from`,
     /// dropping any lease on it. Returns whether the run moved.
@@ -1279,8 +1394,8 @@ pub trait NotionRunRepo: Send + Sync + 'static {
         limit: u16,
     ) -> impl Future<Output = Result<Vec<AdoptedRun>>> + Send;
 
-    /// Move the user's Notion run to `to` with `error` when it is in one of
-    /// `from`, dropping any lease on it; a run cancelled meanwhile stays
+    /// Move the user's Notion run to `to` with `error` and its `error_kind`
+    /// when it is in one of `from`, dropping any lease on it; a run cancelled meanwhile stays
     /// `dismissed` with its own error. In the same transaction, produce the
     /// system event `event` makes of the moved run, so the session presenting
     /// its review hears of the change exactly when it happens. Returns the
@@ -1291,6 +1406,7 @@ pub trait NotionRunRepo: Send + Sync + 'static {
         from: &[RunStatus],
         to: RunStatus,
         error: Option<&str>,
+        error_kind: Option<RunErrorKind>,
         event: Event,
     ) -> impl Future<Output = Result<Option<ReviewedRun>>> + Send
     where

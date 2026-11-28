@@ -19,8 +19,6 @@ type ChannelMessageProps = {
    * it. Rows of messages stored elsewhere leave it out.
    */
   parent?: MessageParent;
-  /** Header time; defaults to the time alone in a channel. */
-  timestampFormat?: 'time' | 'dateAndTime';
   inputMode?: 'inline' | 'unified';
   message: MessageData;
   actions?: MessageActions;
@@ -128,7 +126,6 @@ function DeletedMessageLayout() {
 function RegularMessageLayout(props: {
   renderContent?: (content: JSX.Element) => JSX.Element;
   parent?: MessageParent;
-  timestampFormat?: 'time' | 'dateAndTime';
   inputMode?: 'inline' | 'unified';
   messageEditor?: MessageEditor;
   hideTriggeredBy?: boolean;
@@ -145,13 +142,7 @@ function RegularMessageLayout(props: {
           <div class="flex items-baseline gap-1 min-w-0">
             <Message.SenderName />
             <Message.AgentBadge />
-            <Message.Timestamp
-              class="shrink-0"
-              format={
-                props.timestampFormat ??
-                (props.parent?.type === 'channel' ? 'time' : 'dateAndTime')
-              }
-            />
+            <Message.Timestamp class="shrink-0" />
             <Message.EditedIndicator class="shrink-0" />
           </div>
           <Message.AgentSessionLink class="ml-auto" />
@@ -260,7 +251,6 @@ export function ChannelMessage(props: ChannelMessageProps) {
             <RegularMessageLayout
               renderContent={props.renderContent}
               parent={props.parent}
-              timestampFormat={props.timestampFormat}
               inputMode={props.inputMode}
               messageEditor={props.messageEditor}
               hideTriggeredBy={props.hideTriggeredBy}
