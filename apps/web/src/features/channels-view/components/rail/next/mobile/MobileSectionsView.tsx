@@ -286,6 +286,12 @@ export function MobileSectionsView(props: {
     labels,
     resolveConflictChannels: true,
     channelById: (channelId) => channelsById().get(channelId),
+    // A complete directory holds every joined channel; a filling one reads
+    // them whole.
+    readJoinedChannels: async (signal) =>
+      directory.complete()
+        ? directory.channels()
+        : directory.readComplete(signal),
     favoriteChannelIds: () =>
       new Set(
         (favorites()?.favorites ?? [])
