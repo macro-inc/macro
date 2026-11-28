@@ -1,27 +1,29 @@
 import { type Browser, expect } from '@playwright/test';
 
+const productRoutes = [
+  '/email',
+  '/tasks',
+  '/channels',
+  '/documents',
+  '/calls',
+  '/crm',
+  '/agents',
+  '/github',
+  '/forms',
+  '/spreadsheets',
+  '/databases',
+  '/drive',
+  '/calendar',
+  '/booking-links',
+  '/canvas',
+  '/snippets',
+  '/routines',
+  '/skills',
+];
+
 /** Check each product page's first paint and real app screens in the built site. */
 export async function verifyProductPages(browser: Browser, origin: string) {
-  for (const route of [
-    '/email',
-    '/tasks',
-    '/channels',
-    '/documents',
-    '/calls',
-    '/crm',
-    '/agents',
-    '/github',
-    '/forms',
-    '/spreadsheets',
-    '/databases',
-    '/drive',
-    '/calendar',
-    '/booking-links',
-    '/canvas',
-    '/snippets',
-    '/routines',
-    '/skills',
-  ]) {
+  for (const route of productRoutes) {
     const page = await browser.newPage({
       viewport: { width: 390, height: 844 },
       isMobile: true,
@@ -127,6 +129,44 @@ export async function verifyProductPages(browser: Browser, origin: string) {
     } finally {
       releaseScripts();
       await page.close();
+    }
+  }
+  // On the cream palette, every screen with a Macro Light frame shows it,
+  // on desktop and on a phone (where narrow frames replace wide ones).
+  for (const viewport of [
+    { width: 1280, height: 900 },
+    { width: 390, height: 844 },
+  ]) {
+    for (const route of productRoutes) {
+      const page = await browser.newPage({ viewport });
+      try {
+        await page.goto(`${origin}${route}?theme=cream`, { waitUntil: 'load' });
+        const result = await page.evaluate(() => {
+          const visible = [
+            ...document.querySelectorAll('[data-light] img'),
+          ].filter((img) => img.getClientRects().length > 0);
+          return {
+            palette: document.documentElement.dataset.palette,
+            light: visible.filter((img) =>
+              img.classList.contains('palette-light-only')
+            ).length,
+            dark: visible
+              .filter((img) => !img.classList.contains('palette-light-only'))
+              .map((img) => img.getAttribute('src')),
+          };
+        });
+        const where = `${route} at ${viewport.width}px`;
+        expect(result.palette, `${where}: cream palette applied`).toBe('cream');
+        expect(result.light, `${where}: light screens shown`).toBeGreaterThan(
+          0
+        );
+        expect(
+          result.dark,
+          `${where}: no dark screen with a light frame`
+        ).toEqual([]);
+      } finally {
+        await page.close();
+      }
     }
   }
 }

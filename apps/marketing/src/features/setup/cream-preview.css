@@ -82,11 +82,31 @@ html[data-palette='cream'] .benefit-graphic {
   --benefit-mention: var(--marketing-mention);
 }
 
-/* ---- Dark app screens --------------------------------------------------
-   The product pages' app screens are dark captures with no light counterpart
-   yet. Their flat stage is translucent black, which reads as a deliberate
-   mat on the dark page but as grey fog on cream, so make it solid here. */
+/* ---- App screens -------------------------------------------------------
+   A product-page screen with a Macro Light frame (`data-light`) shows it on a
+   light stage. A screen without one stays dark; its flat stage is translucent
+   black, which reads as a deliberate mat on the dark page but as grey fog on
+   cream, so make it solid here. */
 html[data-palette='cream'] { --feature-screenshot-stage: #141414; }
+html[data-palette='cream'] .feature-screenshot[data-light] { --feature-screenshot-stage: #e8e3d9; }
+html[data-palette='cream'] .feature-screenshot[data-light] .feature-screenshot-frame {
+  box-shadow: 0 0 0 1px rgb(29 28 26 / 10%);
+}
+html[data-palette='cream'] .feature-screenshot--wallpaper[data-light] .feature-screenshot-frame {
+  box-shadow: 0 12px 32px -12px rgb(29 28 26 / 30%), 0 0 0 1px rgb(29 28 26 / 10%);
+}
+html[data-palette='cream'] .feature-screenshot--wallpaper[data-light] .feature-screenshot-backdrop .tutorial-wallpaper {
+  filter: none;
+}
+html[data-palette='cream'] .feature-screenshot--wallpaper[data-light] .feature-screenshot-backdrop::before {
+  background: radial-gradient(ellipse 90% 75% at 18% 12%, rgb(255 255 255 / 18%), transparent 60%);
+  box-shadow: inset 0 0 0 1px rgb(29 28 26 / 10%);
+}
+/* A light phone screen keeps its bezel but takes the light app's background. */
+html[data-palette='cream'] .feature-phone-screens li[data-light] .feature-phone-screen {
+  background: #fcfcfc;
+  box-shadow: 0 0 0 1px #cfc9be, 0 0 0 7px #ebe6dd, 0 0 0 8px #d6d0c5, 0 26px 40px -26px rgb(29 28 26 / 35%);
+}
 
 /* ---- Wall of love ----------------------------------------------------- */
 html[data-palette='cream'] .wall-of-love {
