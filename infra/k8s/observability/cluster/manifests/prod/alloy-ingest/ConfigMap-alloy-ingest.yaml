@@ -555,17 +555,21 @@ data:
           // address: not WAF's clientIp, a rate-based rule's limitValue (the
           // address, for an IP key) or the value of its IP or FORWARDED_IP custom
           // key, or any header (or HEADER custom key) named for forwarding or a
-          // client address. A value is a JSON string, escaped quotes included, and
-          // JSON may have whitespace around its colons and commas. A traceparent
-          // with an all-zero trace or parent ID is invalid (W3C), so neither ID is
-          // taken from it.
+          // client address. A value is a JSON string, escaped quotes included. The
+          // patterns allow whitespace around JSON colons and commas, and either
+          // order of an object's fields. Only the first traceparent header is read:
+          // one whose trace or parent ID is all zeros is invalid (W3C) and gives
+          // neither ID. Upper-case hex is taken, lower-cased.
           `merge_maps(cache, ExtractPatterns(body, "(?i)\"name\"\\s*:\\s*\"traceparent\"\\s*,\\s*\"value\"\\s*:\\s*\"00-(?P<trace_id>[0-9a-f]{32})-(?P<span_id>[0-9a-f]{16})-[0-9a-f]{2}\""), "upsert") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
-          `delete_matching_keys(cache, "^(trace_id|span_id)$") where cache["trace_id"] != nil and (IsMatch(cache["trace_id"], "^0+$") or IsMatch(cache["span_id"], "^0+$"))`,
+          `delete_key(cache, "trace_id") where cache["trace_id"] != nil and (IsMatch(cache["trace_id"], "^0+$") or IsMatch(cache["span_id"], "^0+$"))`,
+          `delete_key(cache, "span_id") where cache["trace_id"] == nil`,
           `set(trace_id.string, ConvertCase(cache["trace_id"], "lower")) where cache["trace_id"] != nil`,
           `set(span_id.string, ConvertCase(cache["span_id"], "lower")) where cache["span_id"] != nil`,
           `replace_pattern(body, "\"(clientIp|limitValue)\"\\s*:\\s*\"(?:[^\"\\\\]|\\\\.)*\"", "\"${1}\":\"redacted\"") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
-          `replace_pattern(body, "(\"key\"\\s*:\\s*\"(?:IP|FORWARDED_IP)\"(?:\\s*,\\s*\"[A-Za-z]+\"\\s*:\\s*\"(?:[^\"\\\\]|\\\\.)*\")*\\s*,\\s*\"value\"\\s*:\\s*\")(?:[^\"\\\\]|\\\\.)*\"", "${1}redacted\"") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
-          `replace_pattern(body, "(?i)(\"name\"\\s*:\\s*\"[^\"]*(?:forwarded|client-ip|real-ip|connecting-ip)[^\"]*\"\\s*,\\s*\"value\"\\s*:\\s*\")(?:[^\"\\\\]|\\\\.)*\"", "${1}redacted\"") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
+          `replace_pattern(body, "(\"key\"\\s*:\\s*\"(?:IP|FORWARDED_IP)\"[^{}]*?\"value\"\\s*:\\s*\")(?:[^\"\\\\]|\\\\.)*\"", "${1}redacted\"") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
+          `replace_pattern(body, "(\"value\"\\s*:\\s*\")(?:[^\"\\\\]|\\\\.)*(\"[^{}]*\"key\"\\s*:\\s*\"(?:IP|FORWARDED_IP)\")", "${1}redacted${2}") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
+          `replace_pattern(body, "(?i)(\"name\"\\s*:\\s*\"[^\"]*(?:forwarded|client-ip|real-ip|connecting-ip)[^\"]*\"[^{}]*?\"value\"\\s*:\\s*\")(?:[^\"\\\\]|\\\\.)*\"", "${1}redacted\"") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
+          `replace_pattern(body, "(?i)(\"value\"\\s*:\\s*\")(?:[^\"\\\\]|\\\\.)*(\"[^{}]*\"name\"\\s*:\\s*\"[^\"]*(?:forwarded|client-ip|real-ip|connecting-ip)[^\"]*\")", "${1}redacted${2}") where IsMatch(attributes["log_group"], "^aws-waf-logs-")`,
           `delete_matching_keys(attributes, "^(log_group|log_stream|msg_type|region|loki\\.attribute\\.labels)$")`,
         ]
       }
