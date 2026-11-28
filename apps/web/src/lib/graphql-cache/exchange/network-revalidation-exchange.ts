@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   type Client,
@@ -5,6 +6,7 @@ import {
   getOperationName,
   makeOperation,
   type Operation,
+  type OperationResult,
 } from '@urql/core';
 import { ResultAsync } from 'neverthrow';
 import {
@@ -32,6 +34,15 @@ export type NetworkRevalidation = {
 };
 
 const CLIENT_OWNERS = new WeakMap<Client, Set<NetworkRevalidation>>();
+const REVALIDATED = new WeakSet<OperationResult>();
+
+/**
+ * Whether the exchange read the mounted queries again before this mutation
+ * result settled; a caller that would read them itself then skips that read.
+ */
+export function networkRevalidated(result: OperationResult): boolean {
+  return REVALIDATED.has(result);
+}
 
 /**
  * Registers a list's owner with the client it reads through, so the list is
@@ -247,15 +258,13 @@ export function networkRevalidationExchange(
           if (
             operation.kind !== 'mutation' ||
             !enabled() ||
-            result.data == null ||
-            result.error ||
             result.hasNext ||
             (disposition && disposition.kind !== 'committed')
           ) {
             return fromValue(result);
           }
-          async function refreshBeforeSettling() {
-            await Telemetry.span(
+          const revalidate = () =>
+            Telemetry.span(
               'graphql.mutation.network_revalidation',
               async (span) => {
                 span.setAttr(
@@ -265,6 +274,19 @@ export function networkRevalidationExchange(
                 await refreshQueries(span);
               }
             );
+          if (result.data == null || result.error) {
+            // A write whose response was lost may still have committed, so
+            // the queries are read again, without holding back its error.
+            if (result.error?.networkError)
+              fireAndForget(
+                revalidate(),
+                'graphql.mutation.network_revalidation'
+              );
+            return fromValue(result);
+          }
+          async function refreshBeforeSettling() {
+            await revalidate();
+            REVALIDATED.add(result);
             return result;
           }
           return fromPromise(refreshBeforeSettling());

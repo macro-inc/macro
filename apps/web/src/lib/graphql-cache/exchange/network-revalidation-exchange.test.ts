@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { empty, makeSubject, mergeMap, pipe, type Subject } from 'wonka';
 import { createQueryAuthorization } from '../../queries/authorization';
 import {
+  networkRevalidated,
   networkRevalidationExchange,
   registerNetworkRevalidation,
 } from './network-revalidation-exchange';
@@ -283,6 +284,42 @@ describe('networkRevalidationExchange', () => {
       requests.filter(({ operation }) => operation.kind === 'query')
     ).toHaveLength(1);
     list.unsubscribe();
+  });
+
+  it('reads queries again after a write whose response was lost, without holding its error', async () => {
+    const { client, requests, respond, flush } = setup();
+    const list = client.query(LIST, {}).subscribe(() => {});
+    respond(0);
+    const saved = client.mutation(SAVE, {}).toPromise();
+    const error = new CombinedError({ networkError: new Error('dropped') });
+    respond(1, { data: undefined, error });
+    const result = await saved;
+    expect(result.error).toBe(error);
+    expect(networkRevalidated(result)).toBe(false);
+    await flush();
+    expect(
+      requests.filter(({ operation }) => operation.kind === 'query')
+    ).toHaveLength(2);
+    list.unsubscribe();
+  });
+
+  it('marks a write whose queries it read again before it settled', async () => {
+    const { client, respond, flush } = setup();
+    const list = client.query(LIST, {}).subscribe(() => {});
+    respond(0);
+    const saved = client.mutation(SAVE, {}).toPromise();
+    respond(1);
+    await flush();
+    respond(2);
+    expect(networkRevalidated(await saved)).toBe(true);
+    list.unsubscribe();
+  });
+
+  it('leaves a write it did not read for unmarked', async () => {
+    const { client, respond } = setup(() => false);
+    const saved = client.mutation(SAVE, {}).toPromise();
+    respond(0);
+    expect(networkRevalidated(await saved)).toBe(false);
   });
 
   it('lets a paged reader read its own pages again, once per write', async () => {
