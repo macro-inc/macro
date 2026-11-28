@@ -6,7 +6,13 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { createSignal } from 'solid-js';
 import { useDriveFilters } from '../filters/use-drive-filters';
 
-export function DriveFilterMenu(props: { grouped?: boolean } = {}) {
+export type DriveFilterMenuProps = {
+  grouped?: boolean;
+  /** The header hid the menu for lack of room, so its hotkey has nothing to open beside. */
+  hidden?: boolean;
+};
+
+export function DriveFilterMenu(props: DriveFilterMenuProps = {}) {
   const filters = useDriveFilters();
 
   const panel = useSplitPanelOrThrow();
@@ -18,6 +24,8 @@ export function DriveFilterMenu(props: { grouped?: boolean } = {}) {
     enabled: panel.isPanelActive,
     filter: {
       description: 'Filter files',
+
+      condition: () => !props.hidden,
 
       run: () => {
         setOpen(true);
