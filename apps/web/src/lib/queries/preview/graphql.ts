@@ -678,6 +678,13 @@ export function createGraphqlItemPreviewQuery(
     }
   );
   const [group, setGroup] = createSignal<PreviewBatch>();
+  // A cache that fails hands its readers to another client; the preview
+  // follows it (the host read tracks that), or writes through the new
+  // client would never reach it.
+  const client = createMemo(() => {
+    getGraphqlSoupCacheHost();
+    return getGraphqlSoupClient();
+  });
   let ready: Promise<PreviewBatch | undefined> = Promise.resolve(undefined);
   const isEnabled = () =>
     enabled() &&
@@ -689,10 +696,11 @@ export function createGraphqlItemPreviewQuery(
     setGroup(undefined);
     ready = Promise.resolve(undefined);
     if (!isEnabled()) return;
-    const subscription = previewBatcher(
-      getGraphqlSoupClient(),
-      includeProperties
-    ).acquire(`${epoch}:${normalizedRecordKey(current)!}`, current, setGroup);
+    const subscription = previewBatcher(client(), includeProperties).acquire(
+      `${epoch}:${normalizedRecordKey(current)!}`,
+      current,
+      setGroup
+    );
     ready = subscription.ready;
     onCleanup(subscription.dispose);
   });
