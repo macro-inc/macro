@@ -897,14 +897,14 @@ must still refresh affected lists after commit. Scroll across a retained row and
 check that the next page remains ordered; a baseline beyond 5,000 rows returns to
 the live server list instead of freezing local membership.
 Tag selections use cached property postings;
-attachment filters list from the server, which has the thread flags this local
-profile lacks. Sender/recipient filters and
+attachment filters use the `mail-attachment` facts projected from each thread's
+attachment types, by the MIME prefixes of the server's thread flags. Sender/recipient filters and
 non-created/updated sorts remain outside this local profile. Grouping and sort-selector
 coverage are separate from the filter-selection matrix. No cache-format wipe is required: Mail uses a separate versioned profile
 and a new backfill checkpoint, preserving existing queued work. Deploy the backend
 schema additions before the client: it selects canonical message eligibility/recency
 fields, body-free canonical preview references, and viewer-relative share facts.
-The `soup-mail-v3` property-aware profile and new backfill checkpoint rebuild Mail proof without
+The property-aware profile (`soup-mail-v6` now) and new backfill checkpoint rebuild Mail proof without
 changing the persisted mutation queue format. Native Tauri maintains the same
 predicate projections and local page contract as the browser.
 Checkpoint v14 restarts older scans to populate property-aware indexes without wiping

@@ -138,6 +138,61 @@ test('delivered reminders immediately lead cached Signal, including sent-only th
   );
 });
 
+test('pushed attachments move threads between attachment kind lists offline and after reopening', async ({
+  page,
+  context,
+}) => {
+  const scope = `attachment-lists-${Date.now()}`;
+  const ready = () =>
+    expect(page.locator('#result')).toHaveAttribute('data-status', 'ready', {
+      timeout: 60_000,
+    });
+  const attachment = page.getByRole('combobox', {
+    name: 'Attachment',
+    exact: true,
+  });
+  const rows = page.locator('#rows li');
+  const listed = async (kind: string, emails: number[]) => {
+    await attachment.selectOption(kind);
+    await expect(rows).toHaveCount(emails.length);
+    for (const email of emails)
+      await expect(
+        rows.filter({ hasText: new RegExp(`^Email ${email} — `) })
+      ).toHaveCount(1);
+  };
+  await page.goto(`/mail-projection.html?scope=${scope}`);
+  await ready();
+  await context.setOffline(true);
+  try {
+    await listed('PDF', []);
+    await page.getByRole('button', { name: 'Deliver attachments' }).click();
+    await listed('PDF', [10, 22]);
+    await listed('IMAGE', [14]);
+    await listed('DOCUMENT', [22]);
+    await page
+      .getByRole('button', { name: 'Deliver attachment changes' })
+      .click();
+    await listed('PDF', [14, 22]);
+    await listed('IMAGE', [14]);
+  } finally {
+    await context.setOffline(false);
+  }
+  // Reopening the cache, and the seed written again without attachments,
+  // keep the lists.
+  await page.goto(`/mail-projection.html?scope=${scope}`);
+  await ready();
+  await context.setOffline(true);
+  try {
+    await listed('PDF', [14, 22]);
+    await listed('IMAGE', [14]);
+    await listed('DOCUMENT', [22]);
+    await attachment.selectOption('all');
+    await expect(rows).toHaveCount(10);
+  } finally {
+    await context.setOffline(false);
+  }
+});
+
 test('invalid identity binding preserves the server response and completes the mutation', async ({
   page,
 }) => {

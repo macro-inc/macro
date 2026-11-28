@@ -45,9 +45,10 @@ describe('revalidateMailAttachmentListsForSoupUpdates', () => {
     const unfiltered = registerList({ l: { Importance: true } });
     const negated = registerList({ '!': { l: { Attachment: 'image' } } });
 
-    await revalidateMailAttachmentListsForSoupUpdates([
-      thread([{ mimeType: 'application/pdf' }]),
-    ]);
+    await revalidateMailAttachmentListsForSoupUpdates(
+      [thread([{ mimeType: 'application/pdf' }])],
+      true
+    );
 
     expect(pdfs).toHaveBeenCalledTimes(1);
     expect(either).toHaveBeenCalledTimes(1);
@@ -58,14 +59,17 @@ describe('revalidateMailAttachmentListsForSoupUpdates', () => {
   it('ignores threads without attachments and other patches', async () => {
     const pdfs = registerList(PDFS);
 
-    await revalidateMailAttachmentListsForSoupUpdates([
-      thread([]),
-      {
-        __typename: 'GraphqlCacheDeletion',
-        graphqlTypeName: 'GraphqlSoupEmailThread',
-        entityId: crypto.randomUUID(),
-      },
-    ]);
+    await revalidateMailAttachmentListsForSoupUpdates(
+      [
+        thread([]),
+        {
+          __typename: 'GraphqlCacheDeletion',
+          graphqlTypeName: 'GraphqlSoupEmailThread',
+          entityId: crypto.randomUUID(),
+        },
+      ],
+      false
+    );
 
     expect(pdfs).not.toHaveBeenCalled();
   });
@@ -73,10 +77,22 @@ describe('revalidateMailAttachmentListsForSoupUpdates', () => {
   it('leaves a list the cache keeps current alone', async () => {
     const maintained = registerList(PDFS, { cacheMaintained: () => true });
 
-    await revalidateMailAttachmentListsForSoupUpdates([
-      thread([{ mimeType: 'application/pdf' }]),
-    ]);
+    await revalidateMailAttachmentListsForSoupUpdates(
+      [thread([{ mimeType: 'application/pdf' }])],
+      true
+    );
 
     expect(maintained).not.toHaveBeenCalled();
+  });
+
+  it('refreshes a maintained list when the cache did not take the push', async () => {
+    const maintained = registerList(PDFS, { cacheMaintained: () => true });
+
+    await revalidateMailAttachmentListsForSoupUpdates(
+      [thread([{ mimeType: 'application/pdf' }])],
+      false
+    );
+
+    expect(maintained).toHaveBeenCalledTimes(1);
   });
 });

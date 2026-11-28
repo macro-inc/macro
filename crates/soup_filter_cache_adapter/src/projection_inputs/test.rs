@@ -36,7 +36,7 @@ fn every_indexed_type_names_its_inputs() {
         .collect::<Vec<_>>();
     assert_eq!(unnamed, Vec::<&str>::new());
     assert!(named.contains("GraphqlSoupEmailThread"));
-    assert_eq!(named.len(), 8, "{named:?}");
+    assert_eq!(named.len(), 9, "{named:?}");
 }
 
 /// Values a removed field may have held, of every JSON shape.

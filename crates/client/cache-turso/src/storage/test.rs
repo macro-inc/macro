@@ -10,6 +10,7 @@ mod fact_lookup_cost;
 mod filter_scope_cost;
 mod filter_scope_semantics;
 mod id_list_semantics;
+mod mail_attachments;
 mod migration;
 // Its I/O, CPU and memory counters read Linux's `/proc`.
 #[cfg(target_os = "linux")]

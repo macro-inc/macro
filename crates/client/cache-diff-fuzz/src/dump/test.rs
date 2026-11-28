@@ -91,13 +91,13 @@ fn json_facts_dropped_from_layer_projections_only() {
     assert_eq!(
         without_json_facts(
             &layer(
-                r#"[{"Replace":{"sort_facts":[{"attribute":"view","value":1}]}},{"Patch":{"sorts":[{"attribute":"view","value":1},{"attribute":"keep","value":2}]}},{"Unknown":{"affected_attributes":["inbox","view"]}},{"Unknown":{"affected_attributes":["view"]}}]"#,
+                r#"[{"Replace":{"exact_facts":[{"attribute":"view","value":[2]},{"attribute":"keep","value":[2]}],"sort_facts":[{"attribute":"view","value":1}]}},{"Patch":{"exact":[{"attribute":"view","values":[]},{"attribute":"keep","values":[[1]]}],"sorts":[{"attribute":"view","value":1},{"attribute":"keep","value":2}]}},{"Unknown":{"affected_attributes":["inbox","view"]}},{"Unknown":{"affected_attributes":["view"]}}]"#,
                 data
             ),
             &names
         ),
         layer(
-            r#"[{"Replace":{"sort_facts":[]}},{"Patch":{"sorts":[{"attribute":"keep","value":2}]}},{"Unknown":{"affected_attributes":["inbox"]}},{"Unknown":{"affected_attributes":["view"]}}]"#,
+            r#"[{"Replace":{"exact_facts":[{"attribute":"keep","value":[2]}],"sort_facts":[]}},{"Patch":{"exact":[{"attribute":"keep","values":[[1]]}],"sorts":[{"attribute":"keep","value":2}]}},{"Unknown":{"affected_attributes":["inbox"]}},{"Unknown":{"affected_attributes":["view"]}}]"#,
             data
         )
     );

@@ -483,7 +483,8 @@ const OPTIMISTIC_SOURCE: &str = "@macro-cache/optimistic-source:";
 
 /// An optimistic layer's source, written again with its `projectionMutations`
 /// lacking each `{"attribute":NAME,"value":N}` (N an i64) of a `Patch`'s `sorts` or a
-/// `Replace`'s `sort_facts`, and NAME
+/// `Replace`'s `sort_facts`, each `{"attribute":NAME,"values":[..]}` of a `Patch`'s
+/// `exact` and `{"attribute":NAME,"value":[..]}` of a `Replace`'s `exact_facts`, and NAME
 /// in an `Unknown`'s `affected_attributes` that names another attribute (an
 /// empty list means every attribute, so a list of NAME alone stays). Any other
 /// text is returned as it is.
@@ -512,6 +513,22 @@ fn without_json_facts(text: &str, names: &[String]) -> String {
                     !(fact.as_object().is_some_and(|fact| fact.len() == 2)
                         && fact.get("attribute").is_some_and(named)
                         && fact.get("value").is_some_and(serde_json::Value::is_i64))
+                });
+            }
+        }
+        // An exact fact: a `Patch` lists its values, a `Replace` holds one per entry.
+        for (pointer, value) in [
+            ("/Patch/exact", "values"),
+            ("/Replace/exact_facts", "value"),
+        ] {
+            if let Some(facts) = mutation
+                .pointer_mut(pointer)
+                .and_then(serde_json::Value::as_array_mut)
+            {
+                facts.retain(|fact| {
+                    !(fact.as_object().is_some_and(|fact| fact.len() == 2)
+                        && fact.get("attribute").is_some_and(named)
+                        && fact.get(value).is_some_and(serde_json::Value::is_array))
                 });
             }
         }

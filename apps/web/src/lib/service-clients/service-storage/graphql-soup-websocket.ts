@@ -11,7 +11,7 @@ import {
 } from '../../queries/channel/notification-refresh';
 import { revalidateCallListsForSoupUpdates } from '../../queries/soup/graphql/call-list-revalidation';
 import {
-  revalidateMailAttachmentLists,
+  revalidateMailAttachmentListsAfterReconnect,
   revalidateMailAttachmentListsForSoupUpdates,
 } from '../../queries/soup/graphql/mail-list-revalidation';
 import {
@@ -388,12 +388,17 @@ export function createGraphqlSoupSubscriptionsLifecycle(
             if (document === SoupUpdatesDocument && result.data != null) {
               const patches = (result.data as SoupUpdatesSubscription)
                 .soupUpdates;
+              const metadata = normalizedCacheResultMetadata(result);
               fireAndForget(
                 revalidateCallListsForSoupUpdates(patches),
                 'graphql-soup-subscriptions'
               );
               fireAndForget(
-                revalidateMailAttachmentListsForSoupUpdates(patches),
+                revalidateMailAttachmentListsForSoupUpdates(
+                  patches,
+                  metadata?.source === 'live-network' &&
+                    metadata.cacheEffectsApplied === true
+                ),
                 'graphql-soup-subscriptions'
               );
               channelHandler.onSoupUpdates(patches);
@@ -440,7 +445,7 @@ export function createGraphqlSoupSubscriptionsLifecycle(
       connections += 1;
       if (connections > 1)
         fireAndForget(
-          revalidateMailAttachmentLists(),
+          revalidateMailAttachmentListsAfterReconnect(),
           'graphql-soup-subscriptions'
         );
     },

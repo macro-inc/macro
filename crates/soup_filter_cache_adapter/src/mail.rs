@@ -4,13 +4,14 @@ use crate::parsed_document::parsed_document;
 use cache_core::store::DurableRead;
 use cache_core::{
     engine::{Engine, EngineError},
-    normalize::normalize,
+    normalize::{RecordUpdates, normalize},
     predicate::reconciliation::PredicateBaselineEntry,
     predicate::{PredicateIndexStorage, ProjectionState},
     store::Storage,
     value::{CacheValue, EntityKey, Record},
 };
 use item_filter_index::mail as vocabulary;
+use item_filter_index::mail::AttachmentKind;
 use predicate_index::{ExactFact, IntegerFact};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -41,6 +42,7 @@ const EXACT_ATTRIBUTES: &[&str] = &[
     "mail-draft-message",
     "mail-sent-message",
     "mail-label-id",
+    vocabulary::ATTACHMENT_ATTRIBUTE,
 ];
 const SORT_ATTRIBUTES: &[&str] = &["mail-all-ts", "mail-inbox-ts", "mail-sent-ts"];
 /// The fields of a thread record its projection reads, which decide which
@@ -59,6 +61,31 @@ pub(super) const FIELDS: &[&str] = &[
     "mailDraftPreview",
     "mailSentPreview",
 ];
+
+/// Every field of a thread record its projection reads: [`FIELDS`], and the
+/// labels and attachments a response need not select to be a whole row.
+pub(super) const INPUTS: &[&str] = &[
+    "linkId",
+    "ownerId",
+    "isRead",
+    "inboxVisible",
+    "isSignal",
+    "cacheProjection",
+    "latestInboundMessageTs",
+    "reminderReturnedAt",
+    "updatedAt",
+    "mailAllPreview",
+    "mailDraftPreview",
+    "mailSentPreview",
+    "labels",
+    "attachments",
+];
+const _: () = assert!(INPUTS.len() == FIELDS.len() + 2);
+
+/// The attachment records a thread's attachment facts come from.
+pub(super) const ATTACHMENT_TYPE: &str = "GraphqlSoupEmailAttachment";
+/// The fields of an attachment record the thread's projection reads.
+pub(super) const ATTACHMENT_INPUTS: &[&str] = &["mimeType"];
 
 /// Which of [`FIELDS`] an update carries, one bit each.
 struct ChangedFields(u16);
@@ -152,6 +179,63 @@ fn label_ids(record: &Record) -> Option<Vec<uuid::Uuid>> {
         })
         .collect()
 }
+/// The attachment records a thread's `attachments` field names. A thread
+/// read without its attachments names none: every document that writes a
+/// whole thread row selects them, as it does its labels.
+fn attachment_keys(record: &Record) -> Vec<EntityKey<'static>> {
+    let Some(CacheValue::List(attachments)) = record.fields.get("attachments") else {
+        return Vec::new();
+    };
+    attachments
+        .iter()
+        .filter_map(|value| match value {
+            CacheValue::Ref(key) => Some(key.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The kinds of a thread's attachments, from the attachment records `lookup`
+/// finds. One the cache holds no MIME type for has no kind, as one with a
+/// NULL type has none on the server.
+fn attachment_kinds<'a>(
+    record: &Record,
+    lookup: impl Fn(&EntityKey<'static>) -> Option<&'a Record>,
+) -> Vec<AttachmentKind> {
+    let keys = attachment_keys(record);
+    vocabulary::attachment_kinds(
+        keys.iter()
+            .filter_map(|key| string(lookup(key)?, "mimeType")),
+    )
+}
+
+/// Whether an attachment record holds the field its kind is read from.
+fn has_mime_type(record: &Record) -> bool {
+    record.fields.contains_key("mimeType")
+}
+
+/// The attachment records `threads` name that `known` lacks with a MIME
+/// type, each once: the ones to read from storage.
+fn unknown_attachments<'a>(
+    threads: impl Iterator<Item = &'a Record>,
+    known: &RecordUpdates,
+) -> Vec<EntityKey<'static>> {
+    threads
+        .flat_map(attachment_keys)
+        .filter(|key| !known.get(key).is_some_and(has_mime_type))
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
+/// `keys` with the records storage returned for them, leaving out the absent.
+fn found(keys: Vec<EntityKey<'static>>, records: Vec<Option<Record>>) -> RecordUpdates {
+    keys.into_iter()
+        .zip(records)
+        .filter_map(|(key, record)| Some((key, record?)))
+        .collect()
+}
+
 fn preview_ref(record: &Record, field: &str) -> Option<Option<uuid::Uuid>> {
     match record.fields.get(field)? {
         CacheValue::Null => Some(None),
@@ -174,17 +258,22 @@ fn verified_supplement(
         .then_some(supplement))
 }
 
-fn project(key: RecordKey, record: &Record) -> Option<IndexDocument> {
+fn project(
+    key: RecordKey,
+    record: &Record,
+    attachments: &[AttachmentKind],
+) -> Option<IndexDocument> {
     let encoded = opaque_string(record, "cacheProjection")?;
     let supplement = verified_supplement(&key, &encoded).ok()??;
     let cache_facts = supplement.mail_facts()?;
-    project_with_facts(key, record, cache_facts)
+    project_with_facts(key, record, cache_facts, attachments)
 }
 
 fn project_with_facts(
     key: RecordKey,
     record: &Record,
     cache_facts: &MailCacheProjectionFacts,
+    attachments: &[AttachmentKind],
 ) -> Option<IndexDocument> {
     let id = key.as_str().strip_prefix(&format!("{TYPE}:"))?;
     let owner = string(record, "ownerId")?;
@@ -219,6 +308,12 @@ fn project_with_facts(
     }
     for label in label_ids(record)? {
         facts.push(uuid_fact("mail-label-id", &label.to_string())?);
+    }
+    for kind in attachments {
+        facts.push(ExactFact {
+            attribute: vocabulary::token(vocabulary::ATTACHMENT_ATTRIBUTE),
+            value: vocabulary::attachment_value(*kind),
+        });
     }
     let updated = timestamp(record, "updatedAt")??;
     let all = cache_facts.latest_non_spam_message_ts().unwrap_or(updated);
@@ -364,7 +459,23 @@ pub async fn draft_optimistic_updates<S: Storage>(
             .any(|facts| facts.has_calendar_attachment),
         shared,
     );
-    Ok(project_with_facts(record_key, record, &facts)
+    let unknown = unknown_attachments(std::iter::once(record), &records);
+    let stored = if unknown.is_empty() {
+        RecordUpdates::new()
+    } else {
+        let stored = storage
+            .get_batch(&unknown)
+            .await
+            .map_err(ProjectionError::Storage)?;
+        found(unknown, stored)
+    };
+    let kinds = attachment_kinds(record, |key| {
+        records
+            .get(key)
+            .filter(|record| has_mime_type(record))
+            .or_else(|| stored.get(key))
+    });
+    Ok(project_with_facts(record_key, record, &facts, &kinds)
         .map(OptimisticProjectionMutation::Replace)
         .into_iter()
         .collect())
@@ -445,12 +556,13 @@ pub async fn projection_updates_for_response<S: DurableRead>(
         )]);
     }
     let prefix = format!("{TYPE}:");
-    let updates = response
-        .updates()?
+    let records = response.updates()?;
+    let updates = records
         .iter()
         .filter(|(key, record)| {
             key.as_ref().starts_with(&prefix)
                 && (record.fields.contains_key("labels")
+                    || record.fields.contains_key("attachments")
                     || FIELDS
                         .iter()
                         .any(|field| record.fields.contains_key(*field)))
@@ -472,27 +584,79 @@ pub async fn projection_updates_for_response<S: DurableRead>(
     } else {
         vec![None; keys.len()]
     };
-    Ok(updates
+    let updates = updates
         .into_iter()
         .zip(bases)
-        .filter_map(|((key, update), base)| {
-            let key = RecordKey::new(key.to_string()).ok()?;
+        .map(|((key, update), base)| {
             let full = FIELDS
                 .iter()
                 .all(|field| update.fields.contains_key(*field));
             let changed = ChangedFields::of(&update);
             // Not one of FIELDS: a response need not select a thread's labels
-            // to be a full row, and a stored row keeps the labels it has.
+            // or attachments to be a full row, and a stored row keeps the
+            // labels and attachments it has.
             let labels_changed = update.fields.contains_key("labels");
+            let attachments_changed = update.fields.contains_key("attachments");
             let mut merged = base.unwrap_or_default();
             merged.merge(update);
+            ThreadUpdate {
+                key,
+                full,
+                changed,
+                labels_changed,
+                attachments_changed,
+                merged,
+            }
+        })
+        .collect::<Vec<_>>();
+    // A whole row, or one whose attachments changed, rewrites its attachment
+    // facts from the attachment records this response holds, or else storage.
+    let unknown = unknown_attachments(
+        updates
+            .iter()
+            .filter(|update| update.full || update.attachments_changed)
+            .map(|update| &update.merged),
+        records,
+    );
+    let stored = if reuse_stored_identity && !unknown.is_empty() {
+        let stored = storage
+            .read_records(&unknown)
+            .await
+            .map_err(ProjectionError::Storage)?;
+        found(unknown, stored)
+    } else {
+        RecordUpdates::new()
+    };
+    let lookup = |key: &EntityKey<'static>| {
+        records
+            .get(key)
+            .filter(|record| has_mime_type(record))
+            .or_else(|| stored.get(key))
+    };
+    Ok(updates
+        .into_iter()
+        .filter_map(|update| {
+            let ThreadUpdate {
+                key,
+                full,
+                changed,
+                labels_changed,
+                attachments_changed,
+                merged,
+            } = update;
+            let key = RecordKey::new(key.to_string()).ok()?;
+            let kinds = if full || attachments_changed {
+                attachment_kinds(&merged, lookup)
+            } else {
+                Vec::new()
+            };
             let incomplete = || ProjectionMutation::MarkIncomplete {
                 record_key: key.clone(),
                 profile: vocabulary::profile(),
                 partition: vocabulary::partition(),
                 kind: ProjectionIncompleteKind::Missing,
             };
-            let Some(document) = project(key.clone(), &merged) else {
+            let Some(document) = project(key.clone(), &merged, &kinds) else {
                 return Some(incomplete());
             };
             if full {
@@ -535,6 +699,7 @@ pub async fn projection_updates_for_response<S: DurableRead>(
                 "mail-signal" => changed.contains("isSignal"),
                 "mail-has-message" => changed.contains("mailAllPreview"),
                 "mail-label-id" => labels_changed,
+                vocabulary::ATTACHMENT_ATTRIBUTE => attachments_changed,
                 "mail-all-ts" => {
                     changed.contains("cacheProjection") || changed.contains("updatedAt")
                 }
@@ -582,6 +747,17 @@ pub async fn projection_updates_for_response<S: DurableRead>(
             })
         })
         .collect())
+}
+
+/// One thread record a write updates, merged over the stored row.
+struct ThreadUpdate {
+    key: EntityKey<'static>,
+    /// Whether the update carries every one of [`FIELDS`].
+    full: bool,
+    changed: ChangedFields,
+    labels_changed: bool,
+    attachments_changed: bool,
+    merged: Record,
 }
 
 /// Email optimism patches only a known authoritative base; it cannot prove

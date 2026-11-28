@@ -6105,6 +6105,7 @@ mod conjunction;
 mod contact_search;
 mod derived_sorts;
 mod integrity;
+mod mail_attachments;
 mod migration;
 mod mutation_retry;
 mod name_search;

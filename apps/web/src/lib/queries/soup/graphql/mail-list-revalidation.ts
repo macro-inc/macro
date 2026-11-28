@@ -53,21 +53,30 @@ function carriesAttachment(patch: SoupPatch): boolean {
 }
 
 /**
- * The local Mail projection has no attachment facts, so a list filtered by
- * attachment kind reads the server and the cache cannot place an arriving
- * thread in it. Mounted lists with that filter refetch when one arrives, and
- * after the Soup socket reconnects, since what it pushed meanwhile is lost.
+ * A host that evaluates Mail locally keeps lists filtered by attachment kind
+ * current from the threads' attachment facts. Elsewhere (a desktop or mobile
+ * binary whose engine predates them, a cold cache) such a list reads the
+ * server and the cache cannot place an arriving thread in it, so mounted lists
+ * the cache does not maintain refetch when one arrives. When the cache did not
+ * take the push (`cacheApplied` false), maintained lists lack it too and refetch.
  */
-export function revalidateMailAttachmentLists(): Promise<void> {
-  return refreshActiveGraphqlSoupQueries({
+export async function revalidateMailAttachmentListsForSoupUpdates(
+  patches: readonly SoupPatch[],
+  cacheApplied: boolean
+): Promise<void> {
+  if (!patches.some(carriesAttachment)) return;
+  await refreshActiveGraphqlSoupQueries({
     where: filtersByAttachment,
-    unmaintainedOnly: true,
+    unmaintainedOnly: cacheApplied,
   });
 }
 
-export async function revalidateMailAttachmentListsForSoupUpdates(
-  patches: readonly SoupPatch[]
-): Promise<void> {
-  if (!patches.some(carriesAttachment)) return;
-  await revalidateMailAttachmentLists();
+/**
+ * After the Soup socket reconnects, what it pushed meanwhile is lost: neither
+ * the cache nor the server page a list shows has it. Mounted lists filtered by
+ * attachment kind read the server again, maintained ones too, until a reconnect
+ * catches the cache up on its own.
+ */
+export function revalidateMailAttachmentListsAfterReconnect(): Promise<void> {
+  return refreshActiveGraphqlSoupQueries({ where: filtersByAttachment });
 }

@@ -307,11 +307,19 @@ describe('GraphQL Soup subscription lifecycle', () => {
       })),
     };
     const attachmentList = vi.fn(async () => {});
+    const maintainedList = vi.fn(async () => {});
     const otherList = vi.fn(async () => {});
     const unregisterAttachments = registerActiveGraphqlSoupQuery({
       isEnabled: () => true,
       refresh: attachmentList,
       body: () => ({ ef: { l: { Attachment: 'pdf' } } }),
+    });
+    // The cache missed the pushes too, so a list it maintains refetches.
+    const unregisterMaintained = registerActiveGraphqlSoupQuery({
+      isEnabled: () => true,
+      refresh: maintainedList,
+      body: () => ({ ef: { l: { Attachment: 'image' } } }),
+      cacheMaintained: () => true,
     });
     const unregisterOther = registerActiveGraphqlSoupQuery({
       isEnabled: () => true,
@@ -330,10 +338,12 @@ describe('GraphQL Soup subscription lifecycle', () => {
 
     lifecycle.connected();
     await vi.waitFor(() => expect(attachmentList).toHaveBeenCalledOnce());
+    expect(maintainedList).toHaveBeenCalledOnce();
     expect(otherList).not.toHaveBeenCalled();
 
     lifecycle.dispose();
     unregisterAttachments();
+    unregisterMaintained();
     unregisterOther();
   });
 

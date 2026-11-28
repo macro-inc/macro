@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod test;
 
+use item_filters::ast::email::AttachmentKind;
 use sqlx::types::Uuid;
 
 // updates a thread's archived status to the passed boolean without performing checks
@@ -89,30 +90,16 @@ pub async fn update_thread_provider_id(
     Ok(())
 }
 
-/// MIME type prefixes behind the email filter's PDF attachment kind. Mirrors
-/// the web client's attachment filters in `next-soup/filters/predicates.ts`.
-pub const PDF_MIME_PREFIXES: &[&str] = &["application/pdf"];
+/// MIME type prefixes behind the email filter's PDF attachment kind, from
+/// the attachment kind the local Mail index also reads. Mirrors the web
+/// client's attachment filters in `next-soup/filters/predicates.ts`.
+pub const PDF_MIME_PREFIXES: &[&str] = AttachmentKind::Pdf.mime_prefixes();
 
 /// MIME type prefixes behind the image attachment kind.
-pub const IMAGE_MIME_PREFIXES: &[&str] = &[
-    "image/png",
-    "image/jpeg",
-    "image/gif",
-    "image/webp",
-    "image/svg+xml",
-];
+pub const IMAGE_MIME_PREFIXES: &[&str] = AttachmentKind::Image.mime_prefixes();
 
 /// MIME type prefixes behind the document attachment kind.
-pub const DOCUMENT_MIME_PREFIXES: &[&str] = &[
-    "application/msword",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/vnd.ms-excel",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "application/vnd.ms-powerpoint",
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    "text/plain",
-    "text/csv",
-];
+pub const DOCUMENT_MIME_PREFIXES: &[&str] = AttachmentKind::Document.mime_prefixes();
 
 /// `LIKE` patterns matching any of `prefixes` as a literal prefix.
 pub(crate) fn like_prefixes(prefixes: &[&str]) -> Vec<String> {

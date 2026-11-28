@@ -35,9 +35,15 @@ waiting for local recomputation to succeed. Removing pages from the server basel
 invalidates overlays built from those pages.
 Changing filters or resetting the cache discards prior reconciliation evidence.
 Unsupported filters/sorts and non-cache transports keep their existing
-network behavior. Mounted Mail lists filtered by attachment kind (the local
-projection has no attachment facts) refetch when a pushed thread carries attachments,
-as lists that can contain calls do for calls, and after the Soup socket reconnects,
+network behavior. Mail lists filtered by attachment kind (PDF, image, document)
+evaluate locally from the `mail-attachment` facts the Mail projection reads off a
+thread's attachments, so a pushed thread moves between them. On a host whose engine
+predates these facts (an older desktop or mobile binary, whatever JavaScript it
+runs) or whose cache is cold, mounted lists with that filter still refetch when a pushed thread carries
+attachments, as lists that can contain calls do for calls. A push carrying
+attachments that the cache did not apply refetches every mounted list with that
+filter. After the Soup socket
+reconnects, every mounted list with that filter refetches, maintained or not,
 since nothing replays what it pushed while it was down.
 
 ### Grouped views

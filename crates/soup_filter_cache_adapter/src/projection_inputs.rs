@@ -21,7 +21,8 @@ pub fn projection_inputs() -> ProjectionInputs {
     let mut inputs = ProjectionInputs::none()
         .own("GraphqlSoupChannel", crate::channels::INPUTS)
         .own("GraphqlSoupDatabaseRow", crate::database_rows::INPUTS)
-        .own(crate::mail::TYPE, crate::mail::FIELDS)
+        .own(crate::mail::TYPE, crate::mail::INPUTS)
+        .nested(crate::mail::ATTACHMENT_TYPE, crate::mail::ATTACHMENT_INPUTS)
         .nested(
             "GraphqlNotification",
             crate::notifications::NOTIFICATION_INPUTS,

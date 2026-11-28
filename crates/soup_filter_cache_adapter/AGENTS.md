@@ -74,6 +74,12 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
 - A thread may have Drafts/Sent previews with no All Mail preview (junk);
   keep those projections complete and let each tab apply its own membership.
 
+- Mail attachment kinds come from the thread's `attachments` refs and each
+  attachment record's `mimeType`, read from the response or else from storage;
+  `attachments` is a projection input, not a Mail profile field. A response that
+  does not select `attachments` keeps the stored kinds. Keep the rule in step with
+  cache-turso's open-time backfill (`storage/mail_attachments.rs`).
+
 - Get an operation's parsed form from `parsed_document`, never
   `Document::parse`: one cache write passes the same text through the
   projection, notification, mail and property passes, and parsing a 20 KB Soup

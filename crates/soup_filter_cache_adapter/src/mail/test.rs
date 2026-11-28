@@ -9,6 +9,7 @@ use soup_filter_projection::{
     MailCacheProjectionFacts, SoupCacheProjectionSupplement, encode_cache_projection_supplement,
 };
 
+mod attachments;
 mod drafts;
 mod labels;
 mod optimistic;
