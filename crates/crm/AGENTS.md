@@ -176,8 +176,9 @@ tools/HTTP/GraphQL surfaces over them.
 - A company merged away keeps answering to its old id through
   `crm_company_aliases`: the `/crm/companies/{company_id}` routes, the company and
   pipeline tools, a contact's company, record associations and `/crm/previews`.
-  The company extractor and `company_receipt` mint the receipt for the company
-  the id names now, so act on the receipt's id, never on the path or argument.
+  The company extractor and GraphQL contact create share
+  `CrmCompanyReceipt::for_user`. It mints the receipt for the company the id
+  names now, so act on the receipt's id. The tools use `company_receipt`.
   A contact merged away does the same through `crm_contact_aliases`: the
   `/crm/contacts/{contact_id}` routes (the contact extractor), pipeline entries,
   record associations, `/crm/previews`, and a contact's discussion and

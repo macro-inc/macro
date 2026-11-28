@@ -225,20 +225,22 @@ impl CrmService for FakeCrm {
         unimplemented!("FakeCrm.get_team_id_for_user")
     }
 
-    async fn create_company(
+    async fn create_company_with_request_id(
         &self,
         _access: &CrmTeamReceipt<MemberTeamRole>,
         _name: &str,
         _domain: Option<&str>,
+        _id: Option<uuid::Uuid>,
     ) -> Result<CrmCompanyWithContacts, CrmError> {
         unimplemented!("FakeCrm.create_company")
     }
 
-    async fn create_contact(
+    async fn create_contact_with_request_id(
         &self,
         _access: &CrmCompanyReceipt<ViewAccessLevel>,
         _name: &str,
         _email: Option<&str>,
+        _id: Option<uuid::Uuid>,
     ) -> Result<CrmContact, CrmError> {
         unimplemented!("FakeCrm.create_contact")
     }
@@ -453,11 +455,12 @@ impl CrmService for FakeCrm {
         unimplemented!("FakeCrm.update_team_settings")
     }
 
-    async fn create_team_contact(
+    async fn create_team_contact_with_request_id(
         &self,
         _access: &CrmTeamReceipt<MemberTeamRole>,
         _name: &str,
         _email: Option<&str>,
+        _id: Option<uuid::Uuid>,
     ) -> Result<CrmContact, CrmError> {
         unimplemented!("FakeCrm.create_team_contact")
     }

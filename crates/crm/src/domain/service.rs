@@ -201,6 +201,17 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
         access: &CrmTeamReceipt<MemberTeamRole>,
         name: &str,
         domain: Option<&str>,
+    ) -> impl Future<Output = Result<CrmCompanyWithContacts, CrmError>> + Send {
+        self.create_company_with_request_id(access, name, domain, None)
+    }
+
+    /// Create a company, reusing the recorded ID on replay of the same request.
+    fn create_company_with_request_id(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+        name: &str,
+        domain: Option<&str>,
+        request_id: Option<uuid::Uuid>,
     ) -> impl Future<Output = Result<CrmCompanyWithContacts, CrmError>> + Send;
 
     /// Manually creates a named contact under an authorized company. The email
@@ -215,6 +226,17 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
         access: &CrmCompanyReceipt<ViewAccessLevel>,
         name: &str,
         email: Option<&str>,
+    ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send {
+        self.create_contact_with_request_id(access, name, email, None)
+    }
+
+    /// Create a company contact, reusing the recorded ID on replay of the same request.
+    fn create_contact_with_request_id(
+        &self,
+        access: &CrmCompanyReceipt<ViewAccessLevel>,
+        name: &str,
+        email: Option<&str>,
+        request_id: Option<uuid::Uuid>,
     ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send;
 
     /// Legacy company exclusion switch. Any member may block; only an admin
@@ -502,6 +524,17 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
         access: &CrmTeamReceipt<MemberTeamRole>,
         name: &str,
         email: Option<&str>,
+    ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send {
+        self.create_team_contact_with_request_id(access, name, email, None)
+    }
+
+    /// Create a team contact, reusing the recorded ID on replay of the same request.
+    fn create_team_contact_with_request_id(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+        name: &str,
+        email: Option<&str>,
+        request_id: Option<uuid::Uuid>,
     ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send;
 
     /// The domains the caller's team keeps out of email sync. Any team
@@ -524,6 +557,15 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
         domain: &str,
         blocked: bool,
     ) -> impl Future<Output = Result<String, CrmError>> + Send;
+}
+
+fn manual_create_id(
+    team_id: uuid::Uuid,
+    kind: &str,
+    request_id: Option<uuid::Uuid>,
+) -> Option<uuid::Uuid> {
+    // A caller's retry token must not select an existing record's primary key.
+    request_id.map(|id| uuid::Uuid::new_v5(&team_id, format!("{kind}:{id}").as_bytes()))
 }
 
 /// Maximum accepted length (in chars) for a manually specified display
@@ -1013,11 +1055,12 @@ where
     }
 
     #[tracing::instrument(skip_all, fields(team_id = %access.team_id()), err)]
-    async fn create_company(
+    async fn create_company_with_request_id(
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
         name: &str,
         domain: Option<&str>,
+        request_id: Option<uuid::Uuid>,
     ) -> Result<CrmCompanyWithContacts, CrmError> {
         access.check_access(&self.companies_repository).await?;
         let name = validate_display_name(name)?;
@@ -1033,16 +1076,23 @@ where
         }
 
         self.companies_repository
-            .create_company_for_team(&access.team_id(), domain.as_deref(), name, Utc::now())
+            .create_company_for_team_with_id(
+                &access.team_id(),
+                domain.as_deref(),
+                name,
+                Utc::now(),
+                manual_create_id(access.team_id(), "company", request_id),
+            )
             .await
     }
 
     #[tracing::instrument(skip_all, fields(team_id = %access.team_id()), err)]
-    async fn create_contact(
+    async fn create_contact_with_request_id(
         &self,
         access: &CrmCompanyReceipt<ViewAccessLevel>,
         name: &str,
         email: Option<&str>,
+        request_id: Option<uuid::Uuid>,
     ) -> Result<CrmContact, CrmError> {
         let name = validate_display_name(name)?;
         let email = email
@@ -1055,13 +1105,14 @@ where
         let company_id = access.company_id()?;
         let include_hidden = access.include_hidden();
         self.companies_repository
-            .create_contact_for_company(
+            .create_contact_for_company_with_id(
                 &team_id,
                 &company_id,
                 email.as_deref(),
                 name,
                 Utc::now(),
                 include_hidden,
+                manual_create_id(team_id, "contact", request_id),
             )
             .await
     }
@@ -1547,11 +1598,12 @@ where
     }
 
     #[tracing::instrument(skip_all, fields(team_id = %access.team_id()), err)]
-    async fn create_team_contact(
+    async fn create_team_contact_with_request_id(
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
         name: &str,
         email: Option<&str>,
+        request_id: Option<uuid::Uuid>,
     ) -> Result<CrmContact, CrmError> {
         access.check_access(&self.companies_repository).await?;
         let name = validate_display_name(name)?;
@@ -1560,6 +1612,7 @@ where
             .filter(|email| !email.is_empty())
             .map(normalize_contact_email)
             .transpose()?;
+        let id = manual_create_id(access.team_id(), "contact", request_id);
 
         // An address at a company's own domain files the contact under that
         // company, as email sync would. Personal and generic providers key no
@@ -1572,7 +1625,13 @@ where
         let Some(company_address) = company_address else {
             return self
                 .companies_repository
-                .create_contact_for_team(&access.team_id(), email.as_deref(), name, Utc::now())
+                .create_contact_for_team_with_id(
+                    &access.team_id(),
+                    email.as_deref(),
+                    name,
+                    Utc::now(),
+                    id,
+                )
                 .await;
         };
 
@@ -1580,7 +1639,13 @@ where
             self.ensure_domain_directory_entry(domain).await?;
         }
         self.companies_repository
-            .create_contact_for_email_domain(&access.team_id(), company_address, name, Utc::now())
+            .create_contact_for_email_domain_with_id(
+                &access.team_id(),
+                company_address,
+                name,
+                Utc::now(),
+                id,
+            )
             .await
     }
 
@@ -1768,20 +1833,22 @@ impl CrmService for NoOpCrmService {
         unimplemented!("NoOpCrmService.get_team_id_for_user")
     }
 
-    async fn create_company(
+    async fn create_company_with_request_id(
         &self,
         _access: &CrmTeamReceipt<MemberTeamRole>,
         _name: &str,
         _domain: Option<&str>,
+        _id: Option<uuid::Uuid>,
     ) -> Result<CrmCompanyWithContacts, CrmError> {
         unimplemented!("NoOpCrmService.create_company")
     }
 
-    async fn create_contact(
+    async fn create_contact_with_request_id(
         &self,
         _access: &CrmCompanyReceipt<ViewAccessLevel>,
         _name: &str,
         _email: Option<&str>,
+        _id: Option<uuid::Uuid>,
     ) -> Result<CrmContact, CrmError> {
         unimplemented!("NoOpCrmService.create_contact")
     }
@@ -1986,11 +2053,12 @@ impl CrmService for NoOpCrmService {
         unimplemented!("NoOpCrmService.update_team_settings")
     }
 
-    async fn create_team_contact(
+    async fn create_team_contact_with_request_id(
         &self,
         _access: &CrmTeamReceipt<MemberTeamRole>,
         _name: &str,
         _email: Option<&str>,
+        _id: Option<uuid::Uuid>,
     ) -> Result<CrmContact, CrmError> {
         unimplemented!("NoOpCrmService.create_team_contact")
     }

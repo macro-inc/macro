@@ -195,17 +195,18 @@ impl CompaniesRepository for StubRepo {
         unimplemented!()
     }
 
-    async fn create_company_for_team(
+    async fn create_company_for_team_with_id(
         &self,
         _team_id: &uuid::Uuid,
         _domain: Option<&str>,
         _name: &str,
         _now: DateTime<Utc>,
+        _id: Option<uuid::Uuid>,
     ) -> Result<CrmCompanyWithContacts, CrmError> {
         unimplemented!()
     }
 
-    async fn create_contact_for_company(
+    async fn create_contact_for_company_with_id(
         &self,
         _team_id: &uuid::Uuid,
         _company_id: &uuid::Uuid,
@@ -213,6 +214,7 @@ impl CompaniesRepository for StubRepo {
         _name: &str,
         _now: DateTime<Utc>,
         _include_hidden: bool,
+        _id: Option<uuid::Uuid>,
     ) -> Result<CrmContact, CrmError> {
         self.created_contact_emails
             .lock()
@@ -235,22 +237,24 @@ impl CompaniesRepository for StubRepo {
         unimplemented!()
     }
 
-    async fn create_contact_for_team(
+    async fn create_contact_for_team_with_id(
         &self,
         _team_id: &uuid::Uuid,
         _email: Option<&str>,
         _name: &str,
         _now: DateTime<Utc>,
+        _id: Option<uuid::Uuid>,
     ) -> Result<CrmContact, CrmError> {
         unimplemented!()
     }
 
-    async fn create_contact_for_email_domain(
+    async fn create_contact_for_email_domain_with_id(
         &self,
         _team_id: &uuid::Uuid,
         _email: &str,
         _name: &str,
         _now: DateTime<Utc>,
+        _id: Option<uuid::Uuid>,
     ) -> Result<CrmContact, CrmError> {
         unimplemented!()
     }

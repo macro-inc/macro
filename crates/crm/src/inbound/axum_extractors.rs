@@ -87,34 +87,11 @@ where
                 .map_err(ExtractorError::from)?;
         let macro_user_id = authorization.authorization.user.macro_user_id.clone();
 
-        let company_id = service
-            .current_entity_id(&requested_id, EntityType::CrmCompany)
-            .await
-            .map_err(ExtractorError::from)?;
-        let (permission, team_id, team_role) = service
-            .get_crm_entity_permission_with_team(
-                Some(&macro_user_id),
-                &company_id,
-                EntityType::CrmCompany,
-            )
-            .await
-            .map_err(ExtractorError::from)?;
-
-        if !permission.satisfies::<T>() {
-            return Err(ExtractorError::Unauthorized);
-        }
-
-        let receipt = EntityAccessReceipt::try_new_authenticated_user(
-            macro_user_id,
-            Entity {
-                entity_id: company_id,
-                entity_type: EntityType::CrmCompany,
-            },
-            permission,
-        )?;
+        let receipt =
+            CrmCompanyReceipt::for_user(service.as_ref(), macro_user_id, &requested_id).await?;
 
         Ok(Self {
-            receipt: CrmCompanyReceipt::new(receipt, team_id, team_role),
+            receipt,
             _marker: PhantomData,
         })
     }

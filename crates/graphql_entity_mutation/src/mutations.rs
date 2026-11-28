@@ -444,8 +444,16 @@ pub enum GraphqlEntityMutationResult<E: SoupEntityEdges> {
 impl<E: SoupEntityEdges> GraphqlEntityMutationResult<E> {
     /// Construct a successful result that refreshes one entity's Soup record.
     pub fn from_updated_entity(entity: Entity<'static>) -> Self {
+        Self::from_updated_entities([entity])
+    }
+
+    /// Construct a successful result that refreshes the affected Soup records.
+    pub fn from_updated_entities(entities: impl IntoIterator<Item = Entity<'static>>) -> Self {
         Self::Success(GraphqlMutationSuccess {
-            effects: vec![EntityMutationEffect::updated(entity)],
+            effects: entities
+                .into_iter()
+                .map(EntityMutationEffect::updated)
+                .collect(),
             edges: PhantomData,
         })
     }

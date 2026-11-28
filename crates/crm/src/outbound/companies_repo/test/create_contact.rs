@@ -8,6 +8,54 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn manual_contact_replay_stays_scoped_to_its_company(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    seed_team(&pool, team_id, "macro|owner@example.com").await?;
+    let company = insert_company(&pool, team_id, true, &[]).await?;
+    let other = insert_company(&pool, team_id, true, &[]).await?;
+    let repo = CompaniesRepositoryImpl::new(pool);
+    let id = Uuid::now_v7();
+    let now = Utc::now();
+    let (first, replay) = tokio::try_join!(
+        repo.create_contact_for_company_with_id(
+            &team_id,
+            &company,
+            None,
+            "Contact",
+            now,
+            false,
+            Some(id)
+        ),
+        repo.create_contact_for_company_with_id(
+            &team_id,
+            &company,
+            None,
+            "Contact",
+            now,
+            false,
+            Some(id)
+        ),
+    )?;
+    assert_eq!(first.id, id);
+    assert_eq!(replay.id, id);
+    assert_eq!(replay.company_id, Some(company));
+    assert!(matches!(
+        repo.create_contact_for_company_with_id(
+            &team_id,
+            &other,
+            None,
+            "Contact",
+            now,
+            false,
+            Some(id)
+        )
+        .await,
+        Err(CrmError::ContactAlreadyExistsForCompany)
+    ));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn create_contact_inserts_contact(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
     seed_team(&pool, team_id, "macro|owner@example.com").await?;
