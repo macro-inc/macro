@@ -390,9 +390,11 @@ impl TursoStorage {
     /// Flushes the WAL when a COMMIT appended to it since the last flush,
     /// making every write so far survive an OS crash or power loss. Returns
     /// whether it flushed. The engine worker calls it once writes go quiet;
-    /// durable writes already flushed themselves. A failed flush latches the
-    /// reset a failed sync inside a COMMIT always has (`Io`): it is the same
-    /// flush, moved out of the COMMIT.
+    /// durable writes already flushed themselves. A failed flush latches a
+    /// reset, as a failed sync inside a COMMIT did: after a failed sync the OS
+    /// may drop the dirty pages, so a retry cannot be trusted. The reason is
+    /// `Io` because the COMMIT had answered; the shell reopens it the same way
+    /// as `TransactionOutcomeUncertain`.
     pub fn flush_wal(&self) -> Result<bool, TursoStorageError> {
         self.require_healthy()?;
         let result = self

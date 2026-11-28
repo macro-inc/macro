@@ -60,7 +60,8 @@ contract and the multi-target verification commands.
   the next read, so cache-turso copies the WAL itself, at fewer points. A
   caller that is not cache-turso must checkpoint on its own.
 - `connect` also sets `synchronous = NORMAL` (`DEFER_COMMIT_FLUSH`): a
-  COMMIT does not flush the WAL. A caller that needs a write to survive an OS
+  COMMIT does not flush the WAL, except that Turso syncs a new WAL header in
+  the first COMMIT after a checkpoint restarts the log. A caller that needs a write to survive an OS
   crash calls `flush_wal` (or its `WalFlusher`) after the COMMIT.
 - Local tests prove physical lock contention but not real cross-worker
   termination — don't read passing tests here as proof of that.
