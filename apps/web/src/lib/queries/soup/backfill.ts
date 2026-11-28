@@ -838,6 +838,16 @@ export const runSoupBackfill = (
     options
   );
 
+/** `runSoupBackfill` run to completion as a promise, for callers outside the
+ * Effect runtime (the Chat cache harness seeds its cache with it). */
+export function runSoupBackfillToCompletion(
+  userId: string,
+  host: SoupBackfillCacheHost,
+  params: SoupBackfillParams
+): Promise<boolean> {
+  return Effect.runPromise(runSoupBackfill(userId, host, params));
+}
+
 /** Runs one lane with its telemetry and retries; false when it was left. */
 const runTrackedSoupBackfill = (
   userId: string,

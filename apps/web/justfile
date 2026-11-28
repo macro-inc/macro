@@ -266,6 +266,18 @@ test-calendar-details-browser *ARGS:
 test-agent-screen-browser *ARGS:
     env -u LD_LIBRARY_PATH bunx playwright test --config src/features/agent-screen/browser-test/playwright.config.ts {{ARGS}}
 
+# Chat's sidebar data path over the real cache engine, headless, at 3,500 and
+# 7,000 channels. Fails on drift from its baseline, growth past twice the work
+# at twice the channels, or a visible-window cap
+# (src/features/channels-view/cache-harness/AGENTS.md).
+test-cache-harness *ARGS: build-cache-wasm
+    bunx vitest run --config src/lib/graphql-cache/headless/vitest.config.ts --maxWorkers=4 {{ARGS}}
+
+# Rewrites the cache harness's baseline from a run. Commit it with the change
+# that moved the counts, and say why in that change.
+test-cache-harness-update: build-cache-wasm
+    UPDATE_CHAT_CACHE_BASELINE=1 bunx vitest run --config src/lib/graphql-cache/headless/vitest.config.ts --maxWorkers=4 src/features/channels-view/cache-harness
+
 # Optimistic mutations through the real worker/WASM cache in Chromium. Same
 # LD_LIBRARY_PATH caveat as the sign-up browser tests above.
 test-functional *ARGS:

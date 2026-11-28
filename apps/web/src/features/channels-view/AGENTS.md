@@ -29,6 +29,10 @@ From `apps/web`:
 
 - `bun run test src/features/channels-view src/lib/queries/channel src/lib/queries/soup/graphql/items.test.ts`
 - `bun run check`
+- `just test-cache-harness src/features/channels-view/cache-harness` when a
+  change touches the sidebar's data path (queries, sections, the directory,
+  Soup, the cache): it counts that path's work at 3,500 and 7,000 channels and
+  fails on growth (`cache-harness/AGENTS.md`).
 
 Run repository `just check` before committing and `just check full` before pushing.
 Leave browser verification to the user when requested.
