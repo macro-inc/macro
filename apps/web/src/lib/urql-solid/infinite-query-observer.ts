@@ -1,8 +1,10 @@
+import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   type AnyVariables,
   type Client,
   type CombinedError,
   createRequest,
+  getOperationName,
   type OperationContext,
   type OperationResult,
 } from '@urql/core';
@@ -12,6 +14,7 @@ import {
   createReactiveSelection,
   type ReactiveSelection,
 } from './reactive-selection';
+import { TRACE_PARENT_CONTEXT_KEY } from './trace-parent-exchange';
 import type {
   UrqlInfiniteData,
   UrqlInfiniteQueryOptions,
@@ -91,6 +94,9 @@ type ReplacementCheck = {
  * failed, or it was stopped.
  */
 type RepairPassEnd = 'done' | 'moved' | 'failed' | 'stopped';
+
+/** What one repair pass did, for its span. */
+type RepairCounts = { read: number; dropped: number };
 
 /**
  * A pass that a moving page cut short waits before the next one, longer each
@@ -716,15 +722,33 @@ export class InfiniteQueryObserver<
   }
 
   private async runRepair(signal: AbortSignal): Promise<void> {
+    // Started by hand, not around the pass, so a pass that reads nothing
+    // still finishes before repairContinuations looks again.
+    const span = Telemetry.span('urql.continuation_repair');
+    const first = this.pages[0];
+    const operation =
+      first &&
+      getOperationName(
+        createRequest(this.options.query, first.variables).query
+      );
+    if (operation) span.setAttr('urql.repair.operation', operation);
+    span.setAttr('urql.repair.pages', this.pages.length);
+    span.setAttr('urql.repair.paused_ms', this.repairPauseMs);
+    const counts: RepairCounts = { read: 0, dropped: 0 };
     let end: RepairPassEnd = 'stopped';
     try {
-      end = await this.repairPass(signal);
+      end = await this.repairPass(signal, span, counts);
     } catch (cause) {
       if (!signal.aborted) {
         end = 'failed';
         this.setState({ repairError: toCombinedError(cause) });
       }
     } finally {
+      span.setAttr('urql.repair.pages_read', counts.read);
+      span.setAttr('urql.repair.pages_dropped', counts.dropped);
+      span.setAttr('urql.repair.outcome', end);
+      if (end === 'failed') span.error('Continuation repair read failed');
+      span.end();
       if (!signal.aborted) {
         this.repairPromise = undefined;
         this.setState({ repairing: false });
@@ -767,7 +791,11 @@ export class InfiniteQueryObserver<
    * read keeps the stale page, reports the error and ends the repair; the
    * next page update tries again.
    */
-  private async repairPass(signal: AbortSignal): Promise<RepairPassEnd> {
+  private async repairPass(
+    signal: AbortSignal,
+    span: Span,
+    counts: RepairCounts
+  ): Promise<RepairPassEnd> {
     let nextIndex = 1;
     let chain = this.checkContinuations();
     while (chain.kind === 'broken') {
@@ -782,14 +810,19 @@ export class InfiniteQueryObserver<
       if (pageIndex < nextIndex) return 'moved';
       nextIndex = pageIndex + 1;
       if (pageParam === null || pageParam === undefined) {
+        counts.dropped += this.pages.length - pageIndex;
         this.destroyPages(pageIndex);
         this.emit();
       } else {
         const stale = this.pages[pageIndex];
+        counts.read += 1;
         const outcome = await this.replacePage(
           pageIndex,
           pageParam,
-          { requestPolicy: 'network-only' },
+          {
+            requestPolicy: 'network-only',
+            context: { [TRACE_PARENT_CONTEXT_KEY]: span },
+          },
           signal,
           {
             complete: true,

@@ -1,9 +1,11 @@
+import { TRACE_PARENT_CONTEXT_KEY } from '@app/lib/urql-solid/trace-parent-exchange';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   isGraphqlServerFault,
   isTransientRequestError,
 } from '@core/util/request-error';
 import type { QueryRevalidation } from '@graphql-cache/exchange/optimistic';
+import type { TraceContext } from '@macro-inc/observability';
 import type { GraphqlNotificationPatch } from '@service-storage/graphql-soup-websocket';
 import { type Client, createRequest } from '@urql/core';
 
@@ -30,6 +32,8 @@ type Waiter = {
   reject: (error: unknown) => void;
   /** Waits its turn as live updates do, not as an explicit refresh. */
   background?: boolean;
+  /** The trace a read again joins, with every attempt the queue makes for it. */
+  trace?: TraceContext;
 };
 type Job = {
   query: QueryRevalidation;
@@ -177,9 +181,10 @@ export class ChannelNotificationRefresh {
    * Reads a registered query again as a live update would, in its turn and
    * under its backoff, and answers whether that read landed. It waits through
    * the retries of a failure that can recover, and answers false when the
-   * query cannot run, fails for good, or its readers close first.
+   * query cannot run, fails for good, or its readers close first. Each
+   * attempt sends in `trace`.
    */
-  readAgain(query: QueryRevalidation): Promise<boolean> {
+  readAgain(query: QueryRevalidation, trace?: TraceContext): Promise<boolean> {
     const job = this.jobs.get(
       createRequest(query.document, query.variables).key
     );
@@ -192,6 +197,7 @@ export class ChannelNotificationRefresh {
         resolve: () => resolve(true),
         reject: () => resolve(false),
         background: true,
+        trace,
       });
     });
     this.schedule();
@@ -408,9 +414,13 @@ export class ChannelNotificationRefresh {
     job.running = true;
     this.active += 1;
     try {
+      // A live update's read belongs to no flow; a read again belongs to its
+      // caller's, attempt by attempt.
+      const trace = job.waiters.find((waiter) => waiter.trace)?.trace;
       const result = await this.client
         .query(job.query.document, job.query.variables, {
           requestPolicy: 'network-only',
+          ...(trace && { [TRACE_PARENT_CONTEXT_KEY]: trace }),
         })
         .toPromise();
       if (this.disposed || epoch !== this.epoch || !job.readers.size) return;

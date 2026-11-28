@@ -1,3 +1,4 @@
+import { Telemetry } from '@macro-inc/observability';
 import {
   type Client,
   CombinedError,
@@ -13,6 +14,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fromValue, makeSubject, onEnd, pipe } from 'wonka';
 import { createUrqlInfiniteQuery } from './create-urql-infinite-query';
 import { InfiniteQueryObserver } from './infinite-query-observer';
+import { TRACE_PARENT_CONTEXT_KEY } from './trace-parent-exchange';
 
 type Page = {
   values: string[];
@@ -22,6 +24,7 @@ type Variables = { cursor: string | null };
 
 type FakeExecution = {
   variables: Variables;
+  context: Partial<OperationContext>;
   next(data: Page): void;
   /** Answers with data and an error together, as a partial response does. */
   partial(data: Page, error: CombinedError): void;
@@ -46,6 +49,7 @@ function makeFakeClient(): {
     } as Operation<Page, Variables>;
     executions.push({
       variables: request.variables,
+      context,
       next: (data) =>
         subject.next({ operation, data } as OperationResult<Page, Variables>),
       partial: (data, error) =>
@@ -704,6 +708,46 @@ describe('createUrqlInfiniteQuery', () => {
     );
     expect(query.isFetching).toBe(false);
     expect(fake.executions).toHaveLength(5);
+  });
+
+  it('records a repair pass on a span its reads send in', async () => {
+    const recorded: Record<string, unknown> = {};
+    const repairSpan = {
+      setAttr: (name: string, value: unknown) => {
+        recorded[name] = value;
+      },
+      error: vi.fn(),
+      end: vi.fn(),
+      run: <T,>(work: () => T) => work(),
+    };
+    const span = Telemetry.span.bind(Telemetry) as (
+      ...args: unknown[]
+    ) => unknown;
+    vi.spyOn(Telemetry, 'span').mockImplementation(((
+      name: string,
+      ...rest: unknown[]
+    ) =>
+      name === 'urql.continuation_repair'
+        ? repairSpan
+        : span(name, ...rest)) as typeof Telemetry.span);
+    const { fake } = await twoPagesRepairedWhile(() => true);
+
+    pushMemberAcross(fake);
+    await vi.waitFor(() => expect(fake.executions).toHaveLength(3));
+    expect(fake.executions[2]?.context[TRACE_PARENT_CONTEXT_KEY]).toBe(
+      repairSpan
+    );
+    fake.executions[2]?.next({ values: ['member', 'c'], nextCursor: null });
+    await vi.waitFor(() => expect(repairSpan.end).toHaveBeenCalledOnce());
+    expect(recorded).toEqual({
+      'urql.repair.operation': 'Page',
+      'urql.repair.pages': 2,
+      'urql.repair.paused_ms': 0,
+      'urql.repair.pages_read': 1,
+      'urql.repair.pages_dropped': 0,
+      'urql.repair.outcome': 'done',
+    });
+    expect(repairSpan.error).not.toHaveBeenCalled();
   });
 
   it('clears a failed repair once the chain holds again', async () => {

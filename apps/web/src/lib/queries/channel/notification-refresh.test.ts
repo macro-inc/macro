@@ -1,3 +1,4 @@
+import { TRACE_PARENT_CONTEXT_KEY } from '@app/lib/urql-solid/trace-parent-exchange';
 import type { QueryRevalidation } from '@graphql-cache/exchange/optimistic';
 import type { GraphqlNotificationPatch } from '@service-storage/graphql-soup-websocket';
 import { type Client, CombinedError, gql } from '@urql/core';
@@ -484,6 +485,26 @@ describe('shared channel notification refresh', () => {
     expect(answer).toHaveBeenCalledWith(true);
     await vi.advanceTimersByTimeAsync(60_000);
     expect(f.query).toHaveBeenCalledTimes(2);
+  });
+
+  it('sends every attempt of a read again in its caller trace, and live updates in none', async () => {
+    const f = setup();
+    f.register();
+    f.request.mockResolvedValueOnce({
+      error: new CombinedError({ networkError: new Error('offline') }),
+    });
+    const trace = { run: <T>(work: () => T) => work() };
+    const landed = f.queue.readAgain(descriptor(), trace);
+    await tick();
+    await vi.advanceTimersByTimeAsync(1000);
+    await expect(landed).resolves.toBe(true);
+    f.queue.onPatch(patch(), false);
+    await tick();
+    expect(f.query.mock.calls.map(([, , context]) => context)).toEqual([
+      { requestPolicy: 'network-only', [TRACE_PARENT_CONTEXT_KEY]: trace },
+      { requestPolicy: 'network-only', [TRACE_PARENT_CONTEXT_KEY]: trace },
+      { requestPolicy: 'network-only' },
+    ]);
   });
 
   it('answers that a read again did not land when its reader closes first', async () => {
