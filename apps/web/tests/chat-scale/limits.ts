@@ -29,6 +29,11 @@ export type StepMeasure = {
   /** `measureUserAgentSpecificMemory`, page and its workers, when offered. */
   agentMemoryMb: number | null;
   domNodes: number;
+  /** Conversation rows the rail had mounted once the step settled. */
+  rowsMounted: number;
+  /** What the step read from the server (`fixture.ts`): rows asked for,
+   * channel ids named by by-ID reads, and rows returned. */
+  server: { rowsRequested: number; idsRequested: number; rowsReturned: number };
   /** Chromium's counters over the step (`Performance.getMetrics`). */
   metrics: Record<string, number>;
   requests: BackendCounts;
@@ -213,6 +218,8 @@ export function summaryTable(runs: readonly ChatScaleRun[]): string {
         step.rowsMs === null ? '' : Math.round(step.rowsMs),
         step.heapMb.toFixed(1),
         step.domNodes,
+        step.rowsMounted,
+        `${step.server.rowsRequested} / ${step.server.rowsReturned}`,
         step.longTasks.count,
         step.longTasks.totalMs,
         step.longTasks.maxMs,
@@ -221,8 +228,8 @@ export function summaryTable(runs: readonly ChatScaleRun[]): string {
     })
   );
   return [
-    '| Channels | Step | Rows on screen (ms) | Heap (MB) | DOM nodes | Long tasks | Long tasks (ms) | Longest (ms) | Requests |',
-    '| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
+    '| Channels | Step | Rows on screen (ms) | Heap (MB) | DOM nodes | Rows mounted | Server rows asked / returned | Long tasks | Long tasks (ms) | Longest (ms) | Requests |',
+    '| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
     ...rows.map((row) => `| ${row} |`),
   ].join('\n');
 }

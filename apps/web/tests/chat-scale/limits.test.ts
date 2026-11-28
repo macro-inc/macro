@@ -27,6 +27,8 @@ function step(overrides: Partial<StepMeasure> = {}): StepMeasure {
     heapMb: 140,
     agentMemoryMb: null,
     domNodes: 1_622,
+    rowsMounted: 40,
+    server: { rowsRequested: 500, idsRequested: 0, rowsReturned: 500 },
     metrics: {},
     requests: NO_REQUESTS,
     ...overrides,
@@ -184,7 +186,7 @@ describe('summaryTable', () => {
     const table = summaryTable([run(3_500), run(7_000)]).split('\n');
     expect(table).toHaveLength(2 + 2 * STEP_NAMES.length);
     expect(table[2]).toBe(
-      '| 3500 | seed | 1600 | 140.0 | 1622 | 10 | 1000 | 170 | 0 |'
+      '| 3500 | seed | 1600 | 140.0 | 1622 | 40 | 500 / 500 | 10 | 1000 | 170 | 0 |'
     );
   });
 });

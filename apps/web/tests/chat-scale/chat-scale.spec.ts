@@ -19,12 +19,17 @@ import {
   type TestInfo,
   test,
 } from '@playwright/test';
+import { type Backend, type BackendCounts, createBackend } from './backend';
 import {
   type ChatFixture,
   createChatFixture,
   FIXTURE_NOW,
+  MIN_OUTSIDE_FIRST_PAGES,
+  MIN_SECTION_COVERAGE,
+  type SectionCoverage,
+  sectionCoverage,
+  VIEWER_ID,
 } from './fixture';
-import { type Backend, type BackendCounts, createBackend } from './backend';
 import {
   type ChatScaleRun,
   limitFailures,
@@ -55,7 +60,14 @@ const QUIET_MS = 3_000;
 const FIRST_ROWS = 15;
 const ROW = '[role="treeitem"]:not([aria-expanded])';
 const SCROLL_STEPS = 20;
+/** Pages read back up from the rail's end for its headings: more than
+ * Direct messages spans at 7,000 channels. */
+const HEADING_PAGES = 400;
+/** Jumps to the rail's end before it holds there. */
+const END_JUMPS = 20;
 const TOGGLED_SECTION = 'Direct messages';
+/** Chat's saved view (`features/channels-view/persistence.ts`), per viewer. */
+const SAVED_VIEW_KEY = 'macro:channels:view-state:v1';
 /** `CHANNEL_DIRECTORY_CHECKPOINT_ID` (`lib/queries/channel/directory-lane.ts`),
  * the last part of the channel lane's checkpoint key in `localStorage`. */
 const CHANNEL_LANE_KEY_SUFFIX = ':channel-directory-reconciled';
@@ -112,24 +124,39 @@ type RunEvidence = {
     hidden: number;
     restored: number;
   };
+  /** How much of the account the sections name, checked before the seed. */
+  sections: SectionCoverage;
+  /** The section headings the rail showed after the run, from its end up
+   * to Team channels: the viewer's saved state collapsed all but
+   * Favorites, Direct messages and one team section. */
+  savedView: { headings: Heading[] };
 };
+
+type Heading = { name: string; expanded: boolean };
 
 const ZERO_METRICS = Object.fromEntries(
   PERFORMANCE_METRICS.map((name) => [name, 0])
 ) as Metrics;
 
-/** Runs in every document before the app: long tasks from the start, and
- * when the rail first shows `firstRows` rows. */
+/** Runs in every document before the app: long tasks from the start, when
+ * the rail first shows `firstRows` rows, and the viewer's saved Chat state
+ * unless the app has written its own. */
 function observePage({
   firstRows,
   row,
+  savedViewKey,
+  savedView,
 }: {
   firstRows: number;
   row: string;
+  savedViewKey: string;
+  savedView: string;
 }): void {
   const state: PageState = { longTasks: [], rowsAt: undefined };
   Object.assign(globalThis, { chatScale: state });
   localStorage.setItem('macro:login', 'true');
+  if (localStorage.getItem(savedViewKey) === null)
+    localStorage.setItem(savedViewKey, savedView);
   new PerformanceObserver((list) => {
     for (const entry of list.getEntries())
       state.longTasks.push([entry.startTime, entry.duration]);
@@ -290,6 +317,88 @@ async function scrollOnePage(scroller: Locator) {
   });
 }
 
+/** The headings mounted now, by row key (`section:<group>` or
+ * `label:<id>`, after the rail's id in the DOM id). */
+async function mountedHeadings(rail: Locator): Promise<Heading[]> {
+  const found = await rail
+    .locator('[role="treeitem"][aria-expanded]')
+    .evaluateAll((items) =>
+      items.map((item) => ({
+        id: item.id,
+        expanded: item.getAttribute('aria-expanded') === 'true',
+      }))
+    );
+  return found.flatMap(({ id, expanded }) => {
+    const key = /-((?:section|label):.+)$/.exec(id)?.[1];
+    return key ? [{ key, expanded }] : [];
+  });
+}
+
+/** Whether each section's heading should read open: the built-in groups
+ * and every custom section, as `fixture.savedView` saved them. */
+function savedHeadings(fixture: ChatFixture): Record<string, boolean> {
+  const { expandedGroups, collapsedLabels } = fixture.savedView;
+  const labels = (['team', 'personal'] as const).flatMap(
+    (scope) => fixture.labels(scope).labels
+  );
+  return {
+    ...Object.fromEntries(
+      Object.entries(expandedGroups).map(([group, open]) => [
+        `section:${group}`,
+        open,
+      ])
+    ),
+    ...Object.fromEntries(
+      labels.map((label) => [
+        `label:${label.id}`,
+        !collapsedLabels.includes(label.id),
+      ])
+    ),
+  };
+}
+
+/** Jumps to the rail's end and pages back up until every expected heading
+ * has mounted or the top is reached, collecting the headings on the way.
+ * The rail virtualizes its sections at estimated heights, so one jump lands
+ * short of the end once they are measured: it jumps until the end holds. */
+async function headingsFromTheEnd(
+  rail: Locator,
+  scroller: Locator,
+  expected: Record<string, boolean>
+): Promise<Heading[]> {
+  const seen = new Map<string, boolean>();
+  const collect = async () => {
+    for (const heading of await mountedHeadings(rail))
+      seen.set(heading.key, heading.expanded);
+    return Object.keys(expected).every((key) => seen.has(key));
+  };
+  for (let jump = 0; jump < END_JUMPS; jump += 1) {
+    const atEnd = await scroller.evaluate(async (element) => {
+      element.scrollTop = element.scrollHeight;
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      return (
+        element.scrollTop + element.clientHeight >= element.scrollHeight - 1
+      );
+    });
+    if ((await collect()) || atEnd) break;
+  }
+  for (let page = 0; page < HEADING_PAGES; page += 1) {
+    if (await collect()) break;
+    const top = await scroller.evaluate(async (element) => {
+      const from = element.scrollTop;
+      element.scrollTop -= element.clientHeight;
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+      return from;
+    });
+    if (top === 0) break;
+  }
+  await scrollToTop(scroller);
+  return [...seen].map(([key, expanded]) => ({ key, expanded }));
+}
+
 async function scrollToTop(scroller: Locator): Promise<void> {
   await scroller.evaluate(async (element) => {
     element.scrollTop = 0;
@@ -311,6 +420,8 @@ type Session = {
   page: Page;
   cdp: CDPSession;
   backend: Backend;
+  fixture: ChatFixture;
+  rail: Locator;
   pageErrors: string[];
 };
 
@@ -322,8 +433,9 @@ async function measure(
   navigates: boolean,
   action: () => Promise<void>
 ): Promise<StepMeasure> {
-  const { page, cdp, backend } = session;
+  const { page, cdp, backend, fixture, rail } = session;
   const mark: BackendCounts = backend.counts();
+  const readMark = fixture.reads();
   const before = navigates ? ZERO_METRICS : await readMetrics(cdp);
   const startedAt = navigates
     ? 0
@@ -367,6 +479,12 @@ async function measure(
     heapMb: heap.usedSize / 2 ** 20,
     agentMemoryMb: memory === null ? null : memory / 2 ** 20,
     domNodes,
+    rowsMounted: await rail.locator(ROW).count(),
+    server: (({ rowsRequested, idsRequested, rowsReturned }) => ({
+      rowsRequested,
+      idsRequested,
+      rowsReturned,
+    }))(fixture.readsSince(readMark)),
     metrics: Object.fromEntries(
       PERFORMANCE_METRICS.map((name) => [
         name,
@@ -385,10 +503,21 @@ async function measureSize(
   testInfo: TestInfo
 ): Promise<SizeResult> {
   const fixture = createChatFixture(channels, FIXTURE_SEED);
+  // Sections that name only channels the first pages load would leave the
+  // rail nothing to resolve: refuse to measure that account.
+  const sections = sectionCoverage(fixture);
+  expect(
+    sections.held / sections.holdable,
+    'the sections hold nine in ten of the channels a section can hold'
+  ).toBeGreaterThanOrEqual(MIN_SECTION_COVERAGE);
+  expect(
+    sections.outsideFirstPages / sections.referenced,
+    'half the channels sections and favorites name are past the first pages'
+  ).toBeGreaterThanOrEqual(MIN_OUTSIDE_FIRST_PAGES);
   const backend = createBackend(DIST, fixture);
   const server = await backend.serve();
   const context = await browser.newContext();
-  const evidence: Partial<RunEvidence> = {};
+  const evidence: Partial<RunEvidence> = { sections };
   let diagnose = async (): Promise<unknown> => ({
     requests: backend.log(),
     backendErrors: backend.errors(),
@@ -397,6 +526,8 @@ async function measureSize(
     await context.addInitScript(observePage, {
       firstRows: FIRST_ROWS,
       row: ROW,
+      savedViewKey: `${SAVED_VIEW_KEY}:${VIEWER_ID}`,
+      savedView: JSON.stringify(fixture.savedView),
     });
     const page = await context.newPage();
     const pageErrors: string[] = [];
@@ -422,8 +553,15 @@ async function measureSize(
     await backend.routePage(page);
     const cdp = await context.newCDPSession(page);
     await cdp.send('Performance.enable');
-    const session: Session = { page, cdp, backend, pageErrors };
     const rail = page.getByRole('tree', { name: 'Conversations' });
+    const session: Session = {
+      page,
+      cdp,
+      backend,
+      fixture,
+      rail,
+      pageErrors,
+    };
     const rowsShown = () =>
       expect(rail.locator(ROW).nth(FIRST_ROWS - 1)).toBeVisible();
     const steps = {} as Record<StepName, StepMeasure>;
@@ -437,10 +575,14 @@ async function measureSize(
     });
     const seeded = await readLaneCheckpoint(page);
     const seededMb = await readStorageMb(page);
-    // The next load, over the cache that visit left.
+    // The next load, over the cache that visit left, through the channel
+    // lane's refresh pass: the lane can pause longer than the quiet window
+    // between pages, which would leave the rest of its pass to the next step.
     steps.coldOpen = await measure(session, true, async () => {
+      const pass = backend.channelPassFinished();
       await page.reload();
       await rowsShown();
+      await pass;
     });
     evidence.lane = { seed: seeded, coldOpen: await readLaneCheckpoint(page) };
     evidence.storageMb = {
@@ -460,6 +602,7 @@ async function measureSize(
     ).toBe(seeded?.storageGeneration);
 
     const { scroller, described } = await railScroller(rail);
+    evidence.savedView = { headings: [] };
     const messaged = messageChannel(fixture);
     const before = (await topChannels(rail, scroller)).includes(messaged);
     await backend.quiet(QUIET_MS);
@@ -544,6 +687,20 @@ async function measureSize(
       evidence.directMessageRows.restored,
       `expanding ${TOGGLED_SECTION} brought every one back`
     ).toBe(evidence.directMessageRows.hidden);
+
+    // Not measured: the headings, read from the rail's end back up, show the
+    // sections the fixture serves in the state the viewer saved.
+    const expected = savedHeadings(fixture);
+    const headings = await headingsFromTheEnd(rail, scroller, expected);
+    evidence.savedView = { headings };
+    expect(
+      Object.fromEntries(
+        headings
+          .filter((heading) => heading.key in expected)
+          .map((heading) => [heading.key, heading.expanded])
+      ),
+      'every section showed its heading, open as the viewer saved it'
+    ).toEqual(expected);
     return {
       run: {
         channels,
