@@ -1,8 +1,10 @@
 # Shared Changes viewer
 
-`changes.tsx` is the shared entry for PRs, agent sessions, and previews. A host
-supplies a `ChangesSource` and `ChangesHost`; `ChangesProvider` owns controller,
-view-state, and dismissal setup. Shared UI never reads agent-session context.
+`changes.tsx` supplies the shared controller and pane for agent sessions and
+legacy PR hosts. The redesigned PR page composes its own tabbed layout over the
+same controller and diff primitives. A host supplies a `ChangesSource` and
+`ChangesHost`; `ChangesProvider` owns controller, view-state, and dismissal setup.
+Shared UI never reads agent-session context.
 
 ```tsx
 <ChangesProvider context={{ source, host }}>
@@ -14,12 +16,13 @@ view-state, and dismissal setup. Shared UI never reads agent-session context.
 ```
 
 `AgentChangesProvider` in `agent-session-changes.tsx` supplies the harness source,
-linked PR metadata, and prompt-based note sending. `block-pr/component/PrChanges.tsx`
-supplies the storage-service PR source and existing PR metadata without an agent
-capability, so the same viewer stays read-only. Neither adapter duplicates the
-shared controller setup or owns the other adapter's queries. `browser-host.ts`
-provides clipboard, external navigation, and notifications explicitly at these
-production boundaries; the generic provider has no implicit browser actions.
+linked PR metadata, and prompt-based note sending. The retained
+`block-pr/component/PrChanges.tsx` adapter supplies the storage-service PR source
+without an agent capability. The redesigned PR page uses the same source through
+its own production composition, not `ChangesSplit`. Neither PR adapter changes the
+agent-session layout. `browser-host.ts` provides clipboard, external navigation,
+and notifications explicitly at production boundaries; the generic provider has
+no implicit browser actions.
 
 Give each host a stable `scopeKey` (for example, `pr:<foreign-entity-id>`) to isolate
 persisted layout, collapse state, and notes. The optional `agent` capability enables
@@ -65,19 +68,21 @@ diff's hunks has no row, so nothing lights and the file header stays in view.
 Unchanged relative files open on GitHub at the head commit. `browser-test/`
 clicks a rendered reply through all of it, in unified and split view.
 
-Native PR and Agents workspace hosts put their title row and content together
-inside `ChangesSplit`, so changes occupy the full height beside that row.
-Host title, sharing, and sidebar actions remain available on the left. The Changes
-button stays visible in split view: ghost while closed, accent text on a tinted
-background while open, without the shared foreground pressed overlay; clicking
+Native Agents workspace hosts and retained legacy PR hosts put their title row
+and content together inside `ChangesSplit`, so changes occupy the full height
+beside that row. Host title, sharing, and sidebar actions remain available on the
+left. The Changes button stays visible in split view: ghost while closed, accent
+text on a tinted background while open, without the shared foreground pressed
+overlay; clicking
 it again closes the pane. Below 28rem of the
 header's named `split-header` container, only Changes becomes icon-only, retaining
 its accessible name, tooltip, pressed state, and touch target. Breadcrumbs keep
 their existing layout. The button has no diff totals; those appear beside the
-pane's branch range and PR number in both split and full-width layouts. On a PR
-detail, the diff count pill also opens the pane when a controller is available;
-otherwise it remains a passive count. The pane slides in from the right edge on
-open and completely off that edge on close, without fading in either direction.
+pane's branch range and PR number in both split and full-width layouts. In a
+retained legacy PR host, the diff count pill also opens the pane when a controller
+is available; otherwise it remains a passive count. The pane slides in from the
+right edge on open and completely off that edge on close, without fading in
+either direction.
 In split view, the session shrinks alongside entry and expands alongside exit.
 Reduced-motion preferences disable both animations.
 Its resize panel stays registered until the exit animation completes; reopening
@@ -85,8 +90,8 @@ cancels exit without remounting the pane. Patch parsing and diff bodies are queu
 after the pane shell mounts, and off-screen bodies wait until needed.
 Split/full toggles retain the host and diff owners and restore the dragged split
 ratio without replaying the visibility slide or reparsing unchanged patch text.
-A host passes `hostMinWidth` to `ChangesSplit` (320px by default; a PR passes
-560px, which its header's title and actions need). A host no wider than that plus
+A host passes `hostMinWidth` to `ChangesSplit` (320px by default; the retained
+legacy PR adapter passes 560px for its header). A host no wider than that plus
 the pane's 400px opens Changes at full width and hides the width toggle,
 without changing the saved split ratio or route layout. Widening restores the
 requested wide layout and keeps the same conversation and diff owners.
@@ -114,10 +119,10 @@ panes. Moving the agent session header does not change that portal placement; fu
 embedded changes require a separate host-layout migration.
 
 The source owns fetching, cache identity, and conversion into the feature's core
-changeset types. The PR page's adapter is `block-pr/data/pr-changes.ts`, over
+changeset types. The PR adapter is `block-pr/data/pr-changes.ts`, over
 `GET /github_pull_requests/{id}/changes` and `/changes/patch` in the storage
-service; `block-pr/component/PrChanges.tsx` mounts it read-only under
-`pr:<foreign-entity-id>` without an agent session.
+service. The redesigned PR composition consumes that source without mounting the
+shared sliding pane. Its PR review capabilities remain separate from agent notes.
 
 Layout and diff style come from `createPaneViewState()` (`pane-view-state.ts`).
 Where the host's route lists `changesSearch.namespace` in its `search`, they live

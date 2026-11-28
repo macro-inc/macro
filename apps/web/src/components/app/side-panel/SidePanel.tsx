@@ -205,6 +205,8 @@ function Layout(
     headerToggle?: boolean;
     /** Desktop height of the header toggle; `md` matches a list header's New. */
     headerToggleSize?: 'sm' | 'md';
+    /** Host-specific dock width; the shared default and floating width stay unchanged. */
+    dockedWidth?: number;
     /** Render the panel over the block instead of reserving horizontal space. */
     floating?: boolean;
     /** Match Root's persistent floating behavior when Layout owns the Root. */
@@ -236,6 +238,7 @@ function Layout(
             persistentFloating={
               props.persistentFloating ?? ctx.persistentFloating()
             }
+            dockedWidth={props.dockedWidth}
           >
             {props.children}
           </SidePanelLayoutInner>
@@ -273,6 +276,7 @@ function SidePanelLayoutInner(
     setIsOverlayMode: Setter<boolean>;
     floating: boolean;
     persistentFloating: boolean;
+    dockedWidth?: number;
   }>
 ) {
   const resolved = children(() => props.children);
@@ -328,7 +332,12 @@ function SidePanelLayoutInner(
         <Resize.Panel
           id="side-panel-side"
           minSize={SIDE_MIN_PX}
-          maxSize={DEFAULT_SIDE_PANEL_WIDTH}
+          maxSize={props.dockedWidth ?? DEFAULT_SIDE_PANEL_WIDTH}
+          target={
+            props.dockedWidth === undefined
+              ? undefined
+              : { kind: 'px', px: props.dockedWidth }
+          }
           index={1}
         >
           <div class="relative flex size-full min-h-0 flex-col z-split-panel-chrome">

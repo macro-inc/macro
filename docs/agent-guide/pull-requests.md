@@ -15,101 +15,135 @@ For now, PR mentions (in messages, documents and Magic Chips) and an agent
 session's PR chip open the pull request on GitHub, not this view: a new tab on
 the web, the system browser in the desktop app. Reviews still opens it here.
 
-Macro-linked GitHub pull requests open inside the Reviews shell, with a Reviews
-breadcrumb, PR title/status, linked GitHub metadata, discussion timeline, and Details/Checks
-side panel below the top bar. The Checks summary names failed and pending checks
-before passes (`1 failed 2 pending 26 passed`), and failed checks list first. Failed
-means the conclusions the Reviews board's Failing column counts (`failure`,
-`timed_out`, `cancelled`, `action_required`, `startup_failure`). An open PR has a split button in the top bar
-beside **Changes** (`[data-pull-request-primary-action]` names its main action).
-For a draft the main action is **Ready for review**; otherwise it is **Merge**,
-disabled (with a tooltip) until every check has finished with a success, skipped,
-or neutral conclusion, so PRs with no checks or with running or failing checks
-cannot merge from it. The chevron beside it (**More pull request actions**) offers
-**Convert to draft** (non-drafts) and **Close pull request**; there is no
-confirmation for either. **Merge** opens a confirmation with the repository, PR
-number, and title, then merges on GitHub as the signed-in user through their
-linked account. GitHub's permissions and branch protections decide every change;
-a refusal appears as a toast with GitHub's reason, and a change refreshes the PR
-status in place. Without a linked GitHub account the toast points to Settings.
-Merged and closed PRs have no split button. PRs are not tasks and do not appear
-in the Tasks list. PRs cannot be favorited.
-**Ask Macro**, before Share, opens a new agent conversation whose unsent draft
-holds the PR chip with the PR's Macro id and GitHub URL; the agent reads the diff
-through the SDK's `githubPullRequests`. On touch screens the header's actions wrap
-onto their own row below the breadcrumb when it leaves no room for them.
-The **Share** button has a **Copy Share Link** button beside it, like other
-items. The "…" menu beside the PR title (in the Reviews breadcrumb, the standalone
-`/app/pr/<id>` page, and PR previews) holds the same changes as the split button,
-with **Merge** only once its checks pass, plus **Reopen pull request** for a
-closed unmerged PR; then **Copy Link** (the Macro link), **Copy ID**, **Copy
-GitHub link**, **Open on GitHub**, and **Copy branch name** when the head branch
-is stored.
-The metadata pills beneath the PR title include linked agent sessions, using the
-agent sparkle icon. A single session shows its name; several sessions show a
-count chip opening a session list. Selecting a session opens it, with Shift-click
-on the single-session chip opening another split. The same chip appears in PR
-list metadata without activating its containing PR row. Empty links show no chip;
-loading or inaccessible session previews are not navigable. PR status pills stay
-passive; status filtering uses the Reviews list's Open/Closed sliding tabs and
-filter menu.
-Opening **Changes** slides a full-height pane in from the right beside the PR details,
-including beside the PR top bar rather than underneath it. The PR details shrink
-alongside the entry slide instead of eagerly jumping narrower. The Changes pane
-has no outer top, right, or bottom border. The PR's `+N −M` diff count pill also
-opens the pane when changes are available; it remains a passive count without a
-Changes controller or when changes are unavailable.
-Closing slides the pane fully off the right edge while expanding the left pane,
-without fading in either direction or a final width snap. From full width, the PR
-details appear behind the sliding pane, without blank space. Reopening during exit
-keeps the same pane mounted.
-The pane shell opens before the diff bodies render. Reduced-motion preferences
-disable both animations.
-The PR breadcrumb and side-panel toggle remain above the left pane. The
-**Changes** toggle stays visible in split view, ghost while closed and accent text
-on a tinted background while open; clicking it again closes the pane. There is no standalone **Open on
-GitHub** button: the pane header has no visible Changes title, and its
-`head → base · #N` is one plain-text GitHub link, underlined on hover without a
-pill background or icon. GitHub diff totals and five green/red squares appear
-beside the PR number in both split and full-width layouts. The squares summarize
-the addition/deletion mix; the numbers retain exact totals. At full width, a smaller
-PR title appears before the link. Both title and totals come from the existing PR
-query; unavailable values stay hidden, without placeholders or captured-count
-fallbacks. File headers highlight on hover. When space is tight, the smaller
-branch/PR/count metadata wraps below the title, while pane actions stay separate.
-The Changes toggle has no diff totals and becomes icon-only below 28rem of header
-width, retaining its name, tooltip, and active state. Breadcrumbs keep their existing layout.
-The full-height file tree has a fixed header with its file count on the left and
-**Hide file tree** on the right. Borderless diff controls float above the diff stack
-rather than spanning the pane in a second toolbar. Unified/Split retains text labels
-at narrow non-touch widths on the left, with diff collapse/expand and refresh on
-the right. Hiding the tree moves its count
-and **Show file tree** above the diffs, as described in
-[AI Chat](ai-chat.md#reviewing-a-linked-github-pull-request).
-Spotlighting changes hides the left pane and its top bar; **Back to the split**
-restores the prior divider position and retains the draft, diff state, and scroll.
-A PR split 960px or narrower (the 560px its header needs plus the pane's 400px)
-opens Changes full-width over the PR instead of as a split inside the split,
-without that width toggle; widening restores the requested wide layout and split
-ratio. Beside the PR, dragging the divider stops at 560px for the PR.
-Narrow file trees start closed. **Show file tree** opens an animated drawer over the
-diffs without resizing them, including on phones. File selection, Escape, the
-backdrop, or **Hide file tree** closes the drawer and restores focus to its opener.
-The drawer does not change the saved wide-tree visibility or preferred width.
-Closing releases the drawer's dialog handlers immediately while its inert visual
-frame finishes exiting, so rapid reopening does not restore focus to a stale opener.
-The file tree has its own draggable, keyboard-resizable divider and remembers its
-width locally. Tree visibility uses the sidebar's shared width transition while
-retaining directory state and diff owners. Reduced motion skips this transition.
-The divider remains visible but inert through the tree's exit. Resizing the outer
-split or viewport settles active tree motion before applying the new geometry.
-**Copy path** briefly shows a non-pulsing success checkmark without collapsing
-the file. The PR viewer stays read-only and does not offer agent review notes.
-Copy Link from a PR in Quick Access copies `/app/reviews/pr/<foreignEntityId>`.
-Old `/app/pr/<foreignEntityId>` links redirect to Reviews. Check a copied link,
-a PR opened from a list or agent session, a second split, breadcrumb return,
-side-panel toggle, and phone layout. If no GitHub data loads, the detail shows
-an error banner with a Retry button; pressing it refetches the PR in place.
+Macro-linked GitHub pull requests open inside the Reviews shell. The docked app
+sidebar keeps its normal collapse and expand behavior. The PR page has **Overview**
+and **Changes** tabs, with GitHub addition/deletion totals on Changes. Switching
+tabs replaces the content in the same pane; it does not open a nested split.
+Old `/app/pr/<foreignEntityId>` links still redirect into Reviews, and copied
+links use `/app/reviews/pr/<foreignEntityId>`.
+
+## Header and Details
+
+The lifecycle icon shows open, draft, merged, or closed. The header's top fade
+also reflects requested changes and failing checks, without replacing the
+lifecycle icon. The title wraps rather than truncates. Its checks icon summarizes
+stored check runs; activating it opens a checks-only dialog with a wider surface,
+24px outer padding and section spacing, and 36px desktop rows (44px on touch).
+Its header stays fixed while only the list scrolls. Phones retain a drawer.
+
+The pills show the author, opened date when known, a GitHub link, branch names,
+linked tasks, and GitHub labels. The GitHub link retains its number and external
+link icon at narrow widths. The branch pill opens the full head and base names
+with separate copy actions. The default base branch is omitted only when known.
+Optional backend data stays hidden until available; missing dates or reviewers
+are never guessed.
+
+At 1224px of PR-pane width, Overview can dock **Details** on the right. The
+header toggle remembers whether the column is shown without moving the text's
+left edge. Below that width, and always on Changes, the toggle opens the floating
+Details popover anchored below its toggle instead of at the window edge.
+Escape or the toggle closes it. Its transient open state is independent of
+the remembered docked-column choice. On phones, the Info island
+opens Details in a drawer. The drawer reuses the same checks, reviewer, stack,
+label, and linked-work lists with touch-size rows. Missing sections stay hidden.
+
+Above 1440px of PR-pane width, the header and content use a centered 1376px
+container with side hairlines beneath the band. The band's one fade spans the
+full PR pane behind the title, pills, and transparent tabs. The normal top bar
+never carries the tint. Only the scrolled status strip adds its own fill, fade,
+and bottom border. All breakpoints use the PR pane,
+not the browser window, so split panes and the app sidebar remain supported.
+
+## Overview
+
+Overview shows the GitHub Markdown description, then Discussion and the merge
+box. Long bodies collapse behind **Show more**. GitHub-hosted description and
+comment images use the shared Markdown image handling. **Hide bots** removes bot
+comments rather than replacing them with a collapsed bot row. Submitted reviews
+show their available state, including compact body-free events. Stored review
+comments retain their thread grouping and file reference. Suggested-change fences
+render as display-only suggestion blocks.
+
+The merge box summarizes checks. Lists order pending checks first, show up to
+five rows initially, and offer **Show all checks** for the rest. Each row shows
+status, duration, and an external link. Its merge
+action stays gray and disabled while unavailable; only an active merge is green.
+An author's pending reviewers appear when reviewer data is available. Existing
+merge, draft, close, and reopen actions keep GitHub's permission and branch
+protection checks. Merge asks for confirmation, and refusals use the existing
+toast feedback. **Ask Macro**, sharing, and the title menu retain their existing
+app actions. Ask Macro, labeled Share, and Details sit at the top bar's right
+end. Phone title menus also include Ask Macro and existing lifecycle actions.
+PRs remain separate from Tasks and cannot be favorited.
+
+## Changes
+
+Changes displays the captured patch through the shared diff renderer. The file
+tree docks on the right from 1162px of PR content-container width; below that the tree
+opens in a popover. Search and filters belong to its header. Selecting a file
+reveals that file in the diff. Hiding the tree gives its width back to the diff.
+This PR-specific composition does not change the agent-session Changes pane.
+
+One main-content background and page scroller serve Overview and Changes. The
+whole diff region has its own background. The title band scrolls naturally;
+the top bar stays visible, and the existing tabs pin at the page's top edge.
+The diff toolbar, file headers, and docked tree stick to that same page
+scroller, not an inner diff scroller. The toolbar offers Unified/Split when the
+diff has enough width, collapse/expand all, refresh, and the tree toggle. Below
+720px the diff is unified only; the narrowest toolbar folds secondary controls
+into a menu. Each file header shows its name before its directory, status,
+addition/deletion totals, copy-path action, and stored review-comment count.
+Sticky file headers are opaque; the file-tree header matches the toolbar background.
+Changes does not add a back button.
+New captures expand files with at most 40 changed lines; explicit collapse
+choices for that capture take precedence.
+
+The top bar does not auto-hide in either tab. After the title and pills scroll
+out, desktop's band tab row becomes option C's full-width status strip: lifecycle
+icon, PR number, checks-dialog trigger, optional stack pill, the same Tabs pill,
+and Merge. The row remains 48px tall with a shared state fade and bottom hairline.
+It switches at the measured title/pill boundary (typically about 86px), not on
+scroll direction. Details and the file tree always start below the strip.
+Under the persistent top bar, the strip sticks at 0px, the Changes toolbar and
+tree header at 48px, and file headers at 96px. Narrow desktop panes retain the
+strip; below 600px, tabs and Merge use their existing icon variants before
+labels can clip. At 400px the existing toolbar menu rules also apply. Phones keep
+their islands and pinned touch tabs without a status strip. Each tab restores
+its own page scroll position, and phone diff content clears the bottom island.
+
+## Unavailable review capabilities
+
+Stack chains, timeline pushes, merge-when-ready, re-running checks, commenting,
+replying, pending review comments, submitting reviews, resolving threads,
+committing suggestions, viewed-file state, commit statuses, required checks, and
+linking tasks from this page require additional backend support. Their typed
+sources return no data and their actions are hidden or unavailable; the page
+does not claim to persist local substitutes.
+
+Development previews can enable synthetic states with `?pr-samples=1`. The
+choice is remembered for the session; `?pr-samples=0` turns it off. The switch is
+restricted to local Vite development and the hosted development environment.
+Sample actions change only sample state and never write to GitHub. Use neutral
+sample records to inspect the review island, review form, sheets, and missing
+backend states. Sample mode is unavailable against production.
+Use `pr-scenario` with `open`, `draft`, `merged`, `closed`, `changes-requested`,
+`failing-checks`, `review-draft`, or `file-progress`. Author merge states use
+`author-merge` (running), `author-failing`, `author-waiting` (passed checks),
+and `author-ready`; reviewer states use `reviewer-merge` (running),
+`reviewer-failing`, and `reviewer-ready`. Reload after changing the scenario.
+The sample changeset contains 12 files; `file-progress` starts with three viewed.
+Draft file comments remain separate until review submission. Replies retain
+thread anchors, and resolving a sample thread removes all its replies.
+Sample mode disables live sharing instead of forwarding a real entity.
+Its safe state menu supports ready-for-review, draft, close, reopen, and merge
+without offering generic actions against a synthetic entity.
+
+Browser and touch verification use the running preview. Check tab alignment,
+sidebar-open and collapsed widths, a second split, Details docking and Escape,
+branch copying, check links, hide-bots behavior, whole-page scrolling and sticky
+controls, narrow diff controls, phone safe areas, and drawer focus restoration.
+A failed first load
+shows a local Retry control without blanking unrelated app chrome.
 Description screenshots hosted on GitHub (including `blob/…?raw=true` links)
 render in the body, in the browser and the desktop app; they must not show
 "This image could not be found."

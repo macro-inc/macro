@@ -36,6 +36,8 @@ export type DialogProps = {
   fullscreen?: boolean /* Fill the viewport */;
   children: JSX.Element /* Content children */;
   class?: string /* classes for content */;
+  /** Bound child flex regions and let the child, rather than the drawer body, own scrolling. */
+  layout?: 'flex';
   /** The dialog's accessible name, when it has no `Dialog.Title`. */
   'aria-label'?: string;
   open: boolean /* if dialog is open */;
@@ -94,10 +96,18 @@ function DialogDrawer(props: DialogProps) {
             class={cn('mx-auto max-w-[calc(100vw-16px)]', props.class)}
           >
             <MobileDrawer.Handle aria-hidden="true" />
-            <MobileDrawer.ScrollBody>
-              {/* Give desktop surfaces their natural height so their size-full
-                  and overflow-clip styles cannot clip the drawer's scroll body. */}
-              <div class="shrink-0 [&>[data-layer]>[data-surface]]:border-0! [&>[data-layer]>[data-surface]]:rounded-none [&>[data-layer]>[data-surface]]:bg-transparent">
+            <MobileDrawer.ScrollBody
+              class={props.layout === 'flex' ? 'overflow-hidden' : undefined}
+            >
+              {/* Intrinsic surfaces keep natural height; flex surfaces bound their own scroll regions. */}
+              <div
+                class={cn(
+                  '[&>[data-layer]>[data-surface]]:border-0! [&>[data-layer]>[data-surface]]:rounded-none [&>[data-layer]>[data-surface]]:bg-transparent',
+                  props.layout === 'flex'
+                    ? 'flex min-h-0 flex-auto flex-col overflow-hidden'
+                    : 'shrink-0'
+                )}
+              >
                 {props.children}
               </div>
             </MobileDrawer.ScrollBody>
@@ -190,6 +200,8 @@ function DesktopDialog(props: DialogProps) {
               props.fullscreen
                 ? 'size-full bg-page pl-(--safe-left) pr-(--safe-right)'
                 : 'w-200 max-w-[calc(100vw-16px)] elevated-surface [&>[data-layer]>[data-surface]]:border-0! [&>[data-layer]>[data-surface]]:bg-transparent [&>[data-layer]>[data-surface]]:rounded-[24px]',
+              props.layout === 'flex' &&
+                'flex min-h-0 flex-col overflow-hidden',
               animateOnOpen() &&
                 (props.fullscreen
                   ? 'dialog-fullscreen-open-animation'

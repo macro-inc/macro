@@ -121,6 +121,16 @@ describe('responsive dialog', () => {
     }
   );
 
+  it('lets bounded flex content own scrolling instead of the surrounding drawer body', async () => {
+    setup({ layout: 'flex' });
+    const dialog = await screen.findByRole('dialog', { name: 'Edit name' });
+    const body = dialog.querySelector('[data-drawer-scroll-body]');
+    expect(body?.classList.contains('overflow-hidden')).toBe(true);
+    expect(body?.classList.contains('overflow-y-auto')).toBe(false);
+    expect(body?.firstElementChild?.classList.contains('min-h-0')).toBe(true);
+    expect(body?.firstElementChild?.classList.contains('flex-auto')).toBe(true);
+  });
+
   it('focuses the first control and restores the opener on opening and reopening a drawer', async () => {
     const onOpenAutoFocus = vi.fn();
     const onCloseAutoFocus = vi.fn();

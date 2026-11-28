@@ -4,7 +4,10 @@ import type {
 } from '@core/comments/discussion';
 import type { GithubPullRequestComment } from '@service-storage/generated/schemas';
 import { describe, expect, it } from 'vitest';
-
+import {
+  prPageTimeline,
+  prPageTimelineFeed,
+} from '../primitives/pr-page-timeline';
 import { buildTimeline, type TimelineEntry } from './timeline';
 
 /** ISO timestamp at the given minute of a fixed hour. */
@@ -288,5 +291,105 @@ describe('buildTimeline', () => {
         100, 10, 11,
       ]);
     });
+  });
+});
+
+describe('PR page timeline', () => {
+  it('keeps a bodyless review before its previously drafted file thread', () => {
+    const entries = githubEntries(
+      prPageTimeline([
+        {
+          id: 7,
+          source: 'review',
+          body: '',
+          reviewState: 'approved',
+          authorLogin: 'example-user',
+          createdAt: at(3),
+        },
+        {
+          id: 8,
+          source: 'review_comment',
+          body: 'File note',
+          path: 'src/example.ts',
+          pullRequestReviewId: 7,
+          createdAt: at(1),
+        },
+        {
+          id: 9,
+          source: 'issue_comment',
+          body: 'Later note',
+          createdAt: at(4),
+        },
+      ])
+    );
+    expect(entries.map((entry) => entry.item.id)).toEqual([7, 8, 9]);
+    expect(entries[0].item).toMatchObject({
+      reviewState: 'approved',
+      body: '',
+    });
+    expect(entries[1].ts).toBeGreaterThan(entries[0].ts);
+  });
+
+  it('separates GitHub id namespaces and interleaves pushes by timestamp', () => {
+    const feed = prPageTimelineFeed(
+      [
+        {
+          id: 1,
+          source: 'issue_comment',
+          body: 'Discussion note',
+          createdAt: at(0),
+        },
+        {
+          id: 1,
+          source: 'review',
+          body: 'Review summary',
+          reviewState: 'commented',
+          createdAt: at(2),
+        },
+      ],
+      [{ id: 'example-push', label: 'Updated branch', createdAt: at(1) }]
+    );
+    expect(feed.map((entry) => entry.kind)).toEqual([
+      'comment',
+      'push',
+      'comment',
+    ]);
+    expect(new Set(feed.map((entry) => entry.key)).size).toBe(3);
+  });
+
+  it('removes a bot root without losing its human reply', () => {
+    const entries = githubEntries(
+      prPageTimeline(
+        [
+          {
+            id: 1,
+            source: 'review_comment',
+            authorLogin: 'example[bot]',
+            body: 'Generated note',
+            createdAt: at(0),
+          },
+          {
+            id: 2,
+            source: 'review_comment',
+            authorLogin: 'octocat',
+            body: 'Human reply',
+            inReplyToId: 1,
+            createdAt: at(1),
+          },
+        ],
+        true
+      )
+    );
+    expect(entries).toHaveLength(1);
+    expect(entries[0].item.id).toBe(2);
+  });
+
+  it('does not invent an event for an empty unsubmitted or unthreaded comment review', () => {
+    expect(prPageTimeline([{ id: 1, source: 'review', body: '' }])).toEqual([]);
+    expect(
+      prPageTimeline([
+        { id: 2, source: 'review', body: '', reviewState: 'commented' },
+      ])
+    ).toEqual([]);
   });
 });

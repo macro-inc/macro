@@ -4,6 +4,7 @@ import {
   type Component,
   createSignal,
   For,
+  type JSX,
   Match,
   Show,
   Switch,
@@ -28,6 +29,8 @@ export type TabOption<T extends string> = {
   icon?: Component<{ class?: string }>;
   /** Shown after the label in muted figures; strings retain caller formatting. */
   count?: number | string;
+  /** Non-interactive metadata beside the label, hidden for icon-only tabs. */
+  accessory?: JSX.Element;
   /**
    * A small attention dot after the label; `violet` where what is new was
    * picked by AI, as the app's violet means.
@@ -147,7 +150,7 @@ export function Tabs<T extends string>(props: TabsProps<T>) {
 
   return (
     <KSegmentedControl
-      ref={props.ref}
+      ref={(element) => props.ref?.(element)}
       aria-label={props['aria-label']}
       value={props.value ?? ''}
       onChange={select}
@@ -273,6 +276,7 @@ function OptionContent<T extends string>(props: {
           {props.option.count}
         </span>
       </Show>
+      <Show when={!props.iconOnly}>{props.option.accessory}</Show>
       <Show when={props.option.dot && !iconOnly()}>
         <span
           aria-hidden="true"

@@ -8,7 +8,8 @@
  *
  * Rows are ordinary buttons, reached with Tab like the sidebar trees. The
  * arrow keys also move between rows, and Left/Right close and open a
- * directory.
+ * directory. Supply `closedPaths` and `onClosedPathsChange` when the host
+ * keeps folder state across dock and popover mounts or collapses all folders.
  */
 
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
@@ -85,6 +86,9 @@ type FileTreeRootProps<T> = {
   /** The selected file, by path. */
   selected?: string;
   onSelect?: (item: T) => void;
+  /** Controlled closed folders, shared across dock and popover mounts when supplied. */
+  closedPaths?: readonly string[];
+  onClosedPathsChange?: (paths: string[]) => void;
   /** What a file's row shows; lead with `FileTree.Icon`, then `FileTree.Name`. */
   children: (file: FileTreeFile<T>) => JSX.Element;
   /** What a directory's row shows; defaults to a folder and its name. */
@@ -95,16 +99,18 @@ type FileTreeRootProps<T> = {
 
 function Root<T>(props: FileTreeRootProps<T>) {
   const nodes = createMemo(() => buildFileTree(props.items, props.path));
-  const [closed, setClosed] = createSignal<ReadonlySet<string>>(new Set());
+  const [ownClosed, setOwnClosed] = createSignal<string[]>([]);
+  const closed = createMemo(() => new Set(props.closedPaths ?? ownClosed()));
   const isOpen = (path: string) => !closed().has(path);
-  const setOpen = (path: string, open: boolean) =>
-    setClosed((previous) => {
-      if (previous.has(path) !== open) return previous;
-      const next = new Set(previous);
-      if (open) next.delete(path);
-      else next.add(path);
-      return next;
-    });
+  const setOpen = (path: string, open: boolean) => {
+    const previous = closed();
+    if (previous.has(path) !== open) return;
+    const next = new Set(previous);
+    if (open) next.delete(path);
+    else next.add(path);
+    if (props.closedPaths === undefined) setOwnClosed([...next]);
+    else props.onClosedPathsChange?.([...next]);
+  };
   const toggle = (path: string) => setOpen(path, !isOpen(path));
   const rows = createMemo(() => visibleNodes(nodes(), isOpen));
 

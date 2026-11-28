@@ -357,7 +357,7 @@ export function StandalonePrDetail(props: { foreignEntityId: string }) {
   );
 }
 
-function PrTitle(props: {
+export function PrTitle(props: {
   prRef: PrRef;
   pullRequest?: GithubPullRequestWithDetails;
 }) {
@@ -368,7 +368,7 @@ function PrTitle(props: {
   );
 }
 
-function PrMetadata(props: {
+export function PrMetadata(props: {
   prRef: PrRef;
   pullRequest?: GithubPullRequestWithDetails;
 }) {
@@ -461,7 +461,9 @@ function PrMetadata(props: {
   );
 }
 
-function PrDescription(props: { pullRequest?: GithubPullRequestWithDetails }) {
+export function PrDescription(props: {
+  pullRequest?: GithubPullRequestWithDetails;
+}) {
   const description = createMemo(() => {
     const raw = props.pullRequest?.description;
     if (!raw) return null;
