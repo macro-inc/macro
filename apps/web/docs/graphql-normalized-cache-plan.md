@@ -1049,7 +1049,7 @@ without them is always ready, and a retired host
 reads into it. The reread runs after its pass, so
 later events never wait for the engine, and gives up after 60 s. A list that never shows, filters or sorts
 by unread state (the Quick Access and menu feeds) passes
-`ignoresNotifications: true`, and notification writes refresh with `notificationsOnly: true`, which skips it. Such a list also reads
+`ignoresNotifications: true`. Such a list reads
 its rows with `SoupPreviewPage` (the `preview` projection), so the server does
 not look up notifications for rows it never shows.
 

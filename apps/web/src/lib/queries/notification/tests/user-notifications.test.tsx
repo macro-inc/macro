@@ -5,7 +5,7 @@
 import type { UnifiedNotification } from '@notifications/types';
 import { createEffect, type JSX } from 'solid-js';
 import { render } from 'solid-js/web';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type UserNotificationsQuery,
   useMarkNotificationsAsDoneMutation,
@@ -17,14 +17,10 @@ const {
   createGraphqlMutationMock,
   createGraphqlQueryMock,
   executeGraphqlMutationMock,
-  graphqlCacheEnabledMock,
-  refreshActiveSoupQueriesMock,
 } = vi.hoisted(() => ({
   createGraphqlMutationMock: vi.fn(),
   createGraphqlQueryMock: vi.fn(),
   executeGraphqlMutationMock: vi.fn(),
-  graphqlCacheEnabledMock: vi.fn(() => true),
-  refreshActiveSoupQueriesMock: vi.fn(async () => undefined),
 }));
 
 vi.mock('@service-notification/client', () => ({
@@ -44,14 +40,6 @@ vi.mock('@service-storage/graphql-notifications', () => ({
   updateNotifications: vi.fn(),
 }));
 
-vi.mock('@queries/soup/graphql/active-queries', () => ({
-  refreshActiveGraphqlSoupQueries: refreshActiveSoupQueriesMock,
-}));
-
-vi.mock('@service-storage/graphql-soup', () => ({
-  graphqlCacheEnabled: graphqlCacheEnabledMock,
-}));
-
 vi.mock('../../client', () => ({ queryClient: {} }));
 
 type GraphqlMutationInput = { notificationIds: string[] };
@@ -61,7 +49,6 @@ type GraphqlMutationOptions = {
 };
 
 beforeEach(() => {
-  graphqlCacheEnabledMock.mockReturnValue(true);
   createGraphqlQueryMock.mockReturnValue({
     data: [],
     error: null,
@@ -239,10 +226,6 @@ describe('notification mutations', () => {
     vi.clearAllMocks();
   });
 
-  afterEach(() => {
-    graphqlCacheEnabledMock.mockReturnValue(true);
-  });
-
   it.each([
     ['seen', useMarkNotificationsAsSeenMutation, 'MARK_SEEN'],
     ['done', useMarkNotificationsAsDoneMutation, 'MARK_DONE'],
@@ -264,31 +247,11 @@ describe('notification mutations', () => {
         notificationIds: ['n1', 'n3'],
         operation,
       });
-      // The normalized cache propagates the result; no Soup refetch needed.
-      expect(refreshActiveSoupQueriesMock).not.toHaveBeenCalled();
       cleanup();
     }
   );
 
-  it('refreshes active Soup queries when the GraphQL cache is unavailable', async () => {
-    graphqlCacheEnabledMock.mockReturnValue(false);
-    executeGraphqlMutationMock.mockResolvedValue([]);
-
-    let mutatePromise: Promise<unknown> | undefined;
-    const cleanup = renderInRoot(() => {
-      const mutation = useMarkNotificationsAsSeenMutation();
-      mutatePromise = mutation.mutateAsync({ notificationIds: ['n1'] });
-      return null;
-    });
-
-    await mutatePromise;
-
-    expect(refreshActiveSoupQueriesMock).toHaveBeenCalledOnce();
-    cleanup();
-  });
-
-  it('rejects when the GraphQL mutation fails, without refreshing Soup', async () => {
-    graphqlCacheEnabledMock.mockReturnValue(false);
+  it('rejects when the GraphQL mutation fails', async () => {
     const failure = new Error('Connection failed');
     executeGraphqlMutationMock.mockRejectedValue(failure);
 
@@ -300,7 +263,6 @@ describe('notification mutations', () => {
     });
 
     await expect(mutatePromise).rejects.toBe(failure);
-    expect(refreshActiveSoupQueriesMock).not.toHaveBeenCalled();
     cleanup();
   });
 });

@@ -468,7 +468,6 @@ export function useSoupAstItemsQuery(
       }),
       // Grouped lists don't report it yet, so writes still read them again.
       cacheMaintained: () => activeGraphqlQuery().cacheMaintained?.() ?? false,
-      ignoresNotifications: () => options?.().ignoresNotifications ?? false,
     })
   );
 
