@@ -1,9 +1,10 @@
-//! Datadog trace-log correlation for JSON logs.
+//! Trace-log correlation for JSON logs.
 //!
 //! Wraps a [`FormatEvent`] to inject `dd.trace_id` and `dd.span_id` into each
-//! JSON log line so that Datadog APM can correlate logs with distributed traces.
+//! JSON log line so that Datadog APM can correlate logs with distributed traces,
+//! and `otel.trace_id` and `otel.span_id`, the W3C IDs, for Grafana.
 
-use opentelemetry::trace::TraceContextExt as _;
+use opentelemetry::trace::{SpanContext, TraceContextExt as _};
 use tracing::Subscriber;
 use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 use tracing_subscriber::{
@@ -11,11 +12,13 @@ use tracing_subscriber::{
     registry::LookupSpan,
 };
 
-/// Wraps an inner [`FormatEvent`] formatter to inject `dd.trace_id` and
-/// `dd.span_id` into each JSON log line.
+/// Wraps an inner [`FormatEvent`] formatter to inject `dd.trace_id`,
+/// `dd.span_id`, `otel.trace_id` and `otel.span_id` into each JSON log line.
 ///
 /// Datadog expects trace IDs as the lower 64 bits of the 128-bit OpenTelemetry
-/// trace ID, represented as a decimal string.
+/// trace ID, represented as a decimal string. That half can't find the trace
+/// anywhere else, so the line also carries the IDs as W3C hex, which the
+/// observability stack's ingest sets as the log record's trace and span.
 pub(crate) struct DatadogFormat<F> {
     pub(crate) inner: F,
 }
@@ -54,13 +57,16 @@ where
 }
 
 /// Read the OpenTelemetry span context from the current [`tracing::Span`] and
-/// insert `dd.trace_id` / `dd.span_id` as decimal strings.
+/// insert its trace fields.
 fn inject_dd_trace_context(obj: &mut serde_json::Map<String, serde_json::Value>) {
     let span = tracing::Span::current();
     let cx = span.context();
-    let otel_span = cx.span();
-    let sc = otel_span.span_context();
+    insert_trace_fields(obj, cx.span().span_context());
+}
 
+/// Insert `dd.trace_id` / `dd.span_id` as decimal strings and
+/// `otel.trace_id` / `otel.span_id` as lowercase hex.
+fn insert_trace_fields(obj: &mut serde_json::Map<String, serde_json::Value>, sc: &SpanContext) {
     if !sc.is_valid() {
         return;
     }
@@ -82,4 +88,54 @@ fn inject_dd_trace_context(obj: &mut serde_json::Map<String, serde_json::Value>)
         "dd.span_id".into(),
         serde_json::Value::String(dd_span_id.to_string()),
     );
+    obj.insert(
+        "otel.trace_id".into(),
+        serde_json::Value::String(sc.trace_id().to_string()),
+    );
+    obj.insert(
+        "otel.span_id".into(),
+        serde_json::Value::String(sc.span_id().to_string()),
+    );
+}
+
+#[cfg(test)]
+mod tests {
+    use opentelemetry::trace::{SpanContext, SpanId, TraceFlags, TraceId, TraceState};
+
+    use super::insert_trace_fields;
+
+    #[test]
+    fn writes_datadog_and_w3c_ids() {
+        let sc = SpanContext::new(
+            TraceId::from_hex("4bf92f3577b34da6a3ce929d0e0e4736").unwrap(),
+            SpanId::from_hex("00f067aa0ba902b7").unwrap(),
+            TraceFlags::SAMPLED,
+            false,
+            TraceState::default(),
+        );
+        let mut obj = serde_json::Map::new();
+        insert_trace_fields(&mut obj, &sc);
+
+        assert_eq!(
+            obj["dd.trace_id"],
+            u64::from_str_radix("a3ce929d0e0e4736", 16)
+                .unwrap()
+                .to_string()
+        );
+        assert_eq!(
+            obj["dd.span_id"],
+            u64::from_str_radix("00f067aa0ba902b7", 16)
+                .unwrap()
+                .to_string()
+        );
+        assert_eq!(obj["otel.trace_id"], "4bf92f3577b34da6a3ce929d0e0e4736");
+        assert_eq!(obj["otel.span_id"], "00f067aa0ba902b7");
+    }
+
+    #[test]
+    fn writes_nothing_without_a_span() {
+        let mut obj = serde_json::Map::new();
+        insert_trace_fields(&mut obj, &SpanContext::empty_context());
+        assert!(obj.is_empty());
+    }
 }
