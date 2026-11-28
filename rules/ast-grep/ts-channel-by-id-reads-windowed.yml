@@ -32,7 +32,7 @@ rule:
   kind: import_specifier
   has:
     field: name
-    regex: ^(useCachedChannelsByIds|useChannelsByIdsQuery|channelsByIdsQueryArgs)$
+    regex: ^(useChannelsByIdsQuery|channelsByIdsQueryArgs)$
   inside:
     kind: import_statement
     stopBy: end
