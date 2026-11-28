@@ -182,32 +182,39 @@ function observePage({
     for (const entry of list.getEntries())
       state.longTasks.push([entry.startTime, entry.duration]);
   }).observe({ type: 'longtask', buffered: true });
-  // The rows are shown once the rail's `firstRows`-th row, the one
-  // `rowsShown` asserts, is rendered and not clipped out of the rail or the
-  // window. An IntersectionObserver reads that in the browser's own
+  // The rows are shown once `firstRows` of the rail's rows are on screen at
+  // once: rendered, not hidden, and not clipped out of the rail or the
+  // window. An IntersectionObserver reports each row in the browser's own
   // rendering step, so the timer forces no layout in the measured page.
-  let watched: Element | undefined;
+  const watched = new WeakSet<Element>();
+  const onScreen = new Set<Element>();
+  const forget = (target: Element): void => {
+    onScreen.delete(target);
+    shown.unobserve(target);
+    watched.delete(target);
+  };
   const shown = new IntersectionObserver((entries) => {
-    for (const entry of entries) {
-      if (entry.target !== watched || entry.intersectionRatio === 0) continue;
-      if (!entry.target.checkVisibility({ visibilityProperty: true })) {
-        // Watched again on the next mutation, which reports it afresh.
-        shown.unobserve(entry.target);
-        watched = undefined;
-        continue;
-      }
-      state.rowsAt = entry.time;
-      shown.disconnect();
-      rows.disconnect();
-      return;
+    for (const { target, intersectionRatio } of entries) {
+      if (!target.isConnected) forget(target);
+      else if (intersectionRatio === 0) onScreen.delete(target);
+      else if (target.checkVisibility({ visibilityProperty: true }))
+        onScreen.add(target);
+      // A hidden row is observed afresh on the next mutation, which reports
+      // it again.
+      else forget(target);
     }
+    for (const target of onScreen) if (!target.isConnected) forget(target);
+    if (onScreen.size < firstRows) return;
+    state.rowsAt = Math.max(...entries.map((entry) => entry.time));
+    shown.disconnect();
+    rows.disconnect();
   });
   const rows = new MutationObserver(() => {
-    const last = document.querySelectorAll(`${tree} ${row}`)[firstRows - 1];
-    if (last === undefined || last === watched) return;
-    if (watched !== undefined) shown.unobserve(watched);
-    watched = last;
-    shown.observe(last);
+    for (const target of document.querySelectorAll(`${tree} ${row}`)) {
+      if (watched.has(target)) continue;
+      watched.add(target);
+      shown.observe(target);
+    }
   });
   rows.observe(document, { childList: true, subtree: true });
 }
