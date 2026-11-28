@@ -76,6 +76,13 @@ export type GraphqlSoupAstItemsQuery = {
   refresh: () => Promise<void>;
 };
 
+/** A finished channel-list row, as the projection lists it. */
+type ChannelItem = {
+  key: string;
+  entity: ChannelEntity;
+  timestamp: number | undefined;
+};
+
 /** Translate the legacy REST-shaped request and project reactive Soup records. */
 export function createGraphqlSoupAstItemsQuery(
   args: Accessor<GraphqlSoupAstItemsQueryArgs>,
@@ -191,11 +198,6 @@ export function createGraphqlSoupAstItemsQuery(
       };
     }
   );
-  type ChannelItem = {
-    key: string;
-    entity: ChannelEntity;
-    timestamp: number | undefined;
-  };
   const channelItems = new WeakMap<
     ProjectionRow,
     {

@@ -3,6 +3,7 @@ import { resolveNotifiedAt } from '@queries/soup/normalized-cache/notified-floor
 import { resolveOwnTouch } from '@queries/soup/normalized-cache/own-touch';
 import type { ChannelListItemFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import type { GraphqlSoupItem } from '@service-storage/graphql-soup';
+import { match } from 'ts-pattern';
 import { CHANNEL_LIST_ROW_NAME } from '../../../graphql-cache/protocol';
 
 /** The live-view row name hosts that shape rows accept (`live_row_shape`). */
@@ -63,8 +64,12 @@ export function adoptChannelListRow(row: object): void {
     ROWS.add(row);
 }
 
+// The state comes from the network: anything else reads as seen.
 const notificationState = (state: string): 'unseen' | 'seen' | 'done' =>
-  state === 'UNSEEN' ? 'unseen' : state === 'DONE' ? 'done' : 'seen';
+  match<string, 'unseen' | 'seen' | 'done'>(state)
+    .with('UNSEEN', () => 'unseen')
+    .with('DONE', () => 'done')
+    .otherwise(() => 'seen');
 
 function message(
   value: ChannelRecord['latestMessage'] | undefined
