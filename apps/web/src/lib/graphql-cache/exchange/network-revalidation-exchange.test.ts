@@ -8,6 +8,7 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { empty, makeSubject, mergeMap, pipe, type Subject } from 'wonka';
 import { createQueryAuthorization } from '../../queries/authorization';
+import { TRACE_PARENT_CONTEXT_KEY } from '../../urql-solid/trace-parent-exchange';
 import {
   networkRevalidated,
   networkRevalidationExchange,
@@ -92,6 +93,28 @@ describe('networkRevalidationExchange', () => {
     expect(events).toEqual(['list', 'detail', 'saved']);
     list.unsubscribe();
     detail.unsubscribe();
+  });
+
+  it('reads the queries again in the trace the write named', async () => {
+    const { client, requests, respond, flush } = setup();
+    const list = client.query(LIST, {}).subscribe(() => {});
+    respond(0);
+    const parent = { run: vi.fn(<T>(work: () => T) => work()) };
+    const saved = client
+      .mutation(SAVE, {}, { [TRACE_PARENT_CONTEXT_KEY]: parent })
+      .toPromise();
+    respond(1);
+    await flush();
+    expect(parent.run).toHaveBeenCalledOnce();
+    // The re-sent list names the reread's trace, not its first request's.
+    const resent = requests[2].operation.context[TRACE_PARENT_CONTEXT_KEY];
+    expect(resent).toBeDefined();
+    expect(resent).not.toBe(
+      requests[0].operation.context[TRACE_PARENT_CONTEXT_KEY]
+    );
+    respond(2);
+    await saved;
+    list.unsubscribe();
   });
 
   it('captures fresh authorization for mutation-triggered revalidation', async () => {
