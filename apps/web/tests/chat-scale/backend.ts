@@ -1,15 +1,17 @@
 /**
  * Everything the Chat scale tier's page talks to, answered in the test
  * process: the built app's files, the fixture (`fixture.ts`) over Soup GraphQL,
- * its websocket and the section lists, a signed-in viewer with no team, and
- * an empty answer from every other service the app asks at startup.
+ * its websocket, the section lists and channel previews, a signed-in viewer
+ * with no team, and an empty account's answer, in each response type, to the
+ * other services the app asks at startup.
  *
  * The page's own requests are routed here (`routePage`); a worker's go to
  * `serve`'s port, which answers the same way. Every request and operation is
- * counted, so a run shows what the app asked for, and every frame the fixture
- * could not answer is an error. A required GraphQL field the fixture does not
- * serve (the shell's calendars, tags, pending sends) is answered empty and
- * counted in `defaulted`.
+ * counted, so a run shows what the app asked for. A service request with no
+ * answer here, a GraphQL error and a read the fixture cannot serve are each an
+ * error (`errors`), which fails the run. A required GraphQL field the fixture
+ * does not serve (the shell's calendars, tags, pending sends) is answered
+ * empty and counted in `defaulted`.
  */
 import { readFileSync } from 'node:fs';
 import {
@@ -58,9 +60,29 @@ const SCHEMA = buildSchema(
 const DSS_HEADERS = { 'x-macro-crm-access': 'none' };
 
 /** An empty account's answers to what the app shell asks at startup, by
- * method and path, in each service's response type. A path missing here is
- * answered `{}`; add it when that answer breaks the page. */
+ * method and path, in each service's response type. A service request that is
+ * not here, in `NOT_FOUND` or in `NO_CONTENT` fails the run: add its answer
+ * here. */
 const REST_ANSWERS: Record<string, unknown> = {
+  // Cookie sessions refresh with this; the app reads only the status.
+  'POST /auth/jwt/refresh': {
+    access_token: 'fixture',
+    refresh_token: 'fixture',
+  },
+  'GET /cognition/import/state': { runs: [], entities: [] },
+  'GET /dss/calendar-events': {
+    hasMore: false,
+    items: [],
+    syncStatus: 'ready',
+  },
+  'POST /dss/databases/starter': {
+    created: false,
+    databaseId: null,
+    tableId: null,
+    viewId: null,
+  },
+  'POST /email/email/links/health-check': {},
+  'GET /scheduled-action/scheduled-actions/draft-jobs': [],
   'GET /dss/crm/member-access': { team_id: null, allowed: false },
   'GET /auth/user/me': {
     user_id: VIEWER_ID,
@@ -98,6 +120,12 @@ const REST_ANSWERS: Record<string, unknown> = {
 
 /** A viewer with no team or GitHub link gets these as not found. */
 const NOT_FOUND = new Set(['GET /auth/team', 'GET /auth/link/github/status']);
+
+/** Writes their services answer with 204 and no body. */
+const NO_CONTENT = new Set(['POST /scheduled-action/suggestions/seen']);
+
+/** How long `quiet` waits for a pause before it fails the step. */
+const QUIET_LIMIT_MS = 120_000;
 
 /** Non-null scalars a missing field answers with. */
 const EMPTY_SCALARS: Record<string, unknown> = {
@@ -175,15 +203,18 @@ export type Backend = {
   push(operation: string, frame: unknown): Promise<number>;
   counts(): BackendCounts;
   since(mark: BackendCounts): BackendCounts;
-  /** Answers the fixture could not give, and frames it could not execute. */
+  /** Service requests with no answer here, GraphQL errors, frames that could
+   * not execute, and reads the fixture cannot serve. */
   errors(): string[];
   /** The first requests, in order, for a run that went wrong. */
   log(): string[];
   /** Resolves once a channel backfill pass returns its last page after this
-   * call. */
+   * call; rejects when one of its pages could not be served. */
   channelPassFinished(): Promise<void>;
-  /** Resolves once no request has arrived for `ms`, with when the last one
-   * did (epoch ms). */
+  /** Resolves once nothing is in flight and nothing moved (a request, an
+   * answer, a socket message, a push) for `ms`, counted from this call at
+   * the earliest, with when the last thing moved (epoch ms). Rejects after
+   * `QUIET_LIMIT_MS` without such a pause. */
   quiet(ms: number): Promise<number>;
 };
 
@@ -240,11 +271,49 @@ export function createBackend(dist: string, fixture: ChatFixture): Backend {
     defaulted: {},
   };
   const errors: string[] = [];
+  const unanswered = new Set<string>();
   const log: string[] = [];
   const documents = new Map<string, DocumentNode>();
   const open = new Map<string, OpenSubscription>();
-  const passWaiters: Array<() => void> = [];
-  let lastRequest = Date.now();
+  const passWaiters: Array<{
+    resolve: () => void;
+    reject: (error: Error) => void;
+  }> = [];
+  const channelsById = new Map(
+    fixture.channels.map((channel) => [channel.id, channel])
+  );
+  let inFlight = 0;
+  let lastActivity = Date.now();
+  const touch = () => {
+    lastActivity = Date.now();
+  };
+  /** Counts `work` as in flight until it has answered. */
+  const track = async <T>(work: () => Promise<T>): Promise<T> => {
+    inFlight += 1;
+    touch();
+    try {
+      return await work();
+    } finally {
+      inFlight -= 1;
+      touch();
+    }
+  };
+
+  /** `POST /dss/channels/preview`: each fixture channel, by id. */
+  const channelPreviews = (body: string) => {
+    const { channel_ids } = JSON.parse(body) as { channel_ids: string[] };
+    return channel_ids.map((id) => {
+      const channel = channelsById.get(id);
+      return channel
+        ? {
+            type: 'access',
+            channel_id: id,
+            channel_name: channel.name,
+            channel_type: channel.channelType,
+          }
+        : { type: 'does_not_exist', channel_id: id };
+    });
+  };
 
   const parsed = (query: string, name: string): DocumentNode => {
     const cached = documents.get(query);
@@ -282,6 +351,7 @@ export function createBackend(dist: string, fixture: ChatFixture): Backend {
     const request = JSON.parse(body) as GraphqlRequest;
     const name = request.operationName ?? 'anonymous';
     add(counts.operations, name);
+    const faultsBefore = fixture.reads().unsupported.length;
     const result = await execute({
       schema: SCHEMA,
       document: parsed(request.query, name),
@@ -291,8 +361,20 @@ export function createBackend(dist: string, fixture: ChatFixture): Backend {
       fieldResolver,
     });
     recordErrors(name, result);
+    // A page the fixture could not serve ends with no cursor too; it is an
+    // error, not the end of a pass.
+    const served =
+      (result.errors ?? []).length === 0 &&
+      fixture.reads().unsupported.length === faultsBefore;
+    if (name === 'SoupChannelDirectoryBackfill' && !served)
+      for (const waiter of passWaiters.splice(0))
+        waiter.reject(
+          new Error(
+            `a channel page failed: ${fixture.reads().unsupported.at(-1) ?? errors.at(-1)}`
+          )
+        );
     if (name === 'SoupChannelDirectoryBackfill' && nextCursor(result) === null)
-      for (const notify of passWaiters.splice(0)) notify();
+      for (const waiter of passWaiters.splice(0)) waiter.resolve();
     return json(result, DSS_HEADERS);
   };
 
@@ -304,9 +386,10 @@ export function createBackend(dist: string, fixture: ChatFixture): Backend {
     const path = url.pathname;
     add(counts.requests, `${method} ${path}`);
     if (log.length < LOG_LIMIT) log.push(`${method} ${path}${url.search}`);
-    lastRequest = Date.now();
     if (method === 'POST' && path === '/dss/items/soup/graphql')
       return await graphql(body);
+    if (method === 'POST' && path === '/dss/channels/preview')
+      return json({ previews: channelPreviews(body) }, DSS_HEADERS);
     if (method === 'GET' && /^\/dss\/channel-(labels|sections)$/.test(path))
       return json(
         fixture.labels(url.searchParams.get('scope') ?? undefined),
@@ -317,7 +400,14 @@ export function createBackend(dist: string, fixture: ChatFixture): Backend {
     if (path === '/auth/user/legacy_user_permissions') return json(VIEWER);
     if (key in REST_ANSWERS) return json(REST_ANSWERS[key], headers);
     if (NOT_FOUND.has(key)) return { status: 404, headers, body: '' };
-    if (SERVICE_PREFIX.test(path)) return json({}, headers);
+    if (NO_CONTENT.has(key)) return { status: 204, headers, body: '' };
+    if (SERVICE_PREFIX.test(path)) {
+      if (!unanswered.has(key)) {
+        unanswered.add(key);
+        errors.push(`no answer for ${key} (REST_ANSWERS)`);
+      }
+      return { status: 501, headers, body: '' };
+    }
     const file = method === 'GET' ? bundleFile(dist, path) : undefined;
     if (file) return { status: 200, headers: file.headers, body: file.body };
     return undefined;
@@ -346,6 +436,7 @@ export function createBackend(dist: string, fixture: ChatFixture): Backend {
   // graphql-transport-ws, as the app's `graphql-ws` client speaks it.
   const soupSocket = (socket: WebSocketRoute) => {
     socket.onMessage((raw) => {
+      touch();
       const message = JSON.parse(String(raw)) as {
         type: string;
         id?: string;
@@ -378,16 +469,18 @@ export function createBackend(dist: string, fixture: ChatFixture): Backend {
     const chunks: Buffer[] = [];
     for await (const chunk of request) chunks.push(chunk as Buffer);
     const url = new URL(request.url ?? '/', 'http://backend');
-    const found = await answer(
-      request.method ?? 'GET',
-      url,
-      Buffer.concat(chunks).toString('utf8')
-    );
-    if (!found) {
-      response.writeHead(404).end();
-      return;
-    }
-    response.writeHead(found.status, found.headers).end(found.body);
+    await track(async () => {
+      const found = await answer(
+        request.method ?? 'GET',
+        url,
+        Buffer.concat(chunks).toString('utf8')
+      );
+      if (!found) {
+        response.writeHead(404).end();
+        return;
+      }
+      response.writeHead(found.status, found.headers).end(found.body);
+    });
   };
 
   return {
@@ -397,6 +490,7 @@ export function createBackend(dist: string, fixture: ChatFixture): Backend {
         (socket) => {
           const path = new URL(socket.url()).pathname;
           add(counts.sockets, path);
+          touch();
           // Every other socket (the connection gateway's) stays open and
           // silent: closing it would only start the app's reconnects.
           if (SOUP_SOCKET.test(path)) soupSocket(socket);
@@ -409,24 +503,26 @@ export function createBackend(dist: string, fixture: ChatFixture): Backend {
           await route.abort();
           return;
         }
-        const found = await answer(
-          request.method(),
-          url,
-          request.postData() ?? ''
-        );
-        try {
-          await route.fulfill(
-            found
-              ? {
-                  status: found.status,
-                  headers: found.headers,
-                  body: found.body,
-                }
-              : { status: 404 }
+        await track(async () => {
+          const found = await answer(
+            request.method(),
+            url,
+            request.postData() ?? ''
           );
-        } catch {
-          // The page closed meanwhile.
-        }
+          try {
+            await route.fulfill(
+              found
+                ? {
+                    status: found.status,
+                    headers: found.headers,
+                    body: found.body,
+                  }
+                : { status: 404 }
+            );
+          } catch {
+            // The page closed meanwhile.
+          }
+        });
       });
     },
     async serve() {
@@ -459,6 +555,7 @@ export function createBackend(dist: string, fixture: ChatFixture): Backend {
       const targets = [...open.values()].filter(
         (each) => each.name === operation
       );
+      touch();
       for (const target of targets) {
         const result = await execute({
           schema: SCHEMA,
@@ -471,6 +568,7 @@ export function createBackend(dist: string, fixture: ChatFixture): Backend {
         target.socket.send(
           JSON.stringify({ id: target.id, type: 'next', payload: result })
         );
+        touch();
       }
       return targets.length;
     },
@@ -482,21 +580,34 @@ export function createBackend(dist: string, fixture: ChatFixture): Backend {
       sockets: subtract(counts.sockets, mark.sockets),
       defaulted: subtract(counts.defaulted, mark.defaulted),
     }),
-    errors: () => [...errors],
+    errors: () => [
+      ...errors,
+      ...fixture.reads().unsupported.map((read) => `fixture: ${read}`),
+    ],
     log: () => [...log],
     channelPassFinished: () =>
-      new Promise<void>((resolve) => {
-        passWaiters.push(resolve);
+      new Promise<void>((resolve, reject) => {
+        passWaiters.push({ resolve, reject });
       }),
     quiet(ms) {
-      return new Promise<number>((resolve) => {
+      const calledAt = Date.now();
+      return new Promise<number>((resolve, reject) => {
         const wait = () => {
-          const left = lastRequest + ms - Date.now();
-          if (left <= 0) {
-            resolve(lastRequest);
+          const now = Date.now();
+          if (now - calledAt > QUIET_LIMIT_MS) {
+            reject(
+              new Error(
+                `no ${ms} ms pause within ${QUIET_LIMIT_MS} ms (${inFlight} in flight)`
+              )
+            );
             return;
           }
-          setTimeout(wait, left);
+          const left = Math.max(lastActivity, calledAt) + ms - now;
+          if (inFlight === 0 && left <= 0) {
+            resolve(lastActivity);
+            return;
+          }
+          setTimeout(wait, Math.max(left, 50));
         };
         wait();
       });

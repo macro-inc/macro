@@ -1,6 +1,8 @@
+import { match } from 'ts-pattern';
 import { describe, expect, it } from 'vitest';
 import {
   type ChatScaleRun,
+  LOADS,
   limitFailures,
   STEP_NAMES,
   type StepMeasure,
@@ -36,7 +38,13 @@ function run(
   change: (name: StepName) => Partial<StepMeasure> = () => ({})
 ): ChatScaleRun {
   const steps = Object.fromEntries(
-    STEP_NAMES.map((name) => [name, step(change(name))])
+    STEP_NAMES.map((name) => [
+      name,
+      step({
+        rowsMs: LOADS.includes(name) ? 1_600 : null,
+        ...change(name),
+      }),
+    ])
   ) as Record<StepName, StepMeasure>;
   return {
     channels,
@@ -70,12 +78,73 @@ describe('limitFailures', () => {
     const failures = limitFailures([
       run(3_500, (name) =>
         name === 'coldOpen' || name === 'expand'
-          ? { longTasks: { count: 1, totalMs: 900, maxMs: 900 } }
+          ? { longTasks: { count: 1, totalMs: 1_200, maxMs: 1_200 } }
           : {}
       ),
     ]);
     expect(failures).toEqual([
-      '3500 channels, expand: longest task (ms): 900, limit 700',
+      '3500 channels, expand: longest task (ms): 1200, limit 1000',
+    ]);
+  });
+
+  it('holds rows on screen, the DOM and every long task total to its ceiling', () => {
+    const failures = limitFailures([
+      run(3_500, (name) =>
+        match(name)
+          .with('seed', () => ({ rowsMs: 8_100 }))
+          .with('coldOpen', () => ({
+            longTasks: { count: 30, totalMs: 9_500, maxMs: 600 },
+          }))
+          .with('scroll', () => ({
+            longTasks: { count: 30, totalMs: 5_100, maxMs: 300 },
+          }))
+          .with('collapse', () => ({ domNodes: 4_100 }))
+          .otherwise(() => ({}))
+      ),
+    ]);
+    expect(failures).toEqual([
+      '3500 channels, seed: rows on screen (ms): 8100, limit 8000',
+      '3500 channels, coldOpen: long tasks in all (ms): 9500, limit 9000',
+      '3500 channels, scroll: long tasks in all (ms): 5100, limit 5000',
+      '3500 channels, collapse: DOM nodes: 4100, limit 4000',
+    ]);
+  });
+
+  it('fails a load that never showed its rows', () => {
+    expect(
+      limitFailures([
+        run(3_500, (name) => (name === 'coldOpen' ? { rowsMs: null } : {})),
+      ])
+    ).toEqual(['3500 channels, coldOpen: rows on screen never measured']);
+  });
+
+  it('fails a step whose readings are under the floors', () => {
+    const empty = {
+      heapMb: 0,
+      domNodes: 0,
+      longTasks: { count: 0, totalMs: 0, maxMs: 0 },
+    };
+    const failures = limitFailures([
+      run(3_500, (name) =>
+        name === 'seed' || name === 'message' ? empty : {}
+      ),
+    ]);
+    expect(failures).toEqual([
+      '3500 channels, seed: heap (MB): 0, at least 10',
+      '3500 channels, seed: DOM nodes: 0, at least 200',
+      '3500 channels, seed: long tasks: 0, at least 1',
+      '3500 channels, message: heap (MB): 0, at least 10',
+      '3500 channels, message: DOM nodes: 0, at least 200',
+    ]);
+  });
+
+  it('fails a heap that grows with the account', () => {
+    const failures = limitFailures([
+      run(3_500),
+      run(7_000, (name) => (name === 'expand' ? { heapMb: 230 } : {})),
+    ]);
+    expect(failures).toEqual([
+      '3500 to 7000 channels, expand: heap growth: 1.64, limit 1.60',
     ]);
   });
 
@@ -115,7 +184,7 @@ describe('summaryTable', () => {
     const table = summaryTable([run(3_500), run(7_000)]).split('\n');
     expect(table).toHaveLength(2 + 2 * STEP_NAMES.length);
     expect(table[2]).toBe(
-      '| 3500 | seed |  | 140.0 | 1622 | 10 | 1000 | 170 | 0 |'
+      '| 3500 | seed | 1600 | 140.0 | 1622 | 10 | 1000 | 170 | 0 |'
     );
   });
 });

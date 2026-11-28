@@ -43,21 +43,21 @@ export type ChatScaleRun = {
 };
 
 /** The steps that load the page; the rest are what a viewer does in it. */
-const LOADS: readonly StepName[] = ['seed', 'coldOpen'];
+export const LOADS: readonly StepName[] = ['seed', 'coldOpen'];
 
 /**
- * Ceilings, the same at both sizes unless a size is named. A local run
+ * Ceilings, the same at both sizes unless a size is named. Two local runs
  * (2026-11-28) measured, at 3,500 / 7,000 channels: heap after collection
- * 156 / 198 MB at most, 1,637 DOM nodes at both, rows on screen 1.4–1.8 s
- * after navigation, a load's longest task 0.58 s and its tasks 2.6 s in all,
- * and an interaction's longest task 0.18 s and its tasks 1.6 s in all.
+ * 158 / 198 MB at most, 1,637 DOM nodes at both, rows on screen 1.4–2.0 s
+ * after navigation, a load's longest task 0.58 s and its tasks 2.9 s in all,
+ * and an interaction's longest task 0.37 s and its tasks 1.6 s in all.
  */
 export const CEILINGS = {
   heapMb: { 3500: 320, 7000: 400 } as Readonly<Record<number, number>>,
   domNodes: 4_000,
   rowsMs: 8_000,
   load: { longestTaskMs: 2_000, longTasksMs: 9_000 },
-  interaction: { longestTaskMs: 700, longTasksMs: 5_000 },
+  interaction: { longestTaskMs: 1_000, longTasksMs: 5_000 },
 } as const;
 
 /**
@@ -76,7 +76,53 @@ export const GROWTH = {
 
 export const LONG_TASK_FLOOR_MS = 500;
 
+/**
+ * The least a measured step can read: Chat open over thousands of channels
+ * holds tens of megabytes and hundreds of elements, and loading it runs long
+ * tasks. A reading under one of these is a measurement that did not happen
+ * (an observer that never ran, a page that never loaded), which would pass
+ * every ceiling.
+ */
+export const FLOORS = {
+  heapMb: 10,
+  domNodes: 200,
+  loadLongTasks: 1,
+} as const;
+
 type Check = { name: string; value: number; limit: number };
+
+function floorFailures(run: ChatScaleRun): string[] {
+  return STEP_NAMES.flatMap((name) => {
+    const step = run.steps[name];
+    const at = `${run.channels} channels, ${name}`;
+    const load = LOADS.includes(name);
+    const floors: Check[] = [
+      { name: `${at}: heap (MB)`, value: step.heapMb, limit: FLOORS.heapMb },
+      {
+        name: `${at}: DOM nodes`,
+        value: step.domNodes,
+        limit: FLOORS.domNodes,
+      },
+      ...(load
+        ? [
+            {
+              name: `${at}: long tasks`,
+              value: step.longTasks.count,
+              limit: FLOORS.loadLongTasks,
+            },
+          ]
+        : []),
+    ];
+    return [
+      ...(load && step.rowsMs === null
+        ? [`${at}: rows on screen never measured`]
+        : []),
+      ...floors
+        .filter((check) => check.value < check.limit)
+        .map((check) => describe(check, 'at least')),
+    ];
+  });
+}
 
 function ceilingChecks(run: ChatScaleRun): Check[] {
   const heapLimit = CEILINGS.heapMb[run.channels];
@@ -146,10 +192,10 @@ function growthChecks(small: ChatScaleRun, large: ChatScaleRun): Check[] {
   });
 }
 
-function describe(check: Check): string {
+function describe(check: Check, bound = 'limit'): string {
   const shown = (value: number) =>
     Number.isInteger(value) ? String(value) : value.toFixed(2);
-  return `${check.name}: ${shown(check.value)}, limit ${shown(check.limit)}`;
+  return `${check.name}: ${shown(check.value)}, ${bound} ${shown(check.limit)}`;
 }
 
 /** The measurements as a Markdown table, for the run's summary. */
@@ -181,8 +227,9 @@ export function summaryTable(runs: readonly ChatScaleRun[]): string {
   ].join('\n');
 }
 
-/** Every limit a run broke, or none. Growth needs both sizes; a run of one
- * size (`-g 3500`) checks only its ceilings. */
+/** Every limit a run broke, or none: floors and ceilings per size, growth
+ * between a size and its double. A run of one size (`-g 3500`) checks only
+ * that size's floors and ceilings. */
 export function limitFailures(runs: readonly ChatScaleRun[]): string[] {
   if (runs.length === 0) return ['no size was measured'];
   const bySize = [...runs].sort((a, b) => a.channels - b.channels);
@@ -196,6 +243,6 @@ export function limitFailures(runs: readonly ChatScaleRun[]): string[] {
   const failed = [...bySize.map(ceilingChecks), ...pairs]
     .flat()
     .filter((check) => check.value > check.limit)
-    .map(describe);
-  return [...unknown, ...failed];
+    .map((check) => describe(check));
+  return [...unknown, ...bySize.flatMap(floorFailures), ...failed];
 }
