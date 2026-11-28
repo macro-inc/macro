@@ -29,7 +29,9 @@ function register(query: Parameters<typeof registerActiveGraphqlSoupQuery>[0]) {
 describe('active GraphQL Soup queries', () => {
   it('acknowledges the scope actually dispatched when recovery queued behind a read', async () => {
     vi.useFakeTimers();
-    onTestFinished(() => vi.useRealTimers());
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
     const earlier = Promise.withResolvers<void>();
     const wrongScope = Promise.withResolvers<void>();
     let scope = 'original';
@@ -56,6 +58,24 @@ describe('active GraphQL Soup queries', () => {
     await vi.advanceTimersByTimeAsync(1000);
     await expect(ready).resolves.toBe(true);
     expect(dispatched).toEqual(['original', 'changed', 'original']);
+  });
+
+  it('credits recovery for a shared follow-up queued by a best-effort read', async () => {
+    vi.useFakeTimers();
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
+    const earlier = Promise.withResolvers<void>();
+    const refresh = vi.fn(async () => {}).mockReturnValueOnce(earlier.promise);
+    register({ isEnabled: () => true, refresh });
+    const initial = refreshActiveGraphqlSoupQueries();
+    const followUp = refreshActiveGraphqlSoupQueries();
+    const ready = recoverActiveGraphqlSoupQueries();
+    earlier.resolve();
+    await Promise.all([initial, followUp]);
+    await vi.advanceTimersByTimeAsync(1000);
+    await expect(ready).resolves.toBe(true);
+    expect(refresh).toHaveBeenCalledTimes(2);
   });
 
   it('retries failed readers and includes newly enabled readers without rereading successes', async () => {

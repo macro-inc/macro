@@ -48,12 +48,7 @@ async function refreshReader(
   const session = cacheSessionGeneration.capture();
   const current = readerRefreshes.get(query);
   if (current?.session === session) {
-    current.followUp ??= refreshAfter(
-      current.inFlight,
-      query,
-      session,
-      trackScope
-    );
+    current.followUp ??= refreshAfter(current.inFlight, query, session);
     return current.followUp;
   }
   const generation = ++refreshGeneration;
@@ -65,8 +60,7 @@ async function refreshReader(
 async function refreshAfter(
   inFlight: Promise<string | undefined>,
   query: ActiveGraphqlSoupQuery,
-  session: string,
-  trackScope: boolean
+  session: string
 ): Promise<string | undefined> {
   try {
     await inFlight;
@@ -75,7 +69,8 @@ async function refreshAfter(
   }
   if (!cacheSessionGeneration.isCurrent(session))
     throw new Error('GraphQL Soup refresh belongs to a retired session');
-  return refreshReader(query, trackScope);
+  // Recovery can join a follow-up queued by a best-effort refresh.
+  return refreshReader(query, true);
 }
 
 const queryScope = (query: ActiveGraphqlSoupQuery) => hashKey([query.body?.()]);
