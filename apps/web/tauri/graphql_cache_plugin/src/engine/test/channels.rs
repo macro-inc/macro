@@ -187,12 +187,12 @@ async fn write(
 }
 
 /// One channel page written again with one channel renamed: a channel list
-/// refetch that changed one row.
+/// refetch that changed one row. Every round renames the same channel, so each
+/// write differs from the one before it in exactly that row.
 fn one_channel_changed(seed: &[Op], round: usize) -> Op {
     let page = seed.iter().find(|op| op.lane == "channels").unwrap();
     let mut data = page.data.clone();
-    data["user"]["soup"]["items"][round % 100]["displayName"] =
-        serde_json::json!(format!("renamed {round}"));
+    data["user"]["soup"]["items"][0]["displayName"] = serde_json::json!(format!("renamed {round}"));
     Op {
         write: true,
         data,
@@ -393,8 +393,10 @@ fn native_channel_batches_bench() {
         let ignore_proof = std::env::var_os("CACHE_BENCH_IGNORE_PROOF").is_some();
         for round in 0..rounds {
             for step in ["unrelated", "one_channel"] {
+                // The warm-up wrote the first `rounds` variants; continue after
+                // them so every measured write changes the cache.
                 let op = match step {
-                    "unrelated" => unrelated[round % unrelated.len()].clone(),
+                    "unrelated" => unrelated[(rounds + round) % unrelated.len()].clone(),
                     _ => one_channel_changed(&seed, round),
                 };
                 // As the page does on the push that follows: the write says which
@@ -404,6 +406,10 @@ fn native_channel_batches_bench() {
                 let started = Mark::now();
                 let written = write(&handle, &docs, &op, &identity).await;
                 samples.record(&format!("write.{step}"), started);
+                assert!(
+                    written.revision_advanced,
+                    "round {round} {step}: a measured write changed nothing"
+                );
                 let unchanged = written.unchanged_views.unwrap_or_default();
                 proven.entry(step).or_default().push(
                     observations
