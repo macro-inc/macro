@@ -812,7 +812,6 @@ export class CoordinatorCore {
       this.claims.delete(transactionId);
   }
 
-
   enginePush(ownerEpoch: OwnerEpoch, push: CachePush): CoordinatorAction[] {
     if (!this.acceptsEngineMessages(ownerEpoch)) {
       return [this.dropStale(ownerEpoch, undefined, 'stale-epoch')];
@@ -1407,14 +1406,11 @@ export class CoordinatorCore {
     // While a newer build waits, a claimed head is settled by an engine of
     // this build, even a hidden one.
     const candidates =
-      visible.length === 0 &&
-      this.awaitingSettlements &&
-      this.unsettled()
+      visible.length === 0 && this.awaitingSettlements && this.unsettled()
         ? eligible
         : visible;
     return candidates.find((tabId) => tabId !== avoid) ?? candidates[0];
   }
-
 
   private route(
     queued: QueuedRequest,
