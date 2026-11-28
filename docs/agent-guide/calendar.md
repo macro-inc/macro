@@ -793,8 +793,10 @@ web subscriptions) carry a small RSS icon named `Subscription calendar` after th
 here, in Settings → Calendar, and on the phone navigation drawer's calendar rows and
 Busy calendars page. A calendar whose sync has been failing persistently carries a small
 warning icon whose tooltip shows `Sync failed: <provider error>`, Settings → Calendar's
-wording. The phone navigation drawer's calendar rows, which phones and tablets use
-instead of this sidebar, show no sync-failure mark. The account keeps syncing its other calendars and the badge clears on its own once that
+wording. Phones and tablets use the phone navigation drawer instead of this sidebar;
+touch has no hover, so its calendar rows show the same warning icon with
+`Sync failed: <provider error>` written under the name (the row grows to fit). The
+account keeps syncing its other calendars and the badge clears on its own once that
 calendar syncs again.
 The phone navigation drawer uses plain account captions and calendar rows rather
 than the old header-gear settings sheet. Visibility and color still write the same
