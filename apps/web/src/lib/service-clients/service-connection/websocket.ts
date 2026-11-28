@@ -29,6 +29,8 @@ export type FromWebsocketMessage = {
   trace?: Record<string, string>;
 };
 
+const GATEWAY_MAX_BACKOFF_MS = 30_000;
+
 export const connectionGatewaySessionTelemetry =
   createSessionWebsocketTelemetry('connection-gateway', resolveWsUrl);
 
@@ -40,8 +42,10 @@ export const ws = new WebsocketBuilder(
     new JsonSerializer<ToWebsocketMessage, FromWebsocketMessage>()
   )
   .withBuffer(new ArrayQueue())
-  .withBackoff(new LinearBackoff(500, 500))
-  .withMaxRetries(20)
+  // Retry without a limit, at most every 30 s: a fixed retry budget ran out
+  // during outages of about two minutes and left presence and realtime
+  // events disconnected for the rest of the session.
+  .withBackoff(new LinearBackoff(500, 500, GATEWAY_MAX_BACKOFF_MS))
   .onOpen(connectionGatewaySessionTelemetry.opened)
   .onError(connectionGatewaySessionTelemetry.failed)
   .onClose((_, event) => connectionGatewaySessionTelemetry.closed(event))
