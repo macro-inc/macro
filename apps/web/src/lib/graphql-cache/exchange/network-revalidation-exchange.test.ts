@@ -337,6 +337,54 @@ describe('networkRevalidationExchange', () => {
     list.unsubscribe();
   });
 
+  it('reads queries again for a write that committed without its rows, keeping its error', async () => {
+    const { client, respond, flush } = setup();
+    const list = client.query(LIST, {}).subscribe(() => {});
+    respond(0);
+    const saved = client.mutation(SAVE, {}).toPromise();
+    const error = new CombinedError({
+      graphQLErrors: [
+        {
+          message: 'A changed item could not be read back',
+          path: ['save', 'results', 0, 'effects'],
+        },
+      ],
+    });
+    respond(1, { data: { save: { results: [] } }, error });
+    await flush();
+    respond(2);
+    const result = await saved;
+    expect(result.error).toBe(error);
+    expect(networkRevalidated(result)).toBe(true);
+    list.unsubscribe();
+  });
+
+  it.each([
+    ['an error outside its rows', ['save'], undefined],
+    ['an HTTP 5xx', ['save', 'results', 0, 'effects'], 503],
+  ])(
+    'does not read queries again for a write with %s',
+    async (_case, path, status) => {
+      const { client, requests, respond, flush } = setup();
+      const list = client.query(LIST, {}).subscribe(() => {});
+      respond(0);
+      const saved = client.mutation(SAVE, {}).toPromise();
+      const error = new CombinedError({
+        graphQLErrors: [{ message: 'failed', path }],
+        response: status ? new Response(null, { status }) : undefined,
+      });
+      respond(1, { data: { save: { results: [] } }, error });
+      const result = await saved;
+      await flush();
+      expect(result.error).toBe(error);
+      expect(networkRevalidated(result)).toBe(false);
+      expect(
+        requests.filter(({ operation }) => operation.kind === 'query')
+      ).toHaveLength(1);
+      list.unsubscribe();
+    }
+  );
+
   it('reads queries again after a write whose response was lost, without holding its error', async () => {
     const { client, requests, respond, flush } = setup();
     const list = client.query(LIST, {}).subscribe(() => {});

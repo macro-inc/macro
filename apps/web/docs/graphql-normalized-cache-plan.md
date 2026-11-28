@@ -1028,7 +1028,9 @@ shows as `other`); the reason holds fixed text only: no filter value and no unre
 `transport: 'rest'` is a choice, not a fallback, and is not recorded.
 
 Without the cache, a committed GraphQL mutation reads every mounted query
-again before it settles (`networkRevalidationExchange`). A flat Soup list
+again before it settles (`networkRevalidationExchange`), including one whose
+only errors sit under its `effect` or `effects` fields (its caller still sees
+the error; an HTTP 5xx does not count). A flat Soup list
 or a project list reads its loaded pages again in cursor order, through the
 `networkRevalidation` its pages carry (`createPagedNetworkRevalidation`), so a
 moved page boundary neither repeats nor drops a row; a refetch already running

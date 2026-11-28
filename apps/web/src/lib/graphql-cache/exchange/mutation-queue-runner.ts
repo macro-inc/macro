@@ -65,6 +65,7 @@ import type {
   QueryRevalidationWire,
 } from '../protocol';
 import { cacheSessionGeneration } from '../session-generation';
+import { onlyEffectErrors } from './effect-errors';
 import type { MutationQueueOwner } from './mutation-queue-owner';
 import {
   failureDetails,
@@ -266,23 +267,6 @@ function mutationErrorCode(
   if (error?.networkError) return;
   const code = error?.graphQLErrors[0]?.extensions.code;
   return typeof code === 'string' ? code : undefined;
-}
-
-const EFFECT_FIELDS = new Set(['effect', 'effects']);
-
-/**
- * Errors only inside the rows a write returns: the write itself committed, and
- * only reading its rows back failed. The server reports a row it could not
- * read back the same way, so a reply without its rows always says so.
- */
-function onlyEffectErrors(error: CombinedError | undefined): boolean {
-  if (!error || error.networkError || error.graphQLErrors.length === 0)
-    return false;
-  return error.graphQLErrors.every((graphqlError) =>
-    (graphqlError.path ?? [])
-      .slice(1)
-      .some((segment) => EFFECT_FIELDS.has(String(segment)))
-  );
 }
 
 /** Server response kept until its local commit succeeds. */
