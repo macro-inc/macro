@@ -721,24 +721,34 @@ fn transaction<T>(
     }
 
     match operation() {
-        Ok(value) => match execute_control(connection, "COMMIT", TestControlPhase::Commit) {
-            Ok(_) => {
-                // Turso's own checkpoint would have run here at 1,000 frames.
-                // As with that one, the write stands whether or not the copy
-                // runs; a failed copy leaves the WAL whole. Only a transaction
-                // that wrote copies, so a read never retries a failed copy.
-                if wal_end.is_some() && connection.owned_wal_end() != wal_end {
-                    let _ = connection.checkpoint_over(CHECKPOINT_CAP_FRAMES);
+        Ok(value) => {
+            let commit_timer = crate::query_telemetry::QueryTimer::start();
+            match execute_control(connection, "COMMIT", TestControlPhase::Commit) {
+                Ok(_) => {
+                    // Turso's own checkpoint would have run here at 1,000 frames.
+                    // As with that one, the write stands whether or not the copy
+                    // runs; a failed copy leaves the WAL whole. Only a transaction
+                    // that wrote copies, so a read never retries a failed copy.
+                    if wal_end.is_some() && connection.owned_wal_end() != wal_end {
+                        if let Some(timer) = commit_timer {
+                            timer.finish_commit();
+                        }
+                        let copy_timer = crate::query_telemetry::QueryTimer::start();
+                        let copy = connection.checkpoint_over(CHECKPOINT_CAP_FRAMES);
+                        if let Some(timer) = copy_timer {
+                            timer.finish_capped_checkpoint(&copy);
+                        }
+                    }
+                    Ok(value)
                 }
-                Ok(value)
+                Err(_) => {
+                    let _ = execute_control(connection, "ROLLBACK", TestControlPhase::Rollback);
+                    Err(TursoStorageError::reset(
+                        PhysicalResetReason::TransactionOutcomeUncertain,
+                    ))
+                }
             }
-            Err(_) => {
-                let _ = execute_control(connection, "ROLLBACK", TestControlPhase::Rollback);
-                Err(TursoStorageError::reset(
-                    PhysicalResetReason::TransactionOutcomeUncertain,
-                ))
-            }
-        },
+        }
         Err(error) => match execute_control(connection, "ROLLBACK", TestControlPhase::Rollback) {
             Ok(_) => Err(error),
             Err(_) => Err(TursoStorageError::reset(

@@ -2000,6 +2000,10 @@ struct FaultIo {
     /// Reads from every file, so a test can tell a cached page from a read one.
     reads: Arc<AtomicU64>,
     database_writes: Arc<AtomicU64>,
+    /// Write requests to every file.
+    writes: Arc<AtomicU64>,
+    /// Syncs of every file.
+    syncs: Arc<AtomicU64>,
 }
 
 impl FaultIo {
@@ -2009,7 +2013,17 @@ impl FaultIo {
             fault: Arc::new(AtomicU8::new(IoFault::None as u8)),
             reads: Arc::new(AtomicU64::new(0)),
             database_writes: Arc::new(AtomicU64::new(0)),
+            writes: Arc::new(AtomicU64::new(0)),
+            syncs: Arc::new(AtomicU64::new(0)),
         })
+    }
+
+    fn writes(&self) -> u64 {
+        self.writes.load(Ordering::SeqCst)
+    }
+
+    fn syncs(&self) -> u64 {
+        self.syncs.load(Ordering::SeqCst)
     }
 
     fn arm(&self, fault: IoFault) {
@@ -2063,6 +2077,8 @@ impl IO for FaultIo {
             database: !path.ends_with("-wal"),
             reads: self.reads.clone(),
             database_writes: self.database_writes.clone(),
+            writes: self.writes.clone(),
+            syncs: self.syncs.clone(),
             inner: self.inner.open_file(path, flags, direct)?,
         }))
     }
@@ -2099,6 +2115,8 @@ struct FaultFile {
     database: bool,
     reads: Arc<AtomicU64>,
     database_writes: Arc<AtomicU64>,
+    writes: Arc<AtomicU64>,
+    syncs: Arc<AtomicU64>,
     inner: Arc<dyn File>,
 }
 
@@ -2160,6 +2178,7 @@ impl File for FaultFile {
         if self.database {
             self.database_writes.fetch_add(1, Ordering::SeqCst);
         }
+        self.writes.fetch_add(1, Ordering::SeqCst);
         self.inner.pwrite(pos, buffer, completion)
     }
 
@@ -2178,6 +2197,7 @@ impl File for FaultFile {
         if self.database {
             self.database_writes.fetch_add(1, Ordering::SeqCst);
         }
+        self.writes.fetch_add(1, Ordering::SeqCst);
         self.inner.pwritev(pos, buffers, completion)
     }
 
@@ -2192,6 +2212,7 @@ impl File for FaultFile {
         if self.take(IoFault::Sync) || (self.database && self.take(IoFault::DatabaseSync)) {
             return Err(CompletionError::IOError(std::io::ErrorKind::Other, "sync").into());
         }
+        self.syncs.fetch_add(1, Ordering::SeqCst);
         self.inner.sync(completion, sync_type)
     }
 
