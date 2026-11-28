@@ -44,12 +44,12 @@ import type {
 } from '../types';
 
 /** A desktop sidebar's list area, in rows (24 × 34px = 816px). */
-export const VIEWPORT_ROWS = 24;
+const VIEWPORT_ROWS = 24;
 /** Rows a section virtualizer mounts past each end of its visible range
  * (`ChannelRailVirtualizer`'s default overscan). */
-export const ROW_OVERSCAN = 6;
+const ROW_OVERSCAN = 6;
 /** Sections the section stack mounts past the visible ones. */
-export const SECTION_OVERSCAN = 3;
+const SECTION_OVERSCAN = 3;
 
 /** The rows of one open section on screen, as its virtualizer reports them
  * through `onRangeChange`: indexes into the section's rows, inclusive. */
@@ -124,7 +124,7 @@ function layoutSections(
 
 /** Which rows the section stack and its row virtualizers mount for a
  * viewport at `scrollTop`. */
-export function modelViewport(
+function modelViewport(
   rows: readonly ChannelRailRow[],
   isOpen: (key: ChannelSectionKey) => boolean,
   scrollTop: number
