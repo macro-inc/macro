@@ -472,7 +472,7 @@ const BOTS_STATIC: &str = r#"    redir /bots "/bots/?{query}" 308
     handle_path /bots/* {
         @read method GET HEAD
         handle @read {
-            root * /srv/bots
+            root * /srv/bots/current
             @doc path_regexp (?i)^/(|fleet/?|passwords/?|billing/?|sign-in/?|teams/[^/]+/bots/[^/]+/(overview|activity(/[^/]+)?|email|access)/?)$
             rewrite @doc /index.html
             file_server

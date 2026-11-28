@@ -18,6 +18,7 @@ import {
 } from './creator-profile';
 import {
   clearRestoredHireDraft,
+  clearWorkingDraft,
   type Draft,
   defaultDraft,
   draftName,
@@ -200,6 +201,7 @@ export default function Creator() {
   function finishHire() {
     setRestored(undefined);
     try {
+      clearWorkingDraft(sessionStorage);
       clearRestoredHireDraft(sessionStorage);
     } catch {
       setStorageUnavailable(true);

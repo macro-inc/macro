@@ -1,13 +1,11 @@
 import { useLocation } from '@solidjs/router';
 import { createResource, Match, Switch } from 'solid-js';
-import { session } from '../session';
 import type {
   BillingReader,
   BillingReading,
   BillingSnapshot,
   BillingTeam,
 } from './read';
-import { unavailableBilling } from './read';
 import { ReadState } from './read-state';
 import { Invoices, ModeledUsage, Usage } from './sections';
 import './style.css';
@@ -46,10 +44,7 @@ export default function Billing() {
         return readPage(sampleTeam, fixtureBilling(scenario));
       }
 
-      const identity = await session.getSession();
-      if (identity.status !== 'signed-in') return { status: 'unavailable' };
-
-      return readPage(identity.team, unavailableBilling);
+      return { status: 'unavailable' };
     }
   );
 

@@ -600,7 +600,7 @@ fn real_caddy_applies_the_generated_cookie_rules() {
 fn bots_routes_only_mount_when_requested() {
     let native = caddyfile(&test_instance(), Mode::Local, false, true);
     assert!(native.contains("handle_path /bots/*"));
-    assert!(native.contains("root * /srv/bots"));
+    assert!(native.contains("root * /srv/bots/current"));
     assert!(native.contains("@read method GET HEAD"));
     assert!(native.contains("rewrite @doc /index.html"));
     assert!(native.contains("handle_path /auth/*"));
