@@ -38,6 +38,12 @@ const SOUP_GRAPHQL_WEBSOCKET_PATH = '/items/soup/graphql/ws';
 export const SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS = Number.POSITIVE_INFINITY;
 
 const MAX_RETRY_DELAY_MS = 60_000;
+/** How long after the socket connects, or a set attaches on an open one, the
+ * server may still not be listening for it: graphql-ws reports the
+ * connection on the server's acknowledgement, before it sends the
+ * subscriptions, and the server starts each one's listener after reading it.
+ * Updates count as reaching the cache only from this long after. */
+export const SUBSCRIBE_REGISTRATION_MS = 5_000;
 
 /** The cookie refresh failed for a transient reason, such as an outage. */
 export class GraphqlSoupWebSocketAuthUnavailableError extends Error {
@@ -323,7 +329,8 @@ export function createGraphqlSoupSubscriptionsLifecycle(
   let connections = 0;
   let stopWatchingForReattach: (() => void) | undefined;
   let socketOpen = false;
-  // The set is subscribed and none of its subscriptions has ended or failed.
+  // The set writes the cache (it holds SoupUpdates), and none of its
+  // subscriptions has ended, failed, or failed to write the cache since.
   let attached = false;
   const [liveSince, setLiveSince] = createSignal<number | undefined>();
   // Updates reach the cache from now on, once the set that writes it is
@@ -335,7 +342,7 @@ export function createGraphqlSoupSubscriptionsLifecycle(
       currentHost !== undefined &&
       !currentHost.disabled
     )
-      setLiveSince(Date.now());
+      setLiveSince(Date.now() + SUBSCRIBE_REGISTRATION_MS);
   };
 
   // graphql-ws retries transient failures itself and gives up only on ones a
@@ -403,23 +410,22 @@ export function createGraphqlSoupSubscriptionsLifecycle(
               ({ document }) => document !== SoupUpdatesDocument
             );
       const setGeneration = generation;
-      // A subscription that failed or ended misses what follows, and no
-      // reconnect of the socket brings it back: only a new set does.
-      const ended = () => {
+      // A subscription that failed, ended, or lost an update on its way into
+      // the cache misses what follows, and no reconnect of the socket brings
+      // it back: only a new set does, on the next foreground or online signal.
+      const lost = () => {
         if (setGeneration !== generation) return;
         attached = false;
         setLiveSince(undefined);
+        reattachOnNextOpportunity();
       };
-      attached = true;
+      attached = host !== undefined && !host.disabled;
       unsubscribes = subscriptions.map(({ document, errorMessage }) => {
         const subscription = pipe(
           client.subscription(document, {}),
           // The server can end one with no result at all (a subscriber
           // that fell behind), which urql passes on only as the end.
-          onEnd(() => {
-            ended();
-            if (setGeneration === generation) reattachOnNextOpportunity();
-          }),
+          onEnd(lost),
           subscribe((result) => {
             if (document === ActivityUpdatesDocument) {
               activityHandler.onResult(
@@ -467,12 +473,16 @@ export function createGraphqlSoupSubscriptionsLifecycle(
               }
             }
             // An error may have ended the subscription, or dropped what it
-            // delivered: urql gives no end after a GraphQL error.
-            if (result.error || result.hasNext === false) ended();
-            // urql ends a subscription with a final `hasNext: false` result.
-            if (result.hasNext === false && setGeneration === generation) {
-              reattachOnNextOpportunity();
-            }
+            // delivered: urql gives no end after a GraphQL error. urql ends a
+            // subscription with a final `hasNext: false` result.
+            const metadata = normalizedCacheResultMetadata(result);
+            if (
+              result.error ||
+              result.hasNext === false ||
+              (metadata?.source === 'live-network' &&
+                metadata.cacheEffectsApplied === false)
+            )
+              lost();
           })
         );
         return () => subscription.unsubscribe();

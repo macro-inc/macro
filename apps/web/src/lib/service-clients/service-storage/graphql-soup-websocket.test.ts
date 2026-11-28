@@ -67,6 +67,7 @@ import {
   GraphqlSoupWebSocketAuthUnavailableError,
   publishNotificationPatch,
   SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS,
+  SUBSCRIBE_REGISTRATION_MS,
   shouldRetryGraphqlSoupWebSocket,
   subscribeToGraphqlNotificationPatches,
   waitToRetryGraphqlSoupWebSocket,
@@ -527,7 +528,9 @@ describe('GraphQL Soup subscription lifecycle', () => {
       expect(lifecycle.updatesLiveSince()).toBeUndefined();
       vi.setSystemTime(2_000);
       lifecycle.socketConnected();
-      expect(lifecycle.updatesLiveSince()).toBe(2_000);
+      expect(lifecycle.updatesLiveSince()).toBe(
+        2_000 + SUBSCRIBE_REGISTRATION_MS
+      );
 
       vi.setSystemTime(3_000);
       lifecycle.socketClosed();
@@ -537,37 +540,49 @@ describe('GraphQL Soup subscription lifecycle', () => {
       expect(lifecycle.updatesLiveSince()).toBeUndefined();
       vi.setSystemTime(4_000);
       lifecycle.socketConnected();
-      expect(lifecycle.updatesLiveSince()).toBe(4_000);
+      expect(lifecycle.updatesLiveSince()).toBe(
+        4_000 + SUBSCRIBE_REGISTRATION_MS
+      );
 
       // A subscription that ended or failed misses what follows.
       receive.at(-1)?.({ hasNext: true });
-      expect(lifecycle.updatesLiveSince()).toBe(4_000);
+      expect(lifecycle.updatesLiveSince()).toBe(
+        4_000 + SUBSCRIBE_REGISTRATION_MS
+      );
       receive.at(-1)?.({ error: new Error('lagging'), hasNext: false });
       expect(lifecycle.updatesLiveSince()).toBeUndefined();
       // Attached again on the open socket.
       vi.setSystemTime(5_000);
       lifecycle.replace(client as never, host as never);
-      expect(lifecycle.updatesLiveSince()).toBe(5_000);
+      expect(lifecycle.updatesLiveSince()).toBe(
+        5_000 + SUBSCRIBE_REGISTRATION_MS
+      );
 
       // Paused for navigation.
       dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
       expect(lifecycle.updatesLiveSince()).toBeUndefined();
       vi.setSystemTime(6_000);
       dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
-      expect(lifecycle.updatesLiveSince()).toBe(6_000);
+      expect(lifecycle.updatesLiveSince()).toBe(
+        6_000 + SUBSCRIBE_REGISTRATION_MS
+      );
 
       // A cache that takes no updates.
       host.disabled = true;
       expect(lifecycle.updatesLiveSince()).toBeUndefined();
       host.disabled = false;
-      expect(lifecycle.updatesLiveSince()).toBe(6_000);
+      expect(lifecycle.updatesLiveSince()).toBe(
+        6_000 + SUBSCRIBE_REGISTRATION_MS
+      );
       // Subscriptions without the cache host write no cache.
       lifecycle.replace(client as never);
       lifecycle.connected();
       expect(lifecycle.updatesLiveSince()).toBeUndefined();
 
       lifecycle.replace(client as never, host as never);
-      expect(lifecycle.updatesLiveSince()).toBe(6_000);
+      expect(lifecycle.updatesLiveSince()).toBe(
+        6_000 + SUBSCRIBE_REGISTRATION_MS
+      );
       lifecycle.dispose();
       expect(lifecycle.updatesLiveSince()).toBeUndefined();
     } finally {
@@ -645,6 +660,42 @@ describe('GraphQL Soup subscription lifecycle', () => {
       receive.at(-1)?.({ error: new Error('subscription failed') });
       expect(lifecycle.updatesLiveSince()).toBeUndefined();
       lifecycle.connected();
+      lifecycle.socketClosed();
+      lifecycle.socketConnected();
+      expect(lifecycle.updatesLiveSince()).toBeUndefined();
+
+      // The next foreground signal attaches a new set.
+      setVisibility('visible');
+      expect(client.subscription).toHaveBeenCalledTimes(6);
+      expect(lifecycle.updatesLiveSince()).toBeDefined();
+
+      // An update the cache failed to take is missed as well.
+      receive.at(-1)?.({
+        extensions: {
+          __macroNormalizedCache: {
+            source: 'live-network',
+            cacheEffectsApplied: false,
+          },
+        },
+      } as { error?: unknown });
+      expect(lifecycle.updatesLiveSince()).toBeUndefined();
+    } finally {
+      lifecycle.dispose();
+    }
+  });
+
+  it('says nothing reaches the cache from a set attached without the cache host, once the host is enabled', () => {
+    const client = {
+      query: vi.fn(),
+      subscription: vi.fn(() => resultSource(() => ({ unsubscribe: vi.fn() }))),
+    };
+    const host = { disabled: true, onCacheGenerationChanged: () => () => {} };
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
+    try {
+      lifecycle.replace(client as never, host as never);
+      lifecycle.socketConnected();
+      // The set holds no SoupUpdates subscription.
+      host.disabled = false;
       lifecycle.socketClosed();
       lifecycle.socketConnected();
       expect(lifecycle.updatesLiveSince()).toBeUndefined();
