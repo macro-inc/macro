@@ -4,12 +4,16 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   mutation: vi.fn(),
   refresh: vi.fn(),
+  host: vi.fn(),
+  unmaintained: vi.fn(),
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
   getEntityGraphqlClient: () => ({ mutation: mocks.mutation }),
+  getGraphqlCacheHost: mocks.host,
 }));
 vi.mock('../soup/graphql/active-queries', () => ({
   refreshActiveGraphqlSoupQueries: mocks.refresh,
+  getUnmaintainedGraphqlSoupRevalidations: mocks.unmaintained,
 }));
 vi.mock('@queries/client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
@@ -19,10 +23,14 @@ vi.mock('@queries/client', async () => {
 import { UpdateEntitySharePoliciesDocument } from '@service-storage/graphql/generated/graphql';
 import { queryClient } from '../client';
 import { createGraphqlSoupDeletion } from '../soup/graphql/optimistic-deletions';
+
+const UNMAINTAINED = [{ document: 'unmaintained-list', variables: {} }];
+
 import {
   duplicateEntity,
   moveEntity,
   restoreEntity,
+  trashEntity,
   updateEntitySharePolicy,
   usesGraphqlSharePolicy,
 } from './entity-mutations';
@@ -30,6 +38,8 @@ import {
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.refresh.mockResolvedValue(undefined);
+  mocks.host.mockReturnValue({ disabled: false });
+  mocks.unmaintained.mockReturnValue(UNMAINTAINED);
   mocks.mutation.mockReturnValue({
     toPromise: async () => ({
       data: {
@@ -47,6 +57,76 @@ beforeEach(() => {
 });
 
 afterEach(() => queryClient.clear());
+
+const trashed = (effects: unknown) => ({
+  toPromise: async () => ({
+    data: {
+      trashEntities: {
+        results: [{ __typename: 'GraphqlMutationSuccess', effects }],
+      },
+    },
+    error:
+      effects === null
+        ? new CombinedError({
+            graphQLErrors: [
+              {
+                message: 'effects',
+                path: ['trashEntities', 'results', 0, 'effects'],
+              },
+            ],
+          })
+        : undefined,
+  }),
+});
+
+it('reads only the lists the cache cannot keep current after a write', async () => {
+  mocks.mutation.mockReturnValue(trashed([]));
+  await trashEntity({ type: 'DOCUMENT', id: 'entity' });
+  expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith({
+    unmaintainedOnly: true,
+  });
+});
+
+it('leaves the lists to the client without a live cache', async () => {
+  // Its exchange read every mounted list before the write settled.
+  mocks.host.mockReturnValue(undefined);
+  mocks.mutation.mockReturnValue(trashed([]));
+  await trashEntity({ type: 'DOCUMENT', id: 'entity' });
+  expect(mocks.refresh).not.toHaveBeenCalled();
+});
+
+it.each([
+  ['a live cache', { disabled: false }],
+  ['no live cache', undefined],
+])(
+  'reads every list after a write whose rows never came back, with %s',
+  async (_, host) => {
+    mocks.host.mockReturnValue(host);
+    mocks.mutation.mockReturnValue(trashed(null));
+    await trashEntity({ type: 'DOCUMENT', id: 'entity' });
+    expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith({
+      unmaintainedOnly: false,
+    });
+  }
+);
+
+it('queues a move with the lists to read once it commits, and reads none itself', async () => {
+  mocks.mutation.mockReturnValue({
+    toPromise: async () => ({
+      data: {
+        moveEntities: {
+          results: [{ __typename: 'GraphqlMutationSuccess', effects: [] }],
+        },
+      },
+    }),
+  });
+  await moveEntity({ type: 'DOCUMENT', id: 'entity' }, 'project');
+  expect(mocks.mutation.mock.calls[0]?.[2]).toEqual({
+    macroTraceParent: expect.anything(),
+    optimisticMutation: { revalidations: UNMAINTAINED },
+  });
+  expect(mocks.refresh).not.toHaveBeenCalled();
+});
 
 it('shows a confirmed restore immediately while retaining unrelated and newer deletes', async () => {
   mocks.refresh.mockReturnValue(new Promise<void>(() => {}));
@@ -170,7 +250,9 @@ it.each([
       // The request and cache writes join the `entity.*` span's trace.
       { macroTraceParent: expect.anything() }
     );
-    expect(mocks.refresh).toHaveBeenCalledOnce();
+    expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith({
+      unmaintainedOnly: true,
+    });
   }
 );
 
