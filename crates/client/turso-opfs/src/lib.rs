@@ -28,5 +28,5 @@ mod browser;
 pub use browser::{
     CloseFailure, ClosedSession, ConnectFailure, ConnectedOpfsSession, OpenDisposition,
     OpenFailure, OpenResult, OpfsError, OpfsErrorKind, OpfsIoTotals, OpfsOwner, OpfsSession,
-    ResetFailure, ResetRequiredSession, Sidecar, WipeFailure, io_totals,
+    ResetFailure, ResetRequiredSession, Sidecar, WalFlusher, WipeFailure, io_totals,
 };
