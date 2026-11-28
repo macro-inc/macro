@@ -97,7 +97,8 @@ export function registerChannelListNotificationRefresh(
  * stop, or from when a page lands while they are stopped. Once one has missed
  * them for `freshMs`, it is read again while reads hold, in the refresh
  * queue's turn; a page the queue does not read, because reads stopped first,
- * keeps its deadline for when they resume.
+ * keeps its deadline for when they resume, or for when its dropped read
+ * settles if they resumed before it did.
  */
 function catchUpLaterPages(
   pages: Accessor<readonly QueryRevalidation[]>,
@@ -105,6 +106,8 @@ function catchUpLaterPages(
 ) {
   const missed = new Map<number, MissedPage>();
   const queued = new Set<number>();
+  // The current read cycle's deadline, while reads hold.
+  let rearm: (() => void) | undefined;
   const readAgain = async (key: number, page: MissedPage) => {
     queued.add(key);
     const landed = await channelNotificationRefresh(
@@ -112,6 +115,9 @@ function catchUpLaterPages(
     ).readAgain(page.query);
     queued.delete(key);
     if (landed && missed.get(key) === page) missed.delete(key);
+    // A page dropped because reads stopped, settling after they resumed,
+    // was skipped by that cycle's deadline as still queued.
+    rearm?.();
   };
   createEffect(
     on([read, pages], ([reads, all]) => {
@@ -134,6 +140,7 @@ function catchUpLaterPages(
       // A deadline, not a debounce: each page waits out its own.
       let timer: ReturnType<typeof setTimeout> | undefined;
       const wait = () => {
+        clearTimeout(timer);
         const waiting = [...missed].filter(([key]) => !queued.has(key));
         if (waiting.length === 0) return;
         const due = Math.min(...waiting.map(([, page]) => page.since));
@@ -147,8 +154,12 @@ function catchUpLaterPages(
           Math.max(0, due + freshMs - Date.now())
         );
       };
+      rearm = wait;
       wait();
-      onCleanup(() => clearTimeout(timer));
+      onCleanup(() => {
+        rearm = undefined;
+        clearTimeout(timer);
+      });
     })
   );
 }

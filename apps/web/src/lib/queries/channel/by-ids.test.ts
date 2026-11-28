@@ -145,6 +145,27 @@ describe('registerChannelListNotificationRefresh', () => {
     }
   });
 
+  it('reads dropped pages again when they settle after reads resumed', async () => {
+    const { dispose, setRead } = list();
+    try {
+      setRead(false);
+      vi.advanceTimersByTime(40_000);
+      setRead(true);
+      vi.advanceTimersByTime(0);
+      expect(readPages()).toEqual([SECOND, THIRD]);
+      // Reads stop and resume before the queue drops both reads, so the new
+      // cycle saw them still queued.
+      setRead(false);
+      const dropped = landAll(false);
+      setRead(true);
+      await dropped;
+      vi.advanceTimersByTime(0);
+      expect(readPages()).toEqual([SECOND, THIRD]);
+    } finally {
+      dispose();
+    }
+  });
+
   it('counts a page that lands while reads are stopped from when it landed', () => {
     const { dispose, setPages, setRead } = list([FIRST]);
     try {
