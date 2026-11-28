@@ -609,6 +609,10 @@ type CompleteMutationRoot {
 	"""
 	inviteCalendarEventGuests(input: InviteCalendarEventGuestsInput!): GraphqlCalendarMutationPayload!
 	"""
+	Insert an imported batch and any new column options into a CRM pipeline.
+	"""
+	insertCrmPipelineRows(input: InsertCrmPipelineRowsInput!): CrmPipelineImportPayload!
+	"""
 	Commit a previously reviewed CRM merge.
 	"""
 	commitCrmMerge(input: CommitCrmMergeInput!): CrmMergePayload!
@@ -1089,6 +1093,175 @@ enum CrmMergeSharing {
 	Remove sharing rules attached to source records.
 	"""
 	STOP
+}
+
+"""
+A populated cell read from a committed pipeline row.
+"""
+type CrmPipelineImportCell {
+	"""
+	The column containing the value.
+	"""
+	columnId: ID!
+	"""
+	The stored value.
+	"""
+	value: GraphqlPropertyValue!
+}
+
+"""
+A cell to write in an imported row.
+"""
+input CrmPipelineImportCellInput {
+	"""
+	The column receiving the value.
+	"""
+	columnId: ID!
+	"""
+	The imported value. A missing value leaves the cell empty.
+	"""
+	value: CrmPipelineImportCellValue
+}
+
+"""
+The typed value of an imported pipeline cell.
+"""
+input CrmPipelineImportCellValue @oneOf {
+	"""
+	Plain text.
+	"""
+	text: String
+	"""
+	A numeric value.
+	"""
+	number: Float
+	"""
+	A checkbox value.
+	"""
+	boolean: Boolean
+	"""
+	An RFC 3339 timestamp.
+	"""
+	date: String
+	"""
+	A pair of RFC 3339 timestamps.
+	"""
+	dateRange: CrmPipelineImportDateRangeInput
+	"""
+	URLs assigned to the cell.
+	"""
+	links: [String!]
+	"""
+	Option IDs or labels assigned to the cell.
+	"""
+	options: [CrmPipelineImportOptionRef!]
+	"""
+	Macro records assigned to the cell.
+	"""
+	entities: [CrmPipelineImportEntityInput!]
+	"""
+	Related database rows assigned to the cell.
+	"""
+	rowIds: [ID!]
+}
+
+"""
+The inclusive start and end of an imported date range.
+"""
+input CrmPipelineImportDateRangeInput {
+	"""
+	First timestamp.
+	"""
+	start: String!
+	"""
+	Last timestamp.
+	"""
+	end: String!
+}
+
+"""
+A Macro record referenced by an imported cell.
+"""
+input CrmPipelineImportEntityInput {
+	"""
+	The kind of record.
+	"""
+	entityType: GraphqlPropertyEntityType!
+	"""
+	The record's identifier.
+	"""
+	entityId: String!
+}
+
+"""
+New options on one imported column.
+"""
+input CrmPipelineImportOptionGroupInput {
+	"""
+	Column receiving the options.
+	"""
+	columnId: ID!
+	"""
+	Options to add.
+	"""
+	options: [CrmPipelineImportOptionInput!]!
+}
+
+"""
+One option introduced by a pipeline import.
+"""
+input CrmPipelineImportOptionInput {
+	"""
+	A client-minted option identifier.
+	"""
+	id: ID!
+	"""
+	The label displayed for the option.
+	"""
+	label: String!
+}
+
+"""
+An option named by its ID or its label.
+"""
+input CrmPipelineImportOptionRef @oneOf {
+	"""
+	The option's identifier.
+	"""
+	id: ID
+	"""
+	The option's label.
+	"""
+	label: String
+}
+
+"""
+The imported row identifiers and their committed primary data.
+"""
+type CrmPipelineImportPayload {
+	"""
+	The inserted row identifiers, in input order.
+	"""
+	rowIds: [ID!]!
+	"""
+	Inserted records in input order, subject to concurrent deletions.
+	A missing list means the rows committed but could not be read.
+	"""
+	rows: [GraphqlCrmPipelineRow!]
+}
+
+"""
+A row from a pipeline import.
+"""
+input CrmPipelineImportRowInput {
+	"""
+	Client-minted row UUID, retained on delivery retries.
+	"""
+	id: ID!
+	"""
+	Initial cell values, by column identifier.
+	"""
+	cells: [CrmPipelineImportCellInput!]!
 }
 
 """
@@ -4896,6 +5069,24 @@ enum GraphqlCrmPipelineRecordType {
 	Contacts.
 	"""
 	CONTACT
+}
+
+"""
+A pipeline entry visible through the pipeline's own access receipt.
+"""
+type GraphqlCrmPipelineRow {
+	"""
+	Stable row identity for the normalized cache.
+	"""
+	id: ID!
+	"""
+	The pipeline holding this row.
+	"""
+	pipelineId: ID!
+	"""
+	Populated cells, including server defaults.
+	"""
+	cells: [CrmPipelineImportCell!]!
 }
 
 """
@@ -12348,6 +12539,28 @@ type InitiativeTasksPage {
 	Total tasks visible to this viewer.
 	"""
 	total: Int!
+}
+
+"""
+Append imported records and add any missing options in the same transaction.
+"""
+input InsertCrmPipelineRowsInput {
+	"""
+	The pipeline the caller is editing.
+	"""
+	pipelineId: ID!
+	"""
+	The pipeline's table.
+	"""
+	tableId: ID!
+	"""
+	The rows to append, at most 500 per request.
+	"""
+	rows: [CrmPipelineImportRowInput!]!
+	"""
+	New options to add before inserting the rows.
+	"""
+	optionGroups: [CrmPipelineImportOptionGroupInput!]!
 }
 
 """

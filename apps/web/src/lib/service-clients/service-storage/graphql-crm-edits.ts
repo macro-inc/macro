@@ -20,6 +20,8 @@ import {
   EditCrmCompanyDomainDocument,
   type EditCrmCompanyDomainInput,
   type EntityMutationResultFieldsFragment,
+  InsertCrmPipelineRowsDocument,
+  type InsertCrmPipelineRowsInput,
   RenameCrmCompanyDocument,
   type RenameCrmCompanyInput,
 } from './graphql/generated/graphql';
@@ -45,10 +47,12 @@ export class CrmGraphqlWriteError extends ThrownResultError {
   readonly extensions: Record<string, unknown> | undefined;
 }
 
-type EffectPayload = { result?: EntityMutationResultFieldsFragment | null } & (
-  | { companyId: string }
-  | { survivorId: string; mergedIds: string[] }
-);
+type EffectPayload =
+  | ({ result?: EntityMutationResultFieldsFragment | null } & (
+      | { companyId: string }
+      | { survivorId: string; mergedIds: string[] }
+    ))
+  | { rowIds: string[]; rows: { id: string }[] | null };
 
 type CrmEditOutcome<T> = {
   /** Only the original operation response carries its non-cache fields. */
@@ -62,9 +66,15 @@ type EditOptions = {
   span: Span;
   /** Contacts without a changed company do not affect company-only readers. */
   contactsOnly?: boolean;
+  /** CSV import refreshes its lists once after all batches commit. */
+  batch?: boolean;
 };
 
 function hasAllEffects(payload: EffectPayload) {
+  if ('rowIds' in payload) {
+    const resolved = new Set(payload.rows?.map((row) => row.id));
+    return payload.rowIds.every((id) => resolved.has(id));
+  }
   const result = payload.result;
   if (result?.__typename !== 'GraphqlMutationSuccess') return false;
   const survivor =
@@ -147,19 +157,22 @@ async function edit<
               {},
               {
                 uuid,
-                revalidations: getActiveGraphqlSoupRevalidations(client, {
-                  unmaintainedOnly: true,
-                  where: (filters) => {
-                    const types = crmExternalWriteTypes(filters);
-                    return options.contactsOnly
-                      ? types.includes('GraphqlSoupCrmContact')
-                      : types.length > 0;
-                  },
-                }),
+                revalidations: options.batch
+                  ? []
+                  : getActiveGraphqlSoupRevalidations(client, {
+                      unmaintainedOnly: true,
+                      where: (filters) => {
+                        const types = crmExternalWriteTypes(filters);
+                        return options.contactsOnly
+                          ? types.includes('GraphqlSoupCrmContact')
+                          : types.length > 0;
+                      },
+                    }),
               }
             )
           : { optimisticMutation: false }),
         [TRACE_PARENT_CONTEXT_KEY]: options.span,
+        deferNetworkRevalidation: options.batch,
       })
       .toPromise();
 
@@ -177,7 +190,7 @@ async function edit<
       return {
         payload: undefined,
         effectsResolved: true,
-        cacheRevalidates: true,
+        cacheRevalidates: !options.batch,
         listsReadAgain: false,
       };
     }
@@ -191,7 +204,8 @@ async function edit<
     return {
       payload,
       effectsResolved,
-      cacheRevalidates: !!queuedCommit?.transactionId && effectsResolved,
+      cacheRevalidates:
+        !!queuedCommit?.transactionId && effectsResolved && !options.batch,
       listsReadAgain: networkRevalidated(result),
     };
   } finally {
@@ -228,3 +242,18 @@ export const commitGraphqlCrmMerge = (input: CommitCrmMergeInput, span: Span) =>
     span,
     contactsOnly: input.recordType === 'CONTACT',
   });
+
+export function insertGraphqlCrmPipelineRows(
+  input: InsertCrmPipelineRowsInput
+) {
+  return Telemetry.span('crm.pipeline_import_batch', (span) => {
+    span.setAttr('crm.pipeline_id', String(input.pipelineId));
+    span.setAttr('crm.import.batch_rows', input.rows.length);
+    return edit(
+      InsertCrmPipelineRowsDocument,
+      { input },
+      (data) => data.insertCrmPipelineRows,
+      { span, batch: true }
+    );
+  });
+}

@@ -19,6 +19,9 @@ composed onto CRM Soup entities.
 - `src/mutations.rs` and `src/mutations/record_merge.rs`: company rename,
   domain edits, and reviewed merges use the same domain receipts as their
   REST counterparts. Merges return source tombstones and the survivor.
+- `src/mutations/pipeline_import.rs`: a bounded import command adds rows and
+  missing options atomically. It reads the imported rows through the pipeline
+  receipt and uses stable row IDs for replay after a lost response.
 
 ## Scope
 
