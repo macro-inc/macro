@@ -300,4 +300,43 @@ describe('favorites GraphQL mutations', () => {
     expect(() => graphqlReorderFavoritesResult(reorder)).toThrow(error);
     expect(() => graphqlSetFavoriteResult(toggle)).toThrow(error);
   });
+
+  it.each([
+    ['commits', 200],
+    ['fails', 503],
+  ])(
+    '%s a favorite whose only error is in its returned rows, HTTP %i',
+    async (outcome, status) => {
+      const error = new CombinedError({
+        graphQLErrors: [
+          {
+            message: 'A changed item could not be read back',
+            path: ['setFavorite', 'result', 'effects', 0, 'item'],
+          },
+        ],
+        response: new Response(null, { status }),
+      });
+      mutationMock.mockReturnValue({
+        toPromise: async () => ({
+          data: {
+            setFavorite: {
+              __typename: 'SetFavoritePayload',
+              result: { __typename: 'GraphqlMutationSuccess', effects: [] },
+              favorite: null,
+            },
+          },
+          error,
+        }),
+      });
+      const toggle = await executeGraphqlSetFavoriteMutation(
+        client,
+        input,
+        false,
+        0
+      );
+      if (outcome === 'commits')
+        expect(graphqlSetFavoriteResult(toggle)).toEqual({ kind: 'committed' });
+      else expect(() => graphqlSetFavoriteResult(toggle)).toThrow(error);
+    }
+  );
 });

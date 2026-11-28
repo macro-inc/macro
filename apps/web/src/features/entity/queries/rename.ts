@@ -2,6 +2,7 @@ import { TRACE_PARENT_CONTEXT_KEY } from '@app/lib/urql-solid/trace-parent-excha
 import { renameDatabase } from '@block-database/queries/rename-database';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { committedWithMissingRows } from '@graphql-cache/exchange/effect-errors';
 import { networkRevalidationIncomplete } from '@graphql-cache/exchange/network-revalidation-exchange';
 import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
 import { type Span, Telemetry } from '@macro-inc/observability';
@@ -237,7 +238,8 @@ async function sendGraphqlRenames(
       return operations.map(() => ({ success: true, queued: true }));
     }
     if (disposition?.kind === 'permanently-failed') throw disposition.error;
-    if (result.error) throw result.error;
+    // A write missing some rows committed; the lists are read again for them.
+    if (result.error && !committedWithMissingRows(result)) throw result.error;
     if (!result.data && disposition?.kind === 'committed') {
       // Preserve accepted edits until fresh reads can establish each result.
       return operations.map(() => ({ success: true, queued: true }));

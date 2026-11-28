@@ -6,6 +6,7 @@ import { entityOptimisticResolvers } from '@queries/entity-optimistic-resolvers'
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import {
   type Client,
+  CombinedError,
   createClient,
   type Exchange,
   type Operation,
@@ -449,3 +450,71 @@ it('reads each mounted list again after a rename whose exchange read failed', as
   unregister();
   unregisterFailing();
 });
+
+it.each([
+  ['committed', 200],
+  ['failed', 503],
+])(
+  'reports a rename %s when its only error is in its returned rows, HTTP %i',
+  async (outcome, status) => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    cache = new QueryClient({
+      defaultOptions: { mutations: { retry: false } },
+    });
+    cache.setQueryData(authKeys.userInfo.queryKey, {
+      id: 'viewer',
+      authenticated: true,
+    });
+    mocks.host = undefined;
+    mocks.soup.mockReturnValue({ rollback: vi.fn() });
+    const error = new CombinedError({
+      graphQLErrors: [
+        {
+          message: 'A changed item could not be read back',
+          path: ['renameEntities', 'results', 0, 'effects', 0, 'item'],
+        },
+      ],
+      response: new Response(null, { status }),
+    });
+    const exchange: Exchange = () => (source) =>
+      pipe(
+        source,
+        filter((operation) => operation.kind === 'mutation'),
+        map((operation) => ({
+          operation,
+          stale: false,
+          hasNext: false,
+          data: {
+            renameEntities: {
+              results: [{ __typename: 'GraphqlMutationSuccess', effects: [] }],
+            },
+          },
+          error,
+        }))
+      );
+    mocks.client = createClient({
+      url: 'http://test.invalid',
+      exchanges: [exchange],
+    });
+    let mutation!: ReturnType<typeof createRenameDssEntityMutation>;
+    dispose = render(
+      () => (
+        <QueryClientProvider client={cache}>
+          {(() => {
+            mutation = createRenameDssEntityMutation();
+            return null;
+          })()}
+        </QueryClientProvider>
+      ),
+      document.createElement('div')
+    );
+    const renamed = mutation.mutateAsync({
+      entity: { id: 'document-1', type: 'document', name: 'Before' },
+      newName: 'After',
+    });
+    await expect(renamed).resolves.toEqual({
+      success: outcome === 'committed',
+    });
+    vi.restoreAllMocks();
+  }
+);

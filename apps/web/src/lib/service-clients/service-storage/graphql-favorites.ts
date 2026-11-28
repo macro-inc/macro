@@ -1,3 +1,4 @@
+import { committedWithMissingRows } from '@graphql-cache/exchange/effect-errors';
 import {
   executeOptimisticMutation,
   optimisticMutationDispositionOf,
@@ -269,7 +270,8 @@ export function graphqlSetFavoriteResult(
     return { kind: 'queued', transactionId: disposition.transactionId };
   }
   if (disposition?.kind === 'permanently-failed') throw disposition.error;
-  if (result.error) throw result.error;
+  // A write missing some rows committed; the lists are read again for them.
+  if (result.error && !committedWithMissingRows(result)) throw result.error;
   if (disposition?.kind === 'committed' && !disposition.data)
     return { kind: 'committed' };
   const payload = result.data?.setFavorite;
