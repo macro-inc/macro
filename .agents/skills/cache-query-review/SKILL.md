@@ -187,11 +187,13 @@ A finding is closed by a code change or a number, never by rewording.
 
 Put one table in the PR body under `## Cache query review`, one row per
 query the change touches, worst first. Each cell gives N → 2N; write `not
-measured` where no source gave a number.
+measured` where no source gave a number. The row below shows the format
+only: its query is made up and its numbers are invented, so never copy
+them as evidence.
 
 | Query | Plan | VM steps | Limit | Largest ID list or OR filter (batches) | Records returned | Rows rendered | Reads after an unrelated write | Reads after a one-row update | First result / update | Evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `useCachedChannelsByIds` (`lib/queries/channel/by-ids.ts`) | `records` primary key | not measured | 500 a batch | 500 (2) → 500 (4) | 1,000 → 2,000 | 40 → 40 | 0 → 0 | 1 → 1 | not measured | measured: call-site test |
+| `useCachedWidgetsByIds` (an example) | `records` primary key | not measured | 500 a batch | 500 (2) → 500 (4) | 1,000 → 2,000 | 40 → 40 | 0 → 0 | 1 → 1 | not measured | measured: a call-site test at 3,500 and 7,000 (example) |
 
 State each row's evidence:
 
