@@ -184,7 +184,7 @@ fn normalized_authority_owns_membership_names_deletes_and_rebuilds() {
             panic!("deleted");
         };
         assert!(outcome.rows.is_empty());
-        driver::write_transaction(&connection, || {
+        driver::write_transaction(&connection, driver::Durability::Cache, || {
             driver::execute(
                 &connection,
                 "DELETE FROM meta WHERE key = ?",

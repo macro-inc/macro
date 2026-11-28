@@ -652,8 +652,10 @@ Search Datadog logs for `service:web-app "graphql_cache.slow_query"`:
 - `cache.slow_query_threshold_ms`: `200`.
 - `cache.storage.writes`, `cache.storage.write_bytes`, `cache.storage.write_ms`,
   `cache.storage.flushes`, `cache.storage.flush_ms`: the OPFS writes and flushes
-  made during the statement. A slow `COMMIT` splits into its WAL append (writes)
-  and its flush; any other statement shows the page writes it caused.
+  made during the statement. A slow `COMMIT` shows its WAL append (writes) and
+  the WAL header sync after a restart of the log; a queue write's flush runs
+  after the statement and is not in it. Any other statement shows the page
+  writes it caused.
 
 Parameters, results, raw SQL, and user identity are not exported. Logging uses
 an anonymous span context. A throwing JS telemetry callback cannot change query
@@ -706,6 +708,42 @@ completed OPFS writes and flushes (`cache.storage.*`) since its last report.
 The OPFS counts cover every file of the worker, so
 `cache.storage.flushes / cache.storage.commits` is the worker's flushes per
 COMMIT, checkpoint and close flushes included.
+
+## WAL flushes
+
+The browser's connection runs `synchronous = NORMAL` (`DEFER_COMMIT_FLUSH` in
+turso-opfs), so a COMMIT appends to the WAL without flushing it (Turso still
+syncs a new WAL header, after a checkpoint restarts the log). A closed or
+crashed tab, or a killed browser, keeps every COMMIT; an OS crash or power
+loss can drop the newest ones and leaves the database as of an earlier
+COMMIT, which opens whole.
+
+- Queue writes flush before they answer: an enqueue (one transaction with its
+  first claim), claim, defer, complete and discard, a rewrite of queued
+  layers, a schema adoption (it can retire queued layers), the queue reset
+  and the salvage import. So do the records the engine
+  trusts after a crash (`Storage::put_batch_durable`): the permission marker
+  and the storage generation. A failed flush leaves the write's outcome
+  unknown, and the cache needs a physical reset
+  (`TransactionOutcomeUncertain`).
+- Cache writes hold data the server sends again. After a request that can
+  write, the engine worker calls `flushWal` once nothing has run for 250 ms
+  (a request that starts restarts the wait), or before the next request once
+  the first unflushed write is 2 s old. A power loss can take the cache
+  writes of the last 2 s, and more while one long request runs. A read of
+  the storage generation flushes first: the hydration checkpoints kept
+  outside the cache are saved after it, so a cursor never outlives the pages
+  it counts. A WAL inherited from a session that ended without flushing
+  counts as unflushed, so the new owner's first flush covers it. A drain
+  cancels the quiet wait, though the requests it still runs flush as before
+  (a generation read first, or once 2 s have passed): closing the engine on
+  release, handoff or close flushes the WAL and then copies it into the
+  database. When that flush fails it closes reset-required without copying:
+  the OS may have dropped the dirty pages, and a later sync that succeeds
+  would let the copy move them into the database. A failed copy leaves the
+  WAL as it was. A wipe deletes the file.
+- A failed deferred flush is reported as `graphql_cache.wal_flush` with its
+  error class and resets the cache, as a failed sync inside a COMMIT did.
 
 ## Slow request telemetry
 

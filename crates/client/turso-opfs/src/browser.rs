@@ -16,7 +16,7 @@ use std::{
 };
 use turso_core::{
     Buffer, Clock, Completion, CompletionError, Connection, Database, File, IO, LimboError,
-    MonotonicInstant, OpenFlags, OpenOptions, SqliteDialect, WallClockInstant,
+    MonotonicInstant, OpenFlags, OpenOptions, SqliteDialect, SyncMode, WallClockInstant,
     io::{FileId, FileSyncType},
 };
 use wasm_bindgen::{JsCast, JsValue, closure::Closure, prelude::wasm_bindgen};
@@ -55,6 +55,19 @@ const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 /// cannot wait for a spill's write mid-statement; the sync access handles here
 /// finish every write before it returns.
 const PAGE_CACHE_PAGES: i64 = 8_000;
+
+/// Whether the connection runs `synchronous = NORMAL`: a COMMIT appends to
+/// the WAL without flushing it, and the flush comes later
+/// ([`ConnectedOpfsSession::flush_wal`]) or before a checkpoint copies the
+/// WAL, as Turso syncs the log before backfilling it. A write the caller must
+/// not lose flushes before it answers ([`WalFlusher`]).
+///
+/// The WAL keeps every commit whole and in order, so a crash loses at most
+/// the newest unflushed commits and never corrupts the file. Writes that were
+/// never flushed survive the tab or the whole browser being killed; only an
+/// OS crash or power loss can drop them. `false` restores a flush in every
+/// COMMIT (`synchronous = FULL`, Turso's default).
+const DEFER_COMMIT_FLUSH: bool = true;
 
 #[wasm_bindgen]
 extern "C" {
@@ -397,11 +410,22 @@ impl OpfsOwner {
                     return Err(open_failure_after_cleanup(adapter_error, self));
                 }
             };
+            // A WAL left by a session that ended without flushing (a killed
+            // tab, a lost lock) may hold commits only the OS has. They count as
+            // unflushed, so the first flush makes them durable before anything
+            // read from them, such as a saved hydration cursor, outlives them.
+            let unflushed = role == FileRole::Wal
+                && !was_created
+                && handle.get_size().map_or(true, |size| size > 0.0);
             REGISTRY.with(|registry| {
-                registry
-                    .borrow_mut()
-                    .handles
-                    .insert(handle_id, RegisteredHandle { role, handle });
+                registry.borrow_mut().handles.insert(
+                    handle_id,
+                    RegisteredHandle {
+                        role,
+                        handle,
+                        unflushed,
+                    },
+                );
             });
         }
 
@@ -688,6 +712,21 @@ impl fmt::Display for ConnectFailure {
 
 impl std::error::Error for ConnectFailure {}
 
+/// Flushes one connected session's WAL ([`ConnectedOpfsSession::flush_wal`]).
+#[derive(Clone, Copy, Debug)]
+pub struct WalFlusher {
+    owner: OwnerId,
+    session: SessionId,
+}
+
+impl WalFlusher {
+    /// Flushes the WAL when a write reached it since its last flush, and
+    /// returns whether it flushed. Fails once the session has closed.
+    pub fn flush(&self) -> Result<bool, OpfsError> {
+        flush_session_wal(self.owner, self.session)
+    }
+}
+
 /// Session owning the sole production Turso database and connection.
 pub struct ConnectedOpfsSession {
     owner: OwnerId,
@@ -735,6 +774,25 @@ impl ConnectedOpfsSession {
             .as_ref()
             .expect("armed connected session always owns its connection")
             .clone()
+    }
+
+    /// Flushes the WAL when a COMMIT appended to it since its last flush, or
+    /// when the session opened a non-empty WAL it cannot know was flushed, so
+    /// every commit made so far survives an OS crash or power loss. Returns
+    /// whether it flushed. A failed flush leaves the WAL due, and the next
+    /// call flushes it again.
+    pub fn flush_wal(&self) -> Result<bool, OpfsError> {
+        self.wal_flusher().flush()
+    }
+
+    /// A handle that flushes this session's WAL, for the storage to make a
+    /// write durable before it answers. It fails once the session
+    /// closes.
+    pub fn wal_flusher(&self) -> WalFlusher {
+        WalFlusher {
+            owner: self.owner,
+            session: self.session,
+        }
     }
 
     /// Consumes the session, calls its bound `Connection::close`, verifies the
@@ -1052,6 +1110,53 @@ struct SessionReferences;
 struct RegisteredHandle {
     role: FileRole,
     handle: FileSystemSyncAccessHandle,
+    /// Whether a write reached this file since its last successful flush.
+    unflushed: bool,
+}
+
+/// Records that a write reached `id` (or that a flush made it durable).
+fn set_unflushed(id: HandleId, unflushed: bool) {
+    REGISTRY.with(|registry| {
+        if let Some(entry) = registry.borrow_mut().handles.get_mut(&id) {
+            entry.unflushed = unflushed;
+        }
+    });
+}
+
+/// Flushes the session's WAL when a write reached it since its last flush.
+/// Returns whether it flushed.
+fn flush_session_wal(owner: OwnerId, session: SessionId) -> Result<bool, OpfsError> {
+    let _operation =
+        OperationGuard::enter(owner, session).map_err(|error| turso_error("flush", error))?;
+    let wal = REGISTRY.with(|registry| {
+        let registry = registry.borrow();
+        registry
+            .handles
+            .iter()
+            .find(|(_, entry)| entry.role == FileRole::Wal)
+            .map(|(id, entry)| (*id, entry.unflushed, entry.handle.clone()))
+    });
+    let Some((id, unflushed, handle)) = wal else {
+        poison(
+            owner,
+            "active session has no registered OPFS WAL handle to flush",
+        );
+        return Err(OpfsError::new(
+            OpfsErrorKind::Lifecycle,
+            "active OPFS handle registry is invalid",
+        ));
+    };
+    if !unflushed {
+        return Ok(false);
+    }
+    let started_at = performance_now();
+    handle.flush().map_err(|error| {
+        let _ = js_handle_completion_error(owner, "OPFS flush", &error, ErrorKind::Other);
+        js_error(OpfsErrorKind::Flush, "OPFS flush", &error)
+    })?;
+    count_flush(started_at);
+    set_unflushed(id, false);
+    Ok(true)
 }
 
 #[derive(Clone, Debug)]
@@ -1285,6 +1390,8 @@ impl File for OpfsFile {
         if result.is_ok() {
             count_write(buffer.as_slice().len(), started_at);
         }
+        // A failed write may still have changed part of the file.
+        set_unflushed(self.handle, true);
         finish_completion(&completion, result);
         Ok(completion)
     }
@@ -1333,6 +1440,7 @@ impl File for OpfsFile {
                 started_at,
             );
         }
+        set_unflushed(self.handle, true);
         finish_completion(&completion, result);
         Ok(completion)
     }
@@ -1352,6 +1460,7 @@ impl File for OpfsFile {
         });
         if result.is_ok() {
             count_flush(started_at);
+            set_unflushed(self.handle, false);
         }
         finish_completion(&completion, result);
         Ok(completion)
@@ -1373,6 +1482,8 @@ impl File for OpfsFile {
         let _operation = OperationGuard::enter(self.owner, self.session)?;
         let result = validate_position(len).and_then(|()| {
             let handle = registered_handle(self.owner, self.session, self.handle)?;
+            // A truncate changes the file as a write does.
+            set_unflushed(self.handle, true);
             handle.truncate_with_f64(len as f64).map_err(|error| {
                 js_handle_limbo_error(self.owner, "OPFS truncate", &error, ErrorKind::Other)
             })?;
@@ -1994,6 +2105,9 @@ fn connect_turso_database(database: &Arc<Database>) -> turso_core::Result<Arc<Co
     // next read. cache-turso copies the WAL itself, at fewer points.
     let connection = database.connect()?;
     connection.wal_auto_actions_disable();
+    if DEFER_COMMIT_FLUSH {
+        connection.set_sync_mode(SyncMode::Normal);
+    }
     Ok(connection)
 }
 

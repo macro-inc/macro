@@ -37,6 +37,16 @@ discards them. Without spilling, such a transaction leaves nothing to evict and
 each further page scans the whole cache. Clean pages beyond the cap are read
 again from OPFS.
 
+`connect()` runs the connection at `synchronous = NORMAL` while
+`DEFER_COMMIT_FLUSH` is `true`: a COMMIT appends to the WAL without flushing
+it (Turso still syncs a new WAL header after a checkpoint restarts the log). A killed tab or browser keeps what was appended; an OS crash or power loss
+can drop the newest COMMITs and leaves the file as of an earlier one.
+`ConnectedOpfsSession::flush_wal()` flushes the WAL when a write reached it
+since the last flush, or the session opened a non-empty WAL that an earlier
+session may have left unflushed, and says whether it did; `wal_flusher()` is the same call
+as a handle the storage keeps, which fails once the session closes.
+Setting the constant to `false` restores a flush in every COMMIT.
+
 The crate tests physical lock contention in its real DedicatedWorker. Actual
 cross-worker termination/restart orchestration remains a WP-08 coordinator
 harness responsibility: terminating a worker causes the browser to release its

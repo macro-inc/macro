@@ -129,6 +129,10 @@ impl<S: crate::predicate::PredicateIndexStorage> DurableRead for S {
     }
 }
 
+/// What [`Storage::upsert_mutation_and_claim`] returns: the upsert, and the
+/// claim made after it, whose failure leaves the upsert standing.
+pub type UpsertAndClaim<E> = (MutationUpsertResult, Result<Option<ClaimedMutation>, E>);
+
 /// Async KV over normalized records. Batch-oriented by design: the engine
 /// issues one `get_batch` per denormalization round, never per record.
 pub trait Storage: MaybeSend {
@@ -180,6 +184,16 @@ pub trait Storage: MaybeSend {
         &mut self,
         entries: Vec<(EntityKey<'static>, Record)>,
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
+
+    /// [`Self::put_batch`] for state the engine trusts after a crash, such as
+    /// the permission marker: the records are on disk when it returns. A
+    /// backend whose COMMITs do not flush overrides it.
+    fn put_batch_durable(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend {
+        self.put_batch(entries)
+    }
 
     /// Atomically upserts records and generic projection lifecycle changes.
     fn put_batch_with_projections(
@@ -321,6 +335,29 @@ pub trait Storage: MaybeSend {
         now_ms: i64,
         reconciliation: OptimisticUpsertReconciliation,
     ) -> impl Future<Output = Result<MutationUpsertResult, Self::Error>> + MaybeSend;
+
+    /// [`Self::upsert_mutation_with_shadow`], then
+    /// [`Self::claim_next_mutation`]. The upsert's result decides the outer
+    /// `Result`; a failed claim is nested and never undoes the upsert.
+    ///
+    /// A backend whose writes each pay a flush overrides this to write both
+    /// in one transaction. It then writes the upsert alone after a failed
+    /// claim, unless undoing the claim failed, which is a reset.
+    fn upsert_mutation_and_claim(
+        &mut self,
+        entry: NewQueuedMutation,
+        now_ms: i64,
+        reconciliation: OptimisticUpsertReconciliation,
+        claim: MutationClaimRequest,
+    ) -> impl Future<Output = Result<UpsertAndClaim<Self::Error>, Self::Error>> + MaybeSend {
+        async move {
+            let upsert = self
+                .upsert_mutation_with_shadow(entry, now_ms, reconciliation)
+                .await?;
+            let claimed = self.claim_next_mutation(claim).await;
+            Ok((upsert, claimed))
+        }
+    }
 
     /// Loads authoritative projection states aligned with `keys`.
     fn load_projection_states(

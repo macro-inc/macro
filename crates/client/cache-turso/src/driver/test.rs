@@ -205,7 +205,7 @@ fn texts_beyond_the_bound_evict_the_least_recently_used() {
 #[test]
 fn transactions_commit_and_roll_back_through_cached_statements() {
     let db = setup("statement-cache-transactions.db");
-    write_transaction(&db, || {
+    write_transaction(&db, Durability::Cache, || {
         execute(
             &db,
             INSERT,
@@ -216,7 +216,7 @@ fn transactions_commit_and_roll_back_through_cached_statements() {
     .unwrap();
     // Each control text runs twice, so it is kept from its second use.
     for _ in 0..2 {
-        let failed: Result<(), _> = write_transaction(&db, || {
+        let failed: Result<(), _> = write_transaction(&db, Durability::Cache, || {
             execute(
                 &db,
                 INSERT,
@@ -279,7 +279,7 @@ fn connection_pair(name: &str) -> (Db, Db) {
 }
 
 fn write_pages(db: &Db, from: i64, rows: i64) {
-    write_transaction(db, || {
+    write_transaction(db, Durability::Cache, || {
         for id in from..from + rows {
             execute(
                 db,

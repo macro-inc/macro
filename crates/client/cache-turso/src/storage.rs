@@ -260,7 +260,10 @@ impl TursoStorage {
             Ok(_) => Ok((
                 Self {
                     health: AtomicU8::new(0),
-                    connection: Db::cached(session.connection()),
+                    connection: Db::cached(session.connection()).with_wal_flush({
+                        let flusher = session.wal_flusher();
+                        Arc::new(move || flusher.flush().map(|_| ()).map_err(|_| ()))
+                    }),
                     session,
                 },
                 if fresh {
@@ -291,7 +294,7 @@ impl TursoStorage {
     pub fn browser_test_make_namespace_incompatible(&mut self) -> Result<(), TursoStorageError> {
         self.require_healthy()?;
         let connection = self.connection();
-        self.latch_result(driver::write_transaction(&connection, || {
+        self.latch_result(driver::write_transaction(&connection, driver::Durability::Cache, || {
             require_changed(
                 driver::execute(
                     &connection,
@@ -309,42 +312,46 @@ impl TursoStorage {
     pub fn browser_test_corrupt_queue_payload(&mut self) -> Result<(), TursoStorageError> {
         self.require_healthy()?;
         let connection = self.connection();
-        self.latch_result(driver::write_transaction(&connection, || {
-            require_changed(
-                driver::execute(
-                    &connection,
-                    QUEUE_INSERT,
-                    vec![
-                        text("00000000-0000-4000-8000-000000000001"),
-                        text("mutation BrowserTestCorrupt { __typename }"),
-                        Value::Null,
-                        text("{}"),
-                        Value::Null,
-                        Value::from_i64(0),
-                        Value::Null,
-                        Value::Null,
-                        Value::from_i64(0),
-                        Value::Null,
-                        Value::Null,
-                        Value::from_i64(1),
-                    ],
-                )?,
-                1,
-            )?;
-            let id = mutation_id_from_row(connection.last_insert_rowid())?;
-            require_changed(
-                driver::execute(
-                    &connection,
-                    LAYER_INSERT,
-                    vec![
-                        Value::from_i64(mutation_id_to_sql(id)?),
-                        text("{}"),
-                        Value::from_blob(vec![0xff]),
-                    ],
-                )?,
-                1,
-            )
-        }))
+        self.latch_result(driver::write_transaction(
+            &connection,
+            driver::Durability::Cache,
+            || {
+                require_changed(
+                    driver::execute(
+                        &connection,
+                        QUEUE_INSERT,
+                        vec![
+                            text("00000000-0000-4000-8000-000000000001"),
+                            text("mutation BrowserTestCorrupt { __typename }"),
+                            Value::Null,
+                            text("{}"),
+                            Value::Null,
+                            Value::from_i64(0),
+                            Value::Null,
+                            Value::Null,
+                            Value::from_i64(0),
+                            Value::Null,
+                            Value::Null,
+                            Value::from_i64(1),
+                        ],
+                    )?,
+                    1,
+                )?;
+                let id = mutation_id_from_row(connection.last_insert_rowid())?;
+                require_changed(
+                    driver::execute(
+                        &connection,
+                        LAYER_INSERT,
+                        vec![
+                            Value::from_i64(mutation_id_to_sql(id)?),
+                            text("{}"),
+                            Value::from_blob(vec![0xff]),
+                        ],
+                    )?,
+                    1,
+                )
+            },
+        ))
     }
 
     /// Consumes storage and closes Turso into a health-typed OPFS capability.
@@ -354,13 +361,18 @@ impl TursoStorage {
     /// Close failure exposes no recoverable session and requires replacing the
     /// worker before a recovery wipe.
     pub fn try_close(self) -> Result<TursoStorageCloseOutcome, TursoStorageCloseFailure> {
-        let reason = self.latched_reason();
+        let latched = self.latched_reason();
         let Self {
             session,
             connection,
             ..
         } = self;
+        // After a failed sync the OS may have dropped dirty WAL pages, and a
+        // later sync can still succeed, so no copy may move that WAL into the
+        // database: the pair closes as reset-required, as `flush_wal` latches.
+        let reason = latched.or_else(|| session.flush_wal().err().map(|_| PhysicalResetReason::Io));
         if reason.is_none() {
+            // A copy that fails or finds the log busy leaves it as it was.
             connection.checkpoint_before_close();
         }
         connection.release_statements();
@@ -377,8 +389,59 @@ impl TursoStorage {
         })
     }
 
+    /// Flushes the WAL when a COMMIT appended to it since the last flush,
+    /// making every write so far survive an OS crash or power loss. Returns
+    /// whether it flushed. The engine worker calls it once writes go quiet;
+    /// durable writes already flushed themselves. A failed flush latches a
+    /// reset, as a failed sync inside a COMMIT did: after a failed sync the OS
+    /// may drop the dirty pages, so a retry cannot be trusted. The reason is
+    /// `Io` because the COMMIT had answered; the shell reopens it the same way
+    /// as `TransactionOutcomeUncertain`.
+    pub fn flush_wal(&self) -> Result<bool, TursoStorageError> {
+        self.require_healthy()?;
+        let result = self
+            .session
+            .flush_wal()
+            .map_err(|_| TursoStorageError::reset(PhysicalResetReason::Io));
+        self.latch_result(result)
+    }
+
     fn connection(&self) -> Db {
         self.connection.clone()
+    }
+}
+
+impl TursoStorage {
+    fn put_records(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        durability: driver::Durability,
+    ) -> Result<(), TursoStorageError> {
+        self.require_healthy()?;
+        let result = (|| {
+            let mut entries = prepare_records(entries)?;
+            if entries.is_empty() {
+                return Ok(());
+            }
+            let connection = self.connection();
+            driver::write_transaction(&connection, durability, || {
+                let mut statement = driver::prepare(&connection, RECORD_UPSERT)?;
+                for (index, entry) in entries.iter_mut().enumerate() {
+                    let changed = driver::execute_prepared(
+                        &mut statement,
+                        vec![
+                            text(&entry.key.typename),
+                            text(&entry.key.id),
+                            Value::from_blob(std::mem::take(&mut entry.value)),
+                        ],
+                    )?;
+                    require_changed(changed, 1)?;
+                    self.fault_after(TestFaultSite::Put, index)?;
+                }
+                write_derived_rows(&connection, &entries)
+            })
+        })();
+        self.latch_result(result)
     }
 }
 
@@ -1013,6 +1076,13 @@ impl TursoStorage {
         self.connection.clone()
     }
 
+    /// Flushes the WAL with `flush` after each durable write, as the browser's
+    /// connection does.
+    #[cfg(test)]
+    pub(crate) fn set_wal_flush(&mut self, flush: driver::WalFlush) {
+        self.connection = self.connection.clone().with_wal_flush(flush);
+    }
+
     /// The storage version this open upgraded the file from, when an older
     /// build wrote it (`storage/migration.rs`); `None` when it was already
     /// current or new.
@@ -1096,6 +1166,96 @@ impl TursoStorage {
     fn require_healthy(&self) -> Result<(), TursoStorageError> {
         self.latched_reason()
             .map_or(Ok(()), |reason| Err(TursoStorageError::reset(reason)))
+    }
+
+    /// Writes a mutation, its layer and its shadows inside the caller's
+    /// transaction.
+    fn upsert_in_transaction(
+        &self,
+        connection: &Db,
+        entry: &NewQueuedMutation,
+        mutation_values: Vec<Value>,
+        updates: Vec<u8>,
+        now_ms: i64,
+        reconciliation: OptimisticUpsertReconciliation,
+    ) -> Result<MutationUpsertResult, TursoStorageError> {
+        if let Some(expected) = &reconciliation.expected_queue
+            && !queue_snapshot_matches(connection, expected)?
+        {
+            return Err(TursoStorageError::InvalidInput);
+        }
+        let collision = driver::query(
+            connection,
+            "SELECT m.id, m.lease_expires_at_ms, m.attempt_count, o.optimistic_data_json FROM mutation_queue m JOIN optimistic_layers o ON o.mutation_id = m.id WHERE m.uuid = ?1 AND m.superseded = 0",
+            vec![text(&entry.uuid.to_string())],
+        )?;
+        let kind = match collision.as_slice() {
+            [] => MutationUpsertKind::Inserted,
+            [row] if row.len() == 4 => {
+                let existing = mutation_id_from_row(required_i64(row, 0)?)?;
+                if cache_core::queue::collision_stays_active(
+                    nullable_i64(row, 1)?,
+                    now_ms,
+                    required_i64(row, 2)? > 0,
+                    &required_text(row, 3)?,
+                ) {
+                    require_changed(
+                        driver::execute(
+                            connection,
+                            "UPDATE mutation_queue SET superseded = 1 WHERE id = ?1 AND superseded = 0",
+                            vec![Value::from_i64(mutation_id_to_sql(existing)?)],
+                        )?,
+                        1,
+                    )?;
+                    MutationUpsertKind::AppendedAfterActive {
+                        active_id: existing,
+                    }
+                } else {
+                    require_changed(
+                        driver::execute(
+                            connection,
+                            "DELETE FROM mutation_queue WHERE id = ?1 AND superseded = 0",
+                            vec![Value::from_i64(mutation_id_to_sql(existing)?)],
+                        )?,
+                        1,
+                    )?;
+                    mutation_retry::remove(connection, mutation_id_to_sql(existing)?)?;
+                    MutationUpsertKind::ReplacedPending {
+                        removed_id: existing,
+                    }
+                }
+            }
+            _ => return Err(invariant()),
+        };
+        self.fault_after(TestFaultSite::Enqueue, 0)?;
+        require_changed(
+            driver::execute(connection, QUEUE_INSERT, mutation_values)?,
+            1,
+        )?;
+        let id = mutation_id_from_row(connection.last_insert_rowid())?;
+        mutation_retry::save(
+            connection,
+            mutation_id_to_sql(id)?,
+            entry.mutation.server_failure_count,
+        )?;
+        self.fault_after(TestFaultSite::Enqueue, 1)?;
+        require_changed(
+            driver::execute(
+                connection,
+                LAYER_INSERT,
+                vec![
+                    Value::from_i64(mutation_id_to_sql(id)?),
+                    text(&entry.optimistic.optimistic_data_json),
+                    Value::from_blob(updates),
+                ],
+            )?,
+            1,
+        )?;
+        self.fault_after(TestFaultSite::Enqueue, 2)?;
+        write_upsert_shadow_reconciliation(connection, id, reconciliation, |index| {
+            self.fault_after(TestFaultSite::Enqueue, index + 3)
+        })?;
+        Ok(MutationUpsertResult { id, kind })
     }
 
     fn latch_result<T>(
@@ -1265,31 +1425,14 @@ impl Storage for TursoStorage {
         &mut self,
         entries: Vec<(EntityKey<'static>, Record)>,
     ) -> Result<(), Self::Error> {
-        self.require_healthy()?;
-        let result = (|| {
-            let mut entries = prepare_records(entries)?;
-            if entries.is_empty() {
-                return Ok(());
-            }
-            let connection = self.connection();
-            driver::write_transaction(&connection, || {
-                let mut statement = driver::prepare(&connection, RECORD_UPSERT)?;
-                for (index, entry) in entries.iter_mut().enumerate() {
-                    let changed = driver::execute_prepared(
-                        &mut statement,
-                        vec![
-                            text(&entry.key.typename),
-                            text(&entry.key.id),
-                            Value::from_blob(std::mem::take(&mut entry.value)),
-                        ],
-                    )?;
-                    require_changed(changed, 1)?;
-                    self.fault_after(TestFaultSite::Put, index)?;
-                }
-                write_derived_rows(&connection, &entries)
-            })
-        })();
-        self.latch_result(result)
+        self.put_records(entries, driver::Durability::Cache)
+    }
+
+    async fn put_batch_durable(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+    ) -> Result<(), Self::Error> {
+        self.put_records(entries, driver::Durability::Durable)
     }
 
     async fn put_batch_with_projections(
@@ -1322,7 +1465,7 @@ impl Storage for TursoStorage {
                 return Ok(());
             }
             let connection = self.connection();
-            driver::write_transaction(&connection, || {
+            driver::write_transaction(&connection, driver::Durability::Cache, || {
                 let mut record_statement = driver::prepare(&connection, RECORD_DELETE)?;
                 let mut search_rowid_statement = driver::prepare(&connection, SEARCH_ROWID)?;
                 let mut search_delete_statement = driver::prepare(&connection, SEARCH_DELETE)?;
@@ -1459,87 +1602,74 @@ impl Storage for TursoStorage {
             let mutation_values = mutation_values(&entry)?;
             let updates = encode_record_updates(&entry.optimistic.normalized_updates);
             let connection = self.connection();
-            driver::write_transaction(&connection, || {
-                if let Some(expected) = &reconciliation.expected_queue
-                    && !queue_snapshot_matches(&connection, expected)?
-                {
-                    return Err(TursoStorageError::InvalidInput);
-                }
-                let collision = driver::query(
+            driver::write_transaction(&connection, driver::Durability::Durable, || {
+                self.upsert_in_transaction(
                     &connection,
-                    "SELECT m.id, m.lease_expires_at_ms, m.attempt_count, o.optimistic_data_json FROM mutation_queue m JOIN optimistic_layers o ON o.mutation_id = m.id WHERE m.uuid = ?1 AND m.superseded = 0",
-                    vec![text(&entry.uuid.to_string())],
-                )?;
-                let kind = match collision.as_slice() {
-                    [] => MutationUpsertKind::Inserted,
-                    [row] if row.len() == 4 => {
-                        let existing = mutation_id_from_row(required_i64(row, 0)?)?;
-                        if cache_core::queue::collision_stays_active(
-                            nullable_i64(row, 1)?,
-                            now_ms,
-                            required_i64(row, 2)? > 0,
-                            &required_text(row, 3)?,
-                        ) {
-                            require_changed(
-                                driver::execute(
-                                    &connection,
-                                    "UPDATE mutation_queue SET superseded = 1 WHERE id = ?1 AND superseded = 0",
-                                    vec![Value::from_i64(mutation_id_to_sql(existing)?)],
-                                )?,
-                                1,
-                            )?;
-                            MutationUpsertKind::AppendedAfterActive {
-                                active_id: existing,
-                            }
-                        } else {
-                            require_changed(
-                                driver::execute(
-                                    &connection,
-                                    "DELETE FROM mutation_queue WHERE id = ?1 AND superseded = 0",
-                                    vec![Value::from_i64(mutation_id_to_sql(existing)?)],
-                                )?,
-                                1,
-                            )?;
-                            mutation_retry::remove(&connection, mutation_id_to_sql(existing)?)?;
-                            MutationUpsertKind::ReplacedPending {
-                                removed_id: existing,
-                            }
-                        }
-                    }
-                    _ => return Err(invariant()),
-                };
-                self.fault_after(TestFaultSite::Enqueue, 0)?;
-                require_changed(
-                    driver::execute(&connection, QUEUE_INSERT, mutation_values)?,
-                    1,
-                )?;
-                let id = mutation_id_from_row(connection.last_insert_rowid())?;
-                mutation_retry::save(
-                    &connection,
-                    mutation_id_to_sql(id)?,
-                    entry.mutation.server_failure_count,
-                )?;
-                self.fault_after(TestFaultSite::Enqueue, 1)?;
-                require_changed(
-                    driver::execute(
-                        &connection,
-                        LAYER_INSERT,
-                        vec![
-                            Value::from_i64(mutation_id_to_sql(id)?),
-                            text(&entry.optimistic.optimistic_data_json),
-                            Value::from_blob(updates),
-                        ],
-                    )?,
-                    1,
-                )?;
-                self.fault_after(TestFaultSite::Enqueue, 2)?;
-                write_upsert_shadow_reconciliation(&connection, id, reconciliation, |index| {
-                    self.fault_after(TestFaultSite::Enqueue, index + 3)
-                })?;
-                Ok(MutationUpsertResult { id, kind })
+                    &entry,
+                    mutation_values,
+                    updates,
+                    now_ms,
+                    reconciliation,
+                )
             })
         })();
         self.latch_result(result)
+    }
+
+    /// One transaction, so one durable flush, for the upsert and its claim.
+    async fn upsert_mutation_and_claim(
+        &mut self,
+        entry: NewQueuedMutation,
+        now_ms: i64,
+        reconciliation: OptimisticUpsertReconciliation,
+        claim: MutationClaimRequest,
+    ) -> Result<cache_core::store::UpsertAndClaim<Self::Error>, Self::Error> {
+        self.require_healthy()?;
+        let alone = reconciliation.clone();
+        let mut claim_failure = None;
+        let result = (|| {
+            reconciliation
+                .validate()
+                .map_err(|_| TursoStorageError::InvalidInput)?;
+            let mutation_values = mutation_values(&entry)?;
+            let updates = encode_record_updates(&entry.optimistic.normalized_updates);
+            let connection = self.connection();
+            driver::write_transaction(&connection, driver::Durability::Durable, || {
+                let upsert = self.upsert_in_transaction(
+                    &connection,
+                    &entry,
+                    mutation_values,
+                    updates,
+                    now_ms,
+                    reconciliation,
+                )?;
+                match self
+                    .fault_after(TestFaultSite::Claim, 0)
+                    .and_then(|()| claim_head(&connection, &claim))
+                {
+                    Ok(claimed) => Ok((upsert, claimed)),
+                    Err(error) => {
+                        // Roll the upsert back with it; it is written alone below.
+                        claim_failure = Some(error);
+                        Err(TursoStorageError::Database)
+                    }
+                }
+            })
+        })();
+        match (result, claim_failure) {
+            (Ok((upsert, claimed)), _) => Ok((upsert, Ok(claimed))),
+            // A failed claim whose rollback went through does not cost the
+            // upsert: write it on its own, as the separate calls would have,
+            // and report the claim under it. A failed rollback is a reset,
+            // and the enqueue is not acknowledged.
+            (Err(TursoStorageError::Database), Some(claim_error)) => {
+                let upsert = self
+                    .upsert_mutation_with_shadow(entry, now_ms, alone)
+                    .await?;
+                Ok((upsert, self.latch_result(Err(claim_error))))
+            }
+            (Err(error), _) => self.latch_result(Err(error)),
+        }
     }
 
     async fn load_projection_states(
@@ -1573,7 +1703,9 @@ impl Storage for TursoStorage {
     ) -> Result<(), Self::Error> {
         self.require_healthy()?;
         let connection = self.connection();
-        let result = driver::write_transaction(&connection, || {
+        // The layers belong to queued mutations, which a crash must not take
+        // back to their old data.
+        let result = driver::write_transaction(&connection, driver::Durability::Durable, || {
             for (id, layer) in layers {
                 let id = mutation_id_to_sql(*id)?;
                 driver::execute(
@@ -1661,63 +1793,8 @@ impl Storage for TursoStorage {
         self.require_healthy()?;
         let result = {
             let connection = self.connection();
-            driver::write_transaction(&connection, || {
-                let rows = driver::query(&connection, QUEUE_HEAD_SELECT, Vec::new())?;
-                let Some(row) = rows.first() else {
-                    if !driver::query(&connection, ANY_LAYER_SELECT, Vec::new())?.is_empty() {
-                        return Err(invariant());
-                    }
-                    return Ok(None);
-                };
-                if rows.len() != 1 {
-                    return Err(invariant());
-                }
-                let mut parsed = parse_queue_row(row)?;
-                let optimistic = parsed.optimistic.take().ok_or_else(invariant)?;
-                if parsed
-                    .mutation
-                    .next_attempt_at_ms
-                    .is_some_and(|next| next > request.now_ms)
-                    || parsed
-                        .mutation
-                        .lease_expires_at_ms
-                        .is_some_and(|expiry| expiry > request.now_ms)
-                {
-                    return Ok(None);
-                }
-
-                parsed.mutation.attempt_count = parsed.mutation.attempt_count.saturating_add(1);
-                parsed.mutation.lease_generation =
-                    parsed.mutation.lease_generation.saturating_add(1);
-                let generation =
-                    generation_to_sql(parsed.mutation.lease_generation).map_err(|_| invariant())?;
-                parsed.mutation.next_attempt_at_ms = None;
-                parsed.mutation.lease_owner = Some(request.owner.clone());
-                parsed.mutation.lease_expires_at_ms = Some(request.lease_expires_at_ms);
-                require_changed(
-                    driver::execute(
-                        &connection,
-                        "UPDATE mutation_queue SET attempt_count = ?2, next_attempt_at_ms = NULL, lease_owner = ?3, lease_generation = ?4, lease_expires_at_ms = ?5 WHERE id = ?1",
-                        vec![
-                            Value::from_i64(mutation_id_to_sql(parsed.id)?),
-                            Value::from_i64(i64::from(parsed.mutation.attempt_count)),
-                            text(&request.owner),
-                            Value::from_i64(generation),
-                            Value::from_i64(request.lease_expires_at_ms),
-                        ],
-                    )?,
-                    1,
-                )?;
-                Ok(Some(ClaimedMutation {
-                    queued: QueuedMutation {
-                        id: parsed.id,
-                        uuid: parsed.uuid,
-                        superseded: parsed.superseded,
-                        mutation: parsed.mutation,
-                        optimistic,
-                    },
-                    lease_generation: u64::try_from(generation).map_err(|_| invariant())?,
-                }))
+            driver::write_transaction(&connection, driver::Durability::Durable, || {
+                claim_head(&connection, &request)
             })
         };
         self.latch_result(result)
@@ -1736,7 +1813,7 @@ impl Storage for TursoStorage {
             let id = mutation_id_to_sql(id)?;
             let generation = generation_to_sql(claim.generation)?;
             let connection = self.connection();
-            driver::write_transaction(&connection, || {
+            driver::write_transaction(&connection, driver::Durability::Durable, || {
                 let changed = driver::execute(
                     &connection,
                     "UPDATE mutation_queue SET next_attempt_at_ms = ?4, lease_owner = NULL, lease_expires_at_ms = NULL, last_error = ?5 WHERE id = ?1 AND lease_owner = ?2 AND lease_generation = ?3",
@@ -1781,7 +1858,7 @@ impl Storage for TursoStorage {
             generation_to_sql(claim.generation)?;
             let entries = prepare_records(entries)?;
             let connection = self.connection();
-            driver::write_transaction(&connection, || {
+            driver::write_transaction(&connection, driver::Durability::Durable, || {
                 if !claim_is_current(&connection, sql_id, &claim)? {
                     return Ok(false);
                 }
@@ -1835,7 +1912,7 @@ impl Storage for TursoStorage {
             generation_to_sql(claim.generation)?;
             let entries = prepare_records(entries)?;
             let connection = self.connection();
-            driver::write_transaction(&connection, || {
+            driver::write_transaction(&connection, driver::Durability::Durable, || {
                 if !claim_is_current(&connection, sql_id, &claim)?
                     || !queue_identity_matches(&connection, &reconciliation.expected_queue)?
                 {
@@ -1890,7 +1967,7 @@ impl Storage for TursoStorage {
             let sql_id = mutation_id_to_sql(id)?;
             generation_to_sql(claim.generation)?;
             let connection = self.connection();
-            driver::write_transaction(&connection, || {
+            driver::write_transaction(&connection, driver::Durability::Durable, || {
                 if !claim_is_current(&connection, sql_id, &claim)? {
                     return Ok(false);
                 }
@@ -1923,7 +2000,7 @@ impl Storage for TursoStorage {
             let sql_id = mutation_id_to_sql(id)?;
             generation_to_sql(claim.generation)?;
             let connection = self.connection();
-            driver::write_transaction(&connection, || {
+            driver::write_transaction(&connection, driver::Durability::Durable, || {
                 if !claim_is_current(&connection, sql_id, &claim)?
                     || !queue_identity_matches(&connection, &reconciliation.expected_queue)?
                 {
@@ -1962,7 +2039,7 @@ impl Storage for TursoStorage {
         let result = (|| {
             let entries = prepare_records(entries)?;
             let connection = self.connection();
-            driver::write_transaction(&connection, || {
+            driver::write_transaction(&connection, driver::Durability::Durable, || {
                 driver::execute(&connection, "DELETE FROM optimistic_layers", Vec::new())?;
                 self.fault_after(TestFaultSite::Clear, 0)?;
                 driver::execute(&connection, "DELETE FROM mutation_queue", Vec::new())?;
@@ -2080,7 +2157,7 @@ impl PredicateIndexStorage for TursoStorage {
                 .map(RecordKey::from_entity)
                 .collect::<Result<Vec<_>, _>>()?;
             let connection = self.connection();
-            driver::write_transaction(&connection, || {
+            driver::write_transaction(&connection, driver::Durability::Cache, || {
                 let mut record_statement = driver::prepare(&connection, RECORD_DELETE)?;
                 let mut search_rowid_statement = driver::prepare(&connection, SEARCH_ROWID)?;
                 let mut search_delete_statement = driver::prepare(&connection, SEARCH_DELETE)?;
@@ -2217,6 +2294,69 @@ fn write_shadow_reconciliation(
         after_write(index)?;
     }
     Ok(())
+}
+
+/// Leases the queue head when it is runnable and not leased, inside the
+/// caller's transaction.
+fn claim_head(
+    connection: &Db,
+    request: &MutationClaimRequest,
+) -> Result<Option<ClaimedMutation>, TursoStorageError> {
+    let rows = driver::query(connection, QUEUE_HEAD_SELECT, Vec::new())?;
+    let Some(row) = rows.first() else {
+        if !driver::query(connection, ANY_LAYER_SELECT, Vec::new())?.is_empty() {
+            return Err(invariant());
+        }
+        return Ok(None);
+    };
+    if rows.len() != 1 {
+        return Err(invariant());
+    }
+    let mut parsed = parse_queue_row(row)?;
+    let optimistic = parsed.optimistic.take().ok_or_else(invariant)?;
+    if parsed
+        .mutation
+        .next_attempt_at_ms
+        .is_some_and(|next| next > request.now_ms)
+        || parsed
+            .mutation
+            .lease_expires_at_ms
+            .is_some_and(|expiry| expiry > request.now_ms)
+    {
+        return Ok(None);
+    }
+
+    parsed.mutation.attempt_count = parsed.mutation.attempt_count.saturating_add(1);
+    parsed.mutation.lease_generation = parsed.mutation.lease_generation.saturating_add(1);
+    let generation =
+        generation_to_sql(parsed.mutation.lease_generation).map_err(|_| invariant())?;
+    parsed.mutation.next_attempt_at_ms = None;
+    parsed.mutation.lease_owner = Some(request.owner.clone());
+    parsed.mutation.lease_expires_at_ms = Some(request.lease_expires_at_ms);
+    require_changed(
+        driver::execute(
+            connection,
+            "UPDATE mutation_queue SET attempt_count = ?2, next_attempt_at_ms = NULL, lease_owner = ?3, lease_generation = ?4, lease_expires_at_ms = ?5 WHERE id = ?1",
+            vec![
+                Value::from_i64(mutation_id_to_sql(parsed.id)?),
+                Value::from_i64(i64::from(parsed.mutation.attempt_count)),
+                text(&request.owner),
+                Value::from_i64(generation),
+                Value::from_i64(request.lease_expires_at_ms),
+            ],
+        )?,
+        1,
+    )?;
+    Ok(Some(ClaimedMutation {
+        queued: QueuedMutation {
+            id: parsed.id,
+            uuid: parsed.uuid,
+            superseded: parsed.superseded,
+            mutation: parsed.mutation,
+            optimistic,
+        },
+        lease_generation: u64::try_from(generation).map_err(|_| invariant())?,
+    }))
 }
 
 fn write_upsert_shadow_reconciliation(
@@ -3713,7 +3853,7 @@ fn migrate_previous_format(
         3 => decode_format_3_record,
         _ => return Err(TursoStorageError::reset(PhysicalResetReason::Compatibility)),
     };
-    driver::write_transaction(connection, || {
+    driver::write_transaction(connection, driver::Durability::Cache, || {
         // The adoption after the open resets the cache in place, which takes
         // the shadows and overlays the previous format composed too.
         schema_store::mark_unreadable(connection)?;
@@ -3810,7 +3950,7 @@ fn initialize(
 ) -> Result<Initialized, TursoStorageError> {
     enable_foreign_keys(connection).map_err(TursoStorageError::initialization)?;
     if fresh {
-        driver::write_transaction(connection, || {
+        driver::write_transaction(connection, driver::Durability::Cache, || {
             for sql in fresh_schema_statements() {
                 driver::execute(connection, sql, Vec::new())?;
             }
@@ -4054,7 +4194,7 @@ fn ensure_search_projection_version(connection: &Db) -> Result<(), TursoStorageE
 
     // Regenerate disposable search rows atomically without replacing normalized
     // records, the data generation marker, or pending optimistic mutations.
-    driver::write_transaction(connection, || {
+    driver::write_transaction(connection, driver::Durability::Cache, || {
         driver::execute(
             connection,
             "DELETE FROM search_documents WHERE profile = ?1",
@@ -5562,7 +5702,7 @@ impl TursoStorage {
         let result = (|| {
             let mut entries = prepare()?;
             let connection = self.connection();
-            driver::write_transaction(&connection, || {
+            driver::write_transaction(&connection, driver::Durability::Cache, || {
                 // Several records per statement: on a cold write, running one
                 // statement per record cost more than the rows it wrote.
                 let mut written = 0;
@@ -6001,6 +6141,8 @@ enum TestFaultSite {
     Put,
     Delete,
     Enqueue,
+    /// The claim an upsert makes in its own transaction.
+    Claim,
     Complete,
     Discard,
     Clear,

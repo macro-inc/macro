@@ -174,6 +174,9 @@ export interface CacheEngine {
   queueDiagnostics?(): Promise<CacheQueueDiagnostics>;
   /** Optional for compatibility engines; absence leaves the checkpoint to COMMIT. */
   checkpointIfDue?(): Promise<CacheWalCheckpoint>;
+  /** Flushes the WAL the cache COMMITs appended to; resolves to whether it
+   * flushed. Absent where every COMMIT flushes. */
+  flushWal?(): Promise<boolean>;
   readQuery(
     opId: string | undefined,
     query: string,

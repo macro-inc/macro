@@ -140,6 +140,8 @@ export interface CacheWorkerCoreOptions {
   afterArrivedMessages?: (resume: () => void) => void;
   /** Calls `run` once the engine has been quiet; returns a cancel. */
   afterQuiet?: (run: () => void) => () => void;
+  /** Calls `run` after `ms`; returns a cancel. */
+  afterDelay?: (run: () => void, ms: number) => () => void;
 }
 
 // A burst that keeps arriving must not hold back the requests already here.
@@ -162,10 +164,29 @@ function afterArrivedMessages(resume: () => void): void {
  */
 const IDLE_CHECKPOINT_QUIET_MS = 100;
 
-function afterQuiet(run: () => void): () => void {
-  const timer = setTimeout(run, IDLE_CHECKPOINT_QUIET_MS);
+function afterDelay(run: () => void, ms: number): () => void {
+  const timer = setTimeout(run, ms);
   return () => clearTimeout(timer);
 }
+
+function afterQuiet(run: () => void): () => void {
+  return afterDelay(run, IDLE_CHECKPOINT_QUIET_MS);
+}
+
+/**
+ * Cache COMMITs append to the WAL without flushing it (queue writes flush
+ * themselves). The worker flushes it once the engine has been quiet this
+ * long, so a burst of writes pays one flush...
+ */
+const WAL_FLUSH_QUIET_MS = 250;
+/** ...and at the latest this long after the first write it holds, between
+ * two requests if the engine never goes quiet. Up to this much of the newest
+ * cache writes can be lost to an OS crash or power loss, never to a closed
+ * tab or a killed browser. */
+const WAL_FLUSH_MAX_DELAY_MS = 2_000;
+/** A deferred flush this slow is reported, like a slow statement; the
+ * flushes' totals ride on `graphql_cache.storage_io`. */
+const WAL_FLUSH_SLOW_MS = 200;
 
 // Backfill hydration is cache warming, so foreground reads may overtake it.
 // Hydration and authoritative writes still retain arrival order so stale
@@ -307,8 +328,14 @@ export class CacheWorkerCore {
   /** A request that can write ran since the last WAL checkpoint. */
   private checkpointPending = false;
   private cancelIdleCheckpoint: (() => void) | undefined;
+  /** When a request that can write first ran since the last WAL flush. */
+  private unflushedSince: number | undefined;
+  /** The WAL flush runs before the next request. */
+  private walFlushDue = false;
+  private cancelWalFlush: (() => void) | undefined;
   private readonly afterArrivedMessages: (resume: () => void) => void;
   private readonly afterQuiet: (run: () => void) => () => void;
+  private readonly afterDelay: (run: () => void, ms: number) => () => void;
   private acceptingRequests = true;
   private activeRequestHandlers = 0;
   private readonly drainWaiters = new Set<() => void>();
@@ -339,6 +366,7 @@ export class CacheWorkerCore {
     this.afterArrivedMessages =
       options.afterArrivedMessages ?? afterArrivedMessages;
     this.afterQuiet = options.afterQuiet ?? afterQuiet;
+    this.afterDelay = options.afterDelay ?? afterDelay;
   }
 
   addPort(port: PortLike): void {
@@ -477,6 +505,9 @@ export class CacheWorkerCore {
     this.cancelQueueDiagnostics?.();
     this.cancelIdleCheckpoint?.();
     this.cancelIdleCheckpoint = undefined;
+    // Closing the engine flushes the WAL.
+    this.cancelWalFlush?.();
+    this.cancelWalFlush = undefined;
     if (
       this.activeRequestHandlers > 0 ||
       this.running ||
@@ -583,7 +614,12 @@ export class CacheWorkerCore {
    * may observe the newer state, which is linearizable and avoids stale work.
    */
   private drainQueue(): void {
-    if (this.running || this.yielding || this.queue.length === 0) return;
+    if (this.running || this.yielding) return;
+    if (this.walFlushDue || this.walFlushOverdue()) {
+      this.startWalFlush();
+      return;
+    }
+    if (this.queue.length === 0) return;
 
     let segmentEnd = this.queue.findIndex((queued) =>
       isOrderingBarrier(queued.request)
@@ -624,9 +660,16 @@ export class CacheWorkerCore {
     let index = pick(segmentEnd, this.runnablePriority(segmentEnd, false));
     const search = this.typedSearchBeforeTeardown(segmentEnd, pick);
     if (search !== undefined) index = search;
+    if (this.flushesBefore(this.queue[index])) {
+      this.startWalFlush();
+      return;
+    }
 
     const queued = this.dequeue(index);
     if (!queued) return;
+    // The quiet wait starts again once this request ends.
+    this.cancelWalFlush?.();
+    this.cancelWalFlush = undefined;
     this.running = true;
     const startedAt = this.now();
     const queueDepth = this.queue.length;
@@ -649,7 +692,9 @@ export class CacheWorkerCore {
         this.running = false;
         if (!isReadOnlyCacheRequest(queued.request.kind)) {
           this.checkpointPending = true;
+          this.unflushedSince ??= this.now();
         }
+        this.scheduleWalFlush();
         this.collectArrivalsThenDrain();
         this.scheduleIdleCheckpoint();
         this.resolveDrainWaitersIfIdle();
@@ -695,6 +740,116 @@ export class CacheWorkerCore {
         'graphql_cache.wal_checkpoint'
       );
     });
+  }
+
+  /**
+   * Arms the WAL flush after a request: once the engine has been quiet for
+   * `WAL_FLUSH_QUIET_MS`, or before the next request once the first unflushed
+   * write is `WAL_FLUSH_MAX_DELAY_MS` old.
+   */
+  private scheduleWalFlush(): void {
+    this.cancelWalFlush?.();
+    this.cancelWalFlush = undefined;
+    const since = this.unflushedSince;
+    if (since === undefined || this.walFlushDue || !this.acceptingRequests) {
+      return;
+    }
+    const engine = this.engine;
+    if (!engine?.flushWal) {
+      // An engine without it flushes in every COMMIT.
+      this.unflushedSince = undefined;
+      return;
+    }
+    const left = since + WAL_FLUSH_MAX_DELAY_MS - this.now();
+    if (left <= 0) {
+      this.walFlushDue = true;
+      return;
+    }
+    this.cancelWalFlush = this.afterDelay(
+      () => {
+        this.cancelWalFlush = undefined;
+        if (this.engine !== engine || !this.acceptingRequests) return;
+        this.walFlushDue = true;
+        this.drainQueue();
+      },
+      Math.min(WAL_FLUSH_QUIET_MS, left)
+    );
+  }
+
+  /** The first unflushed write is `WAL_FLUSH_MAX_DELAY_MS` old. */
+  private walFlushOverdue(): boolean {
+    const since = this.unflushedSince;
+    return (
+      since !== undefined &&
+      this.engine?.flushWal !== undefined &&
+      this.now() - since >= WAL_FLUSH_MAX_DELAY_MS
+    );
+  }
+
+  /**
+   * Hydration checkpoints kept outside the cache are keyed by the storage
+   * generation, and saved once it is read back after a page. The writes
+   * before that read reach disk first, so a saved cursor never runs ahead of
+   * the pages a power loss keeps.
+   */
+  private flushesBefore(next: QueuedEngineRequest | undefined): boolean {
+    return (
+      this.unflushedSince !== undefined &&
+      this.engine?.flushWal !== undefined &&
+      next?.request.kind === 'current-storage-generation'
+    );
+  }
+
+  /** Runs the due WAL flush in the request queue's place. */
+  private startWalFlush(): void {
+    this.cancelWalFlush?.();
+    this.cancelWalFlush = undefined;
+    this.walFlushDue = false;
+    this.unflushedSince = undefined;
+    const engine = this.engine;
+    const flushWal = engine?.flushWal?.bind(engine);
+    // It runs during a drain too: a storage-generation read still queued
+    // then must not answer before the writes ahead of it reach disk.
+    if (!flushWal) {
+      this.drainQueue();
+      return;
+    }
+    this.running = true;
+    fireAndForget(this.runWalFlush(flushWal), 'graphql_cache.wal_flush');
+  }
+
+  private async runWalFlush(flushWal: () => Promise<boolean>): Promise<void> {
+    const startedAt = this.now();
+    try {
+      const flushed = await flushWal();
+      const durationMs = this.now() - startedAt;
+      // A flush with nothing to write may still wait for the engine.
+      if (flushed && durationMs >= WAL_FLUSH_SLOW_MS) {
+        this.telemetry.record({
+          name: 'graphql_cache.wal_flush',
+          operationCategory: 'storage',
+          outcome: 'success',
+          durationMs,
+        });
+      }
+    } catch (error) {
+      // A failed flush latches a reset in the engine, reported here.
+      this.telemetry.record({
+        name: 'graphql_cache.wal_flush',
+        operationCategory: 'storage',
+        outcome: 'error',
+        ...describeCacheError(error),
+        durationMs: this.now() - startedAt,
+      });
+      this.reportResetRequired(error);
+      if (isStorageBusy(error)) this.options.onStorageBusy?.();
+    } finally {
+      this.running = false;
+      this.collectArrivalsThenDrain();
+      // An idle copy that fell due during the flush waited for it.
+      this.scheduleIdleCheckpoint();
+      this.resolveDrainWaitersIfIdle();
+    }
   }
 
   /** Runs one idle copy, records it, and drains what arrived meanwhile. */
@@ -1014,7 +1169,12 @@ export class CacheWorkerCore {
    * repeats while they keep coming, up to a bound.
    */
   private collectArrivalsThenDrain(yieldsLeft = MAX_ARRIVAL_YIELDS): void {
-    if (this.running || this.yielding || this.queue.length === 0) return;
+    if (this.running || this.yielding) return;
+    if (this.queue.length === 0) {
+      // A WAL flush that fell due during the last request runs now.
+      if (this.walFlushDue) this.startWalFlush();
+      return;
+    }
 
     // Nothing still on its way would be picked ahead of a typed search, and
     // it is the one request someone is waiting on.

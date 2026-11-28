@@ -15,7 +15,8 @@ contract and the multi-target verification commands.
   `OpfsOwner`, `OpfsSession`, or close/reset paths.
 - `src/browser.rs` (wasm32 only): `OpfsOwner`, `OpfsSession`, `ConnectedOpfsSession`,
   close/reset state types, and `io_totals` (completed OPFS writes and flushes
-  since the worker started, across every file and session).
+  since the worker started, across every file and session), and
+  `flush_wal`/`WalFlusher`, the WAL flush COMMITs no longer make.
 - `src/browser/sidecar.rs` (wasm32 only): `Sidecar`, the file beside the pair
   that a wipe leaves alone.
 - `src/state.rs`, `src/write_batch.rs`: target-independent lifecycle machine,
@@ -58,6 +59,10 @@ contract and the multi-target verification commands.
   and the log restart): every checkpoint drops the connection's page cache at
   the next read, so cache-turso copies the WAL itself, at fewer points. A
   caller that is not cache-turso must checkpoint on its own.
+- `connect` also sets `synchronous = NORMAL` (`DEFER_COMMIT_FLUSH`): a
+  COMMIT does not flush the WAL, except that Turso syncs a new WAL header in
+  the first COMMIT after a checkpoint restarts the log. A caller that needs a write to survive an OS
+  crash calls `flush_wal` (or its `WalFlusher`) after the COMMIT.
 - Local tests prove physical lock contention but not real cross-worker
   termination — don't read passing tests here as proof of that.
 

@@ -127,7 +127,7 @@ fn ensure(connection: &Db, viewer: Option<&str>) -> Result<bool, TursoStorageErr
 }
 
 pub(super) fn open(connection: &Db) -> Result<(), TursoStorageError> {
-    driver::write_transaction(connection, || {
+    driver::write_transaction(connection, driver::Durability::Cache, || {
         ensure(connection, viewer(connection)?.as_deref())?;
         Ok(())
     })

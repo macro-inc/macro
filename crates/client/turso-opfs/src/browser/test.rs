@@ -1374,7 +1374,7 @@ async fn page_cache_cap_spills_transactions_larger_than_the_cache() {
 }
 
 #[wasm_bindgen_test]
-async fn io_totals_count_each_commit_s_wal_append_and_flush() {
+async fn a_commit_appends_without_flushing_and_flush_wal_flushes_once() {
     let nonce = js_sys::Date::now() as u64;
     let database_name = format!("io-totals-{nonce}.db");
     clean_pair(&database_name).await;
@@ -1392,23 +1392,86 @@ async fn io_totals_count_each_commit_s_wal_append_and_flush() {
     connection
         .execute(format!("INSERT INTO pages (id, body) VALUES (1, '{body}')"))
         .expect("insert one row");
-    let after = io_totals();
-    // One autocommit: its pages appended to the WAL, then one WAL flush.
-    assert!(after.writes > before.writes, "{before:?} -> {after:?}");
+    let committed = io_totals();
+    // One autocommit appends its pages to the WAL and, under
+    // `synchronous = NORMAL`, does not flush it.
     assert!(
-        after.write_bytes - before.write_bytes >= 4_096,
-        "{before:?} -> {after:?}"
+        committed.writes > before.writes,
+        "{before:?} -> {committed:?}"
     );
-    assert_eq!(after.flushes - before.flushes, 1, "{before:?} -> {after:?}");
-    assert!(after.write_ms >= before.write_ms && after.flush_ms >= before.flush_ms);
+    assert!(
+        committed.write_bytes - before.write_bytes >= 4_096,
+        "{before:?} -> {committed:?}"
+    );
+    assert_eq!(
+        committed.flushes, before.flushes,
+        "{before:?} -> {committed:?}"
+    );
+    assert!(committed.write_ms >= before.write_ms);
 
-    // A read writes and flushes nothing.
+    // The deferred flush flushes the WAL once, then has nothing left to do.
+    assert!(connected.flush_wal().expect("flush the WAL"));
+    let flushed = io_totals();
+    assert_eq!(
+        flushed.flushes - committed.flushes,
+        1,
+        "{committed:?} -> {flushed:?}"
+    );
+    assert_eq!(flushed.writes, committed.writes);
+    assert!(flushed.flush_ms >= committed.flush_ms);
+    assert!(
+        !connected
+            .wal_flusher()
+            .flush()
+            .expect("flush a flushed WAL")
+    );
+    assert_eq!(io_totals(), flushed);
+
+    // A read writes and flushes nothing, and leaves nothing to flush.
     assert_eq!(
         query_one_i64(&connection, "SELECT COUNT(*) FROM pages").expect("count rows"),
         1
     );
-    assert_eq!(io_totals(), after);
+    assert!(!connected.flush_wal().expect("flush after a read"));
+    assert_eq!(io_totals(), flushed);
     drop(connection);
+    let owner = connected
+        .try_close()
+        .expect("close session")
+        .preserve()
+        .expect("preserve pair");
+    owner.release().await.expect("release owner lock");
+    clean_pair(&database_name).await;
+}
+
+#[wasm_bindgen_test]
+async fn a_session_flushes_the_wal_it_inherits_unflushed() {
+    let nonce = js_sys::Date::now() as u64;
+    let database_name = format!("inherited-wal-{nonce}.db");
+    clean_pair(&database_name).await;
+    let owner = OpfsOwner::acquire(&database_name)
+        .await
+        .expect("identity-bound owner");
+    let connected = connect_ready(open_ready(owner).await);
+    let connection = connected.connection();
+    connection
+        .execute("CREATE TABLE pages (id INTEGER PRIMARY KEY, body TEXT NOT NULL)")
+        .expect("create table");
+    drop(connection);
+    // The session leaves a non-empty WAL. A killed tab would leave it
+    // unflushed; the next session cannot tell, so it treats any inherited
+    // frames as unflushed (this clean close happens to have synced them).
+    let owner = connected
+        .try_close()
+        .expect("close session")
+        .preserve()
+        .expect("preserve pair");
+
+    let connected = connect_ready(open_ready(owner).await);
+    let before = io_totals();
+    assert!(connected.flush_wal().expect("flush the inherited WAL"));
+    assert_eq!(io_totals().flushes - before.flushes, 1);
+    assert!(!connected.flush_wal().expect("flush a flushed WAL"));
     let owner = connected
         .try_close()
         .expect("close session")

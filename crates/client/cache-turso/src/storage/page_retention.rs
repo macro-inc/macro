@@ -30,7 +30,7 @@ pub(super) fn compact_legacy_pages(connection: &Db) -> Result<(), TursoStorageEr
     // No schema/namespace bump or cache clear. Only the viewer records are
     // visited through the composite primary key, one at a time. The marker and
     // replacements commit together; failed opens can retry without losing data.
-    driver::write_transaction(connection, || {
+    driver::write_transaction(connection, driver::Durability::Cache, || {
         let mut after: Option<String> = None;
         loop {
             let (sql, values) = match after.as_ref() {
