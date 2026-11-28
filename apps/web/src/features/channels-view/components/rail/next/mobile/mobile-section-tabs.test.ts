@@ -18,7 +18,7 @@ describe('mobileSectionMemberWindow', () => {
         label: undefined,
         rows,
         isLoaded: nothingLoaded,
-        undiscovered: [],
+        discover: [],
       }).size
     ).toBe(0);
     expect(
@@ -26,7 +26,7 @@ describe('mobileSectionMemberWindow', () => {
         label: label(ids(10)),
         rows: undefined,
         isLoaded: nothingLoaded,
-        undiscovered: ids(10),
+        discover: ids(10),
       }).size
     ).toBe(0);
   });
@@ -37,7 +37,7 @@ describe('mobileSectionMemberWindow', () => {
       label: label(list),
       rows: { ids: list, start: 60, end: 70 },
       isLoaded: (id) => id === 'channel-60',
-      undiscovered: [],
+      discover: [],
     });
     // Rows 54-76 with overscan, widened to blocks 50-74 and 75-99.
     expect(windowIds(window)).toEqual(
@@ -51,25 +51,36 @@ describe('mobileSectionMemberWindow', () => {
         label: label(ids(size)),
         rows: { ids: ids(size), start: 0, end: 11 },
         isLoaded: nothingLoaded,
-        undiscovered: [],
+        discover: [],
       }).size;
     expect(lookup(7000)).toBe(25);
     expect(lookup(3500)).toBe(25);
   });
 
-  it('looks up the next undiscovered members only once the end is on screen', () => {
+  it('looks up the members to discover only once the end is on screen', () => {
     const shown = ids(30);
-    const undiscovered = ids(500, 'unknown');
+    const discover = ids(25, 'unknown');
     const at = (start: number, end: number) =>
       windowIds(
         mobileSectionMemberWindow({
-          label: label([...shown, ...undiscovered]),
+          label: label([...shown, ...ids(500, 'unknown')]),
           rows: { ids: shown, start, end },
           isLoaded: () => true,
-          undiscovered,
+          discover,
         })
       );
     expect(at(0, 11)).toEqual([]);
-    expect(at(18, 29)).toEqual(undiscovered.slice(0, 25));
+    expect(at(18, 29)).toEqual(discover);
+  });
+
+  it('discovers members from an empty list, whose end is on screen', () => {
+    const discover = ids(25, 'unknown');
+    const window = mobileSectionMemberWindow({
+      label: label(ids(7000, 'unknown')),
+      rows: { ids: [], start: 0, end: 0 },
+      isLoaded: nothingLoaded,
+      discover,
+    });
+    expect(windowIds(window)).toEqual(discover);
   });
 });

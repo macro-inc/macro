@@ -100,7 +100,9 @@ vi.mock('@solid-primitives/resize-observer', () => ({
   createElementSize: () => ({ height: 0 }),
 }));
 vi.mock('@ui', () => ({
-  Button: () => null,
+  Button: (props: { onClick?: () => void; children?: JSX.Element }) => (
+    <button onClick={() => props.onClick?.()}>{props.children}</button>
+  ),
   EmptyStatePanel: () => null,
   cn: (...classes: unknown[]) => classes.filter(Boolean).join(' '),
 }));
@@ -313,6 +315,52 @@ describe('mobile section hydration', () => {
     setLoading(false);
     setLoading(true);
     expect(screen.getByRole('button', { name: 'One' })).toBe(row);
+  });
+});
+
+describe('mobile section discovery', () => {
+  const empty: ChannelsDataSource = { ...source, items: () => [] };
+
+  it('reports an empty list, which mounts no rows, with its end on screen', async () => {
+    const onRowsOnScreen = vi.fn();
+    render(() => (
+      <ChannelsMobileView
+        source={empty}
+        pinned={[]}
+        searchQuery=""
+        onClearSearch={() => {}}
+        onRowsOnScreen={onRowsOnScreen}
+      />
+    ));
+    await waitFor(() =>
+      expect(onRowsOnScreen).toHaveBeenCalledWith({ ids: [], start: 0, end: 0 })
+    );
+  });
+
+  it('offers Load more under the rows and in place of the empty state while a source waits to be asked', () => {
+    const [loadMore, setLoadMore] = createSignal<(() => void) | undefined>();
+    const asked = vi.fn();
+    const [items, setItems] = createSignal<ChannelEntity[]>([]);
+    render(() => (
+      <ChannelsMobileView
+        source={{ ...source, items }}
+        pinned={[]}
+        searchQuery=""
+        onClearSearch={() => {}}
+        onLoadMore={loadMore()}
+      />
+    ));
+    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
+
+    setLoadMore(() => asked);
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+    expect(asked).toHaveBeenCalledOnce();
+
+    setItems([channel]);
+    expect(screen.getByRole('button', { name: 'One' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Load more' })).toBeTruthy();
+    setLoadMore(undefined);
+    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
   });
 });
 

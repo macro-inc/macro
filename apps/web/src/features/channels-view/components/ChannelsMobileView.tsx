@@ -3,6 +3,7 @@ import { toEntityActionListState } from '@app/features/next-soup/actions';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { SoupEntityContextMenu } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
+import { t } from '@app/lib/i18n';
 import { CHANNEL_ACTION_VIEW_CONTEXT } from '@channel/Channel/channel-actions';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
@@ -67,6 +68,11 @@ export function ChannelsMobileView(props: {
   children?: JSX.Element;
   /** Told which rows are on screen whenever they or the scroll change. */
   onRowsOnScreen?: (rows: MobileRowsOnScreen) => void;
+  /**
+   * Ends the list, even an empty one, in a Load more button that calls this,
+   * for a source that looks up more only when asked.
+   */
+  onLoadMore?: () => void;
 }) {
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
@@ -116,10 +122,16 @@ export function ChannelsMobileView(props: {
   );
   const viewportSize = createElementSize(viewport);
   const reportRowsOnScreen = () => {
-    const handle = virtualizer();
-    if (!handle || !props.onRowsOnScreen) return;
+    if (!props.onRowsOnScreen) return;
     const ids = visibleIds();
-    const last = Math.max(0, ids.length - 1);
+    // An empty list mounts no rows to measure, and its end is on screen.
+    if (ids.length === 0) {
+      props.onRowsOnScreen({ ids, start: 0, end: 0 });
+      return;
+    }
+    const handle = virtualizer();
+    if (!handle) return;
+    const last = ids.length - 1;
     props.onRowsOnScreen({
       ids,
       start: Math.min(last, handle.findItemIndex(handle.scrollOffset)),
@@ -262,7 +274,9 @@ export function ChannelsMobileView(props: {
       <Match
         when={
           forceEmptyState() ||
-          (visibleChannels().length === 0 && pinned().length === 0)
+          (visibleChannels().length === 0 &&
+            pinned().length === 0 &&
+            !props.onLoadMore)
         }
       >
         <Show
@@ -332,6 +346,15 @@ export function ChannelsMobileView(props: {
             </SoupEntityContextMenu>
           )}
         </Virtualizer>
+        <Show when={props.onLoadMore}>
+          {(loadMore) => (
+            <div class="flex h-12 items-center justify-center">
+              <Button variant="ghost" size="sm" onClick={() => loadMore()()}>
+                {t('channelSections.loadMore')}
+              </Button>
+            </div>
+          )}
+        </Show>
         <Show when={props.source.isLoadingMore()}>
           <div class="flex h-12 items-center justify-center text-ink-muted">
             <SpinnerIcon

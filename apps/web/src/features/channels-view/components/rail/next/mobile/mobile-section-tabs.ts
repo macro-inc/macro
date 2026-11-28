@@ -62,7 +62,7 @@ export function channelsForMobileSection(options: {
 /**
  * The selected section's members to look up by ID, as on desktop: the rows on
  * screen and a few beyond that no live list holds, and, once the end of the
- * list is on screen, the next members no source holds at all. Rows elsewhere
+ * list is on screen, the next members discovery asks for. Rows elsewhere
  * show the directory's records; nothing past the screen is looked up.
  */
 export function mobileSectionMemberWindow(options: {
@@ -70,8 +70,8 @@ export function mobileSectionMemberWindow(options: {
   rows: MobileRowsOnScreen | undefined;
   /** IDs a live list (recents, unread) holds. */
   isLoaded: (id: string) => boolean;
-  /** Members no source holds yet, empty while the directory may still bring them. */
-  undiscovered: readonly string[];
+  /** The next members discovery asks for, empty while the directory may still bring them. */
+  discover: readonly string[];
 }): ChannelIdWindow {
   const { label, rows } = options;
   if (!label || !rows) return EMPTY_CHANNEL_WINDOW;
@@ -84,12 +84,8 @@ export function mobileSectionMemberWindow(options: {
       isLoaded: options.isLoaded,
     },
   ];
-  if (end >= rows.ids.length && options.undiscovered.length > 0) {
-    slices.push({
-      key: `undiscovered:${label.id}`,
-      ids: options.undiscovered,
-      range: { start: 0, end: 1 },
-    });
+  if (end >= rows.ids.length && options.discover.length > 0) {
+    slices.push({ key: `unknown:${label.id}`, ids: options.discover });
   }
   return channelIdWindow(slices);
 }

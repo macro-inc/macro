@@ -27,7 +27,15 @@ import {
   on,
   Show,
 } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { useChannelsView } from '../../../../channels-view-context';
+import {
+  advanceMemberDiscovery,
+  type MemberDiscovery,
+  type MemberDiscoverySources,
+  memberDiscoveryBudget,
+  memberDiscoveryStatus,
+} from '../../../../core/member-discovery';
 import type { ChannelsDataSource, ChannelsSources } from '../../../../queries';
 import { deduplicateChannels } from '../../../../queries';
 import {
@@ -131,15 +139,64 @@ export function MobileSectionsView(props: {
   const channelsById = createMemo(
     () => new Map(sectionRecords().map((channel) => [channel.id, channel]))
   );
-  const undiscovered = createMemo(() => {
+  // The selected section walks its unknown members once, from a cursor that
+  // only moves forward, and waits for Load more after a run of misses; a tab
+  // chosen again starts over. An Unread only tab lists what the unread
+  // projection holds, so it discovers nothing.
+  const discoveringLabel = () => {
     const label = selectedLabel();
-    if (!label) return [];
-    const known = channelsById();
-    const unavailable = members.unavailableIds();
-    return label.channelIds.filter(
-      (id) => !known.has(id) && !unavailable.has(id)
+    if (!label || preferences()?.unreadOnly === true) return;
+    return label;
+  };
+  const [discoveryExtensions, setDiscoveryExtensions] = createStore<
+    Record<string, number>
+  >({});
+  const discoveryBudget = (labelId: string) =>
+    memberDiscoveryBudget(discoveryExtensions[labelId] ?? 0);
+  const discoverySources: MemberDiscoverySources = {
+    isKnown: (id) => channelsById().has(id),
+    isUnavailable: (id) => members.unavailableIds().has(id),
+  };
+  const discovery = createMemo<MemberDiscovery | undefined>((previous) => {
+    const label = discoveringLabel();
+    if (!label) return;
+    return advanceMemberDiscovery(
+      previous,
+      label.channelIds,
+      discoverySources,
+      discoveryBudget(label.id)
     );
   });
+  const discoveryStatus = createMemo(() => {
+    const label = discoveringLabel();
+    const current = discovery();
+    if (!label || !current) return;
+    return memberDiscoveryStatus(
+      current,
+      discoverySources,
+      discoveryBudget(label.id)
+    );
+  });
+  const toDiscover = () => {
+    const status = discoveryStatus();
+    return status?.kind === 'next' ? status.ids : [];
+  };
+  const discovering = () =>
+    discoveryStatus()?.kind === 'next' && !members.error();
+  const loadMoreMembers = () => {
+    const label = discoveringLabel();
+    if (!label || discoveryStatus()?.kind !== 'paused') return;
+    return () => {
+      const interaction = beginInteraction('channels.section.load_more', {
+        attributes: { 'channel.section.id': label.id },
+      });
+      try {
+        setDiscoveryExtensions(label.id, (count) => (count ?? 0) + 1);
+      } finally {
+        interaction.end();
+      }
+    };
+  };
   // The window reads records it resolved itself; it is built from this
   // declaration once the list has reported its rows, after the first layout.
   function sectionMemberWindow(): ChannelIdWindow {
@@ -152,7 +209,7 @@ export function MobileSectionsView(props: {
       label,
       rows: report.rows,
       isLoaded: (id) => liveIds().has(id),
-      undiscovered: directorySettled() ? undiscovered() : [],
+      discover: directorySettled() ? toDiscover() : [],
     });
   }
   const base = () =>
@@ -170,19 +227,17 @@ export function MobileSectionsView(props: {
     items: sectionChannels,
     isLoading: () =>
       selectedLabel()
-        ? members.isLoading() ||
-          (!directorySettled() && undiscovered().length > 0)
+        ? members.isLoading() || discovering()
         : base().isLoading(),
     isFetching: () =>
       selectedLabel() ? members.isLoading() : base().isFetching(),
     error: () => (selectedLabel() ? members.error() : base().error()),
     // A section's members are looked up as its end comes on screen, so the
-    // list asks for no pages; it shows more are coming until none are left.
+    // list asks for no pages; it shows more are coming until none are left,
+    // or Load more after a run of misses.
     hasMore: () => !selectedLabel() && base().hasMore(),
     isLoadingMore: () =>
-      selectedLabel()
-        ? undiscovered().length > 0 && !members.error()
-        : base().isLoadingMore(),
+      selectedLabel() ? discovering() : base().isLoadingMore(),
     loadMore: async () => {
       if (!selectedLabel()) await base().loadMore();
     },
@@ -282,6 +337,7 @@ export function MobileSectionsView(props: {
         preferences={preferences()}
         includePinnedInList={selected() !== 'all'}
         onRowsOnScreen={(rows) => setRowsOnScreen({ tab: selected(), rows })}
+        onLoadMore={loadMoreMembers()}
       >
         <nav
           aria-label={t('channelSections.sections')}
