@@ -1,0 +1,21 @@
+apps/web/src/lib/service-clients/service-storage/websocket.test.ts
+  s_a7807558141686::t_3ba8629bb6e68d 1-92
+apps/web/src/lib/service-clients/service-storage/websocket.ts
+  s_a7807558141686::t_f8a3eeabbd789e 3,29-33,36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "8ac3f2b423b8e481a1dc69e6a2451750db7b9c47",
+  "prompts": {},
+  "sessions": {
+    "s_a7807558141686": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "71d31516-d1bd-4b72-82a5-4e04abffbd09",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
