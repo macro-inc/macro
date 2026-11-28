@@ -1,12 +1,10 @@
 import { throwOnErr } from '@core/util/result';
 import type { UnifiedNotification } from '@notifications/types';
-import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { notificationServiceClient } from '@service-notification/client';
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
 import type { GetAllUserNotificationsResponse } from '@service-notification/generated/schemas/getAllUserNotificationsResponse';
 import type { NotificationUpdateOperation } from '@service-storage/graphql/generated/graphql';
 import { updateNotifications } from '@service-storage/graphql-notifications';
-import { graphqlCacheEnabled } from '@service-storage/graphql-soup';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { type InfiniteData, useInfiniteQuery } from '@tanstack/solid-query';
 import { type Accessor, createSignal, untrack } from 'solid-js';
@@ -216,12 +214,6 @@ function _useEntitiesNotificationsQuery(args: {
   }));
 }
 
-async function refreshSoupAfterUncachedGraphqlWrite(): Promise<void> {
-  if (!graphqlCacheEnabled()) {
-    await refreshActiveGraphqlSoupQueries({ notificationsOnly: true });
-  }
-}
-
 /** Mark notifications done through the shared GraphQL mutation. Throws on failure. */
 export async function bulkMarkNotificationsAsDone(
   notificationIds: string[]
@@ -297,9 +289,8 @@ function createNotificationsMutation(operation: NotificationUpdateOperation) {
     const graphqlMutation = createGraphqlUpdateNotificationsMutation({
       operation,
       // The normalized client propagates the optimistic notification row
-      // into active Soup edges. Its uncached fallback cannot, so refetch
-      // mounted Soup queries after the authoritative mutation succeeds.
-      onSuccess: refreshSoupAfterUncachedGraphqlWrite,
+      // into active Soup edges. Without it, the client reads mounted queries
+      // again before the mutation settles (`networkRevalidationExchange`).
     });
 
     return {

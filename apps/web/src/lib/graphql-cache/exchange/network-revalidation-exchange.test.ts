@@ -8,7 +8,13 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { empty, makeSubject, mergeMap, pipe, type Subject } from 'wonka';
 import { createQueryAuthorization } from '../../queries/authorization';
-import { networkRevalidationExchange } from './network-revalidation-exchange';
+import { TRACE_PARENT_CONTEXT_KEY } from '../../urql-solid/trace-parent-exchange';
+import {
+  networkRevalidated,
+  networkRevalidationExchange,
+  registerNetworkRevalidation,
+} from './network-revalidation-exchange';
+import { withOptimisticMutationDisposition } from './optimistic';
 
 const LIST = gql`query List { items { id tags } }`;
 const DETAIL = gql`query Detail { item { id tags } }`;
@@ -89,6 +95,28 @@ describe('networkRevalidationExchange', () => {
     detail.unsubscribe();
   });
 
+  it('reads the queries again in the trace the write named', async () => {
+    const { client, requests, respond, flush } = setup();
+    const list = client.query(LIST, {}).subscribe(() => {});
+    respond(0);
+    const parent = { run: vi.fn(<T>(work: () => T) => work()) };
+    const saved = client
+      .mutation(SAVE, {}, { [TRACE_PARENT_CONTEXT_KEY]: parent })
+      .toPromise();
+    respond(1);
+    await flush();
+    expect(parent.run).toHaveBeenCalledOnce();
+    // The re-sent list names the reread's trace, not its first request's.
+    const resent = requests[2].operation.context[TRACE_PARENT_CONTEXT_KEY];
+    expect(resent).toBeDefined();
+    expect(resent).not.toBe(
+      requests[0].operation.context[TRACE_PARENT_CONTEXT_KEY]
+    );
+    respond(2);
+    await saved;
+    list.unsubscribe();
+  });
+
   it('captures fresh authorization for mutation-triggered revalidation', async () => {
     const { client, requests, respond, flush } = setup();
     const authorization = createQueryAuthorization(
@@ -123,6 +151,20 @@ describe('networkRevalidationExchange', () => {
     expect(
       requests.filter(({ operation }) => operation.kind === 'query')
     ).toHaveLength(1);
+    list.unsubscribe();
+  });
+
+  it('leaves list refresh to the caller for a batch write', async () => {
+    const { client, requests, respond, flush } = setup();
+    const list = client.query(LIST, {}).subscribe(() => {});
+    respond(0);
+    const saved = client
+      .mutation(SAVE, {}, { deferNetworkRevalidation: true })
+      .toPromise();
+    respond(1);
+    await flush();
+    expect(requests).toHaveLength(2);
+    expect(networkRevalidated(await saved)).toBe(false);
     list.unsubscribe();
   });
 
@@ -263,6 +305,8 @@ describe('networkRevalidationExchange', () => {
     respond(2, { data: undefined, error });
     expect((await saved).error).toBeUndefined();
     expect(errors.at(-1)).toBe(error);
+    // A caller that would read the list itself still does.
+    expect(networkRevalidated(await saved)).toBe(false);
     list.unsubscribe();
   });
 
@@ -280,5 +324,254 @@ describe('networkRevalidationExchange', () => {
       requests.filter(({ operation }) => operation.kind === 'query')
     ).toHaveLength(1);
     list.unsubscribe();
+  });
+
+  it('reads queries again after a write whose response was lost, without holding its error', async () => {
+    const { client, requests, respond, flush } = setup();
+    const list = client.query(LIST, {}).subscribe(() => {});
+    respond(0);
+    const saved = client.mutation(SAVE, {}).toPromise();
+    const error = new CombinedError({ networkError: new Error('dropped') });
+    respond(1, { data: undefined, error });
+    const result = await saved;
+    expect(result.error).toBe(error);
+    expect(networkRevalidated(result)).toBe(false);
+    await flush();
+    expect(
+      requests.filter(({ operation }) => operation.kind === 'query')
+    ).toHaveLength(2);
+    list.unsubscribe();
+  });
+
+  it('reads queries again after a lost write the cache gave up on', async () => {
+    const { client, requests, respond, flush } = setup();
+    const list = client.query(LIST, {}).subscribe(() => {});
+    respond(0);
+    const saved = client.mutation(SAVE, {}).toPromise();
+    const error = new CombinedError({ networkError: new Error('dropped') });
+    const failed = withOptimisticMutationDisposition(
+      {
+        operation: requests[1].operation,
+        data: undefined,
+        error,
+        stale: false,
+        hasNext: false,
+      },
+      { kind: 'permanently-failed' }
+    );
+    respond(1, failed);
+    expect((await saved).error).toBe(error);
+    await flush();
+    expect(
+      requests.filter(({ operation }) => operation.kind === 'query')
+    ).toHaveLength(2);
+    list.unsubscribe();
+  });
+
+  it('marks a write whose queries it read again before it settled', async () => {
+    const { client, respond, flush } = setup();
+    const list = client.query(LIST, {}).subscribe(() => {});
+    respond(0);
+    const saved = client.mutation(SAVE, {}).toPromise();
+    respond(1);
+    await flush();
+    respond(2);
+    expect(networkRevalidated(await saved)).toBe(true);
+    list.unsubscribe();
+  });
+
+  it('leaves a write it did not read for unmarked', async () => {
+    const { client, respond } = setup(() => false);
+    const saved = client.mutation(SAVE, {}).toPromise();
+    respond(0);
+    expect(networkRevalidated(await saved)).toBe(false);
+  });
+
+  it('lets a paged reader read its own pages again, once per write', async () => {
+    const { client, requests, respond, flush } = setup();
+    const owner = vi.fn(async () => {});
+    const context = {
+      networkRevalidation: {
+        revalidate: owner,
+        active: () => true,
+        gone: () => false,
+      },
+    };
+    const first = client.query(LIST, { page: 1 }, context).subscribe(() => {});
+    const second = client.query(LIST, { page: 2 }, context).subscribe(() => {});
+    respond(0);
+    respond(1);
+    const saved = client.mutation(SAVE, {}).toPromise();
+    respond(2);
+    await saved;
+    await flush();
+    expect(owner).toHaveBeenCalledOnce();
+    // The owner reads its pages in order itself; nothing re-sends them.
+    expect(requests).toHaveLength(3);
+    first.unsubscribe();
+    second.unsubscribe();
+  });
+
+  it('settles the write when a paged reader fails or stalls its read', async () => {
+    vi.useFakeTimers();
+    const { client, respond } = setup();
+    const failing = client
+      .query(
+        LIST,
+        { page: 1 },
+        {
+          networkRevalidation: {
+            revalidate: async () => {
+              throw new Error('offline');
+            },
+            active: () => true,
+            gone: () => false,
+          },
+        }
+      )
+      .subscribe(() => {});
+    const stalled = client
+      .query(
+        DETAIL,
+        {},
+        {
+          networkRevalidation: {
+            revalidate: () => new Promise(() => {}),
+            active: () => true,
+            gone: () => false,
+          },
+        }
+      )
+      .subscribe(() => {});
+    respond(0);
+    respond(1);
+    let settled = false;
+    const saved = client.mutation(SAVE, {}).toPromise();
+    const done = (async () => {
+      await saved;
+      settled = true;
+    })();
+    respond(2);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(15_000);
+    await done;
+    expect((await saved).error).toBeUndefined();
+    expect(networkRevalidated(await saved)).toBe(false);
+    failing.unsubscribe();
+    stalled.unsubscribe();
+  });
+
+  it('re-sends a query whose paged reader is gone', async () => {
+    const { client, requests, respond, flush } = setup();
+    let mounted = true;
+    const owner = vi.fn(async () => {});
+    const list = client
+      .query(
+        LIST,
+        { page: 1 },
+        {
+          networkRevalidation: {
+            revalidate: owner,
+            active: () => mounted,
+            gone: () => !mounted,
+          },
+        }
+      )
+      .subscribe(() => {});
+    respond(0);
+    // The list is gone while another reader keeps the same page mounted.
+    mounted = false;
+    const saved = client.mutation(SAVE, {}).toPromise();
+    respond(1);
+    await flush();
+    respond(2);
+    await saved;
+    expect(owner).not.toHaveBeenCalled();
+    expect(
+      requests.filter(({ operation }) => operation.kind === 'query')
+    ).toHaveLength(2);
+    list.unsubscribe();
+  });
+
+  it('leaves a paused reader its pages without re-sending them', async () => {
+    const { client, requests, respond, flush } = setup();
+    const owner = vi.fn(async () => {});
+    const list = client
+      .query(
+        LIST,
+        { page: 1 },
+        {
+          networkRevalidation: {
+            revalidate: owner,
+            active: () => false,
+            gone: () => false,
+          },
+        }
+      )
+      .subscribe(() => {});
+    respond(0);
+    const saved = client.mutation(SAVE, {}).toPromise();
+    respond(1);
+    await saved;
+    await flush();
+    expect(owner).not.toHaveBeenCalled();
+    expect(
+      requests.filter(({ operation }) => operation.kind === 'query')
+    ).toHaveLength(1);
+    list.unsubscribe();
+  });
+
+  it('sends a page in flight again when the write commits, and lets its reader read', async () => {
+    const { client, requests, respond, flush } = setup();
+    const owner = vi.fn(async () => {});
+    const list = client
+      .query(
+        LIST,
+        { page: 1 },
+        {
+          networkRevalidation: {
+            revalidate: owner,
+            active: () => true,
+            gone: () => false,
+          },
+        }
+      )
+      .subscribe(() => {});
+    // The page's request started before the write and has not answered:
+    // urql would join the reader's own read onto it.
+    const saved = client.mutation(SAVE, {}).toPromise();
+    respond(1);
+    await flush();
+    expect(owner).toHaveBeenCalledOnce();
+    const queries = requests.filter(
+      ({ operation }) => operation.kind === 'query'
+    );
+    expect(queries).toHaveLength(2);
+    expect(queries[1].operation.context.requestPolicy).toBe('network-only');
+    respond(requests.indexOf(queries[1]));
+    await saved;
+    list.unsubscribe();
+  });
+
+  it('reads a list registered with the client whose operations never reached it', async () => {
+    const { client, respond, flush } = setup();
+    const owner = vi.fn(async () => {});
+    const unregister = registerNetworkRevalidation(client, {
+      revalidate: owner,
+      active: () => true,
+      gone: () => false,
+    });
+    const first = client.mutation(SAVE, {}).toPromise();
+    respond(0);
+    await first;
+    await flush();
+    expect(owner).toHaveBeenCalledOnce();
+    unregister();
+    const second = client.mutation(SAVE, {}).toPromise();
+    respond(1);
+    await second;
+    await flush();
+    expect(owner).toHaveBeenCalledOnce();
   });
 });

@@ -1135,6 +1135,7 @@ export function createMutationQueueRunner(
       | 'permanently-failed' = 'queued';
     let outcome: MutationAttemptOutcome = 'detached';
     let details: MutationAttemptDetails = {};
+    let cacheEffectsApplied: boolean | undefined;
     const response = result.error?.response ?? attempt.response;
     try {
       const httpServerFailure = (response?.status ?? 0) >= 500;
@@ -1325,6 +1326,7 @@ export function createMutationQueueRunner(
             );
         } else {
           disposition = 'committed';
+          cacheEffectsApplied = applies;
           outcome = 'committed';
           if (!applies) {
             await deps.revalidate(
@@ -1385,6 +1387,7 @@ export function createMutationQueueRunner(
         : {
             kind: disposition,
             transactionId: attempt.transactionId,
+            ...(disposition === 'committed' ? { cacheEffectsApplied } : {}),
           }
     );
   }

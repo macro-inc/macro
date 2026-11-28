@@ -10,8 +10,11 @@ crm = { path = "../crm", default-features = false, features = ["ports"] }
 databases = { path = "../databases", default-features = false, features = ["ports"] }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
 graphql_common = { path = "../graphql_common" }
+graphql_entity_mutation = { path = "../graphql_entity_mutation" }
 graphql_properties = { path = "../graphql_properties" }
+graphql_soup = { path = "../graphql_soup" }
 macro_user_id = { path = "../macro_user_id" }
+model-entity = { path = "../model-entity" }
 models_properties = { path = "../models_properties" }
 tokio = { workspace = true }
 tracing = { workspace = true }

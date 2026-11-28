@@ -23,12 +23,14 @@ vi.mock('@queries/storage/deleted', () => ({
   optimisticallyRemoveDeletedItem: mocks.removeDeleted,
 }));
 vi.mock('@queries/soup/graphql/active-queries', () => ({
+  getUnmaintainedGraphqlSoupRevalidations: () => [],
   refreshActiveGraphqlSoupQueries: mocks.refresh,
 }));
 vi.mock('@service-storage/util/refetchResources', () => ({
   refetchResources: mocks.resources,
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
+  getGraphqlCacheHost: () => undefined,
   getEntityGraphqlClient: () => ({ mutation: mocks.mutation }),
 }));
 vi.mock('@service-storage/client', () => ({

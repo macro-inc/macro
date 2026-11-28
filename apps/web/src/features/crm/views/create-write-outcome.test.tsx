@@ -1,4 +1,3 @@
-import { safeFetch } from '@core/util/safeFetch';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import {
   cleanup,
@@ -8,16 +7,22 @@ import {
   waitFor,
 } from '@solidjs/testing-library';
 import { QueryClient } from '@tanstack/solid-query';
+import { type Client, createClient, fetchExchange } from '@urql/core';
 import { err, ok } from 'neverthrow';
 import { createSignal, Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { CrmRecordDependencies } from '../queries/dependencies';
+import type { CrmCreateDependencies } from '../queries/dependencies';
 
 const fixtures = vi.hoisted(() => ({
   proof: vi.fn(),
   retire: vi.fn(),
   refetch: vi.fn(),
-  deps: undefined as CrmRecordDependencies | undefined,
+  deps: undefined as CrmCreateDependencies | undefined,
+  graphql: undefined as Client | undefined,
+}));
+vi.mock('@service-storage/graphql-soup', () => ({
+  getGraphqlSoupClient: () => fixtures.graphql!,
+  getGraphqlCacheHost: () => undefined,
 }));
 vi.mock('@core/constant/servers', () => ({
   SERVER_HOSTS: {
@@ -109,18 +114,15 @@ beforeEach(async () => {
   setCrmAccessSession('viewer');
   await crmAccessAuthority.refresh();
   client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
-  const create = (path: string, input: unknown) =>
-    safeFetch<{ id: string }>(`http://localhost/dss${path}`, {
-      method: 'POST',
-      body: JSON.stringify(input),
-    });
   fixtures.deps = {
     client,
-    storage: {
-      createCompany: (input: unknown) => create('/crm/companies', input),
-      createContact: (input: unknown) => create('/crm/contacts', input),
-    },
-  } as unknown as CrmRecordDependencies;
+    hasLiveCache: () => false,
+  } as CrmCreateDependencies;
+  fixtures.graphql = createClient({
+    url: 'http://localhost/dss/graphql',
+    fetch: (...args) => globalThis.fetch(...args),
+    exchanges: [fetchExchange],
+  });
 });
 afterEach(async () => {
   cleanup();
@@ -138,7 +140,7 @@ it.each([
   ['contact', 'unavailable'],
   ['contact', 'revoked'],
 ] as const)(
-  'keeps a committed %s create successful when post-response proof is %s',
+  'keeps a committed %s create successful after an effects error and %s access proof',
   async (kind, proofState) => {
     const reply = Promise.withResolvers<Response>();
     const fetch = vi.fn(() => reply.promise);
@@ -184,16 +186,21 @@ it.each([
     fixtures.proof.mockResolvedValue(
       proofState === 'revoked'
         ? ok({ team_id: team, allowed: false })
-        : err(new Error('Proof unavailable'))
+        : err([{ code: 'UNAVAILABLE', message: 'Proof unavailable' }])
     );
+    await crmAccessAuthority.refresh().catch(() => {});
+    const mutation =
+      kind === 'company' ? 'createCrmCompany' : 'createCrmContact';
     reply.resolve(
-      Response.json(
-        { id: `${kind}-created`, name: 'Created once' },
-        {
-          status: 201,
-          headers: { 'x-macro-crm-access': `${team}:denied` },
-        }
-      )
+      Response.json({
+        data: { [mutation]: { recordId: `${kind}-created`, result: null } },
+        errors: [
+          {
+            message: 'Effects unavailable',
+            path: [mutation, 'result', 'effects'],
+          },
+        ],
+      })
     );
     await waitFor(() =>
       expect(created).toHaveBeenCalledExactlyOnceWith(`${kind}-created`)
@@ -212,13 +219,7 @@ it.each([
         `${kind}-created`
       ).queryKey
     );
-    if (kind === 'company' && proofState !== 'revoked') {
-      // A transient lookup failure leaves the proven generation current, so
-      // the successfully created company's detail can still be seeded.
-      expect(cached).toEqual({ id: 'company-created', name: 'Created once' });
-    } else {
-      expect(cached).toBeUndefined();
-    }
+    expect(cached).toBeUndefined();
     // Even a stale form event cannot resubmit the cleared input after success.
     fireEvent.submit(form);
     await Promise.resolve();

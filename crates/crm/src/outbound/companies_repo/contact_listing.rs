@@ -43,8 +43,24 @@ impl CompaniesRepositoryImpl {
     ) -> Result<Vec<CrmContactForSoup>, CrmError> {
         // Arbitrary boolean filter trees require dynamic SQL. Every value is
         // bound, and all SQL identifiers/operators come from closed Rust enums.
+        let ids_only = contact_ids_only(&query.filter);
         let mut sql = QueryBuilder::<Postgres>::new(include_str!("contact_listing/candidates.sql"));
-        sql.push_bind(viewer_id.to_owned());
+        if ids_only {
+            // A hydration batch targets a few contact IDs. Keep the directory
+            // and history reads as point lookups even with a generic plan.
+            sql.push(include_str!("contact_listing/explicit_id_joins.sql"))
+                .push_bind(viewer_id.to_owned())
+                .push(
+                    r#", ct.id::text, 'crm_contact')
+                        ORDER BY "userId", "itemId", "itemType" LIMIT 1
+                    ) uh ON uh."itemId" = ct.id::text AND uh."itemType" = 'crm_contact'
+                       AND uh."userId" = "#,
+                )
+                .push_bind(viewer_id.to_owned());
+        } else {
+            sql.push(include_str!("contact_listing/browse_joins.sql"))
+                .push_bind(viewer_id.to_owned());
+        }
         match scope {
             CrmContactListScope::Viewer(user_id) => {
                 sql.push(" JOIN team_user tu ON tu.team_id = ct.team_id AND tu.user_id = ")
@@ -63,17 +79,13 @@ impl CompaniesRepositoryImpl {
                 }
             }
         }
-        if !contact_hidden_requested(&query.filter) && !contact_ids_only(&query.filter) {
+        if !ids_only && !contact_hidden_requested(&query.filter) {
             sql.push(" AND NOT (ct.hidden OR co.hidden IS TRUE)");
         }
         sql.push(" AND ");
         push_filter(&mut sql, &query.filter);
         sql.push(include_str!("contact_listing/page.sql"));
-        sql.push(if contact_ids_only(&query.filter) {
-            "TRUE"
-        } else {
-            "email_rank = 1"
-        });
+        sql.push(if ids_only { "TRUE" } else { "email_rank = 1" });
         let sort = match query.sort {
             CrmCompanyListSort::CreatedAt => "first_interaction",
             CrmCompanyListSort::UpdatedAt => "last_interaction",

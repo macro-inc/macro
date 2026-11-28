@@ -1,15 +1,24 @@
+import { withOptimisticMutationDisposition } from '@graphql-cache/exchange/optimistic';
 import { CombinedError } from '@urql/core';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   mutation: vi.fn(),
   refresh: vi.fn(),
+  host: vi.fn(),
+  unmaintained: vi.fn(),
+  readAgain: vi.fn(),
+}));
+vi.mock('@graphql-cache/exchange/network-revalidation-exchange', () => ({
+  networkRevalidated: mocks.readAgain,
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
   getEntityGraphqlClient: () => ({ mutation: mocks.mutation }),
+  getGraphqlCacheHost: mocks.host,
 }));
 vi.mock('../soup/graphql/active-queries', () => ({
   refreshActiveGraphqlSoupQueries: mocks.refresh,
+  getUnmaintainedGraphqlSoupRevalidations: mocks.unmaintained,
 }));
 vi.mock('@queries/client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
@@ -19,10 +28,14 @@ vi.mock('@queries/client', async () => {
 import { UpdateEntitySharePoliciesDocument } from '@service-storage/graphql/generated/graphql';
 import { queryClient } from '../client';
 import { createGraphqlSoupDeletion } from '../soup/graphql/optimistic-deletions';
+
+const UNMAINTAINED = [{ document: 'unmaintained-list', variables: {} }];
+
 import {
   duplicateEntity,
   moveEntity,
   restoreEntity,
+  trashEntity,
   updateEntitySharePolicy,
   usesGraphqlSharePolicy,
 } from './entity-mutations';
@@ -30,6 +43,9 @@ import {
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.refresh.mockResolvedValue(undefined);
+  mocks.host.mockReturnValue({ disabled: false });
+  mocks.unmaintained.mockReturnValue(UNMAINTAINED);
+  mocks.readAgain.mockReturnValue(false);
   mocks.mutation.mockReturnValue({
     toPromise: async () => ({
       data: {
@@ -47,6 +63,88 @@ beforeEach(() => {
 });
 
 afterEach(() => queryClient.clear());
+
+/** A move the cache queued, answered with its prediction. */
+const queuedMove = () =>
+  withOptimisticMutationDisposition(
+    {
+      operation: { context: {} },
+      data: {
+        moveEntities: {
+          results: [{ __typename: 'GraphqlMutationSuccess', effects: [] }],
+        },
+      },
+    } as never,
+    { kind: 'queued', transactionId: 'move' }
+  );
+
+const trashed = (effects: unknown) => ({
+  toPromise: async () => ({
+    data: {
+      trashEntities: {
+        results: [{ __typename: 'GraphqlMutationSuccess', effects }],
+      },
+    },
+    error:
+      effects === null
+        ? new CombinedError({
+            graphQLErrors: [
+              {
+                message: 'effects',
+                path: ['trashEntities', 'results', 0, 'effects'],
+              },
+            ],
+          })
+        : undefined,
+  }),
+});
+
+it('reads only the lists the cache cannot keep current after a write', async () => {
+  mocks.mutation.mockReturnValue(trashed([]));
+  await trashEntity({ type: 'DOCUMENT', id: 'entity' });
+  expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith({
+    unmaintainedOnly: true,
+  });
+});
+
+it('leaves the lists to the client when its exchange read them all', async () => {
+  // Without a live cache the exchange read every mounted list, each
+  // successfully, before the write settled.
+  mocks.host.mockReturnValue(undefined);
+  mocks.readAgain.mockReturnValue(true);
+  mocks.mutation.mockReturnValue(trashed([]));
+  await trashEntity({ type: 'DOCUMENT', id: 'entity' });
+  expect(mocks.refresh).not.toHaveBeenCalled();
+});
+
+it.each([
+  ['a live cache', { disabled: false }],
+  ['no live cache', undefined],
+])(
+  'reads every list after a write whose rows never came back, with %s',
+  async (_, host) => {
+    mocks.host.mockReturnValue(host);
+    mocks.mutation.mockReturnValue(trashed(null));
+    await trashEntity({ type: 'DOCUMENT', id: 'entity' });
+    expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith({
+      unmaintainedOnly: false,
+    });
+  }
+);
+
+it('queues a move with the lists to read once it commits, and reads none itself', async () => {
+  mocks.mutation.mockReturnValue({
+    toPromise: async () => ({
+      ...queuedMove(),
+    }),
+  });
+  await moveEntity({ type: 'DOCUMENT', id: 'entity' }, 'project');
+  expect(mocks.mutation.mock.calls[0]?.[2]).toEqual({
+    macroTraceParent: expect.anything(),
+    optimisticMutation: { revalidations: UNMAINTAINED },
+  });
+  expect(mocks.refresh).not.toHaveBeenCalled();
+});
 
 it('shows a confirmed restore immediately while retaining unrelated and newer deletes', async () => {
   mocks.refresh.mockReturnValue(new Promise<void>(() => {}));
@@ -170,7 +268,9 @@ it.each([
       // The request and cache writes join the `entity.*` span's trace.
       { macroTraceParent: expect.anything() }
     );
-    expect(mocks.refresh).toHaveBeenCalledOnce();
+    expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith({
+      unmaintainedOnly: true,
+    });
   }
 );
 
@@ -283,4 +383,57 @@ it('never mistakes a source or parent patch for the duplicated entity', async ()
     duplicateEntity({ type: 'DOCUMENT', id: 'source' })
   ).rejects.toThrow('no copy identity');
   expect(mocks.mutation).toHaveBeenCalledOnce();
+});
+
+it.each([
+  [
+    'trash',
+    () => trashEntity({ type: 'DOCUMENT', id: 'entity' }),
+    'trashEntities',
+  ],
+  [
+    'move',
+    () => moveEntity({ type: 'DOCUMENT', id: 'entity' }, 'project'),
+    'moveEntities',
+  ],
+])(
+  'reads every list in its own order when the exchange could not, after a %s without a live cache',
+  async (_, write, field) => {
+    mocks.host.mockReturnValue(undefined);
+    mocks.readAgain.mockReturnValue(false);
+    mocks.mutation.mockReturnValue({
+      toPromise: async () => ({
+        data: {
+          [field]: {
+            results: [{ __typename: 'GraphqlMutationSuccess', effects: [] }],
+          },
+        },
+      }),
+    });
+    await write();
+    expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith({
+      unmaintainedOnly: false,
+    });
+  }
+);
+
+it('reads the lists itself after a move the queue refused and sent directly', async () => {
+  mocks.mutation.mockReturnValue({
+    toPromise: async () =>
+      withOptimisticMutationDisposition(
+        {
+          operation: { context: {} },
+          data: {
+            moveEntities: {
+              results: [{ __typename: 'GraphqlMutationSuccess', effects: [] }],
+            },
+          },
+        } as never,
+        { kind: 'committed' }
+      ),
+  });
+  await moveEntity({ type: 'DOCUMENT', id: 'entity' }, 'project');
+  expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith({
+    unmaintainedOnly: true,
+  });
 });

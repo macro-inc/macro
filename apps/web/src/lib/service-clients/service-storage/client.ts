@@ -77,9 +77,6 @@ import type { CreateChannelRequest } from './generated/schemas/createChannelRequ
 import type { CreateChannelResponse } from './generated/schemas/createChannelResponse';
 import type { CreateChannelScopedBotRequest } from './generated/schemas/createChannelScopedBotRequest';
 import type { CreateChannelScopedBotResponse } from './generated/schemas/createChannelScopedBotResponse';
-import type { CreateCrmCompanyRequest } from './generated/schemas/createCrmCompanyRequest';
-import type { CreateCrmContactRequest } from './generated/schemas/createCrmContactRequest';
-import type { CreateCrmTeamContactRequest } from './generated/schemas/createCrmTeamContactRequest';
 import type { CreateDocument200 as CreateDocumentResponse } from './generated/schemas/createDocument200';
 import type { CreateDocumentRequest } from './generated/schemas/createDocumentRequest';
 import type { CreatedUserApiKey } from './generated/schemas/createdUserApiKey';
@@ -2836,12 +2833,6 @@ export const storageServiceClient = {
       });
     },
   },
-  async createCompany(body: CreateCrmCompanyRequest) {
-    return await dssFetch<CrmCompanyResponse>('/crm/companies', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
-  },
   /** `includeContacts: false` leaves `contacts` empty; page them instead. */
   async getCompany({
     companyId,
@@ -2904,24 +2895,6 @@ export const storageServiceClient = {
       `/crm/companies/${companyId}/contacts`,
       { method: 'GET' }
     );
-  },
-  async createContact({
-    companyId,
-    ...body
-  }: { companyId: string } & CreateCrmContactRequest) {
-    return await dssFetch<CrmContactResponse>(
-      `/crm/companies/${companyId}/contacts`,
-      {
-        method: 'POST',
-        body: JSON.stringify(body),
-      }
-    );
-  },
-  async createTeamContact(body: CreateCrmTeamContactRequest) {
-    return await dssFetch<CrmContactResponse>('/crm/contacts', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
   },
   async listCrmBlockedDomains() {
     return await dssFetch<CrmBlockedDomainResponse[]>('/crm/blocked-domains', {

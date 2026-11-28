@@ -28,6 +28,28 @@ async fn team(pool: &PgPool) -> anyhow::Result<(Uuid, CrmTeamReceipt<MemberTeamR
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_contact_replays_with_or_without_a_filed_company(pool: PgPool) -> anyhow::Result<()> {
+    let (team_id, receipt) = team(&pool).await?;
+    let crm = service(&pool);
+    for email in [None, Some("jane@example.com")] {
+        let id = Uuid::now_v7();
+        let (first, replay) = tokio::try_join!(
+            crm.create_team_contact_with_request_id(&receipt, "Jane", email, Some(id)),
+            crm.create_team_contact_with_request_id(&receipt, "Jane", email, Some(id)),
+        )?;
+        assert_eq!(first.id, replay.id);
+        assert_ne!(first.id, id);
+        assert_eq!(first.company_id, replay.company_id);
+        assert_eq!(first.company_id.is_some(), email.is_some());
+    }
+    assert_eq!(
+        count_companies_for_domain(&pool, team_id, "example.com").await?,
+        1
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn company_address_joins_the_existing_company_for_its_domain(
     pool: PgPool,
 ) -> anyhow::Result<()> {

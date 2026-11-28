@@ -2,6 +2,7 @@ import { TRACE_PARENT_CONTEXT_KEY } from '@app/lib/urql-solid/trace-parent-excha
 import { renameDatabase } from '@block-database/queries/rename-database';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { networkRevalidationIncomplete } from '@graphql-cache/exchange/network-revalidation-exchange';
 import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import { renameAgentSession } from '@queries/agent-session/entity-mutations';
@@ -224,6 +225,8 @@ async function sendGraphqlRenames(
         { optimisticMutation: { uuid }, [TRACE_PARENT_CONTEXT_KEY]: span }
       )
       .toPromise();
+    if (networkRevalidationIncomplete(result))
+      fireAndForget(readAgainAfterFailedReread(operations), 'entity-rename');
     const disposition = optimisticMutationDispositionOf(result);
     span.setAttr('entity.disposition', disposition?.kind ?? 'none');
     if (disposition?.kind === 'queued') {
@@ -255,7 +258,25 @@ async function sendGraphqlRenames(
   }
 }
 
-/** Legacy readers refetch confirmed state; the normalized layer owns optimism. */
+/**
+ * A list or preview read the exchange started after the rename failed or timed
+ * out: read the mounted lists again, each in its own cursor order, and the
+ * renamed items' previews.
+ */
+async function readAgainAfterFailedReread(
+  operations: EntityRenameOperation[]
+): Promise<void> {
+  await Promise.allSettled([
+    refreshActiveGraphqlSoupQueries(),
+    ...operations.map(({ entity }) =>
+      refreshActiveGraphqlPreviewQueries(entity.id)
+    ),
+  ]);
+}
+
+/** Legacy readers refetch confirmed state; the normalized layer owns optimism.
+ * Without the cache, the client already read mounted GraphQL queries again
+ * before the write settled (`networkRevalidationExchange`). */
 function observeRenameSettlement(
   uuid: string,
   operations: EntityRenameOperation[]
@@ -287,11 +308,7 @@ function observeRenameSettlement(
             queryKey: callKeys.record(entity.id).queryKey,
           })
         );
-      if (!host || host.disabled)
-        requests.push(refreshActiveGraphqlPreviewQueries(entity.id));
     }
-    if (!host || host.disabled)
-      requests.push(refreshActiveGraphqlSoupQueries());
     await Promise.allSettled(requests);
   };
   const complete = () => {

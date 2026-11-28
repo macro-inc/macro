@@ -33,7 +33,6 @@ import {
   onCleanup,
   untrack,
 } from 'solid-js';
-import { registerActiveGraphqlSoupQuery } from '../../soup/graphql/active-queries';
 import { mapGraphqlEmailThreadPage } from './mapper';
 
 /** REST-compatible pages exposed to the email query facade. */
@@ -405,24 +404,9 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
       return options().select?.(mapped) ?? (mapped as TData);
     },
   }));
-  // Cached threads observe the shared email record. Fetch-only readers instead
-  // opt into their own archive/unarchive completion, never generic Soup or
-  // read/unread refreshes (which can disrupt a successfully opened thread).
-  onCleanup(
-    registerActiveGraphqlSoupQuery({
-      isEnabled: () =>
-        query.isEnabled &&
-        !graphqlCacheEnabled() &&
-        identity()?.kind !== 'local',
-      target: () => ({ kind: 'email-archive', threadId: resolvedThreadId() }),
-      refresh: async () => {
-        await query.refetch({
-          requestPolicy: 'network-only',
-          throwOnError: true,
-        });
-      },
-    })
-  );
+  // Cached threads observe the shared email record. Without the cache, the
+  // client's revalidation exchange reads this mounted query again after each
+  // committed mutation; generic Soup list refreshes never reach it.
   return {
     query,
     resolvedThreadId,

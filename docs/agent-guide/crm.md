@@ -147,6 +147,11 @@ Verify company domain validation by creating a company with an allowed business
 domain, then adding a contact whose email matches it. Personal email provider
 domains must still be rejected as company domains.
 
+With the client cache available, the standalone company and contact dialogs can
+queue a create while offline. The dialog closes with a queued confirmation and
+the record appears in CRM after reconnection. Adding a new record directly to a
+pipeline waits for the server to assign its record ID.
+
 Team admins and owners merge duplicate companies while `enable-crm-merge` is
 on for them. Select two or more companies in a Companies list and press Merge
 in the selection toolbar, or choose Merge companies (several selected) or Merge

@@ -86,8 +86,8 @@ export function AddPipelineRecordDialog(
   }
 ) {
   const company = props.pipeline.recordType === 'company';
-  const createCompany = useCreateCompanyMutation();
-  const createContact = useCreateContactMutation();
+  const createCompany = useCreateCompanyMutation(false);
+  const createContact = useCreateContactMutation(false);
   // A row added from the record's own page has no record to pick or create,
   // so it reads neither list.
   const companies = props.record
@@ -221,6 +221,7 @@ export function AddPipelineRecordDialog(
         name: current.name.trim(),
         domain: domain || undefined,
       });
+      if (!id) throw new Error('The company has no saved ID yet.');
       setChoice({
         kind: 'existing',
         record: { id, name: current.name.trim(), detail: domain },
@@ -237,6 +238,7 @@ export function AddPipelineRecordDialog(
       name: current.name.trim(),
       email,
     });
+    if (!id) throw new Error('The contact has no saved ID yet.');
     setChoice({
       kind: 'existing',
       record: { id, name: current.name.trim(), detail: email },

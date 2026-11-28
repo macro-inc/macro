@@ -1,3 +1,4 @@
+import type { NetworkRevalidation } from '@graphql-cache/exchange/network-revalidation-exchange';
 import type {
   Client,
   GraphQLRequest,
@@ -7,7 +8,7 @@ import type {
 } from '@urql/core';
 import { CombinedError } from '@urql/core';
 import { type DocumentNode, print } from 'graphql';
-import { createComputed, createRoot, createSignal } from 'solid-js';
+import { createComputed, createRoot, createSignal, onCleanup } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeSubject } from 'wonka';
 import {
@@ -29,6 +30,27 @@ const mapSoupPageToEntityListMock = vi.hoisted(() =>
   )
 );
 const makeGraphqlSoupInputMock = vi.hoisted(() => vi.fn());
+
+const networkRevalidationOwners = vi.hoisted(() => [] as NetworkRevalidation[]);
+
+vi.mock(
+  '@graphql-cache/exchange/network-revalidation-exchange',
+  async (importOriginal) => {
+    const original =
+      await importOriginal<
+        typeof import('@graphql-cache/exchange/network-revalidation-exchange')
+      >();
+    return {
+      ...original,
+      registerNetworkRevalidation: (
+        ...args: Parameters<typeof original.registerNetworkRevalidation>
+      ) => {
+        networkRevalidationOwners.push(args[1]);
+        return original.registerNetworkRevalidation(...args);
+      },
+    };
+  }
+);
 
 vi.mock('../../../graphql-cache/exchange/record-selection', () => ({
   selectRecords: vi.fn((document) => ({ document })),
@@ -76,6 +98,7 @@ import {
   getActiveGraphqlSoupRevalidations,
   getUnmaintainedGraphqlSoupRevalidations,
   refreshActiveGraphqlSoupQueries,
+  registerActiveGraphqlSoupQuery,
 } from './active-queries';
 import { createSoupLiveQuery } from './create-soup-live-query';
 import { createGraphqlSoupAstItemsQuery } from './items';
@@ -2666,6 +2689,59 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       }
     }
   );
+
+  it('reads a list again after a write even while an earlier read of it is in flight', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    makeGraphqlSoupInputMock.mockReturnValue({
+      initial: { limit: 50, sortMethod: 'UPDATED_AT' },
+    });
+    networkRevalidationOwners.length = 0;
+    const dispose = createRoot((dispose) => {
+      const query = createGraphqlSoupAstItemsQuery(
+        () => ({ params: {}, body: {} }),
+        () => ({ enabled: true })
+      );
+      onCleanup(
+        registerActiveGraphqlSoupQuery({
+          isEnabled: query.isEnabled,
+          refresh: query.refresh,
+        })
+      );
+      return dispose;
+    });
+    const policies = () =>
+      fake.executions.map((execution) => execution.context.requestPolicy);
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({ items: [], next_cursor: null })
+      );
+      // The exchange's read for an earlier write, still running after the
+      // exchange gave up on it.
+      const owner = networkRevalidationOwners.at(-1);
+      if (!owner) throw new Error('the list registered no network owner');
+      const earlier = owner.revalidate();
+      await vi.waitFor(() => expect(fake.executions).toHaveLength(2));
+      const refresh = refreshActiveGraphqlSoupQueries();
+      fake.executions[1].next(
+        graphqlSoupPage({ items: [], next_cursor: null })
+      );
+      await earlier;
+      // It may have read before the write: the refresh reads again.
+      await vi.waitFor(() => expect(fake.executions).toHaveLength(3));
+      fake.executions[2].next(
+        graphqlSoupPage({ items: [], next_cursor: null })
+      );
+      await refresh;
+      expect(policies()).toEqual([
+        'cache-and-network',
+        'network-only',
+        'network-only',
+      ]);
+    } finally {
+      dispose();
+    }
+  });
 
   it('decides whether its answer is fresh when a disabled list is enabled', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });

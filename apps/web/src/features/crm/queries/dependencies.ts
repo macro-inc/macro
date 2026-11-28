@@ -11,3 +11,7 @@ export type CrmRecordDependencies = Pick<
   CrmQueryDependencies,
   'storage' | 'client'
 >;
+
+export type CrmCreateDependencies = CrmRecordDependencies & {
+  hasLiveCache: () => boolean;
+};
