@@ -233,6 +233,36 @@ export const SCRIPTS: ScriptedScenario[] = [
       { waitMs: 400_000 },
     ],
   },
+  // The same, reached by the owner closing rather than hiding.
+  {
+    name: 'the owner closes while a hidden tab has a write out, then a newer build opens',
+    pages: [1, 1],
+    script: [
+      { waitMs: 5_000 },
+      { send: 'tab2', serverMs: 10_000 },
+      { waitMs: 1_000 },
+      { kind: 'hide', page: 'tab2' },
+      { kind: 'close', page: 'tab1' },
+      { waitMs: 2_000 },
+      { kind: 'open-newer' },
+      { waitMs: 400_000 },
+    ],
+  },
+  {
+    name: 'every tab hides while a write is out, the owner closes, then a newer build opens',
+    pages: [1, 1],
+    script: [
+      { waitMs: 5_000 },
+      { send: 'tab2', serverMs: 10_000 },
+      { kind: 'hide', page: 'tab1' },
+      { kind: 'hide', page: 'tab2' },
+      { waitMs: 4_000 },
+      { kind: 'close', page: 'tab1' },
+      { waitMs: 2_000 },
+      { kind: 'open-newer' },
+      { waitMs: 400_000 },
+    ],
+  },
   // Past it: the newer build goes ahead, and the answer finds nothing to settle.
   {
     name: 'a tab is frozen while it sends a write and a newer build opens',
