@@ -29,7 +29,6 @@ import type {
   SnippetEntity,
 } from '@entity';
 import { useCachedGraphqlChannelsQuery } from '@queries/channel/channels';
-import { toChannelListItem } from '@queries/channel/directory-core';
 import {
   type CachedGraphqlChannel,
   materializeCachedGraphqlChannels,
@@ -61,7 +60,6 @@ import {
   ACCOUNT_WIDE_REFRESH_INTERVAL_MS,
   intervalWhileRead,
 } from '@queries/visible-refresh';
-import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import { crmAccessAllowed } from '@service-storage/crm-access-authority';
 import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
 import { formatDocumentName } from '@service-storage/util/filename';
@@ -76,6 +74,10 @@ import {
   on,
   onCleanup,
 } from 'solid-js';
+import {
+  directoryQuickAccessChannel,
+  showsQuickAccessChannel,
+} from './channel-rows';
 import { deduplicateContactItems, toCrmContactItem } from './crm-contacts';
 import {
   filterQuickAccessItems,
@@ -111,6 +113,8 @@ type IndexEntry = {
 type CacheEntry = {
   item: QuickAccessItem;
   version: string;
+  /** The row a channel item was built from, compared in place of `version`. */
+  channel?: CachedGraphqlChannel;
 };
 
 function historyItemToEntity(item: HistoryItem): QuickAccessEntity {
@@ -166,22 +170,6 @@ function historyItemToEntity(item: HistoryItem): QuickAccessEntity {
         type: 'document',
       } as QuickAccessEntity;
   }
-}
-
-function apiChannelToQuickAccessChannel(
-  channel: ApiChannelWithLatest
-): CachedGraphqlChannel {
-  return {
-    id: channel.id,
-    name: channel.name ?? '',
-    ownerId: channel.owner_id ?? '',
-    channelType: channel.channel_type ?? 'public',
-    participantIds: channel.participants?.map((p) => p.user_id) ?? [],
-    createdAt: channel.created_at,
-    updatedAt: channel.updated_at,
-    viewedAt: channel.viewed_at ?? undefined,
-    interactedAt: channel.interacted_at ?? undefined,
-  };
 }
 
 function channelToEntity(channel: CachedGraphqlChannel): ChannelEntity {
@@ -573,7 +561,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const channelData = new Map(
       completeChannels.map((channel) => [
         channel.id,
-        apiChannelToQuickAccessChannel(toChannelListItem(channel)),
+        directoryQuickAccessChannel(channel),
       ])
     );
     for (const channel of cachedChannels) {
@@ -600,13 +588,19 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     for (const sourceChannel of channelData.values()) {
       const recentlyViewedAt = viewedAtMap.get(sourceChannel.id);
       const viewedAt = latestDate(recentlyViewedAt, sourceChannel.viewedAt);
-      const channel = { ...sourceChannel, viewedAt };
-      const version = JSON.stringify(channel);
-      const cached = itemCache.get(channel.id);
+      const cached = itemCache.get(sourceChannel.id);
 
-      if (!cached || cached.version !== version) {
+      if (
+        !cached?.channel ||
+        !showsQuickAccessChannel(cached.channel, sourceChannel, viewedAt)
+      ) {
+        const channel = { ...sourceChannel, viewedAt };
         const quickAccessItem = channelToQuickAccessItem(channel);
-        itemCache.set(channel.id, { item: quickAccessItem, version });
+        itemCache.set(channel.id, {
+          item: quickAccessItem,
+          version: '',
+          channel,
+        });
         allEntries.push({
           id: channel.id,
           bucket: quickAccessItem.bucket,
@@ -614,7 +608,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         });
       } else {
         allEntries.push({
-          id: channel.id,
+          id: sourceChannel.id,
           bucket: cached.item.bucket,
           sortTimestamp: cached.item.sortTimestamp,
         });
