@@ -20,10 +20,22 @@ export function soupReconciliationBaseline(
 ): Array<{ key: string; sortTimestamp: string }> | undefined {
   const entries = new Map<string, { key: string; sortTimestamp: string }>();
   for (const record of records) {
-    const sortTimestamp =
-      sortMethod === 'CREATED_AT'
-        ? 'createdAt' in record && record.createdAt
-        : 'updatedAt' in record && record.updatedAt;
+    let sortTimestamp: unknown;
+    if (record.__typename === 'GraphqlSoupCall') {
+      const startedAt = 'startedAt' in record && record.startedAt;
+      // Match Soup's call ordering. Only an explicit null end time permits
+      // falling back to the start time.
+      sortTimestamp =
+        sortMethod === 'CREATED_AT'
+          ? startedAt
+          : 'endedAt' in record &&
+            (record.endedAt === null ? startedAt : record.endedAt);
+    } else {
+      sortTimestamp =
+        sortMethod === 'CREATED_AT'
+          ? 'createdAt' in record && record.createdAt
+          : 'updatedAt' in record && record.updatedAt;
+    }
     // Do not silently drop baseline rows whose sort evidence is unavailable.
     if (typeof sortTimestamp !== 'string') return undefined;
     const key = soupItemKey(record);

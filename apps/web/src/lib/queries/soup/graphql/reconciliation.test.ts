@@ -37,6 +37,39 @@ describe('flat Soup baseline reconciliation', () => {
     ).toBe('2026-01-01T00:00:00.123456Z');
   });
 
+  it('uses the start of an active call and the end of an archived call for update order', () => {
+    const active = {
+      __typename: 'GraphqlSoupCall',
+      id: 'active-call',
+      startedAt: '2026-01-01T00:00:00.123456Z',
+      endedAt: null,
+    };
+    const archived = {
+      ...active,
+      id: 'archived-call',
+      endedAt: '2026-02-01T00:00:00.654321Z',
+    };
+    const partial = {
+      __typename: 'GraphqlSoupCall',
+      id: 'partial-call',
+      startedAt: active.startedAt,
+    };
+
+    expect(
+      soupReconciliationBaseline([active, archived], 'UPDATED_AT')
+    ).toEqual([
+      { key: 'GraphqlSoupCall:active-call', sortTimestamp: active.startedAt },
+      { key: 'GraphqlSoupCall:archived-call', sortTimestamp: archived.endedAt },
+    ]);
+    expect(soupReconciliationBaseline([archived], 'CREATED_AT')).toEqual([
+      {
+        key: 'GraphqlSoupCall:archived-call',
+        sortTimestamp: archived.startedAt,
+      },
+    ]);
+    expect(soupReconciliationBaseline([partial], 'UPDATED_AT')).toBeUndefined();
+  });
+
   it('refuses missing sort evidence and oversized baselines rather than dropping server rows', () => {
     expect(
       soupReconciliationBaseline(
