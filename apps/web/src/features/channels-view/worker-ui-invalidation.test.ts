@@ -1,6 +1,6 @@
 import { type ChannelEntity, isChannelEntity } from '@entity';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
-import { type Client, CombinedError, type OperationResult } from '@urql/core';
+import type { Client, OperationResult } from '@urql/core';
 import {
   createComponent,
   createComputed,
@@ -94,10 +94,7 @@ vi.mock(
   }
 );
 
-import {
-  channelNotificationRefresh,
-  disposeChannelNotificationRefresh,
-} from '../../lib/queries/channel/notification-refresh';
+import { disposeChannelNotificationRefresh } from '../../lib/queries/channel/notification-refresh';
 import {
   channelIdWindow,
   useChannelWindow,
