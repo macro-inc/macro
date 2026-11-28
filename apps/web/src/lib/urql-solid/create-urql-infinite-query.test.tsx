@@ -1,4 +1,7 @@
-import { networkRevalidationExchange } from '@graphql-cache/exchange/network-revalidation-exchange';
+import {
+  networkRevalidated,
+  networkRevalidationExchange,
+} from '@graphql-cache/exchange/network-revalidation-exchange';
 import {
   type Client,
   CombinedError,
@@ -654,8 +657,9 @@ describe('createUrqlInfiniteQuery under the revalidation exchange', () => {
   `;
 
   /** A server listing `rows` two at a time, after the row named by a cursor. */
-  function serve(rows: string[]) {
+  function serve(rows: string[], { failReadsAfterWrite = false } = {}) {
     const reads: (string | null)[] = [];
+    let written = false;
     const client = createClient({
       url: 'http://test/graphql',
       exchanges: [
@@ -665,7 +669,21 @@ describe('createUrqlInfiniteQuery under the revalidation exchange', () => {
             operations$,
             mergeMap((operation) => {
               if (operation.kind === 'teardown') return empty;
-              if (operation.kind === 'mutation') rows.shift();
+              if (operation.kind === 'mutation') {
+                rows.shift();
+                written = true;
+              }
+              if (operation.kind === 'query' && failReadsAfterWrite && written)
+                return fromPromise(
+                  Promise.resolve({
+                    operation,
+                    error: new CombinedError({
+                      networkError: new Error('offline'),
+                    }),
+                    stale: false,
+                    hasNext: false,
+                  } as OperationResult)
+                );
               const cursor: string | null = operation.variables?.cursor ?? null;
               if (operation.kind === 'query') reads.push(cursor);
               const start = cursor === null ? 0 : rows.indexOf(cursor) + 1;
@@ -726,6 +744,35 @@ describe('createUrqlInfiniteQuery under the revalidation exchange', () => {
       // Re-sending page 2 after b would show c twice.
       expect(query.data).toEqual(['b', 'c', 'd', 'e']);
       expect(server.reads).toEqual([null, 'c']);
+    });
+  });
+
+  it('does not report a write as read again when the list read fails', async () => {
+    const server = serve(['a', 'b', 'c'], { failReadsAfterWrite: true });
+    await createRoot(async (dispose) => {
+      disposals.push(dispose);
+      const networkRevalidation = createPagedNetworkRevalidation(() => query, {
+        client: () => server.client,
+        chain: () => null,
+        reads: () => true,
+      });
+      const query = createUrqlInfiniteQuery(() => ({
+        client: server.client,
+        query: LIST,
+        initialPageParam: null as string | null,
+        context: { networkRevalidation: networkRevalidation() },
+        variables: (cursor: string | null) => ({ cursor }),
+        getNextPageParam: (data: { page: Page }) => data.page.nextCursor,
+        select: ({ pages }: { pages: { page: Page }[] }) =>
+          pages.flatMap((data) => data.page.values),
+      }));
+      await vi.waitFor(() => expect(query.data).toEqual(['a', 'b']));
+
+      const result = await server.client.mutation(ARCHIVE, {}).toPromise();
+
+      // A caller that would read the list itself must still do so.
+      expect(result.data).toEqual({ archive: true });
+      expect(networkRevalidated(result)).toBe(false);
     });
   });
 

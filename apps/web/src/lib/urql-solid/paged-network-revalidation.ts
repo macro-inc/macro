@@ -49,7 +49,12 @@ export function createPagedNetworkRevalidation(
         if (!self.active()) return;
         options.before?.();
         // A refetch already running may have read before the write committed.
-        await query().refetch({ requestPolicy: 'network-only', fresh: true });
+        // A failed read rejects, so the write is not reported as read again.
+        await query().refetch({
+          requestPolicy: 'network-only',
+          fresh: true,
+          throwOnError: true,
+        });
       },
     };
     onCleanup(registerNetworkRevalidation(options.client(), self));
