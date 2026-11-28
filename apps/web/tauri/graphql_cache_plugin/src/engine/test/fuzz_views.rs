@@ -4,7 +4,8 @@
 //! skip the views the write proved unchanged. After every write each view
 //! must hold the same rows in the same order in both. Half the projects exist
 //! only once a write creates them, and each view sends only part of its members
-//! as server evidence, so writes bring entrants into windows.
+//! as server evidence, so writes bring entrants into windows. Some writes
+//! carry only `updatedAt`, which makes a project they create incomplete.
 use super::*;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -56,10 +57,20 @@ fn item(n: u16, project: &Project) -> Value {
 }
 
 fn write(handle: &EngineHandle, items: Vec<Value>) -> WriteResultWire {
+    write_query(handle, include_str!("project.graphql"), items)
+}
+
+/// A project written with too few fields to project, as a page that selects a
+/// few fields of an entity writes it: a new one is an incomplete projection.
+fn thin(n: u16, project: &Project) -> Value {
+    json!({"__typename": "GraphqlSoupProject", "id": id(n), "updatedAt": TIMES[project.updated]})
+}
+
+fn write_query(handle: &EngineHandle, query: &str, items: Vec<Value>) -> WriteResultWire {
     block_on(handle.write(WriteRequest {
         origin_op_id: None,
         registration: None,
-        query: include_str!("project.graphql").into(),
+        query: query.into(),
         operation_name: None,
         variables: Variables::new(),
         data: json!({"user": {"id": VIEWER, "soup": {"items": items}}}),
@@ -159,10 +170,12 @@ impl View {
         self.observation = update["observationId"].as_str().map(str::to_owned);
     }
 
-    fn shown(&self) -> Vec<(&String, &Value)> {
+    /// The ordered rows; a member whose record the fragment cannot read (a
+    /// thin write left it without fields) has no row, as on the page.
+    fn shown(&self) -> Vec<(&String, Option<&Value>)> {
         self.keys
             .iter()
-            .map(|key| (key, self.rows.get(key).expect("ordered key has a row")))
+            .map(|key| (key, self.rows.get(key)))
             .collect()
     }
 }
@@ -192,7 +205,7 @@ fn views(rng: &mut Rng) -> Vec<View> {
         .collect()
 }
 
-fn run(seed: u64) -> (usize, usize) {
+fn run(seed: u64) -> (usize, usize, usize) {
     let mut rng = Rng(seed);
     let old = spawn_handle();
     let new = spawn_handle();
@@ -218,9 +231,11 @@ fn run(seed: u64) -> (usize, usize) {
     for view in new_views.iter_mut() {
         view.read(&new);
     }
-    let (mut skipped, mut changing) = (0, 0);
+    let (mut skipped, mut changing, mut thin_skipped) = (0, 0, 0);
     for step in 0..STEPS {
         // One to three projects change; ids past PROJECTS are in no view.
+        // One write in five carries only `updatedAt`.
+        let thin_write = rng.below(5) == 0;
         let mut items = Vec::new();
         for _ in 0..1 + rng.below(3) {
             let n = 1 + rng.below(u64::from(PROJECTS) + 4) as u16;
@@ -231,10 +246,17 @@ fn run(seed: u64) -> (usize, usize) {
                 2 => project.parent = (rng.below(2) == 0).then(|| 1 + rng.below(4) as u16),
                 _ => {}
             }
-            items.push(item(n, project));
+            items.push(match thin_write {
+                true => thin(n, project),
+                false => item(n, project),
+            });
         }
-        let old_write = write(&old, items.clone());
-        let new_write = write(&new, items);
+        let query = match thin_write {
+            true => include_str!("thin-project.graphql"),
+            false => include_str!("project.graphql"),
+        };
+        let old_write = write_query(&old, query, items.clone());
+        let new_write = write_query(&new, query, items);
         assert_eq!(old_write.revision_advanced, new_write.revision_advanced);
         if !new_write.revision_advanced {
             assert_eq!(new_write.unchanged_views, None);
@@ -252,6 +274,7 @@ fn run(seed: u64) -> (usize, usize) {
                 .is_some_and(|observation| proven.contains(observation))
             {
                 skipped += 1;
+                thin_skipped += usize::from(thin_write);
                 continue;
             }
             view.read(&new);
@@ -265,16 +288,17 @@ fn run(seed: u64) -> (usize, usize) {
             );
         }
     }
-    (skipped, changing)
+    (skipped, changing, thin_skipped)
 }
 
 #[test]
 fn skipping_views_a_write_proved_unchanged_shows_what_reading_them_does() {
-    let (mut skipped, mut changing) = (0, 0);
+    let (mut skipped, mut changing, mut thin_skipped) = (0, 0, 0);
     for seed in 1..=4u64 {
-        let (s, c) = run(seed.wrapping_mul(0x5851_F42D_4C95_7F2D));
+        let (s, c, t) = run(seed.wrapping_mul(0x5851_F42D_4C95_7F2D));
         skipped += s;
         changing += c;
+        thin_skipped += t;
     }
     // The proof must actually save reads, or the test proves nothing.
     assert!(changing > 500, "{changing} changing writes");
@@ -282,5 +306,9 @@ fn skipping_views_a_write_proved_unchanged_shows_what_reading_them_does() {
         skipped > changing,
         "{skipped} skipped reads over {changing} writes"
     );
-    eprintln!("{changing} changing writes, {skipped} view reads skipped");
+    // Thin writes bring incomplete newcomers, which must not wake every view.
+    assert!(thin_skipped > 0, "no view read skipped after a thin write");
+    eprintln!(
+        "{changing} changing writes, {skipped} view reads skipped, {thin_skipped} after thin writes"
+    );
 }

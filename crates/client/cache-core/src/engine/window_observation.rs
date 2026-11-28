@@ -13,6 +13,9 @@ pub(super) struct WindowObservation {
     boundary: Option<(i64, PredicateRecordKey)>,
     dependencies: BTreeSet<EntityKey<'static>>,
     bound: BTreeSet<EntityKey<'static>>,
+    /// A live view's window, read by reconciliation, whose candidates are
+    /// complete projections only (`PredicateIndexStorage::reconcile_predicate_index`).
+    reconciled: bool,
     fields: BTreeMap<(EntityKey<'static>, String), Option<CacheValue>>,
     /// The live view whose latest read this is; a later read of it replaces it.
     view: Option<String>,
@@ -112,6 +115,7 @@ impl<S: Storage> Engine<S> {
                 dependencies,
                 fields: BTreeMap::new(),
                 view: None,
+                reconciled: bound,
                 bound: if bound {
                     keys.iter()
                         .map(|key| EntityKey(key.as_str().to_owned().into()))
@@ -240,7 +244,11 @@ impl<S: PredicateIndexStorage> Engine<S> {
                         return false;
                     }
                     let ProjectionState::Complete(document) = state else {
-                        return true;
+                        // An incomplete record turns an exact read incomplete, but
+                        // is never a reconciliation candidate. One outside the
+                        // window's keys and baseline (both dependencies) leaves a
+                        // reconciled window as it was.
+                        return !window.reconciled;
                     };
                     let query = window.query.as_query();
                     if !query.partitions.iter().any(|part| {

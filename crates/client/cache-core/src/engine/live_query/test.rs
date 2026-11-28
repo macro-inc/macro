@@ -900,3 +900,84 @@ fn a_view_drops_its_old_observation_after_many_other_views_read() {
         assert!(!unchanged.contains(&first.observation_id));
     });
 }
+
+/// A record whose projection is incomplete (a document holding too few fields
+/// to project) is never a reconciliation candidate, so it leaves a live view's
+/// window as it was. An exact read of the same scope turns incomplete, so a
+/// window observed from one still wakes.
+#[test]
+fn an_incomplete_newcomer_leaves_only_reconciled_windows_unchanged() {
+    block_on(async {
+        let mut engine = Engine::with_capacity(InMemoryStorage::new(), 1);
+        for id in 0..40 {
+            seed(&mut engine, &id.to_string(), id).await;
+        }
+        let first = engine
+            .read_live_query("visible", spec(), None)
+            .await
+            .unwrap();
+        let exact = spec();
+        let exact_keys = match engine
+            .query_predicate_index(&exact.query)
+            .await
+            .unwrap()
+            .value
+        {
+            PredicateQueryResult::Complete(keys) => keys,
+            other => panic!("expected a complete exact read, got {other:?}"),
+        };
+        let selected: Vec<_> = exact_keys
+            .iter()
+            .map(|key| EntityKey(key.as_str().to_owned().into()))
+            .collect();
+        let exact_id = engine.observe_predicate_window(
+            exact.query.clone(),
+            &exact_keys,
+            None,
+            BTreeSet::new(),
+        );
+        engine
+            .read_records_by_keys(&exact.selection, &selected)
+            .await
+            .unwrap();
+        engine
+            .put_records_with_projections(
+                None,
+                vec![(
+                    key("incomplete"),
+                    Record {
+                        fields: BTreeMap::from([(
+                            "__typename".into(),
+                            CacheValue::String("GraphqlSoupEmailThread".into()),
+                        )]),
+                    },
+                )],
+                vec![ProjectionMutation::MarkIncomplete {
+                    record_key: PredicateRecordKey::new(key("incomplete").to_string()).unwrap(),
+                    profile: Profile::new(token("test-live")),
+                    partition: token("email"),
+                    kind: predicate_index::ProjectionIncompleteKind::Missing,
+                }],
+            )
+            .await
+            .unwrap();
+        let unchanged = engine.unchanged_observed_windows().await.unwrap();
+        assert_eq!(unchanged, vec![first.observation_id.clone()]);
+        assert!(!unchanged.contains(&exact_id));
+        // What the proof claims: the view's rows are the same, and the exact
+        // read is not.
+        let again = engine
+            .read_live_query("visible", spec(), Some(first.revision.parse().unwrap()))
+            .await
+            .unwrap();
+        assert!(again.upserts.is_empty() && again.keys.is_none() && !again.reset);
+        assert!(matches!(
+            engine
+                .query_predicate_index(&exact.query)
+                .await
+                .unwrap()
+                .value,
+            PredicateQueryResult::Incomplete
+        ));
+    });
+}
