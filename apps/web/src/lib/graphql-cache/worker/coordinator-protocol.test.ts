@@ -327,6 +327,31 @@ describe('coordinator runtime protocol', () => {
     );
   });
 
+  it('accepts only the row shapes the engine knows', () => {
+    const request = {
+      filters: {},
+      sortMethod: 'UPDATED_AT',
+      sortDirection: 'DESC',
+      limit: 20,
+      baseline: [],
+      liveQuery: {
+        id: 'view',
+        document: 'fragment Item on GraphqlSoupChannel { id }',
+        fragmentName: 'Item',
+      },
+    };
+    const valid = (row: unknown) =>
+      isCacheRequest({
+        id: 1,
+        kind: 'entity-filter',
+        request: { ...request, liveQuery: { ...request.liveQuery, row } },
+      });
+    expect(valid('channel-list')).toBe(true);
+    expect(valid(undefined)).toBe(true);
+    expect(valid('document-list')).toBe(false);
+    expect(valid(1)).toBe(false);
+  });
+
   it('validates Mail pages and reads through a position', () => {
     const request = {
       filters: {},
