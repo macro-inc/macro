@@ -987,10 +987,11 @@ FireLens router, Alloy sidecar, and Grafana environment variable together. Alloy
 labels everything it sends with the Pulumi stack (`deployment.environment` `dev`
 or `prod`).
 
-Other prod projects keep their Datadog-only configuration until they join the
-list. Prod emits about 37 times dev's spans, more than half of them from the
-`email-service` project and a quarter from `cloud-storage-service`. Add projects
-smallest first, a few at a time, and check before each batch:
+Every prod project that uses `withTelemetry` is on the list except
+`search-freshness-probe`, which runs no prod task. Prod emits about 37 times
+dev's spans, more than half of them from the `email-service` project and a
+quarter from `cloud-storage-service`. Before adding a project (a new service, or
+the probe once it runs in prod), check:
 
 - the cluster's ingest, Tempo and Loki have headroom for the project's spans and
   logs (Datadog's `datadog.estimated_usage.apm.ingested_spans` and
@@ -1007,7 +1008,7 @@ A merged list change reaches prod with the next published release that contains
 it, or for one project with *Deploy Service (Generic)* with `prod` selected. The
 job finishes before ECS does: wait for the service's new revision to reach steady
 state (a failed one rolls back on its own), then check that Datadog and Grafana
-both receive each service before adding the next batch.
+both receive the service.
 
 To stop a project's copy, set its entry to `false` and deploy it the same way; its
 Datadog export never changes. Delete the entry, which revokes the task execution

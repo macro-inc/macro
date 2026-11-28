@@ -2,8 +2,8 @@ import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 
 // Prod projects whose ECS services also send to Grafana. Grafana takes every
-// span before its own sampling, and prod emits about 37 times dev's, so add
-// projects a few at a time while the cluster's ingest has headroom
+// span before its own sampling, and prod emits about 37 times dev's, so check
+// the cluster's headroom and the task's memory before adding one
 // (infra/stacks/observability/README.md, "ECS dual export").
 // To stop one, set it to `false`: that keeps its execution role's access to the
 // token, which ECS needs to replace tasks of a revision that still has Alloy.
@@ -16,6 +16,7 @@ const PROD_GRAFANA_PROJECTS: Record<string, boolean> = {
   'connection-gateway': true,
   'contacts-service': true,
   'convert-service': true,
+  'email-service': true,
   'image-proxy-service': true,
   'lexical-service': true,
   'notification-service': true,
