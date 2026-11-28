@@ -1,6 +1,8 @@
 use super::*;
 use serde::Deserialize;
 
+use crate::live_query::LiveQueryRequest;
+
 /// Records and the rows the web's TypeScript port shapes from them
 /// (`channel-list-row.test.ts` writes it with `UPDATE_CHANNEL_LIST_ROW_CORPUS=1`).
 #[derive(Deserialize)]
@@ -32,12 +34,22 @@ fn sends_other_soup_types_as_selected() {
 
 #[test]
 fn names_only_the_shapes_it_has() {
-    assert_eq!(live_row_shape(None).unwrap(), None);
+    assert_eq!(live_row_shape(None), None);
     assert_eq!(
-        live_row_shape(Some("channel-list"))
-            .unwrap()
-            .map(|shape| shape.name()),
+        live_row_shape(Some(LiveRowName::ChannelList)).map(|shape| shape.name()),
         Some(CHANNEL_LIST_ROW)
     );
-    assert!(live_row_shape(Some("grouped")).is_err());
+    let request = |row: &str| {
+        serde_json::from_value::<LiveQueryRequest>(serde_json::json!({
+            "id": "view",
+            "document": "fragment F on GraphqlSoupChannel { id }",
+            "fragmentName": "F",
+            "row": row,
+        }))
+    };
+    assert_eq!(
+        request("channel-list").unwrap().row,
+        Some(LiveRowName::ChannelList)
+    );
+    assert!(request("grouped").is_err());
 }

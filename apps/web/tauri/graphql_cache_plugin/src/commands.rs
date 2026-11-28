@@ -699,7 +699,7 @@ pub async fn graphql_cache_entity_filter(
 #[tracing::instrument(
     name = "graphql_cache.native.entity_filter",
     skip_all,
-    fields(graphql_cache.ipc.command = "entity_filter_rows", graphql_cache.live_query.row = request.live_query.as_ref().and_then(|live| live.row.as_deref()), upstream.trace_id = traceparent.as_deref().and_then(|parent| parent.split('-').nth(1))),
+    fields(graphql_cache.ipc.command = "entity_filter_rows", graphql_cache.live_query.row = request.live_query.as_ref().and_then(|live| live.row).map(soup_filter_cache_adapter::live_query::LiveRowName::as_str), upstream.trace_id = traceparent.as_deref().and_then(|parent| parent.split('-').nth(1))),
     err
 )]
 pub async fn graphql_cache_entity_filter_rows(

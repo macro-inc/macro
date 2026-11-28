@@ -10,6 +10,8 @@
 //! corpus pins the two to the same rows.
 
 use cache_core::engine::live_query::RowShape;
+
+use crate::live_query::LiveRowName;
 use serde_json::{Map, Value as Json};
 
 /// The name a live-view request selects this row by.
@@ -153,20 +155,12 @@ fn notification_edge(notification: &Json, fields: &[&str]) -> Json {
     Json::Object(out)
 }
 
-/// The live-view row a request names, or an error for a name this host does
-/// not know.
-pub fn live_row_shape(name: Option<&str>) -> Result<Option<RowShape>, UnknownRowShape> {
-    match name {
-        None => Ok(None),
-        Some(CHANNEL_LIST_ROW) => Ok(Some(CHANNEL_LIST_ROW_SHAPE)),
-        Some(other) => Err(UnknownRowShape(other.to_owned())),
-    }
+/// The shape of the live-view row a request names.
+pub fn live_row_shape(name: Option<LiveRowName>) -> Option<RowShape> {
+    name.map(|name| match name {
+        LiveRowName::ChannelList => CHANNEL_LIST_ROW_SHAPE,
+    })
 }
-
-/// A live-view request named a row shape this host does not have.
-#[derive(Debug, thiserror::Error)]
-#[error("unknown live query row `{0}`")]
-pub struct UnknownRowShape(pub String);
 
 #[cfg(test)]
 mod test;
