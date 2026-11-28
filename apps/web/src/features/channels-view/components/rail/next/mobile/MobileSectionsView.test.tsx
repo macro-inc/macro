@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   list: undefined as ListProps | undefined,
   window: undefined as (() => ChannelIdWindow) | undefined,
   setUnavailable: (_ids: string[]) => {},
+  setChannels: (_channels: ChannelEntity[]) => {},
 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -66,10 +67,12 @@ vi.mock('@queries/channel/window', async (importOriginal) => {
     ...(await importOriginal<typeof import('@queries/channel/window')>()),
     useChannelWindow: (window: () => ChannelIdWindow) => {
       const [unavailable, setUnavailable] = createSignal<string[]>([]);
+      const [channels, setChannels] = createSignal<ChannelEntity[]>([]);
       mocks.setUnavailable = setUnavailable;
+      mocks.setChannels = setChannels;
       mocks.window = window;
       return {
-        channels: () => [],
+        channels,
         retained: () => [],
         pendingIds: () => new Set<string>(),
         failedIds: () => new Set<string>(),
@@ -222,6 +225,26 @@ describe('phone section discovery', () => {
     expect(discovered()).toEqual(members.slice(100, 125));
     expect(mocks.list!.onLoadMore).toBeUndefined();
     expect(source.isLoading()).toBe(true);
+  });
+
+  it('keeps the members it found after the window forgets their records', () => {
+    const record = (id: string): ChannelEntity => ({
+      id,
+      type: 'channel',
+      name: id,
+      ownerId: 'owner',
+      channelType: 'team',
+      isParticipant: true,
+    });
+    openSection();
+    expect(discovered()).toEqual(members.slice(0, 25));
+    mocks.setChannels(members.slice(0, 25).map(record));
+    expect(discovered()).toEqual(members.slice(25, 50));
+    // The window now holds only the next batch, and retains nothing.
+    mocks.setChannels(members.slice(25, 50).map(record));
+    expect(
+      new Set(mocks.list!.source.items().map((channel) => channel.id))
+    ).toEqual(new Set(members.slice(0, 50)));
   });
 
   it('looks nothing up while the directory may still bring the members', () => {

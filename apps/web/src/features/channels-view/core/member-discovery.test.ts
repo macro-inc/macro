@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   advanceMemberDiscovery,
+  keepDiscoveredRecords,
   MEMBER_DISCOVERY_BATCH,
   MEMBER_DISCOVERY_MISSES,
   type MemberDiscovery,
@@ -107,7 +108,7 @@ describe('member discovery', () => {
     );
   });
 
-  it('goes on past the budget after Show more, and still asks no member twice', () => {
+  it('goes on past the budget after Load more, and still asks no member twice', () => {
     const members = ids(7000);
     const result = simulate({
       members,
@@ -155,5 +156,38 @@ describe('member discovery', () => {
       100
     );
     expect(answered).toEqual({ ids: members, cursor: 30, misses: 10 });
+  });
+});
+
+describe('keepDiscoveredRecords', () => {
+  const record = (id: string, version = 0) => ({ id, version });
+
+  it('keeps what it found after the window drops it, until the section goes', () => {
+    const members = new Set(ids(4));
+    const first = keepDiscoveredRecords(new Map(), members, [
+      record('ch-0'),
+      record('ch-1'),
+      record('outsider'),
+    ]);
+    expect([...first.keys()]).toEqual(['ch-0', 'ch-1']);
+    // The window moved on: the next batch joins what was found before.
+    const second = keepDiscoveredRecords(first, members, [record('ch-2')]);
+    expect([...second.keys()]).toEqual(['ch-0', 'ch-1', 'ch-2']);
+    // The section closed: its members go.
+    expect(keepDiscoveredRecords(second, new Set(), []).size).toBe(0);
+  });
+
+  it('takes the newest record and keeps its identity while nothing changes', () => {
+    const members = new Set(ids(2));
+    const found = [record('ch-0')];
+    const first = keepDiscoveredRecords(new Map(), members, found);
+    expect(keepDiscoveredRecords(first, members, found)).toBe(first);
+    expect(keepDiscoveredRecords(first, members, []).get('ch-0')).toBe(
+      found[0]
+    );
+    const fresher = record('ch-0', 1);
+    expect(
+      keepDiscoveredRecords(first, members, [fresher]).get('ch-0')
+    ).toBe(fresher);
   });
 });

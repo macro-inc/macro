@@ -73,6 +73,7 @@ import {
 } from '../../core/channel-label-eligibility';
 import {
   advanceMemberDiscovery,
+  keepDiscoveredRecords,
   type MemberDiscovery,
   type MemberDiscoverySources,
   memberDiscoveryBudget,
@@ -535,6 +536,29 @@ export function ChannelsRail(props: ChannelsRailProps) {
   );
   // Rows that scrolled away keep their last record unless the pool has a
   // live one; the pool and unread projection keep joined channels current.
+  const isLabelOpen = (labelId: string) =>
+    !state.collapsedLabels.includes(labelId);
+  const discoversMembers = (label: ChannelLabel) =>
+    sectionsEnabled() &&
+    isLabelOpen(label.id) &&
+    state.sectionPreferences[`label:${label.id}`]?.unreadOnly !== true;
+  // What discovery found stays while its section is open, past the window's
+  // retention; the pool keeps joined channels itself.
+  const discoveredChannels = createMemo<ReadonlyMap<string, ChannelEntity>>(
+    (previous) => {
+      const pool = poolById();
+      return keepDiscoveredRecords(
+        previous,
+        new Set(
+          labels()
+            .filter(discoversMembers)
+            .flatMap((label) => label.channelIds)
+        ),
+        referenceWindow.channels().filter((channel) => !pool.has(channel.id))
+      );
+    },
+    new Map()
+  );
   const retainedChannels = createMemo(() => {
     const pool = poolById();
     return referenceWindow
@@ -565,6 +589,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
       if (!members.has(channel.id)) members.set(channel.id, channel);
     }
     for (const [id, channel] of poolById()) {
+      if (!members.has(id)) members.set(id, channel);
+    }
+    for (const [id, channel] of discoveredChannels()) {
       if (!members.has(id)) members.set(id, channel);
     }
     for (const channel of retainedChannels()) {
@@ -645,9 +672,6 @@ export function ChannelsRail(props: ChannelsRailProps) {
     favoriteChannels
   );
 
-  const isLabelOpen = (labelId: string) =>
-    !state.collapsedLabels.includes(labelId);
-
   // Each open section walks its unknown members once, from a cursor that
   // only moves forward, and waits for Load more after a run of misses; a
   // closed section starts again when it opens. An Unread only section lists
@@ -657,10 +681,6 @@ export function ChannelsRail(props: ChannelsRailProps) {
   >({});
   const discoveryBudget = (labelId: string) =>
     memberDiscoveryBudget(discoveryExtensions[labelId] ?? 0);
-  const discoversMembers = (label: ChannelLabel) =>
-    sectionsEnabled() &&
-    isLabelOpen(label.id) &&
-    state.sectionPreferences[`label:${label.id}`]?.unreadOnly !== true;
   const discoverySources = createMemo((): MemberDiscoverySources => {
     const members = membersById();
     const unavailable = referenceWindow.unavailableIds();

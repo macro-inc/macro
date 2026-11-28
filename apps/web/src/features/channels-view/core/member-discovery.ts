@@ -12,7 +12,7 @@
 /** Members asked for in one lookup, the size of a window chunk. */
 export const MEMBER_DISCOVERY_BATCH = 25;
 
-/** Misses discovery takes before it waits for Show more, per extension. */
+/** Misses discovery takes before it waits for Load more, per extension. */
 export const MEMBER_DISCOVERY_MISSES = 100;
 
 export type MemberDiscovery = {
@@ -34,7 +34,7 @@ export type MemberDiscoverySources = {
 export type MemberDiscoveryStatus =
   /** Every member is held or missed. */
   | { kind: 'done' }
-  /** The miss budget is spent; Show more extends it. */
+  /** The miss budget is spent; Load more extends it. */
   | { kind: 'paused' }
   /** These members are next to look up (some may be loading). */
   | { kind: 'next'; ids: readonly string[] };
@@ -42,7 +42,7 @@ export type MemberDiscoveryStatus =
 const sameIds = (a: readonly string[], b: readonly string[]) =>
   a === b || (a.length === b.length && a.every((id, index) => id === b[index]));
 
-/** The miss budget after `extensions` presses of Show more. */
+/** The miss budget after `extensions` presses of Load more. */
 export const memberDiscoveryBudget = (extensions: number) =>
   MEMBER_DISCOVERY_MISSES * (1 + Math.max(0, extensions));
 
@@ -81,7 +81,7 @@ export function advanceMemberDiscovery(
 
 /**
  * What discovery does next from where its cursor stands: once `budget`
- * misses are spent it asks for nothing more until Show more raises it.
+ * misses are spent it asks for nothing more until Load more raises it.
  */
 export function memberDiscoveryStatus(
   discovery: MemberDiscovery,
@@ -101,4 +101,30 @@ export function memberDiscoveryStatus(
     if (!sources.isKnown(id) && !sources.isUnavailable(id)) next.push(id);
   }
   return { kind: 'next', ids: next };
+}
+
+/**
+ * The records discovery found for the members of open sections, kept while
+ * those sections stay open. The cursor has passed them, so a record the
+ * window's bounded retention dropped would never be asked for again and its
+ * row would go. Holds at most one record per member, the latest found;
+ * returns `previous` itself when nothing changed.
+ */
+export function keepDiscoveredRecords<T extends { readonly id: string }>(
+  previous: ReadonlyMap<string, T>,
+  members: ReadonlySet<string>,
+  found: readonly T[]
+): ReadonlyMap<string, T> {
+  let changed = false;
+  const next = new Map<string, T>();
+  for (const [id, record] of previous) {
+    if (members.has(id)) next.set(id, record);
+    else changed = true;
+  }
+  for (const record of found) {
+    if (!members.has(record.id) || next.get(record.id) === record) continue;
+    next.set(record.id, record);
+    changed = true;
+  }
+  return changed ? next : previous;
 }

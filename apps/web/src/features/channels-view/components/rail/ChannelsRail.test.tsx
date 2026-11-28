@@ -888,7 +888,40 @@ describe('bounded reference window', () => {
     expect(unknown?.ids).toEqual(ids.slice(25, 50));
   });
 
-  it('walks past members no lookup found, never asks for them again, and waits for Show more', () => {
+  it('keeps the rows discovery found after the window forgets their records', () => {
+    const ids = numbered('member', 60);
+    const team = (id: string) => ({ ...joined(id), channelType: 'team' });
+    mocks.flags = ['enable-channel-tags'];
+    mocks.labels = [
+      {
+        id: 'section',
+        teamId: 'team',
+        name: 'Section',
+        channelIds: ids,
+        channelCount: ids.length,
+        sortOrder: 0,
+        createdAt: '2026-01-01',
+        updatedAt: '2026-01-01',
+      },
+    ];
+    mount();
+    const rowIds = () =>
+      mocks
+        .actualRows()
+        .flatMap((row) =>
+          row.kind === 'conversation' && ids.includes(row.channel.id)
+            ? [row.channel.id]
+            : []
+        );
+    mocks.rail!.reportSectionRange('label:section', { start: 0, end: 10 });
+    mocks.setReferencedChannels(ids.slice(0, 25).map(team));
+    mocks.rail!.reportSectionRange('label:section', { start: 20, end: 30 });
+    // The window now holds only the next batch, and retains nothing.
+    mocks.setReferencedChannels(ids.slice(25, 50).map(team));
+    expect(rowIds()).toEqual(ids.slice(0, 50));
+  });
+
+  it('walks past members no lookup found, never asks for them again, and waits for Load more', () => {
     const ids = numbered('gone', 300);
     mocks.flags = ['enable-channel-tags'];
     mocks.labels = [

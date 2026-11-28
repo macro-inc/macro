@@ -31,6 +31,7 @@ import { createStore } from 'solid-js/store';
 import { useChannelsView } from '../../../../channels-view-context';
 import {
   advanceMemberDiscovery,
+  keepDiscoveredRecords,
   type MemberDiscovery,
   type MemberDiscoverySources,
   memberDiscoveryBudget,
@@ -126,6 +127,27 @@ export function MobileSectionsView(props: {
       flow.span.setAttr('channels.section.members.dropped', window.dropped);
     })
   );
+  const discoveringLabel = () => {
+    const label = selectedLabel();
+    if (!label || preferences()?.unreadOnly === true) return;
+    return label;
+  };
+  const localIds = createMemo(
+    () => new Set(localChannels().map((channel) => channel.id))
+  );
+  // What discovery found stays while its tab is chosen, past the window's
+  // retention; the directory keeps joined channels itself.
+  const discoveredChannels = createMemo<ReadonlyMap<string, ChannelEntity>>(
+    (previous) => {
+      const local = localIds();
+      return keepDiscoveredRecords(
+        previous,
+        new Set(discoveringLabel()?.channelIds),
+        members.channels().filter((channel) => !local.has(channel.id))
+      );
+    },
+    new Map()
+  );
   // Live records first, then the directory's and those that left the window.
   const sectionRecords = createMemo(() =>
     deduplicateChannels([
@@ -133,6 +155,7 @@ export function MobileSectionsView(props: {
       unread(),
       props.sources.recents.items(),
       localChannels(),
+      [...discoveredChannels().values()],
       members.retained(),
     ])
   );
@@ -143,11 +166,6 @@ export function MobileSectionsView(props: {
   // only moves forward, and waits for Load more after a run of misses; a tab
   // chosen again starts over. An Unread only tab lists what the unread
   // projection holds, so it discovers nothing.
-  const discoveringLabel = () => {
-    const label = selectedLabel();
-    if (!label || preferences()?.unreadOnly === true) return;
-    return label;
-  };
   const [discoveryExtensions, setDiscoveryExtensions] = createStore<
     Record<string, number>
   >({});
