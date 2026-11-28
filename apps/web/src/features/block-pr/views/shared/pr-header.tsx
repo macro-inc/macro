@@ -22,35 +22,34 @@ import type { PrPageReadModel } from '../../context/pr-page-read-model';
 import {
   prLifecycleStatus,
   prStatusBand,
+  prStatusTint,
 } from '../../primitives/pr-page-state';
 import { githubAvatarUrl } from '../../util/githubMarkdown';
 import { prHtmlUrl } from '../../util/prKey';
 
-export function PrStatusFade(props: { page?: PrPageReadModel }) {
+export function PrStatusFade(props: {
+  page?: PrPageReadModel;
+  strip?: boolean;
+}) {
   const band = () =>
     prStatusBand({
       ...props.page?.pullRequest,
       reviewers: props.page?.reviewers,
     });
-  const color = () => {
-    if (!props.page) return 'var(--color-ink-muted)';
-    const state = band();
-    if (state === 'merged') return 'var(--color-note)';
-    if (state === 'draft') return 'var(--color-ink-muted)';
-    if (state === 'open') return 'var(--color-success)';
-    return 'var(--color-failure)';
-  };
+  const tint = () => prStatusTint(props.page ? band() : 'draft');
   return (
     <div
       aria-hidden="true"
       class={cn(
-        'pointer-events-none absolute inset-x-0 top-0 h-[220px] touch:h-[440px] [--pr-tint-hold:0%] touch:[--pr-tint-hold:80%]',
-        band() === 'draft'
-          ? '[--pr-tint:0.08] dark:[--pr-tint:0.10]'
-          : '[--pr-tint:0.12] dark:[--pr-tint:0.14]'
+        'pointer-events-none absolute inset-x-0 top-0 [--pr-tint:var(--pr-tint-light)] dark:[--pr-tint:var(--pr-tint-dark)]',
+        props.strip
+          ? 'h-full'
+          : 'h-[220px] touch:h-[440px] [--pr-tint-hold:0%] touch:[--pr-tint-hold:80%]'
       )}
       style={{
-        background: `linear-gradient(to bottom, rgb(from ${color()} r g b / var(--pr-tint)) var(--pr-tint-hold), transparent)`,
+        '--pr-tint-light': tint().lightOpacity,
+        '--pr-tint-dark': tint().darkOpacity,
+        background: `linear-gradient(to bottom, rgb(from ${tint().color} r g b / var(--pr-tint)) var(--pr-tint-hold, 0%), transparent)`,
       }}
     />
   );
@@ -94,6 +93,7 @@ export function PrOpenedDate(props: {
 export function PrChecksStatusIcon(props: {
   page: PrPageReadModel;
   onClick: (trigger: HTMLButtonElement) => void;
+  size?: 'md' | 'strip';
 }) {
   const checks = () => props.page.checks;
   const total = () => props.page.pullRequest.checks?.length ?? 0;
@@ -113,7 +113,11 @@ export function PrChecksStatusIcon(props: {
       tooltip={label()}
       onClick={(event) => props.onClick(event.currentTarget)}
     >
-      <CheckStateIcon state={state()} circle size="md" />
+      <CheckStateIcon
+        state={state()}
+        circle
+        size={props.size === 'strip' ? 'lg' : 'md'}
+      />
     </Button>
   );
 }

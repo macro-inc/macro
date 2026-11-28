@@ -14,6 +14,8 @@ for reference; the routed page uses the redesigned composition.
 - `pr-page.tsx`: production entry and the single desktop/mobile switch.
 - `views/shared/pr-page-content.tsx`: shared content background, page scroller, and sticky tabs.
 - `views/pr-page-top-bar.tsx`: always-visible desktop title/actions and anchored Details.
+- `views/pr-slim-bar.tsx`: option C's status strip and shared band tab row.
+- `primitives/create-pr-page-layout.ts`: measured docking mode and saved Details preference.
 - `data/queries.ts`: stored PR detail adapter.
 - `data/pr-changes.ts`: storage changeset and patch adapter.
 - `primitives/create-pr-actions.ts`: existing merge, draft, and state writes.
@@ -39,7 +41,7 @@ for reference; the routed page uses the redesigned composition.
 - Keep the lifecycle status icon independent of checks/review band tint.
 - Anchor floating Details to its toggle and keep its transient state separate from the docked Overview preference.
 - Open title checks in a checks-only dialog and show five pending-first rows before expansion.
-- Keep the normal top bar visible on both tabs; leave slim chrome and scroll hide/reveal unwired until a new design arrives.
+- Keep the normal top bar visible; use option C's full-width status strip after the measured title/pill boundary, never directional hide/reveal.
 - Use one page scroller and background for Overview and Changes; keep toolbars, file headers, and the tree sticky against it.
 - Size title/actions with real DOM flex wrappers; desktop HeaderIsland returns a fragment and drops layout classes.
 - Keep the checks-only dialog spacious without changing compact Details list density.

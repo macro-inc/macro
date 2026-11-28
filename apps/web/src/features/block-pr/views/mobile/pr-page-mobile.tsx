@@ -136,11 +136,17 @@ export function PrPageMobile(props: PrPageViewProps) {
             </div>
           </>
         }
-        tabsClass="px-3 pt-3 pb-2"
-        tabs={<PrTabs size="lg" fullWidth />}
+        tabs={() => (
+          <div class="px-3 pt-3 pb-2">
+            <PrTabs size="lg" fullWidth />
+          </div>
+        )}
       >
         <div classList={{ hidden: !layout.changesVisible() }}>
-          <PrChangesView scroller={scroller()} />
+          <PrChangesView
+            scroller={scroller()}
+            contentClass="pb-[calc(var(--mobile-content-inset-bottom,0px)+6rem)]"
+          />
         </div>
         <div
           class="px-3 pb-[calc(var(--mobile-content-inset-bottom,0px)+6rem)]"

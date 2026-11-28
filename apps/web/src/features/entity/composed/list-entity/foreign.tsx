@@ -209,9 +209,11 @@ export function checkDurationText(
 export function CheckStateIcon(props: {
   state: CheckVisualState;
   circle?: boolean;
-  size?: 'md';
+  size?: 'md' | 'lg';
   class?: string;
 }) {
+  const iconSize = (normal: string) =>
+    props.size === 'lg' ? 'size-4.5' : normal;
   return (
     <span
       class={cn(
@@ -225,7 +227,7 @@ export function CheckStateIcon(props: {
           fallback={
             <Check
               class={cn(
-                props.size === 'md' ? 'size-4' : 'size-3',
+                iconSize(props.size === 'md' ? 'size-4' : 'size-3'),
                 'text-success'
               )}
             />
@@ -233,7 +235,7 @@ export function CheckStateIcon(props: {
         >
           <CheckCircle
             class={cn(
-              props.size === 'md' ? 'size-4' : 'size-5',
+              iconSize(props.size === 'md' ? 'size-4' : 'size-5'),
               'text-success'
             )}
           />
@@ -245,7 +247,7 @@ export function CheckStateIcon(props: {
           fallback={
             <X
               class={cn(
-                props.size === 'md' ? 'size-4' : 'size-3',
+                iconSize(props.size === 'md' ? 'size-4' : 'size-3'),
                 'text-failure'
               )}
             />
@@ -253,7 +255,7 @@ export function CheckStateIcon(props: {
         >
           <XCircle
             class={cn(
-              props.size === 'md' ? 'size-4' : 'size-5',
+              iconSize(props.size === 'md' ? 'size-4' : 'size-5'),
               'text-failure'
             )}
           />
@@ -265,7 +267,7 @@ export function CheckStateIcon(props: {
             class={cn(
               'size-4 rounded-full',
               props.circle && [
-                'size-5',
+                iconSize('size-5'),
                 'animate-spin',
                 'bg-[conic-gradient(from_0deg,var(--color-alert-ink)_0deg,var(--color-alert-ink)_60deg,rgb(from_var(--color-alert-ink)_r_g_b/0.2)_120deg,transparent_260deg,transparent_360deg)]',
                 '[mask:radial-gradient(farthest-side,transparent_calc(100%-1.5px),#000_calc(100%-1.5px))]',
@@ -284,13 +286,18 @@ export function CheckStateIcon(props: {
       <Show when={props.state === 'skipped'}>
         <MinusCircle
           class={cn(
-            props.size === 'md' ? 'size-4' : 'size-5',
+            iconSize(props.size === 'md' ? 'size-4' : 'size-5'),
             'text-ink-extra-muted/50'
           )}
         />
       </Show>
       <Show when={props.state === 'none'}>
-        <div class="relative size-4 inline-flex items-center justify-center">
+        <div
+          class={cn(
+            'relative inline-flex items-center justify-center',
+            iconSize('size-4')
+          )}
+        >
           <span class="size-1.5 rounded-full bg-ink-muted/40" />
         </div>
       </Show>

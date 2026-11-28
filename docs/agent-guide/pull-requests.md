@@ -94,11 +94,17 @@ Changes does not add a back button.
 New captures expand files with at most 40 changed lines; explicit collapse
 choices for that capture take precedence.
 
-The top bar does not auto-hide in either tab. The former slim bar and animated
-scroll compensation are not routed; no replacement slim bar is available yet.
-Each tab restores its own position in the shared page scroller. Phones keep
-their MobileHeader islands and pin touch-size tabs below them. Bottom review
-actions remain in the pane's floating chrome region.
+The top bar does not auto-hide in either tab. After the title and pills scroll
+out, desktop's band tab row becomes option C's full-width status strip: lifecycle
+icon, PR number, checks-dialog trigger, optional stack pill, the same Tabs pill,
+and Merge. The row remains 48px tall with a shared state fade and bottom hairline.
+It switches at the measured title/pill boundary (typically about 86px), not on
+scroll direction. Details and the file tree always start below the strip.
+Under the persistent top bar, the strip sticks at 0px, the Changes toolbar and
+tree header at 48px, and file headers at 96px. Narrow desktop panes retain the
+strip; at 400px, tabs and Merge use their existing icon variants. Phones keep
+their islands and pinned touch tabs without a status strip. Each tab restores
+its own page scroll position, and phone diff content clears the bottom island.
 
 ## Unavailable review capabilities
 

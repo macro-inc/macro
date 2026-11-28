@@ -40,6 +40,28 @@ export function prStatusBand(input: {
   return 'open';
 }
 
+/** The strip follows title/pill geometry, not scroll direction or top-bar visibility. */
+export function prSlimBarVisible(
+  scrollTop: number,
+  titlePillsHeight = 86
+): boolean {
+  const threshold = titlePillsHeight > 0 ? titlePillsHeight : 86;
+  return scrollTop >= threshold;
+}
+
+/** Band and strip share semantic colors and theme-specific tint strength. */
+export function prStatusTint(state: PrStatusBand) {
+  let color = 'var(--color-failure)';
+  if (state === 'open') color = 'var(--color-success)';
+  if (state === 'merged') color = 'var(--color-note)';
+  if (state === 'draft') color = 'var(--color-ink-muted)';
+  return {
+    color,
+    lightOpacity: state === 'draft' ? 0.08 : 0.12,
+    darkOpacity: state === 'draft' ? 0.1 : 0.14,
+  };
+}
+
 /** A positive mergeability answer is required; missing backend data never enables Merge. */
 export function prPageReadyToMerge(input: {
   status?: string | null;

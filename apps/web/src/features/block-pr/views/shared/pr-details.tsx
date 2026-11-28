@@ -572,6 +572,7 @@ export function PrMergeBox(props: { page: PrPageReadModel }) {
 export function PrMergeButton(props: {
   page: PrPageReadModel;
   compact?: boolean;
+  size?: 'xs' | 'sm';
 }) {
   const { actions } = usePrPage();
   const flow = useFlow();
@@ -583,9 +584,13 @@ export function PrMergeButton(props: {
     }) &&
     actions.changeState.availableFor('merge') &&
     !actions.pending();
+  const size = () => {
+    if (props.compact) return props.size === 'xs' ? 'icon-xs' : 'icon-sm';
+    return props.size ?? 'sm';
+  };
   return (
     <Button
-      size={props.compact ? 'icon-sm' : 'sm'}
+      size={size()}
       variant={enabled() ? 'success' : 'secondary'}
       disabled={!enabled()}
       aria-label={t('prPage.merge')}

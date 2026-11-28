@@ -2,25 +2,26 @@ import { ViewBreadcrumbs } from '@app/components/view-shell';
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { useChanges } from '@app/features/changes/changes';
 import { t } from '@app/lib/i18n';
-import { useSidePanel } from '@components/app/side-panel';
+import { SidePanel } from '@components/app/side-panel';
+import { SidePanelContext } from '@components/app/side-panel/context';
 import * as Popover from '@kobalte/core/popover';
-import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Button } from '@ui';
-import { createSignal, Match, Show, Switch } from 'solid-js';
+import { createSignal, Match, Show, Switch, useContext } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { PrStatusIcon } from '../component/PrStatus';
 import { usePrPage } from '../context/pr-page-context';
 import type { PrPageReadModel } from '../context/pr-page-read-model';
+import { createPrPageLayout } from '../primitives/create-pr-page-layout';
 import { prLifecycleStatus } from '../primitives/pr-page-state';
 import { PrPageTopBar } from './pr-page-top-bar';
 import { PrReviewIsland } from './pr-review-island';
+import { PrSlimBar } from './pr-slim-bar';
 import { PrBranchPopover } from './shared/pr-branch';
 import { PrChangesView } from './shared/pr-changes';
 import {
   PrChecksDialog,
   PrDetailsColumn,
   PrMergeBox,
-  PrMergeButton,
   PrStackList,
 } from './shared/pr-details';
 import {
@@ -32,18 +33,17 @@ import {
 import { PrPageContent } from './shared/pr-page-content';
 import type { PrPageViewProps } from './shared/pr-page-view-props';
 import { PrCommentForm } from './shared/pr-review';
-import { PrTabs } from './shared/pr-tabs';
 import { PrDescription, PrTimeline } from './shared/pr-timeline';
 
 export function PrPageView(props: PrPageViewProps) {
   const { page, status, retry } = usePrPage();
   const { layout, review } = useChanges();
-  const sidePanel = useSidePanel();
-  const [root, setRoot] = createSignal<HTMLDivElement>();
+  const sidePanel = useContext(SidePanelContext);
+  const { setRoot, width, floatingDetails, dockedDetails } = createPrPageLayout(
+    layout.changesVisible,
+    sidePanel
+  );
   const [scroller, setScroller] = createSignal<HTMLDivElement>();
-  const [width, setWidth] = createSignal(0);
-  createResizeObserver(root, (size) => setWidth(size.width));
-  const floatingDetails = () => width() < 1224 || layout.changesVisible();
   const [panels, setPanels] = createStore<{
     sectionOpen: boolean;
     dialogOpen: boolean;
@@ -57,8 +57,20 @@ export function PrPageView(props: PrPageViewProps) {
     layout.open();
     review.activate(path);
   };
+  const Details = () => (
+    <Show when={page()}>
+      {(current) => (
+        <PrDetailsColumn
+          page={current()}
+          onFile={openFile}
+          onTask={props.onTask}
+          checksOpen={panels.sectionOpen}
+          onChecksOpenChange={(open) => setPanels('sectionOpen', open)}
+        />
+      )}
+    </Show>
+  );
   const name = () => page()?.pullRequest.name ?? t('prPage.loading');
-  const dockedDetails = () => !floatingDetails() && sidePanel?.isOpen();
   const islandInset = () => {
     if (dockedDetails()) return 360;
     if (layout.changesVisible() && width() >= 1162 && layout.treeOpen())
@@ -94,6 +106,15 @@ export function PrPageView(props: PrPageViewProps) {
         )}
       </Show>
 
+      {/* Register the real content so shared Details keyboard commands remain available. */}
+      <Show when={!floatingDetails()}>
+        <SidePanel.Section
+          id="pr-details"
+          title={t('prPage.details')}
+          defaultOpen
+          render={() => <Details />}
+        />
+      </Show>
       <PrPageTopBar
         {...props}
         page={page()}
@@ -144,15 +165,22 @@ export function PrPageView(props: PrPageViewProps) {
             </div>
           </>
         }
-        tabsClass="border-b border-edge-muted px-4 py-3 @min-[720px]/pr-page:pl-[58px] @min-[720px]/pr-page:pr-6"
-        tabs={
-          <div class="flex items-center justify-between gap-2">
-            <PrTabs />
-            <Show when={layout.changesVisible() && page()}>
-              {(current) => <PrMergeButton page={current()} />}
-            </Show>
-          </div>
-        }
+        tabs={(scrolled) => (
+          <PrSlimBar
+            page={page()}
+            scrolled={scrolled()}
+            compact={width() <= 400}
+            changesVisible={layout.changesVisible()}
+            onChecks={openChecks}
+            stack={
+              <Show when={page()}>
+                {(current) => (
+                  <PrStackPopover page={current()} class="h-6 py-0" />
+                )}
+              </Show>
+            }
+          />
+        )}
       >
         <div classList={{ hidden: !layout.changesVisible() }}>
           <PrChangesView scroller={scroller()} />
@@ -206,19 +234,7 @@ export function PrPageView(props: PrPageViewProps) {
                   'calc(var(--pr-page-height) - var(--pr-tabs-height))',
               }}
             >
-              <Show when={page()}>
-                {(current) => (
-                  <PrDetailsColumn
-                    page={current()}
-                    onFile={openFile}
-                    onTask={props.onTask}
-                    checksOpen={panels.sectionOpen}
-                    onChecksOpenChange={(open) =>
-                      setPanels('sectionOpen', open)
-                    }
-                  />
-                )}
-              </Show>
+              <Details />
             </aside>
           </Show>
         </div>
@@ -239,10 +255,10 @@ export function PrPageView(props: PrPageViewProps) {
   );
 }
 
-function PrStackPopover(props: { page: PrPageReadModel }) {
+function PrStackPopover(props: { page: PrPageReadModel; class?: string }) {
   return (
     <Popover.Root placement="bottom-end">
-      <Popover.Trigger as={PrStackPill} page={props.page} />
+      <Popover.Trigger as={PrStackPill} page={props.page} class={props.class} />
       <Popover.Portal>
         <Popover.Content
           class="menu-surface z-modal min-w-64 max-w-[min(400px,90vw)] rounded-xl p-3"

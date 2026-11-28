@@ -4,10 +4,17 @@ import { describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   refreshedKeys: undefined as (() => readonly unknown[]) | undefined,
+  width: (): number | undefined => undefined,
 }));
 
 vi.mock('@solid-primitives/resize-observer', () => ({
   createResizeObserver: () => {},
+  createElementSize: () => ({
+    get width() {
+      return mocks.width();
+    },
+    height: 800,
+  }),
 }));
 vi.mock('../data/prDiscussionSource', () => ({
   createPrDiscussionSource: () => ({}),
@@ -64,6 +71,7 @@ vi.mock('../hooks/usePrShare', () => ({
 }));
 
 import { githubPullRequestChangesKeys } from '@queries/storage/keys';
+import { createPrPageLayout } from '../primitives/create-pr-page-layout';
 import {
   createScrollHideReveal,
   scrollChromeCompensation,
@@ -71,7 +79,9 @@ import {
 import {
   parsePrSuggestion,
   prRowHeight,
+  prSlimBarVisible,
   prStatusBand,
+  prStatusTint,
 } from '../primitives/pr-page-state';
 import { usePrDetail } from './PrDetail';
 import { PrPageTopBar } from './pr-page-top-bar';
@@ -288,7 +298,7 @@ describe('PR page scroll ownership and top-bar placement', () => {
             return tab();
           },
           header: document.createElement('header'),
-          tabs: document.createElement('nav'),
+          tabs: () => document.createElement('nav'),
           children: nested,
           scrollerRef: (element) => refs.push(element),
         }),
@@ -312,6 +322,66 @@ describe('PR page scroll ownership and top-bar placement', () => {
       expect(scroller.contains(nested)).toBe(true);
     } finally {
       dispose();
+    }
+  });
+});
+
+describe('PR status strip C', () => {
+  it('appears only after title and pills leave the page viewport in either direction', () => {
+    expect(prSlimBarVisible(0)).toBe(false);
+    expect(prSlimBarVisible(85)).toBe(false);
+    expect(prSlimBarVisible(86)).toBe(true);
+    expect(prSlimBarVisible(240)).toBe(true);
+    expect(prSlimBarVisible(85)).toBe(false);
+    expect(prSlimBarVisible(86, 160)).toBe(false);
+    expect(prSlimBarVisible(159, 160)).toBe(false);
+    expect(prSlimBarVisible(160, 160)).toBe(true);
+  });
+
+  it.each([
+    ['open', 'var(--color-success)', 0.12, 0.14],
+    ['changes-requested', 'var(--color-failure)', 0.12, 0.14],
+    ['checks-failing', 'var(--color-failure)', 0.12, 0.14],
+    ['closed', 'var(--color-failure)', 0.12, 0.14],
+    ['merged', 'var(--color-note)', 0.12, 0.14],
+    ['draft', 'var(--color-ink-muted)', 0.08, 0.1],
+  ] as const)(
+    'shares the %s band tint with the strip',
+    (state, color, lightOpacity, darkOpacity) => {
+      expect(prStatusTint(state)).toEqual({ color, lightOpacity, darkOpacity });
+    }
+  );
+
+  it('restores the wide Details preference instead of staying in the initial overlay mode', () => {
+    const [width, setWidth] = createSignal(1440);
+    const [changes, setChanges] = createSignal(false);
+    const [overlay, setOverlay] = createSignal(true);
+    const [wideOpen, setWideOpen] = createSignal(true);
+    mocks.width = width;
+    const root = createRoot((dispose) => ({
+      dispose,
+      layout: createPrPageLayout(changes, {
+        isOpen: () => !overlay() && wideOpen(),
+        setIsOverlayMode: setOverlay,
+      }),
+    }));
+    try {
+      expect(overlay()).toBe(false);
+      expect(root.layout.dockedDetails()).toBe(true);
+      setChanges(true);
+      expect(overlay()).toBe(true);
+      expect(root.layout.dockedDetails()).toBe(false);
+      setChanges(false);
+      expect(root.layout.dockedDetails()).toBe(true);
+      setWideOpen(false);
+      setWidth(900);
+      expect(overlay()).toBe(true);
+      setWidth(1440);
+      expect(overlay()).toBe(false);
+      expect(root.layout.dockedDetails()).toBe(false);
+    } finally {
+      root.dispose();
+      mocks.width = () => undefined;
     }
   });
 });

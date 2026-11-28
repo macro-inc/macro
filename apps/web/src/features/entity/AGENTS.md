@@ -15,6 +15,7 @@ when adding context; movement targets own any selection clearing.
 `composed/list-entity/foreign.tsx` exports `CheckStateIcon` and
 `checkDurationText` for the PR page's shared check rows. Keep list-row and
 PR-page check state and duration rendering consistent.
+Use CheckStateIcon's lg size for an 18px glyph; existing default and md renderings stay unchanged.
 
 ## Checks
 

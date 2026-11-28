@@ -21,7 +21,7 @@ import Sidebar from '@icon/system/regular/sidebar-simple.svg';
 import * as Popover from '@kobalte/core/popover';
 import { Key } from '@solid-primitives/keyed';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
-import { Button, Card, Checkbox, CopyButton, Dropdown, Input } from '@ui';
+import { Button, Card, Checkbox, CopyButton, cn, Dropdown, Input } from '@ui';
 import { FileTree } from '@ui/components/FileTree';
 import { buildFileTree, visibleNodes } from '@ui/utils/file-tree';
 import { createMemo, createSignal, Match, Show, Switch } from 'solid-js';
@@ -41,7 +41,10 @@ type PrTreeState = {
   popover: boolean;
   closedFolders: string[];
 };
-export function PrChangesView(props: { scroller?: HTMLDivElement }) {
+export function PrChangesView(props: {
+  scroller?: HTMLDivElement;
+  contentClass?: string;
+}) {
   const { page, actions } = usePrPage();
   const flow = useFlow();
   const { model, review, layout, diffStyle, setDiffStyle, context } =
@@ -338,7 +341,7 @@ export function PrChangesView(props: { scroller?: HTMLDivElement }) {
   return (
     <div
       ref={setRoot}
-      class="relative flex min-h-[calc(var(--pr-page-height)-var(--pr-tabs-height))] min-w-0 bg-panel @container/pr-changes"
+      class="relative flex min-h-[calc(var(--pr-page-height)-var(--pr-tabs-height))] min-w-0 bg-page @container/pr-changes"
     >
       <DiffView.Root
         files={model.files()}
@@ -462,8 +465,11 @@ export function PrChangesView(props: { scroller?: HTMLDivElement }) {
               <DiffView.Stack
                 scrollElement={props.scroller}
                 stickyOffset="calc(var(--pr-tabs-height, 0px) + 3rem)"
-                contentClass="px-4 @min-[720px]/pr-changes:pl-[58px] @min-[720px]/pr-changes:pr-6"
-                headerClass="rounded-t-none bg-panel"
+                contentClass={cn(
+                  'px-4 @min-[720px]/pr-changes:pl-[58px] @min-[720px]/pr-changes:pr-6',
+                  props.contentClass
+                )}
+                headerClass="h-12 rounded-t-none bg-panel"
                 hunkSeparators="metadata"
                 unsafeCSS="[data-separator] { background: rgb(from var(--color-accent) r g b / 0.1); color: var(--color-ink); }"
                 footer={(entry) => (
