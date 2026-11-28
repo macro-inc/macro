@@ -19,7 +19,18 @@ fragment EntityMutationPayloadFields on EntityMutationPayload {
 
 mutation SetEntityAppearance($input: SetEntityAppearanceInput!) {
   setEntityAppearance(input: $input) {
-    ...EntityMutationPayloadFields
+    __typename
+    effects {
+      __typename
+      ... on SoupUpdated {
+        item {
+          __typename
+          id
+          ... on GraphqlSoupDocument { appearance }
+          ... on GraphqlSoupInitiative { appearance }
+        }
+      }
+    }
   }
 }
 

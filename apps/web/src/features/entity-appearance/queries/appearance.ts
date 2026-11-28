@@ -33,6 +33,7 @@ import {
   type AppearanceMutationVariables,
   ENTITY_APPEARANCE_MUTATION_KEY,
 } from './pending-appearance';
+import type { AppearanceWriteReceipt } from './save-entity-appearance';
 
 const savedViewAppearanceSelection = selectRecords(
   SavedViewAppearanceFieldsFragmentDoc
@@ -94,9 +95,7 @@ export function createSaveEntityAppearance(sources: {
     id: string,
     appearance: EntityAppearance,
     isCurrent: () => boolean
-  ) => Promise<
-    Result<{ queued: boolean; listReadFailed: boolean } | undefined, unknown>
-  >;
+  ) => Promise<Result<AppearanceWriteReceipt | undefined, unknown>>;
   refreshSavedView?: (id: string) => Promise<void>;
   acknowledgeWrite?: (host: object) => void;
 }) {
@@ -320,9 +319,15 @@ export function createSaveEntityAppearance(sources: {
         }
         return result;
       });
-      // The durable queue owns this optimism. A later rejection must be
-      // able to remove it without leaving a confirmed legacy reader patch.
-      const authoritative = result.isOk() && !result.value?.queued;
+      // Admission releases the per-entity submission queue. Legacy readers
+      // and the editor confirm the write only when replay commits.
+      const queuedSettlement =
+        result.isOk() && result.value?.queued
+          ? result.value.settlement
+          : undefined;
+      const settlement = await queuedSettlement;
+      const authoritative =
+        result.isOk() && (!result.value?.queued || settlement === 'committed');
       if (authoritative && isCurrent()) readers.confirmed = appearance;
       const cacheResults = await cache;
       if (cacheResults[0]?.status === 'rejected') {
@@ -372,7 +377,7 @@ export function createSaveEntityAppearance(sources: {
           readerWrites.delete(key);
       }
       fireAndForget(finishColdReads(), 'appearance cold reader reconciliation');
-      if (result.isErr()) {
+      if (result.isErr() || (queuedSettlement && settlement !== 'committed')) {
         span.error('appearance update failed');
         return err(t('appearance.saveFailed'));
       }

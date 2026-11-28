@@ -414,7 +414,7 @@ type CompleteMutationRoot {
 	"""
 	Replace a document or initiative's icon and color overrides.
 	"""
-	setEntityAppearance(input: SetEntityAppearanceInput!): EntityMutationPayload!
+	setEntityAppearance(input: SetEntityAppearanceInput!): GraphqlMutationSuccess!
 	"""
 	Rename heterogeneous entities in one request.
 	"""

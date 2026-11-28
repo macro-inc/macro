@@ -1,8 +1,13 @@
 import { COLOR_PALETTE } from '@core/constant/color-palette';
-import type { AppearanceColor } from '@service-storage/generated/schemas/appearanceColor';
-import type { EntityAppearance } from '@service-storage/generated/schemas/entityAppearance';
 
-export type { AppearanceColor, EntityAppearance };
+export type AppearanceColor = (typeof COLOR_PALETTE)[number]['key'];
+export type EntityAppearance = {
+  icon?:
+    | { kind: 'macro'; name: string }
+    | { kind: 'emoji'; value: string }
+    | null;
+  color?: AppearanceColor | null;
+};
 
 const APPEARANCE_ENTITY_TYPES = [
   'document',

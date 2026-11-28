@@ -55,10 +55,10 @@ snippets, task projects (initiatives), forms, databases, and saved views.
 - Match lazy-loaded submenu content with a picker-shaped skeleton, not the branded logo loader.
 - Reuse the shared 12-color tag palette in `@core/constant/color-palette`; preserve named wire keys and let swatches wrap.
 - Use `virtua` for both catalogs and search results; pin and restore focused choices across scrolling and Recent reordering.
-- Apply document and initiative appearance through `setEntityAppearance`. Its optimistic patch and authoritative Soup row share the normalized cache identity, including on offline replay.
+- Apply document and initiative appearance through `setEntityAppearance`. Select the Soup row's identity and appearance so the cache can apply the effect without resolving unrelated edges.
 - For saved-view cache writes, capture the generation before reading the normalized record and retain it through optimistic, confirmed, and rollback patches.
 - Keep pending appearance visible through uncached GraphQL revalidation; retain confirmed intent only for failed readers until fresh data or mutation garbage collection.
-- Serialize submissions per entity and fence confirmed saved-view REST writes against older GraphQL responses. The durable queue owns uncommitted Soup appearance after enqueue.
+- Serialize submissions per entity and fence confirmed saved-view REST writes against older GraphQL responses. Release the submission queue on durable admission and settle the editor and legacy patches on replay.
 - Render public metadata without mounting authenticated preview queries.
 - Preserve appearance in identity projections and renderers, including inbox cards, project list, sidebar, and picker rows; reserve type-only icons for navigation and status.
 - Keep editable header icons outside breadcrumb navigation buttons; keep read-only and flag-disabled icons inside those buttons so icon clicks still navigate. Project breadcrumbs use the lightweight identity read, including owner metadata, without loading task counts or membership.

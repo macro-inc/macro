@@ -1,9 +1,11 @@
 import { entityKeys, formsKeys } from '@queries/storage/keys';
 import { onlineManager, QueryClient } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
+import { createRoot } from 'solid-js';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { DocumentEntity, FormEntity } from '../../entity/types/entity';
 import type { EntityAppearance } from '../core/appearance';
+import { createAppearanceEditor } from '../primitives/create-appearance-editor';
 import { createSaveEntityAppearance } from './appearance';
 
 type UpdateAppearance = Parameters<
@@ -78,6 +80,62 @@ it('submits Soup appearance while the browser is offline', async () => {
     queryClient.clear();
   }
 });
+
+it.each(['committed', 'permanently-failed'] as const)(
+  'settles the picker and legacy metadata after a queued save is %s',
+  async (status) => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(key, original);
+    const started = Promise.withResolvers<void>();
+    const settlement = Promise.withResolvers<typeof status>();
+    const save = createSaveEntityAppearance({
+      queryClient,
+      cacheHost: () => undefined,
+      update: async () => {
+        started.resolve();
+        return ok({
+          queued: true,
+          listReadFailed: false,
+          settlement: settlement.promise,
+        });
+      },
+    });
+    const { editor, dispose } = createRoot((dispose) => ({
+      dispose,
+      editor: createAppearanceEditor({
+        initial: original.appearance,
+        isCurrent: () => true,
+        save: (choice) => save(entity, choice, () => true),
+      }),
+    }));
+    try {
+      const pending = editor.change(appearance);
+      await started.promise;
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(editor.saving()).toBe(true);
+      expect(editor.appearance()).toEqual(appearance);
+      expect(queryClient.getQueryData(key)).toEqual({
+        ...original,
+        appearance,
+      });
+
+      settlement.resolve(status);
+      await pending;
+      expect(editor.saving()).toBe(false);
+      const committed = status === 'committed';
+      expect(editor.error() === undefined).toBe(committed);
+      expect(editor.appearance().icon).toEqual(
+        committed ? appearance.icon : null
+      );
+      expect(queryClient.getQueryData(key)).toEqual(
+        committed ? { ...original, appearance } : original
+      );
+    } finally {
+      dispose();
+      queryClient.clear();
+    }
+  }
+);
 
 it('patches readers before the write resolves and restores only appearance on failure', async () => {
   const queryClient = new QueryClient();

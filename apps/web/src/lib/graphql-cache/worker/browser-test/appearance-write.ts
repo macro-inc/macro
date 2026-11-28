@@ -48,22 +48,16 @@ const list = gql`
 const mutation = gql`
   mutation SetEntityAppearance($input: SetEntityAppearanceInput!) {
     setEntityAppearance(input: $input) {
-      results {
+      __typename
+      effects {
         __typename
-        ... on GraphqlMutationSuccess {
-          effects {
+        ... on SoupUpdated {
+          item {
             __typename
-            ... on SoupUpdated {
-              item {
-                __typename
-                id
-                displayName
-                ... on GraphqlSoupDocument { appearance }
-              }
-            }
+            id
+            ... on GraphqlSoupDocument { appearance }
           }
         }
-        ... on GraphqlMutationError { errorCode message }
       }
     }
   }
@@ -152,25 +146,45 @@ const client = createClient({
     if (offline) throw new TypeError('Offline');
     writes += 1;
     showRequests();
+    if (args.has('old-schema') && writes === 1) {
+      return Response.json({
+        errors: [
+          { message: 'Unknown type "SetEntityAppearanceInput"' },
+          {
+            message:
+              'Unknown field "setEntityAppearance" on type "CompleteMutationRoot".',
+          },
+        ],
+      });
+    }
+    if (args.has('forbidden')) {
+      return Response.json({
+        errors: [
+          {
+            message: 'insufficient permission for entity mutation',
+            path: ['setEntityAppearance'],
+            extensions: { code: 'FORBIDDEN' },
+          },
+        ],
+        data: null,
+      });
+    }
     if (hold) await answer.promise;
     return Response.json({
       data: {
         setEntityAppearance: {
-          results: [
+          __typename: 'GraphqlMutationSuccess',
+          effects: [
             {
-              __typename: 'GraphqlMutationSuccess',
-              effects: [
-                {
-                  __typename: 'SoupUpdated',
-                  item: {
-                    ...row,
-                    appearance: {
-                      icon: { kind: 'emoji', value: '🌿' },
-                      color: 'teal',
-                    },
-                  },
+              __typename: 'SoupUpdated',
+              item: {
+                __typename: row.__typename,
+                id: row.id,
+                appearance: {
+                  icon: { kind: 'emoji', value: '🌿' },
+                  color: 'teal',
                 },
-              ],
+              },
             },
           ],
         },

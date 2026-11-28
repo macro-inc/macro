@@ -83,6 +83,38 @@ describe('GraphQL mutation retries', () => {
     ).toBe(false);
   });
 
+  it('retries an appearance save only when the old server cannot execute it', () => {
+    const mutation = {
+      transactionId: '1',
+      uuid: crypto.randomUUID(),
+      operationName: 'SetEntityAppearance',
+    };
+    const oldSchema = new CombinedError({
+      graphQLErrors: [
+        { message: 'Unknown type "SetEntityAppearanceInput"' },
+        {
+          message:
+            'Unknown field "setEntityAppearance" on type "CompleteMutationRoot".',
+        },
+      ],
+    });
+    expect(shouldRetryGraphqlMutation(oldSchema, mutation)).toBe(true);
+    expect(
+      shouldRetryGraphqlMutation(oldSchema, {
+        ...mutation,
+        operationName: 'MoveEntities',
+      })
+    ).toBe(false);
+    expect(
+      shouldRetryGraphqlMutation(
+        new CombinedError({
+          graphQLErrors: [{ message: 'invalid entity mutation input' }],
+        }),
+        mutation
+      )
+    ).toBe(false);
+  });
+
   describe('email draft writes', () => {
     const fault = (code: string) =>
       new CombinedError({

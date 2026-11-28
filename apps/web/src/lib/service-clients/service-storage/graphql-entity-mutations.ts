@@ -15,8 +15,8 @@ import {
   DeleteEntitiesPermanentlyDocument,
   DuplicateEntitiesDocument,
   type DuplicateEntityInput,
-  type EntityMutationPayloadFieldsFragment,
   type EntityRefInput,
+  type GraphqlEntityMutationErrorCode,
   MoveEntitiesDocument,
   type MoveEntityInput,
   RestoreEntitiesDocument,
@@ -32,6 +32,17 @@ import { getEntityGraphqlClient } from './graphql-soup';
 const isEffectsError = (error: GraphQLError) =>
   error.path?.[1] === 'results' && error.path[3] === 'effects';
 
+type MutationPayload<Effect> = {
+  results: Array<
+    | { __typename: 'GraphqlMutationSuccess'; effects: Effect[] }
+    | {
+        __typename: 'GraphqlMutationError';
+        errorCode: GraphqlEntityMutationErrorCode;
+        message: string;
+      }
+  >;
+};
+
 /** Predicted writes can resolve once durably queued. A result whose
  * effects failed to resolve, or whose rows or deletions the cache failed to
  * apply, says so (`effectsResolved: false`): the write committed, but its rows
@@ -40,12 +51,12 @@ const isEffectsError = (error: GraphQLError) =>
  * client's exchange read every mounted list again, each successfully, before
  * the write settled (no live cache).
  * Never retry a failed/ambiguous GraphQL write through the REST transport. */
-async function mutateEntity<Data, Variables extends AnyVariables>(
+async function mutateEntity<Data, Variables extends AnyVariables, Effect>(
   operation: string,
   entity: EntityRefInput,
   document: TypedDocumentNode<Data, Variables>,
   variables: Variables,
-  payload: (data: Data) => EntityMutationPayloadFieldsFragment,
+  payload: (data: Data) => MutationPayload<Effect>,
   context: Partial<OperationContext> = {}
 ) {
   return Telemetry.span(`entity.${operation}`, async (span) => {
@@ -68,12 +79,12 @@ async function mutateEntity<Data, Variables extends AnyVariables>(
   });
 }
 
-async function sendEntityMutation<Data, Variables extends AnyVariables>(
+async function sendEntityMutation<Data, Variables extends AnyVariables, Effect>(
   span: Span,
   operation: string,
   document: TypedDocumentNode<Data, Variables>,
   variables: Variables,
-  payload: (data: Data) => EntityMutationPayloadFieldsFragment,
+  payload: (data: Data) => MutationPayload<Effect>,
   context: Partial<OperationContext>
 ) {
   // Its request, queue attempt and cache writes join this span's trace.
@@ -128,28 +139,19 @@ async function sendEntityMutation<Data, Variables extends AnyVariables>(
   };
 }
 
-export async function setGraphqlEntityAppearance(
+export const setGraphqlEntityAppearance = (
   input: SetEntityAppearanceInput,
-  revalidations: readonly QueryRevalidation[]
-) {
-  let revalidationsQueued = false;
-  const result = await mutateEntity(
+  revalidations: readonly QueryRevalidation[],
+  uuid?: string
+) =>
+  mutateEntity(
     'set_appearance',
     input.entity,
     SetEntityAppearanceDocument,
     { input },
-    (data) => data.setEntityAppearance,
-    {
-      optimisticMutation: {
-        revalidations,
-        onEnqueued: () => {
-          revalidationsQueued = true;
-        },
-      },
-    }
+    (data) => ({ results: [data.setEntityAppearance] }),
+    { optimisticMutation: { revalidations, uuid } }
   );
-  return { ...result, revalidationsQueued };
-}
 
 /** A move the cache predicts is queued, so the lists it cannot keep current are
  * named here and read again once the move commits, including on replay. */

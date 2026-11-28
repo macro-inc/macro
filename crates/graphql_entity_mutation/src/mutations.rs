@@ -471,16 +471,8 @@ pub struct GraphqlMutationError(
     EntityMutationErrorCode,
 );
 
-/// User-safe failure for one requested entity mutation.
-#[Object]
 impl GraphqlMutationError {
-    /// Stable machine-readable error category.
-    async fn error_code(&self) -> GraphqlEntityMutationErrorCode {
-        GraphqlEntityMutationErrorCode::new(self.0)
-    }
-
-    /// User-safe explanation of the failure.
-    async fn message(&self) -> &'static str {
+    fn user_message(&self) -> &'static str {
         match self.0 {
             EntityMutationErrorCode::UnsupportedOperation(_) => {
                 "Operation is not supported for this entity"
@@ -493,6 +485,20 @@ impl GraphqlMutationError {
             }
             EntityMutationErrorCode::Internal(_) => "An internal error occurred",
         }
+    }
+}
+
+/// User-safe failure for one requested entity mutation.
+#[Object]
+impl GraphqlMutationError {
+    /// Stable machine-readable error category.
+    async fn error_code(&self) -> GraphqlEntityMutationErrorCode {
+        GraphqlEntityMutationErrorCode::new(self.0)
+    }
+
+    /// User-safe explanation of the failure.
+    async fn message(&self) -> &'static str {
+        self.user_message()
     }
 }
 
@@ -604,12 +610,34 @@ impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
         &self,
         ctx: &Context<'_>,
         input: SetEntityAppearanceInput,
-    ) -> async_graphql::Result<EntityMutationPayload<E>> {
+    ) -> async_graphql::Result<GraphqlMutationSuccess<E>> {
         let (entity, appearance) = input.into_model()?;
         let result = mutation_service::<S>(ctx)?
             .set_appearance(mutation_actor(ctx)?, entity, appearance)
             .await;
-        Ok(EntityMutationPayload::new(vec![result]))
+        let span = tracing::Span::current();
+        match result {
+            Ok(result) => {
+                span.record("entity_mutation.failed_count", 0);
+                Ok(GraphqlMutationSuccess {
+                    effects: result.effects,
+                    edges: PhantomData,
+                })
+            }
+            Err(error) => {
+                let code = GraphqlEntityMutationErrorCode::new(error);
+                span.record("entity_mutation.failed_count", 1);
+                span.record("entity_mutation.error_code", tracing::field::debug(code));
+                // This single write failed. The durable queue needs a GraphQL
+                // error to distinguish rollback from a committed write.
+                Err(
+                    async_graphql::Error::new(GraphqlMutationError(error).user_message())
+                        .extend_with(|_, extensions| {
+                            extensions.set("code", async_graphql::resolver_utils::enum_value(code));
+                        }),
+                )
+            }
+        }
     }
 
     /// Rename heterogeneous entities in one request.

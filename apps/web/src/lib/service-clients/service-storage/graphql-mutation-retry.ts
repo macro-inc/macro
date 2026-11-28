@@ -48,13 +48,27 @@ function retriesDraftServerFault(
 
 /**
  * Retry transport failures. Application errors release the queue head, except
- * a server fault on an email draft write, which is retried twice in a row.
+ * a server fault on an email draft write or an appearance mutation reaching
+ * a server replica that has yet to receive its schema.
  */
 export function shouldRetryGraphqlMutation(
   error: CombinedError,
   mutation?: QueuedMutation
 ): boolean {
   const refused = error.graphQLErrors.length > 0;
+  if (
+    refused &&
+    mutation?.operationName === 'SetEntityAppearance' &&
+    error.graphQLErrors.every(
+      (entry) =>
+        !entry.path?.length &&
+        (entry.message === 'Unknown type "SetEntityAppearanceInput"' ||
+          entry.message.startsWith(
+            'Unknown field "setEntityAppearance" on type "CompleteMutationRoot".'
+          ))
+    )
+  )
+    return true;
   if (refused && mutation && retriesDraftServerFault(error, mutation))
     return true;
 

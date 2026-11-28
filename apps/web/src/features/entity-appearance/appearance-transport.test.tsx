@@ -3,7 +3,7 @@ import { INITIAL_CACHE_REVISION } from '@graphql-cache/protocol';
 import { registerActiveGraphqlSoupQuery } from '@queries/soup/graphql/active-queries';
 import { render } from '@solidjs/testing-library';
 import { type Client, createClient, gql, type Operation } from '@urql/core';
-import { getOperationAST } from 'graphql';
+import { getOperationAST, print } from 'graphql';
 import { ok } from 'neverthrow';
 import { afterEach, expect, it, vi } from 'vitest';
 import { filter, map, pipe } from 'wonka';
@@ -34,6 +34,8 @@ vi.mock('@service-storage/entity-appearance', () => ({
 vi.mock('@service-storage/graphql-soup', () => {
   const host = {
     disabled: false,
+    onMutationSettled: () => () => {},
+    onCacheGenerationChanged: () => () => {},
     readRecordsByKeys: async () => ({
       revision: INITIAL_CACHE_REVISION,
       records: [
@@ -105,19 +107,15 @@ it.each(
     } as const;
     const data = {
       setEntityAppearance: {
-        results: [
+        __typename: 'GraphqlMutationSuccess',
+        effects: [
           {
-            __typename: 'GraphqlMutationSuccess',
-            effects: [
-              {
-                __typename: 'SoupUpdated',
-                item: {
-                  __typename: adapters.typename,
-                  id: 'entity',
-                  appearance,
-                },
-              },
-            ],
+            __typename: 'SoupUpdated',
+            item: {
+              __typename: adapters.typename,
+              id: 'entity',
+              appearance,
+            },
           },
         ],
       },
@@ -205,6 +203,7 @@ it.each(
       expect(write && getOperationAST(write.query)?.name?.value).toBe(
         'SetEntityAppearance'
       );
+      expect(write && print(write.query)).not.toMatch(/\bnotifications\b/);
       expect(write?.variables).toEqual({
         input: {
           entity: {

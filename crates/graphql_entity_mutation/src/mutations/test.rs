@@ -216,6 +216,41 @@ impl QueryRoot {
             edges: std::marker::PhantomData,
         }
     }
+
+    async fn appearance_with_unavailable_soup(
+        &self,
+    ) -> super::GraphqlMutationSuccess<TestSoupEdges> {
+        super::GraphqlMutationSuccess {
+            effects: vec![EntityMutationEffect::updated(
+                EntityType::Document.with_entity_string("document-1".to_owned()),
+            )],
+            edges: std::marker::PhantomData,
+        }
+    }
+}
+
+#[tokio::test]
+async fn appearance_preserves_a_committed_write_when_soup_hydration_fails() {
+    let schema = Schema::build(QueryRoot, async_graphql::EmptyMutation, EmptySubscription)
+        .data(EntityMutationActor {
+            user_id: MacroUserIdStr::parse_from_str("macro|graphql-test@example.com").unwrap(),
+            organization_id: None,
+        })
+        .finish();
+    let response = schema
+        .execute("{ appearanceWithUnavailableSoup { __typename effects { __typename } } }")
+        .await;
+    assert_eq!(response.errors.len(), 1);
+    assert_eq!(
+        response.errors[0].path.last(),
+        Some(&async_graphql::PathSegment::Field("effects".into()))
+    );
+    assert_eq!(
+        response.data,
+        value!({ "appearanceWithUnavailableSoup": {
+            "__typename": "GraphqlMutationSuccess", "effects": []
+        } })
+    );
 }
 
 #[tokio::test]
@@ -227,10 +262,7 @@ async fn appearance_requires_an_actor_and_preserves_domain_refusals() {
             icon: { emoji: "🌿" }
             color: GREEN
           }) {
-            results {
-              __typename
-              ... on GraphqlMutationError { errorCode }
-            }
+            effects { __typename }
           }
         }
     "#;
@@ -252,17 +284,19 @@ async fn appearance_requires_an_actor_and_preserves_domain_refusals() {
         }))
         .await;
 
-    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(response.errors.len(), 1);
     assert_eq!(
-        response.data,
-        value!({
-            "setEntityAppearance": {
-                "results": [{
-                    "__typename": "GraphqlMutationError",
-                    "errorCode": "UNSUPPORTED_OPERATION",
-                }],
-            },
-        })
+        response.errors[0].message,
+        "Operation is not supported for this entity",
+    );
+    assert_eq!(
+        response.errors[0]
+            .extensions
+            .as_ref()
+            .and_then(|extensions| extensions.get("code")),
+        Some(&async_graphql::resolver_utils::enum_value(
+            super::GraphqlEntityMutationErrorCode::UnsupportedOperation,
+        ))
     );
 }
 

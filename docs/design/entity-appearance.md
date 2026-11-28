@@ -31,10 +31,11 @@ Edits require existing edit access; routines remain owner-only. Metadata-only
 writes do not change content timestamps or execution configuration revisions.
 Appearance travels with entity reads, rather than fetching per rendered icon.
 The web editor writes Markdown document, snippet, and initiative appearance
-through `setEntityAppearance`. Its effects return the updated Soup entity from
-the primary, so mounted lists update from the normalized cache, including after
-offline replay. The network exchange refreshes mounted queries when the cache is
-unavailable.
+through `setEntityAppearance`. The editor selects the committed Soup identity
+and appearance from the primary. Mounted lists update from the normalized cache,
+including after offline replay. The editor confirms a queued choice when replay
+commits and restores the prior choice when replay rejects it. The network
+exchange refreshes mounted queries when the cache is unavailable.
 Headers and breadcrumbs use the lightweight preview identity selection, without
 loading document properties.
 Existing duplication/template flows copy appearance; blank creation uses defaults.
