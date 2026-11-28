@@ -69,6 +69,7 @@ vi.mock('@core/context/user', () => ({
   useIsAuthenticated: () => () => true,
 }));
 
+import { registerNetworkRevalidation } from '@graphql-cache/exchange/network-revalidation-exchange';
 import { registerActiveGraphqlSoupQuery } from '@queries/soup/graphql/active-queries';
 import { createRevalidatingClient } from '@queries/soup/graphql/revalidating-client.test-helpers';
 import { SoupDocument } from '@service-storage/graphql/generated/graphql';
@@ -398,4 +399,53 @@ it('reads a mounted list once after a rename without the cache', async () => {
   expect(server.reads('Soup')).toBe(2);
   unregister();
   list.unsubscribe();
+});
+
+it('reads each mounted list again after a rename whose exchange read failed', async () => {
+  cache = new QueryClient({
+    defaultOptions: { mutations: { retry: false } },
+  });
+  cache.setQueryData(authKeys.userInfo.queryKey, {
+    id: 'viewer',
+    authenticated: true,
+  });
+  mocks.host = undefined;
+  const server = createRevalidatingClient(() => ({
+    renameEntities: {
+      results: [{ __typename: 'GraphqlMutationSuccess' }],
+    },
+  }));
+  mocks.client = server.client;
+  // A mounted list whose read after the write fails.
+  const unregisterFailing = registerNetworkRevalidation(server.client, {
+    active: () => true,
+    gone: () => false,
+    revalidate: () => Promise.reject(new Error('offline')),
+  });
+  const refresh = vi.fn(async () => {});
+  const unregister = registerActiveGraphqlSoupQuery({
+    isEnabled: () => true,
+    refresh,
+  });
+  let mutation!: ReturnType<typeof createRenameDssEntityMutation>;
+  dispose = render(
+    () => (
+      <QueryClientProvider client={cache}>
+        {(() => {
+          mutation = createRenameDssEntityMutation();
+          return null;
+        })()}
+      </QueryClientProvider>
+    ),
+    document.createElement('div')
+  );
+
+  await mutation.mutateAsync({
+    entity: { id: 'doc-1', type: 'document', name: 'Before' },
+    newName: 'After',
+  });
+
+  await vi.waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+  unregister();
+  unregisterFailing();
 });

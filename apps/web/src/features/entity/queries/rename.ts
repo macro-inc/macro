@@ -2,6 +2,7 @@ import { TRACE_PARENT_CONTEXT_KEY } from '@app/lib/urql-solid/trace-parent-excha
 import { renameDatabase } from '@block-database/queries/rename-database';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { networkRevalidationIncomplete } from '@graphql-cache/exchange/network-revalidation-exchange';
 import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import { renameAgentSession } from '@queries/agent-session/entity-mutations';
@@ -19,11 +20,13 @@ import { queryClient } from '@queries/client';
 import { setHistoryItemName } from '@queries/history/history';
 import { historyKeys } from '@queries/history/keys';
 import { setPreviewName } from '@queries/preview';
+import { refreshActiveGraphqlPreviewQueries } from '@queries/preview/active-queries';
 import {
   getSoupEntityById,
   optimisticUpdateSoupEntity,
   type SoupTransaction,
 } from '@queries/soup/cache';
+import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { soupKeys } from '@queries/soup/keys';
 import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
@@ -222,6 +225,8 @@ async function sendGraphqlRenames(
         { optimisticMutation: { uuid }, [TRACE_PARENT_CONTEXT_KEY]: span }
       )
       .toPromise();
+    if (networkRevalidationIncomplete(result))
+      fireAndForget(readAgainAfterFailedReread(operations), 'entity-rename');
     const disposition = optimisticMutationDispositionOf(result);
     span.setAttr('entity.disposition', disposition?.kind ?? 'none');
     if (disposition?.kind === 'queued') {
@@ -251,6 +256,22 @@ async function sendGraphqlRenames(
   } finally {
     if (!queued) settlement.complete();
   }
+}
+
+/**
+ * A list or preview read the exchange started after the rename failed or timed
+ * out: read the mounted lists again, each in its own cursor order, and the
+ * renamed items' previews.
+ */
+async function readAgainAfterFailedReread(
+  operations: EntityRenameOperation[]
+): Promise<void> {
+  await Promise.allSettled([
+    refreshActiveGraphqlSoupQueries(),
+    ...operations.map(({ entity }) =>
+      refreshActiveGraphqlPreviewQueries(entity.id)
+    ),
+  ]);
 }
 
 /** Legacy readers refetch confirmed state; the normalized layer owns optimism.

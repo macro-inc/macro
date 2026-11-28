@@ -5,6 +5,7 @@ import {
 import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
 import type { Client, OperationResult } from '@urql/core';
 import { revalidateNotificationReaders } from '../../queries/notification/revalidation';
+import { refreshActiveGraphqlSoupQueries } from '../../queries/soup/graphql/active-queries';
 import {
   getChannelListRevalidations,
   revalidateChannelLists,
@@ -48,6 +49,18 @@ function missedExpectedSeen(
   if (args.operation !== 'MARK_SEEN') return false;
   const changed = new Set(rows.map(({ id }) => id));
   return (args.expectedNotificationIds ?? []).some((id) => !changed.has(id));
+}
+
+/**
+ * When a list read the exchange started after this write failed or timed out,
+ * every mounted Soup list reads again through its own refresh, in cursor
+ * order: a saved page request cannot follow a cursor the write moved.
+ */
+async function refreshListsTheExchangeMissed(
+  result: OperationResult
+): Promise<void> {
+  if (networkRevalidationIncomplete(result))
+    await refreshActiveGraphqlSoupQueries();
 }
 
 /** Authoritative rows returned after an entity-scoped notification write. */
@@ -100,6 +113,7 @@ export async function executeGraphqlUpdateNotifications(
   ) {
     await revalidateChannelLists(client);
   }
+  await refreshListsTheExchangeMissed(result);
   return result;
 }
 
@@ -142,5 +156,6 @@ export async function executeGraphqlUpdateNotificationsForEntities(
       ),
     });
   }
+  await refreshListsTheExchangeMissed(result);
   return result;
 }

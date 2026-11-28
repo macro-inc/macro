@@ -20,7 +20,10 @@ import {
   channelNotificationRefresh,
   disposeChannelNotificationRefresh,
 } from '../../queries/channel/notification-refresh';
-import { registerGraphqlSoupRevalidations } from '../../queries/soup/graphql/active-queries';
+import {
+  registerActiveGraphqlSoupQuery,
+  registerGraphqlSoupRevalidations,
+} from '../../queries/soup/graphql/active-queries';
 import {
   ChannelListSoupDocument,
   ChannelUnreadPresenceDocument,
@@ -29,7 +32,10 @@ import {
 } from './graphql/generated/graphql';
 import { createChannelListUpdatesHandler } from './graphql-channel-list-updates';
 import type { GraphqlNotificationPatch } from './graphql-soup-websocket';
-import { executeGraphqlUpdateNotifications } from './graphql-update-notifications';
+import {
+  executeGraphqlUpdateNotifications,
+  executeGraphqlUpdateNotificationsForEntities,
+} from './graphql-update-notifications';
 
 let cleanup: (() => void)[] = [];
 beforeEach(() => {
@@ -434,4 +440,77 @@ describe('new channel pushes', () => {
 
     expect(expectChannel).not.toHaveBeenCalled();
   });
+});
+
+/** A client whose exchange reads mounted queries again after each write, and
+ * whose one mounted list read succeeds or fails. */
+function revalidatingClient(listRead: () => Promise<void>) {
+  const server: Exchange = () => (operations$) =>
+    pipe(
+      operations$,
+      filter((operation) => operation.kind !== 'teardown'),
+      map((operation): OperationResult => {
+        if (operation.kind === 'query')
+          return { operation, data: {}, stale: false, hasNext: false };
+        return {
+          operation,
+          data: {
+            updateNotifications: [],
+            updateNotificationsForEntity: [],
+          },
+          stale: false,
+          hasNext: false,
+        };
+      })
+    );
+  const client = createClient({
+    url: 'http://graphql.test',
+    exchanges: [networkRevalidationExchange(), server],
+  });
+  cleanup.push(
+    registerNetworkRevalidation(client, {
+      active: () => true,
+      gone: () => false,
+      revalidate: listRead,
+    })
+  );
+  const listRefresh = vi.fn(async () => {});
+  cleanup.push(
+    registerActiveGraphqlSoupQuery({
+      isEnabled: () => true,
+      refresh: listRefresh,
+    })
+  );
+  return { client, listRefresh };
+}
+
+describe('a notification write whose exchange read failed', () => {
+  const writes = {
+    ids: (client: Client) =>
+      executeGraphqlUpdateNotifications(client, {
+        notificationIds: ['one'],
+        operation: 'MARK_DONE',
+      }),
+    entity: (client: Client) =>
+      executeGraphqlUpdateNotificationsForEntities(client, {
+        entities: [{ entityId: 'doc', entityType: 'DOCUMENT' }],
+        operation: 'MARK_DONE',
+      }),
+  };
+
+  for (const [name, write] of Object.entries(writes)) {
+    it(`reads each mounted list again in its own order (${name})`, async () => {
+      const { client, listRefresh } = revalidatingClient(() =>
+        Promise.reject(new Error('offline'))
+      );
+      await write(client);
+      expect(listRefresh).toHaveBeenCalledOnce();
+    });
+
+    it(`leaves the lists to the exchange when its read succeeded (${name})`, async () => {
+      const { client, listRefresh } = revalidatingClient(async () => {});
+      await write(client);
+      expect(listRefresh).not.toHaveBeenCalled();
+    });
+  }
 });
