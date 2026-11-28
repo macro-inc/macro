@@ -19,13 +19,11 @@ import { queryClient } from '@queries/client';
 import { setHistoryItemName } from '@queries/history/history';
 import { historyKeys } from '@queries/history/keys';
 import { setPreviewName } from '@queries/preview';
-import { refreshActiveGraphqlPreviewQueries } from '@queries/preview/active-queries';
 import {
   getSoupEntityById,
   optimisticUpdateSoupEntity,
   type SoupTransaction,
 } from '@queries/soup/cache';
-import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { soupKeys } from '@queries/soup/keys';
 import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
@@ -255,7 +253,9 @@ async function sendGraphqlRenames(
   }
 }
 
-/** Legacy readers refetch confirmed state; the normalized layer owns optimism. */
+/** Legacy readers refetch confirmed state; the normalized layer owns optimism.
+ * Without the cache, the client already read mounted GraphQL queries again
+ * before the write settled (`networkRevalidationExchange`). */
 function observeRenameSettlement(
   uuid: string,
   operations: EntityRenameOperation[]
@@ -287,11 +287,7 @@ function observeRenameSettlement(
             queryKey: callKeys.record(entity.id).queryKey,
           })
         );
-      if (!host || host.disabled)
-        requests.push(refreshActiveGraphqlPreviewQueries(entity.id));
     }
-    if (!host || host.disabled)
-      requests.push(refreshActiveGraphqlSoupQueries());
     await Promise.allSettled(requests);
   };
   const complete = () => {
