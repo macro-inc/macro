@@ -42,6 +42,24 @@ otelcol.processor.filter "local_logs" {
       `(resource.attributes["deployment.environment"] == "local" or resource.attributes["deployment.environment.name"] == "local") and resource.attributes["service.name"] != "local-telemetry"`,
     ]
   }
+  output { logs = [otelcol.processor.transform.log_traces.input] }
+}
+
+// A Rust service's JSON log line (macro_entrypoint) carries its span's W3C IDs
+// as otel.trace_id and otel.span_id, next to Datadog's half of the trace ID.
+// ECS's FireLens, a host's journal and CloudWatch pass the line on as the
+// body; this makes it the record's trace and span, which Grafana links.
+otelcol.processor.transform "log_traces" {
+  error_mode = "ignore"
+  log_statements {
+    context = "log"
+    statements = [
+      `merge_maps(cache, ExtractPatterns(body, "\"otel\\.trace_id\":\"(?P<trace_id>[0-9a-f]{32})\""), "upsert") where IsString(body) and IsMatch(body, "\"otel\\.trace_id\":")`,
+      `merge_maps(cache, ExtractPatterns(body, "\"otel\\.span_id\":\"(?P<span_id>[0-9a-f]{16})\""), "upsert") where cache["trace_id"] != nil`,
+      `set(trace_id.string, cache["trace_id"]) where cache["trace_id"] != nil`,
+      `set(span_id.string, cache["span_id"]) where cache["span_id"] != nil`,
+    ]
+  }
   output { logs = [otelcol.processor.transform.emails.input] }
 }
 
