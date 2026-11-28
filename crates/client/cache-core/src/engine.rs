@@ -624,8 +624,10 @@ impl<S: Storage> Engine<S> {
             STORAGE_GENERATION_VALUE_FIELD.to_string(),
             crate::value::CacheValue::String(generation.to_string()),
         );
+        // Hydration checkpoints outside the cache carry it, so a crash must not
+        // replace it.
         self.storage
-            .put_batch(vec![(key, record)])
+            .put_batch_durable(vec![(key, record)])
             .await
             .map_err(EngineError::Storage)?;
         Ok(generation)
@@ -2563,9 +2565,7 @@ impl<S: Storage> Engine<S> {
                 None,
             ),
         };
-        // The expected queue snapshot already matched, so this does not
-        // happen; were it to, a claim made with the upsert stays leased until
-        // its lease expires, and the mutation runs then.
+        // The expected queue snapshot already matched, so the kinds agree.
         if upsert.kind != expected_kind {
             return Err(EngineError::StaleOptimisticUpsert);
         }

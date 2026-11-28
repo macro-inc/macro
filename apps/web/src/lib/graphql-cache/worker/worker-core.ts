@@ -613,7 +613,7 @@ export class CacheWorkerCore {
    */
   private drainQueue(): void {
     if (this.running || this.yielding) return;
-    if (this.walFlushDue) {
+    if (this.walFlushDue || this.walFlushOverdue()) {
       this.startWalFlush();
       return;
     }
@@ -661,6 +661,9 @@ export class CacheWorkerCore {
 
     const queued = this.dequeue(index);
     if (!queued) return;
+    // The quiet wait starts again once this request ends.
+    this.cancelWalFlush?.();
+    this.cancelWalFlush = undefined;
     this.running = true;
     const startedAt = this.now();
     const queueDepth = this.queue.length;
@@ -767,6 +770,16 @@ export class CacheWorkerCore {
     );
   }
 
+  /** The first unflushed write is `WAL_FLUSH_MAX_DELAY_MS` old. */
+  private walFlushOverdue(): boolean {
+    const since = this.unflushedSince;
+    return (
+      since !== undefined &&
+      this.engine?.flushWal !== undefined &&
+      this.now() - since >= WAL_FLUSH_MAX_DELAY_MS
+    );
+  }
+
   /** Runs the due WAL flush in the request queue's place. */
   private startWalFlush(): void {
     this.walFlushDue = false;
@@ -786,9 +799,8 @@ export class CacheWorkerCore {
     try {
       await flushWal();
     } catch (error) {
-      // A flush refused for a lost OPFS handle poisons the session and the
-      // next request reports the reset. Otherwise the WAL stays marked
-      // unflushed and the flush after the next write retries it.
+      // A failed flush latches a reset in the engine, and the next request
+      // reports it.
       this.telemetry.record({
         name: 'graphql_cache.wal_flush',
         operationCategory: 'storage',
@@ -801,6 +813,8 @@ export class CacheWorkerCore {
     } finally {
       this.running = false;
       this.collectArrivalsThenDrain();
+      // An idle copy that fell due during the flush waited for it.
+      this.scheduleIdleCheckpoint();
       this.resolveDrainWaitersIfIdle();
     }
   }

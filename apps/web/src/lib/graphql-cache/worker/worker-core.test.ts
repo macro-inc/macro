@@ -3920,7 +3920,7 @@ describe('CacheWorkerCore', () => {
     expect(flushWal).toHaveBeenCalledOnce();
   });
 
-  it('runs a WAL flush that fell due during a request once the request ends', async () => {
+  it('restarts the quiet wait before a WAL flush when a request runs', async () => {
     const order: string[] = [];
     const flushWal = vi.fn(async () => {
       order.push('flush');
@@ -3957,9 +3957,14 @@ describe('CacheWorkerCore', () => {
     hold = true;
     const second = requests.write();
     await vi.waitFor(() => expect(finishWrite).toBeDefined());
-    delay.elapse();
+    // The running request took the wait down; nothing flushes under it.
+    expect(delay.armed()).toEqual([]);
     finishWrite?.();
     await second;
+    await settle();
+    expect(order).toEqual(['write', 'write']);
+    expect(delay.armed()).toEqual([250]);
+    delay.elapse();
     await vi.waitFor(() => expect(order).toEqual(['write', 'write', 'flush']));
   });
 
@@ -3994,8 +3999,8 @@ describe('CacheWorkerCore', () => {
     now = 2_100;
     await Promise.all([requests.write(), requests.read('next')]);
     await settle();
-    expect(order).toEqual(['write', 'write', 'write', 'flush', 'read:next']);
-    expect(delay.armed()).toEqual([]);
+    expect(order).toEqual(['write', 'write', 'flush', 'write', 'read:next']);
+    expect(flushWal).toHaveBeenCalledOnce();
 
     // The cap counts from the first write after the flush.
     now = 2_200;
@@ -4052,6 +4057,63 @@ describe('CacheWorkerCore', () => {
     );
     await requests.read('after');
     expect(order).toEqual(['write', 'read:after']);
+  });
+
+  it('runs an idle WAL copy that fell due during a WAL flush once the flush ends', async () => {
+    const order: string[] = [];
+    let finishFlush: (() => void) | undefined;
+    let hold = false;
+    const flushWal = vi.fn(async () => {
+      order.push('flush');
+      if (hold) {
+        await new Promise<void>((resolve) => {
+          finishFlush = resolve;
+        });
+      }
+      return true;
+    });
+    const checkpointIfDue = vi.fn(async () => {
+      order.push('copy');
+      return { ran: false, backfilledFrames: 0, walFrames: 0 };
+    });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        ...walFlushEngine(order, flushWal),
+        checkpointIfDue,
+      }),
+    });
+    const delay = delayTimer();
+    const quiet = quietTimer();
+    const core = new CacheWorkerCore({
+      monotonicNow: () => 0,
+      afterArrivedMessages: (resume) => queueMicrotask(resume),
+      afterDelay: delay.afterDelay,
+      afterQuiet: quiet.afterQuiet,
+    });
+    const requests = walFlushRequests(core);
+    await requests.init();
+    await settle();
+    quiet.elapse();
+    await vi.waitFor(() => expect(checkpointIfDue).toHaveBeenCalledOnce());
+    delay.elapse();
+    await vi.waitFor(() => expect(flushWal).toHaveBeenCalledOnce());
+    await settle();
+    quiet.elapse();
+    order.length = 0;
+    checkpointIfDue.mockClear();
+    hold = true;
+
+    await requests.write();
+    await settle();
+    delay.elapse();
+    await vi.waitFor(() => expect(finishFlush).toBeDefined());
+    // The copy's quiet ends while the flush holds the engine: it waits.
+    quiet.elapse();
+    expect(checkpointIfDue).not.toHaveBeenCalled();
+    finishFlush?.();
+    await vi.waitFor(() => expect(quiet.armed()).toBe(1));
+    quiet.elapse();
+    await vi.waitFor(() => expect(order).toEqual(['write', 'flush', 'copy']));
   });
 
   it('cancels a pending WAL flush on drain', async () => {

@@ -185,6 +185,16 @@ pub trait Storage: MaybeSend {
         entries: Vec<(EntityKey<'static>, Record)>,
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
+    /// [`Self::put_batch`] for state the engine trusts after a crash, such as
+    /// the permission marker: the records are on disk when it returns. A
+    /// backend whose COMMITs do not flush overrides it.
+    fn put_batch_durable(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend {
+        self.put_batch(entries)
+    }
+
     /// Atomically upserts records and generic projection lifecycle changes.
     fn put_batch_with_projections(
         &mut self,

@@ -390,16 +390,53 @@ impl TursoStorage {
     /// Flushes the WAL when a COMMIT appended to it since the last flush,
     /// making every write so far survive an OS crash or power loss. Returns
     /// whether it flushed. The engine worker calls it once writes go quiet;
-    /// durable writes already flushed themselves.
+    /// durable writes already flushed themselves. A failed flush latches a
+    /// reset, as a failed flush after a durable write does: what the log
+    /// holds on disk is no longer known.
     pub fn flush_wal(&self) -> Result<bool, TursoStorageError> {
         self.require_healthy()?;
-        self.session
-            .flush_wal()
-            .map_err(|_| TursoStorageError::Database)
+        let result = self.session.flush_wal().map_err(|_| {
+            TursoStorageError::reset(PhysicalResetReason::TransactionOutcomeUncertain)
+        });
+        self.latch_result(result)
     }
 
     fn connection(&self) -> Db {
         self.connection.clone()
+    }
+}
+
+impl TursoStorage {
+    fn put_records(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        durability: driver::Durability,
+    ) -> Result<(), TursoStorageError> {
+        self.require_healthy()?;
+        let result = (|| {
+            let mut entries = prepare_records(entries)?;
+            if entries.is_empty() {
+                return Ok(());
+            }
+            let connection = self.connection();
+            driver::write_transaction(&connection, durability, || {
+                let mut statement = driver::prepare(&connection, RECORD_UPSERT)?;
+                for (index, entry) in entries.iter_mut().enumerate() {
+                    let changed = driver::execute_prepared(
+                        &mut statement,
+                        vec![
+                            text(&entry.key.typename),
+                            text(&entry.key.id),
+                            Value::from_blob(std::mem::take(&mut entry.value)),
+                        ],
+                    )?;
+                    require_changed(changed, 1)?;
+                    self.fault_after(TestFaultSite::Put, index)?;
+                }
+                write_derived_rows(&connection, &entries)
+            })
+        })();
+        self.latch_result(result)
     }
 }
 
@@ -1383,31 +1420,14 @@ impl Storage for TursoStorage {
         &mut self,
         entries: Vec<(EntityKey<'static>, Record)>,
     ) -> Result<(), Self::Error> {
-        self.require_healthy()?;
-        let result = (|| {
-            let mut entries = prepare_records(entries)?;
-            if entries.is_empty() {
-                return Ok(());
-            }
-            let connection = self.connection();
-            driver::write_transaction(&connection, driver::Durability::Cache, || {
-                let mut statement = driver::prepare(&connection, RECORD_UPSERT)?;
-                for (index, entry) in entries.iter_mut().enumerate() {
-                    let changed = driver::execute_prepared(
-                        &mut statement,
-                        vec![
-                            text(&entry.key.typename),
-                            text(&entry.key.id),
-                            Value::from_blob(std::mem::take(&mut entry.value)),
-                        ],
-                    )?;
-                    require_changed(changed, 1)?;
-                    self.fault_after(TestFaultSite::Put, index)?;
-                }
-                write_derived_rows(&connection, &entries)
-            })
-        })();
-        self.latch_result(result)
+        self.put_records(entries, driver::Durability::Cache)
+    }
+
+    async fn put_batch_durable(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+    ) -> Result<(), Self::Error> {
+        self.put_records(entries, driver::Durability::Durable)
     }
 
     async fn put_batch_with_projections(
@@ -1676,7 +1696,9 @@ impl Storage for TursoStorage {
     ) -> Result<(), Self::Error> {
         self.require_healthy()?;
         let connection = self.connection();
-        let result = driver::write_transaction(&connection, driver::Durability::Cache, || {
+        // The layers belong to queued mutations, which a crash must not take
+        // back to their old data.
+        let result = driver::write_transaction(&connection, driver::Durability::Durable, || {
             for (id, layer) in layers {
                 let id = mutation_id_to_sql(*id)?;
                 driver::execute(

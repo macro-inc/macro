@@ -331,3 +331,38 @@ fn a_failed_flush_makes_the_queue_write_s_outcome_uncertain() {
     // The storage latched the reset.
     assert!(block_on(storage.load_mutation_queue()).is_err());
 }
+
+#[test]
+fn durable_records_and_rewritten_layers_survive_a_power_loss() {
+    let io = PowerIo::new("durability-records.db");
+    let (mut storage, flushes) = open_browser_like(&io, true);
+    let queued = block_on(storage.enqueue_mutation(queued("Queued"))).unwrap();
+    let opened = flushes.load(Ordering::SeqCst);
+
+    // The permission marker is written durably: one flush, which also
+    // covers the cache write before it.
+    cache_write(&mut storage, "Document:before", "before");
+    block_on(storage.put_batch_durable(vec![(key("Authority:marker"), record("ready"))])).unwrap();
+    assert_eq!(flushes.load(Ordering::SeqCst), opened + 1);
+
+    // Rewriting a queued mutation's layer flushes too.
+    let layer = PersistedOptimisticLayer {
+        optimistic_data_json: r#"{"rewritten":true}"#.into(),
+        normalized_updates: RecordUpdates::default(),
+    };
+    block_on(storage.replace_optimistic_layers(&[(queued, layer)], &[], &[])).unwrap();
+    assert_eq!(flushes.load(Ordering::SeqCst), opened + 2);
+    cache_write(&mut storage, "Document:after", "after");
+
+    drop(storage);
+    let io = io.after_power_loss();
+    let (storage, _) = open_browser_like(&io, false);
+    assert_eq!(read(&storage, "Authority:marker"), Some(record("ready")));
+    assert_eq!(read(&storage, "Document:before"), Some(record("before")));
+    assert_eq!(read(&storage, "Document:after"), None);
+    let queue = block_on(storage.load_mutation_queue()).unwrap();
+    assert_eq!(
+        queue[0].optimistic.optimistic_data_json,
+        r#"{"rewritten":true}"#
+    );
+}

@@ -154,7 +154,7 @@ impl<S: Storage> Engine<S> {
         authority: &CacheAuthority,
     ) -> Result<(), EngineError<S::Error>> {
         self.storage
-            .put_batch(vec![authority.record()])
+            .put_batch_durable(vec![authority.record()])
             .await
             .map_err(EngineError::Storage)?;
         self.authority = std::sync::OnceLock::from(Some(authority.clone()));

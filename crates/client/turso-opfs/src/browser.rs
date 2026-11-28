@@ -1142,12 +1142,11 @@ fn flush_session_wal(owner: OwnerId, session: SessionId) -> Result<bool, OpfsErr
         return Ok(false);
     }
     let started_at = performance_now();
-    let flushed = handle.flush();
-    count_flush(started_at);
-    flushed.map_err(|error| {
+    handle.flush().map_err(|error| {
         let _ = js_handle_completion_error(owner, "OPFS flush", &error, ErrorKind::Other);
         js_error(OpfsErrorKind::Flush, "OPFS flush", &error)
     })?;
+    count_flush(started_at);
     set_unflushed(id, false);
     Ok(true)
 }
@@ -1475,6 +1474,8 @@ impl File for OpfsFile {
         let _operation = OperationGuard::enter(self.owner, self.session)?;
         let result = validate_position(len).and_then(|()| {
             let handle = registered_handle(self.owner, self.session, self.handle)?;
+            // A truncate changes the file as a write does.
+            set_unflushed(self.handle, true);
             handle.truncate_with_f64(len as f64).map_err(|error| {
                 js_handle_limbo_error(self.owner, "OPFS truncate", &error, ErrorKind::Other)
             })?;

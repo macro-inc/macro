@@ -717,18 +717,21 @@ loss can drop the newest ones and leaves the database as of an earlier
 COMMIT, which opens whole.
 
 - Queue writes flush before they answer: an enqueue (one transaction with its
-  first claim), claim, defer, complete and discard, the queue reset and the
-  salvage import. A failed flush leaves the write's outcome unknown, and the
-  cache needs a physical reset (`TransactionOutcomeUncertain`).
+  first claim), claim, defer, complete and discard, a rewrite of queued
+  layers, the queue reset and the salvage import. So do the records the engine
+  trusts after a crash (`Storage::put_batch_durable`): the permission marker
+  and the storage generation. A failed flush leaves the write's outcome
+  unknown, and the cache needs a physical reset
+  (`TransactionOutcomeUncertain`); a failed `flushWal` latches the same reset.
 - Cache writes hold data the server sends again. After a request that can
-  write, the engine worker calls `flushWal` once nothing has run for 250 ms,
-  or before the next request once the first unflushed write is 2 s old, so up
+  write, the engine worker calls `flushWal` once nothing has run for 250 ms
+  (a request that starts restarts the wait), or before the next request once
+  the first unflushed write is 2 s old, so up
   to 2 s of cache writes are exposed to a power loss. A drain cancels a flush
   not yet started: closing the engine on release, handoff or close flushes
   and copies the WAL itself. A wipe deletes the file.
 - A failed deferred flush is reported as `graphql_cache.wal_flush` with its
-  error class. A lost OPFS handle resets the cache at the next request;
-  otherwise the flush after the next write tries again.
+  error class, and the cache resets at the next request.
 
 ## Slow request telemetry
 
