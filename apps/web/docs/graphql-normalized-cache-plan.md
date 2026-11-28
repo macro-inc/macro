@@ -618,13 +618,17 @@ draining it, answers:
   left; or until `SETTLEMENT_WAIT_MS` (70 s, past the runner's 60 s request
   timeout) has passed, from the takeover and again from each claim the wait
   sees, up to `SETTLEMENT_WAIT_LIMIT_MS` (140 s). It holds
-  `claim-next-mutation` meanwhile, and enqueues too once a claim could no
-  longer get its full wait before the limit. An owner that drains or leaves
-  during the wait is replaced as usual, unless the replacement would wipe the
-  database, and a settlement the lost owner was writing goes to the next
+  `claim-next-mutation` meanwhile, and refuses enqueues as superseded (so the
+  page sends them itself) once a claim could no longer get its full wait
+  before the limit. An owner that drains or leaves during the wait is replaced
+  as usual, unless the replacement would wipe the database, and a settlement
+  the lost owner was writing, or one whose page has gone, goes to the next
   engine. With every tab hidden, the wait starts an engine in a hidden tab
-  rather than parking, so a settlement still has somewhere to land. On the
-  page, a head claimed before retirement settles through the
+  rather than parking, so a settlement still has somewhere to land. Outside
+  the wait, a hidden owner with no visible tab to take over keeps its engine
+  while a head its pages claimed is out, until it settles or its lease ends:
+  a parked build holds no lock, and a newer build would open the database
+  without asking. On the page, a head claimed before retirement settles through the
   host that claimed it (`createRetirableCacheHost` pins it until the head
   settles or its lease ends), and a retired host refuses any other settlement
   (`CacheSettlementUnwrittenError`) rather than acknowledging one it did not
