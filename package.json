@@ -54,7 +54,7 @@
 	"scripts": {
 		"fix": "cd apps/web && bunx --bun @biomejs/biome check --write",
 		"lint:ci": "cd apps/web && bunx --bun @biomejs/biome ci --changed --no-errors-on-unmatched --error-on-warnings",
-		"check": "cd apps/web && tsc --noEmit --skipLibCheck --project tsconfig.json",
+		"check": "bun run --cwd apps/web type-check",
 		"lint": "cd apps/web && bunx --bun @biomejs/biome lint --skip=suspicious/noImportCycles",
 		"lint:oxlint": "cd apps/web && oxlint --type-aware",
 		"format": "cd apps/web && bunx --bun @biomejs/biome format --write"
