@@ -1,5 +1,6 @@
 import { analytics } from '@app/lib/analytics';
 import { catchToResult } from '@core/util/result';
+import { queryAccountSession } from '@queries/auth/account-scope';
 import { removeHistoryItem } from '@queries/history/history';
 import { duplicateDatabase } from '@queries/storage/databases';
 import { getDeletedTree } from '@queries/storage/deleted';
@@ -101,7 +102,9 @@ export async function deleteItem(
 ): Promise<boolean> {
   const { itemType, id } = args;
 
+  const session = queryAccountSession();
   const accessLevel = await getItemAccessLevel({ itemType, id });
+  if (session !== queryAccountSession()) return false;
 
   if (accessLevel === 'owner') {
     if (

@@ -1,3 +1,4 @@
+import { createCrossTabBus } from '@core/cross-tab/cross-tab-bus';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { skipToken, useMutationState, useQuery } from '@tanstack/solid-query';
 import {
@@ -9,7 +10,12 @@ import {
   createSignal,
   onCleanup,
 } from 'solid-js';
-import { queryAccountSession } from '../../auth/account-scope';
+import { z } from 'zod';
+import {
+  currentQueryAccount,
+  isCurrentQueryAccount,
+  queryAccountSession,
+} from '../../auth/account-scope';
 import { queryClient } from '../../client';
 import type { SoupAstItemsData } from '../items';
 import { soupEntityKey } from './entity-input';
@@ -22,11 +28,23 @@ export const GRAPHQL_SOUP_DELETE_MUTATION_KEY = [
 
 export const GRAPHQL_SOUP_DELETE_RETENTION_MS = 60_000;
 const RETAINED_DELETIONS_KEY = graphqlSoupKeys.retainedDeletions.queryKey;
+const EMPTY_DELETE_KEYS: readonly string[] = [];
 type RetainedDeletions = GraphqlSoupDeletion[];
 type DeletionReader = (keys: ReadonlySet<string>) => Iterable<string>;
 const [deletionReaders, setDeletionReaders] = createSignal<
   readonly DeletionReader[]
 >([]);
+const restoreReceipt = z.object({
+  viewerId: z.string(),
+  startedAt: z.number(),
+  keys: z.array(z.string()),
+});
+const restoreReceipts = createCrossTabBus({
+  channelName: 'macro:soup-restore',
+  storageKey: 'macro:soup-restore',
+  parse: (value) => restoreReceipt.safeParse(value).data ?? null,
+});
+const operationTime = () => performance.timeOrigin + performance.now();
 
 /** A live list may still show its previous snapshot after the cache confirms a tombstone. */
 export function observeGraphqlSoupDeletions(reader: DeletionReader) {
@@ -54,19 +72,23 @@ export function createGraphqlSoupDeletion(
   keys: readonly string[]
 ): GraphqlSoupDeletion {
   const session = queryAccountSession();
+  const account = currentQueryAccount();
+  const startedAt = operationTime();
   const [pendingKeys, setDeletedKeys] = createSignal(keys);
   const deletedKeys = () =>
-    session === queryAccountSession() ? pendingKeys() : [];
+    session === queryAccountSession() ? pendingKeys() : EMPTY_DELETE_KEYS;
   let settled = false;
   let released = false;
   let expiryTimer: ReturnType<typeof setTimeout> | undefined;
   let detachReaders: (() => void) | undefined;
+  let unsubscribeRestores: (() => void) | undefined;
   const restoredKeys = new Set<string>();
   const release = () => {
     if (released) return;
     released = true;
     clearTimeout(expiryTimer);
     detachReaders?.();
+    unsubscribeRestores?.();
     setDeletedKeys([]);
     queryClient.setQueryData<RetainedDeletions>(
       RETAINED_DELETIONS_KEY,
@@ -158,6 +180,19 @@ export function createGraphqlSoupDeletion(
       }
     },
   };
+  if (account) {
+    unsubscribeRestores = restoreReceipts.subscribe((receipt) => {
+      if (
+        receipt.viewerId === account.userId &&
+        startedAt < receipt.startedAt &&
+        isCurrentQueryAccount(account)
+      ) {
+        // A sibling tab can publish the restored row before this reader ever
+        // sees it absent. The restore request still has to postdate this delete.
+        deletion.restore(receipt.keys);
+      }
+    });
+  }
   return deletion;
 }
 
@@ -165,6 +200,8 @@ export function createGraphqlSoupDeletion(
  * Call the returned function only after server confirmation. Retained entries
  * survive mutation GC, so consult both sources. */
 export function prepareGraphqlSoupRestore() {
+  const account = currentQueryAccount();
+  const startedAt = operationTime();
   const deletions = new Set([
     ...(queryClient.getQueryData<RetainedDeletions>(RETAINED_DELETIONS_KEY) ??
       []),
@@ -181,10 +218,18 @@ export function prepareGraphqlSoupRestore() {
         return deletion ? [deletion] : [];
       }),
   ]);
-  return (restoredKeys: readonly string[]) =>
+  return (restoredKeys: readonly string[]) => {
     batch(() => {
       for (const deletion of deletions) deletion.restore(restoredKeys);
     });
+    if (account && isCurrentQueryAccount(account) && restoredKeys.length > 0) {
+      restoreReceipts.publish({
+        viewerId: account.userId,
+        startedAt,
+        keys: [...restoredKeys],
+      });
+    }
+  };
 }
 
 /** Only GraphQL-enabled bulk deletes opt into the display overlay. */
@@ -193,7 +238,8 @@ export type GraphqlSoupDeleteContext = {
 };
 
 /** Reflect pending and confirmed deletions in GraphQL views. Completed
- * mutations retain their own tombstones until acknowledgement or expiry.
+ * mutations retain their own tombstones until readers acknowledge them,
+ * a restore supersedes them, or the retention deadline passes with no stale reader.
  */
 export function usePendingGraphqlSoupDeleteKeys() {
   const retained = useQuery(
@@ -201,8 +247,8 @@ export function usePendingGraphqlSoupDeleteKeys() {
       queryKey: RETAINED_DELETIONS_KEY,
       queryFn: skipToken,
       initialData: [] as RetainedDeletions,
-      // One empty index may live for the client session; its entries always have
-      // bounded lifetimes, even when no view is mounted to observe this query.
+      // One empty index may live for the session. Entries without stale readers
+      // are collected even when no view is mounted to observe this query.
       gcTime: Infinity,
     }),
     () => queryClient

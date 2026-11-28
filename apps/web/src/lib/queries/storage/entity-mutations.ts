@@ -1,5 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import { isResponseFreeNetworkError } from '@core/util/request-error';
+import { isTransientRequestError } from '@core/util/request-error';
 import { catchToResult } from '@core/util/result';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
@@ -19,6 +19,7 @@ import {
   updateGraphqlEntitySharePolicy,
 } from '@service-storage/graphql-entity-mutations';
 import { getGraphqlCacheHost } from '@service-storage/graphql-soup';
+import { CombinedError } from '@urql/core';
 import { match } from 'ts-pattern';
 import {
   getUnmaintainedGraphqlSoupRevalidations,
@@ -74,14 +75,17 @@ async function deleteEntity(
   onDeletion: OnSoupDeletion | undefined
 ) {
   const generation = cacheSessionGeneration.capture();
+  const host = onDeletion ? getGraphqlCacheHost() : undefined;
   let result: Awaited<ReturnType<typeof write>>;
   try {
     result = await write(entity);
   } catch (error) {
     if (
-      onDeletion &&
+      host &&
+      getGraphqlCacheHost() === host &&
       cacheSessionGeneration.isCurrent(generation) &&
-      isResponseFreeNetworkError(error)
+      error instanceof CombinedError &&
+      isTransientRequestError(error)
     ) {
       // The server may have trashed the item and its descendants before the
       // response was lost. Restore the failed overlay and read for recovery.

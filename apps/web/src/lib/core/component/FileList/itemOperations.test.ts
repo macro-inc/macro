@@ -10,8 +10,13 @@ const mocks = vi.hoisted(() => ({
   resources: vi.fn(),
   removeDeleted: vi.fn(),
   duplicateDatabase: vi.fn(),
+  accountSession: 0,
 }));
 vi.mock('@app/lib/analytics', () => ({ analytics: { track: vi.fn() } }));
+vi.mock('@queries/auth/account-scope', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@queries/auth/account-scope')>()),
+  queryAccountSession: () => mocks.accountSession,
+}));
 vi.mock('@queries/history/history', () => ({
   removeHistoryItem: mocks.removeHistory,
 }));
@@ -61,6 +66,7 @@ import {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  mocks.accountSession = 0;
   mocks.metadata.mockResolvedValue(ok({ userAccessLevel: 'owner' }));
   mocks.edit.mockResolvedValue(ok(undefined));
   mocks.removeHistory.mockResolvedValue(true);
@@ -132,6 +138,18 @@ describe('entity callers', () => {
     expect(await deleteItem({ itemType: 'document', id: 'shared' })).toBe(true);
     expect(mocks.removeHistory).toHaveBeenCalledWith('document', 'shared');
     expect(mocks.mutation).not.toHaveBeenCalled();
+  });
+
+  it('does not send a delete after a login changes during the access lookup', async () => {
+    const owner = ok({ userAccessLevel: 'owner' });
+    const access = Promise.withResolvers<typeof owner>();
+    mocks.metadata.mockReturnValue(access.promise);
+    const deleting = deleteItem({ itemType: 'document', id: 'source' });
+    mocks.accountSession++;
+    access.resolve(owner);
+    await expect(deleting).resolves.toBe(false);
+    expect(mocks.mutation).not.toHaveBeenCalled();
+    expect(mocks.removeHistory).not.toHaveBeenCalled();
   });
 
   it('opens the new document identity returned by duplicate effects', async () => {

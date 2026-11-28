@@ -2,6 +2,7 @@ import type { ChannelEntity } from '@entity/types/entity';
 import { QueryClient } from '@tanstack/solid-query';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { authKeys } from '../../auth/keys';
 import type { SoupAstItemsData } from '../items';
 
 const refresh = vi.hoisted(() => vi.fn<() => Promise<void>>());
@@ -229,6 +230,39 @@ describe('GraphQL Soup deletion lifecycle', () => {
       await vi.waitFor(() => expect(deletion.keys()).toEqual([]));
     } finally {
       deletion.release();
+    }
+  });
+
+  it('honors a sibling restore receipt only for older deletes of the same account', () => {
+    client.setQueryData(authKeys.userInfo.queryKey, {
+      id: 'viewer',
+      authenticated: true,
+    });
+    const clock = vi.spyOn(performance, 'now');
+    const key = 'GraphqlSoupDocument:shared';
+    clock.mockReturnValue(1);
+    const older = createGraphqlSoupDeletion([key]);
+    clock.mockReturnValue(3);
+    const newer = createGraphqlSoupDeletion([key]);
+    try {
+      for (const viewerId of ['other', 'viewer']) {
+        window.dispatchEvent(
+          new StorageEvent('storage', {
+            key: 'macro:soup-restore',
+            newValue: JSON.stringify({
+              viewerId,
+              startedAt: performance.timeOrigin + 2,
+              keys: [key],
+            }),
+          })
+        );
+        expect(older.keys()).toEqual(viewerId === 'viewer' ? [] : [key]);
+        expect(newer.keys()).toEqual([key]);
+      }
+    } finally {
+      older.release();
+      newer.release();
+      clock.mockRestore();
     }
   });
 });

@@ -41,8 +41,9 @@ When a list still shows the deleted row after a minute, its overlay must stay
 until the list catches up or unmounts.
 Restore immediately after trash and confirm the row
 returns without waiting for retained deletion markers to expire, even if the
-trash's background refresh failed. A delete started after the restore request
-must still hide its row. Deletion and restore overlays distinguish entity type as
+trash's background refresh failed. Check the same restore from a sibling tab.
+A delete started after the restore request must still hide its row. Deletion and
+restore overlays distinguish entity type as
 well as ID, so an unrelated conversation with the same ID remains visible.
 Deleting a non-owned item still only removes it from history. Forking a markdown
 history version still uses REST because GraphQL duplication copies current content.

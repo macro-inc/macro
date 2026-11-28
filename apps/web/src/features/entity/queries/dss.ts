@@ -2,6 +2,7 @@ import { Telemetry, type TraceContext } from '@macro-inc/observability';
 /** Document-storage mutations used by entity surfaces. */
 
 import { databaseEntityMessage } from '@app/features/database/core/write-failure';
+import { NIL_UUID } from '@app/features/next-soup/filters/filter-store';
 import { scheduledActionKeys } from '@app/features/routines/queries/keys';
 import { trashDatabase } from '@block-database/queries/trash-database';
 import {
@@ -18,6 +19,7 @@ import {
   currentQueryAccount,
   isCurrentQueryAccount,
   type QueryAccount,
+  QueryAccountChangedError,
   queryAccountSession,
 } from '@queries/auth/account-scope';
 import { callKeys } from '@queries/call/keys';
@@ -40,6 +42,7 @@ import {
   GRAPHQL_SOUP_DELETE_MUTATION_KEY,
   GRAPHQL_SOUP_DELETE_RETENTION_MS,
 } from '@queries/soup/graphql/optimistic-deletions';
+import { recoverActiveGraphqlSoupQueries } from '@queries/soup/graphql/recover-queries';
 import { soupKeys } from '@queries/soup/keys';
 import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
 import {
@@ -173,31 +176,25 @@ async function settleDssDeletes(
   return { results, acknowledgements };
 }
 
-/** Retry only old writes that bypass the GraphQL client's post-write reads. */
-async function revalidateLegacyDeletions(
-  isPending: () => boolean,
-  where: (body: unknown) => boolean
-) {
-  for (const delay of [0, 1000, 2000]) {
-    if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
-    if (!isPending()) return false;
-    try {
-      await refreshActiveGraphqlSoupQueries({ where, throwOnError: true });
-      return true;
-    } catch {
-      // Keep the tombstone through a transient read failure.
-    }
-  }
-  return false;
-}
-
 function isHistoryList(body: object): boolean {
   const params = 'params' in body ? body.params : undefined;
+  if (typeof params !== 'object' || params === null) return false;
+  const sort = 'sort_method' in params ? params.sort_method : undefined;
   return (
-    typeof params === 'object' &&
-    params !== null &&
-    'sort_method' in params &&
-    params.sort_method === 'viewed_at'
+    sort === undefined || sort === 'viewed_at' || sort === 'viewed_updated'
+  );
+}
+
+function excludesAllAgentSessions(filter: unknown): boolean {
+  if (typeof filter !== 'object' || filter === null) return false;
+  if ('&' in filter && Array.isArray(filter['&']))
+    return filter['&'].some(excludesAllAgentSessions);
+  const literal = 'l' in filter ? filter.l : undefined;
+  return (
+    typeof literal === 'object' &&
+    literal !== null &&
+    'id' in literal &&
+    literal.id === NIL_UUID
   );
 }
 
@@ -243,7 +240,10 @@ export function createBulkDeleteDssItemsMutation() {
   return useMutation(() => ({
     mutationKey: GRAPHQL_SOUP_DELETE_MUTATION_KEY,
     gcTime: GRAPHQL_SOUP_DELETE_RETENTION_MS,
-    mutationFn: async (entities: EntityData[]) => {
+    meta: { accountSession: queryAccountSession() },
+    mutationFn: async (entities: EntityData[], context) => {
+      if (context.meta?.accountSession !== queryAccountSession())
+        throw new QueryAccountChangedError();
       // The sign-in that deletes: a deletion settling after another sign-in
       // holds nothing in its directory.
       const writer = currentQueryAccount();
@@ -292,7 +292,9 @@ export function createBulkDeleteDssItemsMutation() {
       });
       return settleDssDeletes(deletable, deletions, writer, acknowledgements);
     },
-    onMutate: async (entities: EntityData[]) => {
+    onMutate: async (entities: EntityData[], context) => {
+      if (context.meta?.accountSession !== queryAccountSession())
+        throw new QueryAccountChangedError();
       const deletable = entities.filter(isDeletable);
       const { keys, ...snapshots } = removeDssEntityCaches(deletable);
       return {
@@ -328,16 +330,19 @@ export function createBulkDeleteDssItemsMutation() {
         // History removals and agent-session deletes have no GraphQL result
         // for the exchange to apply or revalidate. Share one read for them.
         const hasAgentSessionDeletes = legacyKeys.length > historyOnlyKeys.size;
-        const ready = revalidateLegacyDeletions(
-          () =>
+        const ready = recoverActiveGraphqlSoupQueries({
+          isPending: () =>
             accountSession === queryAccountSession() &&
             legacyKeys.some((key) => deletion.keys().includes(key)),
-          (body) =>
+          where: (body) =>
             typeof body === 'object' &&
             body !== null &&
-            ((hasAgentSessionDeletes && 'asf' in body && !!body.asf) ||
-              (historyOnlyKeys.size > 0 && isHistoryList(body)))
-        );
+            ((hasAgentSessionDeletes &&
+              'asf' in body &&
+              !!body.asf &&
+              !excludesAllAgentSessions(body.asf)) ||
+              (historyOnlyKeys.size > 0 && isHistoryList(body))),
+        });
         for (const key of legacyKeys) acknowledgements.set(key, ready);
       }
       deletion.settle(deletedKeys, acknowledgements, historyOnlyKeys);
@@ -347,6 +352,7 @@ export function createBulkDeleteDssItemsMutation() {
         context.graphqlDeletion.release();
         return;
       }
+      if (error instanceof QueryAccountChangedError) return;
       const partialFailure =
         error instanceof BulkDeleteFailure && error.deletedEntities.length > 0;
       if (partialFailure) {

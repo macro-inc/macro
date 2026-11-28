@@ -3,7 +3,7 @@ import {
   type QueryRevalidation,
 } from '@graphql-cache/exchange/optimistic';
 import type { Client, OperationResult } from '@urql/core';
-import { refreshActiveGraphqlSoupQueries } from '../../queries/soup/graphql/active-queries';
+import { recoverActiveGraphqlSoupQueries } from '../../queries/soup/graphql/recover-queries';
 import {
   SetEmailThreadArchivedDocument,
   SetEmailThreadsArchivedDocument,
@@ -17,7 +17,7 @@ function recoverArchiveLists(result: OperationResult) {
       metadata.cacheEffectsApplied === false)
   ) {
     fireAndForget(
-      refreshActiveGraphqlSoupQueries(),
+      recoverActiveGraphqlSoupQueries(),
       'email-archive-revalidation'
     );
   }

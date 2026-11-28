@@ -26,10 +26,12 @@ afterEach(() => {
   mocks.cache = false;
 });
 
-function setup() {
+function setup(
+  response: unknown = { data: { updateNotificationsForEntity: [] } }
+) {
   const query = vi.fn(() => ({ toPromise: async () => ({ data: {} }) }));
   const mutation = vi.fn(() => ({
-    toPromise: async () => ({ data: { updateNotificationsForEntity: [] } }),
+    toPromise: async () => response,
   }));
   const client = { query, mutation } as unknown as Client;
   const initial = { input: { initial: { limit: 20 } } };
@@ -119,35 +121,31 @@ describe('entity notification reconciliation without the normalized cache', () =
   });
 
   it('recovers a maintained reader when the cache rejects the returned Done rows', async () => {
-    const { client, query } = setup();
-    const refresh = vi.fn(async () => undefined);
     const changed = [
       { __typename: 'GraphqlNotification', id: 'changed', state: 'DONE' },
     ];
-    const mutation = vi.fn(() => ({
-      toPromise: async () => ({
-        data: { updateNotificationsForEntity: changed },
-        extensions: {
-          __macroNormalizedCache: {
-            source: 'live-network',
-            cacheEffectsApplied: false,
-          },
+    const { client, query } = setup({
+      data: { updateNotificationsForEntity: changed },
+      extensions: {
+        __macroNormalizedCache: {
+          source: 'live-network',
+          cacheEffectsApplied: false,
         },
-      }),
-    }));
-    const mixedClient = { ...client, mutation } as Client;
+      },
+    });
+    const refresh = vi.fn(async () => undefined);
     cleanup.push(
       registerNotificationReader({
-        client: () => mixedClient,
+        client: () => client,
         isEnabled: () => true,
         refresh,
         cacheMaintained: () => true,
       })
     );
-    const result = await executeGraphqlUpdateNotificationsForEntities(
-      mixedClient,
-      { ...input, operation: 'MARK_DONE' }
-    );
+    const result = await executeGraphqlUpdateNotificationsForEntities(client, {
+      ...input,
+      operation: 'MARK_DONE',
+    });
     expect(result.data?.updateNotificationsForEntity).toEqual(changed);
     expect(query).toHaveBeenCalled();
     expect(refresh).toHaveBeenCalledOnce();

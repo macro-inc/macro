@@ -90,3 +90,23 @@ it('recovers readers when the cache rejects confirmed Done states', async () => 
   );
   error.mockRestore();
 });
+
+it('retries a failed recovery read without retrying the notification write', async () => {
+  vi.useFakeTimers();
+  const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    mocks.host = {
+      writeQuery: vi.fn(async () => {
+        throw new Error('closed');
+      }),
+    };
+    mocks.refreshSoup.mockRejectedValueOnce(new Error('first read failed'));
+    expect(confirmEntityNotificationsDone(['n1'])).toBe(true);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(mocks.refreshSoup).toHaveBeenCalledTimes(2);
+    expect(mocks.host.writeQuery).toHaveBeenCalledOnce();
+  } finally {
+    error.mockRestore();
+    vi.useRealTimers();
+  }
+});

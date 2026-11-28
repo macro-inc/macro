@@ -174,6 +174,18 @@ it('recovers a delete whose transport lost the server reply without retrying the
   });
 });
 
+it('leaves recovery to the uncached exchange when a delete reply is lost', async () => {
+  mocks.host.mockReturnValue(undefined);
+  const error = new CombinedError({
+    networkError: new Error('connection lost'),
+  });
+  mocks.mutation.mockReturnValue({ toPromise: async () => ({ error }) });
+  await expect(
+    trashEntity({ type: 'PROJECT', id: 'entity' }, vi.fn())
+  ).rejects.toBe(error);
+  expect(mocks.refresh).not.toHaveBeenCalled();
+});
+
 it('leaves the lists to the client when its exchange read them all', async () => {
   // Without a live cache the exchange read every mounted list, each
   // successfully, before the write settled.

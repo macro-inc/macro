@@ -11,7 +11,7 @@ import {
   getGraphqlSoupClient,
 } from '@service-storage/graphql-soup';
 import { stringifyDocument } from '@urql/core';
-import { refreshActiveGraphqlSoupQueries } from '../soup/graphql/active-queries';
+import { recoverActiveGraphqlSoupQueries } from '../soup/graphql/recover-queries';
 import { revalidateNotificationReaders } from './revalidation';
 
 const stateWrite = stringifyDocument(NotificationStateCacheWriteDocument);
@@ -72,7 +72,7 @@ async function writeConfirmedDoneStates(
   } catch (error) {
     if (cacheSessionGeneration.isCurrent(generation)) {
       await Promise.all([
-        refreshActiveGraphqlSoupQueries(),
+        recoverActiveGraphqlSoupQueries(),
         revalidateNotificationReaders(getGraphqlSoupClient()),
       ]);
     }

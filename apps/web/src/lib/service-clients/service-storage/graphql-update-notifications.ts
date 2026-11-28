@@ -9,11 +9,11 @@ import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimis
 import { type Span, Telemetry } from '@macro-inc/observability';
 import type { Client, OperationResult } from '@urql/core';
 import { revalidateNotificationReaders } from '../../queries/notification/revalidation';
-import { refreshActiveGraphqlSoupQueries } from '../../queries/soup/graphql/active-queries';
 import {
   getChannelListRevalidations,
   revalidateChannelLists,
 } from '../../queries/soup/graphql/channel-list-revalidation';
+import { recoverActiveGraphqlSoupQueries } from '../../queries/soup/graphql/recover-queries';
 import {
   type NotificationEntityInput,
   type NotificationUpdateOperation,
@@ -70,7 +70,7 @@ function readAgainAfterFailedReread(
 ): void {
   span.setAttr('revalidation.fallback', true);
   fireAndForget(
-    Promise.allSettled([refreshActiveGraphqlSoupQueries(), ...reads]),
+    Promise.allSettled([recoverActiveGraphqlSoupQueries(), ...reads]),
     'notification-write'
   );
 }
