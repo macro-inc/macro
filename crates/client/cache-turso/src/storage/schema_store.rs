@@ -276,7 +276,9 @@ pub(super) fn adopt(
             return Ok(SchemaAdoption::unchanged(stored));
         }
     }
-    let sorted = driver::write_transaction(connection, driver::Durability::Cache, || {
+    // A tier can retire or rewrite the optimistic layers of queued mutations,
+    // which a crash must not take back to their old data.
+    let sorted = driver::write_transaction(connection, driver::Durability::Durable, || {
         let stored = match load(connection)? {
             Some(row) => decode_stored_schema(&row.artifact).ok(),
             None if is_empty(connection)? => {
@@ -296,7 +298,7 @@ pub(super) fn adopt(
         // decoding only those that may hold identity metadata, and frees the
         // pages they held for what the cache writes next.
         Err(error) if resets_after(error) => {
-            driver::write_transaction(connection, driver::Durability::Cache, || {
+            driver::write_transaction(connection, driver::Durability::Durable, || {
                 let reset = SchemaChange {
                     tier: Tier::Reset(ResetReason::Failed),
                     stored: Arc::clone(incoming),
