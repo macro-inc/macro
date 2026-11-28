@@ -44,6 +44,13 @@ use macro_authorization::{
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model_owner::Owner;
+use nom::{
+    IResult, Parser,
+    branch::alt,
+    bytes::complete::{tag, take_till1},
+    character::complete::{char, one_of, satisfy},
+    combinator::{all_consuming, cut, recognize},
+};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -2246,21 +2253,59 @@ fn validate_workspace(workspace: &str) -> Result<(), CreateSessionApiError> {
 /// root-relative (`\x`) Windows paths depend on the runtime's current
 /// directory, so they are not.
 fn is_absolute_workspace(workspace: &str) -> bool {
-    match workspace.as_bytes() {
-        [b'/', ..] | [b'\\', b'\\', ..] => true,
-        [drive, b':', b'/' | b'\\', ..] => drive.is_ascii_alphabetic(),
-        _ => false,
-    }
+    alt((tag("/"), tag(r"\\"), drive_root))
+        .parse(workspace)
+        .is_ok()
 }
 
-/// A filesystem root, whose trailing separator is the whole path or its
-/// drive's: `/`, `C:\`, `C:/`.
+/// A filesystem root, whose trailing separator is part of the path: `/`, a
+/// drive root (`C:\`, `C:/`), a share root (`\\server\share\`), or a
+/// verbatim root (`\\?\C:\`, `\\?\UNC\server\share\`). `\\?\C:` without its
+/// separator names the volume, not its root directory.
 fn is_root_workspace(workspace: &str) -> bool {
-    match workspace.as_bytes() {
-        [b'/'] => true,
-        [drive, b':', b'/' | b'\\'] => drive.is_ascii_alphabetic(),
-        _ => false,
-    }
+    all_consuming(alt((tag("/"), drive_root, verbatim_root, share_root)))
+        .parse(workspace)
+        .is_ok()
+}
+
+fn drive_root(input: &str) -> IResult<&str, &str> {
+    recognize((
+        satisfy(|c| c.is_ascii_alphabetic()),
+        char(':'),
+        one_of(r"/\"),
+    ))
+    .parse(input)
+}
+
+/// Windows reads either separator in a share path.
+fn share_root(input: &str) -> IResult<&str, &str> {
+    let component = || take_till1(|c: char| c == '/' || c == '\\');
+    recognize((
+        tag(r"\\"),
+        component(),
+        one_of(r"/\"),
+        component(),
+        one_of(r"/\"),
+    ))
+    .parse(input)
+}
+
+/// Windows passes a verbatim path through as written, so only `\`
+/// separates. The cuts keep `\\?\UNC\` from reading as a root: once a
+/// verbatim or verbatim UNC prefix starts, no other reading applies.
+fn verbatim_root(input: &str) -> IResult<&str, &str> {
+    let component = || take_till1(|c: char| c == '\\');
+    recognize((
+        tag(r"\\?\"),
+        cut(alt((
+            recognize((
+                tag(r"UNC\"),
+                cut((component(), char('\\'), component(), char('\\'))),
+            )),
+            recognize((component(), char('\\'))),
+        ))),
+    ))
+    .parse(input)
 }
 
 /// Resolve which bot the session runs for, from the principal and the body.

@@ -26,6 +26,14 @@ fn absolute_paths_of_either_kind_of_runtime_are_accepted() {
         r"\\fileserver\share\code",
         r"\\?\C:\Users\operator\code",
         r"\\?\UNC\fileserver\share\code",
+        // Roots keep their separator: a share root and a verbatim drive root
+        // are roots like `C:\`, and `\\?\C:` without it names the volume.
+        r"\\fileserver\share\",
+        r"\\fileserver\share",
+        r"\\?\C:\",
+        r"\\?\UNC\fileserver\share\",
+        // Windows reads either separator in a share path.
+        r"\\fileserver/share/",
     ] {
         assert_eq!(refusal(workspace), None, "{workspace:?} was refused");
     }
@@ -60,8 +68,18 @@ fn a_trailing_separator_is_refused_except_on_a_root() {
         "/home/operator/code/",
         r"C:\Users\operator\code\",
         "C:/Users/operator/code/",
-        r"\\fileserver\share\",
+        r"\\fileserver\share\code\",
+        r"\\?\C:\Users\operator\code\",
+        r"\\?\UNC\fileserver\share\code\",
+        // Not roots: a server with no share, or no server at all.
+        r"\\fileserver\",
+        r"\\?\UNC\fileserver\",
+        r"\\?\UNC\",
         r"\\",
+        // A verbatim path reads `/` as part of a name, not a separator.
+        r"\\?\C:/",
+        // Read as a Unix path, where this is a folder below the root.
+        "//fileserver/share/",
     ] {
         assert_eq!(
             refusal(workspace),

@@ -1019,6 +1019,7 @@ dependencies = [
  "model_owner",
  "model_user",
  "models_permissions",
+ "nom 8.0.0",
  "non_empty",
  "opentelemetry",
  "opentelemetry_sdk",
