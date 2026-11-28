@@ -339,6 +339,8 @@ function BrowseSection(props: {
   maxHeight: number;
   resizingEnabled: boolean;
   outerScrollRoot: HTMLDivElement | undefined;
+  /** The outer scroll viewport's height, which moves its bottom edge. */
+  viewportHeight: number;
   layoutVersion: number;
   sectionStart: number;
   sectionOrder: readonly ChannelSectionKey[];
@@ -535,6 +537,8 @@ function BrowseSection(props: {
         // Sections above growing move this one on or off screen unscrolled.
         () => props.sectionStart,
         () => props.layoutVersion,
+        // A taller rail shows sections below its old bottom unscrolled.
+        () => props.viewportHeight,
       ],
       () => {
         if (!open()) rail.reportSectionRange(props.sectionKey, undefined);
@@ -910,6 +914,7 @@ function ExpandedBrowse() {
                     maxHeight={maximumHeight(key)}
                     resizingEnabled={resizeFlag().enabled}
                     outerScrollRoot={scrollRoot()}
+                    viewportHeight={scrollSize.height ?? 0}
                     layoutVersion={stackSize.height ?? 0}
                     sectionStart={start()}
                     sectionOrder={keys()}
