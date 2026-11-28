@@ -466,6 +466,26 @@ describe('shared channel notification refresh', () => {
     await expect(landed).resolves.toBe(true);
   });
 
+  it('keeps a read again waiting through a failure that can recover', async () => {
+    const f = setup();
+    f.register();
+    f.request.mockResolvedValueOnce({
+      error: new CombinedError({ networkError: new Error('offline') }),
+    });
+    const answer = vi.fn();
+    const landed = f.queue.readAgain(descriptor());
+    const answered = (async () => answer(await landed))();
+    await tick();
+    expect(f.query).toHaveBeenCalledOnce();
+    expect(answer).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(f.query).toHaveBeenCalledTimes(2);
+    await answered;
+    expect(answer).toHaveBeenCalledWith(true);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(f.query).toHaveBeenCalledTimes(2);
+  });
+
   it('answers that a read again did not land when its reader closes first', async () => {
     const f = setup();
     const { dispose } = f.register();

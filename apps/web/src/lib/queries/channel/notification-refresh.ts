@@ -175,8 +175,9 @@ export class ChannelNotificationRefresh {
 
   /**
    * Reads a registered query again as a live update would, in its turn and
-   * under its backoff, and answers whether that read landed: false when the
-   * query cannot run, the read fails, or its readers close first.
+   * under its backoff, and answers whether that read landed. It waits through
+   * the retries of a failure that can recover, and answers false when the
+   * query cannot run, fails for good, or its readers close first.
    */
   readAgain(query: QueryRevalidation): Promise<boolean> {
     const job = this.jobs.get(
@@ -428,7 +429,8 @@ export class ChannelNotificationRefresh {
         error instanceof Error &&
         (isTransientRequestError(error) || isGraphqlServerFault(error))
       ) {
-        this.settle(job, generation, error);
+        // Reads again wait for the retry; explicit refreshes report the failure.
+        this.settle(job, generation, error, true);
         job.retryAt =
           Date.now() +
           Math.min(30_000, 1000 * 2 ** Math.min(job.failures - 1, 5));
@@ -472,13 +474,16 @@ export class ChannelNotificationRefresh {
     return job.waiters.some((waiter) => !waiter.background);
   }
 
-  private settle(job: Job, generation: number, error?: unknown) {
-    const settled = job.waiters.filter(
-      (waiter) => waiter.generation <= generation
-    );
-    job.waiters = job.waiters.filter(
-      (waiter) => waiter.generation > generation
-    );
+  private settle(
+    job: Job,
+    generation: number,
+    error?: unknown,
+    retrying = false
+  ) {
+    const settles = (waiter: Waiter) =>
+      waiter.generation <= generation && !(retrying && waiter.background);
+    const settled = job.waiters.filter(settles);
+    job.waiters = job.waiters.filter((waiter) => !settles(waiter));
     for (const waiter of settled) {
       if (error !== undefined) waiter.reject(error);
       else waiter.resolve();
