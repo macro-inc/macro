@@ -1,11 +1,13 @@
-import type { SidePanelContextType } from '@components/app/side-panel/context';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { type Accessor, createEffect, createSignal } from 'solid-js';
 
 /** The page owns docking geometry while SidePanel.Root owns the saved preference. */
 export function createPrPageLayout(
   changesVisible: Accessor<boolean>,
-  sidePanel?: Pick<SidePanelContextType, 'isOpen' | 'setIsOverlayMode'>
+  sidePanel?: {
+    isOpen: Accessor<boolean>;
+    setIsOverlayMode: (overlay: boolean) => void;
+  }
 ) {
   const [root, setRoot] = createSignal<HTMLDivElement>();
   const size = createElementSize(root);

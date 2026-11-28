@@ -82,7 +82,6 @@ export function PrPageView(props: PrPageViewProps) {
       ref={setRoot}
       class="relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container/pr-page"
     >
-      <PrStatusFade page={page()} />
       <Show when={props.hosted && page()}>
         {(current) => (
           <ViewBreadcrumbs.Item
@@ -129,47 +128,45 @@ export function PrPageView(props: PrPageViewProps) {
       <PrPageContent
         tab={layout.changesVisible() ? 'changes' : 'overview'}
         scrollerRef={setScroller}
+        decoration={<PrStatusFade page={page()} />}
         header={
-          <>
-            <PrStatusFade page={page()} />
-            <div class="relative flex flex-col gap-4 px-6 pb-3 pt-5 @max-[719px]/pr-page:px-4">
-              <Show
-                when={page()}
-                fallback={
-                  <ListSkeleton.Root label={t('prPage.loading')}>
-                    <ListSkeleton.Bar class="h-6 w-3/4" />
-                    <div class="flex gap-2 py-4">
-                      <ListSkeleton.Bar class="w-28" />
-                      <ListSkeleton.Bar class="w-40" />
-                    </div>
-                  </ListSkeleton.Root>
-                }
-              >
-                {(current) => (
-                  <>
-                    <PrTitleRow
+          <div class="relative flex flex-col gap-4 px-6 pb-3 pt-5 @max-[719px]/pr-page:px-4">
+            <Show
+              when={page()}
+              fallback={
+                <ListSkeleton.Root label={t('prPage.loading')}>
+                  <ListSkeleton.Bar class="h-6 w-3/4" />
+                  <div class="flex gap-2 py-4">
+                    <ListSkeleton.Bar class="w-28" />
+                    <ListSkeleton.Bar class="w-40" />
+                  </div>
+                </ListSkeleton.Root>
+              }
+            >
+              {(current) => (
+                <>
+                  <PrTitleRow
+                    page={current()}
+                    onChecks={openChecks}
+                    stack={<PrStackPopover page={current()} />}
+                  />
+                  <div class="pl-[34px]">
+                    <PrMetadataPills
                       page={current()}
-                      onChecks={openChecks}
-                      stack={<PrStackPopover page={current()} />}
+                      branch={<PrBranchPopover page={current()} />}
+                      onTask={props.onTask}
                     />
-                    <div class="pl-[34px]">
-                      <PrMetadataPills
-                        page={current()}
-                        branch={<PrBranchPopover page={current()} />}
-                        onTask={props.onTask}
-                      />
-                    </div>
-                  </>
-                )}
-              </Show>
-            </div>
-          </>
+                  </div>
+                </>
+              )}
+            </Show>
+          </div>
         }
         tabs={(scrolled) => (
           <PrSlimBar
             page={page()}
             scrolled={scrolled()}
-            compact={width() <= 400}
+            compact={width() < 600}
             changesVisible={layout.changesVisible()}
             onChecks={openChecks}
             stack={

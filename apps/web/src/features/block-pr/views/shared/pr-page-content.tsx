@@ -13,6 +13,7 @@ import { prSlimBarVisible } from '../../primitives/pr-page-state';
 export function PrPageContent(props: {
   tab: 'overview' | 'changes';
   header: JSX.Element;
+  decoration?: JSX.Element;
   tabs: (scrolled: Accessor<boolean>) => JSX.Element;
   children: JSX.Element;
   scrollerRef: (element: HTMLDivElement) => void;
@@ -65,13 +66,13 @@ export function PrPageContent(props: {
         setSize('scrollTop', event.currentTarget.scrollTop);
       }}
     >
-      <div
-        ref={setHeader}
-        class="relative mx-auto w-full @min-[1441px]/pr-page:max-w-[1376px]"
-      >
-        {props.header}
+      <div ref={setHeader} class="relative w-full">
+        {props.decoration}
+        <div class="relative mx-auto w-full @min-[1441px]/pr-page:max-w-[1376px]">
+          {props.header}
+        </div>
       </div>
-      <div ref={setTabs} class="sticky top-0 z-20 bg-panel">
+      <div ref={setTabs} class="sticky top-0 z-20">
         {props.tabs(scrolled)}
       </div>
       <div class="relative mx-auto min-h-[calc(var(--pr-page-height)-var(--pr-tabs-height))] w-full @min-[1441px]/pr-page:max-w-[1376px] @min-[1441px]/pr-page:border-x @min-[1441px]/pr-page:border-edge-muted">

@@ -18,7 +18,12 @@ export function PrSlimBar(props: {
   stack?: JSX.Element;
 }) {
   return (
-    <div class="relative box-border h-12 border-b border-edge-muted bg-panel">
+    <div
+      class={cn(
+        'relative box-border h-12',
+        props.scrolled && 'border-b border-edge-muted bg-panel'
+      )}
+    >
       <Show when={props.scrolled}>
         <PrStatusFade page={props.page} strip />
       </Show>

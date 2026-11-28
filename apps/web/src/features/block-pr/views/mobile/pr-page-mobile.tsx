@@ -73,7 +73,6 @@ export function PrPageMobile(props: PrPageViewProps) {
       .length;
   return (
     <div class="relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden pt-(--mobile-content-inset-top) @container/pr-page">
-      <PrStatusFade page={page()} />
       <MobileHeader
         trailing={
           <MobileHeader.Island>
@@ -99,42 +98,40 @@ export function PrPageMobile(props: PrPageViewProps) {
       <PrPageContent
         tab={layout.changesVisible() ? 'changes' : 'overview'}
         scrollerRef={setScroller}
+        decoration={<PrStatusFade page={page()} />}
         header={
-          <>
-            <PrStatusFade page={page()} />
-            <div class="flex flex-col gap-4 px-3 pt-6 pb-3">
-              <Show
-                when={page()}
-                fallback={
-                  <ListSkeleton.Root label={t('prPage.loading')}>
-                    <ListSkeleton.Bar class="h-6 w-4/5" />
-                  </ListSkeleton.Root>
-                }
-              >
-                {(current) => (
-                  <>
-                    <PrTitleRow page={current()} onChecks={openChecks} />
-                    <div class="pl-7">
-                      <PrMetadataPills
-                        page={current()}
-                        onTask={props.onTask}
-                        branch={
-                          <PrBranchPill
-                            page={current()}
-                            onClick={() => setState('sheet', 'branch')}
-                            trailing={<Copy class="size-4 shrink-0" />}
-                          />
-                        }
-                        stack={
-                          <PrStackPill page={current()} onClick={openDetails} />
-                        }
-                      />
-                    </div>
-                  </>
-                )}
-              </Show>
-            </div>
-          </>
+          <div class="flex flex-col gap-4 px-3 pt-6 pb-3">
+            <Show
+              when={page()}
+              fallback={
+                <ListSkeleton.Root label={t('prPage.loading')}>
+                  <ListSkeleton.Bar class="h-6 w-4/5" />
+                </ListSkeleton.Root>
+              }
+            >
+              {(current) => (
+                <>
+                  <PrTitleRow page={current()} onChecks={openChecks} />
+                  <div class="pl-7">
+                    <PrMetadataPills
+                      page={current()}
+                      onTask={props.onTask}
+                      branch={
+                        <PrBranchPill
+                          page={current()}
+                          onClick={() => setState('sheet', 'branch')}
+                          trailing={<Copy class="size-4 shrink-0" />}
+                        />
+                      }
+                      stack={
+                        <PrStackPill page={current()} onClick={openDetails} />
+                      }
+                    />
+                  </div>
+                </>
+              )}
+            </Show>
+          </div>
         }
         tabs={() => (
           <div class="px-3 pt-3 pb-2">

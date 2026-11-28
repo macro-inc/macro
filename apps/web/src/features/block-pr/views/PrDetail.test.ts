@@ -55,6 +55,9 @@ vi.mock('../data/queries', () => ({
 vi.mock('@app/features/changes/changes', () => ({
   ChangesSplit: () => null,
   ChangesToggle: () => null,
+  useChanges: () => ({
+    layout: { changesVisible: () => false, open: () => {}, close: () => {} },
+  }),
 }));
 vi.mock('../component/PrChanges', () => ({ PrChangesProvider: () => null }));
 vi.mock('../component/PrTimeline', () => ({ PrTimeline: () => null }));
@@ -71,6 +74,8 @@ vi.mock('../hooks/usePrShare', () => ({
 }));
 
 import { githubPullRequestChangesKeys } from '@queries/storage/keys';
+import { PrPageProvider } from '../context/pr-page-context';
+import { createSamplePrPage } from '../data/pr-page-samples';
 import { createPrPageLayout } from '../primitives/create-pr-page-layout';
 import {
   createScrollHideReveal,
@@ -85,6 +90,7 @@ import {
 } from '../primitives/pr-page-state';
 import { usePrDetail } from './PrDetail';
 import { PrPageTopBar } from './pr-page-top-bar';
+import { PrSlimBar } from './pr-slim-bar';
 import { PrDetailsSection } from './shared/pr-details';
 import { PrPageContent } from './shared/pr-page-content';
 
@@ -382,6 +388,75 @@ describe('PR status strip C', () => {
     } finally {
       root.dispose();
       mocks.width = () => undefined;
+    }
+  });
+});
+
+describe('PR band to strip switch', () => {
+  it('keeps band tabs transparent and retains the same Tabs node when strip chrome takes over', () => {
+    const container = document.createElement('div');
+    const [scrolled, setScrolled] = createSignal(false);
+    const dispose = render(() => {
+      const source = createSamplePrPage();
+      return createComponent(PrPageProvider, {
+        value: source,
+        get children() {
+          return createComponent(PrSlimBar, {
+            get page() {
+              return source.page();
+            },
+            get scrolled() {
+              return scrolled();
+            },
+            compact: false,
+            changesVisible: false,
+            onChecks: () => {},
+          });
+        },
+      });
+    }, container);
+    try {
+      const row = container.firstElementChild;
+      const tabs = container.querySelector('input[type="radio"]');
+      expect(tabs).not.toBeNull();
+      expect(row?.classList.contains('bg-panel')).toBe(false);
+      expect(row?.classList.contains('border-b')).toBe(false);
+      setScrolled(true);
+      expect(row?.classList.contains('bg-panel')).toBe(true);
+      expect(row?.classList.contains('border-b')).toBe(true);
+      expect(container.querySelector('input[type="radio"]')).toBe(tabs);
+      setScrolled(false);
+      expect(row?.classList.contains('bg-panel')).toBe(false);
+      expect(row?.classList.contains('border-b')).toBe(false);
+      expect(container.querySelector('input[type="radio"]')).toBe(tabs);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('places the full-width band decoration outside the clamped title and pills', () => {
+    const container = document.createElement('div');
+    const decoration = document.createElement('div');
+    const title = document.createElement('h1');
+    const dispose = render(
+      () =>
+        createComponent(PrPageContent, {
+          tab: 'overview',
+          decoration,
+          header: title,
+          tabs: () => document.createElement('nav'),
+          children: null,
+          scrollerRef: () => {},
+        }),
+      container
+    );
+    try {
+      expect(decoration.parentElement?.contains(title)).toBe(true);
+      expect(decoration.parentElement).not.toBe(title.parentElement);
+      expect(decoration.parentElement?.className).not.toContain('max-w');
+      expect(title.parentElement?.className).toContain('max-w-[1376px]');
+    } finally {
+      dispose();
     }
   });
 });
